@@ -1,8 +1,20 @@
-# Module src/mcp
-
+---
+Title: Module src/mcp
 Version: 1.0.1
 Type: component
 Status: accepted
+Summary: ""
+---
+```markdown
+---
+Title: Module src/mcp
+Version: 1.0.1
+Type: component
+Status: accepted
+Summary: "Model Context Protocol server layer exposing read-only Metaproject services (code graph, security, flow, memory, health, wiki, validation) as MCP tools and resources to AI editors. Thin protocol adapter delegating to service facades; supports stdio and opt-in HTTP/SSE transport."
+---
+# Module src/mcp
+
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
 VerifiedScope: sha256:9cbe5d0cbd59c817e21a866641803a8a96522d3542c1b221f31df60d6a148619
 
@@ -32,7 +44,13 @@ The module is organized in three concentric layers.
 
 **McpConfig** — the structured configuration surface: transport choice (`stdio` | `http`), HTTP host/port/enabled, tool include/exclude filter lists, resource roots, and the `redactToolOutput` boolean (defaults to `true` and must remain so per the security contract M-5).
 
-**Visibility filter** — a three-layer gate evaluated in `visibleTools()`: (1) the manifest's `modules.mcp.enabled` and `expose.tools` flags, (2) whether the tool's `module` is listed in `expose.modules`, and (3) the config-level include/exclude list. A tool that fails any layer is hidden from `tools/list` and is unreachable via `tools/call`.
+**Visibility filter** — a three-layer gate evaluated in `visibleTools()`:
+
+1. The manifest's `modules.mcp.enabled` and `expose.tools` flags
+2. Whether the tool's `module` is listed in `expose.modules`
+3. The config-level include/exclude list
+
+A tool that fails any layer is hidden from `tools/list` and is unreachable via `tools/call`.
 
 **Redaction seam** — every tool result is serialized to JSON and passed through `redactToolOutput` before being returned to the transport. This seam is the only path out; it is not possible to bypass it for a visible tool.
 
@@ -42,70 +60,94 @@ The module is organized in three concentric layers.
 
 ## Main flows
 
-**Flow 1 — `keryx serve-mcp` startup.** `src/commands` calls `serveMcp({ cwd })` in `server.ts`. That function calls `buildMcpContext(cwd)` from `dispatch.ts`, which concurrently loads config via `loadMcpConfig` (`config.ts`) and the manifest discovery snapshot. With the context built, `createMcpServer(ctx)` is called: it lazily imports the SDK (throwing `McpSdkMissingError` with an install hint if it is absent), constructs an SDK `Server`, and registers four request handlers that close over `ctx`. Finally, `startStdioTransport(server)` (from `./transport/stdio`) connects the server to stdin/stdout and begins the JSON-RPC message loop.
+### Flow 1 — `keryx serve-mcp` startup
 
-**Flow 2 — a tool call (`tools/call`).** The SDK delivers a `CallToolRequest` to the registered handler in `server.ts`. The handler extracts `name` and `arguments`, then calls `dispatchCallTool(ctx, name, args)` in `dispatch.ts`. That function runs `visibleTools(ctx)` to verify the tool is exposed, then calls `tool.invoke(ctx.cwd, args)` — for example, for `gdgraph.affected` this calls `getAffected(graph, file)` from `src/gdgraph/query`. The raw result is JSON-serialized and passed through `redactToolOutput` before being wrapped in `{ text, isError }` and returned to the SDK. Any error in `invoke` is caught and returned as `isError: true` rather than propagating across the transport.
+1. `src/commands` calls `serveMcp({ cwd })` in `server.ts`
+2. `serveMcp` calls `buildMcpContext(cwd)` from `dispatch.ts`
+3. `buildMcpContext` concurrently loads config via `loadMcpConfig` (`config.ts`) and the manifest discovery snapshot
+4. With the context built, `createMcpServer(ctx)` is called
+   - Lazily imports the SDK (throws `McpSdkMissingError` with an install hint if absent)
+   - Constructs an SDK `Server`
+   - Registers four request handlers that close over `ctx`
+5. `startStdioTransport(server)` from `./transport/stdio` connects the server to stdin/stdout and begins the JSON-RPC message loop
 
-**Flow 3 — `keryx integrate`.** `src/commands` calls `installMcpClient(projectRoot, ids, options)` in `client-config.ts`. For each resolved runtime (e.g. `cursor`), it reads the existing settings file (or starts from an empty object), calls `runtime.merge(settings, projectRoot)` to inject the managed server entry with the `_keryxManaged` sentinel, validates the result, and writes the file back (unless `dryRun`). In parallel, `enableMcpModule` updates `metaproject.json` to set `modules.mcp.enabled=true` and calls `scaffoldMcpModule` to create the `core/mcp/` directory tree and default config/manifest files if they are missing. Finally, `probeMcpSdk` checks whether the optional SDK is importable and returns an actionable hint if not.
+### Flow 2 — a tool call (`tools/call`)
 
----
+1. The SDK delivers a `CallToolRequest` to the registered handler in `server.ts`
+2. Handler extracts `name` and `arguments`, calls `dispatchCallTool(ctx, name, args)` in `dispatch.ts`
+3. `dispatchCallTool` runs `visibleTools(ctx)` to verify the tool is exposed
+4. Calls `tool.invoke(ctx.cwd, args)` — for example, for `gdgraph.affected` this calls `getAffected(graph, file)` from `src/gdgraph/query`
+5. Raw result is JSON-serialized and passed through `redactToolOutput`
+6. Wrapped in `{ text, isError }` and returned to the SDK
+7. Any error in `invoke` is caught and returned as `isError: true` rather than propagating across the transport
 
-<!-- keryx:reference:begin v=1 hash=329e26f318ed59fe46139b165d47bf1b1c85c927487391ac734828879b269953 -->
+### Flow 3 — `keryx integrate`
+
+1. `src/commands` calls `installMcpClient(projectRoot, ids, options)` in `client-config.ts`
+2. For each resolved runtime (e.g. `cursor`):
+   - Reads existing settings file (or starts from empty object)
+   - Calls `runtime.merge(settings, projectRoot)` to inject the managed server entry with `_keryxManaged` sentinel
+   - Validates the result and writes the file back (unless `dryRun`)
+3. In parallel, `enableMcpModule` updates `metaproject.json` to set `modules.mcp.enabled=true`
+4. `scaffoldMcpModule` creates the `core/mcp/` directory tree and default config/manifest files if missing
+5. `probeMcpSdk` checks whether the optional SDK is importable and returns an actionable hint if not
+
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
-- `HandleSlateOpenParams` (interface)
-- `handleSlateOpen` (function)
-- `buildToolRegistry` (function)
-- `McpContext` (interface)
-- `buildMcpContext` (function)
-- `visibleTools` (function)
-- `ToolListing` (interface)
-- `dispatchListTools` (function)
-- `ToolCallResult` (interface)
-- `dispatchCallTool` (function)
-- `dispatchListResources` (function)
-- `dispatchReadResource` (function)
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `HandleSlateOpenParams` | interface | Parameters for slate open handler |
+| `handleSlateOpen` | function | Handles slate open events |
+| `buildToolRegistry` | function | Constructs the tool registry |
+| `McpContext` | interface | Per-request runtime bundle |
+| `buildMcpContext` | function | Assembles McpContext from config and discovery |
+| `visibleTools` | function | Applies three-layer visibility filter |
+| `ToolListing` | interface | Tool list response structure |
+| `dispatchListTools` | function | Handles tools/list requests |
+| `ToolCallResult` | interface | Tool call response structure |
+| `dispatchCallTool` | function | Handles tools/call requests |
+| `dispatchListResources` | function | Handles resources/list requests |
+| `dispatchReadResource` | function | Handles resources/read requests |
 
 ### Key files
 
-- `src/mcp/tools.ts` - imported by 5, imports 13
-- `src/mcp/dispatch.ts` - imported by 6, imports 6
-- `src/mcp/metaproject-tools.ts` - imported by 5, imports 4
-- `src/mcp/client-config.ts` - imported by 6, imports 2
-- `src/mcp/mcp.test.ts` - imported by 0, imports 7
-- `src/mcp/server.ts` - imported by 3, imports 3
+| File | Imports | Exports to |
+|------|---------|------------|
+| `src/mcp/tools.ts` | 13 | 5 modules |
+| `src/mcp/dispatch.ts` | 6 | 6 modules |
+| `src/mcp/metaproject-tools.ts` | 4 | 5 modules |
+| `src/mcp/client-config.ts` | 2 | 6 modules |
+| `src/mcp/server.ts` | 3 | 3 modules |
+| `src/mcp/mcp.test.ts` | 7 | 0 (test file) |
 
-### Depends on
+### Module dependencies
 
-- `src/harness/tool` - 8 import(s)
-- `src/lib` - 6 import(s)
-- `src/sac` - 4 import(s)
-- `src/gdgraph` - 3 import(s)
-- `src/security` - 3 import(s)
-- `src/standard` - 2 import(s)
+**Depends on:**
 
-### Depended on by
+- `src/harness/tool` — 8 import(s)
+- `src/lib` — 6 import(s)
+- `src/sac` — 4 import(s)
+- `src/gdgraph` — 3 import(s)
+- `src/security` — 3 import(s)
+- `src/standard` — 2 import(s)
 
-- `src/commands` - 3 import(s)
-- `src/harness/tool` - 3 import(s)
-- `src/sac` - 3 import(s)
-- `src/tui` - 3 import(s)
+**Depended on by:**
+
+- `src/commands` — 3 import(s)
+- `src/harness/tool` — 3 import(s)
+- `src/sac` — 3 import(s)
+- `src/tui` — 3 import(s)
 
 ### Graph signals
 
 - Files: 19
 - Cross-module imports: 36
-<!-- keryx:reference:end -->
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -118,6 +160,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 1.0.0 - Prose sections enriched by gdwiki enrich workflow (2026-07-10).
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **1.0.1** — Reference refreshed from the code graph (5886c474)
+- **1.0.0** — Prose sections enriched by gdwiki enrich workflow (2026-07-10)
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z
+```

@@ -1,92 +1,90 @@
 ---
 Title: Module src/harness/provider
-Version: 0.1.1
+Version: 0.1.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:77b5dcbbcf6457957ed826cafd3bb4f162b054724de3d959857a1d901c41a4a1
-Summary: "`src/harness/provider` groups 9 file(s). Depends on `src/harness/provider/anthropic`, `src/harness/provider/ollama`, `src/commands`. Exposes 20 public symbol(s)."
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:e028db32e4bbb28425d70fded66238919396fd47d7156ce092f73e302cd2f5a2
+Summary: "`src/harness/provider` groups 9 file(s). Provides the provider-abstraction layer of the harness: normalized model vocabulary, `ProviderPort` contract, factory for concrete providers, and a fake provider for tests. Exposes 20 public symbol(s)."
 ---
+
 # Module src/harness/provider
 
 ## Summary
 
-`src/harness/provider` groups 9 file(s). It is the provider-abstraction layer of the
-harness: it defines the normalized model vocabulary, the `ProviderPort` contract, a
-factory for concrete providers, and a fake provider for tests. It depends on the
-`anthropic` and `ollama` adapters and on `src/commands`, and exposes 20 public
-symbol(s).
+`src/harness/provider` provides the abstraction layer between the harness and model
+providers. It defines normalized request, event, usage, and error vocabulary; the
+`ProviderPort` contract; a factory for concrete providers; and a fake provider for tests.
 
-## Overview
+The module exposes 20 public symbols. It connects to provider adapters, including
+Anthropic and Ollama, and is used by `src/commands` and other harness consumers.
 
-`src/harness/provider` owns the contracts and plumbing that let the harness talk to
-LLM backends through a single interface. It defines the provider-agnostic request and
-response vocabulary (`NormalizedRequest`, `NormalizedEvent`, `NormalizedUsage`, ...),
-the `ProviderPort` interface that concrete adapters implement, and the factory
-(`make-provider`) that wires up adapters for specific backends such as Anthropic and
-Ollama. It also ships an in-memory `FakeProvider` so consumers can be developed and
-tested without a live model endpoint.
+## Responsibilities
 
-## How it works
+The module groups together:
 
-The module is organized as a small ports-and-adapters stack with a dependency-free
-core:
+- **Normalized types** for provider requests, responses, events, usage, capabilities,
+  and errors.
+- **`ProviderPort`**, the contract used to communicate with a provider.
+- **Provider construction**, through `makeProvider`.
+- **Single-turn orchestration**, for coordinating a request and its result.
+- **A fake provider**, for exercising provider flows without a live endpoint.
 
-- **`types.ts`** — the core vocabulary. Defines the normalized model
-  (`NormalizedRequest`, `NormalizedEvent`, `NormalizedUsage`, ...), `ProviderErrorKind`,
-  attempt/outcome types, and provider metadata. It imports nothing, which is why it is
-  the most widely imported file in the module (50 import sites).
-- **`provider-port.ts`** — the seam. Declares `ProviderPort`, the interface every
-  concrete provider must implement.
-- **`make-provider.ts`** — the factory. Given a provider descriptor, selects the
-  matching adapter (from `anthropic` or `ollama`) and returns it as a `ProviderPort`.
-- **`single-turn.ts`** — convenience orchestration for a single request/response cycle
-  over the port.
-- **`fake-provider.ts`** — a scripted, in-memory provider driven by
-  `FakeProviderTranscript`, plus `requestHashOf` to correlate requests with transcript
-  entries.
-
-Consumers such as `src/commands`, `src/harness/run`, and `src/harness/tool/builtin`
-program against `ProviderPort` and the normalized types, so vendor SDK details stay
-behind the port.
+Using this shared contract keeps callers working with normalized types rather than
+provider-specific details.
 
 ## Key concepts
 
-- **Provider** — a model backend reachable through the harness; concretely, the
-  adapters under `src/harness/provider/anthropic` and `src/harness/provider/ollama`.
-- **ProviderPort** — the interface that decouples the harness from vendor SDKs; all
-  request/response flows go through it.
-- **Normalized types** — provider-agnostic shapes that hide vendor differences:
-  `NormalizedRequest` / `NormalizedRequestOptions`, `NormalizedBudget`,
-  `NormalizedMessage`, `NormalizedToolDefinition`, `NormalizedUsage`,
-  `NormalizedEvent` / `NormalizedEventKind`, `NormalizedError`, and `StreamOptions`.
-- **Provider metadata** — `ProviderDescription`, `ProviderDescriptorSummary`, and
-  `ProviderCapabilities` describe a provider and what it supports; the factory uses
-  these to choose and configure an adapter.
-- **Attempt / AttemptOutcome** — a single call attempt to a provider and its result,
-  including streamed events and usage.
-- **ProviderErrorKind** — normalized classification of provider failures.
-- **FakeProvider / FakeProviderTranscript** — a deterministic test double and its
-  scripted interaction log.
-- **requestHashOf** — produces a stable hash of a normalized request, used to
-  correlate incoming requests with scripted transcript entries.
+### Normalized vocabulary
+
+The normalized types describe provider interactions independently of a specific
+backend. They include request and message shapes, tool definitions and calls, streaming
+events, usage, capabilities, and errors. `ProviderErrorKind` classifies provider
+failures, while `NormalizedEventKind` identifies event kinds.
+
+### ProviderPort
+
+`ProviderPort` is the interface through which the harness interacts with providers.
+Concrete adapters implement this contract.
+
+### Provider descriptors
+
+`ProviderDescription`, `ProviderDescriptorSummary`, and `ProviderCapabilities` describe
+providers and their capabilities. `MakeProviderOpts` supplies options to the factory.
+
+### Attempts and outcomes
+
+`Attempt` and `AttemptOutcome` represent a provider call attempt and its outcome,
+including normalized events and usage.
+
+### Fake provider
+
+`FakeProvider` is a scripted test double. Its transcript type,
+`FakeProviderTranscript`, provides scripted interactions; `requestHashOf` can be used to
+correlate a normalized request with transcript entries.
 
 ## Main flows
 
-1. **Creating a provider.** A caller passes a provider descriptor to
-   `make-provider.ts`. The factory matches it to the Anthropic or Ollama adapter and
-   returns a `ProviderPort`.
-2. **Single-turn request.** The harness builds a `NormalizedRequest` and sends it
-   through the `ProviderPort`; `single-turn.ts` encapsulates the one-shot cycle,
-   streaming back `NormalizedEvent`s and completing with an `AttemptOutcome` and
-   `NormalizedUsage`. Failures surface as `NormalizedError` with a `ProviderErrorKind`.
-3. **Simulating a provider in tests.** Tests construct a `FakeProvider` from a
-   `FakeProviderTranscript`; `requestHashOf` lets the transcript match an incoming
-   request to the scripted response — no network or vendor SDK required.
+### Creating a provider
+
+Callers use `makeProvider` to construct a provider for a supported backend. The returned
+provider is used through `ProviderPort`.
+
+### Making a single-turn request
+
+A caller creates a `NormalizedRequest` and uses the provider port to perform the
+interaction. The single-turn orchestration supports handling normalized events and the
+resulting attempt outcome. Provider failures are represented using normalized error
+types.
+
+### Testing provider interactions
+
+Tests can use `FakeProvider` and a scripted transcript to exercise provider behavior
+without relying on a live endpoint.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=782399c5b2bd317d46168fd3258ea132ba4d1a0bad928b9d9c6b06b9b197abcf -->
+<!-- keryx:reference:begin v=1 hash=48d1106db3957bf478c333a4d06db14231c66fe739918931987f65dae8c61d2a -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -101,6 +99,8 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 - `NormalizedEvent` (interface)
 - `NormalizedUsage` (interface)
 - `NormalizedToolCall` (interface)
+- `ProviderReplayItem` (interface)
+- `MessageReasoning` (interface)
 - `NormalizedMessage` (interface)
 - `NormalizedToolDefinition` (interface)
 - `NormalizedRequestOptions` (interface)
@@ -112,52 +112,56 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 - `StreamOptions` (interface)
 - `Attempt` (interface)
 - `ProviderPort` (interface)
-- `MakeProviderOpts` (interface)
-- `makeProvider` (function)
 
 ### Key files
 
-- `src/harness/provider/types.ts` - imported by 85, imports 0
-- `src/harness/provider/make-provider.ts` - imported by 11, imports 8
-- `src/harness/provider/single-turn.ts` - imported by 15, imports 4
-- `src/harness/provider/fake-provider.ts` - imported by 13, imports 2
+- `src/harness/provider/types.ts` - imported by 145, imports 0
+- `src/harness/provider/single-turn.ts` - imported by 25, imports 4
+- `src/harness/provider/make-provider.ts` - imported by 15, imports 11
+- `src/harness/provider/fake-provider.ts` - imported by 20, imports 2
 - `src/harness/provider/provider-port.ts` - imported by 10, imports 2
-- `src/harness/provider/make-provider.test.ts` - imported by 0, imports 7
+- `src/harness/provider/make-provider.test.ts` - imported by 0, imports 9
 
 ### Depends on
 
-- `src/harness/provider/anthropic` - 2 import(s)
-- `src/harness/provider/compat` - 2 import(s)
-- `src/harness/provider/ollama` - 2 import(s)
-- `src/harness/provider/openai` - 2 import(s)
 - `src/commands` - 2 import(s)
+- `src/lib/oauth` - 2 import(s)
+- `src/harness/provider/anthropic` - 1 import(s)
+- `src/harness/provider/compat` - 1 import(s)
 - `src/harness/provider/gemini` - 1 import(s)
+- `src/harness/provider/ollama` - 1 import(s)
 
 ### Depended on by
 
-- `src/commands` - 17 import(s)
-- `src/tui` - 11 import(s)
+- `src/commands` - 18 import(s)
 - `scripts/benchmark` - 10 import(s)
-- `src/harness/tool/builtin` - 9 import(s)
-- `src/wiki` - 8 import(s)
-- `src/harness/run` - 7 import(s)
+- `src/tui` - 7 import(s)
+- `src/acp` - 4 import(s)
+- `src/tui/games` - 4 import(s)
+- `src/wiki` - 4 import(s)
+
+### Dependency basis
+
+- Production imports only: 129 import(s) from test file(s) (e.g. `src/acp/hook-notices.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 11
-- Cross-module imports: 13
+- Files: 16
+- Cross-module imports: 12
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are
+linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/commands](src-commands.md)
 
 ## Changelog
 
-- 0.1.1 - Reference refreshed from the code graph (5886c474).
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-08-11T07:37:30.932Z. Prose sections are drafts for the gdwiki enrich workflow.
-- 0.1.0 - Prose sections enriched by documentation pass; status set to accepted.
+- 0.1.2 - Reference refreshed from the code graph (4e80355f).
+- **0.1.1** — Reference refreshed from the code graph (5886c474).
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-08-11T07:37:30.932Z. Prose
+  sections are drafts for the gdwiki enrich workflow.
+- **0.1.0** — Prose sections enriched by documentation pass; status set to accepted.

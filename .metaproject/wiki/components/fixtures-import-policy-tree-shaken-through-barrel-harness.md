@@ -3,67 +3,75 @@ Title: Module fixtures/import-policy/tree-shaken-through-barrel/harness
 Version: 0.1.0
 Type: component
 Status: draft
-Summary: "`fixtures/import-policy/tree-shaken-through-barrel/harness` groups 2 file(s). Exposes 1 public symbol(s)."
+Summary: "A fixture harness modeling import graph traversal through a barrel module. Exposes the `CLIENT` symbol from a two-file module structure."
 ---
 # Module fixtures/import-policy/tree-shaken-through-barrel/harness
 
 ## Summary
 
-`fixtures/import-policy/tree-shaken-through-barrel/harness` is a small fixture harness used to model or validate an import graph that can be traversed through a barrel module. It groups two files and exposes one public symbol, `CLIENT`.
+`fixtures/import-policy/tree-shaken-through-barrel/harness` is a minimal fixture harness used to model or validate an import graph traversable through a barrel module. It contains two files and exposes a single public symbol, `CLIENT`.
 
 ## Overview
 
-This module owns a minimal fixture surface under the `import-policy` fixtures area. Its likely purpose is to provide a controlled module shape for checks related to import policies or tree shaking through a barrel export.
+This module provides a controlled module shape for testing import policy or tree-shaking behavior involving barrel exports. The harness is intentionally self-contained with a predictable structure:
 
-The harness is intentionally small. It separates a public entry point from a lower-level leaf module so that dependency or import graph behavior can be observed with fewer moving parts.
+- Two files form a simple dependency chain
+- One public symbol is re-exported through the entry point
+- No cross-module imports (zero external dependencies)
+
+The harness serves as a building block for the broader `import-policy/tree-shaken-through-barrel` fixture suite, allowing tests to observe how a public symbol is resolved through a barrel-style entry point.
 
 ## How it works
 
-The harness is structured around two main files:
+The harness consists of two files:
 
-- `index.ts` acts as the module entry point and the file that is consumed by another fixture module.
-- `leaf.ts` appears to be a lower-level dependency used by the entry point.
+| File | Role | Dependencies |
+|------|------|--------------|
+| `index.ts` | Barrel entry point; the module consumers import | Imports `leaf.ts` |
+| `leaf.ts` | Leaf module; contains the `CLIENT` implementation | None |
 
-The public API exposes a single symbol, `CLIENT`. The entry point likely serves as the barrel or aggregation surface that makes this fixture value available to consumers while keeping the implementation detail in a separate leaf file.
+**Symbol flow:** `leaf.ts` defines `CLIENT` → `index.ts` re-exports it → consumer imports `index.ts` and receives `CLIENT`.
 
-Because the harness has no cross-module imports in the captured graph signals, it is self-contained apart from being consumed by a graph-related fixture.
+This structure mimics a common real-world pattern where a barrel file aggregates symbols from internal modules, providing a stable public API while isolating implementation details.
 
 ## Key concepts
 
-- **Harness**  
-  A small supporting fixture that provides a predictable module shape for graph, import policy, or tree shaking checks.
+### Harness
+A small supporting fixture that provides a predictable, controlled module shape for testing graph traversal, import policy enforcement, or tree-shaking behavior.
 
-- **Barrel entry point**  
-  `index.ts` represents the public-facing module entry that may aggregate or re-export symbols from a leaf implementation.
+### Barrel entry point
+`index.ts` acts as the public-facing module entry. It aggregates or re-exports symbols from the leaf module, making it the interface consumers interact with.
 
-- **Leaf module**  
-  `leaf.ts` is a deeper dependency inside the harness. It is referenced by the entry point but does not depend on other files according to the graph data.
+### Leaf module
+`leaf.ts` is the implementation layer. It contains no local dependencies and provides the `CLIENT` symbol that the entry point re-exports.
 
-- **Public fixture symbol**  
-  `CLIENT` is the only exposed symbol from this module and likely represents the fixture value used by consumers of the harness.
+### Public fixture symbol
+`CLIENT` is the sole exposed symbol from this harness. It represents the fixture value used by consumers (such as `gdgraph`) to validate import graph behavior.
 
 ## Main flows
 
-1. **Consumer imports the harness**
-   - A consumer references `fixtures/import-policy/tree-shaken-through-barrel/harness`.
-   - The entry point `index.ts` is the imported module.
-   - The consumer receives the public `CLIENT` symbol.
+### 1. Consumer imports the harness
+A consumer references the harness by its module path. The entry point `index.ts` is resolved as the imported module, and the consumer receives the public `CLIENT` symbol.
 
-2. **Entry point resolves through the harness graph**
-   - `index.ts` participates in a two-file fixture graph.
-   - It depends on `leaf.ts`, which in turn has no local dependencies.
-   - This creates a simple dependency chain: consumer → harness entry point → leaf module.
+```typescript
+import { CLIENT } from 'fixtures/import-policy/tree-shaken-through-barrel/harness';
+```
 
-3. **Graph or import policy inspection**
-   - The `gdgraph` fixture imports this harness.
-   - This allows the broader fixture system to observe how a public symbol is reached through the barrel-style harness structure.
+### 2. Entry point resolves through the harness graph
+The entry point participates in a two-file fixture graph. It depends on `leaf.ts`, which has no local dependencies, creating a simple chain:
+
+```
+consumer → harness/index.ts → harness/leaf.ts
+```
+
+### 3. Graph or import policy inspection
+The `gdgraph` fixture imports this harness to observe how a public symbol is reached through the barrel-style structure. This enables validation of import resolution, tree-shaking decisions, or policy checks.
 
 ---
 
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -71,12 +79,12 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `fixtures/import-policy/tree-shaken-through-barrel/harness/index.ts` - imported by 1, imports 1
-- `fixtures/import-policy/tree-shaken-through-barrel/harness/leaf.ts` - imported by 1, imports 0
+- `fixtures/import-policy/tree-shaken-through-barrel/harness/index.ts` — imported by 1, imports 1
+- `fixtures/import-policy/tree-shaken-through-barrel/harness/leaf.ts` — imported by 1, imports 0
 
 ### Depended on by
 
-- `fixtures/import-policy/tree-shaken-through-barrel/gdgraph` - 1 import(s)
+- `fixtures/import-policy/tree-shaken-through-barrel/gdgraph` — 1 import(s)
 
 ### Entry points
 
@@ -84,16 +92,17 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Graph signals
 
-- Files: 2
-- Cross-module imports: 0
+| Signal | Value |
+|--------|-------|
+| Files | 2 |
+| Cross-module imports | 0 |
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.

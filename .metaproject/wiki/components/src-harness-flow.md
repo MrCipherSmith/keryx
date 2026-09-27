@@ -5,110 +5,106 @@ Type: component
 Status: draft
 Summary: "`src/harness/flow` groups 4 file(s). Depends on `src/flow`, `src/harness/completion`, `src/contracts`."
 ---
+```markdown
+---
+Title: Module src/harness/flow
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/harness/flow` groups 4 files and provides a harness-side integration point for flow behavior. Depends on `src/flow`, `src/harness/completion`, `src/contracts`, and `src/harness/evidence` (tests)."
+---
 
 # Module src/harness/flow
 
 ## Summary
 
-`src/harness/flow` groups 4 files and provides a harness-side integration point for flow behavior. It depends primarily on `src/flow`, `src/harness/completion`, and `src/contracts`, with an additional dependency on `src/harness/evidence` through its tests.
+`src/harness/flow` provides a controlled boundary between the harness layer and the flow layer. It enables harness code to exercise, validate, and coordinate flow-related behavior without duplicating flow internals.
 
-The module acts as a controlled bridge between the harness and the flow layer. It lets harness code exercise, validate, and coordinate flow-related behavior without duplicating flow internals.
+The module depends on:
+
+- `src/flow` — core flow semantics
+- `src/harness/completion` — completion coordination
+- `src/contracts` — shared type/contract definitions
+- `src/harness/evidence` — test artifact handling (tests only)
 
 ## Overview
 
-This module owns the harness integration for flow behavior. Its purpose is to provide a managed boundary where flow primitives can be used, tested, and validated under harness expectations.
+This module owns the harness integration for flow behavior. It exposes a managed boundary where flow primitives can be used, tested, and validated under harness expectations.
 
-The two main pieces are the managed flow port and the parity utility. Together they support harness control, completion handling, contract conformance, and consistency checks around flow behavior.
+The two implementation files are:
 
-## How it works
+- **managed-flow-port.ts** — the main harness-facing integration surface
+- **parity.ts** — utilities for consistency validation around flow behavior
 
-The module is organized around two implementation files and two tests:
+## File Structure
 
-- `managed-flow-port.ts` provides the main harness-facing integration surface for flow behavior.
-- `parity.ts` supports consistency or parity-related validation around flow behavior.
-- `managed-flow-port.test.ts` exercises the managed port against related modules.
-- `parity.test.ts` exercises the parity utility against related modules.
+| File | Purpose | Imports | Imported By |
+|------|---------|---------|-------------|
+| `managed-flow-port.ts` | Harness integration surface | 2 | 4 |
+| `parity.ts` | Consistency checking utility | 2 | 1 |
+| `managed-flow-port.test.ts` | Integration tests | 7 | 0 |
+| `parity.test.ts` | Parity utility tests | 7 | 0 |
 
-The tests import multiple modules, including flow, completion, contracts, and evidence, which indicates they are primarily integration-oriented. They verify that the harness-side flow boundary behaves consistently with the rest of the system.
-
-The module is imported by `src/flow` and `src/harness/child`, which suggests it is used as a shared integration seam. In one direction, harness code can use managed flow behavior. In the other, flow-related tests or utilities may reference the module for validation or compatibility checks.
-
-## Key concepts
+## Key Concepts
 
 - **Managed flow port**  
-  A harness-controlled boundary around flow behavior. This allows harness code to interact with flow functionality in a more constrained and testable way.
+  A harness-controlled boundary around flow behavior. Allows harness code to interact with flow functionality in a constrained, testable way.
 
 - **Flow behavior**  
-  Behavior owned by `src/flow`. This module does not replace the flow layer; it integrates with it.
+  Behavior owned by `src/flow`. This module integrates with the flow layer but does not replace it.
 
 - **Completion handling**  
-  The module depends on `src/harness/completion`, indicating that completion-related coordination is part of the harness flow boundary.
+  The module depends on `src/harness/completion`, indicating that completion coordination is part of the harness flow boundary.
 
 - **Contract conformance**  
-  The dependency on `src/contracts` suggests the module works with shared contract definitions or type boundaries used to keep the integration consistent.
+  The dependency on `src/contracts` provides shared type boundaries to keep the integration consistent.
 
 - **Parity**  
-  Parity behavior is used to check that flow-related behavior remains aligned across the modules involved in the harness integration.
+  Parity utilities check that flow-related behavior remains aligned across modules involved in the harness integration.
 
 - **Evidence**  
-  The tests use `src/harness/evidence`, indicating that observable evidence or test artifacts are part of validating harness behavior.
+  Tests use `src/harness/evidence` to capture or inspect observable behavior during validation.
 
-## Main flows
+## Usage Patterns
 
-### 1. Harness-side use of the managed flow port
+### Harness-side use of the managed flow port
 
-1. A consumer, such as `src/harness/child`, imports `managed-flow-port`.
-2. The managed port provides a controlled surface for flow behavior instead of exposing direct internal flow details.
-3. The port relies on `src/flow` for flow semantics and on `src/harness/completion` for completion-related coordination.
-4. `src/contracts` provides shared type or contract context so the boundary stays consistent with the rest of the system.
+1. A consumer (such as `src/harness/child`) imports `managed-flow-port`.
+2. The port provides a controlled surface for flow behavior instead of exposing internal flow details directly.
+3. The port relies on `src/flow` for flow semantics and `src/harness/completion` for completion coordination.
+4. `src/contracts` provides shared types so the boundary stays consistent.
 
-### 2. Parity validation
+### Parity validation
 
 1. Code or tests use `parity` to compare expected and observed flow behavior.
-2. The comparison is evaluated against relevant modules such as `src/flow`, `src/contracts`, and harness completion behavior.
-3. Tests verify that the flow-related behavior remains aligned with harness expectations.
+2. Comparisons are evaluated against `src/flow`, `src/contracts`, and harness completion behavior.
+3. Tests verify alignment between flow behavior and harness expectations.
 
-### 3. Integration testing through evidence
+### Integration testing with evidence
 
-1. The tests in this module import multiple dependencies to simulate or exercise real integration paths.
-2. `src/harness/evidence` is used to capture or inspect observable behavior.
-3. This turns the module into a verification layer for the harness flow boundary, not just a passive adapter.
+1. Tests import multiple dependencies to simulate real integration paths.
+2. `src/harness/evidence` captures observable behavior for inspection.
+3. This turns the module into a verification layer for the harness flow boundary.
 
----
+## Dependencies
 
-## Reference (from code graph)
+### Direct imports from this module
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+| Module | Import Count |
+|--------|-------------|
+| `src/flow` | 8 |
+| `src/harness/completion` | 4 |
+| `src/contracts` | 2 |
+| `src/harness/evidence` | 1 |
 
-### Key files
+### Consumers of this module
 
-- `src/harness/flow/managed-flow-port.test.ts` - imported by 0, imports 7
-- `src/harness/flow/parity.test.ts` - imported by 0, imports 7
-- `src/harness/flow/managed-flow-port.ts` - imported by 4, imports 2
-- `src/harness/flow/parity.ts` - imported by 1, imports 2
+| Module | Import Count |
+|--------|-------------|
+| `src/flow` | 1 |
+| `src/harness/child` | 1 |
 
-### Depends on
-
-- `src/flow` - 8 import(s)
-- `src/harness/completion` - 4 import(s)
-- `src/contracts` - 2 import(s)
-- `src/harness/evidence` - 1 import(s)
-
-### Depended on by
-
-- `src/flow` - 1 import(s)
-- `src/harness/child` - 1 import(s)
-
-### Graph signals
-
-- Files: 4
-- Cross-module imports: 15
-
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related Pages
 
 - [Wiki Index](../index.md)
 - [Module src/flow](src-flow.md)
@@ -119,4 +115,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

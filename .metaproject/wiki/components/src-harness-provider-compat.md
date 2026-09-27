@@ -3,69 +3,97 @@ Title: Module src/harness/provider/compat
 Version: 0.1.0
 Type: component
 Status: draft
-Summary: "`src/harness/provider/compat` groups 3 file(s). Depends on `src/harness/provider`, `src/security`, `src/harness/mutation`. Exposes 6 public symbol(s)."
+Summary: OpenAI-compatible provider support module for the harness. Groups three files, exposes six public symbols, and depends on `src/harness/provider`, `src/security`, and `src/harness/mutation`.
 ---
 # Module src/harness/provider/compat
 
 ## Summary
 
-`src/harness/provider/compat` is the OpenAI-compatible provider support module for the harness. It groups three files and exposes six public symbols used by provider consumers. The module depends on `src/harness/provider`, `src/security`, and `src/harness/mutation`.
+`src/harness/provider/compat` provides an OpenAI-compatible provider abstraction within the harness system. The module groups three files and exposes six public symbols used by consumers in `src/harness/provider` and `src/harness/provider/ollama`.
 
 ## Overview
 
-This module owns the compatibility layer needed to represent and operate OpenAI-compatible providers within the harness provider system. Its public API defines a provider engine, provider dependencies, identity information, model descriptors, provider descriptor documents, and capability grants. These contracts allow higher-level provider code, including `src/harness/provider` and `src/harness/provider/ollama`, to consume OpenAI-compatible provider functionality without directly coupling to lower-level provider details. The dependency on the Anthropic provider module suggests it reuses established provider descriptor or capability patterns from that part of the provider family.
+This module owns the compatibility layer that bridges OpenAI-style provider integrations with the harness provider architecture. Its public API defines contracts for:
 
-## How it works
+- The provider engine itself
+- Provider dependencies and identity
+- Model and provider metadata descriptors
+- Capability grants for security boundaries
 
-The module is centered on `openai-compat-provider.ts`, where the provider-facing behavior is implemented through the `OpenAiCompatEngine` class. The remaining public interfaces define the inputs and outputs used by that engine and by consumers of the module.
+By expressing these contracts through existing harness abstractions (via `src/security` and `src/harness/mutation`), the module avoids duplicating lower-level concerns. This design allows `src/harness/provider` and `src/harness/provider/ollama` to consume OpenAI-compatible functionality without coupling to OpenAI-specific implementation details.
 
-- `OpenAiCompatProviderDeps` represents the collaborators or configuration required by the provider engine.
-- `OpenAiCompatIdentity` represents provider identity information used to distinguish or validate provider context.
-- `OpenAiCompatModelDescriptor` describes individual model metadata.
-- `OpenAiCompatProviderDescriptorDocument` describes the provider as a whole.
-- `OpenAiCompatCapabilityGrant` represents the capability or permission boundary associated with provider operations.
-- `OpenAiCompatEngine` provides the exported entry point for working with these contracts.
+## Architecture
 
-Because the module depends on `src/security` and `src/harness/mutation`, capability grants and mutation-aware behavior are expressed through existing harness abstractions rather than being reinvented inside this compatibility module. The adjacent test files provide direct coverage of the provider behavior and related scenario-oriented tests.
+### Core file
+
+- `openai-compat-provider.ts` — Contains the `OpenAiCompatEngine` class, which is the primary entry point for provider operations.
+
+### Test files
+
+- `openai-compat-provider.test.ts` — Unit tests for provider behavior.
+- `openai-compat-provider.privatelan.test.ts` — Scenario-oriented tests.
+
+### Public API
+
+| Symbol | Type | Purpose |
+|--------|------|---------|
+| `OpenAiCompatEngine` | class | Exported entry point for OpenAI-compatible provider operations |
+| `OpenAiCompatCapabilityGrant` | interface | Represents the permission or capability boundary for provider actions |
+| `OpenAiCompatProviderDeps` | interface | Defines collaborators and configuration required by the engine |
+| `OpenAiCompatIdentity` | interface | Provider identity information for context qualification |
+| `OpenAiCompatModelDescriptor` | interface | Metadata describing an individual model |
+| `OpenAiCompatProviderDescriptorDocument` | interface | Metadata describing the provider as a whole |
+
+## Dependencies
+
+### Required dependencies
+
+- `src/harness/provider` — Core harness provider abstractions
+- `src/security` — Security contracts used by capability grants
+- `src/harness/mutation` — Mutation-aware behavior integrated into provider operations
+
+### Inherited patterns
+
+- `src/harness/provider/anthropic` — Provides descriptor and capability patterns reused by this module
+
+## Consumers
+
+This module is imported by:
+
+- `src/harness/provider` (2 imports) — Primary consumer using engine and descriptor contracts
+- `src/harness/provider/ollama` (1 import) — Reuses OpenAI-compatible contracts for Ollama integration
 
 ## Key concepts
 
-- **OpenAI-compatible provider**: A provider implementation exposed through a contract compatible with OpenAI-style provider integrations, while still using harness-wide provider, security, and mutation abstractions.
-- **Provider engine**: The exported class responsible for coordinating provider behavior and exposing the module’s provider-facing capabilities.
-- **Provider dependencies**: Required collaborators or configuration values that allow the compatibility provider to integrate with the broader harness.
-- **Provider identity**: Information that identifies or qualifies the provider context being used.
-- **Model descriptor**: Metadata describing an individual model exposed through the provider.
-- **Provider descriptor document**: Metadata describing the provider as a unit.
-- **Capability grant**: A security-related boundary that represents what provider operations are allowed or exposed.
+- **OpenAI-compatible provider**: A provider exposed through OpenAI-style contracts while leveraging harness-wide abstractions for security and mutation handling.
+- **Provider engine**: The `OpenAiCompatEngine` class coordinates behavior and exposes the module's capabilities.
+- **Capability grant**: A security boundary defined via `src/security` that governs allowed provider operations.
+- **Descriptor documents**: Metadata contracts that decouple provider details from consumer code.
 
-## Main flows
+## Integration patterns
 
-### Provider integration flow
+### Provider initialization
 
-1. A consumer in `src/harness/provider` imports `src/harness/provider/compat`.
-2. The consumer uses the exported `OpenAiCompatEngine` from `openai-compat-provider.ts`.
-3. Provider dependencies and identity are supplied through `OpenAiCompatProviderDeps` and `OpenAiCompatIdentity`.
-4. The consumer consumes provider and model metadata through the descriptor types and capability-related contracts.
+1. Consumer imports `OpenAiCompatEngine` and related interfaces from the module.
+2. Dependencies are assembled into `OpenAiCompatProviderDeps`.
+3. Identity is provided via `OpenAiCompatIdentity`.
+4. The engine is instantiated with these inputs.
 
-### Provider description flow
+### Metadata consumption
 
-1. Provider-level metadata is represented by `OpenAiCompatProviderDescriptorDocument`.
-2. Model-level metadata is represented by `OpenAiCompatModelDescriptor`.
-3. Capability boundaries are represented by `OpenAiCompatCapabilityGrant`.
-4. These contracts allow consumers to understand, validate, and integrate the provider without depending on OpenAI-specific implementation details directly.
+1. `OpenAiCompatProviderDescriptorDocument` provides provider-level metadata.
+2. `OpenAiCompatModelDescriptor` provides per-model metadata.
+3. `OpenAiCompatCapabilityGrant` expresses security boundaries for the provider.
 
-### Ollama reuse flow
+This separation allows consumers to inspect, validate, and integrate the provider without binding to implementation specifics.
 
-1. `src/harness/provider/ollama` imports this module.
-2. It can reuse the OpenAI-compatible provider contracts or engine behavior exposed by the module.
-3. This allows related provider integrations to share compatibility behavior while retaining their own provider-specific positioning in the harness.
+### Shared compatibility
+
+`src/harness/provider/ollama` reuses this module's contracts to share OpenAI-compatible behavior while maintaining its own provider-specific positioning in the harness.
 
 ---
 
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+## Reference
 
 ### Public API
 
@@ -78,31 +106,28 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/harness/provider/compat/openai-compat-provider.ts` - imported by 5, imports 6
-- `src/harness/provider/compat/openai-compat-provider.privatelan.test.ts` - imported by 0, imports 2
-- `src/harness/provider/compat/openai-compat-provider.test.ts` - imported by 0, imports 2
+- `src/harness/provider/compat/openai-compat-provider.ts` — 5 importers, 6 imports
+- `src/harness/provider/compat/openai-compat-provider.privatelan.test.ts` — 0 importers, 2 imports
+- `src/harness/provider/compat/openai-compat-provider.test.ts` — 0 importers, 2 imports
 
-### Depends on
+### Dependencies
 
-- `src/harness/provider` - 5 import(s)
-- `src/security` - 1 import(s)
-- `src/harness/mutation` - 1 import(s)
-- `src/harness/provider/anthropic` - 1 import(s)
+- `src/harness/provider` — 5 import(s)
+- `src/security` — 1 import(s)
+- `src/harness/mutation` — 1 import(s)
+- `src/harness/provider/anthropic` — 1 import(s)
 
-### Depended on by
+### Dependents
 
-- `src/harness/provider` - 2 import(s)
-- `src/harness/provider/ollama` - 1 import(s)
+- `src/harness/provider` — 2 import(s)
+- `src/harness/provider/ollama` — 1 import(s)
 
 ### Graph signals
 
 - Files: 3
 - Cross-module imports: 8
 
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related
 
 - [Wiki Index](../index.md)
 - [Module src/harness/provider](src-harness-provider.md)
@@ -113,4 +138,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched for gdwiki workflow.

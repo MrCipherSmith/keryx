@@ -1,56 +1,85 @@
 ---
 Title: Module src/harness/tool
-Version: 0.1.1
+Version: 0.1.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:f7dc78789a4677214bb7b311494b6b7df744bed5cd663abeddfe3a2bc8fc57bf
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:5027c12126fa3ce470c0fe21bce73e15416061ed3e9039223e44509dee4b4fe5
 Summary: "`src/harness/tool` groups 13 file(s). Depends on `src/gdgraph`, `src/memory`, `src/contracts`. Exposes 17 public symbol(s)."
 ---
+
 # Module src/harness/tool
 
 ## Summary
 
-`src/harness/tool` groups 13 file(s). Depends on `src/gdgraph`, `src/memory`, `src/contracts`. Exposes 17 public symbol(s).
+`src/harness/tool` defines the harness-facing vocabulary and boundaries for working with tools. It models tool definitions, calls, execution state, and results, and provides interfaces for registering tools and requesting their execution.
 
-## Overview
-
-`src/harness/tool` is the harness-facing module for modeling, registering, and executing tool invocations in a typed way. It owns the core vocabulary for tool definitions, calls, execution state, and results, and provides the ports through which callers interact with that vocabulary. The module also bridges tooling into the wider harness environment by adapting metaproject operations and depending on graph, memory, and contract layers.
-
-## How it works
-
-The module is organized around a small set of shared contracts and the components that implement or consume them.
-
-- `types.ts` is the foundational layer: it defines most of the public interfaces (tool definitions, calls, results, state, provenance, and executor ports) and is imported by the largest number of files in the module.
-- `registry.ts` provides a registry abstraction for tool definitions, exposed to callers as `ToolRegistrySnapshot`.
-- `metaproject-port.ts` and `metaproject-adapter.ts` define and build the metaproject adapter, using `MetaprojectAdapterDeps` to connect tool execution to metaproject concerns.
-- `metaproject-operations.ts` contains the concrete operations used by the adapter.
-- `fake-tool.ts` provides a lightweight fake useful for tests and harness flows.
-
-Consumers such as `src/commands` and `src/harness/run` depend on this module to obtain tool definitions, execute calls through the executor port, and work with execution results.
+The module also adapts metaproject operations for use in the harness. Its primary dependencies are `src/gdgraph`, `src/memory`, and `src/contracts`; it also has supporting dependencies on `src/mcp`, `src/flow`, and `src/wiki`.
 
 ## Key concepts
 
-- **ToolDefinition** – the static description of a tool: its identity, limits, classification, risk, replay behavior, and provenance.
-- **ToolCall / ToolInvocation** – representations of a concrete invocation of a tool.
-- **ToolExecutionState / ToolExecutionStateValue** – state tracking for an in-flight or completed tool execution.
-- **ToolResult** – the outcome of a tool execution.
-- **ToolExecutorPort** – the boundary through which callers execute tools and observe results.
-- **ToolRegistrySnapshot** – an immutable view of the registered tool set.
-- **CausalIds** – identifiers used to trace causal relationships between invocations.
-- **MetaprojectAdapterDeps / createMetaprojectAdapter** – dependency container and factory for the metaproject adapter, which connects tool behavior to metaproject operations.
+- **`ToolDefinition`** describes a tool, including its limits, classification, risk, replay behavior, and provenance.
+- **`ToolCall` and `ToolInvocation`** represent a concrete tool invocation.
+- **`ToolExecutionState` and `ToolExecutionStateValue`** describe execution state.
+- **`ToolResult`** represents an execution outcome.
+- **`ToolExecutorPort`** defines the boundary for requesting tool execution.
+- **`ToolRegistrySnapshot`** represents a snapshot of the registered tool set.
+- **`CausalIds`** provides identifiers for tracing causal relationships between invocations.
+- **`MetaprojectAdapterDeps` and `createMetaprojectAdapter`** define the dependencies and factory for the metaproject adapter.
+
+## Architecture
+
+The module's shared types describe the contracts used by its registry, executor boundary, and metaproject adapter.
+
+### Core files
+
+| File | Purpose |
+|------|---------|
+| `types.ts` | Defines the main public interfaces and types for tool definitions, calls, results, execution state, provenance, and executor ports. |
+| `registry.ts` | Provides the registry abstraction, including `ToolRegistrySnapshot`. |
+| `metaproject-port.ts` | Defines the port for metaproject operations. |
+| `metaproject-adapter.ts` | Implements the metaproject adapter using `MetaprojectAdapterDeps`. |
+| `metaproject-operations.ts` | Defines concrete operations used by the adapter. |
+| `fake-tool.ts` | Provides a lightweight fake tool for tests and harness flows. |
+
+### Dependencies
+
+The primary dependencies are:
+
+- **`src/gdgraph`** — graph operations used in tool execution context.
+- **`src/memory`** — memory-layer integration.
+- **`src/contracts`** — contract-layer integration.
+
+The module also has supporting dependencies on `src/mcp`, `src/flow`, and `src/wiki`.
 
 ## Main flows
 
-1. **Registering and inspecting tools**: Tool definitions are collected into the registry. Consumers request a `ToolRegistrySnapshot` to enumerate or validate the available tools before making a call.
+### Registering and inspecting tools
 
-2. **Executing a tool**: A caller builds a `ToolCall`, submits it through a `ToolExecutorPort`, and receives execution state plus a `ToolResult`. The flow is typed through the interfaces in `types.ts`, with `registry.ts` providing the tool set and `fake-tool.ts` available for test or simulation paths.
+Tool definitions are collected into a registry. Consumers can use a `ToolRegistrySnapshot` to inspect the available tools before making a call.
 
-3. **Metaproject adaptation**: `createMetaprojectAdapter` uses `MetaprojectAdapterDeps` to construct an adapter backed by `metaproject-port.ts`. The adapter performs metaproject operations (via `metaproject-operations.ts`) against `src/gdgraph`, `src/memory`, and `src/contracts`, allowing tools to participate in a broader harness execution context.
+### Requesting tool execution
+
+Callers submit a `ToolCall` through the `ToolExecutorPort`. The module's shared types describe the call, execution state, and result. `fake-tool.ts` provides a fake tool for test or simulation paths.
+
+### Adapting metaproject operations
+
+`createMetaprojectAdapter` constructs an adapter using `MetaprojectAdapterDeps` and the metaproject port. The adapter uses operations from `metaproject-operations.ts` to connect tool behavior with metaproject concerns and the wider harness environment.
+
+## Consumers
+
+The module is consumed by:
+
+- **`src/commands`** — 14 imports
+- **`src/harness/run`** — 12 imports
+- **`src/mcp`** — 8 imports
+- **`src/harness/replay`** — 6 imports
+- **`src/harness/mutation`** — 5 imports
+- **`src/harness/policy`** — 4 imports
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=ffc6d634c70f28e5dcf33091b620bed9ec2b59bce624d8d4f0164ab2cefb2e6a -->
+<!-- keryx:reference:begin v=1 hash=46d6229b61a5ce777f394fa931223777ace8da7d63aabcc7e330951b1ea41cd0 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -59,6 +88,7 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 ### Public API
 
 - `MetaprojectAdapterDeps` (interface)
+- `SEARCH_CODE_RG_MISSING`
 - `createMetaprojectAdapter` (function)
 - `ToolLimits` (interface)
 - `ToolClassification` (interface)
@@ -78,46 +108,50 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/harness/tool/metaproject-adapter.ts` - imported by 12, imports 21
-- `src/harness/tool/types.ts` - imported by 28, imports 0
-- `src/harness/tool/metaproject-port.ts` - imported by 19, imports 0
-- `src/harness/tool/registry.ts` - imported by 16, imports 1
-- `src/harness/tool/metaproject-operations.ts` - imported by 8, imports 3
-- `src/harness/tool/fake-tool.ts` - imported by 7, imports 3
+- `src/harness/tool/metaproject-adapter.ts` - imported by 23, imports 35
+- `src/harness/tool/types.ts` - imported by 34, imports 0
+- `src/harness/tool/metaproject-port.ts` - imported by 25, imports 3
+- `src/harness/tool/metaproject-operations.ts` - imported by 16, imports 6
+- `src/harness/tool/registry.ts` - imported by 19, imports 1
+- `src/harness/tool/fake-tool.ts` - imported by 10, imports 3
 
 ### Depends on
 
+- `src/wiki` - 10 import(s)
 - `src/gdgraph` - 9 import(s)
-- `src/memory` - 5 import(s)
-- `src/contracts` - 4 import(s)
-- `src/mcp` - 3 import(s)
-- `src/flow` - 3 import(s)
-- `src/wiki` - 3 import(s)
+- `src/lib` - 5 import(s)
+- `src/memory` - 4 import(s)
+- `src/flow` - 2 import(s)
+- `src/health` - 2 import(s)
 
 ### Depended on by
 
-- `src/commands` - 14 import(s)
-- `src/harness/run` - 12 import(s)
-- `src/mcp` - 8 import(s)
-- `src/harness/replay` - 6 import(s)
-- `src/harness/mutation` - 5 import(s)
-- `src/harness/policy` - 4 import(s)
+- `src/commands` - 7 import(s)
+- `src/mcp` - 4 import(s)
+- `src/harness/run` - 3 import(s)
+- `src/harness/tool/builtin` - 3 import(s)
+- `src/wiki` - 3 import(s)
+- `src/acp` - 2 import(s)
+
+### Dependency basis
+
+- Production imports only: 93 import(s) from test file(s) (e.g. `src/acp/roster.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 13
-- Cross-module imports: 34
+- Files: 21
+- Cross-module imports: 42
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived and regenerated by `keryx wiki collect --force`. Only pages that exist are linked; add links only after verifying the target page.
 
 - [Wiki Index](../index.md)
 - [Module src/commands](src-commands.md)
 
 ## Changelog
 
+- 0.1.2 - Reference refreshed from the code graph (4e80355f).
 - 0.1.1 - Reference refreshed from the code graph (5886c474).
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-08-19T12:51:02.609Z. Prose sections are drafts for the gdwiki enrich workflow.

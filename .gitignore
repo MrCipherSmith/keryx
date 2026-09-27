@@ -48,57 +48,7 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # this public repository's history, where deleting it later does not remove it.
 .benchmark-runs/
 
-# keryx:begin
-# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
-.metaproject/runtime/
-.metaproject/core/**/*.ts
-.metaproject/data/**/storage/
-.metaproject/data/**/raw/
-# Governance stocktake cache (flow 309 T12): per-machine, keyed by content
-# hash + algorithm version — regenerated on the next `keryx skills stocktake`
-# run, never meant to be shared across checkouts.
-.metaproject/data/skills/stocktake/cache.json
-.metaproject/data/**/queries/
-.metaproject/data/**/summaries/
-.metaproject/data/gdctx/artifacts/
-.metaproject/data/gdwiki/artifacts/
-.metaproject/data/gdwiki/link-check/
-.metaproject/data/health/history/
-.metaproject/data/health/artifacts/latest.md
-.metaproject/data/health/artifacts/latest.json
-.metaproject/data/testing/history/
-.metaproject/data/testing/logs/
-.metaproject/data/testing/artifacts/latest.md
-.metaproject/data/testing/artifacts/latest.json
-.metaproject/data/tasks/runtime/
-.metaproject/data/tasks/logs/
-.metaproject/flows/.flow-init.lock/
-.metaproject/flows/.flow-lock-*/
-# Memory generated views, caches, reports, and atomic staging are disposable.
-.metaproject/data/memory/index/
-.metaproject/data/memory/embeddings/
-.metaproject/data/memory/artifacts/
-.metaproject/runtime/memory/
-# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
-.metaproject/data/security/raw/
-.metaproject/data/security/raw/**
-.metaproject/data/security/artifacts/latest.md
-.metaproject/data/security/artifacts/latest.json
-# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
-# gdctx write path on every call, not a project artifact. These lines were added
-# to this repository's .gitignore by hand INSIDE the managed block, where the
-# next `keryx update` regenerated them away — which is how they came to belong
-# here instead.
-.metaproject/data/forgetting/
-.metaproject/data/retention/
-.metaproject/reports/
-# W3 self-learning loop: passive observation events and not-yet-reviewed
-# candidate patterns are per-machine, never meant to be shared/committed
-# (W3-AC9). ".metaproject/data/" is not blanket-ignored, so these two get
-# their own entries rather than inheriting coverage that does not exist.
-.metaproject/data/learning/observations/
-.metaproject/data/learning/candidates/
-# keryx:end
+
 
 # Flow 313 (W4 portability) — the per-scope bundle applied-state ledger is
 # local, per-machine state (R1-F9): a cloned/checked-out repo must never ship
@@ -109,7 +59,6 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # which does not (yet) know about this path, and a hand-edit placed inside
 # the block is wiped by the next `keryx update` (see the forgetting/retention
 # comment above, which hit the same issue).
-.metaproject/data/bundles/
 
 # mutation-sweep working state. The journal names the file that may still
 # be mutated if the run is killed; the progress file is how a backgrounded
@@ -141,3 +90,59 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # recent-docs.json runtime state there — same reasoning as the entry above,
 # just at a nested path the root-anchored pattern above does not reach.
 bench/jev-review/fixtures/conform-project/.metaproject/data/
+
+# keryx:begin
+# Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
+.metaproject/runtime/
+.metaproject/core/**/*.ts
+.metaproject/data/**/storage/
+.metaproject/data/**/raw/
+.metaproject/data/**/queries/
+.metaproject/data/**/summaries/
+.metaproject/data/gdctx/artifacts/
+.metaproject/data/gdwiki/artifacts/
+.metaproject/data/gdwiki/link-check/
+.metaproject/data/health/history/
+.metaproject/data/health/artifacts/latest.md
+.metaproject/data/health/artifacts/latest.json
+.metaproject/data/testing/history/
+.metaproject/data/testing/logs/
+.metaproject/data/testing/artifacts/latest.md
+.metaproject/data/testing/artifacts/latest.json
+.metaproject/data/tasks/runtime/
+.metaproject/data/tasks/logs/
+# The bundle ledger and staged/inspected bundle artifacts are local runtime
+# state (applied-state.json, temp audit copies), not something a project
+# commits.
+.metaproject/data/bundles/
+# Skills stocktake reports and cache are dated, regenerated-on-demand runtime
+# output, not project content. (Install-state under data/integrations/ stays
+# tracked — see install-state.ts for why.)
+.metaproject/data/skills/stocktake/
+.metaproject/flows/.flow-init.lock/
+.metaproject/flows/.flow-lock-*/
+# Memory generated views, caches, reports, and atomic staging are disposable.
+.metaproject/data/memory/index/
+.metaproject/data/memory/embeddings/
+.metaproject/data/memory/artifacts/
+.metaproject/runtime/memory/
+# Security: local-only HMAC key, self-protect state, and local hash report must never be committed.
+.metaproject/data/security/raw/
+.metaproject/data/security/raw/**
+.metaproject/data/security/artifacts/latest.md
+.metaproject/data/security/artifacts/latest.json
+# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
+# gdctx write path on every call, not a project artifact. These lines were added
+# to this repository's .gitignore by hand INSIDE the managed block, where the
+# next `keryx update` regenerated them away — which is how they came to belong
+# here instead.
+.metaproject/data/forgetting/
+.metaproject/data/retention/
+.metaproject/reports/
+# Self-learning loop: passive observation events and not-yet-reviewed
+# candidate patterns are per-machine, never meant to be shared/committed.
+# ".metaproject/data/" is not blanket-ignored, so these two get their own
+# entries rather than inheriting coverage that does not exist.
+.metaproject/data/learning/observations/
+.metaproject/data/learning/candidates/
+# keryx:end

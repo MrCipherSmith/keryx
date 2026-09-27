@@ -5,63 +5,181 @@ Type: component
 Status: accepted
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
 VerifiedScope: sha256:f0e6a671ae331af8e8ea63dbe69d878091b0a8d7f4db58f5bd73737bc2399326
-Summary: `src/testing` groups 11 file(s). Depends on `src/lib`, `src/security`, `src/health`. Exposes 18 public symbol(s).
+Summary: `src/testing` groups 11 file(s). Depends on `src/lib`, `src/security`, and `src/health`. Exposes 18 public symbol(s).
 ---
 
 # Module src/testing
 
 ## Summary
 
-`src/testing` groups 11 files. It depends on `src/lib`, `src/security`, and `src/health`. It exposes 18 public symbols.
+`src/testing` is the testing intelligence layer of the project. It owns:
+
+- Project analysis (framework and test-file discovery)
+- Test selection for changed files and full-project scopes
+- Coverage-map ingestion and line-level impact analysis
+- Run orchestration
+- Artifact persistence under `.metaproject/data/testing/`
+
+The module integrates with `src/security` to gate raw log and coverage output before writing to disk. It exposes its capabilities through a feature-flag seam so that all advanced behaviours degrade gracefully to a byte-identical static fallback when not configured.
 
 ## Overview
 
-`src/testing` is the testing intelligence layer of the project. It owns project analysis (framework and test-file discovery), test selection for changed files and full-project scopes, coverage-map ingestion and line-level impact analysis, run orchestration, and artifact persistence under `.metaproject/data/testing/`. The module integrates with `src/security` to gate raw log and coverage output before writing to disk. It exposes its capabilities through a feature‑flag seam so that all advanced behaviours degrade gracefully to a byte‑identical static fallback when not configured.
+`src/testing` is organized into four focused files that compose rather than call each other in cycles:
+
+| File | Responsibility |
+|------|----------------|
+| `service.ts` | Central orchestrator |
+| `coverage-map.ts` | Pure analysis layer |
+| `capability.ts` | Thin feature gate |
+| `selection.ts` | Stateless naming/directory heuristics |
 
 ## How it works
 
-The module is organised into four focused files that compose rather than call each other in cycles.
+### `service.ts` — Central orchestrator
 
-**`service.ts`** — the central orchestrator. It reads the project once with `analyzeTestingProject`, which walks the filesystem, inspects `package.json` scripts and dependencies, detects test frameworks (bun, vitest, jest, playwright, cypress, testing‑library), and extracts convention hints from instruction files. The result — a `TestingContext` — is persisted as both JSON and Markdown under `.metaproject/data/testing/`. `runTesting` then uses this context: it delegates test selection to either the coverage-map path or the static path, always unions in a smoke tier via `resolveSmokeSet`, resolves the right test command for the detected package manager, executes it via `Bun.spawn`, and gates every piece of output through the `src/security` guard before writing raw logs or the final report. Reports are written to `artifacts/latest.{json,md}` and appended to a timestamped history folder.
+1. Reads the project once with `analyzeTestingProject`, which:
+   - Walks the filesystem
+   - Inspects `package.json` scripts and dependencies
+   - Detects test frameworks (bun, vitest, jest, playwright, cypress, testing-library)
+   - Extracts convention hints from instruction files
 
-**`coverage-map.ts`** — a pure analysis layer. It parses existing coverage output (lcov or V8/bun JSON) into a deterministic `testFile → { coveredFiles, coveredLines }` map, serialises it to `.metaproject/data/testing/coverage-map.json`, and exposes `selectByCoverageMap` for line‑level or file‑level intersection against a changed‑file set. Every persisted coverage log passes through the same security write seam used in `service.ts`. The map is loaded and consulted only when the `coverageMap` capability is enabled — `service.ts` calls `isTestingCapabilityEnabled` first and falls back to the static path unconditionally when the map is absent or malformed.
+2. Persists the result (`TestingContext`) as JSON and Markdown under `.metaproject/data/testing/`
 
-**`capability.ts`** — a thin gate that reads `.metaproject/metaproject.json` and returns whether a named testing capability (e.g. `coverageMap`) is active. It accepts both bare string and enriched `{ id, enabled }` shapes, mirrors the pattern used by `src/security`, and never throws — a missing manifest always returns `false`.
+3. `runTesting` uses this context to:
+   - Delegate test selection (coverage-map path or static path)
+   - Union in a smoke tier via `resolveSmokeSet`
+   - Resolve the right test command for the detected package manager
+   - Execute via `Bun.spawn`
+   - Gate output through `src/security` before writing raw logs or reports
 
-**`selection.ts`** — a stateless utility layer with no imports beyond `path`. It provides the naming/directory heuristic (`relatedByNamingAndDirectory`) that maps a changed source file to co‑located test files, `staticChangedSelection` which applies that heuristic to a list of changed files, and `resolveSmokeSet` which expands glob/tag/path selectors into a stable subset of the known test files for the always‑on smoke tier.
+4. Reports are written to `artifacts/latest.{json,md}` and appended to a timestamped history folder
+
+### `coverage-map.ts` — Pure analysis layer
+
+- Parses existing coverage output (lcov or V8/bun JSON) into a deterministic `testFile → { coveredFiles, coveredLines }` map
+- Serializes to `.metaproject/data/testing/coverage-map.json`
+- Exposes `selectByCoverageMap` for line-level or file-level intersection against a changed-file set
+- All persisted coverage logs pass through the security write seam
+- Map is loaded only when the `coverageMap` capability is enabled
+
+### `capability.ts` — Feature gate
+
+- Reads `.metaproject/metaproject.json`
+- Returns whether a named testing capability (e.g. `coverageMap`) is active
+- Accepts both bare string and enriched `{ id, enabled }` shapes
+- Mirrors the pattern used by `src/security`
+- Never throws — a missing manifest always returns `false`
+
+### `selection.ts` — Stateless utilities
+
+Provides these utilities with no imports beyond `path`:
+
+- `relatedByNamingAndDirectory` — naming/directory heuristic mapping changed source files to co-located test files
+- `staticChangedSelection` — applies that heuristic to a list of changed files
+- `resolveSmokeSet` — expands glob/tag/path selectors into a stable subset of known test files for the always-on smoke tier
 
 ## Key concepts
 
-**TestingContext** — a snapshot of the project’s testing setup: detected frameworks, `package.json` scripts that match test keywords, config files, test files, CI workflow files, extracted conventions from instruction files, and actionable recommendations. Generated by `analyzeTestingProject` and cached in `context.json`; consumed by every downstream operation.
+### TestingContext
 
-**TestingConfig** — the per‑project policy object loaded from `.metaproject/testing.config.json` (defaulting to sensible values when absent). Controls the test runner override, changed‑selection strategies, coverage‑map source and artifact path, smoke selectors, hook opt‑ins, and artifact retention limit.
+A snapshot of the project's testing setup:
+- Detected frameworks
+- `package.json` scripts matching test keywords
+- Config files, test files, CI workflow files
+- Extracted conventions from instruction files
+- Actionable recommendations
 
-**TestingReport** — the structured result of a `runTesting` call, including status (`pass`/`fail`/`skipped`), counts, the selection metadata (which files were selected, via which strategies, with what fallback), individual `TestingFailure` entries, and a pointer to the raw log. Written to `artifacts/latest.json` and rendered as `artifacts/latest.md`.
+Generated by `analyzeTestingProject` and cached in `context.json`; consumed by every downstream operation.
 
-**CoverageMap** — a normalised `testFile → { coveredFiles, coveredLines? }` structure parsed from existing lcov or V8/bun JSON coverage output. Enables precise changed‑file → affected‑test mapping at line granularity. Absent or malformed maps cause transparent fallback to the static naming heuristic.
+### TestingConfig
 
-**Changed‑file selection** — the process of deriving which tests to run given a set of changed files. Three strategies are composed: (1) static naming/directory heuristic (`relatedByNamingAndDirectory`), (2) coverage‑map intersection (`selectByCoverageMap`, active only when the capability is enabled and a map exists), and (3) an always‑on smoke tier (`resolveSmokeSet`). When no tests are selected and `fallbackWhenEmpty` is `full`, all known test files are returned.
+Per-project policy object loaded from `.metaproject/testing.config.json` (defaults when absent). Controls:
+- Test runner override
+- Changed-selection strategies
+- Coverage-map source and artifact path
+- Smoke selectors
+- Hook opt-ins
+- Artifact retention limit
 
-**Security write seam** — every piece of external tool output (test run raw log, coverage data) is checked through `guardOutput` and `redactRaw` from `src/security` before being persisted. In advisory mode the write proceeds with a warning; in enforced/CI mode the raw log is suppressed and only the redacted content reaches the committable report artifacts.
+### TestingReport
+
+Structured result of a `runTesting` call, including:
+- Status (`pass`/`fail`/`skipped`)
+- Counts
+- Selection metadata (which files, via which strategies, with what fallback)
+- Individual `TestingFailure` entries
+- Pointer to the raw log
+
+Written to `artifacts/latest.json` and rendered as `artifacts/latest.md`.
+
+### CoverageMap
+
+Normalized `testFile → { coveredFiles, coveredLines? }` structure:
+- Parsed from existing lcov or V8/bun JSON coverage output
+- Enables precise changed-file → affected-test mapping at line granularity
+- Absent or malformed maps cause transparent fallback to the static naming heuristic
+
+### Changed-file selection
+
+Process of deriving which tests to run given a set of changed files. Three composed strategies:
+
+1. **Static naming/directory heuristic** — `relatedByNamingAndDirectory`
+2. **Coverage-map intersection** — `selectByCoverageMap` (active only when capability enabled and map exists)
+3. **Always-on smoke tier** — `resolveSmokeSet`
+
+When no tests are selected and `fallbackWhenEmpty` is `full`, all known test files are returned.
+
+### Security write seam
+
+Every piece of external tool output (test run raw log, coverage data) is checked through `guardOutput` and `redactRaw` from `src/security` before being persisted:
+- **Advisory mode** — write proceeds with a warning
+- **Enforced/CI mode** — raw log is suppressed; only redacted content reaches committable report artifacts
 
 ## Main flows
 
-**Flow 1 — Project analysis (first run)**  
-A caller invokes `analyzeTestingProject(cwd)` in `service.ts`. The function walks the filesystem (skipping `.git`, `node_modules`, `dist`, etc.), reads `package.json`, and classifies each file against four regexes: test files, config files, CI workflow files, and instruction files. Framework detection scans the combined dependency+script+config strings for bun/vitest/jest/playwright/cypress/testing‑library patterns. `extractConventions` reads up to 40 instruction files and collects lines mentioning test‑related keywords. The resulting `TestingContext` is written to `context.json`, `context.md`, and `recommendations.md` under `.metaproject/data/testing/`, then returned.
+### Flow 1 — Project analysis (first run)
 
-**Flow 2 — Changed‑scope test run with coverage‑map selection**  
-A caller invokes `runTesting({ cwd, changed: true, since: "HEAD~1" })` in `service.ts`. After loading config and context, `selectChangedTests` is called. It runs `git diff --name-only` and `git ls-files --others` to collect changed files, then checks the `coverageMap` capability gate via `capability.ts`. If enabled, it calls `loadCoverageMap` from `coverage-map.ts`, which reads the persisted `coverage-map.json` and returns a normalised `CoverageMap`. `selectByCoverageMap` intersects the changed files against each test entry’s `coveredFiles` (using `coveredLines` for line‑level precision when available). Changed files absent from the map fall back to `relatedByNamingAndDirectory` from `selection.ts`. The smoke tier is then unioned in via `resolveSmokeSet`. The resolved command is executed with `Bun.spawn`; the raw output is guarded by `src/security` before writing the raw log, and the redacted copy is used for failure parsing and counts. The final `TestingReport` is written to `artifacts/latest.json` and `artifacts/latest.md`.
+1. Caller invokes `analyzeTestingProject(cwd)` in `service.ts`
+2. Function walks filesystem (skipping `.git`, `node_modules`, `dist`, etc.) and reads `package.json`
+3. Classifies each file against four regexes: test files, config files, CI workflow files, instruction files
+4. Framework detection scans combined dependency+script+config strings for bun/vitest/jest/playwright/cypress/testing-library patterns
+5. `extractConventions` reads up to 40 instruction files and collects lines mentioning test-related keywords
+6. Resulting `TestingContext` is written to `context.json`, `context.md`, and `recommendations.md` under `.metaproject/data/testing/`
 
-**Flow 3 — Coverage map build from existing lcov output**  
-A caller invokes `buildCoverageMap(cwd, config)` in `coverage-map.ts`. When `source` is `import` or `auto`, the function reads the file at `config.coverageMap.path` (typically `coverage/lcov.info`). `parseLcov` scans the text line by line, collecting `SF:` source file names and `DA:line,hits` entries, and returns a map of covered file → covered line numbers. The result is attributed to a synthetic `<suite>` test entry (since import mode has no per‑test attribution). Any raw coverage text passes through `guardOutput`/`redactRaw` before being persisted to `data/testing/logs/coverage.raw.log`. `normalizeCoverageMap` sorts all keys and de‑duplicates line arrays for determinism, and the result is serialised with `serializeCoverageMap` to `coverage-map.json` for future use by the selection path.
+### Flow 2 — Changed-scope test run with coverage-map selection
+
+1. Caller invokes `runTesting({ cwd, changed: true, since: "HEAD~1" })` in `service.ts`
+2. Loads config and context
+3. `selectChangedTests` is called:
+   - Runs `git diff --name-only` and `git ls-files --others` to collect changed files
+   - Checks `coverageMap` capability gate via `capability.ts`
+   - If enabled, calls `loadCoverageMap` from `coverage-map.ts`
+   - `selectByCoverageMap` intersects changed files against each test entry's `coveredFiles`
+   - Changed files absent from map fall back to `relatedByNamingAndDirectory`
+   - Smoke tier is unioned in via `resolveSmokeSet`
+4. Resolved command is executed with `Bun.spawn`
+5. Raw output is guarded by `src/security` before writing raw log
+6. Redacted copy is used for failure parsing and counts
+7. Final `TestingReport` written to `artifacts/latest.json` and `artifacts/latest.md`
+
+### Flow 3 — Coverage map build from existing lcov output
+
+1. Caller invokes `buildCoverageMap(cwd, config)` in `coverage-map.ts`
+2. When `source` is `import` or `auto`, reads file at `config.coverageMap.path` (typically `coverage/lcov.info`)
+3. `parseLcov` scans text line by line:
+   - Collects `SF:` source file names
+   - Collects `DA:line,hits` entries
+   - Returns map of covered file → covered line numbers
+4. Result attributed to synthetic `<suite>` test entry (import mode has no per-test attribution)
+5. Raw coverage text passes through `guardOutput`/`redactRaw` before persisting to `data/testing/logs/coverage.raw.log`
+6. `normalizeCoverageMap` sorts all keys and de-duplicates line arrays for determinism
+7. Result serialized with `serializeCoverageMap` to `coverage-map.json`
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=b66490f60fc7afd04d76bca39c9aea63aba44e0a3a88fcd5d93eadf1dc987d2e -->
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -86,40 +204,40 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/testing/service.ts` - imported by 9, imports 8
-- `src/testing/coverage-map.ts` - imported by 4, imports 3
-- `src/testing/coverage-map.test.ts` - imported by 0, imports 6
-- `src/testing/selection.ts` - imported by 5, imports 0
-- `src/testing/types.ts` - imported by 5, imports 0
-- `src/testing/capability.ts` - imported by 2, imports 2
+- `src/testing/service.ts` — imported by 9, imports 8
+- `src/testing/coverage-map.ts` — imported by 4, imports 3
+- `src/testing/coverage-map.test.ts` — imported by 0, imports 6
+- `src/testing/selection.ts` — imported by 5, imports 0
+- `src/testing/types.ts` — imported by 5, imports 0
+- `src/testing/capability.ts` — imported by 2, imports 2
 
 ### Depends on
 
-- `src/lib` - 8 import(s)
-- `src/security` - 3 import(s)
-- `src/metrics` - 2 import(s)
-- `src/health` - 1 import(s)
-- `fixtures/change-impacted-test` - 1 import(s)
+- `src/lib` — 8 import(s)
+- `src/security` — 3 import(s)
+- `src/metrics` — 2 import(s)
+- `src/health` — 1 import(s)
+- `fixtures/change-impacted-test` — 1 import(s)
 
 ### Depended on by
 
-- `src/commands` - 7 import(s)
-- `src/eval` - 2 import(s)
-- `src/health/sources` - 2 import(s)
-- `src/harness/tool` - 1 import(s)
-- `src/lib` - 1 import(s)
-- `src/review` - 1 import(s)
+- `src/commands` — 7 import(s)
+- `src/eval` — 2 import(s)
+- `src/health/sources` — 2 import(s)
+- `src/harness/tool` — 1 import(s)
+- `src/lib` — 1 import(s)
+- `src/review` — 1 import(s)
 
 ### Graph signals
 
 - Files: 11
 - Cross-module imports: 15
-<!-- keryx:reference:end -->
+
+---
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -131,6 +249,6 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 1.0.0 - Prose sections enriched by gdwiki enrich workflow (2026-07-10). Status set to accepted.
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **1.0.1** — Reference refreshed from the code graph (5886c474)
+- **1.0.0** — Prose sections enriched by gdwiki enrich workflow (2026-07-10). Status set to accepted
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow

@@ -1,50 +1,79 @@
-# Module src/security/detect/injection
-
-Version: 1.0.1
+---
+Title: Module src/security/detect/injection
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+Summary: Optional semantic-model capability that supplements regex-based injection detection when its runtime dependency and verified model asset are available.
+---
+# Module src/security/detect/injection
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
 VerifiedScope: sha256:a77bc1f71c058b400f7e0a8a9c227311f9247bca4fbc54de0df6c4799b2f63e5
 
 ## Summary
 
-`src/security/detect/injection` groups 2 file(s). Depends on `src/security`, `src/security/detect`, `src/capability`. Exposes 7 public symbol(s).
+`src/security/detect/injection` adds optional semantic classification to the injection detection provided by `src/security/detect`. It depends on `src/security`, `src/security/detect`, and `src/capability`, and exposes seven public symbols.
+
+The semantic detector supplements the regex detector; it does not replace it. If the classifier runtime or verified model asset is unavailable, detection falls back to the regex-only path.
 
 ## Overview
 
-`src/security/detect/injection` implements an optional semantic-model layer that sits on top of the always-on regex injection detector. It exposes a `CapabilitySpec` (Block E/E1) that the security seam resolves at runtime: when both the text-classification runtime dependency and a verified model asset are present, the adapter runs a Prompt Guard 2 classifier and adds recall for paraphrased injections that the regex floor misses. When either prerequisite is absent the module degrades silently to regex-only detection, preserving exit-0 semantics and byte-identical output.
+The module defines a `CapabilitySpec` that the capability seam can resolve at runtime. When both the optional text-classification runtime and a verified model asset are available, the adapter can classify content and identify paraphrased injections that regex patterns may miss.
+
+The implementation is in `adapter.ts`; `adapter.test.ts` covers the adapter and its integration with detection.
 
 ## How it works
 
-The module is a single file (`adapter.ts`) structured around the `CapabilitySpec` contract from `src/capability/seam`. `makeInjectionSpec` constructs the spec: it declares an optional runtime dependency and an optional verified asset path, and returns a `load()` factory that the seam calls once both are resolved. The resulting `CapabilityAdapter` exposes `isAvailable()` — which returns `true` only when both the runtime dep and the asset resolved — and `run(content)`, which calls the classifier and forwards the raw score to `injectionMatchesFromScore`.
+### Capability specification
 
-Score normalization is handled by `injectionScoreOf`, which accepts the common `[{ label, score }]` shape returned by transformer-style text-classification pipelines. It maps INJECTION/JAILBREAK/LABEL_1 labels to their raw score and BENIGN/LABEL_0 labels to the complement (`1 - score`), taking the max across all rows. This keeps the module structurally decoupled from any particular ML library — `runRuntimeClassifier` bridges to the runtime via a duck-typed `pipeline()` call and never imports the package statically.
+`makeInjectionSpec` creates the capability specification. It declares the optional runtime dependency and verified asset requirement, then provides a `load()` factory for the seam to call once those requirements are resolved.
 
-Tests in `adapter.test.ts` inject a deterministic `seededClassifier` function to verify the merge-and-recall path without requiring a real model download. The metaproject manifest controls capability enablement via a `capabilities` entry keyed on `INJECTION_MODEL_ID`.
+The resulting adapter provides:
+
+- `isAvailable()`, which reports whether the runtime dependency and asset are available.
+- `run(content)`, which classifies the content and passes the normalized score to `injectionMatchesFromScore`.
+
+### Classification and score normalization
+
+`runRuntimeClassifier` calls the runtime through a duck-typed `pipeline()` interface rather than importing a particular ML package statically.
+
+`injectionScoreOf` accepts transformer-style rows containing `label` and `score` fields. It maps injection-related labels such as `INJECTION`, `JAILBREAK`, and `LABEL_1` to their scores, and benign labels such as `BENIGN` and `LABEL_0` to `1 - score`. When there are multiple rows, it uses the maximum resulting score.
+
+The normalized score is compared with the configured `minConfidence` threshold. Scores below the threshold do not produce a model finding. A qualifying score is converted into a detector match by `injectionMatchesFromScore`.
+
+### Availability and fallback
+
+The seam only runs the semantic adapter when its requirements are resolved. When either the runtime or verified asset is missing, the adapter is unavailable and detection continues with the regex-based detector. The optional model therefore supplements the existing path rather than making it a prerequisite.
 
 ## Key concepts
 
-- **CapabilitySpec / CapabilityAdapter** — the seam contract from `src/capability` that allows optional runtime dependencies. A spec declares what it needs (dependency id, asset id); the seam resolves both and calls `load()`. The adapter's `isAvailable()` gate determines whether detection actually runs.
-- **INJECTION_MODEL_ID** — the string key (`"security.injectionModel"`) used to register and look up this capability in the metaproject manifest and the security config.
-- **InjectionClassifier** — a simple callable `(text: string) => Promise<number> | number` that returns an injection probability in [0, 1]. The interface is injectable so tests can substitute a deterministic classifier without model weights.
-- **minConfidence threshold** — a configurable floor (default 0.5) below which classifier scores produce no findings. This prevents low-confidence model noise from escalating to approval-required decisions.
-- **Regex floor** — the deterministic `detectInjection` detector in `src/security/detect/injection` (the parent module) that always runs. This adapter never replaces it; it only supplements with additional recall.
-- **Degradation / warn-once** — when `isAvailable()` returns false (missing dep or unverified asset), the seam logs a one-time warning via `warn-once` and returns regex-only results that are byte-identical to the synchronous path.
+- **CapabilitySpec and CapabilityAdapter** — The contract from `src/capability` for declaring and using optional runtime capabilities.
+- **`INJECTION_MODEL_ID`** — The capability key, `"security.injectionModel"`, used to register and look up the injection model capability.
+- **`InjectionClassifier`** — An injectable classifier function that takes text and returns a score synchronously or asynchronously. It allows tests to use a deterministic classifier without model weights.
+- **`minConfidence`** — The score threshold for emitting a model-based finding.
+- **Regex detector** — The detector in `src/security/detect` remains the baseline and continues to run independently of this optional adapter.
 
 ## Main flows
 
-**Flow 1 — Happy path (model available, paraphrase detected)**
-`runDetectorsAsync` is called with content and a resolved `SecurityConfig`. The seam resolves the spec built by `injectionModelSpec` (runtime dep + asset both present). `CapabilityAdapter.isAvailable()` returns `true`. `run(content)` calls `runRuntimeClassifier`, which duck-types the runtime's `pipeline("text-classification", asset.path)` and obtains a `[{ label, score }]` result. `injectionScoreOf` normalises the result to a probability. If the score meets `minConfidence`, `injectionMatchesFromScore` emits a `DetectorMatch` with `category:"prompt-injection"` and `policyId:"prompt-injection.model"`. The match is merged with regex findings and passed to `resolveDecision` in `src/security/resolve`, which may escalate to `require-approval` when a co-occurring egress signal is present (AC1.4).
+### Model available
 
-**Flow 2 — Degradation (asset missing or dep unresolved)**
-The seam resolves the spec but either the optional dependency or the asset is absent. `isAvailable()` returns `false`. The seam emits a one-time warning via `warn-once` keyed on `INJECTION_MODEL_ID` and skips `run()`. `runDetectorsAsync` returns the same matches as the synchronous `runDetectors`, byte-identical to the regex-only baseline (AC1.3). The process exits 0 with no model findings in the output.
+1. The security detection flow resolves the injection capability.
+2. The seam loads the adapter when the runtime dependency and verified asset are available.
+3. The adapter classifies the content and normalizes the classifier result.
+4. If the score meets the confidence threshold, the adapter creates a prompt-injection match.
+5. The match is combined with the other detector findings for security decision-making.
 
-**Flow 3 — Test / offline path (injected classifier)**
-`makeInjectionSpec` is called with a `classifier` option pointing to a deterministic function (e.g. `seededClassifier`). The seam calls `load()` and wires `run()` to call the injected classifier directly, bypassing `runRuntimeClassifier`. Availability still follows the dep/asset resolution logic. This lets `adapter.test.ts` assert recall improvement over the regex baseline and confirm escalation behaviour without downloading any model weights.
+### Model unavailable
+
+If the runtime dependency or verified asset is unavailable, the semantic adapter does not run. Detection uses the regex-based path without model findings.
+
+### Test or offline use
+
+Tests can supply a deterministic classifier when creating the specification. This bypasses the runtime classifier call while allowing the adapter’s scoring and match behavior to be tested without downloading model weights.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=43b39fb65a89f6385cf0db91b01179b48003121872ce14b177ccc3be287d673a -->
+<!-- keryx:reference:begin v=1 hash=b8e3c2b3047ed1d2e0c7f2a9d41392fc2395392a7a43f4705e304ebb9b8f3790 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -67,24 +96,26 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Depends on
 
-- `src/security` - 4 import(s)
-- `src/capability` - 2 import(s)
-- `src/security/detect` - 2 import(s)
+- `src/capability` - 1 import(s)
+- `src/security` - 1 import(s)
 
 ### Depended on by
 
 - `src/security/detect` - 1 import(s)
 
+### Dependency basis
+
+- Production imports only: 6 import(s) from test file(s) (e.g. `src/security/detect/injection/adapter.test.ts`) excluded from the two sections above in both directions.
+
 ### Graph signals
 
 - Files: 2
-- Cross-module imports: 8
+- Cross-module imports: 2
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/security](src-security.md)
@@ -93,6 +124,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose enriched by gdwiki enrich workflow. Overview, How it works, Key concepts, and Main flows filled from `adapter.ts` and `adapter.test.ts`.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

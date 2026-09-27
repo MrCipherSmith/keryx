@@ -1,5 +1,15 @@
 ---
 Title: Module scripts/benchmark
+Version: 0.1.2
+Type: component
+Status: accepted
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:38dd884f8897b41bf2350dd4219c207a547e2d05f6892a4a9177cc57e42ac93d
+Summary: "`scripts/benchmark` groups 13 file(s). Depends on `src/metrics`, `src/harness/provider`, `src/harness/tool/builtin`."
+---
+```markdown
+---
+Title: Module scripts/benchmark
 Version: 0.1.1
 Type: component
 Status: accepted
@@ -11,73 +21,95 @@ Summary: "`scripts/benchmark` groups 13 file(s). Depends on `src/metrics`, `src/
 
 ## Summary
 
-`scripts/benchmark` groups 13 file(s). Depends on `src/metrics`, `src/harness/provider`, `src/harness/tool/builtin`.
+The `scripts/benchmark` module is the benchmark harness of the application. It provides executable scripts that run repeatable evaluation scenarios against the system under test and record results. Each script is a standalone entrypoint that configures a concrete experiment and exits after producing metrics.
 
 ## Overview
 
-The `scripts/benchmark` module is the benchmark harness of the application. It groups executable scripts that run repeatable evaluation scenarios against the system under test and record the results. Unlike runtime modules, these scripts are operational entrypoints: each one configures a concrete experiment and then exits after producing metrics.
+The module's purpose is to make benchmark runs explicit and scriptable. By separating each scenario into its own file, the project can run the following benchmark types independently or as part of a larger evaluation pipeline:
 
-The module's purpose is to make benchmark runs explicit and scriptable. By separating each scenario into its own file, the project can run safety checks, containment checks, ablation studies, and oracle-based comparisons independently or as part of a larger evaluation pipeline.
+- **Safety checks** - Verify safe behavior and guardrails
+- **Containment checks** - Confirm the system respects containment boundaries
+- **Ablation studies** - Measure impact by disabling or altering parts of the system
+- **Oracle comparisons** - Compare results against a reference or gold-standard baseline
 
 ## How it works
 
-The module has no shared internal library of its own. Instead, each script is a thin entrypoint that composes existing subsystems from the rest of the codebase:
+The module has no shared internal library. Each script is a thin entrypoint that composes existing subsystems:
 
-- `src/harness/provider` supplies the provider abstraction used to execute benchmark scenarios.
-- `src/harness/tool/builtin` contributes the built-in tools available during a run.
-- `src/metrics` collects and records the results produced by each benchmark.
-- Additional imports from `src/harness/child`, `src/commands`, and `src/wiki` support process management, command orchestration, and wiki-related operations where needed.
+| Dependency | Role |
+|------------|------|
+| `src/harness/provider` | Provider abstraction for executing benchmark scenarios |
+| `src/harness/tool/builtin` | Built-in tools available during a run |
+| `src/metrics` | Collects and records results produced by each benchmark |
+| `src/harness/child` | Process management |
+| `src/commands` | Command orchestration |
+| `src/wiki` | Wiki-related operations |
 
-The scripts are intentionally separated by scenario type. The `run-*.ts` naming convention indicates that each file is a standalone runnable benchmark, not a library function.
+Scripts follow the `run-*.ts` naming convention, indicating each file is a standalone runnable benchmark rather than a library function.
 
 ## Key concepts
 
-- **Benchmark run**: An execution of one benchmark script that produces a set of metrics.
-- **Ablation**: A benchmark variant that disables or alters part of the system to measure its impact. `run-ablation.ts` and `run-ablation-codex.ts` are the ablation entrypoints.
-- **Containment**: A benchmark focused on verifying that the system respects containment boundaries. `run-containment.ts` covers this scenario.
-- **Safety**: A benchmark focused on safe behavior and guardrails. `run-safety.ts` covers this scenario.
-- **Oracle**: A reference or gold-standard run used for comparison. `run-gdwiki-oracle.ts` and `run-testing-oracle.ts` implement oracle-style benchmarks.
+- **Benchmark run** - An execution of one benchmark script that produces a set of metrics
+- **Ablation** - A benchmark variant that disables or alters part of the system to measure its impact
+- **Containment** - A benchmark focused on verifying the system respects containment boundaries
+- **Safety** - A benchmark focused on safe behavior and guardrails
+- **Oracle** - A reference or gold-standard run used for comparison
 
 ## Main flows
 
-A typical benchmark flow starts with an operator invoking one of the scripts. The script initializes a provider through `src/harness/provider`, makes built-in tools available through `src/harness/tool/builtin`, runs the scenario, and hands the outcome to `src/metrics` for collection.
+A typical benchmark flow:
 
-The ablation flow is similar, but the script varies the configuration or available tooling to compare behavior across conditions. The oracle flows add a comparison step: results from the system under test are measured against an oracle baseline. In all cases, the script exits after the run completes, leaving the metrics as the durable output.
+1. Operator invokes one of the benchmark scripts
+2. Script initializes a provider through `src/harness/provider`
+3. Script makes built-in tools available through `src/harness/tool/builtin`
+4. Script runs the scenario
+5. Script hands the outcome to `src/metrics` for collection
+6. Script exits after the run completes
+
+**Ablation flow** - Similar to the typical flow, but the script varies the configuration or available tooling to compare behavior across conditions.
+
+**Oracle flows** - Add a comparison step where results from the system under test are measured against an oracle baseline.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=dd51efc0a715c1150ab9ee3335a1fcba26470bad2b0f1fea14c79383c0230494 -->
+<!-- keryx:reference:begin v=1 hash=6d912b0cfc031d79c45bba5dbbd3adcb8d79eddd9d672eda04e14df2c45dcc5a -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
 `--force`. The prose sections above are the agent/human-owned part.
 
+### Public API
+
+- `AblationEmissionIO`
+- `finalizeMutatingAblationRun` (function)
+- `finalizeAblationRun` (function)
+
 ### Key files
 
-- `scripts/benchmark/run-ablation-mutating.ts` - imported by 0, imports 11
-- `scripts/benchmark/run-ablation.ts` - imported by 0, imports 10
-- `scripts/benchmark/run-containment.ts` - imported by 0, imports 8
-- `scripts/benchmark/run-safety.ts` - imported by 0, imports 8
-- `scripts/benchmark/run-ablation-raw.ts` - imported by 0, imports 7
-- `scripts/benchmark/mutating-tasks.ts` - imported by 5, imports 0
+- `scripts/benchmark/run-ablation-mutating.ts` - imported by 1, imports 11
+- `scripts/benchmark/run-ablation.ts` - imported by 1, imports 10
+- `scripts/benchmark/run-containment.ts` - imported by 2, imports 9
+- `scripts/benchmark/run-safety.ts` - imported by 2, imports 9
+- `scripts/benchmark/run-ablation-raw.ts` - imported by 1, imports 7
+- `scripts/benchmark/ablation-emission-gating.test.ts` - imported by 0, imports 7
 
 ### Depends on
 
-- `src/metrics` - 42 import(s)
+- `src/metrics` - 44 import(s)
 - `src/harness/provider` - 10 import(s)
 - `src/harness/child` - 9 import(s)
 - `src/harness/tool/builtin` - 9 import(s)
 - `src/commands` - 5 import(s)
 - `src/wiki` - 3 import(s)
 
-### Depended on by
+### Dependency basis
 
-- `src/metrics` - 1 import(s)
+- Production imports only: 10 import(s) from test file(s) (e.g. `scripts/benchmark/ablation-emission-gating.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 22
-- Cross-module imports: 79
+- Files: 33
+- Cross-module imports: 84
 <!-- keryx:reference:end -->
 
 ## Related Wiki
@@ -93,5 +125,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 0.1.2 - Reference refreshed from the code graph (4e80355f).
 - 0.1.1 - Reference refreshed from the code graph (5886c474).
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-08-13T11:45:47.763Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

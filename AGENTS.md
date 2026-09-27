@@ -37,5 +37,7 @@ For lessons learned, decisions, constraints, repeated mistakes, and historical p
 
 For starting, tracking, or finishing a managed piece of work (a flow), use the Metaproject flow skill for state/status commands. For non-trivial implementation through Task Manager, use the local gdskills flow-orchestrator first: .metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md. All flow state changes go through the keryx flow CLI.
 
+For choosing which model to run this session, a subagent dispatch, or a scheduled/unattended run on, use the model tiers: the flagship tier for planning and review, one tier down for subagents, docs, and unattended work, and the smallest tier only for trivial, mechanical work. Declare a tier, never a model id, in a rule/skill/subagent file — this project has not pinned any of these categories in `routing.config.json`, so every one of them runs on the session's own model.
+
 <!-- /keryx:index -->
 

@@ -5,89 +5,126 @@ Type: component
 Status: draft
 Summary: "`src/tui/games` groups terminal UI game features, including game modal presentation, game selection, model turn helpers, agent panel rendering, and shared game types/constants. It exposes 14 public symbols and coordinates with `src/tui`, `src/harness/provider`, and `src/tui/games/tic-tac-toe`."
 ---
+```markdown
+---
+Title: Module src/tui/games
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/tui/games` is the terminal UI package for game-related commands and presentation. It groups 12 files and exposes 14 public symbols for opening and presenting a games modal, identifying game commands, running game-model turns, rendering an agent panel, and formatting turn statistics."
+---
 
 # Module src/tui/games
 
-## Summary
-
-`src/tui/games` is the terminal UI package for game-related commands and presentation. It groups 12 files and exposes 14 public symbols for opening and presenting a games modal, identifying game commands, running game-model turns, rendering an agent panel, and formatting turn statistics.
-
-The module acts as the bridge between the TUI shell and game implementations. It provides the shared contracts, defaults, and presentation helpers used by game surfaces, while relying on `src/tui` for terminal UI integration, `src/harness/provider` for model-backed behavior, and `src/tui/games/tic-tac-toe` for a concrete game example.
-
 ## Overview
 
-This module owns the user-facing “games” area inside the TUI. It turns game-related input into modal UI state, keeps game definitions available through default lists and a registry, and supports a tic-tac-toe game integration.
+`src/tui/games` provides the terminal UI layer for game-related commands and presentation within the TUI shell. It connects user input to game state by coordinating:
 
-Its main purpose is to connect the terminal shell with model-backed game flows while keeping shared game types, constants, registry creation, turn accounting, and formatting helpers in one place.
+- Game modal lifecycle (open/present)
+- Game command recognition
+- Model-backed turn execution
+- Agent panel rendering
+- Turn statistics formatting
 
-## How it works
+The module relies on `src/tui` for terminal integration, `src/harness/provider` for model-facing behavior, and `src/tui/games/tic-tac-toe` for a concrete game implementation.
 
-The package is organized around a small set of responsibilities:
+## Architecture
 
-- **Public entry point**  
-  `src/tui/games/index.ts` exposes the module’s public API to the rest of the app.
+The package organizes functionality across focused files:
 
-- **Shared contracts**  
-  `src/tui/games/types.ts` defines shared game-related shapes used across the package. It is one of the most widely imported files in the module, indicating it is a central contract layer.
+| File | Responsibility |
+|------|-----------------|
+| `index.ts` | Public API entry point; exposes 14 symbols |
+| `types.ts` | Shared game contracts; most widely imported file |
+| `constants.ts` | Default games, footer text, timeout config |
+| `modal.ts` | Main coordination point; imports 12 files |
+| `agent-panel.ts` | Renders agent/model response area |
+| `modal.test.ts` | Integration tests; imports 10 files |
 
-- **Shared constants**  
-  `src/tui/games/constants.ts` stores stable values such as default games, footer text, and model timeout configuration.
+### Entry point
 
-- **Modal coordination**  
-  `src/tui/games/modal.ts` imports many other files and is likely the main coordination point for the games modal. It connects command recognition, game selection, presentation helpers, and game-specific integrations.
+`src/tui/games/index.ts` exposes the module's public API to consumers.
 
-- **Agent panel rendering**  
-  `src/tui/games/agent-panel.ts` provides rendering for an agent panel used during game-related model interactions.
+### Shared contracts
 
-- **Tests**  
-  `src/tui/games/modal.test.ts` covers modal behavior and imports from most of the module, reinforcing `modal.ts` as a central integration point.
+`src/tui/games/types.ts` defines shapes used across the package and serves as the central contract layer.
 
-Dependencies are focused and intentional:
+### Stable values
 
-- `src/tui` provides terminal UI integration.
-- `src/harness/provider` supplies provider or model-facing services.
-- `src/tui/games/tic-tac-toe` supplies the tic-tac-toe game implementation and related game contracts.
+`src/tui/games/constants.ts` provides:
 
-## Key concepts
+- `DEFAULT_GAMES` — list of available games
+- `GAMES_FOOTER` — shared footer text
+- `GAME_MODEL_TIMEOUT_MS` — timeout for model calls
 
-- **Games modal**  
-  A terminal UI surface for presenting game options or game state. Public helpers such as `openGamesModal` and `presentGamesModal` indicate that modal lifecycle and presentation are separated.
+### Coordination
 
-- **Game command**  
-  A game-related user command recognized through `isGameCommand`. This keeps command classification separate from rendering.
+`src/tui/games/modal.ts` is the main integration point, connecting command recognition, game selection, presentation helpers, and game-specific implementations.
 
-- **Game registry**  
-  A container for available games. `createRegistry`, `DEFAULT_GAMES`, and `ticTacToeGame` suggest that games are represented as first-class entries that the modal can display or dispatch.
+## Key Concepts
 
-- **Game model turn**  
-  A model-backed turn or action associated with a game. `runGameModelTurn` and `GAME_MODEL_TIMEOUT_MS` indicate that game interactions may depend on provider calls with bounded execution time.
+### Games modal
 
-- **Agent panel**  
-  A UI area associated with model or agent responses. `renderAgentPanel` is exported by this module, suggesting it is used within game flows to display model output.
+A terminal UI surface for presenting game options or active game state. Two public helpers manage the lifecycle:
 
-- **Turn totals and formatting**  
-  Helpers such as `addTurn`, `emptyTurnTotals`, `formatMs`, and `formatTokens` indicate that game sessions track lightweight turn metadata and present it in user-facing form.
+- `openGamesModal` — initializes the modal
+- `presentGamesModal` — renders and displays it
 
-## Main flows
+### Game command
+
+User input classified as game-related via `isGameCommand`. Command classification is kept separate from rendering logic.
+
+### Game registry
+
+A container for available games. Use `createRegistry` to build one; `DEFAULT_GAMES` and `ticTacToeGame` provide built-in entries.
+
+### Game model turn
+
+A model-backed turn execution, handled by `runGameModelTurn`. Timeouts are configured via `GAME_MODEL_TIMEOUT_MS`.
+
+### Agent panel
+
+A UI component that displays model or agent responses during game interactions, rendered via `renderAgentPanel`.
+
+### Turn statistics
+
+Lightweight metadata tracking for game sessions:
+
+- `emptyTurnTotals` — initializes counters
+- `addTurn` — records a turn
+- `formatMs` — formats durations
+- `formatTokens` — formats token counts
+
+## Main Flows
 
 ### Opening the games modal
 
-A game-related command enters the TUI and is recognized through `isGameCommand`. The games module opens the games modal using `openGamesModal`, then presents it using `presentGamesModal`. During presentation, the module uses available game definitions, likely sourced from `DEFAULT_GAMES`, `createRegistry`, and the `ticTacToeGame` export, to render the game selection surface. `GAMES_FOOTER` provides shared footer content for the modal.
+1. User issues a game-related command
+2. `isGameCommand` classifies the input
+3. `openGamesModal` initializes the modal
+4. `presentGamesModal` renders it using:
+   - Game definitions from `DEFAULT_GAMES`
+   - Registry from `createRegistry`
+   - `ticTacToeGame` as the demo game
+   - `GAMES_FOOTER` for footer content
 
-### Running a model-backed game turn
+### Running a model-backed turn
 
-When a game requires model interaction, the module uses `runGameModelTurn`. The provider dependency on `src/harness/provider` supplies the model-facing behavior, while `GAME_MODEL_TIMEOUT_MS` bounds the operation duration. Results or agent output can be rendered through `renderAgentPanel`. Turn accounting is tracked using `emptyTurnTotals` and `addTurn`, with `formatMs` and `formatTokens` used for display-oriented summaries.
+1. Game requires model interaction
+2. `runGameModelTurn` executes with timeout from `GAME_MODEL_TIMEOUT_MS`
+3. `src/harness/provider` supplies the model-facing behavior
+4. Results rendered via `renderAgentPanel`
+5. Turn tracked via `addTurn` using `emptyTurnTotals` for initialization
+6. Display formatted with `formatMs` and `formatTokens`
 
-### Integrating tic-tac-toe
+### Tic-tac-toe integration
 
-`src/tui/games/tic-tac-toe` is both a dependency and a dependent of this package. The tic-tac-toe implementation consumes shared contracts and presentation helpers from `src/tui/games`, while also providing `ticTacToeGame` back into the broader games surface. This creates a close relationship: the parent module defines the shared game contract, and the tic-tac-toe package supplies a concrete game implementation that fits that contract.
+`src/tui/games/tic-tac-toe` has a bidirectional relationship with this module:
 
----
+- **Consumes** shared contracts from `src/tui/games/types.ts` and presentation helpers
+- **Provides** `ticTacToeGame` back to the games registry
 
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+## Reference
 
 ### Public API
 
@@ -106,39 +143,35 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 - `formatTokens`
 - `ticTacToeGame`
 
-### Key files
+### Key files by reach
 
-- `src/tui/games/modal.ts` - imported by 3, imports 12
-- `src/tui/games/types.ts` - imported by 11, imports 1
-- `src/tui/games/modal.test.ts` - imported by 0, imports 10
-- `src/tui/games/index.ts` - imported by 1, imports 8
-- `src/tui/games/agent-panel.ts` - imported by 2, imports 3
-- `src/tui/games/constants.ts` - imported by 5, imports 0
+| File | Imported by | Imports |
+|------|-------------|---------|
+| `modal.ts` | 3 | 12 |
+| `types.ts` | 11 | 1 |
+| `modal.test.ts` | 0 | 10 |
+| `index.ts` | 1 | 8 |
+| `agent-panel.ts` | 2 | 3 |
+| `constants.ts` | 5 | 0 |
 
-### Depends on
+### Dependencies
 
-- `src/tui` - 6 import(s)
-- `src/harness/provider` - 6 import(s)
-- `src/tui/games/tic-tac-toe` - 5 import(s)
+- `src/tui` — 6 imports (terminal UI integration)
+- `src/harness/provider` — 6 imports (model-facing behavior)
+- `src/tui/games/tic-tac-toe` — 5 imports (game implementation)
 
-### Depended on by
+### Dependents
 
-- `src/tui/games/tic-tac-toe` - 7 import(s)
-- `src/tui` - 1 import(s)
+- `src/tui/games/tic-tac-toe` — 7 imports
+- `src/tui` — 1 import
 
-### Entry points
-
-- `src/tui/games/index.ts`
-
-### Graph signals
+### Module metrics
 
 - Files: 12
 - Cross-module imports: 17
+- Entry point: `src/tui/games/index.ts`
 
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related Pages
 
 - [Wiki Index](../index.md)
 - [Module src/tui](src-tui.md)
@@ -147,4 +180,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+```

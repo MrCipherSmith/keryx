@@ -5,146 +5,133 @@ Type: component
 Status: draft
 Summary: "`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 public symbol(s)."
 ---
+```markdown
+---
+Title: Module src/retention
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 public symbol(s)."
+---
 
 # Module src/retention
 
 ## Summary
 
-`src/retention` groups 7 file(s). Depends on `src/lib`. Exposes 15 public symbol(s).
+`src/retention` owns the core abstractions for identifying, describing, and cleaning retention-relevant artifacts. It provides types, constants, and filesystem-facing helpers used to define retention units, entry statistics, and target metadata.
+
+The module is consumed by higher-level orchestration such as [src/commands](src-commands.md) and [src/forgetting](src-forgetting.md). Those consumers discover cleanup targets, apply policy bounds, and perform retention operations without depending directly on lower-level filesystem details.
 
 ## Overview
 
-`src/retention` owns the core abstractions for identifying, describing, and cleaning retention-relevant artifacts. It provides the types, constants, and filesystem-facing helpers used to define retention units, entry statistics, and target metadata.
+The module organizes around four cooperating layers:
 
-The module is designed to be consumed by higher-level orchestration such as `src/commands` and `src/forgetting`. Those consumers can discover cleanup targets, apply policy bounds, and perform retention operations without directly depending on lower-level filesystem details.
+- **Filesystem abstraction** (`src/retention/fs-deps.ts`): defines `RetentionFsDeps`, a contract for filesystem operations needed by retention logic. `defaultFsDeps` provides the production implementation, and `describeError` normalizes failures for user-facing or test-facing use.
+- **Policy and target model** (`src/retention/policy.ts`): exposes core domain types and constants including `RetentionUnit`, `RetentionEntryStat`, `RetentionTarget`, target discovery result types, and budget/age limits.
+- **Sweep and auto-sweep logic** (`src/retention/sweep.ts`, `src/retention/auto-sweep.ts`): builds on policy types and the filesystem contract to coordinate retention execution.
+- **Test coverage** (`src/retention/auto-sweep.test.ts`, `src/retention/sweep.test.ts`): exercises sweep and auto-sweep paths through the module's public and internal seams.
 
-## How it works
+## Key Concepts
 
-The module is organized around a small set of cooperating layers.
+### Domain Types
 
-- Filesystem abstraction: `src/retention/fs-deps.ts` defines `RetentionFsDeps`, a contract for the filesystem operations needed by retention logic. `defaultFsDeps` supplies the production implementation, and `describeError` helps normalize failures for user-facing or test-facing use.
-- Policy and target model: `src/retention/policy.ts` exposes the core domain types and constants for retention behavior. This includes `RetentionUnit`, `RetentionEntryStat`, `RetentionTarget`, target discovery result types, and budget/age limits.
-- Sweep and auto-sweep logic: `src/retention/sweep.ts` and `src/retention/auto-sweep.ts` build on the policy types and filesystem contract to coordinate retention execution.
-- Test coverage: `src/retention/auto-sweep.test.ts` and `src/retention/sweep.test.ts` exercise the sweep and auto-sweep paths through the module’s public and internal seams.
+- **`RetentionUnit`**: core unit for modeling a retention-managed object or grouping of related entries.
+- **`RetentionEntryStat`**: stats-oriented interface for individual retention entries, including information used to determine cleanup or sweep eligibility.
+- **`RetentionTarget`**: a discovered target that retention logic can act upon.
+- **`TargetDiscoveryResult`**: result type for discovery flows that identify one or more retention targets.
 
-The module depends on `src/lib` for shared support code. It is depended on by `src/commands` and `src/forgetting`, which likely use it for discovery and retention-driven behavior.
+### Filesystem Abstraction
 
-## Key concepts
+- **`RetentionFsDeps`** (interface): contract defining filesystem operations needed by retention logic.
+- **`defaultFsDeps`**: production implementation of `RetentionFsDeps`.
+- **`describeError`**: helper for consistent failure descriptions during retention operations.
 
-- `RetentionUnit`  
-  The core unit used to model a retention-managed object or grouping of related entries.
+### Policy Constants
 
-- `RetentionEntryStat`  
-  A stats-oriented interface for describing individual retention entries, likely including information used to decide eligibility for cleanup or sweep.
+| Constant | Purpose |
+|----------|---------|
+| `DEFAULT_MAX_AGE_DAYS` | Default age limit for retention entries |
+| `GDCTX_RAW_MAX_BYTES` | Size budget for raw gdctx artifacts |
+| `GDCTX_ARTIFACTS_MAX_BYTES` | Size budget for processed gdctx artifacts |
+| `OWNER_CONFLICT_MAX_AGE_DAYS` | Age limit for owner-conflict entries |
+| `OWNER_CONFLICT_MAX_BYTES` | Size budget for owner-conflict cleanup |
 
-- `RetentionTarget`  
-  A discovered target that can be acted upon by retention logic.
+### Discovery Functions
 
-- `TargetDiscoveryResult`  
-  The result type for discovery flows that identify one or more retention targets.
+- **`discoverTargets`**: general entry point for finding retention targets.
+- **`discoverOwnerConflictTargets`**: specialized discovery for owner-conflict cleanup cases.
+- **`gdctxTargets`**: selects or constructs gdctx-specific retention targets.
 
-- `RetentionFsDeps` and `defaultFsDeps`  
-  A filesystem dependency contract and its default implementation. This keeps the module testable and decoupled from direct filesystem calls.
+## Main Flows
 
-- `describeError`  
-  A helper for producing clearer, more consistent descriptions of failures encountered during retention operations.
+### 1. Discover Retention Targets
 
-- `gdctxTargets`  
-  A function related to selecting or constructing `gdctx`-specific retention targets.
+Higher-level code uses the discovery surface to identify cleanup candidates:
 
-- `discoverTargets` and `discoverOwnerConflictTargets`  
-  Discovery entry points for finding retention targets in general and for owner-conflict-specific cleanup cases.
+1. Call `discoverTargets` for general discovery, `gdctxTargets` for gdctx-specific targets, or `discoverOwnerConflictTargets` for owner-conflict cases.
+2. Receive a `TargetDiscoveryResult` containing typed `RetentionTarget` values.
 
-- Policy constants  
-  The module exposes several named limits, including:
-  - `DEFAULT_MAX_AGE_DAYS`
-  - `GDCTX_RAW_MAX_BYTES`
-  - `GDCTX_ARTIFACTS_MAX_BYTES`
-  - `OWNER_CONFLICT_MAX_AGE_DAYS`
-  - `OWNER_CONFLICT_MAX_BYTES`
+### 2. Apply Retention Policy Bounds
 
-## Main flows
+Retention behavior is guided by named constants rather than scattered literals:
 
-### 1. Discover retention targets
+- **Age limits**: `DEFAULT_MAX_AGE_DAYS`, `OWNER_CONFLICT_MAX_AGE_DAYS`
+- **Size budgets**: `GDCTX_RAW_MAX_BYTES`, `GDCTX_ARTIFACTS_MAX_BYTES`, `OWNER_CONFLICT_MAX_BYTES`
 
-Higher-level code can use the module’s discovery surface to identify cleanup candidates.
+This approach makes policy easier to compare, test, and evolve.
 
-- General discovery is exposed through `discoverTargets`.
-- `gdctx`-specific target selection is exposed through `gdctxTargets`.
-- Owner-conflict discovery is exposed through `discoverOwnerConflictTargets`.
-- The result is described by `TargetDiscoveryResult`, which allows callers to work with discovered `RetentionTarget` values in a typed way.
+### 3. Execute Filesystem-Backed Retention Operations
 
-### 2. Apply retention policy bounds
+After targets are identified, retention execution uses the filesystem abstraction:
 
-Retention behavior is guided by a set of named constants rather than scattered literals.
+1. Operations rely on `RetentionFsDeps` to inspect or mutate filesystem state.
+2. `defaultFsDeps` supplies the production implementation.
+3. `describeError` provides consistent failure interpretation.
 
-- Age-based limits are expressed through values such as `DEFAULT_MAX_AGE_DAYS` and `OWNER_CONFLICT_MAX_AGE_DAYS`.
-- Size budgets are expressed through values such as `GDCTX_RAW_MAX_BYTES`, `GDCTX_ARTIFACTS_MAX_BYTES`, and `OWNER_CONFLICT_MAX_BYTES`.
+This keeps core retention logic testable while supporting real filesystem behavior.
 
-This makes policy easier to compare, test, and evolve.
-
-### 3. Perform filesystem-backed retention operations
-
-Once targets are identified, retention execution relies on the filesystem abstraction layer.
-
-- `RetentionFsDeps` defines the operations needed to inspect or mutate filesystem state.
-- `defaultFsDeps` supplies the normal implementation.
-- `describeError` provides a consistent way to interpret failures during these operations.
-
-This flow keeps the core retention logic testable while still supporting real filesystem behavior.
-
----
-
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+## Reference
 
 ### Public API
 
+**Types**
 - `RetentionUnit`
 - `RetentionEntryStat` (interface)
 - `RetentionFsDeps` (interface)
-- `describeError` (function)
-- `defaultFsDeps`
 - `RetentionTarget` (interface)
+- `TargetDiscoveryResult` (interface)
+
+**Functions**
+- `describeError`
+- `gdctxTargets`
+- `discoverOwnerConflictTargets`
+- `discoverTargets`
+
+**Values**
+- `defaultFsDeps`
 - `DEFAULT_MAX_AGE_DAYS`
 - `GDCTX_RAW_MAX_BYTES`
 - `GDCTX_ARTIFACTS_MAX_BYTES`
 - `OWNER_CONFLICT_MAX_AGE_DAYS`
 - `OWNER_CONFLICT_MAX_BYTES`
-- `gdctxTargets` (function)
-- `TargetDiscoveryResult` (interface)
-- `discoverOwnerConflictTargets` (function)
-- `discoverTargets` (function)
 
-### Key files
+### Key Files
 
-- `src/retention/fs-deps.ts` - imported by 8, imports 0
-- `src/retention/policy.ts` - imported by 5, imports 2
-- `src/retention/auto-sweep.ts` - imported by 3, imports 3
-- `src/retention/sweep.ts` - imported by 3, imports 3
-- `src/retention/auto-sweep.test.ts` - imported by 0, imports 3
-- `src/retention/sweep.test.ts` - imported by 0, imports 3
+| File | Imports | Imported By |
+|------|---------|-------------|
+| `src/retention/fs-deps.ts` | 0 | 8 |
+| `src/retention/policy.ts` | 2 | 5 |
+| `src/retention/auto-sweep.ts` | 3 | 3 |
+| `src/retention/sweep.ts` | 3 | 3 |
+| `src/retention/auto-sweep.test.ts` | 3 | 0 |
+| `src/retention/sweep.test.ts` | 3 | 0 |
 
-### Depends on
+### Dependencies
 
-- `src/lib` - 3 import(s)
+- **Depends on**: [src/lib](src-lib.md) (3 imports)
+- **Depended on by**: [src/commands](src-commands.md) (4 imports), [src/forgetting](src-forgetting.md) (2 imports)
 
-### Depended on by
-
-- `src/commands` - 4 import(s)
-- `src/forgetting` - 2 import(s)
-
-### Graph signals
-
-- Files: 7
-- Cross-module imports: 3
-
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -153,4 +140,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections were later enriched from the module’s public API, key files, and dependency graph.
+- 0.1.0 — Initial generation by `keryx wiki collect`; prose enriched from public API, key files, and dependency graph.
+```

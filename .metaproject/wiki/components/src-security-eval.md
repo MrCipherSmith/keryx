@@ -1,55 +1,66 @@
-# Module src/security/eval
-
-Version: 1.0.1
+---
+Title: Module src/security/eval
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+Summary: "Red-team evaluation harness for Keryx's security detectors. Loads labeled corpus fixtures, runs detection pipelines, computes per-detector false-negative rates, gates results against committed ceilings, and produces deterministic plaintext reports."
+---
+# Module src/security/eval
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
 VerifiedScope: sha256:5d41f1069802d6b28344db6841337ea58162775233530b41dab99921d1a80eb5
 
 ## Summary
 
-`src/security/eval` groups 2 file(s). Depends on `src/security`, `src/security/detect`, `src/lib`. Exposes 15 public symbol(s).
+`src/security/eval` provides a harness for evaluating Keryx security detectors. It loads labeled corpus fixtures, runs cases through a detection function, aggregates per-detector metrics, checks results against configured false-negative-rate ceilings, and formats a deterministic report.
 
-## Overview
-
-`src/security/eval` is the red-team evaluation harness for Keryx's security detectors. It owns the full pipeline for measuring detector quality: loading labeled corpus fixtures, running them through a configurable detect function, computing per-detector false-negative rates, gating results against committed ceilings, and producing a deterministic, git-diffable plaintext report. The module is consumed by the `src/commands` layer (one import) and depends on `src/security` for configuration and `src/security/detect` for the actual detection pipeline.
+The module contains `harness.ts` and its test file. It is used by `src/commands` and depends on `src/security`, `src/security/detect`, and `src/lib`.
 
 ## How it works
 
-The module is built around a single file, `harness.ts`, with no sub-layers. The design separates three concerns: data loading, metric aggregation, and quality gating.
+The harness separates evaluation into fixture loading, metric aggregation, and quality gating.
 
-Data loading is handled by `loadEvalCases`, which reads `cases.json` from a corpus directory and normalises it into a sorted, validated array of `EvalCase` objects. The sort on case `id` is deliberate: it makes the accumulated report stable regardless of filesystem order. `loadThresholds` applies the same defensive pattern to `fixtures/thresholds.json`, accepting either a flat record or a wrapped `{ thresholds: ... }` shape.
+### Load fixtures
 
-Metric aggregation happens in `runEval`, which iterates corpora, runs each case through the injected `DetectFn`, and accumulates true/false positive and negative counts per detector name. The `firedFor` helper decouples matching from aggregation: a case "fires" if any `DetectorMatch` carries a `policyId` or `category` equal to the labeled detector, so corpus fixtures can label at either granularity. The resulting `EvalReport` carries per-detector `fnRate` values computed as `falseNeg / positives`.
+- `loadEvalCases` reads a corpus directory's `cases.json` and returns validated `EvalCase` entries sorted by case ID.
+- `loadThresholds` reads the thresholds fixture and accepts either a flat record or a `{ thresholds: ... }` wrapper.
 
-Quality gating is a pure, stateless function (`gateEval`) that compares each detector's `fnRate` against its committed ceiling from the thresholds table. Detectors with no ceiling entry default to 0, preventing silent regressions from unlisted detectors. `formatEvalReport` serialises the report to a fixed-width plaintext table with no timestamps or absolute paths, so a re-run on unchanged fixtures produces an identical string and shows no diff.
+Sorting cases by ID helps keep evaluation results stable across runs.
 
-The `pureDetect` factory wires the module to the shipped deterministic pipeline (`runDetectors` from `src/security/detect`), but the `DetectFn` interface is intentionally abstract, allowing callers to inject model-augmented or stubbed backends for testing.
+### Run evaluations
+
+`runEval` processes cases from the selected corpora by passing each input to an injected `DetectFn`. The `firedFor` helper checks whether any returned match has a `policyId` or `category` equal to the case's labeled detector.
+
+The harness aggregates true positives, false negatives, false positives, and true negatives for each detector. It computes the false-negative rate (`fnRate`) as `falseNeg / positives` and returns the results in an `EvalReport`.
+
+`pureDetect` provides a `DetectFn` backed by the shipped deterministic detection pipeline. Because the detection function is injectable, callers can also supply another implementation, such as a stub for testing.
+
+### Check thresholds and format reports
+
+`gateEval` compares each detector's `fnRate` with its configured maximum. If a detector has no threshold entry, its ceiling defaults to `0`. The function returns a pass or fail result with human-readable reasons for violations.
+
+`formatEvalReport` produces a fixed-width plaintext table ordered by detector name. It omits timestamps and absolute paths, so unchanged inputs produce a stable, git-diffable report.
 
 ## Key concepts
 
-- **EvalCase** — a single labeled test input: an `id`, the raw `input` string, an `expected` outcome (`"positive"` or `"negative"`), and the `detector` name under test.
-- **DetectFn** — the injectable detection interface: takes an input string and returns `DetectorMatch[]` (from `src/security/types`). The default implementation is `pureDetect`, which delegates to `runDetectors` with the workspace config.
-- **DetectorEval** — per-detector aggregated metrics: `truePos`, `falseNeg`, `falsePos`, `trueNeg`, and the derived `fnRate` (false-negative rate).
-- **EvalReport** — the full run result: which corpora were seen, total case count, and the sorted `DetectorEval` array.
-- **Thresholds / ThresholdEntry** — the committed quality ceiling table, keyed by detector name; each entry carries `maxFnRate`. An absent entry implies a ceiling of 0.
-- **GateResult** — the pass/fail verdict from `gateEval`, carrying human-readable `reasons` for each violation.
-- **DEFAULT_CORPORA** — the canonical set of corpus families: `injection`, `exfil`, `structured-pii`, and `secret`.
+- **EvalCase** — A labeled input containing an ID, input text, expected outcome (`"positive"` or `"negative"`), and detector name.
+- **DetectFn** — The detection function accepted by the harness, which takes input text and returns `DetectorMatch[]`. `pureDetect` supplies the standard implementation.
+- **DetectorEval** — Per-detector counts for true positives, false negatives, false positives, and true negatives, plus the derived `fnRate`.
+- **EvalReport** — The evaluation result, including the corpora processed, total case count, and detector metrics.
+- **ThresholdEntry / Thresholds** — The committed maximum false-negative rates, keyed by detector name.
+- **GateResult** — The pass/fail outcome from `gateEval`, including reasons when thresholds are exceeded.
+- **DEFAULT_CORPORA** — The canonical corpus families: `injection`, `exfil`, `structured-pii`, and `secret`.
 
-## Main flows
+## Typical workflow
 
-**1. Standard eval run (pure detector path)**
-A caller (typically a CLI command in `src/commands`) invokes `pureDetect(cwd)` to obtain a `DetectFn` bound to the workspace security config. It then calls `runEval({ fixturesRoot, corpora: DEFAULT_CORPORA, detect })`. Inside `runEval`, `loadEvalCases` reads each corpus directory's `cases.json`, validates and sorts entries, and returns `EvalCase[]`. For each case, `detect(input)` is called and `firedFor` maps the resulting `DetectorMatch[]` to a boolean. Counts accumulate per detector name. `runEval` returns an `EvalReport` with sorted detectors and computed `fnRate` values.
-
-**2. Quality gate check**
-After obtaining an `EvalReport`, the caller loads `fixtures/thresholds.json` via `loadThresholds`. It then calls `gateEval(report, thresholds)`, which iterates each `DetectorEval` and compares its `fnRate` against the committed ceiling (defaulting to 0 for unlisted detectors). The returned `GateResult` has `status: "pass"` or `"fail"` with a list of human-readable violation strings. A non-empty `reasons` array means at least one detector has regressed beyond its committed ceiling.
-
-**3. Deterministic report serialisation**
-`formatEvalReport(report, thresholds)` produces a fixed-width plaintext table ordered by detector name, with each row showing positives, TP, FN, FP, fnRate, ceiling, and pass/fail status. Because the report contains no timestamps or absolute paths and cases are sorted by `id` before aggregation, two consecutive runs on identical fixtures produce an identical string — a re-run diff is empty and a regression appears as a reviewable text change.
+1. Create a detection function with `pureDetect(cwd)` or provide another `DetectFn`.
+2. Call `runEval` with the fixture root, selected corpora, and detection function.
+3. Load thresholds with `loadThresholds` and pass them with the report to `gateEval`.
+4. Use `formatEvalReport` to produce a stable plaintext summary for review.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=c4822635c7c0add51740fe8ffd32b20172d093bf6c4007a4d1ea2e4231c33502 -->
+<!-- keryx:reference:begin v=1 hash=74812a4a7dcd553388d2be6cd6b0efdfbaa6c896fdd2c37a131017219d92ad98 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -80,25 +91,27 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Depends on
 
-- `src/security` - 4 import(s)
-- `src/security/detect` - 2 import(s)
+- `src/security` - 2 import(s)
 - `src/lib` - 1 import(s)
+- `src/security/detect` - 1 import(s)
 
 ### Depended on by
 
-- `src/security/detect` - 2 import(s)
 - `src/commands` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 5 import(s) from test file(s) (e.g. `src/security/detect/exfil.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
 - Files: 2
-- Cross-module imports: 7
+- Cross-module imports: 4
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/security](src-security.md)
@@ -108,6 +121,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose enriched by gdwiki enrich workflow: Overview, How it works, Key concepts, Main flows written from harness.ts and harness.test.ts.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

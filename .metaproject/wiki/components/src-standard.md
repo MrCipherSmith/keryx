@@ -1,107 +1,154 @@
-# Module src/standard
-
+---
+Title: Module src/standard
 Version: 1.0.1
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
+Summary: "Implements the Metaproject Standard (v0.1.0): validates workspace conformance, evaluates capability profiles, and provides a machine-readable discovery surface."
+---
+# Module src/standard
+
+VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df  
 VerifiedScope: sha256:1e60f5ac7a644f48352f7f476b84d5fc16da0414043f050119a4d922f4e98f24
 
 ## Summary
 
-`src/standard` groups 9 file(s). Depends on `src/lib`, `src/commands`. Exposes 9 public symbol(s).
+`src/standard` implements the Metaproject Standard (v0.1.0). It validates a workspace against the standard, evaluates its capability profiles, and prepares machine-readable information for tools and AI agents.
 
-## Overview
+The module depends on `src/lib` and `src/commands`. Command handlers and the MCP server consume its structured results; output formatting and printing are handled by their callers.
 
-`src/standard` is the compliance and discovery layer that implements the Metaproject Standard (v0.1.0). It validates that a workspace on disk conforms to the specification, evaluates which capability profiles are satisfied, and exposes a machine-readable discovery surface (`llms.txt`) that lets AI agents and tooling understand what a metaproject workspace offers without reading the full filesystem. The module is consumed primarily by the `src/commands` layer and the MCP server, which delegate all structured results back here; `src/standard` itself never prints or formats output.
+## Responsibilities
 
-## How it works
+The module covers four related concerns:
 
-The module is organised in three distinct concern layers. The lowest layer is `profiles.ts`, which holds the authoritative module-category lists (`AGENT_MODULES`, `CI_MODULES`) and two pure functions: `computeProfiles` derives the correct profile set from a list of enabled module keys (always includes `minimal`, adds `agent`/`ci`/`full` based on which category buckets are populated), and `evaluateProfiles` inspects the actual filesystem to determine which profiles a workspace *currently satisfies* and compares them against what `metaproject.json` declares.
+- **Profiles:** Derive profile declarations from enabled modules and evaluate which profiles a workspace satisfies.
+- **Validation:** Check the manifest, enabled modules, required files, and declared paths for conformance.
+- **Capabilities:** Normalize capability information from an in-memory manifest.
+- **Discovery:** Build deterministic `llms.txt` content from manifest and artifact information.
 
-The validation layer lives in `validate.ts`. It bundles a self-contained JSON-Schema draft-2020-12 walker (a `walk`/`validateAgainstSchema` pair that resolves both `#/$defs/` references and external named schemas through a `SCHEMA_REGISTRY`) and uses it to verify `metaproject.json` and each enabled module entry against their respective schemas. On top of that schema check it performs eight additional structural checks: required files and directories exist, declared path fields resolve on disk, module manifests are present, root agent entrypoints (AGENTS.md / CLAUDE.md) link `.metaproject/index.md`, and profile declarations match the evaluated satisfaction set. Missing `data/` directories are demoted to warnings because they are generated lazily and are often gitignored.
+## Profiles
 
-`capabilities.ts` is a pure, stateless extractor that reads the in-memory manifest and normalises the `capabilities[]` array — accepting both the legacy bare-string form and the richer object form — into a uniform `CapabilitiesReport`. It never touches the filesystem.
+The profile logic defines module categories and uses them to derive and evaluate workspace profiles.
 
-`emit-llms.ts` provides the discovery surface. `renderLlms` is a pure, deterministic text renderer (no timestamps, all lists sorted) that produces a `llms.txt` following the llms.txt convention: an H1 title, a blockquote summary, a Modules section linking each enabled module's manifest, and a Generated artifacts section sourced from the on-disk `artifacts/` index. `emitLlms` drives the disk walk to collect artifact paths and composes the final file content.
+- `AGENT_MODULES` identifies agent-facing modules.
+- `CI_MODULES` identifies modules associated with CI and reporting.
+- `computeProfiles` derives profile declarations from enabled module keys. The `minimal` profile is always included; other profiles depend on the module categories.
+- `evaluateProfiles` inspects the workspace and compares the profiles it satisfies with those declared in `metaproject.json`.
 
-`service.ts` is the thin facade consumed by the command layer. It provides `runValidate`, `runDoctor` (both delegate to `validateWorkspace`), and `runCapabilities` (reads the manifest then calls `extractCapabilities` and `evaluateProfiles`). Commands stay side-effect-free: they receive structured results and handle all printing themselves.
+The profiles are:
 
-## Key concepts
+| Profile | Conditions |
+|---------|------------|
+| `minimal` | Core files and directories are present. |
+| `agent` | Agent-facing modules are enabled and root entrypoints are wired. |
+| `ci` | Report modules are enabled and an `artifacts/` directory is present. |
+| `full` | The `minimal`, `agent`, and `ci` conditions are all satisfied. |
 
-**Metaproject Standard version** (`STANDARD_VERSION = "0.1.0"`) — the version string the implementation targets. It appears in manifests and `llms.txt` so tooling can detect compatibility without parsing code.
+Declared and satisfied profiles may differ. Evaluation reports both declared profiles that are unsatisfied and satisfied profiles that were not declared.
 
-**Profile** — a named compliance tier for a workspace. The four profiles are `minimal` (core files and directories present), `agent` (agent-facing modules enabled and root entrypoints wired), `ci` (report modules enabled with an `artifacts/` directory), and `full` (all three satisfied simultaneously). Profiles are both *declared* in `metaproject.json` and *evaluated* from disk; the two sets can diverge, and `evaluateProfiles` surfaces both `unsatisfiedDeclared` and `undeclaredSatisfied` so the command layer can advise the user.
+The module categories described by this page are:
 
-**Module category** — modules are grouped into `AGENT_MODULES` (gdgraph, gdctx, gdskills, gdwiki, memory) and `CI_MODULES` (health, testing). These categories determine which profiles a manifest will claim and which the workspace will satisfy.
+- `AGENT_MODULES`: `gdgraph`, `gdctx`, `gdskills`, `gdwiki`, and `memory`
+- `CI_MODULES`: `health` and `testing`
 
-**ValidationResult / Issue** — the structured output of workspace validation. Each issue carries a machine-readable `code`, a human-readable `message`, and an optional `fix` hint. Errors block compliance; warnings are advisory (e.g. missing `data/` directories).
+## Validation
 
-**CapabilitiesReport** — a normalised, manifest-sourced view of the workspace: the standard version, declared profiles, and per-module enabled status, commands, and capability identifiers. This is the data structure exposed to MCP consumers.
+`validateWorkspace` checks workspace conformance and returns structured validation results. It validates `metaproject.json` and each enabled module entry against their schemas, then performs additional structural checks, including:
 
-**`llms.txt`** — the machine-readable discovery file written to `.metaproject/llms.txt`. It follows the llms.txt convention and is fully deterministic: re-running `emitLlms` on the same workspace produces a byte-identical file.
+- Required files and directories exist.
+- Declared paths resolve on disk.
+- Module manifests are present.
+- Root agent entrypoints (`AGENTS.md` and `CLAUDE.md`) link to `.metaproject/index.md`.
+- Declared profiles match the profiles evaluated from the workspace.
+
+Validation issues include a machine-readable code and a human-readable message, with an optional fix hint. Errors indicate failed conformance; warnings are advisory. Missing `data/` directories are treated as warnings because they may be generated lazily and gitignored.
+
+The validation layer includes a JSON Schema draft-2020-12 walker. It resolves `#/$defs/` references and external named schemas through `SCHEMA_REGISTRY`.
+
+## Capabilities
+
+`extractCapabilities` reads the manifest in memory and produces a normalized `CapabilitiesReport`. It accepts both legacy bare-string entries and richer object forms in `capabilities[]`. The extraction itself does not access the filesystem.
+
+The report provides a manifest-sourced view of the standard version, declared profiles, and per-module enabled status, commands, and capability identifiers. `runCapabilities` combines this report with profile evaluation, which does inspect the workspace.
+
+## Discovery with `llms.txt`
+
+`renderLlms` is a pure, deterministic renderer. It produces an `llms.txt` document containing:
+
+- A title and summary blockquote.
+- A modules section linking to enabled module manifests.
+- A generated artifacts section based on the artifact index.
+
+`emitLlms` gathers the manifest and artifact information needed for rendering and returns the path and content. The command layer handles writing the file. With the same inputs, rendering produces byte-identical content.
+
+## Service entrypoints
+
+The service layer provides a facade for command handlers:
+
+- `runValidate` delegates to workspace validation.
+- `runDoctor` also delegates to workspace validation.
+- `runCapabilities` reads the manifest, extracts capabilities, and evaluates profiles.
+
+These entrypoints return structured results rather than printing or formatting output.
 
 ## Main flows
 
-**1. `keryx standard validate` (or `doctor`)**
-A command handler in `src/commands` calls `runValidate(cwd)` (or `runDoctor`) in `service.ts`. The service delegates immediately to `validateWorkspace(cwd)` in `validate.ts`. That function first checks required files and directories, then reads and parses `metaproject.json`, runs it through the bundled JSON-Schema walker against `MANIFEST_TOP_LEVEL_SCHEMA`, validates each enabled module entry against `MODULE_SCHEMA`, verifies that declared path fields exist on disk, confirms that root entrypoints link the index, and finally calls `evaluateProfiles` from `profiles.ts` to compare declared vs satisfied profiles. A `ValidationResult` with typed `errors` and `warnings` arrays is returned to the command layer for rendering.
+### Validation and doctor
 
-**2. `keryx standard capabilities`**
-The command calls `runCapabilities(cwd)` in `service.ts`. The service reads `metaproject.json` from disk (throwing a clear error if it is absent or malformed), then runs two independent operations in parallel: `extractCapabilities(manifest)` in `capabilities.ts` (pure, no I/O) normalises module commands and capability ids into a `CapabilitiesReport`, and `evaluateProfiles(cwd, manifest)` in `profiles.ts` checks the filesystem for each profile's conditions. Both results are returned together as `CapabilitiesResult`. The MCP server also calls this entry point to populate its tool responses.
+```text
+src/commands handler
+  └── runValidate / runDoctor (service.ts)
+        └── validateWorkspace (validate.ts)
+              ├── Read and validate metaproject.json
+              ├── Validate enabled module entries
+              ├── Check required files, directories, and declared paths
+              ├── Check root entrypoint links
+              ├── Evaluate workspace profiles
+              └── Return validation issues
+```
 
-**3. `keryx standard emit-llms`**
-The command calls through to `emitLlms(cwd)` in `emit-llms.ts`. The function reads `metaproject.json` into a lightweight `Manifest` shape, then `collectArtifactIndex` walks `.metaproject/data/**/artifacts/**` to gather all artifact paths. Both inputs are handed to `renderLlms`, which builds the deterministic `llms.txt` body: a sorted module list with manifest links and command annotations, followed by a sorted artifact index. The function returns `{ path, content }` — the command layer writes the file to disk and reports the outcome.
+### Capabilities
 
----
+```text
+src/commands handler or MCP server
+  └── runCapabilities (service.ts)
+        ├── Read metaproject.json
+        ├── extractCapabilities (capabilities.ts)
+        └── evaluateProfiles (profiles.ts)
+```
 
-<!-- keryx:reference:begin v=1 hash=e3cbc48df681e80bd4cf7202231b1baed118b3ab21355852579e1d42ba2cd398 -->
-## Reference (from code graph)
+### Discovery
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+```text
+src/commands handler
+  └── emitLlms (emit-llms.ts)
+        ├── Read manifest information
+        ├── Collect artifact paths
+        └── renderLlms(manifest, artifacts)
+              └── Return path and content
+  └── Command layer writes the file
+```
 
-### Public API
+## Public API
 
-- `DoctorReport`
-- `runValidate` (function)
-- `runDoctor` (function)
-- `CapabilitiesResult`
-- `runCapabilities` (function)
-- `STANDARD_VERSION`
-- `computeProfiles` (function)
-- `evaluateProfiles` (function)
-- `PROFILE_NAMES`
+| Export | Type | Description |
+|--------|------|-------------|
+| `DoctorReport` | Type | Report structure for the doctor command. |
+| `runValidate` | Function | Validate workspace conformance. |
+| `runDoctor` | Function | Run diagnostic validation. |
+| `CapabilitiesResult` | Type | Result structure for the capabilities command. |
+| `runCapabilities` | Function | Extract and evaluate workspace capabilities. |
+| `STANDARD_VERSION` | Constant | Target standard version, `0.1.0`. |
+| `computeProfiles` | Function | Derive profiles from enabled modules. |
+| `evaluateProfiles` | Function | Evaluate which profiles a workspace satisfies. |
+| `PROFILE_NAMES` | Constant | Array of valid profile names. |
 
-### Key files
+## Dependencies and consumers
 
-- `src/standard/service.ts` - imported by 4, imports 5
-- `src/standard/profiles.ts` - imported by 6, imports 2
-- `src/standard/types.ts` - imported by 7, imports 0
-- `src/standard/validate.ts` - imported by 2, imports 4
-- `src/standard/command-registry.ts` - imported by 5, imports 0
-- `src/standard/emit-llms.ts` - imported by 2, imports 2
-
-### Depends on
-
-- `src/lib` - 5 import(s)
-- `src` - 1 import(s)
-- `src/commands` - 1 import(s)
-
-### Depended on by
-
-- `src/commands` - 11 import(s)
-- `src/mcp` - 2 import(s)
-- `src/metrics` - 1 import(s)
-
-### Graph signals
-
-- Files: 14
-- Cross-module imports: 7
-<!-- keryx:reference:end -->
+`src/standard` depends on `src/lib` and `src/commands`. It is consumed by command handlers and the MCP server; `src/metrics` also depends on it.
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived links; only pages verified to exist are included.
 
 - [Wiki Index](../index.md)
 - [Module src/lib](src-lib.md)
@@ -110,6 +157,6 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
-- 1.0.0 - Prose sections enriched by gdwiki agent from code reads of profiles.ts, service.ts, validate.ts, emit-llms.ts, capabilities.ts.
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **1.0.1** — Reference refreshed from the code graph (5886c474).
+- **1.0.0** — Prose sections enriched by gdwiki agent from code reads of `profiles.ts`, `service.ts`, `validate.ts`, `emit-llms.ts`, and `capabilities.ts`.
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections were drafts for the gdwiki enrich workflow.

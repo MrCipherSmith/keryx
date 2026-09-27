@@ -9,107 +9,112 @@ Summary: "`src/harness/evidence` groups 3 file(s). Depends on `src/contracts`. E
 
 ## Summary
 
-`src/harness/evidence` groups 3 file(s). Depends on `src/contracts`. Exposes 10 public symbol(s).
-
-The module defines the shared vocabulary for evidence created, scanned, referenced, and redacted by harness-related modules. Its public surface centers on evidence records, provenance, artifact references, scan outputs, and redaction results.
+`src/harness/evidence` provides the shared contract layer for evidence created, scanned, referenced, and redacted by harness-related modules. It defines typed objects that describe evidence: its kind, provenance, artifact linkages, causal relationships, scan outputs, and redaction transformations.
 
 ## Overview
 
-This module is the evidence contract layer for the harness. It provides typed objects that other modules use to describe evidence: what kind of evidence exists, where it came from, which artifacts it points to, and what causal relationships it belongs to.
+This module centralizes evidence-related type definitions used across the harness and security subsystems. By exposing a common vocabulary through `src/harness/evidence/types.ts`, other modules can exchange evidence data without duplicating interface definitions.
 
-It also exposes redaction-related types and a helper function, `redactForPersistence`, suggesting that evidence can be transformed into a safer form before persistence or later handling. The module itself focuses on structure and transformation contracts rather than owning storage, transport, or execution lifecycle.
+The module also provides redaction functionality through `src/harness/evidence/redaction.ts`, including the [`redactForPersistence`](#public-api) helper for preparing evidence before storage.
+
+Because evidence often carries sensitive data — file contents, process output, secrets caught mid-flight — this module's redaction layer is a deliberate boundary: anything written to durable storage should pass through it first.
 
 ## How it works
 
-The module is organized around a small number of files:
+The module consists of three files:
 
-- `src/harness/evidence/types.ts` defines the shared evidence shapes and public contracts.
-- `src/harness/evidence/redaction.ts` provides redaction-related behavior, including `redactForPersistence`.
-- `src/harness/evidence/redaction.test.ts` verifies redaction behavior.
+| File | Purpose | Import relationships |
+|------|---------|---------------------|
+| `types.ts` | Core evidence shapes and contracts | Imported by 7 modules |
+| `redaction.ts` | Redaction logic and helpers | Imported by 4 modules |
+| `redaction.test.ts` | Unit tests for redaction | Imports 3 dependencies |
 
-`types.ts` is imported by multiple other modules, indicating that it serves as the central contract layer for evidence objects. Consumers import the module to get consistent evidence types instead of inventing local shapes.
+`types.ts` serves as the canonical contract layer. Other modules import evidence types from this file rather than defining local interfaces, which keeps evidence shapes consistent across the codebase and avoids drift between producers and consumers of evidence data.
 
-The module depends on `src/contracts`, meaning it aligns evidence definitions with shared application contracts. It is consumed by harness and security modules, including `src/harness/child`, `src/harness/extension`, and `src/security`.
+The module depends on [`src/contracts`](src-contracts.md), aligning evidence definitions with the application's shared contracts.
 
 ## Key concepts
 
-The module introduces several core evidence-related objects:
+### Evidence identity
 
-- `EvidenceRecord`: the main record used to describe a piece of evidence.
-- `EvidenceKind`: classification or categorization for evidence.
-- `EvidenceCausalIds`: identifiers used to associate evidence with causal relationships.
-- `EvidenceArtifactRef`: a reference to an artifact related to evidence.
-- `EvidenceProvenance`: information describing where evidence came from.
-- `ScanResult`: result data produced by evidence-related scanning behavior.
-- `RedactionDeps`: dependencies or context needed for redaction.
-- `RedactionResult`: the output shape produced by redaction.
-- `RedactionProvenance`: information describing the redaction that was applied.
-- `redactForPersistence`: public helper used to prepare evidence for persistence.
+- **`EvidenceRecord`** — The primary record describing a piece of evidence: what it is, where it came from, and what it relates to.
+- **`EvidenceKind`** — Classification or category for evidence, used to distinguish different flavors of recorded observations.
+- **`EvidenceCausalIds`** — Identifiers linking a piece of evidence back to the events or actions that caused it.
 
-Together, these concepts separate evidence identity, provenance, artifact linkage, scanning, and redaction into distinct parts.
+### Provenance and artifacts
+
+- **`EvidenceProvenance`** — Metadata describing where a piece of evidence originated (e.g. which process, run, or scan produced it).
+- **`EvidenceArtifactRef`** — A reference to an artifact (file, output, etc.) related to a piece of evidence.
+
+### Scanning
+
+- **`ScanResult`** — The result data produced when evidence is passed through a scanning process.
+
+### Redaction
+
+- **`RedactionDeps`** — Dependencies or context required to perform redaction operations.
+- **`RedactionResult`** — Output shape produced by a redaction operation, containing the sanitized evidence.
+- **`RedactionProvenance`** — Metadata describing what redaction was applied and why.
+- **`redactForPersistence`** — Helper function that transforms evidence into a form safe to persist to storage.
 
 ## Main flows
 
-### Producing or validating evidence
+### Creating evidence records
 
-A consumer module imports evidence types from `src/harness/evidence` and uses them to describe evidence it creates or observes. For example, it may construct an `EvidenceRecord`, classify it using `EvidenceKind`, attach `EvidenceProvenance`, reference artifacts with `EvidenceArtifactRef`, and associate causal identifiers using `EvidenceCausalIds`.
+1. A consumer module imports evidence types from `src/harness/evidence`.
+2. It constructs an `EvidenceRecord`, classifying it with `EvidenceKind`.
+3. It attaches provenance via `EvidenceProvenance`.
+4. It references related artifacts using `EvidenceArtifactRef`.
+5. It associates causal identifiers through `EvidenceCausalIds`.
 
-### Redacting evidence before persistence
+### Redacting before persistence
 
-Modules that need to reduce risk before storing evidence can use `redactForPersistence`. The related types `RedactionDeps`, `RedactionResult`, and `RedactionProvenance` describe the inputs, outputs, and lineage of that redaction process.
+Modules that need to sanitize evidence before storage follow this pattern:
 
-### Sharing evidence across harness modules
+1. Gather redaction context into `RedactionDeps`.
+2. Call `redactForPersistence(evidence, deps)`.
+3. Receive a `RedactionResult` containing the transformed evidence and an accompanying `RedactionProvenance` describing what was removed or altered.
 
-Because the evidence types are centralized, other modules such as `src/harness/child`, `src/harness/extension`, `src/harness/flow`, `src/harness/process`, `src/harness/run`, and `src/security` can exchange evidence-related data using the same contract definitions instead of duplicating local interfaces.
+### Sharing across modules
 
----
+The centralized types enable consistent evidence exchange between:
 
-## Reference (from code graph)
+- [`src/harness/child`](src-harness-child.md)
+- [`src/harness/extension`](src-harness-extension.md)
+- [`src/harness/flow`](src-harness-flow.md)
+- [`src/harness/process`](src-harness-process.md)
+- [`src/harness/run`](src-harness-run.md)
+- [`src/security`](src-security.md)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Because all these modules speak the same evidence vocabulary, evidence produced in one part of the harness (e.g. during process execution) can be consumed, scanned, or redacted elsewhere without translation.
 
-### Public API
+## Public API
 
-- `EvidenceCausalIds` (interface)
-- `EvidenceArtifactRef` (interface)
-- `EvidenceProvenance` (interface)
-- `EvidenceKind`
-- `EvidenceRecord` (interface)
-- `ScanResult` (interface)
-- `RedactionDeps` (interface)
-- `RedactionResult`
-- `RedactionProvenance` (interface)
-- `redactForPersistence` (function)
+| Symbol | Type | Description |
+|--------|------|-------------|
+| `EvidenceCausalIds` | interface | Identifiers for evidence causal relationships |
+| `EvidenceArtifactRef` | interface | Reference to a related artifact |
+| `EvidenceProvenance` | interface | Origin metadata for evidence |
+| `EvidenceKind` | type | Evidence classification |
+| `EvidenceRecord` | interface | Main evidence record shape |
+| `ScanResult` | interface | Result of evidence scanning |
+| `RedactionDeps` | interface | Dependencies for redaction |
+| `RedactionResult` | type | Output of redaction operation |
+| `RedactionProvenance` | interface | Metadata about applied redaction |
+| `redactForPersistence` | function | Prepares evidence for safe storage |
 
-### Key files
+## Dependents
 
-- `src/harness/evidence/types.ts` - imported by 7, imports 0
-- `src/harness/evidence/redaction.ts` - imported by 4, imports 0
-- `src/harness/evidence/redaction.test.ts` - imported by 0, imports 3
+This module is consumed by:
 
-### Depends on
-
-- `src/contracts` - 1 import(s)
-
-### Depended on by
-
-- `src/harness/child` - 2 import(s)
-- `src/harness/extension` - 2 import(s)
-- `src/security` - 2 import(s)
-- `src/harness/flow` - 1 import(s)
-- `src/harness/process` - 1 import(s)
-- `src/harness/run` - 1 import(s)
-
-### Graph signals
-
-- Files: 3
-- Cross-module imports: 1
+- `src/harness/child` — 2 imports
+- `src/harness/extension` — 2 imports
+- `src/security` — 2 imports
+- `src/harness/flow` — 1 import
+- `src/harness/process` — 1 import
+- `src/harness/run` — 1 import
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/contracts](src-contracts.md)
@@ -122,4 +127,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Initial documentation generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z.

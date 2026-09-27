@@ -5,158 +5,181 @@ Type: component
 Status: draft
 Summary: "`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/games`. Exposes 17 public symbol(s)."
 ---
+```markdown
+---
+Title: Module src/tui/games/tic-tac-toe
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/games`. Exposes 17 public symbol(s)."
+---
+
 # Module src/tui/games/tic-tac-toe
 
 ## Summary
 
-`src/tui/games/tic-tac-toe` groups 11 file(s). Depends on `src/tui/games`. Exposes 17 public symbol(s).
+`src/tui/games/tic-tac-toe` provides a self-contained Tic-Tac-Toe game component for the TUI layer. It groups 11 files, depends on `src/tui/games`, and exposes 17 public symbols.
 
 ## Overview
 
-The module implements tic-tac-toe as a self-contained TUI game component. It owns the game board, core win/draw rules, presentation geometry, and prompt helpers for model-assisted play.
+The module implements Tic-Tac-Toe as a reusable TUI game component. It owns:
 
-Its role in the application is to provide a reusable tic-tac-toe implementation that can be wired into the broader games area provided by `src/tui/games`. The module separates rule logic from rendering, layout, and integration, so game state can be reasoned about independently from terminal presentation.
+- Game board state and logic
+- Win/draw detection rules
+- Presentation geometry and layout
+- Prompt helpers for model-assisted play
 
-## How it works
+Its role is to provide a composable Tic-Tac-Toe implementation that integrates with the broader games area via `src/tui/games`.
+
+## How It Works
 
 The module is organized around several cooperating layers:
 
-- **Rules and state** (`core.ts`)
-  - `emptyBoard` and `freshGame` create the initial board state.
-  - `placeMark` applies a move to the board.
-  - `freeCells` exposes cells that can still be played.
-  - `checkWinner` and `isGameOver` determine whether the game has ended.
+### Rules and State (`core.ts`)
 
-- **Game packaging and export** (`game.ts`, `index.ts`)
-  - `ticTacToeGame` is the public game entry used by the games area.
-  - `index.ts` aggregates the public API and is the module’s entry point.
+- `emptyBoard` and `freshGame` create the initial board state
+- `placeMark` applies a move to the board
+- `freeCells` exposes cells that can still be played
+- `checkWinner` and `isGameOver` determine whether the game has ended
 
-- **Presentation geometry** (`layout.ts`)
-  - Constants such as `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, and `GAME_CELL_SIZES` describe the board’s visual structure.
-  - `gameBoardWidth` and `resolveCellSize` help translate board state into renderable dimensions.
+### Game Packaging and Export (`game.ts`, `index.ts`)
 
-- **Rendering** (`render.ts`)
-  - Draws the board and marks using the layout model.
-  - Focuses on visual presentation rather than game rules.
+- `ticTacToeGame` is the public game entry used by the games area
+- `index.ts` aggregates the public API and is the module's entry point
 
-- **Model-assisted play** (`prompts.ts`)
-  - `gameSystemPrompt` and `gameUserPrompt` provide prompt text for model-assisted move selection.
-  - `parseModelMove` normalizes model output into a usable move representation.
-  - `bestLocalMove` supports local move selection or fallback behavior.
+### Presentation Geometry (`layout.ts`)
 
-The module depends on `src/tui/games` for shared integration behavior. It is also imported by `src/tui/games`, indicating that the games area consumes this module to present or wire tic-tac-toe into the application.
+- `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, and `GAME_CELL_SIZES` describe the board's visual structure
+- `gameBoardWidth` and `resolveCellSize` translate board state into renderable dimensions
 
-## Key concepts
+### Rendering (`render.ts`)
 
-- **Board**
-  - The 3x3 playing surface used by the game.
-  - Created with `emptyBoard` or `freshGame` and updated through `placeMark`.
+- Draws the board and marks using the layout model
+- Focuses on visual presentation rather than game rules
 
-- **Cell and mark**
-  - A cell is a board position that may contain a player mark or remain empty.
-  - `freeCells` identifies playable cells.
+### Model-Assisted Play (`prompts.ts`)
 
-- **Winner and game-over state**
-  - `checkWinner` determines whether a winning line exists.
-  - `isGameOver` determines whether play should stop, either due to a win or another terminal condition.
+- `gameSystemPrompt` and `gameUserPrompt` provide prompt text for model-assisted move selection
+- `parseModelMove` normalizes model output into a usable move representation
+- `bestLocalMove` supports local move selection or fallback behavior
 
-- **Local move**
-  - A move selected without external model input.
-  - `bestLocalMove` contributes to local move selection or fallback behavior.
+## Key Concepts
 
-- **Model move**
-  - A move suggested by an external model and then normalized through `parseModelMove`.
+### Board
 
-- **Layout**
-  - The geometry mapping logical board cells to TUI coordinates.
-  - Represented through constants and helpers such as `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, `GAME_CELL_SIZES`, `gameBoardWidth`, and `resolveCellSize`.
+- The 3×3 playing surface used by the game
+- Created with `emptyBoard` or `freshGame` and updated through `placeMark`
 
-- **Game entry**
-  - `ticTacToeGame` is the public object that makes this game available to `src/tui/games`.
+### Cell and Mark
 
-## Main flows
+- A cell is a board position that may contain a player mark or remain empty
+- `freeCells` identifies playable cells
 
-### Start or reset a game
+### Winner and Game-Over State
 
-1. A caller begins or resets play through the module’s public entry point or `ticTacToeGame`.
-2. `freshGame` and `emptyBoard` create a clean starting board.
-3. The surrounding game UI renders the board using layout helpers and `render.ts`.
+- `checkWinner` determines whether a winning line exists
+- `isGameOver` determines whether play should stop, either due to a win or a draw
 
-### Apply a local move
+### Local Move
 
-1. The surrounding TUI controller selects a target cell from the current board state.
-2. `freeCells` can be used to determine whether the selected cell is still playable.
-3. `placeMark` applies the move to the board.
-4. `checkWinner` and `isGameOver` evaluate whether the move ended the game.
+- A move selected without external model input
+- `bestLocalMove` contributes to local move selection or fallback behavior
 
-### Request a model-assisted move
+### Model Move
 
-1. `gameSystemPrompt` and `gameUserPrompt` prepare prompt text describing the game context.
-2. A model response is passed to `parseModelMove` to obtain a usable move.
-3. If the move is valid, it is applied through `placeMark`.
-4. If model input is unavailable or invalid, `bestLocalMove` can provide a local fallback move.
+- A move suggested by an external model and then normalized through `parseModelMove`
+
+### Layout
+
+- The geometry mapping logical board cells to TUI coordinates
+- Represented through constants: `GAME_CELL_GAP`, `GAME_BOARD_CHROME_X`, `GAME_CELL_SIZES`
+- Computed via helpers: `gameBoardWidth`, `resolveCellSize`
+
+### Game Entry
+
+- `ticTacToeGame` is the public object that makes this game available to `src/tui/games`
+
+## Main Flows
+
+### Start or Reset a Game
+
+1. A caller begins or resets play through the module's public entry point or `ticTacToeGame`
+2. `freshGame` and `emptyBoard` create a clean starting board
+3. The surrounding game UI renders the board using layout helpers and `render.ts`
+
+### Apply a Local Move
+
+1. The surrounding TUI controller selects a target cell from the current board state
+2. `freeCells` determines whether the selected cell is still playable
+3. `placeMark` applies the move to the board
+4. `checkWinner` and `isGameOver` evaluate whether the move ended the game
+
+### Request a Model-Assisted Move
+
+1. `gameSystemPrompt` and `gameUserPrompt` prepare prompt text describing the game context
+2. A model response is passed to `parseModelMove` to obtain a usable move
+3. If the move is valid, it is applied through `placeMark`
+4. If model input is unavailable or invalid, `bestLocalMove` provides a local fallback move
 
 ---
 
-## Reference (from code graph)
+## Reference
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted by `keryx wiki collect`; regenerated with `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
-- `ticTacToeGame`
-- `checkWinner`
-- `emptyBoard`
-- `freshGame`
-- `freeCells`
-- `isGameOver`
-- `bestLocalMove`
-- `parseModelMove`
-- `placeMark`
-- `asTtt`
-- `gameSystemPrompt`
-- `gameUserPrompt`
-- `GAME_CELL_GAP`
-- `GAME_BOARD_CHROME_X`
-- `GAME_CELL_SIZES`
-- `gameBoardWidth`
-- `resolveCellSize`
+| Symbol | Description |
+|--------|-------------|
+| `ticTacToeGame` | Public game entry point |
+| `checkWinner` | Determines if a winning line exists |
+| `emptyBoard` | Creates an empty board state |
+| `freshGame` | Creates a fresh game state |
+| `freeCells` | Lists playable cells |
+| `isGameOver` | Checks terminal game state |
+| `bestLocalMove` | Local move selection or fallback |
+| `parseModelMove` | Normalizes model output to a move |
+| `placeMark` | Applies a move to the board |
+| `asTtt` | Type conversion utility |
+| `gameSystemPrompt` | System prompt for model-assisted play |
+| `gameUserPrompt` | User prompt for model-assisted play |
+| `GAME_CELL_GAP` | Layout constant for cell spacing |
+| `GAME_BOARD_CHROME_X` | Layout constant for board chrome |
+| `GAME_CELL_SIZES` | Layout constant for cell dimensions |
+| `gameBoardWidth` | Computes board width |
+| `resolveCellSize` | Resolves cell size for rendering |
 
-### Key files
+### Key Files
 
-- `src/tui/games/tic-tac-toe/core.ts` - imported by 8, imports 1
-- `src/tui/games/tic-tac-toe/game.ts` - imported by 2, imports 5
-- `src/tui/games/tic-tac-toe/index.ts` - imported by 3, imports 4
-- `src/tui/games/tic-tac-toe/layout.ts` - imported by 5, imports 1
-- `src/tui/games/tic-tac-toe/prompts.ts` - imported by 3, imports 1
-- `src/tui/games/tic-tac-toe/render.ts` - imported by 1, imports 3
+| File | Imports | Exports |
+|------|---------|---------|
+| `src/tui/games/tic-tac-toe/core.ts` | 1 | 8 |
+| `src/tui/games/tic-tac-toe/game.ts` | 5 | 2 |
+| `src/tui/games/tic-tac-toe/index.ts` | 4 | 3 |
+| `src/tui/games/tic-tac-toe/layout.ts` | 1 | 5 |
+| `src/tui/games/tic-tac-toe/prompts.ts` | 1 | 3 |
+| `src/tui/games/tic-tac-toe/render.ts` | 3 | 1 |
 
-### Depends on
+### Dependencies
 
-- `src/tui/games` - 7 import(s)
+- **Depends on:** `src/tui/games` (7 imports)
+- **Depended on by:** `src/tui/games` (5 imports)
 
-### Depended on by
-
-- `src/tui/games` - 5 import(s)
-
-### Entry points
+### Entry Points
 
 - `src/tui/games/tic-tac-toe/index.ts`
 
-### Graph signals
+### Graph Signals
 
-- Files: 11
-- Cross-module imports: 7
+- **Files:** 11
+- **Cross-module imports:** 7
 
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+## Related Pages
 
 - [Wiki Index](../index.md)
 - [Module src/tui/games](src-tui-games.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections reviewed and enriched.
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections reviewed and enriched.
+```

@@ -1,61 +1,76 @@
-# Module src/review
-
-Version: 1.0.1
+---
+Title: Module src/review
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:becdec05810cecb41251f17f07e52592172c19caf3149ce32f1dd533782095c7
+Summary: "`src/review` groups 6 file(s). Depends on `src/flow`, `src/commands`, `src/lib`. Exposes 18 public symbol(s)."
+---
+
+# Module src/review
+
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:65f8792a47e9f2d3134d057866494322ac507748ad0e2a595f17a66575cd79f6
 
 ## Summary
 
-`src/review` groups 3 file(s). Depends on `src/flow`, `src/commands`, `src/lib`. Exposes 7 public symbol(s).
+`src/review` groups six files and exposes 18 public symbols. It provides review-related types and functionality, with connections to `src/flow`, `src/commands`, and `src/lib`.
 
 ## Overview
 
-`src/review` owns the managed-review lifecycle in keryx: it creates, stores, validates, and closes structured review packages that capture the scope, reviewer coverage, findings, learning candidates, and decisions produced by a code-review run. A review package can exist as a standalone artifact under `.metaproject/reviews/` or be attached to an active flow inside `.metaproject/flows/<flow>/reviews/`, making review outcomes first-class citizens of the flow lifecycle. The module bridges the review system with the flow system (`src/flow`) and exposes its operations to CLI commands (`src/commands`).
+`src/review` supports managed review packages: structured artifacts that capture a review’s scope, reviewer coverage, findings, learning candidates, and decisions. Packages can be stored as standalone artifacts under `.metaproject/reviews/` or attached to a flow under `.metaproject/flows/<flow>/reviews/`.
+
+The module connects review operations to the flow system and makes them available to CLI commands.
 
 ## How it works
 
-The module is split into two files: `types.ts` declares all branded union types and domain shapes (modes, statuses, target kinds, finding classifications), while `managed.ts` contains every unit of runtime logic that operates on those types.
+The module has six files. `types.ts` defines review-related types, while `managed.ts` contains the managed-package operations. The remaining files cover specialized concerns:
 
-`managed.ts` organizes its work in three layers. The top layer is the public API surface — `createManagedReviewPackage`, `getManagedReviewStatus`, `completeManagedReview`, and `validateManagedReviewManifest` — each of which takes a `cwd` plus a reference or full input struct and operates on the filesystem. The middle layer is a set of pure builder/renderer helpers (`buildManifest`, `normalizeCoverage`, `normalizeFindings`, `renderScope`, `renderCoverage`, `renderReport`, `renderLearning`, `renderDecisions`) that transform inputs into the concrete files that make up a package. The lowest layer is path resolution: `reviewsRoot` computes the standalone reviews root; `packagePath` selects either the flow-attached path (when mode is `attach-review` or `ingest` and a flow is found) or the standalone root; and `resolveReviewPackagePath` does reverse lookup from a short ref or direct path.
+- `pr-comments.ts` — pull request comment integration
+- `blast-radius.ts` — impact analysis for findings
+- `verification.ts` — verification of review state
+- `filter-stats.ts` — filtering and statistical aggregation
 
-`findRelatedFlow` ties the review module to the flow store: given a target (PR URL, issue URL, or branch name), it walks all known flow directories and returns the first flow whose state matches. This is what lets keryx automatically attach a review to an in-progress flow without requiring an explicit flow ID.
+The managed-package logic has three broad parts:
 
-Validation (`validateManagedReviewManifest`) is run synchronously before any files are written during creation, and again before the `closed` status transition during completion. It checks schema version, required string fields, allowed enum values for mode/status/target kind, and the presence of every required artifact path. It also appears to load a JSON Schema document from `docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json` when that file exists, though the schema is loaded but not actively applied in the current implementation.
+- **Package operations:** `createManagedReviewPackage`, `getManagedReviewStatus`, `completeManagedReview`, and `validateManagedReviewManifest` work with review packages and their filesystem representation.
+- **Builders and renderers:** Helpers such as `buildManifest`, `normalizeCoverage`, `normalizeFindings`, and the `render*` functions transform review inputs into package artifacts.
+- **Path resolution:** `reviewsRoot`, `packagePath`, and `resolveReviewPackagePath` determine where packages are stored and how they are found.
+
+`findRelatedFlow` connects reviews to flows by examining known flow directories for a match against a review target, such as a pull request, issue, or branch. This allows a review to be attached to a matching flow without requiring the caller to provide a flow ID.
+
+Manifest validation runs during package creation and before a package is closed. It checks required fields, supported enum values, schema version, and required artifact paths. The implementation may load a JSON Schema document from `docs/requirements/managed-review-feedback-loop/schemas/managed-review-package.schema.json` when present, but does not apply that schema in the current implementation.
 
 ## Key concepts
 
-**ManagedReviewPackage** — the primary artifact: a directory on disk containing a `manifest.json` and six Markdown/JSON artifact files (`scope.md`, `coverage.md`, `report.md`, `findings.json`, `learning.md`, `decisions.md`).
-
-**ManagedReviewMode** — controls where a package is stored and how findings are classified. Three modes: `attach-review` (must resolve a flow, stored inside the flow), `review-flow` (standalone, no flow lookup), and `ingest` (imports an external report text and requires one).
-
-**ReviewTargetKind** — the type of artifact being reviewed: `pr`, `issue`, `branch`, `path`, or `report`.
-
-**ReviewPackageStatus** — lifecycle of a package: `draft` → `reviewed` → `decided` → `learned` → `closed`. `completeManagedReview` transitions directly to `closed` after validating all artifacts exist.
-
-**ReviewCoverageEntry** — records which reviewer ran, with a status (`run`, `skipped`, `failed`, `needs_context`) and a human reason. Defaults to a single `review-orchestrator` entry when none is provided.
-
-**NormalizedReviewFinding** — a structured finding extracted from the raw report text by matching `F-NNN` codes. Each finding carries a severity (`blocker`, `major`, `minor`, `info`), a `FindingClassification`, and a `flow_relevance` indicating whether it was found during an active flow or as post-flow or standalone feedback.
-
-**FindingClassification** — categorizes a finding's disposition: `missed_by_flow_gate`, `valid_followup`, `out_of_scope`, `skill_learning_candidate`, or `false_positive`. Findings in the `ingest` mode default to `valid_followup`; all others default to `skill_learning_candidate`.
-
-**FlowMatchResult** — the result of `findRelatedFlow`: includes the matched flow ID, its directory, and the reason for the match (`explicit-flow-id`, `pr-url`, `issue-url`, `branch`, or `none`).
+- **Managed review package:** A directory containing a `manifest.json` and review artifacts: `scope.md`, `coverage.md`, `report.md`, `findings.json`, `learning.md`, and `decisions.md`.
+- **Managed review mode:** Controls how a package is created and stored:
+  - `attach-review` associates a review with a flow.
+  - `review-flow` creates a standalone review without flow lookup.
+  - `ingest` imports an external report and requires report text.
+- **Review target kind:** Identifies the reviewed item: `pr`, `issue`, `branch`, `path`, or `report`.
+- **Review package status:** Describes the package lifecycle: `draft`, `reviewed`, `decided`, `learned`, and `closed`. `completeManagedReview` validates the artifacts and transitions the package to `closed`.
+- **Review coverage entry:** Records a reviewer and their status (`run`, `skipped`, `failed`, or `needs_context`), with a reason. When no coverage is provided, coverage defaults to a `review-orchestrator` entry.
+- **Normalized review finding:** A structured finding extracted from report text by matching `F-NNN` codes. Findings include severity, classification, and flow relevance.
+- **Finding classification:** Describes a finding’s disposition: `missed_by_flow_gate`, `valid_followup`, `out_of_scope`, `skill_learning_candidate`, or `false_positive`. In `ingest` mode, findings default to `valid_followup`; in other modes, they default to `skill_learning_candidate`.
+- **Flow match result:** Reports the matched flow, its directory, and the match reason, such as an explicit flow ID, pull request URL, issue URL, or branch.
 
 ## Main flows
 
-**1. Creating a flow-attached review package (`attach-review` mode)**
-A CLI command in `src/commands` calls `createManagedReviewPackage` with `mode: "attach-review"` and a PR URL as the target. `managed.ts` calls `resolvePackageFlow`, which delegates to `findRelatedFlow`; that function walks `listFlowDirs` from `src/flow` and matches the PR URL against `flow.pr.url` for each active flow, returning the flow ID and directory. `packagePath` then places the package inside `.metaproject/flows/<flow-dir>/reviews/<reviewId>/`. `buildManifest` populates the `flow` field with the matched flow's ID and path. After `validateManagedReviewManifest` passes, six files are written atomically to the package directory.
+### Create a flow-attached review package
 
-**2. Ingesting an external review report (`ingest` mode)**
-A CLI command calls `createManagedReviewPackage` with `mode: "ingest"`, a target, and either `reportPath` or `reportText`. `readReport` reads the text from the provided path or inline string (failing fast if neither is supplied). `normalizeFindings` scans the text line by line for `F-NNN` pattern tokens, extracting severity from keyword presence and defaulting classification to `valid_followup`. The resulting findings populate `findings.json` and seed the `learning.md` and `decisions.md` artifact files. The package is stored under `.metaproject/reviews/<reviewId>/` if no matching flow is found.
+A CLI command can call `createManagedReviewPackage` with `mode: "attach-review"` and a target such as a pull request URL. The module looks for a matching flow, then stores the package under `.metaproject/flows/<flow-dir>/reviews/<reviewId>/`. The manifest records the matched flow. After validation, the package artifacts are written to the directory.
 
-**3. Closing a review package**
-A CLI command calls `completeManagedReview(cwd, ref)`. `resolveReviewPackagePath` first tries the ref as a direct path, then as a standalone review ID, then walks all flow review subdirectories to find a matching directory name. Once the directory is resolved, `missingArtifacts` checks that all six required files exist on disk; if any are missing, an error is thrown. The manifest is read, its `status` is set to `"closed"` and `updatedAt` refreshed, the updated manifest is validated again, and then written back atomically.
+### Ingest an external review report
+
+A CLI command can call `createManagedReviewPackage` with `mode: "ingest"` and provide either `reportPath` or `reportText`. The report is read from the supplied source; creation fails if neither is available. The module extracts findings from report text by scanning for `F-NNN` tokens, assigns severity based on detected keywords, and defaults classifications to `valid_followup`. If no flow matches, the package is stored under `.metaproject/reviews/<reviewId>/`.
+
+### Close a review package
+
+A CLI command can call `completeManagedReview(cwd, ref)`. The module resolves the reference as a direct path or review ID, including IDs found in flow review directories. It checks that all required artifacts exist, updates the manifest status to `closed` and refreshes `updatedAt`, validates the updated manifest, and writes it back.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=ed3b85119758c3da152a6e506c6184337a1fadc2e884a06349e1f9f82594f732 -->
+<!-- keryx:reference:begin v=1 hash=315676248975d5dce5465869b0314d9c955eae76a2ad7de555b758d7808caaef -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -86,38 +101,44 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/review/types.ts` - imported by 23, imports 5
-- `src/review/managed.ts` - imported by 8, imports 12
-- `src/review/pr-comments.ts` - imported by 7, imports 3
-- `src/review/blast-radius.ts` - imported by 4, imports 5
-- `src/review/verification.ts` - imported by 7, imports 1
-- `src/review/filter-stats.ts` - imported by 4, imports 3
+- `src/review/types.ts` - imported by 30, imports 7
+- `src/review/scope.ts` - imported by 34, imports 0
+- `src/review/managed.ts` - imported by 10, imports 14
+- `src/review/cost.ts` - imported by 17, imports 0
+- `src/review/conform-state.ts` - imported by 13, imports 3
+- `src/review/conform-clauses.ts` - imported by 13, imports 1
 
 ### Depends on
 
-- `src/lib` - 9 import(s)
-- `src/gdskills` - 8 import(s)
-- `src/commands` - 7 import(s)
-- `src/flow` - 6 import(s)
-- `src/gdgraph` - 3 import(s)
-- `src/memory` - 2 import(s)
+- `src/flow` - 17 import(s)
+- `src/lib` - 14 import(s)
+- `src/security` - 11 import(s)
+- `src/gdskills` - 6 import(s)
+- `src/testing` - 3 import(s)
+- `src/gdgraph` - 2 import(s)
 
 ### Depended on by
 
-- `src/commands` - 15 import(s)
-- `src/flow` - 3 import(s)
-- `src/gdskills` - 1 import(s)
+- `src/commands` - 73 import(s)
+- `src/tui` - 26 import(s)
+- `src/flow` - 5 import(s)
+- `src/learning` - 5 import(s)
+- `src/learning/signals` - 2 import(s)
+- `scripts` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 43 import(s) from test file(s) (e.g. `src/commands/review-comments-cli.test.ts`) excluded from the two sections above in both directions.
 
 ### Graph signals
 
-- Files: 30
-- Cross-module imports: 37
+- Files: 101
+- Cross-module imports: 56
 <!-- keryx:reference:end -->
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived and regenerated by `keryx wiki collect --force`. Only existing pages are linked.
 
 - [Wiki Index](../index.md)
 - [Module src/flow](src-flow.md)
@@ -126,6 +147,7 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 1.0.1 - Reference refreshed from the code graph (5886c474).
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
+- 1.0.1 - Reference refreshed from the code graph (5886c474); summary updated to reflect 6 files and 18 public symbols; key files table expanded with all 6 files; Public API section reorganized into Constants and Types groups.
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow. Overview, How it works, Key concepts, and Main flows filled from code reading of `src/review/types.ts` and `src/review/managed.ts`.
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.

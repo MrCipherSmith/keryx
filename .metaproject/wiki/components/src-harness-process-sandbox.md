@@ -5,6 +5,14 @@ Type: component
 Status: draft
 Summary: "`src/harness/process/sandbox` groups 31 file(s). Depends on `src/harness/process`, `src/lib`, `src/harness/policy`. Exposes 17 public symbol(s)."
 ---
+```markdown
+---
+Title: "Module src/harness/process/sandbox"
+Version: 0.1.0
+Type: component
+Status: draft
+Summary: "`src/harness/process/sandbox` owns the sandboxing layer for process execution inside the harness. It defines sandbox profiles, translates policy-derived constraints into concrete sandbox settings, detects available sandbox launchers, and exposes wrappers and adapters that other modules use to run commands under controlled restrictions."
+---
 
 # Module src/harness/process/sandbox
 
@@ -40,19 +48,19 @@ For Seatbelt-style environments, the module can serialize a profile into a forma
 
 ### Wrapping layer
 
-Once a profile exists, the module can wrap a command so it runs inside the sandbox. Wrapping is handled for both Seatbelt-style and bubblewrap-style launchers, with helper APIs for constructing the appropriate command arguments and invoking the launcher binary.
+Once a profile exists, the module wraps a command so it runs inside the sandbox. Wrapping is handled for both Seatbelt-style and bubblewrap-style launchers, with helper APIs for constructing the appropriate command arguments and invoking the launcher binary.
 
-This separation lets higher-level callers request “run this command in a sandbox” without needing to know whether the underlying platform uses `sandbox-exec`, `bwrap`, or another mechanism.
+This separation lets higher-level callers request "run this command in a sandbox" without needing to know whether the underlying platform uses `sandbox-exec`, `bwrap`, or another mechanism.
 
 ### Detection and adapter layer
 
 Not every environment exposes the same sandbox facilities. The module includes detection logic for discovering an available sandbox launcher and resolving an appropriate adapter. The adapter interface gives callers a stable way to launch sandboxed processes even when the underlying launcher differs.
 
-This is the main integration surface for process execution. Callers can obtain an adapter and use it as the execution layer, while the sandbox module continues to handle argument construction and launcher selection underneath.
+This is the main integration surface for process execution. Callers obtain an adapter and use it as the execution layer, while the sandbox module continues to handle argument construction and launcher selection underneath.
 
 ### Network layer
 
-For networked runs, the module provides helpers for allowlisting traffic and preparing network execution context. These helpers support routing or mediation of outbound connections, matching targets against an allowlist, and creating certificate authority material for the run. This makes it possible to combine filesystem/process isolation with controlled network access.
+For networked runs, the module provides helpers for allowlisting traffic and preparing network execution context. These helpers support routing or mediation of outbound connections, matching targets against an allowlist, and creating certificate authority material for the run. This makes it possible to combine filesystem and process isolation with controlled network access.
 
 ### Module composition
 
@@ -62,11 +70,11 @@ The main entry point re-exports the public surface consumed by other modules. In
 
 ### Sandbox profile
 
-A sandbox profile is the module’s canonical representation of what a process is allowed to do. It is used as the input to platform-specific wrapping logic.
+A sandbox profile is the module's canonical representation of what a process is allowed to do. It serves as input to platform-specific wrapping logic.
 
 Public APIs:
 
-- `defaultSandboxProfile`: the module’s baseline profile.
+- `defaultSandboxProfile`: the module's baseline profile.
 - `defaultReadDenyList`: default denied read paths or patterns used to restrict access.
 - `sandboxProfileFromPolicy`: derives a profile from policy-shaped input.
 
@@ -103,7 +111,7 @@ Public APIs:
 
 ### Network controls
 
-The network controls allow the module to support sandboxed execution with restricted outbound access.
+Network controls allow the module to support sandboxed execution with restricted outbound access.
 
 Public APIs:
 
@@ -138,9 +146,9 @@ This flow keeps policy interpretation separate from platform-specific command co
 
 1. A caller needs to run a command that may perform network activity.
 2. The module prepares the network execution context with `setupNetworkRun`.
-3. `createAllowlistProxy` provides the network mediation layer, and `matchesAllowlist` is used to decide which targets are permitted.
+3. `createAllowlistProxy` provides the network mediation layer, and `matchesAllowlist` decides which targets are permitted.
 4. `createRunCa` supports certificate-related material for the run.
-5. The command is still launched through the sandbox adapter or wrapper, so filesystem/process isolation and network policy are applied together.
+5. The command is still launched through the sandbox adapter or wrapper, so filesystem and process isolation are applied alongside network policy.
 
 This flow lets the harness combine sandbox isolation with controlled outbound access in a single execution model.
 
@@ -177,14 +185,13 @@ The public API can be grouped into four clusters:
 - **Adapters and detection**: `SandboxedProcessAdapter`, `detectSandboxLauncher`, `resolveSandboxAdapter`
 - **Network execution helpers**: `createAllowlistProxy`, `matchesAllowlist`, `setupNetworkRun`, `createRunCa`
 
-This grouping reflects the module’s intended use: first describe the sandbox, then choose a launcher, then run the process, and optionally attach controlled network behavior.
+This grouping reflects the module's intended use: first describe the sandbox, then choose a launcher, then run the process, and optionally attach controlled network behavior.
 
 ---
 
 ## Reference (from code graph)
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -241,8 +248,7 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/harness/process](src-harness-process.md)
@@ -256,3 +262,4 @@ exist are linked; when enriching, add new links only to pages you have verified.
 ## Changelog
 
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched for wiki review.
+```

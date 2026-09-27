@@ -5,122 +5,83 @@ Type: component
 Status: draft
 Summary: "`src/harness/provider/ollama` groups 2 file(s). Depends on `src/harness/provider`, `src/contracts`, `src/harness/provider/compat`. Exposes 5 public symbol(s)."
 ---
+```markdown
+---
+Title: Module src/harness/provider/ollama
+Version: 0.1.0
+Type: component
+Status: accepted
+Summary: "`src/harness/provider/ollama` groups 2 file(s). Depends on `src/harness/provider`, `src/contracts`, `src/harness/provider/compat`. Exposes 5 public symbol(s)."
+---
 # Module src/harness/provider/ollama
-
-## Summary
-
-`src/harness/provider/ollama` groups 2 file(s). Depends on `src/harness/provider`, `src/contracts`, `src/harness/provider/compat`. Exposes 5 public symbol(s).
 
 ## Overview
 
-This module owns the Ollama-specific provider integration for the harness layer. Its purpose is to expose a provider implementation and the related data shapes needed for harness code to treat Ollama as a supported provider source.
+This module provides the Ollama-specific provider integration for the harness layer. It exposes `OllamaProvider` and supporting data shapes, enabling harness code to treat Ollama as a supported provider source.
 
-The module is consumed by the broader provider layer and by `src/harness/mutation`, which indicates that it participates in provider discovery, provider metadata resolution, and mutation-related provider handling. The implementation and tests are colocated, keeping provider behavior and verification close together.
+**Dependencies:**
+- `src/harness/provider` — provider-layer abstractions
+- `src/contracts` — shared harness contracts or interfaces
+- `src/harness/provider/compat` — compatibility handling between provider expectations and Ollama-specific shapes
 
-## How it works
+**Consumers:**
+- `src/harness/provider` — uses the module for provider discovery and metadata resolution
+- `src/harness/mutation` — uses provider-related metadata and capability grants
 
-The module exposes one central runtime symbol, `OllamaProvider`, along with supporting public symbols that describe provider dependencies, model metadata, capability grants, and provider descriptor documents.
+## Public API
 
-The provider class is expected to bridge Ollama-specific provider behavior to the harness provider contract. It depends on:
+| Symbol | Description |
+|--------|-------------|
+| `OllamaProvider` | Main provider class for Ollama runtime integration within the harness |
+| `OllamaProviderDeps` | Dependency shape for constructing `OllamaProvider` |
+| `OllamaModelDescriptor` | Descriptor object for an Ollama model |
+| `OllamaProviderDescriptorDocument` | Document-like shape for provider descriptors and metadata |
+| `OllamaCapabilityGrant` | Capability grant object representing permission scope |
 
-- `src/harness/provider` for provider-layer abstractions or composition.
-- `src/contracts` for shared harness contracts or interfaces.
-- `src/harness/provider/compat` for compatibility handling between provider expectations and provider-specific shapes.
+## How It Works
 
-Supporting symbols such as `OllamaModelDescriptor`, `OllamaProviderDescriptorDocument`, and `OllamaCapabilityGrant` provide metadata used to describe and control access to Ollama provider capabilities.
+`OllamaProvider` bridges Ollama-specific behavior to the harness provider contract. The supporting symbols provide metadata used to describe and control access to Ollama provider capabilities:
 
-## Key concepts
+- **Descriptors** (`OllamaModelDescriptor`, `OllamaProviderDescriptorDocument`) enable the harness to reason about model capabilities and availability
+- **Capability grants** (`OllamaCapabilityGrant`) represent permissions or scopes relevant to provider operations
+- **Compatibility bridge** via `src/harness/provider/compat` normalizes Ollama provider behavior to the broader harness surface
 
-- `OllamaProvider`
-  - The public provider class exposed by this module.
-  - Represents the runtime provider integration for Ollama within the harness.
+## Key Flows
 
-- `OllamaProviderDeps`
-  - A dependency shape used to configure or construct the Ollama provider.
-  - Likely carries the provider-layer or contract dependencies required by `OllamaProvider`.
+### Provider Integration
 
-- `OllamaModelDescriptor`
-  - A descriptor object for an Ollama model.
-  - Likely used when the harness needs to reason about model capabilities or availability.
+1. `src/harness/provider` imports from this module
+2. Provider layer accesses `OllamaProvider` and public types through the module surface
+3. Consumers treat Ollama as a supported provider without depending on Ollama-specific implementation details
 
-- `OllamaProviderDescriptorDocument`
-  - A document-like public shape for provider descriptors.
-  - Likely groups provider or model metadata needed by consumers of the provider module.
+### Provider Construction
 
-- `OllamaCapabilityGrant`
-  - A public capability grant object associated with the Ollama provider.
-  - Likely represents a permission or capability scope relevant to provider operations.
+1. Caller provides dependency and descriptor shapes (`OllamaProviderDeps`, etc.)
+2. `OllamaProvider` is instantiated with dependencies resolved from `src/contracts` and `src/harness/provider/compat`
+3. Provider conforms to shared harness behavior and compatibility expectations
 
-- Compatibility bridge
-  - The dependency on `src/harness/provider/compat` indicates that this module helps normalize or adapt Ollama provider behavior to the broader harness provider surface.
+### Mutation Metadata Flow
 
-## Main flows
+1. `src/harness/mutation` depends on this module
+2. Mutation workflows use model descriptors and capability grants for operations interacting with provider-backed behavior
+3. Ollama-specific metadata remains encapsulated while mutation consumers use only the public surface
 
-### Provider integration flow
+## Files
 
-1. `src/harness/provider` imports from `src/harness/provider/ollama`.
-2. The provider layer can access `OllamaProvider` and related public types through this module.
-3. Consumers of the provider layer can treat Ollama as one of the supported provider implementations without depending directly on the Ollama-specific file.
+| File | Purpose |
+|------|---------|
+| `src/harness/provider/ollama/ollama-provider.ts` | Implementation — 4 imports, 2 exports |
+| `src/harness/provider/ollama/ollama-provider.test.ts` | Tests — 4 imports, 0 re-exports |
 
-### Provider construction and compatibility flow
+## Related
 
-1. A caller provides dependency and descriptor shapes such as `OllamaProviderDeps`.
-2. `OllamaProvider` is exposed for harness consumers that need to create or use the Ollama-backed provider.
-3. The provider relies on `src/contracts` and `src/harness/provider/compat` to conform to shared harness behavior and compatibility expectations.
-
-### Mutation-side metadata flow
-
-1. `src/harness/mutation` depends on this module.
-2. Mutation workflows may use provider-related metadata, such as model descriptors or capability grants, while handling operations that interact with provider-backed behavior.
-3. This keeps Ollama-specific metadata close to the implementation while allowing mutation consumers to import only the public module surface.
-
----
-
-## Reference (from code graph)
-
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
-
-### Public API
-
-- `OllamaCapabilityGrant`
-- `OllamaProviderDeps`
-- `OllamaModelDescriptor`
-- `OllamaProviderDescriptorDocument`
-- `OllamaProvider` (class)
-
-### Key files
-
-- `src/harness/provider/ollama/ollama-provider.ts` - imported by 4, imports 2
-- `src/harness/provider/ollama/ollama-provider.test.ts` - imported by 0, imports 4
-
-### Depends on
-
-- `src/harness/provider` - 3 import(s)
-- `src/contracts` - 1 import(s)
-- `src/harness/provider/compat` - 1 import(s)
-
-### Depended on by
-
-- `src/harness/provider` - 2 import(s)
-- `src/harness/mutation` - 1 import(s)
-
-### Graph signals
-
-- Files: 2
-- Cross-module imports: 5
-
-## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
-
-- [Wiki Index](../index.md)
 - [Module src/harness/provider](src-harness-provider.md)
 - [Module src/contracts](src-contracts.md)
 - [Module src/harness/provider/compat](src-harness-provider-compat.md)
 - [Module src/harness/mutation](src-harness-mutation.md)
+- [Wiki Index](../index.md)
 
 ## Changelog
 
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
+- 0.1.0 — Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z
+```

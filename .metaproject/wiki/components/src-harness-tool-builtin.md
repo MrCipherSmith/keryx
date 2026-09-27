@@ -5,8 +5,9 @@ Type: component
 Status: accepted
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
 VerifiedScope: sha256:8ebb184f114016df927b275971fda6ad6baae256123281773549fa2055470943
-Summary: "`src/harness/tool/builtin` groups 18 file(s). Depends on `src/harness/provider`, `src/harness/process/sandbox`, `src/harness/web`. Exposes 9 public symbol(s)."
+Summary: "`src/harness/tool/builtin` groups 18 file(s). Depends on `src/harness/provider`, `src/harness/process/sandbox`, and `src/harness/web`, and exposes 9 public symbol(s)."
 ---
+
 # Module src/harness/tool/builtin
 
 ## Summary
@@ -15,102 +16,128 @@ Summary: "`src/harness/tool/builtin` groups 18 file(s). Depends on `src/harness/
 
 ## Overview
 
-This module owns the built-in tools that a harness can offer to an agent. It contains implementations for interactive tool results, spawning subagents, executing shell commands, accessing metaproject data, and fetching or searching web resources.
+This module provides the built-in tools that a harness exposes to an agent. It contains implementations for:
 
-The module acts as the default toolbox: callers such as `src/commands`, `src/tui`, and benchmark/stress scripts can use these tools without reimplementing the underlying integration logic.
+- **Interactive tool results** and contracts
+- **Spawning subagents** with configurable modes and timeouts
+- **Executing shell commands** under confinement
+- **Accessing metaproject data**
+- **Fetching or searching web resources**
+
+The module serves as the default toolbox. Callers such as `src/commands`, `src/tui`, and benchmark/stress scripts consume these tools without reimplementing integration logic.
 
 ## How it works
 
-The module is organized around small tool-specific files that each wrap one external capability:
+Each file wraps one external capability:
 
-- `shell-exec-tool.ts` integrates with `src/harness/process/sandbox` to run commands under confinement.
-- `web-fetch-tool.ts` and `web-search-tool.ts` wrap the shared `src/harness/web` module.
-- `spawn-subagent-tool.ts` uses `src/harness/provider` and dependency-injected options to create subagents.
-- `interactive-tools.ts` defines the result and tool contracts used by interactive actions.
-- `metaproject-tools.ts` exposes tools for working with metaproject information.
+| File | Responsibility |
+|------|----------------|
+| `shell-exec-tool.ts` | Integrates with `src/harness/process/sandbox` to run confined commands |
+| `web-fetch-tool.ts` | Wraps `src/harness/web` for content retrieval |
+| `web-search-tool.ts` | Wraps `src/harness/web` for search operations |
+| `spawn-subagent-tool.ts` | Uses `src/harness/provider` and dependency injection to create subagents |
+| `interactive-tools.ts` | Defines `InteractiveToolResult` and `InteractiveTool` contracts |
+| `metaproject-tools.ts` | Exposes tools for metaproject information |
 
-The public surface is small: most files export one or two symbols, and higher-level callers consume the ready-made tools through the functions listed in the Public API section.
+Most files export one or two symbols. Higher-level callers consume ready-made tools through the functions listed in the Public API section.
 
 ## Key concepts
 
-- **Tool**: an executable capability exposed to the agent. Built-in tools implement or wrap tool-shaped interfaces.
-- **Interactive tool**: a tool whose result can represent interactive or user-facing output, described by `InteractiveToolResult` and `InteractiveTool`.
-- **Read-only tools**: the subset collected by `builtinReadOnlyTools`, intended for operations that do not require write access.
-- **Subagent tooling**: `createSpawnSubagentTool`, configured by `SpawnSubagentToolDeps`, `SubagentMode`, and `resolveSubagentTimeoutMs`, with timeout overrides through `ENV_SUBAGENT_TIMEOUT_MS`.
-- **Sandboxing**: shell execution relies on `src/harness/process/sandbox`, with helpers such as `confineToRoot` to constrain command scope.
+### Tool
+An executable capability exposed to the agent. Built-in tools implement or wrap tool-shaped interfaces.
+
+### Interactive tool
+A tool whose result can represent interactive or user-facing output. Defined by `InteractiveToolResult` and `InteractiveTool` interfaces.
+
+### Read-only tools
+Tools collected by `builtinReadOnlyTools`, intended for operations that do not require write access.
+
+### Subagent tooling
+- `createSpawnSubagentTool` creates the subagent tool
+- `SpawnSubagentToolDeps` provides dependency injection
+- `SubagentMode` controls subagent behavior
+- `resolveSubagentTimeoutMs` resolves timeout values
+- `ENV_SUBAGENT_TIMEOUT_MS` allows timeout override via environment
+
+### Sandboxing
+Shell execution relies on `src/harness/process/sandbox`. The `confineToRoot` helper constrains command scope to a root directory.
 
 ## Main flows
 
-- **Shell execution**: the agent invokes the shell tool; the tool hands the command to `src/harness/process/sandbox`, which confines and runs it, and returns the result to the agent.
-- **Subagent spawning**: the agent invokes the spawn-subagent tool; `createSpawnSubagentTool` resolves the subagent mode and timeout, then delegates to the provider layer to start the subagent.
-- **Web lookup**: the agent calls the built-in web fetch or search tool; the tool forwards the request through `src/harness/web` and returns the resulting content or search results.
+### Shell execution
+1. Agent invokes the shell tool
+2. Tool hands the command to `src/harness/process/sandbox`
+3. Sandbox confines and runs the command
+4. Result is returned to the agent
 
-These flows keep built-in tools thin and delegate the heavy lifting to the harness infrastructure modules they depend on.
+### Subagent spawning
+1. Agent invokes the spawn-subagent tool
+2. `createSpawnSubagentTool` resolves the subagent mode and timeout
+3. Provider layer starts the subagent
+4. Result is returned to the agent
+
+### Web lookup
+1. Agent calls the web fetch or search tool
+2. Tool forwards the request through `src/harness/web`
+3. Content or search results are returned
+
+These flows keep built-in tools thin by delegating heavy lifting to infrastructure modules.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=d236df736df999cf06e731843ac22991651eac641460aec3c8669fbb9bf0ecde -->
-## Reference (from code graph)
+## Public API
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+### Interfaces
+- `InteractiveToolResult`
+- `InteractiveTool`
+- `StructuredSubagentResult`
+- `SpawnSubagentTool`
+- `SpawnSubagentToolDeps`
 
-### Public API
+### Functions
+- `confineToRoot` — constrain command scope to a root directory
+- `builtinReadOnlyTools` — collect read-only tool set
+- `resolveSubagentTimeoutMs` — resolve timeout from config or environment
 
-- `InteractiveToolResult` (interface)
-- `InteractiveTool` (interface)
-- `confineToRoot` (function)
-- `builtinReadOnlyTools` (function)
+### Constants and types
 - `SubagentMode`
 - `SpawnSubagentFleetEvent`
 - `SubagentCompletionStatus`
-- `StructuredSubagentResult` (interface)
-- `SpawnSubagentTool` (interface)
 - `DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS`
 - `DEFAULT_SUBAGENT_MAX_ROUNDS`
 - `MAX_SUBAGENT_MAX_ROUNDS`
 - `ENV_SUBAGENT_TIMEOUT_MS`
-- `resolveSubagentTimeoutMs` (function)
-- `SpawnSubagentToolDeps` (interface)
-- `createSpawnSubagentTool` (function)
 
-### Key files
+## Key files
 
-- `src/harness/tool/builtin/interactive-tools.ts` - imported by 32, imports 1
-- `src/harness/tool/builtin/spawn-subagent-tool.ts` - imported by 13, imports 15
-- `src/harness/tool/builtin/background-job-registry.ts` - imported by 16, imports 2
-- `src/harness/tool/builtin/shell-exec-tool.ts` - imported by 11, imports 4
-- `src/harness/tool/builtin/metaproject-tools.ts` - imported by 7, imports 3
-- `src/harness/tool/builtin/workspace-lifecycle-tool.ts` - imported by 5, imports 5
+| File | Imported by | Imports |
+|------|-------------|---------|
+| `interactive-tools.ts` | 32 | 1 |
+| `spawn-subagent-tool.ts` | 13 | 15 |
+| `background-job-registry.ts` | 16 | 2 |
+| `shell-exec-tool.ts` | 11 | 4 |
+| `metaproject-tools.ts` | 7 | 3 |
+| `workspace-lifecycle-tool.ts` | 5 | 5 |
+
+## Dependencies
 
 ### Depends on
-
-- `src/session` - 12 import(s)
-- `src/harness/provider` - 9 import(s)
-- `src/harness/web` - 5 import(s)
-- `src/harness/tool` - 4 import(s)
-- `src/lib` - 3 import(s)
-- `src/security` - 3 import(s)
+- `src/session` — 12 imports
+- `src/harness/provider` — 9 imports
+- `src/harness/web` — 5 imports
+- `src/harness/tool` — 4 imports
+- `src/lib` — 3 imports
+- `src/security` — 3 imports
 
 ### Depended on by
-
-- `src/commands` - 29 import(s)
-- `src/tui` - 14 import(s)
-- `scripts/benchmark` - 9 import(s)
-- `scripts/stress` - 4 import(s)
-- `src/security` - 3 import(s)
-- `src/sac` - 2 import(s)
-
-### Graph signals
-
-- Files: 33
-- Cross-module imports: 52
-<!-- keryx:reference:end -->
+- `src/commands` — 29 imports
+- `src/tui` — 14 imports
+- `scripts/benchmark` — 9 imports
+- `scripts/stress` — 4 imports
+- `src/security` — 3 imports
+- `src/sac` — 2 imports
 
 ## Related Wiki
-
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
 
 - [Wiki Index](../index.md)
 - [Module src/commands](src-commands.md)
@@ -118,5 +145,5 @@ exist are linked; when enriching, add new links only to pages you have verified.
 
 ## Changelog
 
-- 0.1.1 - Reference refreshed from the code graph (5886c474).
-- 0.1.0 - Generated by `keryx wiki collect` at 2026-08-13T11:45:47.763Z. Prose sections are drafts for the gdwiki enrich workflow.
+- **0.1.1** — Reference refreshed from the code graph (5886c474)
+- **0.1.0** — Generated by `keryx wiki collect` at 2026-08-13T11:45:47.763Z

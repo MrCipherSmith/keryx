@@ -3,7 +3,7 @@ Title: Module scripts
 Version: 0.1.0
 Type: component
 Status: draft
-Summary: "`scripts` groups 13 file(s). Depends on `src/sac`. Exposes 1 public symbol(s)."
+Summary: The `scripts` module groups development, validation, and fixture-generation helpers. It depends on `src/sac`, is imported by `src/sac` through its public fixture generator, and exposes one public symbol: `generateSacPolicyExperimentFixtures`.
 ---
 
 # Module scripts
@@ -14,37 +14,44 @@ The `scripts` module groups development, validation, and fixture-generation help
 
 ## Overview
 
-This component owns operational scripts rather than end-user runtime code. Its primary purpose is to prepare SAC policy experiment fixtures and to provide focused checks for documentation links and retired CLI spellings. It also includes test coverage related to global installation.
+This component owns operational scripts rather than end-user runtime code. Its primary purpose is to:
 
-The module is small but cross-cutting: it reaches into `src/sac` for SAC-related definitions, while `src/sac` can import the fixture generator. This relationship is intentionally narrow and centers on fixture production rather than shared runtime behavior.
+- Prepare SAC policy experiment fixtures
+- Validate documentation links
+- Check for retired CLI spellings
+- Cover global installation behavior in tests
+
+The module has a narrow, intentional relationship with `src/sac`: script files depend on SAC definitions for context, while `src/sac` imports the fixture generator. This coupling centers on fixture production rather than shared runtime behavior.
 
 ## How it works
 
-The module is organized as a collection of script entry points, not as a layered runtime package. Each file generally performs a single operational role.
+The module is organized as a collection of script entry points, not as a layered runtime package. Each file performs a single operational role.
 
-- `scripts/generate-sac-policy-experiment-fixtures.ts` defines the module’s public API. It imports SAC-related definitions from `src/sac` and exports `generateSacPolicyExperimentFixtures`.
-- `scripts/check-doc-links.ts` implements a documentation-link validation script, while `scripts/check-doc-links.test.ts` exercises that implementation.
-- `scripts/check-retired-cli-spellings.ts` implements a check for retired CLI spellings, with corresponding tests in `scripts/check-retired-cli-spellings.test.ts`.
-- `scripts/install-global.test.ts` contains tests related to global installation behavior.
-
-The code graph shows a narrow bidirectional relationship with `src/sac`: script files depend on SAC definitions, and SAC code imports the fixture generator. This keeps the module focused on generating and validating project artifacts rather than owning application logic.
+| File | Role |
+|------|------|
+| `scripts/generate-sac-policy-experiment-fixtures.ts` | Defines the public API. Imports SAC definitions from `src/sac` and exports `generateSacPolicyExperimentFixtures`. |
+| `scripts/check-doc-links.ts` | Validates documentation links. |
+| `scripts/check-doc-links.test.ts` | Tests the documentation-link validation. |
+| `scripts/check-retired-cli-spellings.ts` | Checks for retired CLI spellings. |
+| `scripts/check-retired-cli-spellings.test.ts` | Tests the retired CLI spelling check. |
+| `scripts/install-global.test.ts` | Tests global installation behavior. |
 
 ## Key concepts
 
 - **Script entry point**  
-  An executable helper intended for development, validation, or fixture preparation.
+  An executable helper for development, validation, or fixture preparation.
 
 - **Public symbol**  
-  An exported API surface. In this module, the only documented public symbol is `generateSacPolicyExperimentFixtures`.
+  An exported API surface. The only documented public symbol is `generateSacPolicyExperimentFixtures`.
 
 - **SAC policy experiment fixture**  
-  Generated data used to support SAC policy experiment workflows. The module owns the generator, while `src/sac` may consume it.
+  Generated data that supports SAC policy experiment workflows. The module owns the generator; `src/sac` may consume it.
 
 - **Validation check**  
-  A small executable routine used to verify repository content or CLI conventions, such as documentation links or retired CLI spellings.
+  A routine that verifies repository content or CLI conventions.
 
 - **Test wrapper**  
-  A file that imports or invokes an implementation script and asserts its expected behavior.
+  A file that imports or invokes an implementation and asserts expected behavior.
 
 ## Main flows
 
@@ -52,24 +59,23 @@ The code graph shows a narrow bidirectional relationship with `src/sac`: script 
 
 1. A caller imports `generateSacPolicyExperimentFixtures` from `scripts/generate-sac-policy-experiment-fixtures.ts`.
 2. The script uses SAC-related definitions from `src/sac`.
-3. The generated fixture data becomes available to SAC consumers, including the `src/sac` relationship shown in the code graph.
+3. The generated fixture data becomes available to SAC consumers.
 
 ### Check documentation links
 
-1. `scripts/check-doc-links.ts` performs the documentation-link check.
-2. `scripts/check-doc-links.test.ts` imports or invokes the implementation and validates expected behavior.
+1. `scripts/check-doc-links.ts` runs the documentation-link check.
+2. `scripts/check-doc-links.test.ts` validates expected behavior.
 
 ### Check retired CLI spellings
 
-1. `scripts/check-retired-cli-spellings.ts` scans for or validates retired CLI spellings.
-2. `scripts/check-retired-cli-spellings.test.ts` verifies the behavior of that check.
+1. `scripts/check-retired-cli-spellings.ts` scans for retired CLI spellings.
+2. `scripts/check-retired-cli-spellings.test.ts` verifies the check's behavior.
 
 ---
 
-## Reference (from code graph)
+## Reference
 
-Extracted deterministically by `keryx wiki collect`; regenerated by
-`--force`. The prose sections above are the agent/human-owned part.
+Extracted deterministically by `keryx wiki collect`; regenerated by `--force`. The prose sections above are the agent/human-owned part.
 
 ### Public API
 
@@ -77,20 +83,22 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `scripts/generate-sac-policy-experiment-fixtures.ts` - imported by 1, imports 2
-- `scripts/check-doc-links.test.ts` - imported by 0, imports 1
-- `scripts/check-doc-links.ts` - imported by 1, imports 0
-- `scripts/check-retired-cli-spellings.test.ts` - imported by 0, imports 1
-- `scripts/check-retired-cli-spellings.ts` - imported by 1, imports 0
-- `scripts/install-global.test.ts` - imported by 0, imports 0
+| File | Imports | Imported by |
+|------|---------|-------------|
+| `scripts/generate-sac-policy-experiment-fixtures.ts` | 2 | 1 |
+| `scripts/check-doc-links.ts` | 0 | 1 |
+| `scripts/check-doc-links.test.ts` | 1 | 0 |
+| `scripts/check-retired-cli-spellings.ts` | 0 | 1 |
+| `scripts/check-retired-cli-spellings.test.ts` | 1 | 0 |
+| `scripts/install-global.test.ts` | 0 | 0 |
 
-### Depends on
+### Dependencies
 
-- `src/sac` - 2 import(s)
+- `src/sac` — 2 import(s)
 
-### Depended on by
+### Dependents
 
-- `src/sac` - 1 import(s)
+- `src/sac` — 1 import(s)
 
 ### Graph signals
 
@@ -99,12 +107,11 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ## Related Wiki
 
-Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
-exist are linked; when enriching, add new links only to pages you have verified.
+Graph-derived — regenerated by `keryx wiki collect --force`. Only pages that exist are linked.
 
 - [Wiki Index](../index.md)
 - [Module src/sac](src-sac.md)
 
 ## Changelog
 
-- 0.1.0 - Initial page generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections have since been enriched and marked accepted.
+- 0.1.0 — Initial page generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections enriched and marked accepted.

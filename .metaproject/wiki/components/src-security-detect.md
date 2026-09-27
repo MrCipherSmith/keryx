@@ -1,74 +1,90 @@
 ---
 Title: Module src/security/detect
-Version: 1.0.1
+Version: 1.0.2
 Type: component
 Status: accepted
-VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
-VerifiedScope: sha256:6c363305ab633b255527d9e65605f303f39d9e80249facaf41b3a2a689ba1583
+VerifiedAt: 4e80355f1b9fa8576742d151d54397abbd527b38
+VerifiedScope: sha256:cc0459b2cfe29d3fec3ae048a5f8c983ce89aa53841da1d8c1448e17d56abdba
 Summary: `src/security/detect` groups 12 file(s). Depends on `src/security`, `src/harness`, `src/capability`. Exposes 10 public symbol(s).
 ---
 
 # Module src/security/detect
 
-## Summary
-
-`src/security/detect` is the threat-detection engine for the Keryx security pipeline. It contains 12 files, depends on `src/security`, `src/harness`, and `src/capability`, and exposes 10 public symbols.
-
 ## Overview
 
-This module owns the full set of content detectors for the Keryx pipeline: secrets, entropy, PII, prompt injection, egress, exfiltration, and MCP manifest scanning. It provides a unified synchronous entry point (`runDetectors`) and an optional asynchronous entry point (`runDetectorsAsync`) that layers in opt-in model-backed backends. Every detector is gated by `SecurityConfig` policy flags, enabling per-category toggling without changing call sites.
+`src/security/detect` contains content-detection logic for the Keryx security pipeline. Its detectors cover secrets, entropy, personally identifiable information (PII), prompt injection, outbound egress, exfiltration, and MCP tool manifests.
 
-## How It Works
+The module provides a synchronous, policy-gated scan through `runDetectors` and an asynchronous scan through `runDetectorsAsync`. The asynchronous path can add optional model-backed results; deterministic results remain available when those backends are disabled or unavailable.
 
-The module uses a two-tier detection architecture.
+## Architecture
 
-**Deterministic tier (synchronous).** Pure-function detectors – `detectSecrets`, `detectEntropy`, `detectPii`, `detectInjection`, `detectEgress`, `detectExfil` – run synchronously using regex and heuristic logic with no external dependencies. The `index.ts` orchestrator (`runDetectors`) iterates over active policy flags from `SecurityConfig`, invokes each applicable detector, and deduplicates overlapping spans by keeping the highest-confidence match per region. This ensures that an entropy hit never double-counts an exact secret at the same byte offset.
+### Deterministic detection
 
-**Optional async tier.** `runDetectorsAsync` extends the deterministic result with model-backed adapters for prompt-injection classification and PII named-entity recognition. Each adapter is resolved through the capability seam (`resolveCapability`) using a `CapabilitySpec` – a lazy, injectable abstraction over the underlying model runtime. If the environment variable `SECURITY_MODEL_RUNTIME` is empty (the default, because the ONNX stack was removed for weight), or if capability resolution fails, the async path silently falls back to the deterministic result. Adapter errors are caught inside `mergeAdapter` so that deterministic matches always survive.
+The deterministic detectors use patterns and heuristics and run synchronously:
 
-**Egress and exfiltration.** `egress.ts` detects instructions to transmit data outbound: send-verb proximity to external URLs, SSRF targets (RFC-1918, loopback, link-local, cloud-metadata hosts), non-allowlisted domains (if an allowlist is set), and private-file references paired with a send verb. `exfil.ts` targets the EchoLeak / CVE-2025-32711 class of zero-click markdown exfiltration: it parses inline images, inline links, reference-style links, and HTML `<img>` tags, extracts the URL host, and flags any host not on the egress allowlist. Exfiltration findings carry `mask:"url"` so that `applyRedaction` can neutralize the auto-render trigger.
+- `detectSecrets`
+- `detectEntropy`
+- `detectPii`
+- `detectInjection`
+- `detectEgress`
+- `detectExfil`
 
-**MCP manifest scanning.** `mcp.ts` is a standalone, network-free scanner for MCP tool manifests. It concatenates every human-facing text surface of each tool definition (description plus all JSON schema property descriptions and titles) and runs the combined text through pattern tables for tool-poisoning, line-jumping, and invisible/steganographic Unicode. It also checks for tool-shadowing (duplicate names in one manifest) and rug-pull detection (SHA-256 drift versus a pinned baseline). All findings from `mcp.ts` are leak-safe: the `value` field carries a category token rather than raw manifest content.
+`runDetectors` uses the security configuration to decide which detector families to run. It collects their findings, resolves overlapping matches, and returns the results in content order.
 
-## Key Concepts
+### Optional model-backed detection
 
-- **DetectorMatch** – the shared finding shape returned by every detector: `category`, `policyId`, `severity`, `confidence`, `start`/`end` (byte offsets in the scanned content), `value`, optional `mask`, and `remediation`. All detectors produce this type so that findings compose uniformly.
-- **SecurityConfig** – the policy and backend configuration object that gates which detectors run. `config.policies.<category>.enabled` controls each detector family; `config.backends.entropy.enabled`, `config.backends.injectionModel`, and `config.backends.piiModel` control optional enhancements.
-- **CapabilitySpec / capability seam** – the lazy-resolution abstraction for opt-in model backends. A `CapabilitySpec<string, DetectorMatch[]>` describes a backend adapter; `resolveCapability(cwd, spec)` returns the adapter only when the runtime is available, otherwise returns null. This keeps the module weight-free by default.
-- **Deterministic floor** – the synchronous, regex-and-heuristic-only detection path that is always active regardless of model availability. Every acceptance criterion that requires byte-identical results under a disabled or broken backend is satisfied here.
-- **Egress allowlist** – a list of permitted host entries (exact or apex wildcard) used by both `detectEgress` and `detectExfil`. An empty allowlist activates the strictest posture for exfil detection (every external markdown URL is flagged) while keeping egress detection in proximity-only mode.
-- **Rug-pull / baseline** – a `Record<string, string>` map of tool-name to SHA-256 used by `scanMcpManifest`. When a tool's computed hash diverges from its pinned entry, a `mcp.rug-pull.definition-drift` finding is raised.
+`runDetectorsAsync` starts with the synchronous results and can add results from model-backed prompt-injection and PII adapters. Adapter resolution uses the capability seam, which allows backends to be supplied lazily rather than requiring the model runtime by default.
 
-## Main Flows
+If a backend is disabled, cannot be resolved, or fails while running, the asynchronous path retains the deterministic results.
 
-### Synchronous policy-gated scan
+## Egress and exfiltration
 
-1. Caller passes raw text content and a `SecurityConfig` to `runDetectors`.
-2. The orchestrator checks each policy flag in order: secrets (optionally with entropy), PII, prompt injection, egress, exfiltration.
-3. It accumulates `DetectorMatch[]` from each active detector.
-4. After all detectors run, `dedupeOverlaps` sorts by descending confidence, walks the list, and drops any match whose span is fully contained by a higher-confidence match in the same category.
-5. Result is re-sorted by offset and returned.
+`detectEgress` looks for indications that content may send data externally. Its checks include send-related wording near URLs, potentially unsafe network targets, domains outside a configured allowlist, and private-file references associated with sending.
 
-### Async model-augmented scan
+`detectExfil` focuses on markdown and HTML constructs that can trigger outbound requests when rendered, including inline and reference-style links, images, and HTML `<img>` tags. It checks extracted hosts against the egress allowlist. Findings can include `mask: "url"` to indicate that the URL should be neutralized during redaction.
 
-1. `runDetectorsAsync` first calls `runDetectors` to obtain the deterministic baseline.
-2. It checks `config.backends.injectionModel.enabled` and `config.backends.piiModel.enabled`; if either is enabled, it resolves the corresponding `CapabilitySpec` via the capability seam.
-3. It calls `mergeAdapter`, which awaits `resolveCapability`. If an adapter is returned, it awaits `adapter.run(content)` to obtain additional matches and pushes them into the accumulated list.
-4. Any thrown error is swallowed so that deterministic matches are never lost.
-5. A final `dedupeOverlaps` pass is applied before returning.
+## MCP manifest scanning
 
-### MCP manifest threat scan
+The MCP manifest scanner checks tool definitions without making network requests. It examines human-facing text, including tool descriptions and nested schema descriptions and titles, for patterns associated with tool poisoning, line jumping, and invisible Unicode. It also checks for duplicate tool names and, when a baseline is supplied, changes to tool definitions.
 
-1. `scanMcpManifest` receives a parsed manifest object and an optional baseline.
-2. It calls `parseTools` to extract `McpToolDef[]`, then for each tool calls `toolText` to build a single string covering the description and all nested schema field descriptions and titles.
-3. This text is tested against each poisoning pattern table and line-jumping pattern table. Invisible Unicode is checked independently.
-4. Duplicate tool names are caught by a `seenNames` counter.
-5. If a baseline is provided, each tool's SHA-256 (via `hashToolDefinition`) is compared to its pinned entry.
-6. All findings use category tokens in `value`, never raw content (leak-safety requirement).
+Manifest findings use category tokens in their `value` field rather than copying raw manifest content.
+
+## Key concepts
+
+- **`DetectorMatch`** — A shared finding shape used by detectors. It includes a category, policy identifier, severity, confidence, content offsets, a value, and remediation information; a match may also include a mask.
+- **`SecurityConfig`** — Configuration for detector policies and optional backends. Policy flags control which detector families run, while backend settings control optional enhancements.
+- **Capability seam** — The lazy-resolution mechanism used to obtain optional model adapters. It keeps model-runtime dependencies out of the default deterministic path.
+- **Egress allowlist** — The configured set of permitted hosts used by egress and exfiltration checks. The behavior for an empty allowlist depends on the detector: exfiltration treats external markdown URLs strictly, while egress uses proximity-based checks.
+- **MCP baseline** — A mapping of tool names to expected SHA-256 values. When a supplied baseline does not match a tool definition, the scanner can report definition drift.
+
+## Main flows
+
+### Synchronous scan
+
+1. The caller passes content and a `SecurityConfig` to `runDetectors`.
+2. The orchestrator checks the relevant policy settings and runs enabled detectors.
+3. Detector findings are collected and overlapping matches are deduplicated.
+4. The results are returned in content-offset order.
+
+### Asynchronous scan
+
+1. `runDetectorsAsync` obtains the deterministic results by calling `runDetectors`.
+2. If the relevant model backends are enabled, it attempts to resolve and run their adapters.
+3. Adapter results are merged with the deterministic findings.
+4. Resolution or adapter errors do not discard the deterministic results.
+5. Overlaps are deduplicated before the results are returned.
+
+### MCP manifest scan
+
+1. The scanner extracts tool definitions from the parsed manifest.
+2. It combines each tool’s human-facing text and checks it for suspicious patterns and invisible Unicode.
+3. It checks for duplicate tool names.
+4. If a baseline is provided, it compares each tool definition with its pinned hash.
+5. Findings use category tokens rather than raw manifest text.
 
 ---
 
-<!-- keryx:reference:begin v=1 hash=69accba4cef490895970ac5e158d52b265d47c5efe1e083add9ea26c35a204c5 -->
+<!-- keryx:reference:begin v=1 hash=382718884bb067a29715a70dffc334c59079331d4ba20de86118014f0f879ab8 -->
 ## Reference (from code graph)
 
 Extracted deterministically by `keryx wiki collect`; regenerated by
@@ -89,30 +105,32 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Key files
 
-- `src/security/detect/index.ts` - imported by 10, imports 10
-- `src/security/detect/exfil.test.ts` - imported by 0, imports 6
-- `src/security/detect/pii.ts` - imported by 4, imports 1
-- `src/security/detect/egress.ts` - imported by 3, imports 1
-- `src/security/detect/exfil.ts` - imported by 2, imports 2
-- `src/security/detect/injection.ts` - imported by 3, imports 1
+- `src/security/detect/index.ts` - imported by 11, imports 10
+- `src/security/detect/pii.ts` - imported by 9, imports 1
+- `src/security/detect/exfil.ts` - imported by 7, imports 2
+- `src/security/detect/exfil.test.ts` - imported by 0, imports 8
+- `src/security/detect/secrets.ts` - imported by 6, imports 1
+- `src/security/detect/mcp.ts` - imported by 5, imports 1
 
 ### Depends on
 
-- `src/security` - 11 import(s)
-- `src/security/eval` - 2 import(s)
-- `src/eval` - 2 import(s)
+- `src/security` - 8 import(s)
 - `src/capability` - 1 import(s)
 - `src/security/detect/injection` - 1 import(s)
 - `src/security/detect/pii` - 1 import(s)
 
 ### Depended on by
 
-- `src/security` - 6 import(s)
+- `src/security` - 11 import(s)
+- `src/security/audit-harness` - 3 import(s)
 - `src/commands` - 2 import(s)
-- `src/security/detect/injection` - 2 import(s)
-- `src/security/eval` - 2 import(s)
+- `src/contracts` - 2 import(s)
 - `src/harness/web` - 1 import(s)
 - `src/mcp` - 1 import(s)
+
+### Dependency basis
+
+- Production imports only: 19 import(s) from test file(s) (e.g. `src/security/audit-harness/audit-harness.test.ts`) excluded from the two sections above in both directions.
 
 ### Entry points
 
@@ -120,8 +138,8 @@ Extracted deterministically by `keryx wiki collect`; regenerated by
 
 ### Graph signals
 
-- Files: 13
-- Cross-module imports: 18
+- Files: 15
+- Cross-module imports: 11
 <!-- keryx:reference:end -->
 
 ## Related Wiki
@@ -140,6 +158,7 @@ Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that exi
 
 ## Changelog
 
+- 1.0.2 - Reference refreshed from the code graph (4e80355f).
 - 1.0.1 - Reference refreshed from the code graph (5886c474).
 - 1.0.0 - Prose sections enriched by gdwiki enrich workflow (Overview, How it works, Key concepts, Main flows).
 - 0.1.0 - Generated by `keryx wiki collect` at 2026-07-10T08:14:04.890Z. Prose sections are drafts for the gdwiki enrich workflow.
