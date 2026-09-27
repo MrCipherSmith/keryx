@@ -10,9 +10,12 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+/** A fixed nonce so the demo output is reproducible; real sessions generate one. */
+const DEMO_NONCE = "demoNonce000";
+
 import {
   runAgentTurn,
-  HARNESS_ENVELOPE_PREFIX,
+  harnessEnvelopePrefix,
   type AgentDeps,
   type AgentIO,
 } from "../../../../src/commands/agent.ts";
@@ -154,6 +157,7 @@ async function scenarioOptedIn(): Promise<void> {
     idSeq: fixedIdSeq(),
     maxRounds: 5,
     planFollowThrough: true,
+    controlNonce: DEMO_NONCE,
   };
   const history: NormalizedMessage[] = [];
   const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
@@ -166,8 +170,10 @@ async function scenarioOptedIn(): Promise<void> {
     (m) => m.provenance === "harness" && String(m.content).includes("actionable items remain"),
   );
   console.log(`nudge pushed with provenance "harness": ${nudge?.provenance === "harness"}`);
-  console.log(`nudge content starts with envelope prefix: ${String(nudge?.content).startsWith(HARNESS_ENVELOPE_PREFIX)}`);
-  console.log(`HARNESS_ENVELOPE_PREFIX = ${JSON.stringify(HARNESS_ENVELOPE_PREFIX)}`);
+  const marker = harnessEnvelopePrefix(DEMO_NONCE);
+  console.log(`nudge content starts with the session marker: ${String(nudge?.content).startsWith(marker)}`);
+  console.log(`session marker = ${JSON.stringify(marker)}`);
+  console.log(`every request's instruction states the marker: ${requests.every((r) => JSON.stringify(r).includes(marker))}`);
   console.log(`--- nudge content ---\n${nudge?.content}`);
 }
 

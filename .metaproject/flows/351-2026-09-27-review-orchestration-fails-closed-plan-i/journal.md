@@ -237,3 +237,8 @@ All six round-2 targets fixed; two new minors in one call site (R3-1 raw error t
 - Deferred with D/E: F-011 stop-strategy instead of `subagentBudget` branches, F-024 split agent.ts, F-020, F-021; optional provider-port `toolChoice` (F-014).
 - 2026-09-27T11:31:58.992Z - task-done: T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction
 - 2026-09-27T11:41:23.238Z - renumbered: 347 -> 351: id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs
+
+## Pre-PR (orchestrator)
+
+- Rebased onto origin/main 901a6c33 (clean). Flow renumbered 347 → 351: #767 gave 347 to review-jev-contract while this branch was open; id-map.json records it. Earlier sections and commit subjects that say "flow 347" mean this flow.
+- Demo scripts updated to the final API (`harnessEnvelopePrefix(nonce)` replaced `HARNESS_ENVELOPE_PREFIX` in T17) with a fixed demo nonce; both re-run on the rebased head: AC1 `requests.length === 1: true`, `[plan] Turn ending with open plan items (follow-through is off): implement, verify`, opt-in nudge starts with `[keryx shell — control nudge · demoNonce000]`, every request states the marker; AC4/AC5/AC13 unchanged (`status: BudgetExhausted (3/3 calls)`, fleet failed/budget-exhausted, warning `[false,false,true,true,true]` now nonce-bearing).
