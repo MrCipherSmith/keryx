@@ -1332,7 +1332,13 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   // call, and reads notices via `takeNotices()` — see `shell.ts`'s own
   // comment there) — the replacement text is about as long as what it
   // replaced, but the doc comment explaining it pushed the target past 7200.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7600);
+  // Widened to 7800 for AC7 (flow 352 audit): `jobRegistryBox.current =
+  // jobRegistry;` plus its doc comment, inserted right after `jobRegistry`'s
+  // own declaration so the SIGINT/SIGTERM handler (`closeAndExit`, declared
+  // before this branch runs) can reach it too — see `shell.ts`'s own comment
+  // there and this file's dedicated "closeAndExit sweeps tracked background
+  // jobs" describe block below.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7800);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(
@@ -1433,6 +1439,76 @@ describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-
 
   test("AgentDeps declares an optional sweepBackgroundJobs hook", () => {
     expect(agentSource).toContain("sweepBackgroundJobs?: () => Promise<void>;");
+  });
+});
+
+// --- AC7 (flow 352 audit) — closeAndExit (the readline SIGINT/SIGTERM
+// handler) sweeps tracked background jobs too, matching EOF/`/exit` (source-
+// text audit; same convention as every other `closeAndExit`/`runAgentRepl`
+// row in this file — `closeAndExit` is a bare, non-exported closure with no
+// injection seam, and unlike `leaseBox`/`busBox`'s existing cross-process
+// SIGTERM/SIGINT proofs (`shell-lease.process.test.ts`, `shell-bus.process.test.ts`,
+// both driven in `--chat` mode), a background job only exists in AGENT mode,
+// where every process test here relies on `--model unused` never issuing a
+// real tool call — there is no live seam to start one for real).
+//
+// Before this fix, `closeAndExit` released the lease and left the bus
+// (both mirrored into boxes declared before it) but had NO equivalent box
+// for the job registry, which is created later, inside the `if (agentMode) {`
+// branch — so Ctrl-C/`kill` on a readline agent session left every tracked
+// background job's process group running.
+describe("AC7 (flow 352 audit) — closeAndExit sweeps tracked background jobs before process.exit (source-text audit)", () => {
+  const shellSourceAc7Sweep = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const closeAndExitStart = shellSourceAc7Sweep.indexOf("const closeAndExit = (code: number) => (): void => {");
+  const closeAndExitEnd = shellSourceAc7Sweep.indexOf('process.on("SIGINT", closeAndExit(130));');
+
+  test("anchor sanity: both markers exist and the handler is declared before it is registered", () => {
+    expect(closeAndExitStart).toBeGreaterThanOrEqual(0);
+    expect(closeAndExitEnd).toBeGreaterThan(closeAndExitStart);
+  });
+
+  test("closeAndExit's body sweeps the job-registry box before process.exit(code)", () => {
+    const closeAndExitBody = shellSourceAc7Sweep.slice(closeAndExitStart, closeAndExitEnd);
+    const sweepIndex = closeAndExitBody.indexOf("jobRegistryBox.current?.sweepAll()");
+    const exitIndex = closeAndExitBody.indexOf("process.exit(code)");
+    expect(sweepIndex).toBeGreaterThanOrEqual(0);
+    expect(exitIndex).toBeGreaterThan(sweepIndex);
+  });
+
+  test("jobRegistryBox is declared before closeAndExit — reachable from the handler, same as leaseBox/busBox", () => {
+    const boxDeclIndex = shellSourceAc7Sweep.indexOf(
+      "const jobRegistryBox: { current: JobRegistry | undefined } = { current: undefined };",
+    );
+    expect(boxDeclIndex).toBeGreaterThanOrEqual(0);
+    expect(closeAndExitStart).toBeGreaterThan(boxDeclIndex);
+  });
+
+  test("the readline agent-mode branch populates jobRegistryBox with the SAME instance sweepBackgroundJobs uses", () => {
+    const agentModeBranchStart = shellSourceAc7Sweep.indexOf("if (agentMode) {");
+    const jobRegistryIndex = shellSourceAc7Sweep.indexOf(
+      "const jobRegistry = createJobRegistry({ cwd: agentCwd });",
+      agentModeBranchStart,
+    );
+    // Tight window: the box assignment is the very next statement after
+    // creation (see the doc comment right above it in `shell.ts`).
+    const boxAssignIndex = shellSourceAc7Sweep.indexOf(
+      "jobRegistryBox.current = jobRegistry;",
+      jobRegistryIndex,
+    );
+    // Wide window for the field, same as the existing sibling audit above
+    // (`agentModeBranchAc7`, 7600 chars) — it sits much further down, inside
+    // the `agentDepsBase` object literal.
+    const sweepFieldIndex = shellSourceAc7Sweep.indexOf(
+      "sweepBackgroundJobs: () => jobRegistry.sweepAll(),",
+      jobRegistryIndex,
+    );
+    expect(agentModeBranchStart).toBeGreaterThanOrEqual(0);
+    expect(jobRegistryIndex).toBeGreaterThan(agentModeBranchStart);
+    // The box is populated right after creation — before the SAME instance
+    // is also closed over by the `agentDepsBase.sweepBackgroundJobs` field.
+    expect(boxAssignIndex).toBeGreaterThan(jobRegistryIndex);
+    expect(boxAssignIndex).toBeLessThan(sweepFieldIndex);
+    expect(sweepFieldIndex).toBeGreaterThan(jobRegistryIndex);
   });
 });
 

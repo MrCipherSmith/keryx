@@ -3103,6 +3103,7 @@ async function runAgentTurnCore(
             deps,
             hasInvocationCapacity,
             reserveInvocation,
+            signal,
           )
         : undefined;
 
@@ -3498,7 +3499,7 @@ async function runAgentTurnCore(
       }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
-        await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog });
+        await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog }, signal);
       } else {
         system(
           `\n[budget] Stopping tools: no progress (only repeated/exhausted tool signatures; ` +
@@ -3734,6 +3735,14 @@ async function finishWithBudgetSummary(
     maxAttempts?: number;
     toolLog: string[];
   },
+  // AC6 (flow 352 audit): this call always hardcoded `undefined` here and
+  // handed it straight to `streamWrapUpRound`, unlike its sibling
+  // `finishWithSubmitResult` a few lines below, which has always threaded the
+  // turn's real signal through. The effect: aborting the parent turn during
+  // THIS specific wrap-up round (no-progress with rounds still left) never
+  // reached the provider call, so the round streamed to completion — the one
+  // "final" turn call still uninterruptible by construction.
+  signal: AbortSignal | undefined,
 ): Promise<void> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -3792,7 +3801,7 @@ async function finishWithBudgetSummary(
       });
     }
   }
-  const request: NormalizedRequest = {
+  const baseRequest: Omit<NormalizedRequest, "signal"> = {
     providerId: deps.providerId,
     modelId: deps.modelId,
     systemInstruction: deps.systemInstruction,
@@ -3804,8 +3813,12 @@ async function finishWithBudgetSummary(
     requestId: deps.idSeq(),
     parentRunId,
   };
+  // AC6: `request.signal` itself, same as the main round loop and
+  // `finishWithSubmitResult` both set — not only the separate `signal`
+  // argument `streamWrapUpRound` takes for its own `streamOptions` below.
+  const request: NormalizedRequest = signal === undefined ? { ...baseRequest } : { ...baseRequest, signal };
 
-  const round = await streamWrapUpRound(io, deps, request, undefined, system);
+  const round = await streamWrapUpRound(io, deps, request, signal, system);
   if (round.thrownError !== undefined) {
     system(`\n[error] wrap-up failed: ${round.thrownError}\n`);
   }
@@ -4019,6 +4032,14 @@ async function runConcurrentSpawnBatch(
   deps: AgentDeps,
   hasInvocationCapacity: () => boolean,
   reserveInvocation: () => boolean,
+  // AC6 (flow 352 audit): the turn's abort signal — `runOne` below always
+  // hardcoded `undefined` in `executeCall`'s signal position, so a
+  // `spawn_subagent` call dispatched through this CONCURRENT batch never
+  // received the turn's own signal (the sequential per-call loop this
+  // function exists alongside passes it via `executeCall` correctly). An
+  // aborted parent turn reached every other tool but not a concurrently
+  // spawned child.
+  signal: AbortSignal | undefined,
 ): Promise<Map<string, InteractiveToolResult>> {
   const maxConcurrency = deps.maxSubagentConcurrency ?? DEFAULT_MAX_SUBAGENT_CONCURRENCY;
   const perTaskRuntimeMs = NOMINAL_CONCURRENT_SPAWN_RUNTIME_MS;
@@ -4038,7 +4059,7 @@ async function runConcurrentSpawnBatch(
       hasInvocationCapacity,
       reserveInvocation,
       undefined,
-      undefined,
+      signal,
       undefined,
       deps.hardDeny === undefined ? undefined : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
       deps.hooks,

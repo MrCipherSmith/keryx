@@ -55,6 +55,7 @@ import type { SearchProviderDescriptor, SearchProviderId } from "../harness/sear
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
+import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { createMcpRuntime, type McpRuntime } from "../mcp-servers/runtime";
 
@@ -2457,7 +2458,20 @@ export async function runAgentRepl(
 
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
-  for (;;) {
+  //
+  // AC7 (flow 352 audit): the whole loop is wrapped in one try/finally so
+  // `leaveBus()`/`releaseLease()` run EXACTLY once, on every way this loop
+  // can end — a deliberate `return` below (EOF, `/exit`) same as an
+  // exception `runOperatorLine` propagates (it rethrows the turn's own
+  // error, see its own try/catch above, and nothing between here and there
+  // ever caught it). Before this, a thrown turn error left the loop — and
+  // the whole function — without either call ever running, parking the
+  // session lease held and the bus membership joined until something else
+  // force-cleared them. The two calls used to be duplicated at each
+  // deliberate `return` site instead; removed there now that the `finally`
+  // covers them too, so a normal exit is not calling both.
+  try {
+    for (;;) {
     await drainHeldQueue();
     const input = await readLineOrCompletion();
     if (input.kind === "completion") {
@@ -2508,8 +2522,9 @@ export async function runAgentRepl(
       // Flow 173 (AC7): sweep every tracked background job (process-group
       // SIGTERM→SIGKILL) on real session exit.
       await deps.sweepBackgroundJobs?.();
-      leaveBus(); // flow 273 AC7-equivalent: the normal return leaves the bus too
-      releaseLease(); // AC7: the normal return releases the session lease
+      // flow 273 / AC7: `leaveBus()`/`releaseLease()` used to run here too;
+      // the wrapping `finally` around this whole loop now covers every
+      // `return` (this one included) exactly once — see its comment.
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -2521,8 +2536,8 @@ export async function runAgentRepl(
         // SLATE-5 close trigger: shell exit (explicit command).
         await closeSlateSession(slateSession, mintTimestampAttemptId);
         await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
-        leaveBus(); // flow 273 T6: /exit leaves the bus too
-        releaseLease(); // flow 271 AC7: `/exit` releases the session lease
+        // flow 273 T6 / flow 271 AC7: same note as the EOF path above — the
+        // wrapping `finally` now leaves the bus and releases the lease.
         return;
       }
       if (command === "/bus") {
@@ -2883,6 +2898,12 @@ export async function runAgentRepl(
     }
     await runOperatorLine(line);
     printPromptWithBusNotice();
+  }
+  } finally {
+    // AC7: the one place these two now run — see the comment above the
+    // loop for why the per-`return` duplicates were removed.
+    leaveBus();
+    releaseLease();
   }
 }
 
@@ -3927,6 +3948,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // The bus client the readline REPL joined (flow 273 T6), released by the
   // same signal handler before the lease (specification §5.4).
   const busBox: { current: BusClient | undefined } = { current: undefined };
+  // AC7 (flow 352 audit): the readline agent session's JobRegistry, same
+  // reachable-from-the-signal-handler box as `readlineMcp` above. Before
+  // this, EOF and `/exit` (inside `runAgentRepl`, via `deps.sweepBackgroundJobs`)
+  // were the only two paths that swept tracked background jobs on real
+  // session exit — Ctrl-C/SIGTERM killed the readline process without ever
+  // sweeping, leaving every job's process group running.
+  const jobRegistryBox: { current: JobRegistry | undefined } = { current: undefined };
 
   // SIGINT: exit, but CLOSE FIRST.
   //
@@ -3951,6 +3979,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     releaseSessionLease(leaseBox.current);
     leaseBox.current = undefined;
     void (async (): Promise<void> => {
+      try {
+        // AC7: sweep every tracked background job (process-group
+        // SIGTERM→SIGKILL) here too — the same call EOF/`/exit` make inside
+        // `runAgentRepl`, reachable here only through the box above since
+        // this handler is registered before the agent-mode branch that
+        // creates the registry ever runs.
+        await jobRegistryBox.current?.sweepAll();
+      } catch {
+        // Exiting; a failed sweep must not become the last thing printed.
+      }
       try {
         await readlineMcp?.close();
       } catch {
@@ -4096,6 +4134,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         console.log(metaprojectNotice);
       }
       const jobRegistry = createJobRegistry({ cwd: agentCwd });
+      // AC7 (flow 352 audit): reachable from the SIGINT/SIGTERM handler
+      // above, same reasoning as `readlineMcp = mcpRuntime;` just below.
+      jobRegistryBox.current = jobRegistry;
       // One MCP runtime per session, for the same reason as `jobRegistry`
       // above: server processes must not be re-spawned and orphaned on every
       // tool-list rebuild. Non-blocking — the dials run behind the prompt.

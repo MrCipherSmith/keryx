@@ -136,10 +136,23 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
       ["SNOWFLAKEPASSWD", "x", true],
       ["MYPASSPHRASE", "x", true],
       ["NPM_CONFIG__AUTH", "base64", true],
+      // Round five (flow 352 audit, AC4): the same GLUED lesson for
+      // KEY/TOKEN/SECRET, not just PASSWORD — `SECRET_SEGMENT_RE` requires a
+      // `_` immediately around the segment, which none of these have.
+      ["PRIVATEKEY", "x", true],
+      ["REFRESHTOKEN", "x", true],
+      ["ACCESSTOKEN", "x", true],
+      ["APITOKEN", "x", true],
+      ["DBPASS", "x", true],
       // Boundary: `PWD` is the segment that catches `MYSQL_PWD`, so the
       // working directory has to be excepted by exact name.
       ["PWD", "/repo", false],
       ["OLDPWD", "/", false],
+      // Boundary FOR THE GLUED RULE specifically: `APP` is a real prefix in
+      // that rule (`APPTOKEN`, `APPSECRET`), but `APPCONFIG` glues it to
+      // neither `KEY`, `TOKEN` nor `SECRET` — an ordinary config path must
+      // survive sharing a prefix with a credential shape.
+      ["APPCONFIG", "/etc/app/config.yaml", false],
     ],
   },
   {

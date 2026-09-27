@@ -169,6 +169,89 @@ describe("approval is bound to the COMMAND, not to the name", () => {
   });
 });
 
+describe("AC5 (flow 352 audit): the fingerprint covers the oauth block", () => {
+  const baseOauth = { clientId: "client-a", scopes: ["read", "list"], callbackPort: 8765 };
+  const withOauth: ResolvedMcpServer = {
+    name: "docs",
+    source: "project",
+    projectLocal: true,
+    file: "/repo/.keryx/mcp-servers.json",
+    enabled: true,
+    url: "https://mcp.example.com",
+    raw: { url: "https://mcp.example.com" },
+    oauth: baseOauth,
+  };
+
+  test("changing clientId changes the fingerprint", () => {
+    expect(serverFingerprint(withOauth)).not.toBe(
+      serverFingerprint({ ...withOauth, oauth: { ...baseOauth, clientId: "client-b" } }),
+    );
+  });
+
+  test("changing scopes changes the fingerprint", () => {
+    expect(serverFingerprint(withOauth)).not.toBe(
+      serverFingerprint({ ...withOauth, oauth: { ...baseOauth, scopes: ["read", "list", "write"] } }),
+    );
+  });
+
+  test("changing callbackPort changes the fingerprint", () => {
+    expect(serverFingerprint(withOauth)).not.toBe(
+      serverFingerprint({ ...withOauth, oauth: { ...baseOauth, callbackPort: 9000 } }),
+    );
+  });
+
+  test("a trusted oauth server becomes untrusted once any of the three changes (end to end)", () => {
+    const { configDir } = clonedRepo({});
+    approveServer(withOauth, configDir);
+    const approvals = loadTrustStore(configDir);
+    expect(requiresApproval(withOauth, approvals)).toBe(false);
+
+    const tampered: ResolvedMcpServer = { ...withOauth, oauth: { ...baseOauth, clientId: "attacker-app" } };
+    expect(requiresApproval(tampered, approvals)).toBe(true);
+  });
+
+  test("scope order does not matter — a reformat must not revoke trust", () => {
+    expect(serverFingerprint(withOauth)).toBe(
+      serverFingerprint({ ...withOauth, oauth: { ...baseOauth, scopes: [...baseOauth.scopes].reverse() } }),
+    );
+  });
+
+  const noOauth: ResolvedMcpServer = {
+    name: "docs",
+    source: "project",
+    projectLocal: true,
+    file: "/repo/.keryx/mcp-servers.json",
+    enabled: true,
+    command: "npx",
+    args: ["-y", "docs-mcp"],
+    raw: { command: "npx", args: ["-y", "docs-mcp"] },
+  };
+
+  test("a server with NO oauth field keeps the exact fingerprint it had before oauth was hashed at all", () => {
+    // Regression guard for the "prefer yes" call in the acceptance criterion:
+    // this is the fingerprint the OLD code (material with no `oauth` key at
+    // all) would have produced for `noOauth`, computed independently here so
+    // a future refactor cannot silently reintroduce an unconditional `oauth`
+    // key and still pass.
+    const { createHash } = require("node:crypto") as typeof import("node:crypto");
+    const legacyMaterial = JSON.stringify({
+      command: noOauth.command ?? null,
+      args: noOauth.args ?? [],
+      url: noOauth.url ?? null,
+      env: noOauth.env ?? {},
+      cwd: noOauth.cwd ?? null,
+      headers: [],
+      bearer_token_env_var: noOauth.bearer_token_env_var ?? null,
+    });
+    const legacyFingerprint = createHash("sha256").update(legacyMaterial).digest("hex").slice(0, 32);
+    expect(serverFingerprint(noOauth)).toBe(legacyFingerprint);
+  });
+
+  test("declaring oauth: false is itself hashed — distinct from no oauth field at all", () => {
+    expect(serverFingerprint(noOauth)).not.toBe(serverFingerprint({ ...noOauth, oauth: false }));
+  });
+});
+
 describe("the store fails closed", () => {
   test("an unreadable trust store grants nothing", () => {
     const { configDir } = clonedRepo({});

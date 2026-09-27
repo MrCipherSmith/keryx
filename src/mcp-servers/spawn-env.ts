@@ -47,7 +47,7 @@
 //
 // Pure: the parent environment is a parameter, never read from a global.
 
-import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env";
+import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env-deny";
 import { declaredCredentialEnvKeys, savedCredentialEnvKeys } from "../lib/shell-config";
 
 /**
@@ -221,6 +221,27 @@ const SECRET_SUBSTRING_RE =
   /(PASSWORD|PASSWD|PASSPHRASE|PASSCODE|SSHPASS|SECRET|CREDENTIAL|APIKEY|KEYFILE|PRIVKEY)/;
 
 /**
+ * PREFIX+SUFFIX credential shapes with NO underscore between the halves —
+ * `PRIVATEKEY`, `REFRESHTOKEN`, `ACCESSTOKEN`, `APITOKEN`, `DBPASS` (flow 352
+ * audit, AC4). `SECRET_SEGMENT_RE` above is boundary-anchored — it requires a
+ * `_` (or the start/end of the whole name) immediately around the segment —
+ * which a glued compound never has by definition, the same way round two's
+ * glued-PASSWORD class (`PGPASSWORD`, `SSHPASS`, this file's header) escaped
+ * the ORIGINAL underscore-anchored password check.
+ *
+ * A short, closed list of PREFIXES on each side, not a bare `KEY`, `TOKEN`,
+ * `SECRET` or `PASS` substring: those already have documented boundary cases
+ * this file must not re-break — a bare `KEY` substring takes
+ * `KEYBOARD_LAYOUT`, a bare `TOKEN` substring takes `TOKENIZER`/
+ * `TOKENIZERS_PARALLELISM`, a bare `PASS` substring takes `PASSAGE`/
+ * `COMPASS`, and a bare `PRIVATE` substring takes `PRIVATE_REGISTRY_URL`
+ * (`spawn-env.table.test.ts`'s own boundary rows). Requiring the suffix to be
+ * GLUED directly onto the prefix is what keeps `PRIVATE_REGISTRY_URL` (an
+ * underscore between them) out while catching `PRIVATEKEY` (none).
+ */
+const GLUED_SECRET_RE = /(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)|DB(PASS|PWD)/;
+
+/**
  * Connection strings that conventionally carry an inline password.
  *
  * `postgres://user:hunter2@host/db` is a credential in a field nobody calls
@@ -300,7 +321,12 @@ export function isDeniedForMcpChild(name: string, value?: string): boolean {
   if (EXTERNAL_ENV_PREFIX_SWEEPS.some((prefix) => upper.startsWith(prefix.toUpperCase()))) return true;
   if (MCP_ENV_PREFIX_SWEEPS.some((prefix) => upper.startsWith(prefix))) return true;
 
-  return SECRET_SEGMENT_RE.test(upper) || SECRET_SUBSTRING_RE.test(upper) || CONNECTION_STRING_RE.test(upper);
+  return (
+    SECRET_SEGMENT_RE.test(upper) ||
+    SECRET_SUBSTRING_RE.test(upper) ||
+    GLUED_SECRET_RE.test(upper) ||
+    CONNECTION_STRING_RE.test(upper)
+  );
 }
 
 export type McpChildEnvInput = {

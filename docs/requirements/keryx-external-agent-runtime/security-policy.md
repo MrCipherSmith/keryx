@@ -49,6 +49,18 @@ broken.
 would be a table that falls behind the vendor's next release, and this is
 precisely the kind of list that is not noticed when it does.
 
+### 2.2a Credential shapes (flow 352)
+
+After the named removals and sweeps, every variable that
+`isDeniedForMcpChild` (`src/mcp-servers/spawn-env.ts`) classifies as a
+credential is removed too: `SSH_AUTH_SOCK`, `GIT_ASKPASS`/`SSH_ASKPASS`, cloud
+credential files and kube/netrc pointers, `GITHUB_TOKEN`/`GH_TOKEN`, and every
+other provider's model key. The one exemption is the key the target CLI itself
+authenticates with (`EXTERNAL_RUNTIME_CREDENTIAL_ALLOW` in
+`src/harness/external/env.ts`): `OPENAI_API_KEY` for `codex-cli`,
+`GEMINI_API_KEY`/`GOOGLE_API_KEY` for `gemini-acp`. A subscription login lives
+in the CLI's own config directory and is unaffected.
+
 ### 2.3 Sweeps for keryx's own variables
 
 Any keryx variable that identifies a session, transport, or channel is removed.

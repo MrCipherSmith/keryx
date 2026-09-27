@@ -73,6 +73,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import { METAPROJECT_OPERATIONS, toInteractiveTools } from "../harness/tool/metaproject-operations";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
+import { composeAbortSignals } from "../lib/abort-compose";
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import type { WikiPage } from "./types";
 
@@ -144,34 +145,6 @@ export interface EnrichPageDeepInput {
   clock?: () => string;
   /** Cancellation inherited from the shell/wiki operation. */
   signal?: AbortSignal;
-}
-
-function composeAbortSignals(external: AbortSignal | undefined, timeout: AbortSignal): {
-  signal: AbortSignal;
-  dispose: () => void;
-} {
-  if (external === undefined) {
-    return { signal: timeout, dispose: () => {} };
-  }
-  const controller = new AbortController();
-  const abortFrom = (signal: AbortSignal): void => {
-    if (!controller.signal.aborted) {
-      controller.abort(signal.reason);
-    }
-  };
-  const onExternalAbort = (): void => abortFrom(external);
-  const onTimeoutAbort = (): void => abortFrom(timeout);
-  external.addEventListener("abort", onExternalAbort, { once: true });
-  timeout.addEventListener("abort", onTimeoutAbort, { once: true });
-  if (external.aborted) abortFrom(external);
-  if (timeout.aborted) abortFrom(timeout);
-  return {
-    signal: controller.signal,
-    dispose: () => {
-      external.removeEventListener("abort", onExternalAbort);
-      timeout.removeEventListener("abort", onTimeoutAbort);
-    },
-  };
 }
 
 function errorMessage(cause: unknown): string {

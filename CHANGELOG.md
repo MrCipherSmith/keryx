@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.15] — 2026-09-27
+
+### Security
+- **External agents no longer inherit the operator's credentials.** A Codex,
+  Gemini or Claude Code child now gets the same shape-based credential strip an
+  MCP server gets: `SSH_AUTH_SOCK`, `GIT_ASKPASS`, cloud credential files,
+  `GITHUB_TOKEN` and other providers' keys stay behind. Only the key the target
+  CLI itself signs in with passes (`OPENAI_API_KEY` for Codex,
+  `GEMINI_API_KEY`/`GOOGLE_API_KEY` for Gemini).
+- **Web search keeps its API key on its own host.** A redirect to another origin
+  is still followed, but without the credential.
+- **A timed-out sub-agent's partial output is quarantined** like every other
+  sub-agent result.
+- **MCP servers stop receiving glued credential names** such as `REFRESHTOKEN`,
+  `PRIVATEKEY` or `DBPASS`.
+- **Changing an MCP server's `oauth` block (client id, scopes, callback port)
+  needs re-approval.** Servers without an `oauth` block keep their approval.
+
+### Fixed
+- **Ctrl-C reaches sub-agents.** Aborting a turn now stops an in-flight
+  `spawn_subagent` child, a parallel batch of them, and the budget wrap-up round.
+- **`keryx shell` releases its session lease when a turn fails**, so the next
+  `-r` does not need `--take-over`, and Ctrl-C stops background jobs as `/exit`
+  does.
+
 ## [0.3.14] — 2026-09-27
 
 ### Fixed

@@ -473,7 +473,7 @@ export async function runExternalChild(
         {
           argv,
           cwd: created.path,
-          env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
+          env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth, runtimeId: entry.id }),
           prompt: assembled.prompt,
           timeoutMs: input.timeoutMs,
           // Per-agent override of the shared line-stream default (flow 298
@@ -584,7 +584,7 @@ async function runAcpBranch(args: {
       worktreePath,
       ...(input.projectRoot === undefined ? {} : { projectRoot: input.projectRoot }),
       prompt: args.prompt,
-      env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth }),
+      env: buildExternalChildEnv({ parent: input.parentEnv, depth: input.depth, runtimeId: entry.id }),
       timeoutMs: input.timeoutMs,
       write: args.write,
       spawn: deps.spawn,

@@ -66,7 +66,7 @@ test("shell_exec passes the exported session to its commands, and external agent
     expect(shellEnv.KERYX_SESSION_PROVIDER).toBe("demo");
     expect(shellEnv.KERYX_SESSION_MODEL).toBe("demo-medium");
     // A Claude Code or Codex child is not this session.
-    const external = buildExternalChildEnv({ parent: process.env, depth: 1 });
+    const external = buildExternalChildEnv({ parent: process.env, depth: 1, runtimeId: "claude-cli" });
     expect(external.KERYX_SESSION_PROVIDER).toBeUndefined();
     expect(external.KERYX_SESSION_MODEL).toBeUndefined();
   } finally {
