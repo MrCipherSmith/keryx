@@ -178,12 +178,13 @@ otuiTest("↓ never runs past the last command in a tab", async () => {
   const h = await mountChrome(otui, { width: 100, height: 30 });
   const handle = openHelpModal(otui.core, h.chrome, { onKeypress: keypressSource(h.renderer) });
   await h.flush();
-  // "Start here" has 5 entries: init, status, shell, help, /help.
+  // "Start here" has 7 entries: init, status, shell, help, /help, doctor,
+  // /doctor (flow 353 added the last two).
   for (let i = 0; i < 10; i += 1) {
     await h.mockInput.pressArrow("down");
   }
   await h.flush();
-  expect(handle?.selectedEntry()).toBe("slash:/help");
+  expect(handle?.selectedEntry()).toBe("slash:/doctor");
   h.destroy();
 });
 
