@@ -326,5 +326,13 @@
     "toDir": "350-2026-09-25-routing-classifier-each-keryx-shell-requ",
     "at": "2026-09-27T08:44:15.747Z",
     "reason": "duplicate id 338: the Wave 4 stack-pack flow created earlier the same day holds 338 and was closed under it"
+  },
+  {
+    "from": "347",
+    "to": "351",
+    "fromDir": "347-2026-09-27-review-orchestration-fails-closed-plan-i",
+    "toDir": "351-2026-09-27-review-orchestration-fails-closed-plan-i",
+    "at": "2026-09-27T11:41:23.238Z",
+    "reason": "id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs"
   }
 ]

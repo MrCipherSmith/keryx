@@ -236,3 +236,4 @@ All six round-2 targets fixed; two new minors in one call site (R3-1 raw error t
 - Nonce not persisted: a resumed session treats older nudges as content.
 - Deferred with D/E: F-011 stop-strategy instead of `subagentBudget` branches, F-024 split agent.ts, F-020, F-021; optional provider-port `toolChoice` (F-014).
 - 2026-09-27T11:31:58.992Z - task-done: T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction
+- 2026-09-27T11:41:23.238Z - renumbered: 347 -> 351: id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs

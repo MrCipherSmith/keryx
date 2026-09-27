@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "347",
+  "id": "351",
   "slug": "review-orchestration-fails-closed-plan-i",
   "title": "Review orchestration fails closed: plan is display-only, exhausted subagents report, reviewer inventory and publication are checked",
   "status": "in-progress",
   "createdAt": "2026-09-27T08:21:53.406Z",
-  "updatedAt": "2026-09-27T11:31:58.992Z",
+  "updatedAt": "2026-09-27T11:41:23.238Z",
   "source": {
     "type": "description",
     "ref": null
@@ -743,6 +743,11 @@
       "at": "2026-09-27T11:31:58.992Z",
       "event": "task-done",
       "detail": "T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction"
+    },
+    {
+      "at": "2026-09-27T11:41:23.238Z",
+      "event": "renumbered",
+      "detail": "347 -> 351: id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs"
     }
   ]
 }
