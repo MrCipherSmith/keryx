@@ -74,21 +74,30 @@ export type ResolveChildModelResult =
   | { ok: false; reason: string };
 
 /**
+ * Providers with their own native adapter (not in the OpenAI-compatible
+ * registry) that reach a vendor over the network: Anthropic, the ChatGPT
+ * subscription (`openai-codex`) and Gemini. Without them here, a session
+ * running on one of these could not spawn a single sub-agent.
+ */
+const NATIVE_NETWORK_PROVIDER_IDS: ReadonlySet<string> = new Set<string>(["anthropic", "openai-codex", "gemini"]);
+
+/**
  * Classify a provider id for the model gates. `ollama` is loopback-local;
- * `anthropic` and every registered OpenAI-compatible provider are network-class;
+ * the native network providers (`anthropic`, `openai-codex`, `gemini`) and every
+ * registered OpenAI-compatible provider are network-class;
  * anything else is `unknown` (and thus denied on the orchestrated child path).
  * Pure — derived from the static provider registry.
  */
 export function providerClass(id: string): ProviderClass {
   if (id === "ollama") return "local";
-  if (id === "anthropic") return "network";
+  if (NATIVE_NETWORK_PROVIDER_IDS.has(id)) return "network";
   if (providerByName(id) !== undefined) return "network";
   return "unknown";
 }
 
 /** The full set of provider ids {@link providerClass} classifies as non-`unknown`. */
 export const KNOWN_PROVIDER_IDS: ReadonlySet<string> = new Set<string>([
-  "anthropic",
+  ...NATIVE_NETWORK_PROVIDER_IDS,
   "ollama",
   ...OPENAI_COMPAT_PROVIDERS.map((p) => p.name),
 ]);

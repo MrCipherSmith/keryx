@@ -204,6 +204,14 @@ describe("providerClass — AC5 registry coverage", () => {
     expect(providerClass("anthropic")).toBe("network");
   });
 
+  test("the native subscription/vendor adapters are network-class, so their sessions can spawn sub-agents", () => {
+    // A keryx shell session on the ChatGPT subscription used to fail every
+    // spawn_subagent with "provider \"openai-codex\" is not classifiable".
+    expect(providerClass("openai-codex")).toBe("network");
+    expect(providerClass("gemini")).toBe("network");
+    expect(KNOWN_PROVIDER_IDS.has("openai-codex")).toBe(true);
+  });
+
   test("every registered OpenAI-compat provider classifies as network", () => {
     for (const p of OPENAI_COMPAT_PROVIDERS) {
       expect(providerClass(p.name)).toBe("network");
