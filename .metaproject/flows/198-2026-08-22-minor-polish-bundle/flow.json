@@ -3,9 +3,9 @@
   "id": "198",
   "slug": "minor-polish-bundle",
   "title": "Minor polish: [destructive] audit tag, headless SIGINT exit, SESSCLI-04 spec correction",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-22T11:00:48.538Z",
-  "updatedAt": "2026-09-27T08:48:51.223Z",
+  "updatedAt": "2026-09-27T09:25:48.892Z",
   "source": {
     "type": "description",
     "ref": null
@@ -181,6 +181,21 @@
       "at": "2026-09-27T08:48:51.223Z",
       "event": "ac-confirmed",
       "detail": "AC3: docs/verification/keryx-shell-tui-test-catalog.md SESSCLI-04 row now describes graceful line-tolerant recovery (exit 0) instead of a named refusal, with the fallback-to-context 'incomplete' export and the one remaining refusal (context unreadable, exit 1, file and reason named). Re-probed live on 2026-09-27 with keryx sessions export: trailing garbage, mid-JSON truncation, binary overwrite -> exit 0; oversized/directory archive.jsonl -> exit 0 marked incomplete; oversized context -> named refusal exit 1. (signed: noreply@anthropic.com [derived])"
+    },
+    {
+      "at": "2026-09-27T09:25:48.829Z",
+      "event": "completing",
+      "detail": "merged commit: 24f83a31"
+    },
+    {
+      "at": "2026-09-27T09:25:48.890Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-27T09:25:48.892Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "signatures": [
@@ -205,6 +220,17 @@
       },
       "criterion": "AC3",
       "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
+    },
+    {
+      "at": "2026-09-27T09:25:48.892Z",
+      "kind": "complete",
+      "identity": {
+        "value": "noreply@anthropic.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296",
+      "headCommit": "24f83a31"
     }
   ],
   "completionAttempts": [
@@ -259,6 +285,63 @@
       ],
       "passed": false,
       "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
+    },
+    {
+      "at": "2026-09-27T09:25:48.890Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "4 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "24f83a31 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "skipped",
+          "detail": "task gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "skipped",
+          "detail": "review gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "24f83a31",
+    "ref": "origin/main",
+    "at": "2026-09-27T09:25:48.892Z"
+  }
 }

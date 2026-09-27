@@ -18,3 +18,6 @@
 - 2026-09-27T08:46:00.929Z - completion-attempt-recorded: attempt 1: failed
 - 2026-09-27T08:46:00.930Z - completion-failed: acceptance-criteria: unconfirmed: AC3
 - 2026-09-27T08:48:51.223Z - ac-confirmed: AC3: docs/verification/keryx-shell-tui-test-catalog.md SESSCLI-04 row now describes graceful line-tolerant recovery (exit 0) instead of a named refusal, with the fallback-to-context 'incomplete' export and the one remaining refusal (context unreadable, exit 1, file and reason named). Re-probed live on 2026-09-27 with keryx sessions export: trailing garbage, mid-JSON truncation, binary overwrite -> exit 0; oversized/directory archive.jsonl -> exit 0 marked incomplete; oversized context -> named refusal exit 1. (signed: noreply@anthropic.com [derived])
+- 2026-09-27T09:25:48.829Z - completing: merged commit: 24f83a31
+- 2026-09-27T09:25:48.890Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-27T09:25:48.892Z - done: all gates passed
