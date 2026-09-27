@@ -1,10 +1,17 @@
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
-import { runAgentTurn } from "./agent";
+import {
+  buildBudgetWarningLine,
+  HARNESS_ENVELOPE_PREFIX,
+  parseSubmitResultInput,
+  runAgentTurn,
+  SUBMIT_RESULT_TOOL_NAME,
+} from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
+  NormalizedMessage,
   NormalizedRequest,
   ProviderDescription,
   ProviderPort,
@@ -502,6 +509,150 @@ test("T20 F-001: an unattended no-progress stop reports a truthful terminal reas
   expect(terminalStates).toHaveLength(1);
   expect(terminalStates[0]?.reason).toBe("no_progress");
   expect(terminalStates[0]?.reason).not.toBe("budget_exhausted");
+});
+
+// --- Flow 347 T7: the subagent budget contract (AC4/AC5/AC13) -------------
+
+function recordingProbe(invoked: string[]): InteractiveTool {
+  return {
+    definition: {
+      name: "budget_probe",
+      description: "records invocations",
+      inputSchema: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input) => {
+      invoked.push(String(input.value));
+      return { output: `invoked:${String(input.value)}`, isError: false };
+    },
+  };
+}
+
+test("flow 347 AC4: an advisory subagent call limit below the calls made never stops the turn", async () => {
+  const { provider, requests } = scriptedProvider([
+    threeCallsInOneRound(),
+    [{ kind: "text_delta", text: "finished" }, { kind: "model_end" }],
+  ]);
+  const invoked: string[] = [];
+  const result = await runAgentTurn(
+    { write: () => undefined },
+    {
+      provider,
+      providerId: "offline-budget-stub",
+      modelId: "fixture",
+      tools: [recordingProbe(invoked)],
+      systemInstruction: "offline",
+      idSeq: fixedId(),
+      maxRounds: 10,
+      subagentBudget: { advisoryToolCalls: 1 },
+    },
+    [],
+    "run all three probes",
+  );
+  expect(invoked).toEqual(["one", "two", "three"]);
+  expect(requests).toHaveLength(2);
+  expect(result.finishReason).toBeUndefined();
+  expect(result.budgetStop).toBeUndefined();
+});
+
+test("flow 347 AC5: a configured cap in a subagent turn runs one submit_result-only round and reports it", async () => {
+  const { provider, requests } = scriptedProvider([
+    threeCallsInOneRound(),
+    [
+      { kind: "tool_call_start", toolCallId: "submit", toolName: SUBMIT_RESULT_TOOL_NAME },
+      {
+        kind: "tool_call_end",
+        toolCallId: "submit",
+        input: JSON.stringify({ status: "partial", summary: "two of three", result: "partial table" }),
+      },
+      { kind: "model_end" },
+    ],
+  ]);
+  const invoked: string[] = [];
+  const history: NormalizedMessage[] = [];
+  const result = await runAgentTurn(
+    { write: () => undefined },
+    {
+      provider,
+      providerId: "offline-budget-stub",
+      modelId: "fixture",
+      tools: [recordingProbe(invoked)],
+      systemInstruction: "offline",
+      idSeq: fixedId(),
+      maxRounds: 10,
+      maxToolCalls: 2,
+      subagentBudget: {},
+    },
+    history,
+    "run all three probes",
+  );
+  expect(invoked).toEqual(["one", "two"]);
+  expect(requests).toHaveLength(2);
+  expect(requests[1]?.tools?.map((t) => t.name)).toEqual([SUBMIT_RESULT_TOOL_NAME]);
+  expect(result.finishReason).toBe("tool-call-budget");
+  expect(result.budgetStop).toEqual({ used: 2, limit: 2, unit: "calls" });
+  expect(result.submittedResult).toEqual({ status: "partial", summary: "two of three", result: "partial table" });
+  const nudge = history.find((m) => m.role === "user" && m.content.includes(SUBMIT_RESULT_TOOL_NAME));
+  expect(nudge?.provenance).toBe("harness");
+  expect(nudge?.content.startsWith(HARNESS_ENVELOPE_PREFIX)).toBe(true);
+  // The budget line rides on results from 80% of the cap: call 1 (50%) has
+  // none, call 2 (100%) and the refused call 3 do.
+  expect(
+    requests[1]?.messages.filter((m) => m.role === "tool").map((m) => m.content.includes("Return your result now.")),
+  ).toEqual([false, true, true]);
+});
+
+test("flow 347: top-level callers keep maxToolCalls as a hard stop with no wrap-up and no budget line", async () => {
+  const { provider, requests } = scriptedProvider([threeCallsInOneRound()]);
+  const invoked: string[] = [];
+  const history: NormalizedMessage[] = [];
+  const result = await runAgentTurn(
+    { write: () => undefined },
+    {
+      provider,
+      providerId: "offline-budget-stub",
+      modelId: "fixture",
+      tools: [recordingProbe(invoked)],
+      systemInstruction: "offline",
+      idSeq: fixedId(),
+      maxRounds: 10,
+      maxToolCalls: 2,
+    },
+    history,
+    "run all three probes",
+  );
+  expect(requests).toHaveLength(1);
+  expect(result.finishReason).toBe("tool-call-budget");
+  expect(result.budgetStop).toBeUndefined();
+  expect(history.some((m) => m.content.includes("Return your result now."))).toBe(false);
+});
+
+test("flow 347 AC5: parseSubmitResultInput validates the schema instead of trusting it", () => {
+  expect(parseSubmitResultInput(JSON.stringify({ status: "partial", summary: "s", result: { a: 1 } }))).toEqual({
+    ok: true,
+    value: { status: "partial", summary: "s", result: { a: 1 } },
+  });
+  expect(parseSubmitResultInput("not json").ok).toBe(false);
+  expect(parseSubmitResultInput(JSON.stringify({ status: "done", summary: "s", result: "r" })).ok).toBe(false);
+  expect(parseSubmitResultInput(JSON.stringify({ status: "partial", summary: " ", result: "r" })).ok).toBe(false);
+  expect(parseSubmitResultInput(JSON.stringify({ status: "partial", summary: "s" })).ok).toBe(false);
+  expect(parseSubmitResultInput(JSON.stringify({ status: "partial", summary: "s", result: "r", extra: 1 })).ok).toBe(false);
+});
+
+test("flow 347 AC13: buildBudgetWarningLine fires at 80% and not before, as one line", () => {
+  expect(buildBudgetWarningLine([{ used: 3, limit: 5, unit: "tool calls" }])).toBeUndefined();
+  expect(buildBudgetWarningLine([{ used: 7, limit: 10, unit: "rounds" }])).toBeUndefined();
+  const line = buildBudgetWarningLine([
+    { used: 4, limit: 5, unit: "tool calls", advisory: true },
+    { used: 8, limit: 10, unit: "rounds" },
+  ]);
+  expect(line).toBe(`${HARNESS_ENVELOPE_PREFIX} Budget: 1 of 5 advisory tool calls left; 2 of 10 rounds left. Return your result now.`);
+  expect(line?.includes("\n")).toBe(false);
 });
 
 function fixedId(): () => string {

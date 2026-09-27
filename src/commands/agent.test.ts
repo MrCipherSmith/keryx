@@ -510,11 +510,17 @@ test("finishWithBudgetSummary's wrap-up request also carries deps.reasoningEffor
     idSeq: fixedIdSeq(),
     reasoningEffort: "medium",
   };
-  await runAgentTurn(collectingIo().io, deps, [], "loop forever");
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(collectingIo().io, deps, history, "loop forever");
   // The LAST request is the no-tools wrap-up request `finishWithBudgetSummary` sends.
   const wrapUpRequest = requests[requests.length - 1];
   expect(wrapUpRequest?.tools).toBeUndefined();
   expect(wrapUpRequest?.options).toEqual({ reasoning: "medium" });
+  // Flow 347 T7 (AC9): the "Tool loop stopped" nudge is shell-authored.
+  const stopMsg = history.find((m) => m.role === "user" && m.content.includes("Tool loop stopped"));
+  expect(stopMsg?.provenance).toBe("harness");
+  expect(stopMsg?.content.startsWith(HARNESS_ENVELOPE_PREFIX)).toBe(true);
+  expect(stopMsg?.content).not.toContain("[system]");
 });
 
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {
@@ -1621,9 +1627,13 @@ test("runAgentTurn injects a switch-approach hint after a tool fails identically
   expect(hints).toHaveLength(1); // fires once per signature, not on every attempt
   expect(hints[0]).toContain('tool "flaky_search"');
   expect(hints[0]).toContain("Switch to a different tool or ask the user");
-  // The hint is also fed back to the model as a project-provenance message.
+  // Flow 347 T7 (AC9): the hint is fed back to the model as a shell-authored
+  // control nudge — `harness` provenance and the shell envelope, never a
+  // bare `[system]` line posing as operator input.
   const hintMsg = history.find((m) => m.role === "user" && /is failing repeatedly/.test(m.content));
-  expect(hintMsg?.provenance).toBe("project");
+  expect(hintMsg?.provenance).toBe("harness");
+  expect(hintMsg?.content.startsWith(HARNESS_ENVELOPE_PREFIX)).toBe(true);
+  expect(hintMsg?.content).not.toContain("[system]");
 });
 
 test("runAgentTurn does not hint after a single tool failure", async () => {

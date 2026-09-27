@@ -885,6 +885,24 @@ session state and still see recent context about the busy main turn.
   wizard, any finite number) is sent on every request to that provider once
   one is set — absent, no `temperature` is sent at all, unchanged from
   before this setting existed.
+- **Subagent budgets.** A `spawn_subagent` child stops on its round budget
+  (`max_rounds`, default 10, capped at 24), its wall-clock deadline
+  (`KERYX_SUBAGENT_TIMEOUT_MS` can tighten it; `0` disables it) and the
+  no-progress detector. The `max_tool_calls` value the parent model passes
+  is advisory: it never stops the child. A hard tool-call cap applies only
+  when the operator sets `KERYX_SUBAGENT_MAX_TOOL_CALLS` to a positive
+  integer (unset or `0` means no cap). From 80% of any of these limits
+  (advisory calls, the configured cap, the round budget) every tool result
+  the child receives ends with one line saying what remains and telling it
+  to return its result now. When the child reaches the configured cap or its
+  round budget, or stalls, it gets exactly one more round in which the only
+  tool is `submit_result` (`status: "partial"`, `summary`, `result`). That
+  round is the only request ever sent past the round budget, so a child makes
+  at most `max_rounds + 1` requests (25 at the cap). The parent sees
+  `status: BudgetExhausted (<used>/<limit> <calls|rounds>)` or
+  `status: NoProgress (…)` as the first line of the result, followed by the
+  submitted result or `no result submitted`; the fleet row shows the child
+  as failed, not done.
 - **Streaming and timeouts.** Every provider adapter (Anthropic, OpenAI,
   Gemini, and the OpenAI-compatible engine) streams the reply incrementally
   instead of waiting for the full response. Two independent deadlines guard

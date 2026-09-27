@@ -174,14 +174,34 @@ export const DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS = 30 * 60_000;
 
 /**
  * Inclusive per-child model-round-trip budget when `max_rounds` is omitted.
- * Every child provider request consumes one round, including an optional
- * no-progress summary; no request is made after this limit.
- * The optional `max_tool_calls` limit counts actual invocations separately.
+ * Every child provider request consumes one round. Flow 347 T7 (AC5): a child
+ * that reaches this limit (or a configured tool-call cap, or stalls) gets
+ * exactly ONE more request — the `submit_result` wrap-up round — so a child
+ * makes at most `max_rounds + 1` requests, and never more than
+ * `MAX_SUBAGENT_MAX_ROUNDS + 1`.
  */
 export const DEFAULT_SUBAGENT_MAX_ROUNDS = 10;
 
-/** Per-child hard cap even when the model explicitly asks for more. */
+/** Per-child hard cap even when the model explicitly asks for more (the wrap-up round comes on top). */
 export const MAX_SUBAGENT_MAX_ROUNDS = 24;
+
+/**
+ * Flow 347 T7 (AC4): operator setting for a HARD per-child tool-call cap, in
+ * actual tool invocations. Configured the same way as the neighbouring
+ * {@link ENV_SUBAGENT_TIMEOUT_MS}. Unset, blank, non-numeric or `<= 0` means
+ * no hard call cap — the child's stopping limits are then its round budget,
+ * the wall-clock deadline and the no-progress detector. The model-supplied
+ * `max_tool_calls` never stops a child; it is only a warning threshold.
+ */
+export const ENV_SUBAGENT_MAX_TOOL_CALLS = "KERYX_SUBAGENT_MAX_TOOL_CALLS";
+
+/** Resolve the operator's hard per-child tool-call cap; `undefined` = none configured. */
+export function resolveSubagentMaxToolCalls(
+  env: Record<string, string | undefined> = process.env,
+): number | undefined {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_MAX_TOOL_CALLS);
+  return n === undefined || n <= 0 ? undefined : n;
+}
 
 /**
  * Env override for the child wall-clock deadline, in ms. The effective deadline
@@ -212,6 +232,24 @@ function boundSummary(text: string): string {
   }
   const dropped = text.length - MAX_CHILD_SUMMARY_CHARS;
   return `${text.slice(0, MAX_CHILD_SUMMARY_CHARS)}\n…(truncated: ${dropped} more characters from the subagent)`;
+}
+
+/**
+ * Flow 347 T7 (AC5): first line of a stopped child's output —
+ * `status: BudgetExhausted (<used>/<limit> <calls|rounds>)` or
+ * `status: NoProgress (…)` — so the parent reads the outcome before anything else.
+ */
+function formatStoppedStatusLine(
+  status: "BudgetExhausted" | "NoProgress",
+  turnResult: RunAgentTurnResult | undefined,
+): string {
+  if (status === "NoProgress") {
+    return "status: NoProgress (only repeated or exhausted tool calls)";
+  }
+  const stop = turnResult?.budgetStop;
+  return stop === undefined
+    ? "status: BudgetExhausted"
+    : `status: BudgetExhausted (${stop.used}/${stop.limit} ${stop.unit})`;
 }
 
 export interface SpawnSubagentToolDeps {
@@ -286,6 +324,12 @@ export interface SpawnSubagentToolDeps {
   onLedgerReady?: (controls: { resetBudget: () => void }) => void;
   /** Optional host bridge for fleet updates; omitted for non-TUI shells. */
   onFleetEvent?: (event: SpawnSubagentFleetEvent) => void;
+  /**
+   * Flow 347 T7 (AC4): a host-resolved hard per-child tool-call cap. Omitted
+   * (every production call site) reads {@link ENV_SUBAGENT_MAX_TOOL_CALLS} at
+   * each dispatch via {@link resolveSubagentMaxToolCalls}; tests set it here.
+   */
+  configuredMaxToolCalls?: number;
   /**
    * External-agent runtime seam (flow 176; docs/requirements/keryx-external-agent-runtime).
    *
@@ -415,8 +459,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "(MAE multi-agent). Use for independent investigations, reviews, or research while " +
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
         "label?: string, max_tool_calls?: integer, max_rounds?: integer }. " +
-        "max_tool_calls caps actual native child tool invocations; max_rounds independently " +
-        "limits model rounds (default 10, capped at 24). External runtimes cannot accept these limits. " +
+        "max_tool_calls is ADVISORY: it never stops the child, it only sets when the child is warned " +
+        "(from 80% of it) to return its result; a hard tool-call cap exists only when the operator " +
+        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 10, capped ` +
+        "at 24). A child that hits its round budget or the operator's call cap gets one final round to " +
+        "submit a partial result, and the output's first line is then 'status: BudgetExhausted (...)'. " +
+        "External runtimes cannot accept these limits. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
         "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
@@ -429,8 +477,22 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task: { type: "string" },
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
-          max_tool_calls: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
-          max_rounds: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+          max_tool_calls: {
+            type: "integer",
+            minimum: 0,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Advisory tool-call target. Never stops the child; from 80% of it every tool result tells " +
+              "the child what remains and to return its result.",
+          },
+          max_rounds: {
+            type: "integer",
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Model-round budget (default 10, capped at 24). On reaching it the child gets one final " +
+              "round to submit a partial result.",
+          },
           /**
            * Flow 204 — how much model this child's work is worth.
            *
@@ -517,9 +579,12 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           return { status: "Error", output: `spawn_subagent ${field} must be a safe integer >= ${minimum}`, isError: true };
         }
       }
-      const maxToolCalls = input.max_tool_calls as number | undefined;
+      // Flow 347 T7 (AC4): the model's `max_tool_calls` is advisory (a warning
+      // threshold); only the operator's configured cap stops a child.
+      const advisoryToolCalls = input.max_tool_calls as number | undefined;
+      const configuredMaxToolCalls = deps.configuredMaxToolCalls ?? resolveSubagentMaxToolCalls();
       const maxRounds = Math.min(MAX_SUBAGENT_MAX_ROUNDS, (input.max_rounds as number | undefined) ?? DEFAULT_SUBAGENT_MAX_ROUNDS);
-      if ((maxToolCalls !== undefined || input.max_rounds !== undefined) &&
+      if ((advisoryToolCalls !== undefined || input.max_rounds !== undefined) &&
         typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external") {
         return { status: "Error", output: "External subagents do not support native tool-call or model-round limits; use supported runtime budgets.", isError: true };
       }
@@ -1060,17 +1125,27 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
-          (maxToolCalls === undefined ? "" : `You may invoke at most ${maxToolCalls} tools in total. `) +
+          (configuredMaxToolCalls === undefined
+            ? ""
+            : `You may invoke at most ${configuredMaxToolCalls} tools in total (a hard limit). `) +
+          (advisoryToolCalls === undefined
+            ? ""
+            : `Aim to finish within about ${advisoryToolCalls} tool calls — a target, not a hard stop; ` +
+              "tool results will tell you when you are close. ") +
           `You have up to ${maxRounds} model turns (rounds) to complete this task — each round ` +
           "may include several tool calls; an identical call repeated does not start a new round " +
           "but is still capped at a few attempts, so do not retry the same query hoping for a " +
           "different answer. If a graph/symbol/wiki lookup returns empty or 'not found', that tool " +
           "has no index for this — do not re-run it with a slightly reworded query; switch tool " +
           "(e.g. a direct file read or a plain text/code search) or report the gap instead of " +
-          "spending rounds probing the same dead end. End with a short factual summary the parent can use.",
+          "spending rounds probing the same dead end. When a tool result says your budget is nearly " +
+          "spent, stop exploring and return your result. If a limit is reached you get one final round " +
+          "in which the only tool is submit_result — use it to hand back a partial result. " +
+          "End with a short factual summary the parent can use.",
         idSeq: () => idSeq(),
         maxRounds,
-        ...(maxToolCalls === undefined ? {} : { maxToolCalls }),
+        ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
+        subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
       };
 
       let assistant = "";
@@ -1431,28 +1506,48 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
         const isError = status !== "Completed";
+        // Flow 347 T7 (AC5): a child the harness stopped is never reported as
+        // `done`, and its slate folds as incomplete.
         emitFleetEvent({
           kind: "upsert",
           id: workerId,
           label,
-          status: "done",
-          detail: "done",
+          status: isError ? "failed" : "done",
+          detail: status === "Completed" ? "done" : status === "NoProgress" ? "no-progress" : "budget-exhausted",
           model: `${runModel.provider}/${runModel.model}`,
           task,
         });
-        await foldChildSlateAndCleanup("completed");
+        await foldChildSlateAndCleanup(isError ? "incomplete" : "completed");
         await fireSubagentStop(status);
+        const header =
+          `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
+          `MAE reservation: rounds≤${maxRounds} ` +
+          (configuredMaxToolCalls === undefined ? "" : `calls≤${configuredMaxToolCalls} `) +
+          (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
+          `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
+          (tierRecord === undefined ? "" : `${tierRecord}\n`);
+        if (status === "Completed") {
+          return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}` };
+        }
+        const statusLine = formatStoppedStatusLine(status, turnResult);
+        const submitted = turnResult?.submittedResult;
+        // The submitted payload is child-authored text entering the parent's
+        // history, so it gets the same quarantine pass as the summary.
+        const resultBlock =
+          submitted !== undefined
+            ? foldChildSummary(
+                `--- submitted result (${submitted.status}) ---\n` +
+                  `summary: ${submitted.summary}\n` +
+                  `result:\n${typeof submitted.result === "string" ? submitted.result : JSON.stringify(submitted.result, null, 2)}`,
+              ).text
+            : `no result submitted${turnResult?.submitResultError !== undefined ? ` (${turnResult.submitResultError})` : ""}\n` +
+              `--- last output ---\n${folded.text}`;
+        const boundedResult = boundSummary(resultBlock);
         return {
           status,
           isError,
-          output:
-            `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
-            `MAE reservation: rounds≤${maxRounds} ` +
-            (maxToolCalls === undefined ? "" : `calls≤${maxToolCalls} `) +
-            `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
-            (tierRecord === undefined ? "" : `${tierRecord}\n`) +
-            `--- summary ---\n${boundSummary(folded.text)}`,
-          ...(status !== "Completed" ? { partial: boundSummary(folded.text) } : {}),
+          output: `${statusLine}\n${header}${boundedResult}`,
+          partial: boundedResult,
         };
       } catch (cause) {
         closed = true;

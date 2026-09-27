@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   createSpawnSubagentTool,
+  ENV_SUBAGENT_MAX_TOOL_CALLS,
   ENV_SUBAGENT_TIMEOUT_MS,
+  resolveSubagentMaxToolCalls,
   type SpawnSubagentFleetEvent,
 } from "./spawn-subagent-tool";
 import { DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
-import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+import type { NormalizedEvent, NormalizedRequest, ProviderPort, StreamOptions } from "../../provider/types";
 import { loadRoutingConfigRaw } from "../../routing/config";
 import { approveProjectRouting } from "../../routing/trust";
 
@@ -95,38 +97,222 @@ test("per-child round cap is 24 even when the model asks for more", async () => 
   expect(result.output).toMatch(/rounds≤24\b/);
 });
 
-test("child max_tool_calls caps actual invocations independently from model rounds", async () => {
-  let requests = 0;
-  const events: SpawnSubagentFleetEvent[] = [];
-  const base = stubProvider("unused");
-  const provider: ProviderPort = {
-    ...base,
-    describe: () => ({ ...base.describe(), capabilities: { ...base.describe().capabilities, toolCalls: true, parallelToolCalls: true } }),
-    async *stream(_request, options) {
-      requests += 1;
-      if (requests === 1) {
-        for (const [index, name] of ["get_cwd", "list_dir"].entries()) {
-          yield { kind: "tool_call_start", sequence: index * 2, attemptId: options.attemptId, toolCallId: name, toolName: name };
-          yield { kind: "tool_call_end", sequence: index * 2 + 1, attemptId: options.attemptId, toolCallId: name, input: name === "list_dir" ? '{"path":"."}' : "{}" };
+/**
+ * Flow 347 T7: a child provider driven by a per-request script. Each request
+ * is recorded (tools offered + messages) so a test can inspect exactly what
+ * the child was sent, including the budget wrap-up round.
+ */
+function scriptedChildProvider(
+  script: (requestIndex: number) => readonly Partial<NormalizedEvent>[],
+): { provider: ProviderPort; requests: NormalizedRequest[] } {
+  const requests: NormalizedRequest[] = [];
+  return {
+    requests,
+    provider: {
+      describe: () => ({ capabilities: { ...PROBE_CAPABILITIES_T7 }, descriptor: { providerId: "scripted-child" } }),
+      async *stream(request, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
+        requests.push(request);
+        let sequence = 0;
+        for (const event of script(requests.length)) {
+          yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...event } as NormalizedEvent;
         }
-      } else {
-        yield { kind: "text_delta", sequence: 0, attemptId: options.attemptId, text: "completed" };
-      }
-      yield { kind: "model_end", sequence: 5, attemptId: options.attemptId };
+      },
     },
   };
-  const tool = createSpawnSubagentTool({
-    cwd: process.cwd(), getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
-    makeProvider: () => provider, getDetectedProviders: () => [{ name: "ollama" }], onFleetEvent: (event) => events.push(event),
+}
+
+const PROBE_CAPABILITIES_T7 = {
+  streaming: true,
+  toolCalls: true,
+  parallelToolCalls: true,
+  structuredOutput: false,
+  reasoningMetadata: false,
+  promptCaching: false,
+  vision: false,
+  tokenCounting: false,
+  modelListing: false,
+};
+
+/** One `get_cwd` call per id, all in one round (distinct ids, same signature is fine up to 3). */
+function toolCalls(...specs: { id: string; name: string; input?: string }[]): Partial<NormalizedEvent>[] {
+  return [
+    ...specs.flatMap((s) => [
+      { kind: "tool_call_start" as const, toolCallId: s.id, toolName: s.name },
+      { kind: "tool_call_end" as const, toolCallId: s.id, input: s.input ?? "{}" },
+    ]),
+    { kind: "model_end" },
+  ];
+}
+
+function textRound(text: string): Partial<NormalizedEvent>[] {
+  return [{ kind: "text_delta", text }, { kind: "model_end" }];
+}
+
+function childTool(provider: ProviderPort, events: SpawnSubagentFleetEvent[], configuredMaxToolCalls?: number) {
+  return createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
+    makeProvider: () => provider,
+    getDetectedProviders: () => [{ name: "ollama" }],
+    onFleetEvent: (event) => events.push(event),
+    ...(configuredMaxToolCalls !== undefined ? { configuredMaxToolCalls } : {}),
   });
-  const result = await tool.invoke({ task: "Read cwd then list files", max_tool_calls: 1, max_rounds: 10 });
-  expect(requests).toBe(1);
+}
+
+function toolMessages(request: NormalizedRequest | undefined): string[] {
+  return (request?.messages ?? []).filter((m) => m.role === "tool").map((m) => m.content);
+}
+
+function lastUpsert(events: SpawnSubagentFleetEvent[]): Extract<SpawnSubagentFleetEvent, { kind: "upsert" }> | undefined {
+  const upserts = events.filter((e): e is Extract<SpawnSubagentFleetEvent, { kind: "upsert" }> => e.kind === "upsert");
+  return upserts[upserts.length - 1];
+}
+
+test("flow 347 AC4: a model-supplied max_tool_calls below the calls actually made does not stop the child", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const { provider, requests } = scriptedChildProvider((n) =>
+    n === 1
+      ? toolCalls(
+          { id: "a", name: "get_cwd" },
+          { id: "b", name: "list_dir", input: '{"path":"."}' },
+          { id: "c", name: "list_dir", input: '{"path":"src"}' },
+        )
+      : textRound("completed after three calls"),
+  );
+  const result = await childTool(provider, events).invoke({ task: "Read cwd then list files", max_tool_calls: 1, max_rounds: 10 });
+
+  expect(requests).toHaveLength(2);
   const results = events.filter((event) => event.kind === "log" && event.entry.kind === "result");
-  expect(results.filter((event) => event.kind === "log" && !event.entry.text.includes("(error)"))).toHaveLength(1);
-  expect(results.some((event) => event.kind === "log" && event.entry.text.startsWith("list_dir (error)") && /budget/i.test(event.entry.text))).toBe(true);
-  expect(result.status).toBe("BudgetExhausted");
-  expect(result.output).toContain("calls≤1");
+  expect(results).toHaveLength(3);
+  expect(results.some((event) => event.kind === "log" && event.entry.text.includes("(error)"))).toBe(false);
+  expect(result.status).toBe("Completed");
+  expect(result.output).toContain("completed after three calls");
+  expect(result.output).toContain("calls~1(advisory)");
+  expect(result.output).not.toContain("calls≤");
   expect(result.output).toContain("rounds≤10");
+  expect(lastUpsert(events)?.status).toBe("done");
+  // The child is told the truth: a target, not a hard limit.
+  const system = requests[0]?.systemInstruction ?? "";
+  expect(system).not.toContain("You may invoke at most");
+  expect(system).toContain("Aim to finish within about 1 tool calls");
+});
+
+test("flow 347 AC4/AC5: an operator-configured cap stops the child and runs one submit_result-only round", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const { provider, requests } = scriptedChildProvider((n) =>
+    n === 1
+      ? toolCalls(
+          { id: "a", name: "get_cwd" },
+          { id: "b", name: "list_dir", input: '{"path":"."}' },
+          { id: "c", name: "list_dir", input: '{"path":"src"}' },
+        )
+      : toolCalls({
+          id: "submit",
+          name: "submit_result",
+          input: JSON.stringify({ status: "partial", summary: "read cwd and one listing", result: { findings: ["F-1"] } }),
+        }),
+  );
+  const result = await childTool(provider, events, 2).invoke({ task: "Review; return findings", max_tool_calls: 40 });
+
+  expect(requests).toHaveLength(2);
+  const wrapUp = requests[1];
+  expect(wrapUp?.tools?.map((t) => t.name)).toEqual(["submit_result"]);
+  expect(requests[0]?.systemInstruction).toContain("You may invoke at most 2 tools in total");
+  expect(result.status).toBe("BudgetExhausted");
+  expect(result.isError).toBe(true);
+  const [firstLine] = result.output.split("\n");
+  expect(firstLine).toBe("status: BudgetExhausted (2/2 calls)");
+  expect(result.output).toContain("--- submitted result (partial) ---");
+  expect(result.output).toContain("summary: read cwd and one listing");
+  expect(result.output).toContain('"F-1"');
+  expect(result.output).toContain("calls≤2");
+  expect(result.partial).toContain("read cwd and one listing");
+  const final = lastUpsert(events);
+  expect(final?.status).not.toBe("done");
+  expect(final?.status).toBe("failed");
+  expect(final?.detail).toBe("budget-exhausted");
+});
+
+test("flow 347 AC5: a round-budget stop that returns no submit_result call says so explicitly", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const { provider, requests } = scriptedChildProvider((n) =>
+    n <= 2 ? toolCalls({ id: `t${n}`, name: "list_dir", input: JSON.stringify({ path: n === 1 ? "." : "src" }) }) : textRound("I ran out"),
+  );
+  const result = await childTool(provider, events).invoke({ task: "explore", max_rounds: 2 });
+
+  // max_rounds 2 + exactly one wrap-up request — never more.
+  expect(requests).toHaveLength(3);
+  expect(requests[2]?.tools?.map((t) => t.name)).toEqual(["submit_result"]);
+  expect(result.status).toBe("BudgetExhausted");
+  expect(result.output.split("\n")[0]).toBe("status: BudgetExhausted (2/2 rounds)");
+  expect(result.output).toContain("no result submitted");
+  expect(lastUpsert(events)?.status).toBe("failed");
+});
+
+test("flow 347 AC5: an invalid submit_result input is rejected, not trusted", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const { provider } = scriptedChildProvider((n) =>
+    n === 1
+      ? toolCalls({ id: "a", name: "get_cwd" })
+      : toolCalls({ id: "s", name: "submit_result", input: JSON.stringify({ status: "done", summary: "x", result: "y" }) }),
+  );
+  const result = await childTool(provider, events).invoke({ task: "explore", max_rounds: 1 });
+  expect(result.status).toBe("BudgetExhausted");
+  expect(result.output).toContain('no result submitted (invalid submit_result input: status must be "partial")');
+});
+
+test("flow 347 AC13: the budget line appears on tool results from 80% of an advisory call limit, not before", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const paths = ["a", "b", "c", "d", "e"];
+  const { provider, requests } = scriptedChildProvider((n) =>
+    n <= paths.length
+      ? toolCalls({ id: `t${n}`, name: "list_dir", input: JSON.stringify({ path: paths[n - 1] }) })
+      : textRound("done"),
+  );
+  const result = await childTool(provider, events).invoke({ task: "explore", max_tool_calls: 5, max_rounds: 20 });
+  expect(result.status).toBe("Completed");
+  // Request n+1 carries the tool results of rounds 1..n; the last one has all five.
+  const results = toolMessages(requests[requests.length - 1]);
+  expect(results).toHaveLength(5);
+  const warned = results.map((content) => content.includes("Return your result now."));
+  expect(warned).toEqual([false, false, false, true, true]);
+  expect(results[3]).toContain("1 of 5 advisory tool calls left");
+  expect(results[4]).toContain("0 of 5 advisory tool calls left");
+  // Exactly one warning line per result.
+  expect(results[4]?.split("\n").filter((line) => line.includes("Return your result now."))).toHaveLength(1);
+});
+
+test("flow 347 AC13: the budget line also fires from 80% of the round budget", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
+  const paths = ["a", "b", "c", "d", "e"];
+  const { provider, requests } = scriptedChildProvider((n) =>
+    n <= paths.length
+      ? toolCalls({ id: `t${n}`, name: "list_dir", input: JSON.stringify({ path: paths[n - 1] }) })
+      : toolCalls({ id: "s", name: "submit_result", input: JSON.stringify({ status: "partial", summary: "s", result: "r" }) }),
+  );
+  const result = await childTool(provider, events).invoke({ task: "explore", max_rounds: 5 });
+  expect(requests).toHaveLength(6);
+  const results = toolMessages(requests[5]).slice(0, 5);
+  expect(results.map((content) => content.includes("Return your result now."))).toEqual([false, false, false, true, true]);
+  expect(results[3]).toContain("1 of 5 rounds left");
+  expect(result.output.split("\n")[0]).toBe("status: BudgetExhausted (5/5 rounds)");
+  expect(result.output).toContain("--- submitted result (partial) ---");
+});
+
+test("flow 347 AC4: KERYX_SUBAGENT_MAX_TOOL_CALLS is the documented config setting for the hard cap", () => {
+  expect(ENV_SUBAGENT_MAX_TOOL_CALLS).toBe("KERYX_SUBAGENT_MAX_TOOL_CALLS");
+  expect(resolveSubagentMaxToolCalls({})).toBeUndefined();
+  expect(resolveSubagentMaxToolCalls({ KERYX_SUBAGENT_MAX_TOOL_CALLS: "30" })).toBe(30);
+  expect(resolveSubagentMaxToolCalls({ KERYX_SUBAGENT_MAX_TOOL_CALLS: "0" })).toBeUndefined();
+  expect(resolveSubagentMaxToolCalls({ KERYX_SUBAGENT_MAX_TOOL_CALLS: "nope" })).toBeUndefined();
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(),
+    getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
+    makeProvider: () => stubProvider("unused"),
+    getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  expect(tool.definition.description).toContain("ADVISORY");
+  expect(tool.definition.description).toContain(ENV_SUBAGENT_MAX_TOOL_CALLS);
 });
 
 test("invalid child budgets fail before provider creation", async () => {
@@ -350,20 +536,25 @@ test("status: BudgetExhausted when the child's round budget exhausts before a cl
     clock: () => "2020-01-01T00:00:00.000Z",
     onFleetEvent: (event) => events.push(event),
   });
-  // A strict round budget of 1 admits exactly one provider request and its
-  // `probe_1` call. No second tool-bearing request or tool-free wrap-up may
-  // exceed the model-facing `rounds≤1` reservation.
+  // A strict round budget of 1 admits exactly one tool-bearing provider
+  // request and its `probe_1` call. Flow 347 T7 (AC5): exactly ONE more
+  // request follows — the submit_result-only wrap-up — and no tool runs in it
+  // (this provider answers it with `probe_2`, which is refused).
   const result = await tool.invoke({ task: "exhaust the child's round budget", mode: "read_only", max_rounds: 1 });
   const toolCalls = events.filter((event) => event.kind === "log" && event.entry.kind === "tool");
-  expect(requests).toBe(1);
+  expect(requests).toBe(2);
   expect(toolCalls).toHaveLength(1);
   expect(result.status).toBe("BudgetExhausted");
   expect(result.isError).toBe(true);
   expect(result.status).not.toBe("Completed");
+  expect(result.output.split("\n")[0]).toBe("status: BudgetExhausted (1/1 rounds)");
+  expect(result.output).toContain('no result submitted (the final round called "probe_2" instead of submit_result)');
 });
 
 test("status: NoProgress when the child hits the existing no-progress detector, distinct from BudgetExhausted (AC6)", async () => {
+  const events: SpawnSubagentFleetEvent[] = [];
   const tool = createSpawnSubagentTool({
+    onFleetEvent: (event) => events.push(event),
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
     makeProvider: () => repeatedToolCallProvider(),
@@ -379,6 +570,11 @@ test("status: NoProgress when the child hits the existing no-progress detector, 
   expect(result.isError).toBe(true);
   expect(result.status).not.toBe("BudgetExhausted");
   expect(result.status).not.toBe("Completed");
+  // Flow 347 T7 (AC5): the status leads the output and the fleet row is not `done`.
+  expect(result.output.split("\n")[0]?.startsWith("status: NoProgress")).toBe(true);
+  expect(result.output).toContain("no result submitted");
+  expect(lastUpsert(events)?.status).toBe("failed");
+  expect(lastUpsert(events)?.detail).toBe("no-progress");
 });
 
 test("status: Timeout keeps the existing isError:true behavior and gains the matching status (AC7)", async () => {

@@ -635,3 +635,35 @@ test("F-003: a slateSession dir with no live slate.json never gets a synthesized
   const parentSlate = await readSlate(parentDir);
   expect(parentSlate).toBeUndefined();
 });
+
+// --- Flow 347 T7 (AC5): a child the harness stopped on its budget folds as
+// `incomplete`, never `completed`, and keeps the Seeds it wrote. ----------
+
+test("flow 347 AC5: a budget-exhausted child's slate folds as incomplete and keeps its Seeds", async () => {
+  const parentDir = await tempParentDir();
+  const parentCwd = process.cwd();
+  await openSlate({ dir: parentDir, cwd: parentCwd, mintAttemptId: () => "parent-open-1" });
+
+  const marker = "CHILD-SEED-MARKER-347-T7";
+  const captured: NormalizedRequest[] = [];
+  const tool = createSpawnSubagentTool(
+    toolDeps({
+      makeProvider: () => seedWritingProvider(marker, captured),
+      cwd: parentCwd,
+      getSlateSession: () => ({ dir: parentDir, cwd: parentCwd, opened: true }),
+    }),
+  );
+
+  // Round 1 writes the Seed; the round budget of 1 is then exhausted, so the
+  // second request is the submit_result wrap-up (answered here with text).
+  const result = await tool.invoke({ task: "record a follow-up seed", mode: "general", max_rounds: 1 });
+  expect(result.status).toBe("BudgetExhausted");
+  expect(captured).toHaveLength(2);
+
+  const parentAfter = await readSlate(parentDir);
+  const dispatchIds = Object.keys(parentAfter?.childDispatches ?? {});
+  expect(dispatchIds).toHaveLength(1);
+  const dispatch = parentAfter!.childDispatches![dispatchIds[0]!]!;
+  expect(dispatch.status).toBe("incomplete");
+  expect(dispatch.seeds.some((seed) => seed.text.includes(marker))).toBe(true);
+});
