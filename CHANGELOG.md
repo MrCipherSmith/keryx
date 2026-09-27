@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.14] — 2026-09-27
+
+### Fixed
+- **A session on the ChatGPT subscription (`openai-codex`) or Gemini can spawn
+  sub-agents again.** Every `spawn_subagent`, including the review
+  orchestrator's reviewers, was refused with `provider "openai-codex" is not
+  classifiable`: the child-model gate only knew Anthropic, Ollama and the
+  OpenAI-compatible providers, not the native adapters.
+
 ## [0.3.13] — 2026-09-26
 
 ### Fixed
