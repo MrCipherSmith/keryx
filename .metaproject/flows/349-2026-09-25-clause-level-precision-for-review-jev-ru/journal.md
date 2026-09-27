@@ -18,3 +18,4 @@
 - 2026-09-25T18:07:37.691Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/732 (warning: PR is not a draft) (base: main)
 - 2026-09-25T18:07:38.044Z - task-done: T4: Self-review and prepare draft PR
 - 2026-09-25T18:07:45.437Z - ac-confirmed: AC10: PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T08:44:14.952Z - renumbered: 337 -> 349: duplicate id 337: the Wave 4 stack-pack flow created earlier the same day holds 337 and was closed under it

@@ -5,7 +5,7 @@
   "title": "Minor polish: [destructive] audit tag, headless SIGINT exit, SESSCLI-04 spec correction",
   "status": "in-progress",
   "createdAt": "2026-08-22T11:00:48.538Z",
-  "updatedAt": "2026-08-28T08:24:16.156Z",
+  "updatedAt": "2026-09-27T08:48:51.223Z",
   "source": {
     "type": "description",
     "ref": null
@@ -21,8 +21,12 @@
       "note": "Verified: PR #400 adds shell-headless-sigint.test.ts spawning a real piped keryx shell process, sending SIGINT, and asserting prompt exit; shellCommand now installs an immediate-exit SIGINT handler when !process.stdin.isTTY."
     },
     "AC4": {
-      "at": "2026-08-28T08:24:09.110Z",
-      "note": "Verified: PR #400 test plan reports 88/88 tests pass across agent-permission-mode.test.ts, shell.test.ts, shell-headless-sigint.test.ts, command-risk.test.ts; tsc --noEmit clean."
+      "at": "2026-09-27T08:46:00.084Z",
+      "note": "tsc --noEmit clean (and tsconfig.scripts) on main 0b7fc0b, which contains e7967747 (PR #400); CI workflow green on main at 0b7fc0b (run 36282956147)."
+    },
+    "AC3": {
+      "at": "2026-09-27T08:48:51.222Z",
+      "note": "docs/verification/keryx-shell-tui-test-catalog.md SESSCLI-04 row now describes graceful line-tolerant recovery (exit 0) instead of a named refusal, with the fallback-to-context 'incomplete' export and the one remaining refusal (context unreadable, exit 1, file and reason named). Re-probed live on 2026-09-27 with keryx sessions export: trailing garbage, mid-JSON truncation, binary overwrite -> exit 0; oversized/directory archive.jsonl -> exit 0 marked incomplete; oversized context -> named refusal exit 1."
     }
   },
   "pr": {
@@ -152,6 +156,109 @@
       "at": "2026-08-28T08:24:16.156Z",
       "event": "completion-failed",
       "detail": "acceptance-criteria: unconfirmed: AC3"
+    },
+    {
+      "at": "2026-09-27T08:46:00.084Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tsc --noEmit clean (and tsconfig.scripts) on main 0b7fc0b, which contains e7967747 (PR #400); CI workflow green on main at 0b7fc0b (run 36282956147). (signed: noreply@anthropic.com [derived])"
+    },
+    {
+      "at": "2026-09-27T08:46:00.899Z",
+      "event": "completing",
+      "detail": "merged commit: e7967747"
+    },
+    {
+      "at": "2026-09-27T08:46:00.929Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-27T08:46:00.930Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC3"
+    },
+    {
+      "at": "2026-09-27T08:48:51.223Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: docs/verification/keryx-shell-tui-test-catalog.md SESSCLI-04 row now describes graceful line-tolerant recovery (exit 0) instead of a named refusal, with the fallback-to-context 'incomplete' export and the one remaining refusal (context unreadable, exit 1, file and reason named). Re-probed live on 2026-09-27 with keryx sessions export: trailing garbage, mid-JSON truncation, binary overwrite -> exit 0; oversized/directory archive.jsonl -> exit 0 marked incomplete; oversized context -> named refusal exit 1. (signed: noreply@anthropic.com [derived])"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-27T08:46:00.084Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "noreply@anthropic.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
+    },
+    {
+      "at": "2026-09-27T08:48:51.222Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "noreply@anthropic.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-27T08:46:00.929Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "fail",
+          "detail": "unconfirmed: AC3"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e7967747 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "skipped",
+          "detail": "task gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "owner",
+          "status": "skipped",
+          "detail": "owner gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "skipped",
+          "detail": "review gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:206bb5a978d5fc81115e3bee7ec4a55c70acd270f01e04d16b979395f6503296"
     }
   ]
 }

@@ -17,3 +17,4 @@
 - 2026-09-25T18:33:13.635Z - task-done: T2: Implement per plan
 - 2026-09-25T18:33:20.788Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-25T18:33:20.931Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-27T08:44:13.275Z - renumbered: 335 -> 347: duplicate id 335: the Wave 4 stack-pack flow created earlier the same day holds 335 and was closed under it

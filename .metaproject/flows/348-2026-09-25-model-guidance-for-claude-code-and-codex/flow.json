@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "336",
+  "id": "348",
   "slug": "model-guidance-for-claude-code-and-codex",
   "title": "Model guidance for Claude Code and Codex: keryx writes which model to use per kind of work into the agent instructions, from the routing table",
   "status": "in-progress",
   "createdAt": "2026-09-25T17:50:32.826Z",
-  "updatedAt": "2026-09-25T18:22:26.861Z",
+  "updatedAt": "2026-09-27T08:44:14.084Z",
   "source": {
     "type": "description",
     "ref": null
@@ -214,6 +214,11 @@
       "at": "2026-09-25T18:22:26.861Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-27T08:44:14.084Z",
+      "event": "renumbered",
+      "detail": "336 -> 348: duplicate id 336: the Wave 4 stack-pack flow created earlier the same day holds 336 and was closed under it"
     }
   ],
   "signatures": [

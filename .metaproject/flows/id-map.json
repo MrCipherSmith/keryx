@@ -294,5 +294,37 @@
     "toDir": "334-2026-09-25-negation-aware-skill-trigger-scorer-not-",
     "at": "2026-09-25T14:52:39.058Z",
     "reason": "ids 326-333 are taken by the parallel Jev programme session (flow packages not pushed yet); allocation is per working copy"
+  },
+  {
+    "from": "335",
+    "to": "347",
+    "fromDir": "335-2026-09-25-review-jev-contract-an-additional-orches",
+    "toDir": "347-2026-09-25-review-jev-contract-an-additional-orches",
+    "at": "2026-09-27T08:44:13.275Z",
+    "reason": "duplicate id 335: the Wave 4 stack-pack flow created earlier the same day holds 335 and was closed under it"
+  },
+  {
+    "from": "336",
+    "to": "348",
+    "fromDir": "336-2026-09-25-model-guidance-for-claude-code-and-codex",
+    "toDir": "348-2026-09-25-model-guidance-for-claude-code-and-codex",
+    "at": "2026-09-27T08:44:14.083Z",
+    "reason": "duplicate id 336: the Wave 4 stack-pack flow created earlier the same day holds 336 and was closed under it"
+  },
+  {
+    "from": "337",
+    "to": "349",
+    "fromDir": "337-2026-09-25-clause-level-precision-for-review-jev-ru",
+    "toDir": "349-2026-09-25-clause-level-precision-for-review-jev-ru",
+    "at": "2026-09-27T08:44:14.952Z",
+    "reason": "duplicate id 337: the Wave 4 stack-pack flow created earlier the same day holds 337 and was closed under it"
+  },
+  {
+    "from": "338",
+    "to": "350",
+    "fromDir": "338-2026-09-25-routing-classifier-each-keryx-shell-requ",
+    "toDir": "350-2026-09-25-routing-classifier-each-keryx-shell-requ",
+    "at": "2026-09-27T08:44:15.747Z",
+    "reason": "duplicate id 338: the Wave 4 stack-pack flow created earlier the same day holds 338 and was closed under it"
   }
 ]

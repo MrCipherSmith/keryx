@@ -13,3 +13,8 @@
 - 2026-08-28T08:24:15.868Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/400 (warning: PR is not a draft)
 - 2026-08-28T08:24:16.133Z - completing
 - 2026-08-28T08:24:16.156Z - completion-failed: acceptance-criteria: unconfirmed: AC3
+- 2026-09-27T08:46:00.084Z - ac-confirmed: AC4: tsc --noEmit clean (and tsconfig.scripts) on main 0b7fc0b, which contains e7967747 (PR #400); CI workflow green on main at 0b7fc0b (run 36282956147). (signed: noreply@anthropic.com [derived])
+- 2026-09-27T08:46:00.899Z - completing: merged commit: e7967747
+- 2026-09-27T08:46:00.929Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-27T08:46:00.930Z - completion-failed: acceptance-criteria: unconfirmed: AC3
+- 2026-09-27T08:48:51.223Z - ac-confirmed: AC3: docs/verification/keryx-shell-tui-test-catalog.md SESSCLI-04 row now describes graceful line-tolerant recovery (exit 0) instead of a named refusal, with the fallback-to-context 'incomplete' export and the one remaining refusal (context unreadable, exit 1, file and reason named). Re-probed live on 2026-09-27 with keryx sessions export: trailing garbage, mid-JSON truncation, binary overwrite -> exit 0; oversized/directory archive.jsonl -> exit 0 marked incomplete; oversized context -> named refusal exit 1. (signed: noreply@anthropic.com [derived])
