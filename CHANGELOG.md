@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.16] — 2026-09-27
+
+### Fixed
+- **Chat-mode `keryx shell` releases its session lease and leaves the bus on
+  every exit**, including a thrown slash command or line source — 0.3.15 fixed
+  this for agent mode only.
+- **Ctrl-C during the budget wrap-up round is reported as an interruption**,
+  and the text cut mid-stream no longer enters history as a finished turn.
+- **`wiki enrich --deep` no longer leaks an abort listener per failed page**
+  onto the batch's shared cancellation signal.
+
 ## [0.3.15] — 2026-09-27
 
 ### Security
