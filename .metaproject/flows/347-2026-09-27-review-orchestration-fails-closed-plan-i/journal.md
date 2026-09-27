@@ -187,3 +187,8 @@ fleet event detail: budget-exhausted
 ## Full suite after T13–T15
 
 - `bun run test:core` at d9bdbd02: 17737 pass / 238 fail; failing-name set identical to clean origin/main (17710 / 238). The 114 failures T13's worker saw in a wider run are part of that environment set.
+- 2026-09-27T10:10:58.142Z - task-attempt: T16: started (attempt 1) — 347-T16 review round 2
+
+## Review round 2 (T16) — review-r02.md
+
+14 of 18 fixed; AC3/AC6/AC7 now met. User chose option A (per-session nonce on genuine nudges) over patching more channels. T17 = nonce envelope (closes F-009, SEC2-1/R2-2, SEC2-2, R2-3) + R2-1 + R2-4; T18 = round-3 verification (last attempt in the three-attempt bound). Residual, accepted: F-013 declined approval counted as executed; SEC2-3 check-then-use on cwd.
