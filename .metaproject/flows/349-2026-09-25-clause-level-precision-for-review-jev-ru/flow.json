@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "337",
+  "id": "349",
   "slug": "clause-level-precision-for-review-jev-ru",
   "title": "Clause-level precision for review-jev-rules: a process step inside a code rule is not checked against code",
   "status": "implemented",
   "createdAt": "2026-09-25T17:51:18.810Z",
-  "updatedAt": "2026-09-25T18:07:45.437Z",
+  "updatedAt": "2026-09-27T08:44:14.952Z",
   "source": {
     "type": "description",
     "ref": null
@@ -219,6 +219,11 @@
       "at": "2026-09-25T18:07:45.437Z",
       "event": "ac-confirmed",
       "detail": "AC10: PR #732 opened (https://github.com/MrCipherSmith/keryx/pull/732) from feat/clause-tag-precision to main, not merged, CI pending. Commit a7e375ee contains only src/review/conform-clauses.ts, conform-clauses.test.ts, conform-tag-cache.ts, conform-tag-cache.test.ts, and this flow's own .metaproject/flows/337-*/ files — .metaproject/data/ regeneration from the post-commit hook (gdgraph/wiki artifacts) was reverted with git checkout before push, working tree clean. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T08:44:14.952Z",
+      "event": "renumbered",
+      "detail": "337 -> 349: duplicate id 337: the Wave 4 stack-pack flow created earlier the same day holds 337 and was closed under it"
     }
   ],
   "signatures": [

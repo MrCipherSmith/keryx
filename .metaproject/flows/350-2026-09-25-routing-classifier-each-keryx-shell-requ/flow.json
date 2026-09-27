@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "338",
+  "id": "350",
   "slug": "routing-classifier-each-keryx-shell-requ",
   "title": "Routing classifier: each keryx shell request is sorted into a routing category (Jev when connected, else the main model) and sent to that category's model",
   "status": "in-progress",
   "createdAt": "2026-09-25T17:54:16.364Z",
-  "updatedAt": "2026-09-25T18:37:01.617Z",
+  "updatedAt": "2026-09-27T08:44:15.748Z",
   "source": {
     "type": "description",
     "ref": null
@@ -232,6 +232,11 @@
       "at": "2026-09-25T18:37:01.617Z",
       "event": "ac-confirmed",
       "detail": "AC12: docs/docs/cli-reference.md: new 'Routing classifier' paragraph (categories, fallback chain, /route on|off, ShellConfig.routingClassifier.enabled, per-turn tag + sidebar). check-doc-links: 1628 links checked, 0 broken. keryx health run: PASS (score 94). keryx flow check: consistent. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T08:44:15.748Z",
+      "event": "renumbered",
+      "detail": "338 -> 350: duplicate id 338: the Wave 4 stack-pack flow created earlier the same day holds 338 and was closed under it"
     }
   ],
   "signatures": [

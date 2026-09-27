@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "335",
+  "id": "347",
   "slug": "review-jev-contract-an-additional-orches",
   "title": "review-jev-contract: an additional orchestrator reviewer that checks a PR's description claims and the flow's acceptance criteria against the diff",
   "status": "in-progress",
   "createdAt": "2026-09-25T17:50:30.807Z",
-  "updatedAt": "2026-09-25T18:33:20.931Z",
+  "updatedAt": "2026-09-27T08:44:13.275Z",
   "source": {
     "type": "description",
     "ref": null
@@ -214,6 +214,11 @@
       "at": "2026-09-25T18:33:20.931Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-27T08:44:13.275Z",
+      "event": "renumbered",
+      "detail": "335 -> 347: duplicate id 335: the Wave 4 stack-pack flow created earlier the same day holds 335 and was closed under it"
     }
   ],
   "signatures": [
