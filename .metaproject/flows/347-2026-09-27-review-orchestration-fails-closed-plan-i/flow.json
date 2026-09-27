@@ -10,7 +10,7 @@
   "title": "Review orchestration fails closed: plan is display-only, exhausted subagents report, reviewer inventory and publication are checked",
   "status": "in-progress",
   "createdAt": "2026-09-27T08:21:53.406Z",
-  "updatedAt": "2026-09-27T09:11:47.312Z",
+  "updatedAt": "2026-09-27T11:31:58.992Z",
   "source": {
     "type": "description",
     "ref": null
@@ -231,7 +231,7 @@
       "id": "T11",
       "title": "Verify: typecheck, targeted tests, live scripted-provider run for AC1 and AC4 recorded in journal (AC12)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -252,23 +252,207 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "Review the branch diff with review-orchestrator and fix findings",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:29:49.631Z",
+            "outcome": "started",
+            "detail": "347-T12 review round 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Review r01 fixes, turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016 (agent.ts, new harness submit-result module, quarantine patterns)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:39:36.776Z",
+            "outcome": "started",
+            "detail": "347-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Review r01 fixes, spawn_subagent: F-001 cwd worktree validation, F-003 tool-follows-cwd test, F-007, F-008, F-018, F-023",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:39:37.141Z",
+            "outcome": "started",
+            "detail": "347-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Review r01 fixes, small: F-002 snapshot order, F-004 not-found exit tests, F-019, F-022, F-017 skill wording",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:39:37.634Z",
+            "outcome": "started",
+            "detail": "347-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Review round 2 on the r01 fixes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T13",
+        "T14",
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T10:10:58.142Z",
+            "outcome": "started",
+            "detail": "347-T16 review round 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Review r02 fixes: per-session nonce envelope for shell nudges (option A), R2-1 packageRelativePath in bundled builds, R2-4 explicit interrupted status",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T10:22:56.871Z",
+            "outcome": "started",
+            "detail": "347-T17"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Review round 3: verify r02 fixes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T10:57:14.918Z",
+            "outcome": "started",
+            "detail": "347-T18 review round 3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Round-3 fixes: repeated-failure hint quotes no raw error (R3-1), uses redacted output (R3-2), scrub hook context and anchors (R3-3), ACP comments + nonce map pruning (R3-4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T11:08:33.618Z",
+            "outcome": "started",
+            "detail": "347-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T11:16:52.114Z",
+            "outcome": "started",
+            "detail": "347-T20 orchestrator verification"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -424,6 +608,141 @@
       "at": "2026-09-27T09:11:47.312Z",
       "event": "task-attempt",
       "detail": "T11: started (attempt 1) — 347-T11 orchestrator-run"
+    },
+    {
+      "at": "2026-09-27T09:29:49.317Z",
+      "event": "task-done",
+      "detail": "T11: Verify: typecheck, targeted tests, live scripted-provider run for AC1 and AC4 recorded in journal (AC12)"
+    },
+    {
+      "at": "2026-09-27T09:29:49.631Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 347-T12 review round 1"
+    },
+    {
+      "at": "2026-09-27T09:39:35.080Z",
+      "event": "task-added",
+      "detail": "T13: Review r01 fixes, turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016 (agent.ts, new harness submit-result module, quarantine patterns)"
+    },
+    {
+      "at": "2026-09-27T09:39:35.525Z",
+      "event": "task-added",
+      "detail": "T14: Review r01 fixes, spawn_subagent: F-001 cwd worktree validation, F-003 tool-follows-cwd test, F-007, F-008, F-018, F-023"
+    },
+    {
+      "at": "2026-09-27T09:39:35.963Z",
+      "event": "task-added",
+      "detail": "T15: Review r01 fixes, small: F-002 snapshot order, F-004 not-found exit tests, F-019, F-022, F-017 skill wording"
+    },
+    {
+      "at": "2026-09-27T09:39:36.362Z",
+      "event": "task-added",
+      "detail": "T16: Review round 2 on the r01 fixes"
+    },
+    {
+      "at": "2026-09-27T09:39:36.776Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 347-T13"
+    },
+    {
+      "at": "2026-09-27T09:39:37.141Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 347-T14"
+    },
+    {
+      "at": "2026-09-27T09:39:37.634Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 347-T15"
+    },
+    {
+      "at": "2026-09-27T09:39:43.746Z",
+      "event": "task-done",
+      "detail": "T12: Review the branch diff with review-orchestrator and fix findings"
+    },
+    {
+      "at": "2026-09-27T09:45:45.530Z",
+      "event": "task-done",
+      "detail": "T14: Review r01 fixes, spawn_subagent: F-001 cwd worktree validation, F-003 tool-follows-cwd test, F-007, F-008, F-018, F-023"
+    },
+    {
+      "at": "2026-09-27T09:49:46.484Z",
+      "event": "task-done",
+      "detail": "T15: Review r01 fixes, small: F-002 snapshot order, F-004 not-found exit tests, F-019, F-022, F-017 skill wording"
+    },
+    {
+      "at": "2026-09-27T10:00:41.837Z",
+      "event": "task-done",
+      "detail": "T13: Review r01 fixes, turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016 (agent.ts, new harness submit-result module, quarantine patterns)"
+    },
+    {
+      "at": "2026-09-27T10:10:58.142Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 347-T16 review round 2"
+    },
+    {
+      "at": "2026-09-27T10:22:55.963Z",
+      "event": "task-done",
+      "detail": "T16: Review round 2 on the r01 fixes"
+    },
+    {
+      "at": "2026-09-27T10:22:56.272Z",
+      "event": "task-added",
+      "detail": "T17: Review r02 fixes: per-session nonce envelope for shell nudges (option A), R2-1 packageRelativePath in bundled builds, R2-4 explicit interrupted status"
+    },
+    {
+      "at": "2026-09-27T10:22:56.572Z",
+      "event": "task-added",
+      "detail": "T18: Review round 3: verify r02 fixes"
+    },
+    {
+      "at": "2026-09-27T10:22:56.872Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 347-T17"
+    },
+    {
+      "at": "2026-09-27T10:57:14.633Z",
+      "event": "task-done",
+      "detail": "T17: Review r02 fixes: per-session nonce envelope for shell nudges (option A), R2-1 packageRelativePath in bundled builds, R2-4 explicit interrupted status"
+    },
+    {
+      "at": "2026-09-27T10:57:14.918Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 347-T18 review round 3"
+    },
+    {
+      "at": "2026-09-27T11:08:32.533Z",
+      "event": "task-done",
+      "detail": "T18: Review round 3: verify r02 fixes"
+    },
+    {
+      "at": "2026-09-27T11:08:32.889Z",
+      "event": "task-added",
+      "detail": "T19: Round-3 fixes: repeated-failure hint quotes no raw error (R3-1), uses redacted output (R3-2), scrub hook context and anchors (R3-3), ACP comments + nonce map pruning (R3-4)"
+    },
+    {
+      "at": "2026-09-27T11:08:33.265Z",
+      "event": "task-added",
+      "detail": "T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction"
+    },
+    {
+      "at": "2026-09-27T11:08:33.618Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 347-T19"
+    },
+    {
+      "at": "2026-09-27T11:16:51.818Z",
+      "event": "task-done",
+      "detail": "T19: Round-3 fixes: repeated-failure hint quotes no raw error (R3-1), uses redacted output (R3-2), scrub hook context and anchors (R3-3), ACP comments + nonce map pruning (R3-4)"
+    },
+    {
+      "at": "2026-09-27T11:16:52.114Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 347-T20 orchestrator verification"
+    },
+    {
+      "at": "2026-09-27T11:31:58.992Z",
+      "event": "task-done",
+      "detail": "T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction"
     }
   ]
 }
