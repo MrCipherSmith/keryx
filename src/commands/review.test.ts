@@ -1284,3 +1284,38 @@ test("`review learn --reviewer=` (empty value) is refused, not silently falling 
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("needs a value");
 });
+
+// Flow 347 T9, AC7: `.metaproject` in ROOT here has no `skills/gdskills/review`
+// (only the bare directory `beforeEach` creates), the exact shape a review
+// worktree that never ran a full `skills install` has — `data/`/`reviews/`
+// only. Before this fix `reviewers`/`reviewers --json` silently reported
+// `bundled: []`, which an agent read as "no reviewers exist" and skipped
+// required review passes.
+test("`review reviewers` falls back to the keryx package's bundled review skills when the project never installed any, and says so", async () => {
+  await reviewCommand(["reviewers"]);
+  expect(process.exitCode).toBe(0);
+  const output = logs.join("\n");
+  expect(output).toContain("source: package");
+  expect(output).toContain("review-orchestrator");
+  expect(output).not.toBe("");
+});
+
+test("`review reviewers --json` reports bundledSource and a non-empty bundled list from the package fallback", async () => {
+  await reviewCommand(["reviewers", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("package");
+  expect(Array.isArray(parsed.bundled)).toBe(true);
+  expect(parsed.bundled.length).toBeGreaterThan(0);
+  expect(parsed.bundled.map((reviewer: { name: string }) => reviewer.name)).toContain("review-orchestrator");
+});
+
+test("`review reviewers` reports `project` as the source once the project's own review directory is installed, even if empty", async () => {
+  await mkdir(path.join(ROOT, ".metaproject", "skills", "gdskills", "review"), { recursive: true });
+
+  await reviewCommand(["reviewers", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("project");
+  expect(parsed.bundled).toEqual([]);
+});

@@ -10,6 +10,7 @@ import {
   escapeRegexLiteral,
   renderReviewerInventoryMarkdown,
 } from "./reviewers";
+import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
 
 let cwd: string;
 
@@ -34,15 +35,50 @@ async function installBundledReviewer(name: string): Promise<void> {
 }
 
 describe("collectReviewers", () => {
-  test("a project with no metaproject yields empty halves rather than throwing", async () => {
+  test("a project with no metaproject yields an empty project half rather than throwing", async () => {
     const bare = await mkdtemp(path.join(tmpdir(), "keryx-reviewers-bare-"));
     try {
       // A review round must not die because the optional half of its reviewer
       // set is absent — which is the common case, since most projects define no
       // reviewers of their own.
-      expect(await collectReviewers(bare)).toEqual({ bundled: [], project: [] });
+      //
+      // The BUNDLED half is a different story (flow 347 T9): with no
+      // `.metaproject/skills/gdskills/review` at all, this falls back to the
+      // keryx package's own bundled review skills rather than reading as
+      // empty — an empty `bundled` array must mean "nothing found", not
+      // "nothing installed".
+      const inventory = await collectReviewers(bare);
+      expect(inventory.project).toEqual([]);
+      expect(inventory.bundledSource).toBe("package");
+      expect(inventory.bundled.length).toBeGreaterThan(0);
+      expect(inventory.bundled.map((reviewer) => reviewer.name)).toContain("review-orchestrator");
     } finally {
       await rm(bare, { recursive: true, force: true });
+    }
+  });
+
+  test("an existing but EMPTY project review directory is reported as `project`, not `package`", async () => {
+    // A minimal install profile can legitimately install zero review skills.
+    // That is a different fact from the directory never having been created,
+    // and must not silently fall back to the package's reviewers.
+    await mkdir(path.join(cwd, ".metaproject", "skills", "gdskills", "review"), { recursive: true });
+
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.bundledSource).toBe("project");
+    expect(inventory.bundled).toEqual([]);
+  });
+
+  test("the package fallback reads real bundled review skills, sorted, with descriptions", async () => {
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.bundledSource).toBe("package");
+    const names = inventory.bundled.map((reviewer) => reviewer.name);
+    const expectedNames = BUNDLED_GDSKILLS.filter((entry) => entry.category === "review")
+      .map((entry) => entry.name)
+      .sort();
+    expect(names).toEqual(expectedNames);
+    for (const reviewer of inventory.bundled) {
+      expect(reviewer.path).toBe(`src/gdskills/bundled/skills/review/${reviewer.name}`);
+      expect(reviewer.description).toBeDefined();
     }
   });
 
@@ -149,6 +185,22 @@ describe("renderReviewerInventoryMarkdown", () => {
     // A drifted origin is a prompt to look, not a verdict that the reviewer is
     // wrong — the wording has to carry that or it becomes noise people mute.
     expect(rendered).toContain("does not make the reviewer wrong");
+  });
+
+  // Flow 347 T9, AC7: a synthetic `not-found` inventory, since triggering the
+  // real fallback-to-nothing case would require the keryx package itself to
+  // ship no bundled review skills — not reproducible against this checkout.
+  // `renderReviewerInventoryMarkdown` is a pure function, so the source can be
+  // asserted directly without going through `collectReviewers`.
+  test("a `not-found` bundled source says so in text mode, rather than reading as an ordinary empty list", () => {
+    const rendered = renderReviewerInventoryMarkdown({
+      bundled: [],
+      bundledSource: "not-found",
+      project: [],
+    });
+    expect(rendered).toContain("source: not-found");
+    expect(rendered).toContain("not found");
+    expect(rendered).not.toContain("none installed");
   });
 });
 

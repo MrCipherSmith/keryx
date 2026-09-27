@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath } from "../gdskills/catalog";
 import { hashOriginContent, resolveOriginPath } from "../gdskills/project-skills";
 import { unresolvedRuleReferences } from "../gdskills/rule-references";
 import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
@@ -91,8 +92,29 @@ export type ProjectReviewer = {
   drift: OriginDrift;
 };
 
+/**
+ * Where the `bundled` half of the inventory came from (flow 347 T9).
+ *
+ * - `project` — read from this project's INSTALLED tree
+ *   (`.metaproject/skills/gdskills/review`), exactly as before this field
+ *   existed. The directory is present (even if empty — an install profile can
+ *   legitimately install zero review skills).
+ * - `package` — the project directory is absent, so the keryx PACKAGE's own
+ *   bundled review skills were read instead (the same tree `keryx skills
+ *   install` copies from). This is the common case in a worktree whose
+ *   `.metaproject/` was never fully installed (only `data/`/`reviews/`
+ *   exist).
+ * - `not-found` — neither the project directory nor the package's bundled
+ *   review skills could be located. `bundled` is empty here, and that empty
+ *   list means "nothing found", not "nothing installed" — callers must check
+ *   this field rather than infer from an empty array.
+ */
+export type BundledReviewerSource = "project" | "package" | "not-found";
+
 export type ReviewerInventory = {
   bundled: BundledReviewer[];
+  /** See `BundledReviewerSource`. */
+  bundledSource: BundledReviewerSource;
   project: ProjectReviewer[];
 };
 
@@ -233,32 +255,97 @@ async function driftFor(
   }
 }
 
+/** Whether `readdir(dir)` succeeds at all — present-but-empty counts as present. */
+async function directoryExists(dir: string): Promise<boolean> {
+  try {
+    await readdir(dir);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** One installed-tree bundled reviewer entry, shared by both provenance paths below. */
+async function bundledReviewerFromFile(
+  name: string,
+  skillMdPath: string,
+  projectRelativePath: string,
+): Promise<BundledReviewer> {
+  // `metadata.engine` (flow 330/332/333): read best-effort — a reviewer with no
+  // engine declared, or a SKILL.md that vanished between the directory
+  // listing above and this read, is a plain LLM sub-agent reviewer.
+  const content = await readFile(skillMdPath, "utf8").catch(() => undefined);
+  const engine = content !== undefined ? metadataList(content, "engine")[0] : undefined;
+  const description = content !== undefined ? parseSkillFrontmatter(content).description : undefined;
+  return {
+    name,
+    source: "bundled" as const,
+    path: projectRelativePath,
+    ...(engine !== undefined ? { engine } : {}),
+    ...(description !== undefined ? { description } : {}),
+  };
+}
+
 /**
- * Both halves of the reviewer set, with provenance for the project half.
+ * Bundled reviewers read from THIS PROJECT's installed tree
+ * (`.metaproject/skills/gdskills/review`) — what a round can actually
+ * dispatch, which is a different set from the shipped source whenever the
+ * install profile is not `full`.
+ */
+async function projectInstalledReviewers(bundledRoot: string): Promise<BundledReviewer[]> {
+  return Promise.all(
+    (await skillDirs(bundledRoot)).map((name) =>
+      bundledReviewerFromFile(
+        name,
+        path.join(bundledRoot, name, "SKILL.md"),
+        path.posix.join(".metaproject", "skills", "gdskills", "review", name),
+      ),
+    ),
+  );
+}
+
+/**
+ * Bundled reviewers read from the keryx PACKAGE's own bundled skills — the
+ * fallback for a project whose `.metaproject/skills/gdskills/review` was
+ * never installed (e.g. a review worktree carrying only `data/`/`reviews/`).
+ * Reuses `bundledSkillMarkdownPath`, the same source/packaged two-candidate
+ * resolver `catalog.ts` and `install.ts` already use for this exact tree —
+ * no new path scheme.
+ */
+async function packageBundledReviewers(): Promise<BundledReviewer[]> {
+  const names = BUNDLED_GDSKILLS.filter((entry) => entry.category === "review")
+    .map((entry) => entry.name)
+    .sort();
+  const found: BundledReviewer[] = [];
+  for (const name of names) {
+    const file = bundledSkillMarkdownPath("review", name);
+    if (file === undefined) continue;
+    found.push(
+      await bundledReviewerFromFile(name, file, path.posix.join("src", "gdskills", "bundled", "skills", "review", name)),
+    );
+  }
+  return found;
+}
+
+/**
+ * Both halves of the reviewer set, with provenance for each.
  *
- * Bundled reviewers are read from the INSTALLED tree, not from the shipped
- * source: what a round can dispatch is what `keryx skills install` put in this
- * project, which is a different set whenever the profile is not `full`.
+ * The `bundled` half's source (`bundledSource`) is `project` when this
+ * project's installed tree is present (even empty), `package` when it is
+ * absent and the keryx package's own bundled review skills were used
+ * instead, and `not-found` when neither exists — see `BundledReviewerSource`.
  */
 export async function collectReviewers(projectRoot: string): Promise<ReviewerInventory> {
   const bundledRoot = path.join(projectRoot, ".metaproject", "skills", "gdskills", "review");
-  const bundled: BundledReviewer[] = await Promise.all(
-    (await skillDirs(bundledRoot)).map(async (name) => {
-      // `metadata.engine` (flow 330/332/333): read best-effort — a reviewer with no
-      // engine declared, or a SKILL.md that vanished between the directory
-      // listing above and this read, is a plain LLM sub-agent reviewer.
-      const content = await readFile(path.join(bundledRoot, name, "SKILL.md"), "utf8").catch(() => undefined);
-      const engine = content !== undefined ? metadataList(content, "engine")[0] : undefined;
-      const description = content !== undefined ? parseSkillFrontmatter(content).description : undefined;
-      return {
-        name,
-        source: "bundled" as const,
-        path: path.posix.join(".metaproject", "skills", "gdskills", "review", name),
-        ...(engine !== undefined ? { engine } : {}),
-        ...(description !== undefined ? { description } : {}),
-      };
-    }),
-  );
+  let bundled: BundledReviewer[];
+  let bundledSource: BundledReviewerSource;
+  if (await directoryExists(bundledRoot)) {
+    bundled = await projectInstalledReviewers(bundledRoot);
+    bundledSource = "project";
+  } else {
+    bundled = await packageBundledReviewers();
+    bundledSource = bundled.length > 0 ? "package" : "not-found";
+  }
 
   const projectRoot_ = path.join(projectRoot, ".metaproject", "project-skills", PROJECT_REVIEWER_MODULE);
   const project: ProjectReviewer[] = [];
@@ -290,21 +377,38 @@ export async function collectReviewers(projectRoot: string): Promise<ReviewerInv
     });
   }
 
-  return { bundled, project };
+  return { bundled, bundledSource, project };
+}
+
+/** Human text for `bundledSource`, shown in both markdown and, via the JSON field, `--json`. */
+function bundledSourceNote(source: BundledReviewerSource): string {
+  switch (source) {
+    case "project":
+      return "this project's installed reviewers (.metaproject/skills/gdskills/review)";
+    case "package":
+      return "keryx's bundled reviewers — .metaproject/skills/gdskills/review is absent in this "
+        + "project, so the package's own review skills were used instead";
+    case "not-found":
+      return "not found — no .metaproject/skills/gdskills/review directory in this project, and "
+        + "the keryx package's bundled review skills could not be located either";
+  }
 }
 
 export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): string {
   const lines = [
     "# reviewers",
     "",
-    `bundled: ${inventory.bundled.length}`,
+    `bundled: ${inventory.bundled.length} (source: ${inventory.bundledSource})`,
+    `  ${bundledSourceNote(inventory.bundledSource)}`,
     `project-local: ${inventory.project.length}`,
     "",
     "## bundled",
     "",
     ...(inventory.bundled.length > 0
       ? inventory.bundled.map((reviewer) => `- ${reviewer.name}${reviewer.engine !== undefined ? ` (engine: ${reviewer.engine})` : ""}`)
-      : ["- none installed"]),
+      : inventory.bundledSource === "not-found"
+        ? ["- not-found — see note above"]
+        : ["- none installed"]),
     "",
     "## project-local",
     "",

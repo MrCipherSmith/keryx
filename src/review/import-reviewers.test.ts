@@ -76,7 +76,12 @@ describe("importOverlayReviewers", () => {
     await writeOverlay(source, "review-vantage-frontend");
     const result = await importOverlayReviewers({ projectRoot: cwd, from: source, dryRun: true });
     expect(result.imported[0]?.status).toBe("would-import");
-    expect(await collectReviewers(cwd)).toEqual({ bundled: [], project: [] });
+    // No `.metaproject/skills/gdskills/review` was ever installed in `cwd`, so
+    // the bundled half falls back to the keryx package's own review skills
+    // (flow 347 T9) rather than reading as empty.
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.bundledSource).toBe("package");
+    expect(inventory.project).toEqual([]);
   });
 
   test("an existing reviewer is skipped unless --force", async () => {

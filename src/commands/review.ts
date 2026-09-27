@@ -2802,9 +2802,16 @@ async function runReviewers(args: string[]): Promise<void> {
 
   if (args.includes("--json")) {
     console.log(JSON.stringify(inventory, null, 2));
-    return;
+  } else {
+    console.log(renderReviewerInventoryMarkdown(inventory));
   }
-  console.log(renderReviewerInventoryMarkdown(inventory));
+
+  // flow 347 T9: neither this project's installed review skills nor the
+  // keryx package's bundled ones could be located — a real failure, not an
+  // empty-but-valid inventory, so it must not exit 0.
+  if (inventory.bundledSource === "not-found") {
+    process.exitCode = 1;
+  }
 }
 
 async function runStack(args: string[]): Promise<void> {
