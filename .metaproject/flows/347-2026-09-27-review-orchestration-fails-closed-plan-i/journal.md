@@ -15,3 +15,42 @@
 - 2026-09-27T08:24:35.453Z - task-done: T4: Self-review and prepare draft PR
 - 2026-09-27T08:24:55.000Z - frozen: 12 criteria; checksum recorded
 - 2026-09-27T08:24:55.322Z - started
+- 2026-09-27T08:25:01.468Z - task-attempt: T5: started (attempt 1) — 347-T5
+- 2026-09-27T08:25:01.793Z - task-attempt: T9: started (attempt 1) — 347-T9
+- 2026-09-27T08:25:02.143Z - task-attempt: T10: started (attempt 1) — 347-T10
+
+## T10 accepted (DONE)
+
+- Parity verified (cmp both copies), parity/bridge/build-parity tests 19/0.
+- Concern: Stage 1 fallback with `review.jev.contract` off now dispatches `review-logic` (one extra dispatch) so the spec-gate finding has a real reviewer name. Accepted.
+- Concern: the draft-approval gate covers `comments reply --final`; a dispatched/unattended managed run hands the rendered body back to its caller instead of posting. Accepted as fail-closed; surfaced to the user.
+- Worker reported 6 unrelated failures (5 in review-floor-cli.test.ts: repo refuses the test commit author email; 1 in install.test.ts: EACCES in temp dir). T11 checks them against the base.
+- 2026-09-27T08:30:07.798Z - task-done: T10: review-orchestrator skill fail-closed gate, publication draft approval, bridge timing agreement (items 4,5; AC10-AC11)
+- 2026-09-27T08:33:35.935Z - task-done: T5: Plan follow-through opt-in (default off), plan snapshot leads with in_progress, prompt stops tying plan to turn end (items 1,3; AC1-AC3)
+- 2026-09-27T08:33:36.226Z - task-attempt: T6: started (attempt 1) — 347-T6
+
+## T5 accepted (DONE) — bfe51be8
+
+- 193 tests pass (execution-plan, agent, goal-command); typecheck clean. /goal --auto has its own continuation loop, no opt-in needed. No caller sets planFollowThrough today.
+
+## T9 accepted (DONE)
+
+- New `bundledSource: project|package|not-found`; package fallback via existing `bundledSkillMarkdownPath`; not-found exits 1 in both modes. reviewers + import-reviewers tests 28/0.
+- import-reviewers.test.ts assertion updated: dry-run still imports nothing (`project: []`); bundled half now reads as `package` instead of silently empty.
+- Pre-existing failures verified on a clean origin/main worktree (0b7fc0b6): review.test.ts 7 fail (flow 305 routing tests), review-floor-cli + install tests 6 fail. Same counts on this branch — not caused by flow 347.
+- 2026-09-27T08:34:42.388Z - task-done: T9: review reviewers: report inventory source, package fallback, not-found exits non-zero (item 7; AC7)
+- 2026-09-27T08:38:46.001Z - ac-updated: AC4: "When a turn reaches `max_tool_calls`, it runs exactly one further model round with no tools offered before returning `finishReason: "tool-call-budget"`, and that round's text is what a subagent returns. Covered by a test with a scripted provider." -> "A `max_tool_calls` value supplied by the model in `spawn_subagent` is advisory: it never stops the child, it only sets the warning threshold of AC13. A hard tool-call cap applies only when the operator or project configures one through a documented config setting; without it the child's stopping limits are its round budget, the wall-clock deadline and the no-progress detector. Covered by tests: a model-supplied cap below the calls actually made does not stop the child; a configured cap does." (user decision 2026-09-27: T7 scope widened from 'wrap-up round' to A+B+C — the model no longer picks a hard call cap (A), an early warning replaces the surprise cutoff (B), and the final round is a forced structured submit_result (C); T7 had not started)
+- 2026-09-27T08:38:46.304Z - ac-updated: AC5: "A `spawn_subagent` result whose child finished `BudgetExhausted` or `NoProgress` has `output` whose first line is `status: <Status> (<invoked>/<max> calls)` (calls omitted when no call budget applies); the fleet event is not `done`, and the child slate is folded as incomplete. Covered by tests." -> "When a child reaches a stopping limit (configured call cap or round budget) before finishing, the harness runs exactly one final round in which the only tool offered is `submit_result`, whose input schema carries `status` (`partial` here), `summary` and the task's result payload; tool choice is forced where the provider supports it, otherwise the round is instructed and the input is schema-validated. The `spawn_subagent` output's first line is `status: BudgetExhausted (<used>/<limit> <calls|rounds>)` (or `status: NoProgress …`) followed by the submitted result, or an explicit `no result submitted`; the fleet event is not `done` and the child slate folds as incomplete. Covered by tests with a scripted provider." (user decision 2026-09-27: T7 scope widened from 'wrap-up round' to A+B+C — the model no longer picks a hard call cap (A), an early warning replaces the surprise cutoff (B), and the final round is a forced structured submit_result (C); T7 had not started)
+- 2026-09-27T08:38:46.636Z - ac-updated: AC13: "(new)" -> "When a child has used at least 80% of any applicable tool-call limit (advisory or configured) or round budget, every subsequent tool result it receives ends with one line stating what remains and telling it to return its result now; the line appears once per threshold crossing per result, not before the threshold. Covered by tests." (user decision 2026-09-27: T7 scope widened from 'wrap-up round' to A+B+C — the model no longer picks a hard call cap (A), an early warning replaces the surprise cutoff (B), and the final round is a forced structured submit_result (C); T7 had not started)
+
+## Decision — T7 scope widened (user, 2026-09-27)
+
+The tool-call cap chosen by the parent model (15–22 in the incident) was arbitrary, counted the wrong resource, and a re-dispatch repeated the lost work. T7 now covers:
+
+- A — model-supplied `max_tool_calls` is advisory (warning threshold only); a hard call cap exists only via operator/project config. Chosen default for the open question "config setting vs remove": keep as config — existing skills that pass `max_tool_calls` keep working.
+- B — warning line in tool results from 80% of any limit (AC13).
+- C — final round offers only `submit_result` (forced where supported), so an exhausted child always returns a schema-shaped partial result (AC5).
+
+AC4/AC5 rewritten and AC13 appended via `keryx flow ac update` before T7 started.
+
+Follow-up flow (init when it starts, not now — ids get taken on main while a branch is open): D — `continue_subagent(id, extra_rounds)` resumes an exhausted child with its context instead of a fresh re-dispatch; E — reviewers persist findings incrementally (tool or round file) so budget, timeout or provider failure never loses finished work. When D lands, AC10 wording in review-orchestrator ("one re-dispatch with a larger budget") becomes "continue the child".
