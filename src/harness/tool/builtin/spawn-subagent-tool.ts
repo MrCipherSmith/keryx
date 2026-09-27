@@ -8,9 +8,11 @@
 // Risk: `delegate` (agent driver requires approval when an approver is present).
 
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { InteractiveTool } from "./interactive-tools";
 import { builtinReadOnlyTools } from "./interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
@@ -402,6 +404,85 @@ function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+const execFileAsync = promisify(execFile);
+
+/**
+ * Flow 347 T8: resolve and validate the dispatch's optional `cwd`.
+ *
+ * The incident this closes: a review ran the parent in a worktree checked out
+ * at a PR head, but every read-only/search/shell tool built for the verifier
+ * child (and the "Project root:" line in its own prompt) resolved relative to
+ * `SpawnSubagentToolDeps.cwd` — the PARENT's cwd — not the worktree the
+ * review was actually about, so the child silently verified the base branch
+ * instead. `spawn_subagent` now accepts a per-call `cwd` the CHILD's tools and
+ * prompt follow; everything else that is genuinely parent-scoped (the routing
+ * config location, the ephemeral slate's OS-temp storage, the shared MAE
+ * budget ledger) deliberately keeps reading `deps.cwd` — see the call site
+ * below and `SpawnSubagentToolDeps.cwd`'s doc comment for exactly which is
+ * which.
+ *
+ * Fail-closed by construction: an omitted `cwd` resolves to `parentCwd`
+ * (today's unchanged behaviour). A supplied one is accepted ONLY when its
+ * REALPATH (symlinks resolved, so a symlink cannot point the child somewhere
+ * this check never actually inspected) is:
+ *   - the project root itself, or a filesystem descendant of it, OR
+ *   - a path `git worktree list --porcelain`, run IN the project root, reports
+ *     for that same repository (a linked worktree of the parent's own repo —
+ *     exactly the `.review-pr-N/` shape from the incident).
+ * A nonexistent path is refused the same as one outside both of the above —
+ * `realpath` throwing is not distinguished from a real-but-disallowed path,
+ * both are "cannot accept this cwd." The caller (`invoke()` below) must spawn
+ * NOTHING when this returns `ok: false`.
+ */
+async function resolveSubagentCwd(
+  rawCwd: string | undefined,
+  parentCwd: string,
+): Promise<{ ok: true; cwd: string } | { ok: false; reason: string }> {
+  if (rawCwd === undefined) {
+    return { ok: true, cwd: parentCwd };
+  }
+  const requested = path.isAbsolute(rawCwd) ? rawCwd : path.resolve(parentCwd, rawCwd);
+  let real: string;
+  try {
+    real = await realpath(requested);
+  } catch {
+    return { ok: false, reason: `spawn_subagent refused cwd "${rawCwd}": it does not exist` };
+  }
+  // Best-effort: if the project root itself cannot be realpath'd (should not
+  // happen in practice — it is the running process's own cwd), fall back to
+  // comparing against it verbatim rather than treating that as the child's
+  // failure.
+  const realRoot = await realpath(parentCwd).catch(() => parentCwd);
+  if (real === realRoot || real.startsWith(realRoot + path.sep)) {
+    return { ok: true, cwd: real };
+  }
+  // Not inside the project root — the only other accepted shape is a linked
+  // worktree of the SAME repository, as the project root's own git reports it.
+  try {
+    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: parentCwd });
+    const worktreePaths = stdout
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => line.slice("worktree ".length).trim())
+      .filter((p) => p.length > 0);
+    for (const worktreePath of worktreePaths) {
+      const realWorktree = await realpath(worktreePath).catch(() => undefined);
+      if (realWorktree !== undefined && realWorktree === real) {
+        return { ok: true, cwd: real };
+      }
+    }
+  } catch {
+    // `parentCwd` is not a git repository, or `git` is unavailable — falls
+    // through to the refusal below; no worktree can be confirmed either way.
+  }
+  return {
+    ok: false,
+    reason:
+      `spawn_subagent refused cwd "${rawCwd}" (resolved: ${real}): it is neither the project root, ` +
+      "a descendant of it, nor a worktree of this repository",
+  };
+}
+
 // The two profiles that used to be built here moved to
 // `src/harness/policy/profiles.ts` when `keryx serve` needed a profile it could
 // COMPARE against — and the source-level guard written for that comparison found
@@ -470,13 +551,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
         "(light|standard|deep) to size the child's model against your own, and a 'runtime' " +
         "block to delegate the child to an external vendor coding CLI instead of running it " +
-        "in-process.",
+        "in-process. Optional 'cwd' runs the child's tools against a different directory than " +
+        "yours (e.g. a review worktree checked out at a PR head) — accepted only when it is your " +
+        "own project root, a descendant of it, or one of its git worktrees; a relative path " +
+        "resolves against your own cwd. Not supported for external (runtime.kind='external') children.",
       inputSchema: {
         type: "object",
         properties: {
           task: { type: "string" },
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
+          /**
+           * Flow 347 T8: per-call working directory for the CHILD's tools and
+           * "Project root:" prompt line only — see `resolveSubagentCwd`'s doc
+           * comment for the exact acceptance rule and `SpawnSubagentToolDeps.cwd`
+           * for which parent-scoped concerns deliberately do NOT follow it.
+           * OPTIONAL and additive: an omitted value inherits the parent's own
+           * cwd, exactly as every dispatch before this field existed.
+           */
+          cwd: {
+            type: "string",
+            description:
+              "Working directory for the child's tools (relative paths resolve against your own cwd). " +
+              "Must be your project root, a descendant of it, or one of its git worktrees; refused " +
+              "otherwise. Unsupported when 'runtime.kind' is 'external'.",
+          },
           max_tool_calls: {
             type: "integer",
             minimum: 0,
@@ -588,6 +687,33 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external") {
         return { status: "Error", output: "External subagents do not support native tool-call or model-round limits; use supported runtime budgets.", isError: true };
       }
+      // Flow 347 T8 (AC6): validate `cwd` before anything is spawned — a
+      // refused `cwd` must produce an error result with no admission attempt,
+      // no ledger reservation, and no child.
+      if (input.cwd !== undefined && typeof input.cwd !== "string") {
+        return { status: "Error", output: "spawn_subagent cwd must be a string path", isError: true };
+      }
+      const rawCwd = input.cwd as string | undefined;
+      const isExternalRuntimeRequest =
+        typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external";
+      if (rawCwd !== undefined && isExternalRuntimeRequest) {
+        // The external runtime always runs the child in its OWN freshly-cut
+        // disposable worktree (see `createRunExternal`/`runExternalChild`) —
+        // there is no per-call cwd concept on that path to honour, so a
+        // dispatch that asks for both is refused rather than silently
+        // ignoring the one that cannot apply.
+        return {
+          status: "Error",
+          output: "spawn_subagent cwd is not supported for external (runtime.kind='external') children; " +
+            "they always run in their own disposable worktree.",
+          isError: true,
+        };
+      }
+      const cwdResolution = await resolveSubagentCwd(rawCwd, deps.cwd);
+      if (!cwdResolution.ok) {
+        return { status: "Error", output: cwdResolution.reason, isError: true };
+      }
+      const childCwd = cwdResolution.cwd;
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
       const workerId = `sub:${idSeq()}`;
@@ -945,7 +1071,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         };
       }
 
-      const cwd = deps.cwd;
+      // Flow 347 T8: the CHILD's tools, its slate/Anchors computation, and its
+      // "Project root:" prompt line below all follow `childCwd` (the resolved
+      // per-call `cwd`, or `deps.cwd` when none was given) — never `deps.cwd`
+      // directly from here on. Parent-scoped concerns (routing config
+      // location above, this ledger, the OS-temp ephemeral slate directory)
+      // deliberately keep reading `deps.cwd`.
+      const cwd = childCwd;
       const tools =
         mode === "read_only"
           ? [
@@ -1428,7 +1560,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const userLine =
           `## Subagent task (${mode})\n` +
           `${task}\n\n` +
-          `Project root: ${deps.cwd}\n` +
+          `Project root: ${childCwd}\n` +
           `Round budget: ${maxRounds} rounds — plan which tools to try before spending them; prefer a ` +
           "direct, targeted lookup (exact file path, exact symbol) over a broad/guessed one, and fall " +
           "back to a different tool rather than repeating a failed call.\n\n" +
