@@ -367,6 +367,23 @@ export interface AgentDeps {
    */
   unattended?: boolean;
   /**
+   * Flow 347 T5 (AC1): opt-in for the session-plan continuation nudge. The
+   * plan (`plan_set`/`plan_update`, `../session/execution-plan.ts`) is a
+   * display-only, operator-visible projection of intent — NOT a completion
+   * signal (see `session-plan-bridge.mdc`) — so the default (`undefined`/
+   * `false`) never injects anything: a turn that ends with `pending`/
+   * `in_progress` items left simply ends on the model's text reply, and the
+   * operator gets a one-line `[plan]` system() note naming the actionable
+   * items instead. Set `true` only for a caller that has decided it wants the
+   * shell to push a single synthetic `role: "user"` "still has actionable
+   * items" message and force one more round when the model stops early with
+   * work still open (still capped at ONE follow-through per turn — see
+   * `planFollowThroughUsed` in the round loop). `/goal`'s own `--auto`
+   * continuation loop (`goal-command.ts`) is independent of this flag and is
+   * unaffected either way.
+   */
+  planFollowThrough?: boolean;
+  /**
    * Flow 290 (AC5): a hard floor consulted for every non-`read` tool call
    * BEFORE the permission mode is resolved — so `trust` (or any mode) cannot
    * lift it. A string return is the refusal reason: the call is denied, never
@@ -1455,9 +1472,12 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "`in_progress` item, and do not mark work complete before verification. These tools update session metadata " +
     "only; `/plan` remains the operator's separate read-only permission mode.\n" +
     "- **Publishing a plan FOR APPROVAL is a real, supported stopping point.** Mark the items `proposed`, " +
-    "state the plan in your reply, and END THE TURN: `proposed` is not work in progress, so it never forces " +
-    "another round on its own. When the operator approves, move those items to `pending`/`in_progress` and " +
-    "continue. Use `pending` (not `proposed`) only when you are going to execute the plan in this same turn.\n" +
+    "state the plan in your reply, and END THE TURN — that is exactly what `proposed` is for. When the " +
+    "operator approves, move those items to `pending`/`in_progress` and continue. Use `pending` (not " +
+    "`proposed`) only when you are going to execute the plan in this same turn.\n" +
+    "- The plan is published so the operator can see progress; it is not what decides when a turn may end. " +
+    "End a turn whenever the user's request is answered, you are genuinely blocked, or the next step needs " +
+    "the operator's input — regardless of whether plan items are still `pending`/`in_progress`.\n" +
     "- This session has its own Slate (working-set scratch, not project knowledge): " +
     "**slate_read** shows the Course (if a Flow is bound) and Seeds recorded so far — nothing " +
     "here is auto-injected, so call it if you want to see it. **slate_write_seed** with " +
@@ -2629,7 +2649,17 @@ async function runAgentTurnCore(
         );
       }
 
-      if (!planFollowThroughUsed && hasActionableExecutionPlanItems(currentPlan)) {
+      // Flow 347 T5 (AC1): the plan is a display-only projection of intent,
+      // never a completion signal — so by default (`deps.planFollowThrough`
+      // unset/false) a turn with actionable items still ends here, on the
+      // model's own text reply, with nothing injected into `history`. Only an
+      // explicit opt-in reintroduces the single synthetic follow-through round
+      // below (still capped at one per turn via `planFollowThroughUsed`).
+      if (
+        deps.planFollowThrough === true &&
+        !planFollowThroughUsed &&
+        hasActionableExecutionPlanItems(currentPlan)
+      ) {
         planFollowThroughUsed = true;
         history.push({
           role: "user",
@@ -2643,7 +2673,7 @@ async function runAgentTurnCore(
         continue;
       }
 
-      if (planFollowThroughUsed && hasActionableExecutionPlanItems(currentPlan)) {
+      if (hasActionableExecutionPlanItems(currentPlan)) {
         const actionable = currentPlan?.items.filter(
           (item) => item.status === "pending" || item.status === "in_progress",
         ) ?? [];
@@ -2654,7 +2684,13 @@ async function runAgentTurnCore(
         if (actionable.length > shown.length) {
           shown.push(`- … ${actionable.length - shown.length} more actionable item(s)`);
         }
-        system(`\n[plan] Actionable items remain after the single follow-through:\n${shown.join("\n")}\n`);
+        // Two distinct one-line notes for the operator: after the (opt-in)
+        // follow-through round already ran once, vs. the default-off path
+        // where the turn is ending on its very first actionable-plan check.
+        const label = planFollowThroughUsed
+          ? "Actionable items remain after the single follow-through"
+          : "Turn ending with actionable plan items remaining (follow-through is off)";
+        system(`\n[plan] ${label}:\n${shown.join("\n")}\n`);
       }
 
       return {}; // error, or a text-only finish → turn complete

@@ -223,12 +223,45 @@ export function executionPlanApprovalItems(plan: ExecutionPlan | undefined): Exe
   return plan?.items.filter((item) => item.status === "proposed") ?? [];
 }
 
+/**
+ * Flow 347 T5 (AC3): the previous implementation showed `items.slice(0, 7)`
+ * in plain insertion order, so an 18-item plan always showed finished steps
+ * 0-6 and hid the `in_progress` item further down — the exact failure mode
+ * item 3 in `description.md` names. The item the model/operator most needs to
+ * see is whatever is ACTIVE or blocking progress, so the non-finished items
+ * are surfaced first, ordered by how much they demand attention:
+ * `in_progress` (the one thing actually happening right now), then
+ * `blocked` (needs unsticking), then `pending`/`proposed` (queued) — stable
+ * within a status (original plan order preserved via a stable sort). Finished
+ * work (`completed`/`skipped`) is folded into a single trailing count line
+ * instead of eating a row for a status nobody needs to act on. `maxItems`
+ * still caps only the listed (non-finished) rows, same contract as before.
+ */
+const SNAPSHOT_STATUS_RANK: Record<ExecutionPlanStatus, number> = {
+  in_progress: 0,
+  blocked: 1,
+  pending: 2,
+  proposed: 2,
+  completed: 3,
+  skipped: 3,
+};
+
 export function renderExecutionPlanSnapshot(plan: ExecutionPlan | undefined, maxItems = 7): string | undefined {
   if (plan === undefined || plan.items.length === 0) return undefined;
-  const rows = plan.items.slice(0, Math.max(0, maxItems)).map((item) => {
+  const finished = plan.items.filter((item) => item.status === "completed" || item.status === "skipped");
+  const active = plan.items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => item.status !== "completed" && item.status !== "skipped")
+    .sort((a, b) => SNAPSHOT_STATUS_RANK[a.item.status] - SNAPSHOT_STATUS_RANK[b.item.status] || a.index - b.index)
+    .map(({ item }) => item);
+
+  const cap = Math.max(0, maxItems);
+  const shown = active.slice(0, cap);
+  const rows = shown.map((item) => {
     const title = item.title.length > 120 ? `${item.title.slice(0, 119)}…` : item.title;
     return `- ${item.id} [${item.status}]: ${title}`;
   });
-  if (plan.items.length > rows.length) rows.push(`- … ${plan.items.length - rows.length} more item(s)`);
+  if (active.length > shown.length) rows.push(`- … ${active.length - shown.length} more item(s)`);
+  if (finished.length > 0) rows.push(`- ${finished.length} completed/skipped item(s) (folded)`);
   return `Current execution plan (revision ${plan.revision}):\n${rows.join("\n")}`;
 }

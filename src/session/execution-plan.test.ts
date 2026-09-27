@@ -9,8 +9,10 @@ import {
   executionPlanPath,
   getExecutionPlan,
   hasActionableExecutionPlanItems,
+  renderExecutionPlanSnapshot,
   setExecutionPlan,
   updateExecutionPlan,
+  type ExecutionPlan,
   type ExecutionPlanItem,
 } from "./execution-plan";
 
@@ -218,4 +220,69 @@ test("updateExecutionPlan preserves ids, supports every terminal state, and reje
   await expect(
     updateExecutionPlan(dir, { expectedRevision: created.revision, itemId: "verify", status: "pending" }),
   ).rejects.toThrow(/revision|conflict|stale/i);
+});
+
+// --- flow 347 T5 (AC3): renderExecutionPlanSnapshot leads with the active item ---
+
+test("renderExecutionPlanSnapshot orders in_progress, then blocked, pending/proposed, and folds completed/skipped into a count", () => {
+  const plan: ExecutionPlan = {
+    revision: 5,
+    items: [
+      { id: "done1", title: "Done first", status: "completed" },
+      { id: "pending1", title: "Pending first", status: "pending" },
+      { id: "blocked1", title: "Blocked first", status: "blocked" },
+      { id: "active", title: "Active work", status: "in_progress" },
+      { id: "proposed1", title: "Proposed first", status: "proposed" },
+      { id: "skipped1", title: "Skipped first", status: "skipped" },
+      { id: "pending2", title: "Pending second", status: "pending" },
+    ],
+  };
+  const snapshot = renderExecutionPlanSnapshot(plan);
+  expect(snapshot).toBeDefined();
+  const lines = (snapshot as string).split("\n");
+  // in_progress leads, then blocked, then pending/proposed in original order.
+  expect(lines[1]).toContain("active [in_progress]");
+  expect(lines[2]).toContain("blocked1 [blocked]");
+  expect(lines[3]).toContain("pending1 [pending]");
+  expect(lines[4]).toContain("proposed1 [proposed]");
+  expect(lines[5]).toContain("pending2 [pending]");
+  // completed/skipped folded into one trailing count line, not listed individually.
+  expect(snapshot).not.toContain("done1");
+  expect(snapshot).not.toContain("skipped1");
+  expect(snapshot).toContain("2 completed/skipped item(s) (folded)");
+});
+
+test("REGRESSION (flow 347 item 3): an 18-item plan whose in_progress item is 12th still appears in the snapshot", () => {
+  const items: ExecutionPlanItem[] = [];
+  for (let i = 1; i <= 18; i += 1) {
+    const status: ExecutionPlanItem["status"] = i < 12 ? "completed" : i === 12 ? "in_progress" : "pending";
+    items.push({ id: `step-${i}`, title: `Step ${i}`, status });
+  }
+  const plan: ExecutionPlan = { revision: 1, items };
+  const snapshot = renderExecutionPlanSnapshot(plan);
+  expect(snapshot).toContain("step-12 [in_progress]");
+  // It leads the listing (first item row, right after the header line).
+  const lines = (snapshot as string).split("\n");
+  expect(lines[1]).toContain("step-12 [in_progress]");
+});
+
+test("renderExecutionPlanSnapshot: maxItems still caps only the listed (non-finished) items", () => {
+  const items: ExecutionPlanItem[] = [];
+  for (let i = 1; i <= 10; i += 1) {
+    items.push({ id: `p-${i}`, title: `Pending ${i}`, status: "pending" });
+  }
+  items.push({ id: "done", title: "Done", status: "completed" });
+  const plan: ExecutionPlan = { revision: 1, items };
+  const snapshot = renderExecutionPlanSnapshot(plan, 3);
+  expect(snapshot).toContain("p-1 [pending]");
+  expect(snapshot).toContain("p-2 [pending]");
+  expect(snapshot).toContain("p-3 [pending]");
+  expect(snapshot).not.toContain("p-4 [pending]");
+  expect(snapshot).toContain("… 7 more item(s)");
+  expect(snapshot).toContain("1 completed/skipped item(s) (folded)");
+});
+
+test("renderExecutionPlanSnapshot returns undefined for no plan or an empty plan", () => {
+  expect(renderExecutionPlanSnapshot(undefined)).toBeUndefined();
+  expect(renderExecutionPlanSnapshot({ revision: 1, items: [] })).toBeUndefined();
 });

@@ -298,7 +298,7 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect(history.some((m) => m.role === "tool")).toBe(true);
 });
 
-test("runAgentTurn injects the current plan and allows at most one follow-through after a premature final reply", async () => {
+test("runAgentTurn with planFollowThrough opted in: injects the current plan and allows at most one follow-through after a premature final reply", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "keryx-plan-follow-through-"));
   await writeSlate(dir, () => ({ anchors: { root: dir, touched: [] }, course: {}, seeds: [] }));
   await setExecutionPlan(dir, {
@@ -321,6 +321,7 @@ test("runAgentTurn injects the current plan and allows at most one follow-throug
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
     maxRounds: 5,
+    planFollowThrough: true,
   };
   const history: NormalizedMessage[] = [];
   const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
@@ -335,6 +336,48 @@ test("runAgentTurn injects the current plan and allows at most one follow-throug
   expect(collected.system.join("")).toContain("Actionable items remain after the single follow-through");
   expect(collected.system.join("")).toContain("implement [in_progress]");
   expect(collected.system.join("")).toContain("verify [pending]");
+});
+
+test("runAgentTurn with planFollowThrough left at its default (off): ends on the model's reply, nothing injected, one-line [plan] note shown", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-plan-follow-through-default-off-"));
+  await writeSlate(dir, () => ({ anchors: { root: dir, touched: [] }, course: {}, seeds: [] }));
+  await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "implement", title: "Implement it", status: "in_progress" },
+      { id: "verify", title: "Verify it", status: "pending" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "I have started." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "A second round must not run." }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxRounds: 5,
+    // planFollowThrough intentionally omitted — the default.
+  };
+  const history: NormalizedMessage[] = [];
+  const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
+
+  const collected = collectingIo();
+  await runAgentTurn(collected.io, deps, history, "hello", { slateSession });
+
+  // ONE request: no synthetic follow-through was injected.
+  expect(requests).toHaveLength(1);
+  expect(
+    history.some((message) => message.provenance === "project" && message.content.includes("actionable items remain")),
+  ).toBe(false);
+  expect(history.some((message) => message.role === "user" && String(message.content).includes("[system]"))).toBe(false);
+  const said = collected.system.join("");
+  expect(said).toContain("[plan]");
+  expect(said).toContain("implement [in_progress]");
+  expect(said).toContain("verify [pending]");
 });
 
 test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {
@@ -3951,7 +3994,7 @@ test("REGRESSION: a plan published FOR APPROVAL ends the turn — the continuati
   expect(said).not.toContain("still has actionable items");
 });
 
-test("the control: a plan with real work left still gets the single follow-through round", async () => {
+test("the control: with planFollowThrough opted in, a plan with real work left still gets the single follow-through round", async () => {
   const dir = await tempSlateDir();
   const cwd = await tempProjectCwd();
   await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
@@ -3974,6 +4017,7 @@ test("the control: a plan with real work left still gets the single follow-throu
     tools: [],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    planFollowThrough: true,
   };
 
   await runAgentTurn(io, deps, [], "hello", { slateSession: { dir, cwd, opened: true } });
@@ -3982,9 +4026,54 @@ test("the control: a plan with real work left still gets the single follow-throu
   expect(system.join("")).toContain("Actionable items remain after the single follow-through");
 });
 
+test("without planFollowThrough opted in, a plan with real work left ends the turn on one round with a [plan] note, no nudge", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "t1", title: "Already done", status: "completed" },
+      { id: "t2", title: "Still to do", status: "pending" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "Still working." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "A second round must not run." }, { kind: "model_end" }],
+  ]);
+  const { io, system } = collectingIo();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+
+  await runAgentTurn(io, deps, [], "hello", { slateSession: { dir, cwd, opened: true } });
+
+  expect(requests).toHaveLength(1);
+  const said = system.join("");
+  expect(said).not.toContain("still has actionable items");
+  expect(said).toContain("[plan]");
+  expect(said).toContain("t2 [pending]");
+});
+
 test("the instruction teaches the agent the `proposed` vocabulary, or the status is unusable in practice", () => {
   const instruction = buildAgentSystemInstruction();
   expect(instruction).toContain("`proposed`");
   expect(instruction).toContain("END THE TURN");
   expect(instruction).toContain("FOR APPROVAL");
+});
+
+test("flow 347 T5 (AC2): the instruction no longer states or implies plan status decides when a turn may end", () => {
+  const instruction = buildAgentSystemInstruction();
+  // The regression this guards: "`proposed` never forces another round on
+  // its own" implies every OTHER status (pending/in_progress) does. The
+  // rewritten text must say plainly that the plan does not gate turn end.
+  expect(instruction).not.toContain("never forces");
+  expect(instruction).toMatch(/not what decides when a turn may end|does not decide when a turn may end/);
+  // `proposed`/END THE TURN/FOR APPROVAL still documented (previous test).
+  expect(instruction).toContain("`proposed`");
 });
