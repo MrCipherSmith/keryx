@@ -111,7 +111,7 @@ describe("AC10: an external-agent or MCP-server child environment never carries 
       // marker) — the sweep is over the PARENT's `KERYX_*`, not a promise
       // the result carries none at all, so this checks by key rather than by
       // "no KERYX_ prefix survives".
-      const externalEnv = buildExternalChildEnv({ parent, depth: 0 });
+      const externalEnv = buildExternalChildEnv({ parent, depth: 0, runtimeId: "claude-cli" });
       expect(externalEnv.KERYX_BUS_INSTANCE_ID).toBeUndefined();
       expect(externalEnv.KERYX_BUS_NAME).toBeUndefined();
       expect(externalEnv.KERYX_SESSION_LABEL).toBeUndefined();

@@ -535,6 +535,39 @@ test("finishWithBudgetSummary's wrap-up request also carries deps.reasoningEffor
   expect(stopMsg?.content).not.toContain("[system]");
 });
 
+test("AC6 (flow 352 audit): finishWithBudgetSummary's wrap-up request carries the TURN's real abort signal", async () => {
+  // Same no-progress trigger as the test above — the only thing this test
+  // adds is passing a real `signal` into `runAgentTurn` and checking that the
+  // wrap-up request `finishWithBudgetSummary` sends actually carries it.
+  // Before the fix, this call hardcoded `undefined` regardless of what the
+  // turn was given, so `wrapUpRequest.signal` was always `undefined` here.
+  const toolRound = [
+    { kind: "tool_call_start" as const, toolCallId: "c1", toolName: "get_cwd" },
+    { kind: "tool_call_end" as const, toolCallId: "c1", input: "{}" },
+    { kind: "model_end" as const },
+  ];
+  const { provider, requests } = scriptedProvider([
+    toolRound,
+    toolRound,
+    toolRound,
+    toolRound,
+    [{ kind: "text_delta", text: "wrap-up" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const turnSignal = new AbortController().signal;
+  await runAgentTurn(collectingIo().io, deps, [], "loop forever", { signal: turnSignal });
+  const wrapUpRequest = requests[requests.length - 1];
+  expect(wrapUpRequest?.tools).toBeUndefined();
+  expect(wrapUpRequest?.signal).toBe(turnSignal);
+});
+
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {
   const { provider } = scriptedProvider([
     [
@@ -3943,6 +3976,50 @@ test("T9 regression (code-verifier fix): a WaveExecutionError from a LATER wave 
   expect(toolMessages[1]).toBe("spawned:s2");
   expect(toolMessages[2]).toBe("spawned:s3");
   expect(toolMessages[3]).toContain("concurrent wave error");
+});
+
+test("AC6 (flow 352 audit): the CONCURRENT spawn batch forwards the turn's real abort signal to every child", async () => {
+  // Same 4-candidate concurrent-batch shape as the T9 regression test above
+  // (2+ candidates is what routes through `runConcurrentSpawnBatch` at all).
+  // Before the fix, `runConcurrentSpawnBatch`'s own `executeCall` invocation
+  // hardcoded the signal slot to `undefined`, so every concurrently spawned
+  // child's `invoke(input, ctx)` received `ctx.signal === undefined`
+  // regardless of what the turn was given — interrupting the parent turn
+  // never reached a concurrently spawned child, only a sequentially spawned
+  // one.
+  const receivedSignals: (AbortSignal | undefined)[] = [];
+  const spawnTool = delegateSpawnTool(async (input, ctx) => {
+    receivedSignals.push(ctx?.signal);
+    return { output: `spawned:${String(input.task)}`, isError: false };
+  });
+
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const { io } = collectingIoForSpawnTests();
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const turnSignal = new AbortController().signal;
+
+  await runAgentTurn(io, deps, [], "spawn two concurrently", { signal: turnSignal });
+
+  expect(receivedSignals).toHaveLength(2);
+  for (const received of receivedSignals) {
+    expect(received).toBe(turnSignal);
+  }
 });
 
 // ============================================================================

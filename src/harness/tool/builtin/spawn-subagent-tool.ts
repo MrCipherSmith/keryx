@@ -13,7 +13,7 @@ import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import type { InteractiveTool } from "./interactive-tools";
+import type { InteractiveTool, InteractiveToolContext } from "./interactive-tools";
 import { builtinReadOnlyTools } from "./interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
 import { slateWriteSeedTool } from "./slate-tool";
@@ -43,6 +43,7 @@ import {
   type SlateChildDispatch,
 } from "../../../session/slate";
 import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycle";
+import { composeAbortSignals } from "../../../lib/abort-compose";
 import { withFileLock } from "../../../lib/fs";
 import {
   buildTierMap,
@@ -141,7 +142,15 @@ export interface StructuredSubagentResult {
  * D2b consumer) can use this narrower type instead.
  */
 export interface SpawnSubagentTool extends InteractiveTool {
-  invoke: (input: Record<string, unknown>) => Promise<StructuredSubagentResult>;
+  // AC6 (flow 352 audit): `ctx` was dropped from this narrower signature —
+  // `InteractiveTool.invoke` itself always accepted a second parameter, but a
+  // function typed with FEWER parameters than its declared type is legal
+  // TypeScript (extra args are simply never passed), so this compiled clean
+  // while `commands/agent.ts`'s `tool.invoke(input, { signal, ... })` call
+  // silently discarded the `signal` it always sent. Restored so an aborted
+  // parent turn can actually reach the in-flight child (`composeAbortSignals`
+  // below).
+  invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<StructuredSubagentResult>;
 }
 
 /**
@@ -820,7 +829,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       },
       risk: "delegate",
     },
-    invoke: async (input): Promise<StructuredSubagentResult> => {
+    invoke: async (input, toolCtx): Promise<StructuredSubagentResult> => {
       const task = typeof input.task === "string" ? input.task.trim() : "";
       if (task.length === 0) {
         // Local input-validation failure — the child never spawns, so this is
@@ -1445,7 +1454,15 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
 
       let assistant = "";
       let closed = false;
-      const childAbort = new AbortController();
+      // AC6 (flow 352 audit): `internalAbort` is triggered by THIS function's
+      // own reasons (the deadline below, the catch block's cleanup) exactly
+      // as `childAbort` always was; `composed` additionally aborts when the
+      // PARENT turn does (`ctx.signal`, `commands/agent.ts`), so interrupting
+      // the parent reaches an in-flight child instead of leaving it running
+      // past the turn that spawned it. Same composition `deep-enrich.ts` uses
+      // for its own deadline-vs-caller-cancellation signal (`lib/abort-compose.ts`).
+      const internalAbort = new AbortController();
+      const composed = composeAbortSignals(toolCtx?.signal, internalAbort.signal);
       const io: AgentIO = {
         write: (s) => {
           assistant += s;
@@ -1728,7 +1745,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "direct, targeted lookup (exact file path, exact symbol) over a broad/guessed one, and fall " +
           "back to a different tool rather than repeating a failed call.\n\n" +
           "Return a concise summary of findings and any recommended next steps for the parent agent.";
-        const turn = runAgentTurn(io, childDeps, history, userLine, { signal: childAbort.signal });
+        const turn = runAgentTurn(io, childDeps, history, userLine, { signal: composed.signal });
         // D2b (flow 171, Phase D): the child's OWN `finishReason` (D2a,
         // `commands/agent.ts`) is only meaningful once `turn` has actually
         // settled on the "done" (not timed-out) path below — captured into
@@ -1750,23 +1767,30 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           }
           if (outcome === "timeout") {
             closed = true;
-            childAbort.abort();
+            internalAbort.abort();
             void turn.catch(() => {
               // abandoned turn; do not surface after the parent already timed out
             });
+            composed.dispose();
             releaseBudget();
             emitFleetEvent({ kind: "upsert", id: workerId, label, status: "failed", detail: "timeout", task });
             await foldChildSlateAndCleanup("incomplete");
             await fireSubagentStop("Timeout");
+            // AC3 (flow 352 audit): this is child-authored free text same as
+            // every other exit path's summary/submitted-result — an abandoned
+            // child can still have written instruction-shaped prose before the
+            // deadline hit — so it gets the same `foldChildSummary` quarantine
+            // pass those paths already use, not a raw pass-through.
             const partial = assistant.trim();
+            const foldedPartial = partial.length > 0 ? foldChildSummary(partial).text : "";
             return {
               status: "Timeout",
               output:
                 `subagent ${label} (${workerId}) timed out after ${deadlineMs}ms and was abandoned ` +
                 `(tighten or disable with ${ENV_SUBAGENT_TIMEOUT_MS})` +
-                (partial.length > 0 ? `\n--- partial output ---\n${boundSummary(partial)}` : ""),
+                (foldedPartial.length > 0 ? `\n--- partial output ---\n${boundSummary(foldedPartial)}` : ""),
               isError: true,
-              ...(partial.length > 0 ? { partial: boundSummary(partial) } : {}),
+              ...(foldedPartial.length > 0 ? { partial: boundSummary(foldedPartial) } : {}),
             };
           }
           // `turn` already settled ("done" branch above) — re-awaiting the same
@@ -1776,6 +1800,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           turnResult = await turn;
         }
         closed = true;
+        composed.dispose();
         releaseBudget();
         const raw =
           assistant.trim().length > 0
@@ -1845,7 +1870,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         };
       } catch (cause) {
         closed = true;
-        childAbort.abort();
+        internalAbort.abort();
+        composed.dispose();
         releaseBudget(); // a failed child must not hold the parent's budget either
         const msg = cause instanceof Error ? cause.message : String(cause);
         emitFleetEvent({

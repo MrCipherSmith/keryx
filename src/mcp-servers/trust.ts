@@ -49,6 +49,7 @@ export type McpTrustStore = { approvals?: Record<string, string> };
  * the command of an approved server invalidates it.
  */
 export function serverFingerprint(server: ResolvedMcpServer): string {
+  const { oauth } = server;
   const material = JSON.stringify({
     command: server.command ?? null,
     args: server.args ?? [],
@@ -69,6 +70,34 @@ export function serverFingerprint(server: ResolvedMcpServer): string {
     // an approval must not be invalidated by a reformat.
     headers: sortedKeys(server.headers),
     bearer_token_env_var: server.bearer_token_env_var ?? null,
+    // AC5 (flow 352 audit): the same class of hole the P1 comment above
+    // describes, one field over. `oauth` was validated since P0 (`config.ts`)
+    // but never hashed, so a committed `{"docs": {"url": "..."}}` a server
+    // could carry `oauth.clientId` changed in a later commit — a DIFFERENT
+    // app now authenticating through the operator's approval — with the
+    // fingerprint unchanged. `clientId` names which app authenticates,
+    // `scopes` names what it can do once it does, and `callbackPort` is
+    // where the authorization code is delivered: every one of the three is
+    // part of what "approved" actually authorizes, so all three are hashed.
+    //
+    // Included ONLY when the config declares an `oauth` block at all
+    // (`undefined` omits the key entirely, byte-identical to the material
+    // before this field existed) — a server that never had one keeps the
+    // exact fingerprint it always had, so this closes the oauth-tampering
+    // hole without forcing every already-approved, non-OAuth server to be
+    // re-approved.
+    ...(oauth === undefined
+      ? {}
+      : {
+          oauth:
+            oauth === false
+              ? false
+              : {
+                  clientId: oauth.clientId ?? null,
+                  scopes: [...(oauth.scopes ?? [])].sort(),
+                  callbackPort: oauth.callbackPort ?? null,
+                },
+        }),
   });
   return createHash("sha256").update(material).digest("hex").slice(0, 32);
 }

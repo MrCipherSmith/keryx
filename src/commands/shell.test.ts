@@ -122,7 +122,10 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell, shellCommand } from "./shell";
+import type { SignalShutdownParts } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, makeSignalShutdown, parseShellCliFlags, runShell, shellCommand } from "./shell";
+import type { BusClient } from "../bus/client";
+import type { SessionLeaseHandle } from "../session/lease";
 import { blockLabel } from "../lib/md-blocks";
 
 const NO_CAPS: ProviderCapabilities = {
@@ -1332,7 +1335,13 @@ describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wir
   // call, and reads notices via `takeNotices()` — see `shell.ts`'s own
   // comment there) — the replacement text is about as long as what it
   // replaced, but the doc comment explaining it pushed the target past 7200.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7600);
+  // Widened to 7800 for AC7 (flow 352 audit): `jobRegistryBox.current =
+  // jobRegistry;` plus its doc comment, inserted right after `jobRegistry`'s
+  // own declaration so the SIGINT/SIGTERM handler (`closeAndExit`, declared
+  // before this branch runs) can reach it too — see `shell.ts`'s own comment
+  // there and this file's dedicated "closeAndExit sweeps tracked background
+  // jobs" describe block below.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 7800);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(
@@ -1433,6 +1442,49 @@ describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-
 
   test("AgentDeps declares an optional sweepBackgroundJobs hook", () => {
     expect(agentSource).toContain("sweepBackgroundJobs?: () => Promise<void>;");
+  });
+});
+
+// --- AC7 (flow 352 audit) — the SIGINT/SIGTERM handler sweeps tracked
+// background jobs too, as EOF and `/exit` do, after the bus and lease are gone
+// and before the process exits.
+describe("AC7 (flow 352 audit) — makeSignalShutdown", () => {
+  test("leaves the bus, releases the lease, sweeps jobs, closes MCP and readline, then exits", async () => {
+    const order: string[] = [];
+    let exited: (code: number) => void = () => {};
+    const exitedWith = new Promise<number>((resolve) => { exited = resolve; });
+    const lease = { id: "lease" } as unknown as SessionLeaseHandle;
+    const parts: SignalShutdownParts = {
+      busBox: { current: { leave: () => order.push("bus") } as unknown as BusClient },
+      leaseBox: { current: lease },
+      jobRegistryBox: { current: { sweepAll: async () => { order.push("sweep"); } } },
+      closeMcp: async () => { order.push("mcp"); },
+      closeReadline: () => { order.push("readline"); },
+      releaseLease: (l) => { order.push(l === lease ? "lease" : "lease:wrong"); },
+      exit: (code) => { order.push("exit"); exited(code); },
+    };
+    makeSignalShutdown(parts, 130)();
+    expect(await exitedWith).toBe(130);
+    expect(order).toEqual(["bus", "lease", "sweep", "mcp", "readline", "exit"]);
+    expect(parts.busBox.current).toBeUndefined();
+    expect(parts.leaseBox.current).toBeUndefined();
+  });
+
+  test("a failing sweep still closes and exits", async () => {
+    const order: string[] = [];
+    let exited: (code: number) => void = () => {};
+    const exitedWith = new Promise<number>((resolve) => { exited = resolve; });
+    makeSignalShutdown({
+      busBox: { current: undefined },
+      leaseBox: { current: undefined },
+      jobRegistryBox: { current: { sweepAll: async () => { throw new Error("boom"); } } },
+      closeMcp: () => undefined,
+      closeReadline: () => { order.push("readline"); },
+      releaseLease: () => {},
+      exit: (code) => { order.push("exit"); exited(code); },
+    }, 143)();
+    expect(await exitedWith).toBe(143);
+    expect(order).toEqual(["readline", "exit"]);
   });
 });
 

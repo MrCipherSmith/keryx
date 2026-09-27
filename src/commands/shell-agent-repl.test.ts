@@ -8,6 +8,7 @@ import type { AgentDeps } from "./agent";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ShellSessionOpts } from "./shell-types";
 import type { BusClient } from "../bus/client";
+import type { SessionLeaseHandle } from "../session/lease";
 import { resolveBusRoot } from "../bus/paths";
 import { createPauseLease } from "../bus/pause";
 import { CI_ENV_VARS } from "../capability/external-agents";
@@ -725,6 +726,84 @@ describe("flow 173 AC7 — runAgentRepl sweeps background jobs on real session e
     await repl(["/new", "/exit"], { deps: fakeDeps({ sweepBackgroundJobs: async () => { swept += 1; } }) });
     // Exactly one sweep — from the trailing /exit, not from /new.
     expect(swept).toBe(1);
+  });
+});
+
+describe("AC7 (flow 352 audit) — a turn that throws out of runOperatorLine still releases the lease and leaves the bus", () => {
+  // Before the fix, `runOperatorLine`'s own rethrow (`catch (error) { turnError
+  // = ...; throw error; }`) propagated straight out of the `for (;;)` loop and
+  // out of `runAgentRepl` itself — neither `releaseLease()` nor `leaveBus()`
+  // (both defined further up, only ever called from the loop's deliberate EOF
+  // / `/exit` `return`s) ever ran. Real lease + real bus join, same
+  // `runningRepl`-style setup `flow 275 T8/F3` uses above, so this observes
+  // the ACTUAL `SessionLeaseHandle`/`BusClient` transition to
+  // released/left — not merely that some code path was reached.
+  let savedEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    savedEnv = {};
+    for (const key of BUS_ENV_KEYS) savedEnv[key] = process.env[key];
+    process.env.KERYX_DATA_DIR = path.join(root, "data");
+    delete process.env.KERYX_BUS;
+    delete process.env.KERYX_BUS_POLL_MS;
+    for (const key of CI_ENV_VARS) delete process.env[key];
+    writeFileSync(path.join(cwd, "README.md"), "x\n", "utf8");
+    git(cwd, "init", "-q", "-b", "main");
+    git(cwd, "add", ".");
+    git(cwd, "commit", "-q", "-m", "initial");
+  });
+
+  afterEach(() => {
+    for (const key of BUS_ENV_KEYS) {
+      if (savedEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = savedEnv[key];
+    }
+  });
+
+  test("a crashing turn still leaves the lease released and the bus joined-then-left, same as EOF/`/exit`", async () => {
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const q = lineQueue();
+    const out: string[] = [];
+
+    const donePromise = runAgentRepl(
+      q.lines,
+      { printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s) },
+      fakeDeps({
+        // Simplest reliable way to make `runOperatorLine` throw: this hook
+        // fires at the very start of every turn (see the SLATE-3a describe
+        // below), before any provider call — a provider-level failure is
+        // deliberately absorbed elsewhere in the round loop and never
+        // reaches `runOperatorLine`'s own catch/rethrow at all.
+        resetSubagentBudget: () => {
+          throw new Error("boom: simulated turn crash");
+        },
+      }),
+      fakePort(),
+      { cwd, enabled: true, leaseBox, busBox },
+      undefined,
+      undefined,
+      undefined,
+      path.join(root, "config"),
+    );
+
+    await waitUntil(() => busBox.current !== undefined, "bus join");
+    expect(leaseBox.current).toBeDefined();
+
+    q.push("hello");
+
+    let rejected: unknown;
+    try {
+      await donePromise;
+    } catch (cause) {
+      rejected = cause;
+    }
+    expect(rejected).toBeInstanceOf(Error);
+    expect((rejected as Error).message).toContain("boom: simulated turn crash");
+    // The assertion the whole fix is for: cleanup ran even though the loop
+    // never reached either deliberate `return`.
+    expect(leaseBox.current).toBeUndefined();
+    expect(busBox.current).toBeUndefined();
   });
 });
 

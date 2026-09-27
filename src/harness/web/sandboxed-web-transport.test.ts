@@ -82,3 +82,58 @@ test("search requests ask for browser-shaped headers; a fetched page does not", 
   // for by URL must not be requested as if a browser were loading it.
   expect(received[1]).not.toHaveProperty("browserHeaders");
 });
+
+test("AC2: a credential does not survive a cross-origin redirect", async () => {
+  const received: Record<string, unknown>[] = [];
+  const runner: WebWorkerRunner = {
+    run: async (request) => {
+      received.push(request as unknown as Record<string, unknown>);
+      if (received.length === 1) {
+        return { ok: true, value: { status: 302, location: "https://attacker.example/steal", contentType: "text/plain", body: "" } };
+      }
+      return { ok: true, value: { status: 200, contentType: "text/plain", body: "ok" } };
+    },
+  };
+  const transport = new SandboxedWebTransport({ lookup: async () => [{ address: publicAddress }], runner });
+
+  const result = await transport.request({
+    providerId: "tavily",
+    capability: "public-search",
+    url: "https://example.com/search?q=x",
+    method: "GET",
+    credential: { injection: "header", name: "Authorization", value: "Bearer secret-token" },
+  });
+
+  expect(result.ok).toBe(true);
+  expect(received).toHaveLength(2);
+  expect(received[0]).toHaveProperty("credential");
+  expect(received[1]).not.toHaveProperty("credential");
+  expect((received[1] as { hostname?: string }).hostname).toBe("attacker.example");
+});
+
+test("AC2: a same-origin redirect (path change only) still carries the credential", async () => {
+  const received: Record<string, unknown>[] = [];
+  const runner: WebWorkerRunner = {
+    run: async (request) => {
+      received.push(request as unknown as Record<string, unknown>);
+      if (received.length === 1) {
+        return { ok: true, value: { status: 302, location: "https://example.com/search/final?q=x", contentType: "text/plain", body: "" } };
+      }
+      return { ok: true, value: { status: 200, contentType: "text/plain", body: "ok" } };
+    },
+  };
+  const transport = new SandboxedWebTransport({ lookup: async () => [{ address: publicAddress }], runner });
+
+  const result = await transport.request({
+    providerId: "tavily",
+    capability: "public-search",
+    url: "https://example.com/search?q=x",
+    method: "GET",
+    credential: { injection: "header", name: "Authorization", value: "Bearer secret-token" },
+  });
+
+  expect(result.ok).toBe(true);
+  expect(received).toHaveLength(2);
+  expect(received[0]).toHaveProperty("credential");
+  expect(received[1]).toHaveProperty("credential");
+});

@@ -414,3 +414,25 @@ describe("the server's own env block", () => {
     expect(env[denied]).toBe("chosen");
   });
 });
+
+describe("AC4 (flow 352 audit): glued credential-shaped names with no underscore separator", () => {
+  test("PRIVATEKEY, REFRESHTOKEN, ACCESSTOKEN, APITOKEN and DBPASS are denied though none has an underscore", () => {
+    for (const name of ["PRIVATEKEY", "REFRESHTOKEN", "ACCESSTOKEN", "APITOKEN", "DBPASS"]) {
+      expect({ name, denied: isDeniedForMcpChild(name, "x") }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("ordinary variables the glued rule must not catch by sharing a prefix", () => {
+    // PATH/HOME/LANG: the toolchain basics copy-then-strip exists to protect.
+    // TOKENIZERS_PARALLELISM: a real, common non-secret (`transformers`'
+    // fork-safety flag) that a bare TOKEN substring would have caught.
+    for (const [name, value] of [
+      ["PATH", "/usr/bin"],
+      ["HOME", "/home/u"],
+      ["LANG", "en_US.UTF-8"],
+      ["TOKENIZERS_PARALLELISM", "true"],
+    ] as const) {
+      expect({ name, denied: isDeniedForMcpChild(name, value) }).toEqual({ name, denied: false });
+    }
+  });
+});

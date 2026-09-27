@@ -27,7 +27,7 @@ const PARENT: Record<string, string | undefined> = {
 };
 
 describe("buildExternalChildEnv", () => {
-  const env = buildExternalChildEnv({ parent: PARENT, depth: 1 });
+  const env = buildExternalChildEnv({ parent: PARENT, depth: 1, runtimeId: "claude-cli" });
 
   test("keeps ordinary variables the toolchain needs", () => {
     expect(env.PATH).toBe("/usr/bin");
@@ -97,7 +97,7 @@ describe("readExternalDepth", () => {
   });
 
   test("round-trips what buildExternalChildEnv wrote", () => {
-    const env = buildExternalChildEnv({ parent: {}, depth: 3 });
+    const env = buildExternalChildEnv({ parent: {}, depth: 3, runtimeId: "claude-cli" });
     expect(readExternalDepth(env)).toBe(3);
   });
 });
@@ -122,5 +122,85 @@ describe("canNestExternalChild is checked on entry, fail-closed", () => {
 
   test("a cap of zero forbids any external child at all", () => {
     expect(canNestExternalChild({}, 0).ok).toBe(false);
+  });
+});
+
+describe("AC1: buildExternalChildEnv strips credential-shaped variables the old by-name list missed", () => {
+  const LEAKY_PARENT: Record<string, string | undefined> = {
+    PATH: "/usr/bin",
+    HOME: "/home/op",
+    // Live agent sockets / credential-harvesting primitives (spawn-env.ts's
+    // MCP_ENV_DENY) — none of these was on EXTERNAL_ENV_DENY before AC1.
+    SSH_AUTH_SOCK: "/tmp/ssh-agent.sock",
+    GIT_ASKPASS: "/usr/bin/git-credential-helper",
+    SSH_ASKPASS: "/usr/bin/ssh-askpass",
+    // Credential pointers.
+    AWS_SHARED_CREDENTIALS_FILE: "/home/op/.aws/credentials",
+    GOOGLE_APPLICATION_CREDENTIALS: "/home/op/.gcp/sa.json",
+    KUBECONFIG: "/home/op/.kube/config",
+    NETRC: "/home/op/.netrc",
+    // Git-host tokens, caught by the generic TOKEN segment rather than by name.
+    GITHUB_TOKEN: "ghp_deadbeef",
+    GH_TOKEN: "ghp_deadbeef",
+    // Other providers' model keys.
+    OPENAI_API_KEY: "sk-openai-secret",
+    GEMINI_API_KEY: "gm-secret",
+    GOOGLE_API_KEY: "goog-secret",
+  };
+
+  test("a claude-cli child — which needs none of these — gets none of them", () => {
+    const env = buildExternalChildEnv({ parent: LEAKY_PARENT, depth: 0, runtimeId: "claude-cli" });
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/op");
+    for (const key of [
+      "SSH_AUTH_SOCK",
+      "GIT_ASKPASS",
+      "SSH_ASKPASS",
+      "AWS_SHARED_CREDENTIALS_FILE",
+      "GOOGLE_APPLICATION_CREDENTIALS",
+      "KUBECONFIG",
+      "NETRC",
+      "GITHUB_TOKEN",
+      "GH_TOKEN",
+      "OPENAI_API_KEY",
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY",
+    ]) {
+      expect(env).not.toHaveProperty(key);
+    }
+  });
+
+  test("a codex-cli child keeps its OWN key (OPENAI_API_KEY) but not the other provider's", () => {
+    const codexEnv = buildExternalChildEnv({ parent: LEAKY_PARENT, depth: 0, runtimeId: "codex-cli" });
+    expect(codexEnv.OPENAI_API_KEY).toBe("sk-openai-secret");
+    expect(codexEnv).not.toHaveProperty("GEMINI_API_KEY");
+    expect(codexEnv).not.toHaveProperty("GOOGLE_API_KEY");
+    // The harvesting primitives and pointers are not this agent's credential
+    // either way — still stripped.
+    expect(codexEnv).not.toHaveProperty("SSH_AUTH_SOCK");
+    expect(codexEnv).not.toHaveProperty("GITHUB_TOKEN");
+  });
+
+  test("both directions: a gemini-acp child keeps ITS keys and not codex's", () => {
+    const geminiEnv = buildExternalChildEnv({ parent: LEAKY_PARENT, depth: 0, runtimeId: "gemini-acp" });
+    expect(geminiEnv.GEMINI_API_KEY).toBe("gm-secret");
+    expect(geminiEnv.GOOGLE_API_KEY).toBe("goog-secret");
+    expect(geminiEnv).not.toHaveProperty("OPENAI_API_KEY");
+  });
+
+  test("an unrecognised runtimeId gets no exemption at all — fail closed", () => {
+    const env = buildExternalChildEnv({ parent: LEAKY_PARENT, depth: 0, runtimeId: "some-future-cli" });
+    expect(env).not.toHaveProperty("OPENAI_API_KEY");
+    expect(env).not.toHaveProperty("GEMINI_API_KEY");
+    expect(env).not.toHaveProperty("GOOGLE_API_KEY");
+  });
+
+  test("a value-shaped credential (inline userinfo) is stripped regardless of its name or the target", () => {
+    const env = buildExternalChildEnv({
+      parent: { ...LEAKY_PARENT, SOME_SERVICE_URL: "https://ghp_deadbeef@github.com/o/r.git" },
+      depth: 0,
+      runtimeId: "codex-cli",
+    });
+    expect(env).not.toHaveProperty("SOME_SERVICE_URL");
   });
 });

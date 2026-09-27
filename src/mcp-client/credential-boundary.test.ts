@@ -5,7 +5,10 @@
 //
 // The original package's D-01 evidence (`src/harness/external/env.test.ts`,
 // `src/harness/external/runtime.test.ts`) proves `buildExternalChildEnv`
-// strips every credential-shaped variable (`ANTHROPIC_API_KEY` etc.) from a
+// strips every credential-shaped variable a spawned child does not itself
+// authenticate with — `ANTHROPIC_API_KEY` etc. unconditionally, every OTHER
+// provider's key unless the target is the one runtime that reads it (AC1,
+// flow 352: `EXTERNAL_RUNTIME_CREDENTIAL_ALLOW` in `env.ts`) — from a
 // spawned child's environment. This module (`src/mcp-client/`,
 // `src/harness/external/supervise-mcp.ts`) does NOT build its own child
 // environment — it receives one via `McpSpawnOptions.env`

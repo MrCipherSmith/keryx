@@ -227,7 +227,11 @@ the prompt as a diff, since that worktree does not contain it; on overflow the
 diff is what gets cut — never the directive, never the task — and the cut is
 stated inside the prompt. The environment is copied from the parent and then
 stripped: `ANTHROPIC_*`, `CLAUDECODE`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the
-whole `CLAUDE_CODE_*` and `KERYX_*` namespaces, plus a nesting-depth marker added
+whole `CLAUDE_CODE_*` and `KERYX_*` namespaces, then every credential-shaped
+variable by the same shape rules an MCP server child gets (`SSH_AUTH_SOCK`,
+`GIT_ASKPASS`, cloud credential files, `GITHUB_TOKEN`, other providers' keys) —
+except the key the target CLI signs in with (`OPENAI_API_KEY` for Codex,
+`GEMINI_API_KEY`/`GOOGLE_API_KEY` for Gemini) — plus a nesting-depth marker added
 afterwards and honoured **on entry**, so a keryx started from inside an external
 child refuses to start another. The tool roster is restricted: `claude` runs with
 `--tools Read Grep Glob`, an allow-list over the built-in roster rather than a

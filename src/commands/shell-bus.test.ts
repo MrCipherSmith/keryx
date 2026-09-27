@@ -716,16 +716,32 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     expect(slateIndex).toBeGreaterThan(joinIndex);
   });
 
-  test("/exit and end-of-input both leave the bus before releasing the lease", () => {
-    const exitIndex = replBody.indexOf('if (command === "/exit" || command === "/quit") {');
-    const exitBlock = replBody.slice(exitIndex, exitIndex + 400);
-    expect(exitBlock.indexOf("leaveBus()")).toBeGreaterThanOrEqual(0);
-    expect(exitBlock.indexOf("leaveBus()")).toBeLessThan(exitBlock.indexOf("releaseLease()"));
+  // AC7 (flow 352 audit): `leaveBus()`/`releaseLease()` no longer sit inline
+  // at each deliberate `return` — they moved into the ONE `finally` wrapping
+  // the whole loop, so a turn that THROWS out of `runOperatorLine` (not only
+  // a deliberate `/exit`/EOF `return`) reaches them too. This test now checks
+  // the same ordering guarantee (bus left before the lease is released) at
+  // its new single location, and that both `/exit` and EOF still return from
+  // INSIDE the try that finally protects.
+  test("/exit and end-of-input both return from inside the loop's try, whose one finally leaves the bus before releasing the lease", () => {
+    const tryIndex = replBody.indexOf("  try {\n    for (;;) {");
+    // Anchored on its own doc comment, not a bare `"} finally {"` — the loop
+    // body itself contains an EARLIER, unrelated inner `try/finally` (the
+    // task-notification completion branch's spinner/busWorking cleanup).
+    const finallyIndex = replBody.indexOf("} finally {\n    // AC7:", tryIndex);
+    expect(tryIndex).toBeGreaterThan(0);
+    expect(finallyIndex).toBeGreaterThan(tryIndex);
 
+    const finallyBlock = replBody.slice(finallyIndex, finallyIndex + 200);
+    expect(finallyBlock.indexOf("leaveBus();")).toBeGreaterThanOrEqual(0);
+    expect(finallyBlock.indexOf("leaveBus();")).toBeLessThan(finallyBlock.indexOf("releaseLease();"));
+
+    const exitIndex = replBody.indexOf('if (command === "/exit" || command === "/quit") {');
     const eofIndex = replBody.indexOf("SLATE-5 close trigger: shell exit (end of input");
-    const eofBlock = replBody.slice(eofIndex, eofIndex + 400);
-    expect(eofBlock.indexOf("leaveBus()")).toBeGreaterThanOrEqual(0);
-    expect(eofBlock.indexOf("leaveBus()")).toBeLessThan(eofBlock.indexOf("releaseLease()"));
+    expect(exitIndex).toBeGreaterThan(tryIndex);
+    expect(exitIndex).toBeLessThan(finallyIndex);
+    expect(eofIndex).toBeGreaterThan(tryIndex);
+    expect(eofIndex).toBeLessThan(finallyIndex);
   });
 
   test("/new calls bus.setSession before announcing the new session", () => {

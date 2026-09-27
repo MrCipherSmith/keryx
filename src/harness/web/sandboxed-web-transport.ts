@@ -146,11 +146,22 @@ export class SandboxedWebTransport {
     }
     if (!parsed.ok) return parsed;
     let url = parsed.value;
+    // AC2: the credential is scoped to the ORIGIN of the request the caller
+    // actually made, not to wherever a 3xx ends up pointing. Without this, a
+    // search provider's own API key (or a caller-supplied header/json-body
+    // credential) rides along on every hop, so a redirect to an attacker- or
+    // third-party-controlled host receives it. Dropped rather than refused:
+    // the redirect itself is still followed (search/content behaviour is
+    // unaffected for the common same-origin case, e.g. bare domain to `www.`),
+    // it is only the secret that stops crossing an origin boundary — the same
+    // choice browsers make for `Authorization` on a cross-origin redirect.
+    const originalOrigin = url.origin;
     for (let redirects = 0; redirects <= WEB_MAX_REDIRECTS; redirects += 1) {
       const target = request.localOnly === true
         ? { ok: true as const, value: { url: url.toString(), hostname: url.hostname, address: url.hostname === "::1" || url.hostname === "[::1]" ? "::1" : "127.0.0.1" } }
         : await validatePublicTarget(url, this.lookup);
       if (!target.ok) return target;
+      const sameOrigin = url.origin === originalOrigin;
       const worker = await this.runner.run(
         {
           url: target.value.url,
@@ -158,7 +169,7 @@ export class SandboxedWebTransport {
           address: target.value.address,
           method: request.method,
           ...(request.body !== undefined ? { body: request.body } : {}),
-          ...(request.credential !== undefined ? { credential: request.credential } : {}),
+          ...(request.credential !== undefined && sameOrigin ? { credential: request.credential } : {}),
           ...(request.browserHeaders === true ? { browserHeaders: true } : {}),
         }, request.signal,
       );
