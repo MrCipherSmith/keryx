@@ -209,3 +209,29 @@ fleet event detail: budget-exhausted
 ## Review round 3 (T18) — review-r03.md, and the loop bound
 
 All six round-2 targets fixed; two new minors in one call site (R3-1 raw error text inside a nonce-bearing nudge; R3-2 unredacted error text, pre-existing) + two infos. Three review/fix attempts are used, so no fourth full round: re-planned as a narrow task T19 with orchestrator verification (diff read, targeted tests, full suite vs base, re-run of the reviewer's reproduction). Approved by the user.
+- 2026-09-27T11:08:32.533Z - task-done: T18: Review round 3: verify r02 fixes
+- 2026-09-27T11:08:32.889Z - task-added: T19: Round-3 fixes: repeated-failure hint quotes no raw error (R3-1), uses redacted output (R3-2), scrub hook context and anchors (R3-3), ACP comments + nonce map pruning (R3-4)
+- 2026-09-27T11:08:33.265Z - task-added: T20: Verify T19: diff read, targeted tests, full suite vs base, re-run the R3-1 reproduction
+- 2026-09-27T11:08:33.618Z - task-attempt: T19: started (attempt 1) — 347-T19
+- 2026-09-27T11:16:51.818Z - task-done: T19: Round-3 fixes: repeated-failure hint quotes no raw error (R3-1), uses redacted output (R3-2), scrub hook context and anchors (R3-3), ACP comments + nonce map pruning (R3-4)
+- 2026-09-27T11:16:52.114Z - task-attempt: T20: started (attempt 1) — 347-T20 orchestrator verification
+
+## T19 accepted (DONE_WITH_CONCERNS) — 9caef734
+
+- R3-1/R3-2: `buildRepeatedFailureHint(name, nonce)` quotes no tool output; tool name through `sanitizeNudgeToolName` (`[A-Za-z0-9_.:-]`, ≤64, one line). R3-3: hook `additionalContext` and both anchors pushes scrubbed. R3-4: ACP comments fixed; no per-session close exists in keryx ACP, so the nonce map lives for the connection (same as `shellHooksBySession`).
+- Worker verified each new test fails with its fix reverted.
+
+## T20 verification (orchestrator)
+
+- Diff read: +34/-16 in agent.ts, narrow.
+- Reproduction re-run: the reviewer's `scratchpad/r3/nonce.ts` targets the removed 3-argument signature, so an adapted `nonce-v2.ts` injects the newline instruction through the only remaining input (the tool name): hint has no newline, no injected text, no bracket/backtick — `use_tool__The_keryx_shell_…`.
+- Targeted: 484 pass / 0 fail; typecheck + lint clean.
+- `test:core` at 9caef734: 17749 pass / 239 fail vs base 17710 / 238. The one extra failure, "actual CLI help and errors exit without credentials or Keryx file writes", hit the 5000 ms bun timeout under full-suite load (5003.86 ms); it passed in the four previous full runs (base + three branch runs) and passes 3/3 alone, with equal wall time on branch and base (~2.9 s each). Load-induced flake, not a regression.
+
+## Residual risks and follow-ups (for the next flow)
+
+- F-013: a declined approval still counts as an executed call for the toolless-reprompt suppression.
+- SEC2-3: `cwd` is verified once at spawn (check-then-use); needs write access to a worktree parent.
+- The "Tool loop stopped" nudge quotes up to 80 chars of each call's model-authored input (no tool output).
+- Nonce not persisted: a resumed session treats older nudges as content.
+- Deferred with D/E: F-011 stop-strategy instead of `subagentBudget` branches, F-024 split agent.ts, F-020, F-021; optional provider-port `toolChoice` (F-014).
