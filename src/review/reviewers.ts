@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath } from "../gdskills/catalog";
+import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath, packageRelativePath } from "../gdskills/catalog";
 import { hashOriginContent, resolveOriginPath } from "../gdskills/project-skills";
 import { unresolvedRuleReferences } from "../gdskills/rule-references";
 import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
@@ -305,24 +305,38 @@ async function projectInstalledReviewers(bundledRoot: string): Promise<BundledRe
 }
 
 /**
+ * Injectable half of `collectReviewers` (flow 347 T15 / F-004).
+ *
+ * Real callers never pass this: `collectReviewers` defaults it to the real
+ * `bundledSkillMarkdownPath`, so behaviour is unchanged. Tests that need to
+ * force `bundledSource: "not-found"` — the fail-closed exit `runReviewers`
+ * signals with `process.exitCode = 1` — inject a lookup that always returns
+ * `undefined` instead, without deleting real files out of the keryx package
+ * under test.
+ */
+export type CollectReviewersDeps = {
+  bundledSkillMarkdownPath?: (category: string, name: string) => string | undefined;
+};
+
+/**
  * Bundled reviewers read from the keryx PACKAGE's own bundled skills — the
  * fallback for a project whose `.metaproject/skills/gdskills/review` was
  * never installed (e.g. a review worktree carrying only `data/`/`reviews/`).
  * Reuses `bundledSkillMarkdownPath`, the same source/packaged two-candidate
- * resolver `catalog.ts` and `install.ts` already use for this exact tree —
- * no new path scheme.
+ * resolver `catalog.ts` already uses for this exact tree — no new path
+ * scheme. (`install.ts` does not share this resolver: it renders a bundled
+ * skill's SKILL.md from its `BundledSkill` entry rather than reading a file.)
  */
-async function packageBundledReviewers(): Promise<BundledReviewer[]> {
+async function packageBundledReviewers(deps: CollectReviewersDeps = {}): Promise<BundledReviewer[]> {
+  const lookup = deps.bundledSkillMarkdownPath ?? bundledSkillMarkdownPath;
   const names = BUNDLED_GDSKILLS.filter((entry) => entry.category === "review")
     .map((entry) => entry.name)
     .sort();
   const found: BundledReviewer[] = [];
   for (const name of names) {
-    const file = bundledSkillMarkdownPath("review", name);
+    const file = lookup("review", name);
     if (file === undefined) continue;
-    found.push(
-      await bundledReviewerFromFile(name, file, path.posix.join("src", "gdskills", "bundled", "skills", "review", name)),
-    );
+    found.push(await bundledReviewerFromFile(name, file, packageRelativePath(path.dirname(file))));
   }
   return found;
 }
@@ -335,7 +349,7 @@ async function packageBundledReviewers(): Promise<BundledReviewer[]> {
  * absent and the keryx package's own bundled review skills were used
  * instead, and `not-found` when neither exists — see `BundledReviewerSource`.
  */
-export async function collectReviewers(projectRoot: string): Promise<ReviewerInventory> {
+export async function collectReviewers(projectRoot: string, deps: CollectReviewersDeps = {}): Promise<ReviewerInventory> {
   const bundledRoot = path.join(projectRoot, ".metaproject", "skills", "gdskills", "review");
   let bundled: BundledReviewer[];
   let bundledSource: BundledReviewerSource;
@@ -343,7 +357,7 @@ export async function collectReviewers(projectRoot: string): Promise<ReviewerInv
     bundled = await projectInstalledReviewers(bundledRoot);
     bundledSource = "project";
   } else {
-    bundled = await packageBundledReviewers();
+    bundled = await packageBundledReviewers(deps);
     bundledSource = bundled.length > 0 ? "package" : "not-found";
   }
 
@@ -386,11 +400,11 @@ function bundledSourceNote(source: BundledReviewerSource): string {
     case "project":
       return "this project's installed reviewers (.metaproject/skills/gdskills/review)";
     case "package":
-      return "keryx's bundled reviewers — .metaproject/skills/gdskills/review is absent in this "
-        + "project, so the package's own review skills were used instead";
+      return "keryx's bundled reviewers — .metaproject/skills/gdskills/review is absent in this " +
+        "project, so the package's own review skills were used instead";
     case "not-found":
-      return "not found — no .metaproject/skills/gdskills/review directory in this project, and "
-        + "the keryx package's bundled review skills could not be located either";
+      return "not found — no .metaproject/skills/gdskills/review directory in this project, and " +
+        "the keryx package's bundled review skills could not be located either";
   }
 }
 

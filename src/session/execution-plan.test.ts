@@ -224,7 +224,7 @@ test("updateExecutionPlan preserves ids, supports every terminal state, and reje
 
 // --- flow 347 T5 (AC3): renderExecutionPlanSnapshot leads with the active item ---
 
-test("renderExecutionPlanSnapshot orders in_progress, then blocked, pending/proposed, and folds completed/skipped into a count", () => {
+test("renderExecutionPlanSnapshot orders in_progress, then blocked, then pending, then proposed, and folds completed/skipped into a count", () => {
   const plan: ExecutionPlan = {
     revision: 5,
     items: [
@@ -240,12 +240,12 @@ test("renderExecutionPlanSnapshot orders in_progress, then blocked, pending/prop
   const snapshot = renderExecutionPlanSnapshot(plan);
   expect(snapshot).toBeDefined();
   const lines = (snapshot as string).split("\n");
-  // in_progress leads, then blocked, then pending/proposed in original order.
+  // in_progress leads, then blocked, then all pending (in original order), then proposed.
   expect(lines[1]).toContain("active [in_progress]");
   expect(lines[2]).toContain("blocked1 [blocked]");
   expect(lines[3]).toContain("pending1 [pending]");
-  expect(lines[4]).toContain("proposed1 [proposed]");
-  expect(lines[5]).toContain("pending2 [pending]");
+  expect(lines[4]).toContain("pending2 [pending]");
+  expect(lines[5]).toContain("proposed1 [proposed]");
   // completed/skipped folded into one trailing count line, not listed individually.
   expect(snapshot).not.toContain("done1");
   expect(snapshot).not.toContain("skipped1");

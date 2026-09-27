@@ -57,6 +57,16 @@ describe("collectReviewers", () => {
     }
   });
 
+  test("a package lookup that finds nothing yields `bundledSource: \"not-found\"` (flow 347 T15 / F-004)", async () => {
+    // The synthetic-object test above (F-004's own regression note) covers the
+    // pure renderer only. This drives the real fallback path through the
+    // injectable `bundledSkillMarkdownPath` dependency, without requiring the
+    // keryx package itself to ship zero bundled review skills.
+    const inventory = await collectReviewers(cwd, { bundledSkillMarkdownPath: () => undefined });
+    expect(inventory.bundledSource).toBe("not-found");
+    expect(inventory.bundled).toEqual([]);
+  });
+
   test("an existing but EMPTY project review directory is reported as `project`, not `package`", async () => {
     // A minimal install profile can legitimately install zero review skills.
     // That is a different fact from the directory never having been created,
@@ -187,11 +197,10 @@ describe("renderReviewerInventoryMarkdown", () => {
     expect(rendered).toContain("does not make the reviewer wrong");
   });
 
-  // Flow 347 T9, AC7: a synthetic `not-found` inventory, since triggering the
-  // real fallback-to-nothing case would require the keryx package itself to
-  // ship no bundled review skills — not reproducible against this checkout.
-  // `renderReviewerInventoryMarkdown` is a pure function, so the source can be
-  // asserted directly without going through `collectReviewers`.
+  // Flow 347 T9, AC7: a synthetic `not-found` inventory drives the pure
+  // renderer directly. The real fallback-to-nothing path (via the injectable
+  // `bundledSkillMarkdownPath` dependency, flow 347 T15 / F-004) is covered
+  // separately above and, at the command layer, in `review.test.ts`.
   test("a `not-found` bundled source says so in text mode, rather than reading as an ordinary empty list", () => {
     const rendered = renderReviewerInventoryMarkdown({
       bundled: [],

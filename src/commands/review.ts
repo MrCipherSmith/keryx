@@ -29,7 +29,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
-import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
+import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
 // it needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
@@ -2796,9 +2796,17 @@ async function runLoop(args: string[]): Promise<void> {
  * only answer to "who can review", which meant the answer could only ever be
  * "whoever keryx ships".
  */
-async function runReviewers(args: string[]): Promise<void> {
+/**
+ * Exported (only) for `review.test.ts` (flow 347 T15 / F-004): the `deps`
+ * parameter lets a test force `bundledSource: "not-found"` — the fail-closed
+ * exit below — by injecting a package lookup that finds nothing, without
+ * deleting real bundled-skill files out from under the rest of the suite.
+ * `reviewCommand`'s own dispatch never passes it, so real CLI behaviour is
+ * unchanged.
+ */
+export async function runReviewers(args: string[], deps: CollectReviewersDeps = {}): Promise<void> {
   rejectUnknownFlags(args, REVIEWERS_FLAGS, "reviewers");
-  const inventory = await collectReviewers(process.cwd());
+  const inventory = await collectReviewers(process.cwd(), deps);
 
   if (args.includes("--json")) {
     console.log(JSON.stringify(inventory, null, 2));

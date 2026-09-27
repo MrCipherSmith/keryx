@@ -648,6 +648,21 @@ export function bundledSkillMarkdownPath(category: string, name: string): string
 }
 
 /**
+ * A resolved keryx-package file (e.g. from `bundledSkillMarkdownPath`), shown
+ * relative to the package root instead of as an absolute path.
+ *
+ * `here` (this module's directory) is always `<package root>/src/gdskills` or
+ * `<package root>/dist/gdskills` — one level up from the root either way — so
+ * `path.join(here, "..", "..")` is the package root in both the source and
+ * built layouts `bundledSkillMarkdownPath` resolves against.
+ */
+export function packageRelativePath(file: string): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const packageRoot = path.join(here, "..", "..");
+  return path.relative(packageRoot, file).split(path.sep).join("/");
+}
+
+/**
  * A file-backed skill's routing fields, parsed the way `skills_catalog` and
  * `bundled-eval` parse them (`parseSkillFrontmatter`). Throws rather than
  * degrading: a skill routed on an empty description is the defect this exists

@@ -231,19 +231,20 @@ export function executionPlanApprovalItems(plan: ExecutionPlan | undefined): Exe
  * see is whatever is ACTIVE or blocking progress, so the non-finished items
  * are surfaced first, ordered by how much they demand attention:
  * `in_progress` (the one thing actually happening right now), then
- * `blocked` (needs unsticking), then `pending`/`proposed` (queued) — stable
- * within a status (original plan order preserved via a stable sort). Finished
- * work (`completed`/`skipped`) is folded into a single trailing count line
- * instead of eating a row for a status nobody needs to act on. `maxItems`
- * still caps only the listed (non-finished) rows, same contract as before.
+ * `blocked` (needs unsticking), then `pending` (queued, actionable), then
+ * `proposed` (queued, awaiting approval) — stable within a status (original
+ * plan order preserved via a stable sort). Finished work
+ * (`completed`/`skipped`) is folded into a single trailing count line instead
+ * of eating a row for a status nobody needs to act on. `maxItems` still caps
+ * only the listed (non-finished) rows, same contract as before.
  */
 const SNAPSHOT_STATUS_RANK: Record<ExecutionPlanStatus, number> = {
   in_progress: 0,
   blocked: 1,
   pending: 2,
-  proposed: 2,
-  completed: 3,
-  skipped: 3,
+  proposed: 3,
+  completed: 4,
+  skipped: 4,
 };
 
 export function renderExecutionPlanSnapshot(plan: ExecutionPlan | undefined, maxItems = 7): string | undefined {

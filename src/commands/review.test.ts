@@ -13,7 +13,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reviewCommand } from "./review";
+import { reviewCommand, runReviewers } from "./review";
 import type { StructuredReviewFinding } from "../review/types";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
@@ -1317,5 +1317,29 @@ test("`review reviewers` reports `project` as the source once the project's own 
   expect(process.exitCode).toBe(0);
   const parsed = JSON.parse(logs.join("\n"));
   expect(parsed.bundledSource).toBe("project");
+  expect(parsed.bundled).toEqual([]);
+});
+
+// Flow 347 T15 / F-004: the only prior `not-found` coverage exercised the pure
+// renderer (`reviewers.test.ts`), so neither the fail-closed `process.exitCode
+// = 1` nor the `--json` shape of a `not-found` inventory was ever driven
+// through the command itself — the exact exit the incident needs to hold so
+// an agent reading "no reviewers" cannot mistake it for success. `runReviewers`
+// takes the package lookup as an injectable dependency (flow 347 T15) purely
+// so this can force the real fallback-to-nothing path without deleting files
+// out of the keryx package the rest of the suite depends on.
+test("`review reviewers` exits 1 on a `not-found` bundled source, in text mode", async () => {
+  await runReviewers([], { bundledSkillMarkdownPath: () => undefined });
+  expect(process.exitCode).toBe(1);
+  const output = logs.join("\n");
+  expect(output).toContain("source: not-found");
+  expect(output).toContain("not found");
+});
+
+test("`review reviewers --json` exits 1 and reports `bundledSource: \"not-found\"`", async () => {
+  await runReviewers(["--json"], { bundledSkillMarkdownPath: () => undefined });
+  expect(process.exitCode).toBe(1);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("not-found");
   expect(parsed.bundled).toEqual([]);
 });

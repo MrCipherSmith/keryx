@@ -59,8 +59,9 @@ conditional step never runs, it is `skipped` — never absent.
    plan build, after the Flow's task list exists in Phase 1, after
    `review-orchestrator` fixes its scope and dispatch in Step 6. Not at the end.
    For `review-orchestrator` that is the ONLY publication: nothing before Step 6,
-   then all fifteen ids at once — steps 0–5 that ran as `completed`, the ones
-   that did not as `skipped`.
+   then all fifteen ids at once — of steps 0–5, the ones that ran are
+   `completed` and the ones that did NOT run are `skipped`; steps 6–14 are
+   `pending` (or `in_progress` for whichever is starting right now).
 2. **`proposed` for a plan that is awaiting the operator.** Where an orchestrator
    stops to ask — `job-orchestrator` 1.3's "Proceed? (yes / adjust …)" and
    `flow-orchestrator` Phase 4's completion choice — the items are `proposed`
