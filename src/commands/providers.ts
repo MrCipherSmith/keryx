@@ -1295,8 +1295,16 @@ export interface ProvidersCommandDeps {
  */
 export async function providersCommand(args: string[], deps: ProvidersCommandDeps = {}): Promise<void> {
   const command = args[0];
-  if (!command || command === "--help" || command === "-h") {
+  if (command === "--help" || command === "-h") {
     printProvidersHelp();
+    return;
+  }
+  if (!command) {
+    // Flow 353 AC7: bare `keryx providers` prints the status summary, not
+    // usage — the same split `keryx mcp`/`keryx dash` already make between
+    // "no verb at all" (run the obvious default) and "asked for --help"
+    // (print usage). `providers --help` above is unchanged.
+    await runProvidersStatus([], deps);
     return;
   }
   if (command === "list") {

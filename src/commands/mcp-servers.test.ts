@@ -215,6 +215,52 @@ describe("list", () => {
     expect(result.code).toBe(1);
     expect(result.err).toContain("config problem");
   });
+
+  // Flow 353 AC4: a malformed FOREIGN config (e.g. `~/.cursor/mcp.json`,
+  // simulated here with the project-local Cursor compat file so the test
+  // stays isolated from the real home) must warn, not block — `keryx mcp
+  // list` still exits 0 when keryx's own config is fine. The native-config
+  // test just above (still exit 1) is unaffected by this change.
+  test("a malformed FOREIGN config (Cursor) is a warning, not a blocking exit code", async () => {
+    const { run, projectRoot } = harness();
+    mkdirSync(path.join(projectRoot, ".cursor"), { recursive: true });
+    writeFileSync(path.join(projectRoot, ".cursor", "mcp.json"), "{ not valid json");
+
+    const result = await run("list", []);
+    expect(result.code).toBe(0);
+    expect(result.err).toContain("warnings:");
+    expect(result.err).toContain(".cursor");
+    expect(result.err).not.toContain("config problem");
+  });
+
+  test("a malformed FOREIGN config, --json: reported under `warnings`, `problems` stays empty, exit 0", async () => {
+    const { run, projectRoot } = harness();
+    mkdirSync(path.join(projectRoot, ".cursor"), { recursive: true });
+    writeFileSync(path.join(projectRoot, ".cursor", "mcp.json"), "{ not valid json");
+
+    const result = await run("list", ["--json"]);
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.out) as {
+      problems: Array<{ file: string; message: string }>;
+      warnings: Array<{ file: string; message: string }>;
+    };
+    expect(parsed.problems).toEqual([]);
+    expect(parsed.warnings.length).toBe(1);
+    expect(parsed.warnings[0]?.file).toContain(".cursor");
+  });
+
+  test("the project's OWN config being unreadable still exits 1, even alongside a foreign warning", async () => {
+    const { run, projectRoot } = harness();
+    mkdirSync(path.join(projectRoot, ".keryx"), { recursive: true });
+    writeFileSync(path.join(projectRoot, ".keryx", "mcp-servers.json"), "{ broken");
+    mkdirSync(path.join(projectRoot, ".cursor"), { recursive: true });
+    writeFileSync(path.join(projectRoot, ".cursor", "mcp.json"), "{ also broken");
+
+    const result = await run("list", []);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("config problem");
+    expect(result.err).toContain("warnings:");
+  });
 });
 
 describe("remove", () => {

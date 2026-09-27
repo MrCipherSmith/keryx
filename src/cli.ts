@@ -128,6 +128,8 @@ import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { helpCommand } from "./commands/help";
+import { doctorCommand } from "./commands/doctor";
+import { formatUnknownCommandMessage } from "./lib/suggest";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -153,6 +155,8 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   // Flow 303 (AC10): grouped command help by task. `--help`/`-h`/bare `keryx`
   // keep printing the flat USAGE_BODY below (AC5) — this is a SEPARATE verb.
   help: helpCommand,
+  // Flow 353 (AC1): one page of ok/warn/fail checks, `--json` machine-readable.
+  doctor: doctorCommand,
   status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
@@ -269,8 +273,19 @@ export async function main(): Promise<void> {
     return;
   }
 
-  console.error(`Unknown command: ${command}`);
-  printHelp();
+  // Flow 353 AC3: one line, on stderr, never the ~9.5 KB flat usage
+  // (`printHelp` above) — `docs/requirements/backlog.md` item 4 measured
+  // that usage dump landing on STDOUT on an error path, which this also
+  // fixes by not printing it here at all. `__sandbox-net-forward` is
+  // excluded from suggestions: it is an internal-only route
+  // (`CLI_ROUTES`'s own comment) no operator ever types, so it must never
+  // be offered as what they meant to type.
+  console.error(
+    formatUnknownCommandMessage(
+      command,
+      Object.keys(CLI_ROUTES).filter((name) => name !== "__sandbox-net-forward"),
+    ),
+  );
   process.exitCode = 1;
 }
 
@@ -282,6 +297,7 @@ export async function main(): Promise<void> {
 export const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
+  keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
@@ -461,6 +477,7 @@ export const USAGE_BODY = `Usage:
 
 Commands:
   help      Grouped command help by task: every verb, in nine onboarding-ordered groups
+  doctor    One-page health check with a fix hint per line; --json for {checks:[...]}
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions

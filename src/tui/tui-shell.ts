@@ -50,6 +50,7 @@ import {
 import { runModelTurn } from "../harness/provider/single-turn";
 import { buildNextStepPrompt, NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
+import { buildDoctorReport, formatDoctorReport } from "../commands/doctor";
 import {
   closeSlateSession,
   detachSlateSession,
@@ -8029,6 +8030,16 @@ export async function launchTuiAgentShell(opts: {
               chrome.showToast(`Theme: ${themeLabel(id)}`);
             },
           });
+          return;
+        }
+        if (command.name === "/doctor") {
+          // Flow 353 (AC2): same aggregate report `keryx doctor` prints,
+          // inside the session — one call into the shared builder, never a
+          // second implementation of any one check.
+          void (async () => {
+            const report = await buildDoctorReport(sessionCwd);
+            io.onSystem?.(`${formatDoctorReport(report)}\n`);
+          })();
           return;
         }
         if (command.name === "/game") {

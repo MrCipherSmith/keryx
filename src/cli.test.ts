@@ -175,6 +175,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx external status [--json]              Effective on/off, source, Jev credential availability, and what is blocked right now\n",
     "  keryx external list [--json]                 The effective block list (providers, model patterns) and where it came from\n",
     "  external  Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on, off, status, list)\n",
+    // Flow 353 (W5, AC1): the new `keryx doctor` verb — brand-new, so both a
+    // USAGE_BODY line and a Commands: summary row, same shape as flow 305's
+    // `routing`/flow 346's `external` above.
+    "  keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness\n",
+    "  doctor    One-page health check with a fix hint per line; --json for {checks:[...]}\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -239,6 +244,30 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
   );
 });
 
+// Flow 353 AC3: an unknown top-level command used to print `Unknown
+// command: <x>` to stderr and then dump the ~9.5 KB flat usage
+// (`docs/requirements/backlog.md` item 4) to stdout. One line, on stderr,
+// exit 1, never the usage dump; a close typo gets a "did you mean".
+describe("keryx <unknown command> (AC3)", () => {
+  test("`keryx docto` suggests `doctor`, one line, exit 1, nothing on stdout", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunExpectingFailure([cliPath, "docto"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: docto. Did you mean: doctor? Run `keryx --help` for the list.");
+  });
+
+  test("a nonsense word gets no suggestion, but still one line and exit 1", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunExpectingFailure([cliPath, "zzzqxvvv"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: zzzqxvvv. Run `keryx --help` for the list.");
+  });
+});
+
 test("agents bootstrap help is available without touching global files", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
   const output = await runBun([cliPath, "agents", "bootstrap", "--help"]);
@@ -269,6 +298,32 @@ function runBun(args: string[]): Promise<string> {
         return;
       }
       reject(new Error(stderr || `bun exited with ${code}`));
+    });
+  });
+}
+
+/**
+ * Same spawn as {@link runBun}, but for the error path (flow 353 AC3): a
+ * non-zero exit is the case under test, not a test-harness failure, so
+ * this resolves with stdout/stderr/code regardless of what the code was.
+ */
+function runBunExpectingFailure(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      cwd: path.join(import.meta.dir, ".."),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, code });
     });
   });
 }

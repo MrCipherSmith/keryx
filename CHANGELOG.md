@@ -3,6 +3,58 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.17] — 2026-09-27
+
+### Added
+- **`keryx doctor [--json]`.** One page, one pass: keryx's own version and
+  update availability, the running Bun version against `package.json`'s
+  documented floor, whether `ripgrep` is on `PATH`, the OS sandbox launcher,
+  which providers have a credential configured (names only, never values),
+  MCP servers' config validity and trust/approval state, drift in any
+  installed editor/agent integration, Metaproject Standard warnings, stale
+  `.claude/worktrees` entries, and graph/wiki freshness (read from the last
+  report, never recomputed). Every line is `ok`, `warn` or `fail` with a fix
+  hint; exits `0` unless something is `fail`; `--json` emits
+  `{checks:[{id,status,detail,fix?}]}`. Runs in well under a second on a
+  normal checkout. `/doctor` in `keryx shell` (readline and the TUI) prints
+  the identical report inside the session.
+
+### Fixed
+- **An unknown command or subcommand no longer dumps the full usage block.**
+  `keryx docto` (and an unknown `keryx mcp <sub>`, which points at `keryx mcp --help`)
+  now print exactly one line to stderr — `Unknown command: docto. Did you mean: doctor? Run
+  \`keryx --help\` for the list.` — with up to three "did you mean"
+  suggestions by edit distance, and exit `1`. Previously the diagnostic went
+  to stderr but the entire ~9.5 KB usage block followed it to **stdout**.
+- **`keryx mcp list` no longer exits non-zero over someone else's config.** A
+  malformed foreign file it merely reads for compatibility (Cursor's
+  `~/.cursor/mcp.json`, Claude Desktop's `~/.claude.json`, a project's own
+  `.mcp.json`, Grok's TOML config) now prints under a `warnings:` block
+  (`warnings` in `--json`) and exits `0`; only a problem in keryx's own
+  native config (`.keryx/mcp-servers.json`) still exits `1`.
+- **`keryx memory search` matches inflected forms.** Lexical mode now stems
+  both the query and each entry's title/body with a small English suffix
+  stemmer, so `release` also finds an entry that only ever wrote
+  `released`/`releases`/`releasing`. A zero-hit lexical search now also
+  prints a hint: `--semantic` when an embeddings index already exists for
+  the project, otherwise how to build one (`keryx memory index
+  --embeddings`) — `semanticHint` in `--json`.
+- **`keryx health run` no longer reports `tests: missing` on a tree where
+  tests are actually available.** Root cause: in the default "auto" mode,
+  when no persisted `.metaproject/data/testing` report existed to import,
+  `runAdapter` (`src/health/run.ts`) hardcoded the `tests` source's status to
+  `"missing"` regardless of what `detect()` had already established (`bun`
+  on `PATH` and test files present) — contradicting `keryx health sources`'
+  own `detect()`-only view, which had always correctly called the same tree
+  `available`. It now reports what `detect()` found instead of overriding
+  it; `bun test` is still never run as a silent side effect of `auto` mode
+  (unlike ESLint/TypeScript, `bun test` has no narrower default scope) — the
+  source is `available`, execution `not-run`, findings `0`. A genuinely
+  `missing` optional source (e.g. no `bun` binary at all) now also names
+  which check failed in the gate's report line.
+- **Bare `keryx providers` prints the status summary, not usage.** Matches
+  `keryx providers status`; `keryx providers --help` is unchanged.
+
 ## [0.3.16] — 2026-09-27
 
 ### Fixed

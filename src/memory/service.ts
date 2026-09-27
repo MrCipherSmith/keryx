@@ -37,6 +37,12 @@ export { isMemoryHarnessId, MEMORY_HARNESS_IDS, MEMORY_TYPE_VALUES };
 export { containsHarnessHeaderLine };
 
 export { selectHandoffEntries } from "./handoff";
+
+// Flow 353 (P0 W5, AC5): re-exported so `commands/memory.ts`'s zero-hit
+// `--semantic` hint can ask "does an embeddings index exist for this
+// project" through this facade rather than a second direct edge into
+// `memory/embedding/index.ts` (`src/lib/import-policy.ts`'s facade rule).
+export { loadEmbeddingIndex } from "./embedding/index";
 import type {
   MemoryCreateInput,
   MemoryCreateResult,

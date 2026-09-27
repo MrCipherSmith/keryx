@@ -113,6 +113,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     summary: "Grouped command help by task — keryx help [group|command].",
   },
   { kind: "slash", name: "/help", group: "Start here", summary: "Show available commands, grouped by task." },
+  {
+    kind: "cli",
+    name: "doctor",
+    group: "Start here",
+    summary: "One-page health check: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness.",
+  },
+  {
+    kind: "slash",
+    name: "/doctor",
+    group: "Start here",
+    summary: "Same one-page health check, inside the session.",
+  },
 
   // ---- Connect a model provider -------------------------------------------
   {

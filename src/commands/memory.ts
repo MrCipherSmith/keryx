@@ -5,6 +5,7 @@ import { createMemoryService, selectHandoffEntries, MEMORY_HARNESS_IDS, isMemory
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
 import { renderSearchMarkdown } from "../memory/search";
+import { loadEmbeddingIndex } from "../memory/service";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
@@ -256,6 +257,18 @@ async function runSearch(args: string[]): Promise<void> {
   const removalTrail: RemovalLookup | null =
     result.results.length === 0 ? searchRemovals(await loadDeletionTrail(process.cwd()), query) : null;
 
+  // Flow 353 AC5: a zero-hit LEXICAL search said nothing about the other
+  // mode that exists — an operator with no idea `--semantic` is a thing
+  // has no way to discover it from this output. Gated on `!filters.semantic`
+  // so a search that already ASKED for semantic and still found nothing
+  // does not get told to try the very thing it just tried.
+  const semanticHint: string | undefined =
+    result.results.length === 0 && !filters.semantic
+      ? (await loadEmbeddingIndex(process.cwd())) !== null
+        ? "Zero hits in lexical mode. An embeddings index exists for this project — try `--semantic`."
+        : "Zero hits in lexical mode. No embeddings index exists yet — build one with `keryx memory index --embeddings`, then retry with `--semantic`."
+      : undefined;
+
   // AFC-06 (flow 234) T22, AC1 second half: `--as-of` is memory's existing
   // explicit historical mode (`SearchFilters.asOf`, `../memory/types.ts` --
   // "overrides the default `current` exclusion"). It already prints each
@@ -314,6 +327,7 @@ async function runSearch(args: string[]): Promise<void> {
             };
           }),
           ...(removalTrail ? { removalTrail } : {}),
+          ...(semanticHint ? { semanticHint } : {}),
           ...(report ? { report } : {}),
         },
         null,
@@ -331,6 +345,10 @@ async function runSearch(args: string[]): Promise<void> {
   // Routed through the shared renderer so the real user-facing search
   // surface actually shows what AC6 requires.
   console.log(renderSearchMarkdown(query, result.results).trimEnd());
+  if (semanticHint) {
+    console.log("");
+    console.log(semanticHint);
+  }
   if (removalTrail) {
     console.log("");
     console.log("## Removal trail");

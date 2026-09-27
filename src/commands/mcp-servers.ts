@@ -191,20 +191,40 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
   const config = load(deps);
   const wantJson = splitAtSeparator(args).own.includes("--json");
 
+  // Flow 353 AC4: a FOREIGN config problem (Cursor, Claude Desktop, a
+  // project's `.mcp.json`, Grok TOML — `foreign: true`, set once in
+  // `loadMcpServers`'s compat loop) is a courtesy read of a file this
+  // project does not own; it must never make `keryx mcp list` exit
+  // non-zero over someone else's syntax error. Only a problem in keryx's
+  // OWN native config (user or project `.keryx/mcp-servers.json`) still
+  // blocks, exactly as before this flow.
+  const ownProblems = config.problems.filter((p) => !p.foreign);
+  const foreignProblems = config.problems.filter((p) => p.foreign);
+
   if (wantJson) {
     const env = deps.env ?? process.env;
     deps.log(
       JSON.stringify(
-        { servers: config.servers.map((s) => publicView(s, env)), problems: config.problems },
+        {
+          servers: config.servers.map((s) => publicView(s, env)),
+          problems: ownProblems,
+          warnings: foreignProblems,
+        },
         null,
         2,
       ),
     );
-    return config.problems.length > 0 ? 1 : 0;
+    return ownProblems.length > 0 ? 1 : 0;
   }
 
-  for (const problem of config.problems) {
+  for (const problem of ownProblems) {
     deps.err(`config problem — ${problem.file}: ${problem.message}`);
+  }
+  if (foreignProblems.length > 0) {
+    deps.err("warnings:");
+    for (const problem of foreignProblems) {
+      deps.err(`  ${problem.file}: ${problem.message}`);
+    }
   }
 
   if (config.servers.length === 0) {
@@ -214,7 +234,7 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
     deps.log("No MCP servers configured.");
     deps.log(`  user:    ${userConfigFile(deps.configDir)}`);
     deps.log(`  project: ${projectConfigFile(projectRootOf(deps))}`);
-    return config.problems.length > 0 ? 1 : 0;
+    return ownProblems.length > 0 ? 1 : 0;
   }
 
   const approvals = loadTrustStore(deps.configDir);
@@ -238,7 +258,7 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
     );
     deps.log("Read what it launches above, then: keryx mcp trust <name>");
   }
-  return config.problems.length > 0 ? 1 : 0;
+  return ownProblems.length > 0 ? 1 : 0;
 }
 
 /**

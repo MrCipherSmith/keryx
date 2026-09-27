@@ -187,17 +187,28 @@ test("health run over a testing report with an incomplete context reports a bloc
 // corrupted testing report on disk also get silently reported as a clean
 // parse, the same shape of bug? Checked by running, not by reading.
 //
-// It does not. `loadTestingReport` (src/testing/service.ts) already wraps
-// its own `JSON.parse` of the on-disk report in a try/catch that returns
-// `null` on failure. `tests.ts`'s `import()` then throws `NoImportError`,
-// and `run.ts`'s `runAdapter` special-cases the "tests" adapter id on that
-// error to record `status: "missing"` rather than falling back to actually
-// running the suite. So a corrupted report FILE never reaches
+// It does not, but the status this asserts changed under flow 353 AC6.
+// `loadTestingReport` (src/testing/service.ts) already wraps its own
+// `JSON.parse` of the on-disk report in a try/catch that returns `null` on
+// failure. `tests.ts`'s `import()` then throws `NoImportError`, and
+// `run.ts`'s `runAdapter` special-cases the "tests" adapter id on that
+// error — but it used to hardcode `status: "missing"` there regardless of
+// what `detect()` had already found, which is exactly the bug AC6 fixes:
+// on THIS repository (`bun` on PATH, thousands of `*.test.ts` files, simply
+// no persisted report), that hardcoding reported `tests: missing` even
+// though `keryx health sources`'s `detect()`-only view had always said
+// "available" for the same tree. The fix makes `runAdapter` report
+// whatever `detect()` decided instead of overriding it — "available" here,
+// same as a fixture with no report at all (below) — while still never
+// falling back to actually RUNNING the suite from this branch (unlike
+// eslint/tsc, `bun test` has no narrower default scope, so `execution`/
+// `parse` stay "not-run": nothing was executed this pass, corrupted report
+// included). So a corrupted report FILE still never reaches
 // `parseTestingReport`'s own `JSON.parse` (the catch that returns `[]`) in
-// production at all - it is intercepted upstream and recorded honestly as
-// "missing", never as an "available"/"parsed" clean pass. This test locks
-// that behavior in; it required no code change.
-test("a corrupted testing report on disk is recorded as missing, never as a silently clean parse", async () => {
+// production — it is intercepted upstream, same as before — but the
+// honest status for "capable of running, nothing run this pass" is
+// `available`/`not-run`, not `missing`.
+test("a corrupted testing report on disk is recorded as available-but-not-run, never as a silently clean parse", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-health-tests-corrupt-report");
   try {
     await mkdir(path.join(root, "src"), { recursive: true });
@@ -212,8 +223,35 @@ test("a corrupted testing report on disk is recorded as missing, never as a sile
     const { report } = await runHealth({ cwd: root, sources: ["tests"] });
     const testsInfo = report.sources.find((s) => s.source === "tests");
 
-    expect(testsInfo?.status).toBe("missing");
-    expect(testsInfo?.status).not.toBe("available");
+    expect(testsInfo?.status).toBe("available");
+    expect(testsInfo?.execution).toBe("not-run");
+    expect(testsInfo?.parse).toBe("not-run");
+    expect(testsInfo?.findings).toBe(0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 353 AC6: the actual reported bug — no corruption at all, simply no
+// `.metaproject/data/testing` report has ever been generated for this tree.
+// `bun` on PATH plus test files present is what `detect()` already used to
+// call "available" (`keryx health sources` proved it); `runHealth`'s
+// PERSISTED report used to disagree and call the exact same tree `missing`,
+// which is what an operator running `keryx health run` on a fresh clone —
+// or on keryx's own repository — actually saw. This is the regression test
+// that reproduces the previous false `missing` directly, not through a
+// corrupted-file proxy.
+test("a tree with no testing report at all, but bun on PATH and test files present, is available — not missing", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-health-tests-no-report");
+  try {
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "dummy.test.ts"), "test.todo('dummy');\n");
+
+    const { report } = await runHealth({ cwd: root, sources: ["tests"] });
+    const testsInfo = report.sources.find((s) => s.source === "tests");
+
+    expect(testsInfo?.status).toBe("available");
+    expect(testsInfo?.execution).toBe("not-run");
     expect(testsInfo?.findings).toBe(0);
   } finally {
     await rm(root, { recursive: true, force: true });

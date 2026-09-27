@@ -91,6 +91,37 @@ test("keryx providers status --refresh: bypasses a fresh cache and re-probes", a
   expect(calls).toBeGreaterThan(afterFirst);
 });
 
+// Flow 353 AC7: bare `keryx providers` used to print usage — the same page
+// `--help` prints — instead of doing anything. An operator typing the bare
+// noun wants the status summary, not to be told the verbs it already knows
+// exist; `--help` still prints usage (asserted separately below).
+test("keryx providers (bare, no subcommand): prints the SAME output as `keryx providers status`", async () => {
+  const dir = tempDir();
+  const { logs: bareLogs } = await withCapturedLogs(async () => {
+    await providersCommand([], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
+  });
+  const { logs: statusLogs } = await withCapturedLogs(async () => {
+    await providersCommand(["status"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir: tempDir() });
+  });
+  expect(bareLogs.join("\n")).toContain("deepseek");
+  expect(bareLogs.join("\n")).toContain("ok");
+  // Same shape (age line aside, both were just fetched), not merely
+  // "contains deepseek": a bare run that fell back to usage text would
+  // also fail this on its own, but pinning both bodies' provider lines
+  // catches a bare run that ran `list` or `cross-family` instead.
+  expect(bareLogs.length).toBe(statusLogs.length);
+});
+
+test("keryx providers --help: still prints usage, not the status summary", async () => {
+  const dir = tempDir();
+  const { logs } = await withCapturedLogs(async () => {
+    await providersCommand(["--help"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });
+  });
+  const text = logs.join("\n");
+  expect(text).toContain("Usage:");
+  expect(text).not.toContain("fetched");
+});
+
 test("keryx providers test also updates the SAME catalog cache `providers status` reads (AC3)", async () => {
   const dir = tempDir();
   await providersCommand(["test", "deepseek", "--json"], { fetch: fetchOk, env: { DEEPSEEK_API_KEY: "sk-test" }, dir });

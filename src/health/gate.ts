@@ -101,7 +101,12 @@ export function computeGate(input: {
   // same way a skipped optional source already is. Never escalates status.
   const missingOptional = sources.filter((s) => !s.required && s.status === "missing");
   for (const source of missingOptional) {
-    reasons.push(`OPTIONAL: ${source.source} source missing`);
+    // Flow 353 AC6 (second clause): say which check failed, not just that
+    // one did — the same `detail` pattern `brokenRequired` above already
+    // uses for `source.error`. `run.ts`'s `missingSourceReason` is what
+    // populates it; a source with none keeps the unchanged, name-only line.
+    const detail = source.error ? `: ${source.error}` : "";
+    reasons.push(`OPTIONAL: ${source.source} source missing${detail}`);
   }
 
   const brokenOptional = sources.filter(

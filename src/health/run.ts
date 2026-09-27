@@ -263,6 +263,22 @@ function errorCodeSuffix(error: unknown): string {
   return code ? ` (${code})` : "";
 }
 
+/**
+ * Flow 353 AC6 (second clause): named per source id, because the failing
+ * check differs per source — `tests`' only path to a genuine "missing"
+ * status is `resolveBin(cwd, "bun")` finding nothing (see
+ * `sources/tests.ts`'s `detect`; a tree with no test files is `skipped`,
+ * not `missing`, and is unaffected by this). `undefined` for a source this
+ * has not been written for yet, so its report line falls back to naming
+ * only the source — unchanged from before this flow.
+ */
+function missingSourceReason(sourceId: string): string | undefined {
+  if (sourceId === "tests") {
+    return "no `bun` binary found (checked node_modules/.bin and PATH)";
+  }
+  return undefined;
+}
+
 // T70 F-002: `validation?.error` below is adapter-supplied text -- the return
 // value of the optional `SourceAdapter.validate()` extension point
 // (`types.ts:224`), not a caught exception -- but it flows into the exact
@@ -340,7 +356,15 @@ export async function runAdapter(
     };
   }
   if (status === "skipped" || status === "missing") {
-    return { info: { ...base, status }, findings: [] };
+    // Flow 353 AC6 (second clause): a `missing` optional source used to name
+    // only the source, never the check that failed — `gate.ts`'s
+    // `OPTIONAL: <source> source missing` line had nothing to attach a
+    // reason to. `error` here (not `errorCodeSuffix`'s catch-path text,
+    // which is for a `detect()` that THREW, a different failure) is read
+    // by `gate.ts` the same way it already reads it for a required source
+    // (line ~85 there).
+    const reason = missingSourceReason(adapter.id);
+    return { info: { ...base, status, ...(reason !== undefined ? { error: reason } : {}) }, findings: [] };
   }
 
   let raw: RawSourceResult;
@@ -355,7 +379,25 @@ export async function runAdapter(
       } catch (error) {
         if (error instanceof NoImportError) {
           if (adapter.id === "tests") {
-            return { info: { ...base, status: "missing" }, findings: [] };
+            // Flow 353 AC6: `status` here is whatever `adapter.detect(ctx)`
+            // already decided above (line ~330) — "available" whenever
+            // `bun` resolves and test files exist (checked separately at
+            // line 342; "missing"/"skipped" never reach this branch at
+            // all). This branch only means no PERSISTED report exists to
+            // import. The previous code hardcoded `status: "missing"`
+            // here regardless of what `detect()` found, which is what
+            // made `keryx health run` on this very repository — `bun` on
+            // PATH, thousands of `*.test.ts` files, simply no prior
+            // `.metaproject/data/testing` report — report `tests:
+            // missing`, contradicting `keryx health sources`' own
+            // `detect()`-only view (which has always said "available" for
+            // the same tree). Running the WHOLE suite as a silent side
+            // effect of "auto" mode is still deliberately avoided here —
+            // unlike eslint/tsc, `bun test` has no narrower default scope
+            // — so this reports what `detect()` found, with nothing
+            // executed this pass (`execution`/`parse` stay "not-run" on
+            // `base`, same as before).
+            return { info: { ...base, status }, findings: [] };
           }
           raw = await adapter.run(ctx);
         } else {

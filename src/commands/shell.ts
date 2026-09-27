@@ -87,6 +87,7 @@ import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
+import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -235,6 +236,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/compact",
   "/status",
   "/flows",
+  "/doctor",
   "/theme",
   "/mode",
   "/reasoning",
@@ -932,6 +934,14 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/help") {
         system(HELP_TEXT);
+        continue;
+      }
+      if (command === "/doctor") {
+        // Flow 353 (AC2): same aggregate report `keryx doctor` prints,
+        // inside the session — one call into the shared builder, never a
+        // second implementation of any one check.
+        const report = await buildDoctorReport(deps.session?.cwd ?? process.cwd());
+        system(`${formatDoctorReport(report)}\n`);
         continue;
       }
       if (isSessionInfoCommand(command)) {
@@ -2551,6 +2561,12 @@ export async function runAgentRepl(
         await runBusSlashCommand(bus, rest, (text) => agentIo.onSystem?.(text));
       } else if (command === "/help") {
         agentIo.onSystem?.(readlineAgentHelpText());
+      } else if (command === "/doctor") {
+        // Flow 353 (AC2): same aggregate report `keryx doctor` prints,
+        // inside the session — one call into the shared builder, never a
+        // second implementation of any one check.
+        const report = await buildDoctorReport(sessionCwd);
+        agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([
