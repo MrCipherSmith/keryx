@@ -74,6 +74,21 @@ test("module and entity filters restrict results", () => {
   expect(results.map((result) => result.entry.relativePath)).toEqual(["a.md"]);
 });
 
+// Flow 353 AC5: lexical `searchEntries` must apply stemming, so a query for
+// the base form finds an entry that only ever wrote an inflected one — this
+// is the RED->GREEN regression for the previous zero-hit behavior.
+test("a query for the base form finds an entry that only wrote the inflected form (stemming)", () => {
+  const onlyInflected = entry({
+    relativePath: "lessons/release.md",
+    status: "accepted",
+    title: "How the pipeline released the last build",
+    summary: "notes on what happened when this repo released last",
+  });
+  const results = searchEntries([onlyInflected], "release", {}, C, new Date("2026-07-07"));
+  expect(results.length).toBe(1);
+  expect(results[0]?.entry.relativePath).toBe("lessons/release.md");
+});
+
 test("accepted/high-confidence outranks draft/low at equal relevance", () => {
   // AC1 (defect 2): the default `current` query now requires `accepted`
   // status, so a draft entry no longer surfaces under the plain default —

@@ -27,6 +27,15 @@ import type {
   SourceStatus,
 } from "./types";
 
+// Flow 353 (P0 W5, AC1): re-exported so `commands/doctor.ts`'s aggregate
+// "graph/wiki freshness" check can read the SAME last-report metric
+// `runHealth` (`./run.ts`) already reads for `keryx health run`'s own
+// `wikiFreshness` field, through this facade rather than a second direct
+// edge into `health/metrics/wiki-freshness.ts` (`src/lib/import-policy.ts`'s
+// facade rule; `harness/tool/metaproject-adapter.ts`'s existing direct edge
+// into the same file is pre-existing debt this does not touch).
+export { readWikiFreshnessMetric, type WikiFreshnessMetric } from "./metrics/wiki-freshness";
+
 /**
  * Validate the shape `gate()`, `status()`, `explain()` and `updateBaseline()`
  * actually read: an object whose `gate` field is itself an object carrying a

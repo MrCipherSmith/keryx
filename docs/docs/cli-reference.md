@@ -18,8 +18,23 @@ keryx <command> [args] [flags]
 | `--version` | `-v` | Print the installed version and exit. |
 
 Running `keryx` with no command, or with `--help`/`-h`, prints the usage
-block. An unknown command prints an error plus the usage block and exits with
-code `1`.
+block. An unknown top-level command (flow 353, AC3) prints exactly one line
+to stderr — `Unknown command: <x>. Did you mean: <up to 3 close matches>?
+Run \`keryx --help\` for the list.`, the "Did you mean" clause omitted when
+nothing is within edit distance 2 — and exits with code `1`. It never prints
+the full usage block; that used to go to **stdout** on this same error path.
+
+An unknown SUBCOMMAND of a group with a verified subcommand vocabulary
+(flow 353 review round 1) gets the identical one-line treatment, but naming
+that group's own help — `keryx health rn` → `Unknown command: rn. Did you
+mean: run? Run \`keryx health --help\` for the list.` Covers roughly forty
+groups (`modules`, `providers`, `wiki`, `health`, `memory`, `flow`, `mcp`,
+`skills`, … — see `src/lib/group-subcommands.ts` for the exact, hand-verified
+list and why it is not simply "every `CLI_ROUTES` verb"); a group not on
+that list, or a first argument that is a genuine positional (a path, an id,
+a free-text prompt) rather than a closed subcommand vocabulary, is
+unaffected and still reaches the handler's own usage on an unrecognised
+value.
 
 ## version
 
@@ -53,6 +68,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | Command | Purpose |
 |---|---|
 | `help` | Grouped command help by task — `keryx help [group|command]`. |
+| `doctor` | One-page health check with a fix hint per line; `--json` for `{checks:[...]}`. |
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
 | `version` | Check whether the installed Keryx version has a newer npm release. |
 | `sessions` | List, fork, export, or locate agent sessions for the current project. |
@@ -132,6 +148,57 @@ Esc to close. The readline shell, `--no-tui`, and the ACP host print the
 same grouping as text, since a modal cannot render there. On a brand-new
 `keryx shell` with no model provider configured yet, the modal opens once,
 already on the "Connect a model provider" tab.
+
+---
+
+## doctor
+
+One page: is this environment set up correctly. Added by flow 353 (P0 W5).
+
+```
+keryx doctor [--json]
+```
+
+Every check reports `ok`, `warn` or `fail`, with a fix hint on anything that
+is not `ok`:
+
+- **version** — keryx's own version, and whether a newer release is
+  available (`keryx version check`'s own cache/backoff; up to a 2s network
+  call the first time).
+- **bun** — the running Bun version against the floor `package.json`'s
+  `engines.bun` declares.
+- **ripgrep** — is `rg` on `PATH` (required by `keryx ctx rg` and the
+  agent's `search_code` tool).
+- **sandbox** — is the OS sandbox launcher (bubblewrap on Linux, Seatbelt on
+  macOS) installed (`keryx sandbox status`'s own report).
+- **providers** — which providers have a credential configured, by name
+  only — never a value.
+- **mcp** — config validity and trust/approval state for the MCP servers
+  keryx connects to. This does **not** dial any server (unlike
+  `keryx mcp doctor`, which does, and is named in the fix hint when a
+  deeper check is needed) — connecting to every configured server, some of
+  which are real network/subprocess operations with a 10-second default
+  timeout each, would make this command's own 3-second budget impossible to
+  hold on a project with several servers configured.
+- **integrations** — drift in any installed editor/agent integration
+  (`keryx integrations doctor --runtime all`).
+- **standard** — Metaproject Standard warnings and errors
+  (`keryx standard doctor`).
+- **worktrees** — `.claude/worktrees/<name>` entries (the agent harness's
+  own transient per-agent scratch checkouts) that git no longer recognises
+  as a real worktree — reported, never deleted.
+- **graph-freshness** / **wiki-freshness** — read from the last
+  `keryx gdgraph build` / `keryx wiki freshness` report, never recomputed
+  here (recomputing either inside a command meant to run in under three
+  seconds would make the budget impossible to hold, and would couple this
+  command to two subsystems it otherwise only reads a file from).
+
+Exits `0` unless at least one check is `fail`. `--json` emits
+`{checks:[{id,status,detail,fix?}]}`.
+
+In `keryx shell` (readline and the TUI), `/doctor` prints the identical
+report inside the session — the same builder, never a second
+implementation of any one check.
 
 ---
 
@@ -1295,6 +1362,10 @@ keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-mod
 keryx providers test <name> [--json]
 keryx providers remove <name> [--yes]
 ```
+
+Bare `keryx providers` (no subcommand) prints the same output as
+`keryx providers status` (flow 353, AC7) — the summary an operator typing
+the bare noun actually wants. `keryx providers --help` still prints usage.
 
 | Subcommand | Flags | Description |
 |---|---|---|
@@ -2955,6 +3026,18 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
 
+**The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
+used to report the `tests` source as `missing` whenever no persisted
+`.metaproject/data/testing` report existed to import — even on a tree where
+`bun` was on `PATH` and test files existed, which `keryx health sources`'
+own `detect`-only view had always correctly called `available`. The two
+views now agree: no persisted report is `available`/not-run (nothing was
+executed that pass — `bun test` is still never run as a silent side effect
+of the default `auto` mode, unlike ESLint/TypeScript, which have no
+narrower default scope), never `missing`. A genuinely `missing` source
+(e.g. no `bun` binary at all) now also names which check failed, wherever
+the gate reports it.
+
 ---
 
 ## test
@@ -3089,7 +3172,7 @@ keryx memory handoff --from <harness> --target <harness> [--scope project|user] 
 |---|---|---|
 | `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
 | `index` | `--embeddings` | Build an optional disposable catalog at `data/memory/index/index.json`; `--embeddings` additionally builds a disposable vector cache when the capability is available. Search scans canonical Markdown directly and does not consume either generated output. |
-| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. Lexical mode applies a small English suffix stemmer (flow 353, AC5) to both the query and each entry's title/body, so `release` also matches `released`/`releases`/`releasing` — a separate, narrower normalisation from the base tokenizer `dedup`/relevant-recall use, so title/summary similarity is unaffected. On zero hits (and no explicit `--semantic`), the output gains one hint line: `--semantic` is available when an embeddings index already exists for the project, otherwise how to build one (`keryx memory index --embeddings`) — as a `semanticHint` string in `--json`. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
 
 Generated memory catalogs and embedding caches under `.metaproject/data/memory/`
 are disposable and ignored. Existing legacy `data/memory/artifacts/latest.*`
@@ -5837,7 +5920,7 @@ keryx mcp logout <name>
 
 | Command | Description |
 |---|---|
-| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. |
+| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. **Exit codes (flow 353, AC4):** a problem in a FOREIGN config keryx merely reads for compatibility (Cursor's `~/.cursor/mcp.json`, Claude Desktop's `~/.claude.json`, a project's own `.mcp.json`, Grok's TOML config) prints under a `warnings:` block (a `warnings` array alongside `problems` in `--json`) and never blocks — exit `0`. Only a problem in keryx's OWN native config (`.keryx/mcp-servers.json`, either scope) still exits `1`. |
 | `add` | Writes a native entry. The stdio form REQUIRES `--` before the server's command: without it, `keryx mcp add fs -- npx pkg --json` could not tell whose `--json` that is. `-e` is repeatable. `--scope user` (default) writes `mcp-servers.json` in the keryx config dir, owner-only; `--scope project` writes `<root>/.keryx/mcp-servers.json`, which is meant to be committed. An existing name is refused unless `--force`. |
 | `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http` — streamable HTTP negotiates it, so it is not a separate transport. |
 | `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |

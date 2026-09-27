@@ -170,6 +170,54 @@ Adopt canary deploys for the release pipeline.
     expect(unsourced?.author).toBe("unknown");
     expect(unsourced?.confirmedBy).toBe("unknown");
   });
+
+  // Flow 353 AC5: a zero-hit lexical search used to say nothing about the
+  // other mode that exists at all. Two variants, gated on whether an
+  // embeddings index is actually on disk — the wording must not offer
+  // `--semantic` as already-ready when there is nothing for it to rerank.
+  test("zero hits, no embeddings index: the hint names `keryx memory index --embeddings`, not `--semantic`", async () => {
+    await memoryCommand(["search", "a phrase nothing here matches at all"]);
+
+    expect(process.exitCode).toBe(0);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("_No matching memory entries._");
+    expect(output).toContain("keryx memory index --embeddings");
+  });
+
+  test("zero hits, no embeddings index, --json: `semanticHint` names the same build command", async () => {
+    await memoryCommand(["search", "a phrase nothing here matches at all", "--json"]);
+
+    expect(process.exitCode).toBe(0);
+    const payload = JSON.parse(loggedOut.join("\n")) as { semanticHint?: string };
+    expect(payload.semanticHint).toContain("keryx memory index --embeddings");
+  });
+
+  test("zero hits WITH an embeddings index on disk: the hint says `--semantic` is available", async () => {
+    const embeddingsDir = path.join(root, ".metaproject", "data", "memory", "embeddings");
+    await mkdir(embeddingsDir, { recursive: true });
+    await writeFile(
+      path.join(embeddingsDir, "index.meta.json"),
+      JSON.stringify({ model: "test-model", dims: 1, generatedAt: new Date().toISOString(), entryCount: 0 }),
+      "utf8",
+    );
+    await writeFile(path.join(embeddingsDir, "vectors.jsonl"), "", "utf8");
+
+    await memoryCommand(["search", "a phrase nothing here matches at all"]);
+
+    expect(process.exitCode).toBe(0);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("--semantic");
+    expect(output).not.toContain("keryx memory index --embeddings");
+  });
+
+  test("a search that already passed --semantic and still found nothing gets no hint (it just tried that)", async () => {
+    await memoryCommand(["search", "a phrase nothing here matches at all", "--semantic"]);
+
+    expect(process.exitCode).toBe(0);
+    const output = loggedOut.join("\n");
+    expect(output).not.toContain("Zero hits in lexical mode");
+    expect(output).not.toContain("keryx memory index --embeddings");
+  });
 });
 
 // AFC-06 (flow 234) T22 -- AC1's second half: "historical режим явно

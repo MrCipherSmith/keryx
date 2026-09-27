@@ -139,6 +139,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },
   {
+    // Flow 353 (P0 W5, AC2): the same aggregate report `keryx doctor` prints
+    // (version, Bun floor, ripgrep, sandbox, providers, MCP, integrations,
+    // standard, worktrees, graph/wiki freshness), inside the session.
+    name: "/doctor",
+    description: "One-page health check: version, sandbox, providers, MCP, integrations, freshness",
+    modes: BOTH,
+  },
+  {
     name: "/ac",
     description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
     modes: AGENT_ONLY,

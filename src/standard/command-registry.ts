@@ -1310,6 +1310,23 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   },
   {
     module: "core",
+    command: "doctor",
+    summary: "One-page health check: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness.",
+    intent: ["keryx doctor", "health check", "проверь окружение", "is keryx set up correctly", "диагностика"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured {checks:[{id,status,detail,fix?}]}" }],
+    json: true,
+    // Same reasoning as `version check` below, which this command calls
+    // internally as one of its checks: it makes an outbound HTTPS request
+    // (unless cache/backoff-served) and writes the per-user version-check
+    // cache, so it cannot honestly claim `read: true` for every path.
+    read: false,
+    sideEffects: [
+      "makes an outbound HTTPS request to the npm registry as part of its version check, unless served from the local cache or failure-backoff window",
+      "writes <per-user keryx config dir>/version-check.json (outside this project) as part of that same check",
+    ],
+  },
+  {
+    module: "core",
     command: "status",
     summary: "Metaproject workspace status: enabled modules and artifact freshness.",
     intent: ["статус проекта", "project status", "keryx status", "что включено"],

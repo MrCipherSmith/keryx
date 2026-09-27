@@ -1,4 +1,4 @@
-import { tokenSet, tokenize } from "./text";
+import { stem, tokenSet, tokenize } from "./text";
 import { memoryClassOf } from "./types";
 import { computeLifecycle } from "./lifecycle";
 import { isValidAt, validateAsOf } from "./temporal";
@@ -20,7 +20,10 @@ export function searchEntries(
 ): ScoredEntry[] {
   validateQuery(query);
   validateSearchFilters(filters, now);
-  const queryTokens = [...new Set(tokenize(query))];
+  // Flow 353 AC5: stemmed here, once, so "release" matches "released"/
+  // "releases" — see `text.ts`'s `stem` doc comment for what it does and
+  // does not cover. `scoreEntry` stems the body/title the SAME way.
+  const queryTokens = [...new Set(tokenize(query).map(stem))];
   const today = now.toISOString().slice(0, 10);
   const filtered = entries.filter(
     (entry) =>
@@ -60,7 +63,7 @@ export function candidatePool(
 ): ScoredEntry[] {
   validateQuery(query);
   validateSearchFilters(filters, now);
-  const queryTokens = [...new Set(tokenize(query))];
+  const queryTokens = [...new Set(tokenize(query).map(stem))]; // AC5: same stemming as searchEntries above.
   const today = now.toISOString().slice(0, 10);
   return entries
     .filter(
@@ -182,10 +185,13 @@ function scoreEntry(
   config: MemoryConfig,
   now: Date,
 ): ScoredEntry {
-  const bodyTokens = tokenSet(
-    `${entry.title} ${entry.summary} ${entry.details} ${entry.tags.join(" ")}`,
+  // AC5: `queryTokens` (both callers above) is already stemmed — stem the
+  // body/title the SAME way so a lookup on either side lands on the same
+  // key, not the raw form.
+  const bodyTokens = new Set(
+    [...tokenSet(`${entry.title} ${entry.summary} ${entry.details} ${entry.tags.join(" ")}`)].map(stem),
   );
-  const titleTokens = tokenSet(entry.title);
+  const titleTokens = new Set([...tokenSet(entry.title)].map(stem));
 
   let hits = 0;
   let titleHits = 0;

@@ -16,7 +16,7 @@
 // discovery surface, and this one was wrong for two releases.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { printMcpHelp } from "./mcp";
+import { mcpCommand, printMcpHelp } from "./mcp";
 import { MCP_CONSUMER_SUBCOMMANDS } from "./mcp-servers";
 
 const realLog = console.log;
@@ -84,5 +84,41 @@ describe("every consumer subcommand is discoverable", () => {
       (sub) => !usageLines.some((line) => new RegExp(`\\b${sub}\\b`).test(line)),
     );
     expect(missing).toEqual([]);
+  });
+});
+
+// Flow 353 AC3: an unknown `keryx mcp <sub>` used to print `Unknown mcp
+// command: <x>` to stderr and then the WHOLE rich help block (above) to
+// stdout — the same "help on the error path" defect
+// (`docs/requirements/backlog.md` item 4) the top-level `cli.ts` dispatch
+// had. Now: one line, on stderr, with a "did you mean" suggestion when one
+// is close, never the rich help.
+describe("keryx mcp <unknown subcommand>", () => {
+  const realError = console.error;
+  let errLines: string[] = [];
+  afterEach(() => {
+    console.error = realError;
+    process.exitCode = 0;
+  });
+
+  function captureErr(): void {
+    errLines = [];
+    console.error = (...args: unknown[]): void => {
+      errLines.push(args.map((a) => String(a)).join(" "));
+    };
+  }
+
+  test("`keryx mcp lst` suggests `list`, one line, exit 1", async () => {
+    captureErr();
+    await mcpCommand(["lst"]);
+    expect(process.exitCode).toBe(1);
+    expect(errLines.join("\n")).toBe("Unknown command: lst. Did you mean: list? Run `keryx mcp --help` for the list.");
+  });
+
+  test("a nonsense subcommand gets no suggestion, but still one line and exit 1", async () => {
+    captureErr();
+    await mcpCommand(["zzzqxvvv"]);
+    expect(process.exitCode).toBe(1);
+    expect(errLines.join("\n")).toBe("Unknown command: zzzqxvvv. Run `keryx mcp --help` for the list.");
   });
 });

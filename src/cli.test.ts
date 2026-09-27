@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { CLI_ROUTES, exitCodeForError, groupUsage, helpRequestedFor, shouldInterceptHelp } from "./cli";
+import {
+  CLI_ROUTES,
+  exitCodeForError,
+  groupUsage,
+  groupsWithKnownSubcommands,
+  helpRequestedFor,
+  shouldInterceptHelp,
+} from "./cli";
 import { ShellFlagError, shellCommand } from "./commands/shell";
 
 // RED tests for flow 021 (interactive `keryx` shell), T5 / AC3.
@@ -175,6 +182,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx external status [--json]              Effective on/off, source, Jev credential availability, and what is blocked right now\n",
     "  keryx external list [--json]                 The effective block list (providers, model patterns) and where it came from\n",
     "  external  Keep private work in-house: block Jev/TypeSafe and other listed providers/models (on, off, status, list)\n",
+    // Flow 353 (W5, AC1): the new `keryx doctor` verb — brand-new, so both a
+    // USAGE_BODY line and a Commands: summary row, same shape as flow 305's
+    // `routing`/flow 346's `external` above.
+    "  keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness\n",
+    "  doctor    One-page health check with a fix hint per line; --json for {checks:[...]}\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -239,6 +251,98 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
   );
 });
 
+// Flow 353 AC3: an unknown top-level command used to print `Unknown
+// command: <x>` to stderr and then dump the ~9.5 KB flat usage
+// (`docs/requirements/backlog.md` item 4) to stdout. One line, on stderr,
+// exit 1, never the usage dump; a close typo gets a "did you mean".
+describe("keryx <unknown command> (AC3)", () => {
+  test("`keryx docto` suggests `doctor`, one line, exit 1, nothing on stdout", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "docto"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: docto. Did you mean: doctor? Run `keryx --help` for the list.");
+  });
+
+  test("a nonsense word gets no suggestion, but still one line and exit 1", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "zzzqxvvv"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: zzzqxvvv. Run `keryx --help` for the list.");
+  });
+});
+
+// Flow 353 review round 1 (blocker L1): the same one-line treatment, but for
+// an unknown SUBCOMMAND of a known group (`keryx health rn`, `keryx wiki
+// serach`) — previously only the top-level dispatch and `keryx mcp <sub>`
+// had it; every other group with real subcommands still dumped its own full
+// usage. `groupsWithKnownSubcommands()` is the exact set `cli.ts`'s central
+// dispatch checks — iterating it (rather than a second, hand-written list)
+// means a group this file stops tracking cannot silently drop out of
+// coverage here too.
+describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
+  test.each([...groupsWithKnownSubcommands()])("`keryx %s zzzqxvvv`: exit 1, one stderr line naming its own --help, empty stdout", async (group: string) => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, group, "zzzqxvvv"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    const lines = result.stderr.split("\n").filter((line) => line.length > 0);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toBe(`Unknown command: zzzqxvvv. Run \`keryx ${group} --help\` for the list.`);
+  });
+
+  test("`keryx health rn` suggests `run`", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "health", "rn"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: rn. Did you mean: run? Run `keryx health --help` for the list.");
+  });
+
+  // "search" is not actually a real `wiki` subcommand (the real dispatch —
+  // status/new/index/collect/check-links/validate/freshness/refresh/verify/
+  // migrate-markers/ask/sections/enrich/context/backlinks, `commands/wiki.ts`
+  // — has no "search") — so "serach" gets no suggestion. The property this
+  // still proves is the one that matters: one stderr line, empty stdout,
+  // exit 1, never wiki's own full usage dump.
+  test("`keryx wiki serach`: one line, empty stdout, exit 1 (no real `search` subcommand to suggest)", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "wiki", "serach"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: serach. Run `keryx wiki --help` for the list.");
+  });
+
+  test("a real subcommand of a checked group is unaffected (`keryx health status`, `keryx wiki ask`)", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const health = await runBunCapture([cliPath, "health", "status"]);
+    expect(health.code).toBe(0);
+    const wiki = await runBunCapture([cliPath, "wiki", "ask", "--help"]);
+    // `ask --help` is a question, not a claim about wiki's data — exit 0 either way is not the property under test here; only that it was NOT rejected as "unknown".
+    expect(wiki.stderr).not.toContain("Unknown command");
+  });
+
+  // Flow 353 review rounds 2–3 (L3, T3, T4): the guard inspects `args[1]` of a
+  // MAPPED group only, so the one real positive case is a group whose first
+  // positional is not a subcommand word at all — `integrate`'s comma-joined
+  // editor list. Re-adding `integrate` to the map fails both assertions below
+  // (round 3 showed that path/pattern cases behind a bare subcommand word pass
+  // with or without the guard, so they prove nothing and are not here).
+  test("a group whose first positional is a comma-joined list is not in the map and is never refused", async () => {
+    expect([...groupsWithKnownSubcommands()]).not.toContain("integrate");
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "integrate", "cursor,claude", "--dry-run"]);
+    expect(result.code).toBe(0);
+    expect(result.stderr).not.toContain("Unknown command");
+  });
+});
+
 test("agents bootstrap help is available without touching global files", async () => {
   const cliPath = path.join(import.meta.dir, "cli.ts");
   const output = await runBun([cliPath, "agents", "bootstrap", "--help"]);
@@ -269,6 +373,32 @@ function runBun(args: string[]): Promise<string> {
         return;
       }
       reject(new Error(stderr || `bun exited with ${code}`));
+    });
+  });
+}
+
+/**
+ * Same spawn as {@link runBun}, but it never rejects on the exit code: it
+ * resolves with stdout/stderr/code whatever the code was, so a test can assert
+ * exit 1 (flow 353 AC3) or exit 0 as the case under test.
+ */
+function runBunCapture(args: string[]): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, args, {
+      cwd: path.join(import.meta.dir, ".."),
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk);
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, code });
     });
   });
 }

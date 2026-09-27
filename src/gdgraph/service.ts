@@ -18,6 +18,13 @@ import type { GraphData } from "./types";
 // facade rule).
 export { buildAffectedReport, type AffectedReport, type AffectedReportOptions } from "./affected-report";
 
+// Flow 353 (P0 W5, AC1): re-exported so `commands/doctor.ts`'s aggregate
+// "graph/wiki freshness" check can ask the SAME staleness question
+// `commands/gdgraph.ts` already does, through this facade rather than a
+// second direct edge into `gdgraph/staleness.ts` (the same facade rule
+// `buildAffectedReport` above already follows).
+export { checkGraphStaleness, type StalenessCheck, type StalenessStatus } from "./staleness";
+
 export interface GdgraphService {
   build(cwd: string): Promise<{ nodes: number; edges: number; summaryPath: string }>;
   loadGraph(cwd: string): Promise<GraphData>;

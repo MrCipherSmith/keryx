@@ -93,6 +93,17 @@ export type ResolvedMcpServer = McpServerEntry & {
 export type McpConfigProblem = {
   file: string;
   message: string;
+  /**
+   * Flow 353 AC4: is this a courtesy read of a file keryx does not own
+   * (Cursor, Claude Desktop, a project's `.mcp.json`, Grok TOML) rather
+   * than keryx's own native config (`.keryx/mcp-servers.json`, user or
+   * project scope)? `undefined`/`false` for native — `keryx mcp list`
+   * still exits non-zero on those, unchanged from before this flow.
+   * `true` only for the compat readers, set once at the loop in
+   * `loadMcpServers` below rather than at each parser in `compat.ts`, so
+   * it cannot drift from what `compatFiles` actually enumerates.
+   */
+  foreign?: boolean;
 };
 
 export type ResolvedMcpConfig = {
@@ -547,7 +558,12 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
     const home = options.home ?? (options.configDir === undefined ? undefined : NO_HOME);
     for (const entry of compatFiles(options.cwd, home)) {
       const read = readCompatFile(entry, options.cwd);
-      problems.push(...read.problems);
+      // AC4: tagged `foreign` HERE, once, rather than at each parser inside
+      // `compat.ts` (Grok TOML, Claude Desktop JSON, generic `.mcp.json`
+      // shape) — this loop is the one place that already knows every file
+      // it is about to read came from `compatFiles`, so the tag cannot
+      // drift from what that enumeration actually is.
+      problems.push(...read.problems.map((p) => ({ ...p, foreign: true })));
       for (const [name, value] of Object.entries(read.servers) as Array<[string, McpServerEntry]>) {
         const found = entryProblems(name, value);
         if (found.length > 0) {
@@ -555,7 +571,7 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
           // A malformed compat entry that is silently dropped is
           // indistinguishable from one that was never written — and the
           // operator would go looking in the wrong file.
-          for (const message of found) problems.push({ file: entry.file, message });
+          for (const message of found) problems.push({ file: entry.file, message, foreign: true });
           continue;
         }
         winner.set(name, {

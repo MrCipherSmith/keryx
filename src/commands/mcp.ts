@@ -16,8 +16,9 @@
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, heading, style } from "../lib/ui";
 import { mcpRuntimeIds } from "../mcp/client-config";
+import { formatUnknownCommandMessage } from "../lib/suggest";
 import { EDITOR_USAGE, integrateCommand } from "./integrate";
-import { isMcpConsumerSubcommand, runMcpConsumerCommand } from "./mcp-servers";
+import { isMcpConsumerSubcommand, MCP_CONSUMER_SUBCOMMANDS, runMcpConsumerCommand } from "./mcp-servers";
 import { serveMcpCommand } from "./serve-mcp";
 
 export async function mcpCommand(
@@ -70,8 +71,20 @@ export async function mcpCommand(
     return;
   }
 
-  console.error(`Unknown mcp command: ${subcommand}`);
-  printMcpHelp();
+  // Flow 353 AC3: one line, on stderr, never the rich help block above
+  // (`printMcpHelp` is stdout via `console.log`/`heading`/`helpUsage`, and
+  // mixing that into an error path is the same "help on stdout" defect
+  // `docs/requirements/backlog.md` item 4 names for the top-level dispatch
+  // in `cli.ts`). `subcommand` is always defined here — the `!subcommand`
+  // branch above already claimed the undefined case.
+  console.error(
+    formatUnknownCommandMessage(subcommand ?? "", [
+      ...MCP_CONSUMER_SUBCOMMANDS,
+      "install",
+      "uninstall",
+      "serve",
+    ], "keryx mcp --help"),
+  );
   process.exitCode = 1;
 }
 
