@@ -3326,6 +3326,51 @@ export interface ShellCommandRuntime {
   launchChat?: typeof launchTuiChatShell;
 }
 
+
+/** What {@link makeSignalShutdown} tears down; each part injectable for tests. */
+export interface SignalShutdownParts {
+  readonly busBox: { current: BusClient | undefined };
+  readonly leaseBox: { current: SessionLeaseHandle | undefined };
+  readonly jobRegistryBox: { current: Pick<JobRegistry, "sweepAll"> | undefined };
+  readonly closeMcp: () => Promise<void> | undefined;
+  readonly closeReadline: () => void;
+  readonly releaseLease: (lease: SessionLeaseHandle | undefined) => void;
+  readonly exit: (code: number) => void;
+}
+
+/**
+ * The readline SIGINT/SIGTERM handler: exit, but CLOSE FIRST.
+ *
+ * Synchronously, first: the bus presence and the lease must both be gone even
+ * if the closes below hang until the grace timeout (specification §5.4, §6,
+ * AC7). Bus first, so a peer never sees presence outlive the lease it names.
+ * Then every tracked background job is swept (process-group SIGTERM→SIGKILL,
+ * flow 352) — the same call EOF and `/exit` make — before the MCP runtime
+ * closes and the process exits.
+ */
+export function makeSignalShutdown(parts: SignalShutdownParts, code: number): () => void {
+  return (): void => {
+    parts.busBox.current?.leave();
+    parts.busBox.current = undefined;
+    parts.releaseLease(parts.leaseBox.current);
+    parts.leaseBox.current = undefined;
+    void (async (): Promise<void> => {
+      try {
+        await parts.jobRegistryBox.current?.sweepAll();
+      } catch {
+        // Exiting; a failed sweep must not become the last thing printed.
+      }
+      try {
+        await parts.closeMcp();
+      } catch {
+        // Exiting; a failed close must not become the last thing printed.
+      }
+      parts.closeReadline();
+      parts.exit(code);
+    })();
+  };
+}
+
 export async function shellCommand(args: string[], runtime: ShellCommandRuntime = {}): Promise<void> {
   // Internal: the detached watcher `--debug` starts. Not a user-facing flag.
   if (args[0] === "--debug-watcher") {
@@ -3969,35 +4014,19 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   //
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
-  const closeAndExit = (code: number) => (): void => {
-    // Synchronously, first: the bus presence and the lease must both be gone
-    // even if the close below hangs until the grace timeout (specification
-    // §5.4, §6, AC7). Bus first, so a peer never sees presence outlive the
-    // lease it names.
-    busBox.current?.leave();
-    busBox.current = undefined;
-    releaseSessionLease(leaseBox.current);
-    leaseBox.current = undefined;
-    void (async (): Promise<void> => {
-      try {
-        // AC7: sweep every tracked background job (process-group
-        // SIGTERM→SIGKILL) here too — the same call EOF/`/exit` make inside
-        // `runAgentRepl`, reachable here only through the box above since
-        // this handler is registered before the agent-mode branch that
-        // creates the registry ever runs.
-        await jobRegistryBox.current?.sweepAll();
-      } catch {
-        // Exiting; a failed sweep must not become the last thing printed.
-      }
-      try {
-        await readlineMcp?.close();
-      } catch {
-        // Exiting; a failed close must not become the last thing printed.
-      }
-      rl.close();
-      process.exit(code);
-    })();
-  };
+  const closeAndExit = (code: number): (() => void) =>
+    makeSignalShutdown(
+      {
+        busBox,
+        leaseBox,
+        jobRegistryBox,
+        closeMcp: () => readlineMcp?.close(),
+        closeReadline: () => rl.close(),
+        releaseLease: releaseSessionLease,
+        exit: (c) => process.exit(c),
+      },
+      code,
+    );
   process.on("SIGINT", closeAndExit(130));
   // SIGTERM too. Only SIGINT was handled, so `kill <pid>` — what a
   // supervisor, a CI job or a terminal-closing window manager sends — took

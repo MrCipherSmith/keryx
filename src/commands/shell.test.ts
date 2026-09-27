@@ -122,7 +122,10 @@ import type {
 } from "../harness/provider/types";
 // PINNED API (RED: module does not exist until T6).
 import type { ShellDeps, ShellIO } from "./shell";
-import { EXPAND_MAX_LINES, expandedToolOutput, parseShellCliFlags, runShell, shellCommand } from "./shell";
+import type { SignalShutdownParts } from "./shell";
+import { EXPAND_MAX_LINES, expandedToolOutput, makeSignalShutdown, parseShellCliFlags, runShell, shellCommand } from "./shell";
+import type { BusClient } from "../bus/client";
+import type { SessionLeaseHandle } from "../session/lease";
 import { blockLabel } from "../lib/md-blocks";
 
 const NO_CAPS: ProviderCapabilities = {
@@ -1442,73 +1445,46 @@ describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-
   });
 });
 
-// --- AC7 (flow 352 audit) — closeAndExit (the readline SIGINT/SIGTERM
-// handler) sweeps tracked background jobs too, matching EOF/`/exit` (source-
-// text audit; same convention as every other `closeAndExit`/`runAgentRepl`
-// row in this file — `closeAndExit` is a bare, non-exported closure with no
-// injection seam, and unlike `leaseBox`/`busBox`'s existing cross-process
-// SIGTERM/SIGINT proofs (`shell-lease.process.test.ts`, `shell-bus.process.test.ts`,
-// both driven in `--chat` mode), a background job only exists in AGENT mode,
-// where every process test here relies on `--model unused` never issuing a
-// real tool call — there is no live seam to start one for real).
-//
-// Before this fix, `closeAndExit` released the lease and left the bus
-// (both mirrored into boxes declared before it) but had NO equivalent box
-// for the job registry, which is created later, inside the `if (agentMode) {`
-// branch — so Ctrl-C/`kill` on a readline agent session left every tracked
-// background job's process group running.
-describe("AC7 (flow 352 audit) — closeAndExit sweeps tracked background jobs before process.exit (source-text audit)", () => {
-  const shellSourceAc7Sweep = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const closeAndExitStart = shellSourceAc7Sweep.indexOf("const closeAndExit = (code: number) => (): void => {");
-  const closeAndExitEnd = shellSourceAc7Sweep.indexOf('process.on("SIGINT", closeAndExit(130));');
-
-  test("anchor sanity: both markers exist and the handler is declared before it is registered", () => {
-    expect(closeAndExitStart).toBeGreaterThanOrEqual(0);
-    expect(closeAndExitEnd).toBeGreaterThan(closeAndExitStart);
+// --- AC7 (flow 352 audit) — the SIGINT/SIGTERM handler sweeps tracked
+// background jobs too, as EOF and `/exit` do, after the bus and lease are gone
+// and before the process exits.
+describe("AC7 (flow 352 audit) — makeSignalShutdown", () => {
+  test("leaves the bus, releases the lease, sweeps jobs, closes MCP and readline, then exits", async () => {
+    const order: string[] = [];
+    let exited: (code: number) => void = () => {};
+    const exitedWith = new Promise<number>((resolve) => { exited = resolve; });
+    const lease = { id: "lease" } as unknown as SessionLeaseHandle;
+    const parts: SignalShutdownParts = {
+      busBox: { current: { leave: () => order.push("bus") } as unknown as BusClient },
+      leaseBox: { current: lease },
+      jobRegistryBox: { current: { sweepAll: async () => { order.push("sweep"); } } },
+      closeMcp: async () => { order.push("mcp"); },
+      closeReadline: () => { order.push("readline"); },
+      releaseLease: (l) => { order.push(l === lease ? "lease" : "lease:wrong"); },
+      exit: (code) => { order.push("exit"); exited(code); },
+    };
+    makeSignalShutdown(parts, 130)();
+    expect(await exitedWith).toBe(130);
+    expect(order).toEqual(["bus", "lease", "sweep", "mcp", "readline", "exit"]);
+    expect(parts.busBox.current).toBeUndefined();
+    expect(parts.leaseBox.current).toBeUndefined();
   });
 
-  test("closeAndExit's body sweeps the job-registry box before process.exit(code)", () => {
-    const closeAndExitBody = shellSourceAc7Sweep.slice(closeAndExitStart, closeAndExitEnd);
-    const sweepIndex = closeAndExitBody.indexOf("jobRegistryBox.current?.sweepAll()");
-    const exitIndex = closeAndExitBody.indexOf("process.exit(code)");
-    expect(sweepIndex).toBeGreaterThanOrEqual(0);
-    expect(exitIndex).toBeGreaterThan(sweepIndex);
-  });
-
-  test("jobRegistryBox is declared before closeAndExit — reachable from the handler, same as leaseBox/busBox", () => {
-    const boxDeclIndex = shellSourceAc7Sweep.indexOf(
-      "const jobRegistryBox: { current: JobRegistry | undefined } = { current: undefined };",
-    );
-    expect(boxDeclIndex).toBeGreaterThanOrEqual(0);
-    expect(closeAndExitStart).toBeGreaterThan(boxDeclIndex);
-  });
-
-  test("the readline agent-mode branch populates jobRegistryBox with the SAME instance sweepBackgroundJobs uses", () => {
-    const agentModeBranchStart = shellSourceAc7Sweep.indexOf("if (agentMode) {");
-    const jobRegistryIndex = shellSourceAc7Sweep.indexOf(
-      "const jobRegistry = createJobRegistry({ cwd: agentCwd });",
-      agentModeBranchStart,
-    );
-    // Tight window: the box assignment is the very next statement after
-    // creation (see the doc comment right above it in `shell.ts`).
-    const boxAssignIndex = shellSourceAc7Sweep.indexOf(
-      "jobRegistryBox.current = jobRegistry;",
-      jobRegistryIndex,
-    );
-    // Wide window for the field, same as the existing sibling audit above
-    // (`agentModeBranchAc7`, 7600 chars) — it sits much further down, inside
-    // the `agentDepsBase` object literal.
-    const sweepFieldIndex = shellSourceAc7Sweep.indexOf(
-      "sweepBackgroundJobs: () => jobRegistry.sweepAll(),",
-      jobRegistryIndex,
-    );
-    expect(agentModeBranchStart).toBeGreaterThanOrEqual(0);
-    expect(jobRegistryIndex).toBeGreaterThan(agentModeBranchStart);
-    // The box is populated right after creation — before the SAME instance
-    // is also closed over by the `agentDepsBase.sweepBackgroundJobs` field.
-    expect(boxAssignIndex).toBeGreaterThan(jobRegistryIndex);
-    expect(boxAssignIndex).toBeLessThan(sweepFieldIndex);
-    expect(sweepFieldIndex).toBeGreaterThan(jobRegistryIndex);
+  test("a failing sweep still closes and exits", async () => {
+    const order: string[] = [];
+    let exited: (code: number) => void = () => {};
+    const exitedWith = new Promise<number>((resolve) => { exited = resolve; });
+    makeSignalShutdown({
+      busBox: { current: undefined },
+      leaseBox: { current: undefined },
+      jobRegistryBox: { current: { sweepAll: async () => { throw new Error("boom"); } } },
+      closeMcp: () => undefined,
+      closeReadline: () => { order.push("readline"); },
+      releaseLease: () => {},
+      exit: (code) => { order.push("exit"); exited(code); },
+    }, 143)();
+    expect(await exitedWith).toBe(143);
+    expect(order).toEqual(["readline", "exit"]);
   });
 });
 
