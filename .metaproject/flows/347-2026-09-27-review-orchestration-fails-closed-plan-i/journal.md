@@ -88,3 +88,23 @@ Follow-up flow (init when it starts, not now — ids get taken on main while a b
 - Scripted-provider demo against the working tree (scripts outside the repo, `scratchpad/demo/`), re-run by the orchestrator:
   - `bun run demo/ac1-plan-follow-through.ts` → default: `requests.length === 1: true`, `nudge appended to history: false`, operator line `[plan] Turn ending with actionable plan items remaining (follow-through is off)`; opt-in: `requests.length === 2`, provenance `harness`, envelope `[keryx shell — control nudge]`.
   - `bun run demo/ac4-ac5-ac13-spawn-subagent.ts` → advisory `max_tool_calls: 3`, 5 calls: `result.status: Completed`, warning per result `[false,false,true,true,true]`, fleet `done`; configured cap 3: final request tools `["submit_result"]`, first line `status: BudgetExhausted (3/3 calls)`, submitted partial result present, fleet `failed` / `budget-exhausted`.
+- 2026-09-27T09:29:49.317Z - task-done: T11: Verify: typecheck, targeted tests, live scripted-provider run for AC1 and AC4 recorded in journal (AC12)
+- 2026-09-27T09:29:49.631Z - task-attempt: T12: started (attempt 1) — 347-T12 review round 1
+- 2026-09-27T09:39:35.080Z - task-added: T13: Review r01 fixes, turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016 (agent.ts, new harness submit-result module, quarantine patterns)
+- 2026-09-27T09:39:35.525Z - task-added: T14: Review r01 fixes, spawn_subagent: F-001 cwd worktree validation, F-003 tool-follows-cwd test, F-007, F-008, F-018, F-023
+- 2026-09-27T09:39:35.963Z - task-added: T15: Review r01 fixes, small: F-002 snapshot order, F-004 not-found exit tests, F-019, F-022, F-017 skill wording
+- 2026-09-27T09:39:36.362Z - task-added: T16: Review round 2 on the r01 fixes
+- 2026-09-27T09:39:36.776Z - task-attempt: T13: started (attempt 1) — 347-T13
+- 2026-09-27T09:39:37.141Z - task-attempt: T14: started (attempt 1) — 347-T14
+- 2026-09-27T09:39:37.634Z - task-attempt: T15: started (attempt 1) — 347-T15
+- 2026-09-27T09:39:43.746Z - task-done: T12: Review the branch diff with review-orchestrator and fix findings
+
+## Review round 1 (T12) — dispositions
+
+Report: review-r01.md (REQUEST_CHANGES; 0 blocker, 4 major, 14 minor, 7 info; six reviewers, all schema-valid first dispatch). User approved the fix scope 2026-09-27.
+
+- Fix now: T13 (turn loop: F-005 F-006 F-009 F-010 F-012 F-013 F-016), T14 (spawn_subagent: F-001 F-003 F-007 F-008 F-018 F-023), T15 (F-002 F-004 F-017 F-019 F-022). Round 2 review = T16.
+- F-014 decision: AC5 "tool choice is forced where the provider supports it" is read as "where the provider PORT supports it". `NormalizedRequest` has no tool-choice field today; adding one across every provider adapter is out of this flow. The final round offers `submit_result` as the only tool, instructs it, and schema-validates the input. Follow-up candidate: optional `toolChoice` on the port for providers that support it.
+- F-015: the demo scripts move into this flow directory (`demo/`) and their verbatim output is pasted here after T13–T15 (F-016 changes the `[plan]` line, so the pre-fix output would be stale).
+- F-025 (T-2): intended by AC4, no action.
+- Deferred to a follow-up flow (with D/E): F-011 caller-supplied stop strategy instead of `subagentBudget` branches in the turn loop, F-024 extracting nudge helpers / subagent wrap-up out of agent.ts (fits the shell god-file split program), F-020 one-line bullet stall suppressing the reprompt, F-021 unattended-vs-subagent precedence (latent).
