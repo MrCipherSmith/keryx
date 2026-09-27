@@ -49,7 +49,7 @@ Review Orchestrator Progress:
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
 - [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, retained
-- [ ] Step 14: MANAGED rounds only (NEVER in `lightweight`, which is report-only), AFTER THE FINAL ROUND, on an OPEN pull request at the head you reviewed — answer every external comment once, `keryx review comments reply --final` — never against a pull request the dispatch named as the caller's
+- [ ] Step 14: MANAGED rounds only (NEVER in `lightweight`, which is report-only), AFTER THE FINAL ROUND, on an OPEN pull request at the head you reviewed — answer every external comment once, `keryx review comments reply --final` (render with `--dry-run` and get the user's explicit approval first) — never against a pull request the dispatch named as the caller's
 ```
 
 Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They are
@@ -64,7 +64,7 @@ already hold (`--scope`, `--findings`, `--diff-lines`, `--fix-attempt`,
 `--verifier`, `--security`, `--forced-strategy-change`) and paste the `model`
 block it prints into that dispatch.
 
-Do NOT assign the tier by reading the table in `rules/core/model-selection.mdc`. Plan bridge: publish this checklist with `plan_set` under the ids `step-0`…`step-14` and move each item with `plan_update` as its step completes — see the `session-plan-bridge` rule.
+Do NOT assign the tier by reading the table in `rules/core/model-selection.mdc`. Plan bridge: publish this checklist with `plan_set` under the ids `step-0`…`step-14` ONCE, here at Step 6 when scope and dispatch are fixed — never earlier. Publish each of steps 0–5 that ran as `completed`, publish any of steps 0–5 that did NOT run as `skipped`, and publish steps 6–14 as `pending` (or `in_progress` for whichever of them is starting right now) — and from then on move each item with `plan_update` as its step completes — see the `session-plan-bridge` rule. `completed` means the step's artifact exists: steps 8–10 become `completed` (in the plan and in the report) only after `keryx review ingest` has recorded their results, and a step whose reviewers were `BLOCKED` is `blocked`, never `completed`.
 Working it out in your head is exactly the mechanical step that rule moves into
 code — and it is the step that was documented as running for a whole release
 while nothing called it.
@@ -1157,7 +1157,7 @@ stated intent — an `issue_url`, a task doc, or a PR body.**
 1. Fetch issue or task requirements.
 2. Map changed files and functions to acceptance criteria.
 3. Identify any criteria that are not addressed by the diff.
-4. If there are unimplemented criteria: emit them as `blocker` findings in the final report and note them in `## Blockers`.
+4. If there are unimplemented criteria: emit them as `blocker` findings in the final report and note them in `## Blockers`. Their `reviewer` is the reviewer that ran the comparison (`review-jev-contract`, or `review-logic` given the spec and the diff) — never `review-orchestrator`: a finding under the orchestrator's name cannot be routed away from its author, so Wave C silently skips it.
 5. Continue dispatching the remaining reviewers regardless (spec gaps + quality issues both belong in the report).
 
 ### With no issue and no task doc, the PR body is the spec
@@ -1179,7 +1179,7 @@ that already holds intent and diff side by side is this one.
 
 Run it on every round, not only the first. The drift the finding catches is
 created BY the rounds: the code moves to answer findings, the body does not, and
-whoever reads the merge commit a year later reads the body. When `review.jev.contract` is on, dispatch `review-jev-contract --pr` and read its `findings` as this comparison's scored result instead of judging it by eye; the by-eye judgement is the fallback when that opt-in is off — `SKILL.detail.md` § "CLI-engine reviewers".
+whoever reads the merge commit a year later reads the body. When `review.jev.contract` is on, dispatch `review-jev-contract --pr` and read its `findings` as this comparison's scored result instead of judging it by eye; when that opt-in is off, the fallback is `review-logic` dispatched with the spec and the diff, filing under its own name — `SKILL.detail.md` § "CLI-engine reviewers".
 
 ---
 
@@ -1352,6 +1352,8 @@ Before consolidation, validate every reviewer result:
 - Findings without evidence are downgraded to `info` or returned to the reviewer for clarification.
 - Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
 - `NEEDS_CONTEXT` triggers one targeted context refill. If still unresolved, keep it as an explicit open question, not as a blocker.
+- **A reply that is not a result is `BLOCKED`.** That covers an empty reply (`(subagent produced no text)`), a reply without a valid `REVIEW_RESULT` block, and a `spawn_subagent` output whose first line is `status: BudgetExhausted (…)` or `status: NoProgress …` — the reviewer was cut short, so whatever fragment it left is not its review. Re-dispatch it exactly once with a larger budget, telling it to return its report before the budget ends (and the same `cwd` when the round reviews a worktree). If that also fails, the pass is **not run**: list it under **Not run** with the reason, and never write its findings yourself — a review nobody ran reported as run is worse than a gap the operator can see.
+- **The verifier is held to the same rule.** A finding without an applied verifier verdict is `unverified`; the orchestrator never verifies one itself, and a verifier that returned nothing leaves every finding `unverified`, stated in the stage counts.
 - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
 
 ## Severity (canonical)
@@ -1600,11 +1602,7 @@ file and must include the wire-contract line.
 
 ## Stage counts
 
-Required in **How this review was run**, copied from `scope.md`, not re-counted
-by hand. State what each stage removed. Never state it as a precision
-improvement: no precision baseline exists to improve on. The line carries
-`verification_mode` (`off | annotate | filter`), confirmed / refuted /
-unverifiable / unverified, and retained.
+Required in **How this review was run**, copied from `scope.md`, not re-counted by hand. State what each stage removed. Never state it as a precision improvement: no precision baseline exists to improve on. The line carries `verification_mode` (`off | annotate | filter`), confirmed / refuted / unverifiable / unverified, and retained.
 
 `## Checked and cleared` is now **Verified clean**. Same rule: a hypothesis
 that was tested and died, with the evidence, not a list of virtues. There is
@@ -1665,15 +1663,12 @@ Automation values, names unchanged:
 
 Default is do not publish. No resolvable PR number means skip and say so.
 
-The comment is the report in `templates/review-report.md`, English, with the
-domain file chosen above. It does not use a tool heading, a finding table, or
-a meta table. It does not carry a co-author line, a `Generated with` trailer,
-or any sentence that names a vendor or a product as the author. Say who ran
-the orchestrator and which reviewers ran; do not sign the comment as them.
+The comment is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Say who ran the orchestrator and which reviewers ran; do not sign the comment as them.
 
-The follow-up file path and the metadata rules (real model names, Run vs Not
-run, no `adaptive` in the model slot) live in that same template. Write the
-body to a temp file and post with `gh pr comment <n> --body-file <file>`.
+The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. Write the body to a temp file and post with `gh pr comment <n> --body-file <file>`.
+
+**No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
+Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
 Re-read head and the thread immediately before posting. If head moved, re-check
 the findings against the new head and name the commits that were not reviewed.
@@ -1718,6 +1713,11 @@ If absent, proceed normally — context is optional and non-blocking.
 | "The blast radius came back empty, so nothing can break" | Empty and unresolved are different facts. The graph indexes code — a Markdown or JSON change has no radius at all, and the record says which one you got |
 | "The changed files are the same as last round, so scope B can be skipped on the final round" | The final round always recomputes. A fix landed in round 3 is the change; skipping means the certifying round checked the least |
 | "This scope-B file has an obvious naming problem, I'll report it" | Rejected in code: a naming problem is `minor` at best, and the floor is `major`. The set is under regression check, not under review — raise it under scope A |
+| "The reviewer ran out of budget but I saw enough of the diff to write its findings" | Then the report names a review that did not happen. It is `BLOCKED`: one re-dispatch with a larger budget, else **Not run** |
+| "The verifier returned nothing, so I'll confirm the findings myself" | The orchestrator never verifies. No verdict means `unverified`, stated in the stage counts |
+| "The spec-gate finding is mine, so `reviewer: review-orchestrator`" | That name makes the finding unroutable in Wave C. File it under the reviewer that ran the comparison |
+| "Steps 8–10 are done, I'll tick them now and ingest later" | `completed` means the ingest record exists. A plan that runs ahead of the artifacts is how an unrun review looked finished |
+| "The user said publish, so I can post the comment" | That chose whether, not what. Show the rendered body and get approval of it before any GitHub write |
 | "No flags means no reviewers" | No flags → run auto-detection; never produce an empty review |
 | "User named a module so I'll use diff mode" | Named module/component/store → path mode; diff mode is only for branch changes |
 | "Path mode should only show lines I'd flag in diff mode" | Path mode reviews the entire file — all findings apply, not just added lines |

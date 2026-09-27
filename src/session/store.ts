@@ -482,7 +482,13 @@ function readJsonl(file: string): NormalizedMessage[] {
         ...(o.provenance === "trusted" ||
         o.provenance === "project" ||
         o.provenance === "model" ||
-        o.provenance === "tool"
+        o.provenance === "tool" ||
+        // Flow 347 T6 (AC9): a shell-synthesized control nudge (toolless
+        // reprompt, plan follow-through) persists as "harness" — omitting it
+        // here would silently downgrade a reloaded/resumed transcript's
+        // nudges to provenance-less `role: "user"` lines, indistinguishable
+        // from the operator, on every session resume.
+        o.provenance === "harness"
           ? { provenance: o.provenance }
           : {}),
         ...(toolCalls !== undefined ? { toolCalls } : {}),

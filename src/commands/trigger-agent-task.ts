@@ -38,7 +38,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { buildAgentSystemInstruction, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
+import { buildAgentSystemInstruction, generateControlNonce, runAgentTurn, type AgentDeps, type AgentIO } from "./agent";
 import { buildShellHookRuntime } from "./agent-hooks";
 import { ensureScratchParent } from "./unattended-scratch";
 import { builtinReadOnlyTools, type InteractiveTool, type InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
@@ -533,6 +533,7 @@ async function runLocked(
         providerId: dispatch.provider,
         modelId: dispatch.model,
         tools,
+        controlNonce: generateControlNonce(),
         systemInstruction: buildAgentSystemInstruction(undefined, {
           providerId: dispatch.provider,
           modelId: dispatch.model,

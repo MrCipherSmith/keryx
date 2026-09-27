@@ -136,6 +136,7 @@ import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
+  generateControlNonce,
   DEFAULT_MAX_OUTPUT_TOKENS,
   describeReasoningEffortSource,
   isReasoningEffortLevel,
@@ -3500,6 +3501,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // inspector live (flow 173, AC8) via `job-bridge.ts`'s module-level
     // listener; a safe no-op whenever no TUI is mounted to register one.
     const jobRegistry = createJobRegistry({ cwd, onEvent: emitBackgroundJob });
+    // Flow 347 T17: ONE control-nudge nonce per session, outside
+    // `makeAgentDeps` for the same reason as the registry above — a `/model`
+    // rebuild must not change the marker nudges already in history carry.
+    const controlNonce = generateControlNonce();
     // Session-scoped, and LAZY.
     //
     // Session-scoped for the reason spelled out above for the registry:
@@ -3673,6 +3678,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
+        controlNonce,
         tools: buildInteractiveAgentTools({
           cwd,
           metaprojectPort,
@@ -4211,6 +4217,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // names a tool this session was not given.
       const agentDeps: AgentDeps = {
         ...agentDepsBase,
+        // Flow 347 T17: one control-nudge nonce for this readline session.
+        controlNonce: generateControlNonce(),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,

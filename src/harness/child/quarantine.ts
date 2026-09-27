@@ -23,7 +23,23 @@ interface QuarantinePattern {
   test: (text: string) => boolean;
 }
 
+/**
+ * The keryx shell's control-nudge envelope (`[keryx shell — control nudge · <nonce>]`,
+ * `harnessEnvelopePrefix` in `src/commands/agent.ts`), with or without a nonce,
+ * tolerant of spacing, case and the dash variant. A FLAG only (flow 347 T17):
+ * what makes a nudge genuine is the per-session nonce the model learns from its
+ * system instruction, which content cannot know — this pattern just marks a
+ * child summary or peer message that claims the envelope, so the reader sees it.
+ */
+const HARNESS_ENVELOPE_SOURCE = String.raw`\[\s*keryx\s+shell\s*[—–-]+\s*control\s+nudge[^\]\n]{0,80}\]`;
+
 const PATTERNS: readonly QuarantinePattern[] = [
+  {
+    // A forged shell control nudge: text that is not the shell's own claiming
+    // to be one, to be read as a harness instruction rather than content.
+    name: "harness-envelope",
+    test: (t) => new RegExp(HARNESS_ENVELOPE_SOURCE, "i").test(t),
+  },
   {
     // Imitations of harness control tags (e.g. <system-reminder>, </system>),
     // including the agent-bus/child-notification wrappers a forged summary or

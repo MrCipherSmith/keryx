@@ -8,9 +8,11 @@
 // Risk: `delegate` (agent driver requires approval when an approver is present).
 
 import { createHash, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { lstat, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import type { InteractiveTool } from "./interactive-tools";
 import { builtinReadOnlyTools } from "./interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
@@ -22,7 +24,14 @@ import type { SubagentContext } from "../../child/orchestrate";
 import type { HookRuntime } from "../../hooks";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
-import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
+import {
+  generateControlNonce,
+  runAgentTurn,
+  type AgentDeps,
+  type AgentFinishReason,
+  type AgentIO,
+  type RunAgentTurnResult,
+} from "../../../commands/agent";
 import type { ShellHookContext } from "../../../commands/agent-hooks";
 import type { ProviderPort } from "../../provider/types";
 import {
@@ -90,6 +99,9 @@ export type SpawnSubagentFleetEvent =
  *   before the child ever spawned (existing paths, now labeled).
  * - `"NoProgress"` — `runAgentTurn`'s existing no-progress detector fired
  *   (`finishReason: "no-progress"`, D2a), distinct from budget exhaustion.
+ * - `"Interrupted"` — the child was aborted during its `submit_result`
+ *   wrap-up round (`finishReason: "interrupted"`, flow 347 review R2-4); it
+ *   never counts as a clean finish.
  *
  * PRD R9 guard: this status is advisory for the PARENT MODEL's own judgment
  * (retry/extend/accept-partial/give up) only. Do not add mechanical
@@ -101,7 +113,8 @@ export type SubagentCompletionStatus =
   | "Timeout"
   | "Denied"
   | "Error"
-  | "NoProgress";
+  | "NoProgress"
+  | "Interrupted";
 
 /**
  * `spawn_subagent`'s actual result shape (spec §D2). A strict structural
@@ -174,14 +187,34 @@ export const DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS = 30 * 60_000;
 
 /**
  * Inclusive per-child model-round-trip budget when `max_rounds` is omitted.
- * Every child provider request consumes one round, including an optional
- * no-progress summary; no request is made after this limit.
- * The optional `max_tool_calls` limit counts actual invocations separately.
+ * Every child provider request consumes one round. Flow 347 T7 (AC5): a child
+ * that reaches this limit (or a configured tool-call cap, or stalls) gets
+ * exactly ONE more request — the `submit_result` wrap-up round — so a child
+ * makes at most `max_rounds + 1` requests, and never more than
+ * `MAX_SUBAGENT_MAX_ROUNDS + 1`.
  */
 export const DEFAULT_SUBAGENT_MAX_ROUNDS = 10;
 
-/** Per-child hard cap even when the model explicitly asks for more. */
+/** Per-child hard cap even when the model explicitly asks for more (the wrap-up round comes on top). */
 export const MAX_SUBAGENT_MAX_ROUNDS = 24;
+
+/**
+ * Flow 347 T7 (AC4): operator setting for a HARD per-child tool-call cap, in
+ * actual tool invocations. Configured the same way as the neighbouring
+ * {@link ENV_SUBAGENT_TIMEOUT_MS}. Unset, blank, non-numeric or `<= 0` means
+ * no hard call cap — the child's stopping limits are then its round budget,
+ * the wall-clock deadline and the no-progress detector. The model-supplied
+ * `max_tool_calls` never stops a child; it is only a warning threshold.
+ */
+export const ENV_SUBAGENT_MAX_TOOL_CALLS = "KERYX_SUBAGENT_MAX_TOOL_CALLS";
+
+/** Resolve the operator's hard per-child tool-call cap; `undefined` = none configured. */
+export function resolveSubagentMaxToolCalls(
+  env: Record<string, string | undefined> = process.env,
+): number | undefined {
+  const n = parseIntEnvVar(env, ENV_SUBAGENT_MAX_TOOL_CALLS);
+  return n === undefined || n <= 0 ? undefined : n;
+}
 
 /**
  * Env override for the child wall-clock deadline, in ms. The effective deadline
@@ -214,7 +247,72 @@ function boundSummary(text: string): string {
   return `${text.slice(0, MAX_CHILD_SUMMARY_CHARS)}\n…(truncated: ${dropped} more characters from the subagent)`;
 }
 
+/**
+ * Flow 347 T7 (AC5): first line of a stopped child's output —
+ * `status: BudgetExhausted (<used>/<limit> <calls|rounds>)` or
+ * `status: NoProgress (…)` — so the parent reads the outcome before anything else.
+ */
+function formatStoppedStatusLine(
+  status: "BudgetExhausted" | "NoProgress" | "Interrupted",
+  turnResult: RunAgentTurnResult | undefined,
+): string {
+  if (status === "Interrupted") {
+    return "status: Interrupted (stopped during the final submit_result round)";
+  }
+  if (status === "NoProgress") {
+    return "status: NoProgress (only repeated or exhausted tool calls)";
+  }
+  const stop = turnResult?.budgetStop;
+  return stop === undefined
+    ? "status: BudgetExhausted"
+    : `status: BudgetExhausted (${stop.used}/${stop.limit} ${stop.unit})`;
+}
+
+/**
+ * D2b: the completion status for a child turn that settled (not timed out),
+ * from the child's OWN `finishReason`. Only an absent reason is `Completed`;
+ * `interrupted` (flow 347 review R2-4) never is.
+ */
+export function subagentStatusForFinishReason(
+  finishReason: AgentFinishReason | undefined,
+): "Completed" | "BudgetExhausted" | "NoProgress" | "Interrupted" {
+  switch (finishReason) {
+    case "budget":
+    case "tool-call-budget":
+      return "BudgetExhausted";
+    case "no-progress":
+      return "NoProgress";
+    case "interrupted":
+      return "Interrupted";
+    case undefined:
+      return "Completed";
+  }
+}
+
+/** The fleet `detail` for a settled child's status (its fleet `status` is `done` only when `Completed`). */
+export function subagentFleetDetail(status: ReturnType<typeof subagentStatusForFinishReason>): string {
+  switch (status) {
+    case "Completed":
+      return "done";
+    case "NoProgress":
+      return "no-progress";
+    case "Interrupted":
+      return "interrupted";
+    case "BudgetExhausted":
+      return "budget-exhausted";
+  }
+}
+
 export interface SpawnSubagentToolDeps {
+  /**
+   * The PARENT's working directory. Parent-scoped on purpose: the routing
+   * config location (`routing.config.json`), the external-runtime settings
+   * lookup, the shared MAE budget ledger and the ephemeral slate's temp
+   * directory all belong to the parent session and keep reading this value.
+   * The CHILD's tools, its slate anchors and the "Project root:" line of its
+   * prompt instead use the resolved per-call `cwd` input (flow 347 T8; see
+   * `resolveSubagentCwd`), which defaults to this value when omitted.
+   */
   cwd: string;
   /** Parent provider/model (inherited by child unless MAE resolves otherwise). */
   getParentModel: () => { providerId: string; modelId: string; baseUrl?: string };
@@ -287,6 +385,12 @@ export interface SpawnSubagentToolDeps {
   /** Optional host bridge for fleet updates; omitted for non-TUI shells. */
   onFleetEvent?: (event: SpawnSubagentFleetEvent) => void;
   /**
+   * Flow 347 T7 (AC4): a host-resolved hard per-child tool-call cap. Omitted
+   * (every production call site) reads {@link ENV_SUBAGENT_MAX_TOOL_CALLS} at
+   * each dispatch via {@link resolveSubagentMaxToolCalls}; tests set it here.
+   */
+  configuredMaxToolCalls?: number;
+  /**
    * External-agent runtime seam (flow 176; docs/requirements/keryx-external-agent-runtime).
    *
    * When a dispatch carries `runtime.kind === "external"` AND this hook is
@@ -358,6 +462,183 @@ function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+const execFileAsync = promisify(execFile);
+
+/**
+ * Flow 347 T8: resolve and validate the dispatch's optional `cwd`.
+ *
+ * The incident this closes: a review ran the parent in a worktree checked out
+ * at a PR head, but every read-only/search/shell tool built for the verifier
+ * child (and the "Project root:" line in its own prompt) resolved relative to
+ * `SpawnSubagentToolDeps.cwd` — the PARENT's cwd — not the worktree the
+ * review was actually about, so the child silently verified the base branch
+ * instead. `spawn_subagent` now accepts a per-call `cwd` the CHILD's tools and
+ * prompt follow; everything else that is genuinely parent-scoped (the routing
+ * config location, the ephemeral slate's OS-temp storage, the shared MAE
+ * budget ledger) deliberately keeps reading `deps.cwd` — see the call site
+ * below and `SpawnSubagentToolDeps.cwd`'s doc comment for exactly which is
+ * which.
+ *
+ * Fail-closed by construction: an omitted `cwd` resolves to `parentCwd`
+ * (today's unchanged behaviour). A supplied one is accepted ONLY when its
+ * REALPATH (symlinks resolved, so a symlink cannot point the child somewhere
+ * this check never actually inspected) is:
+ *   - the project root itself, or a filesystem descendant of it, OR
+ *   - a VERIFIED worktree of the project root's own repository (exactly the
+ *     `.review-pr-N/` shape from the incident), or a filesystem descendant of
+ *     one — see {@link verifiedWorktreeRoots} for what "verified" means.
+ * A nonexistent path is refused the same as one outside both of the above —
+ * `realpath` throwing is not distinguished from a real-but-disallowed path,
+ * both are "cannot accept this cwd." The caller (`invoke()` below) must spawn
+ * NOTHING when this returns `ok: false`.
+ */
+async function resolveSubagentCwd(
+  rawCwd: string | undefined,
+  parentCwd: string,
+): Promise<{ ok: true; cwd: string } | { ok: false; reason: string }> {
+  if (rawCwd === undefined) {
+    return { ok: true, cwd: parentCwd };
+  }
+  const requested = path.isAbsolute(rawCwd) ? rawCwd : path.resolve(parentCwd, rawCwd);
+  let real: string;
+  try {
+    real = await realpath(requested);
+  } catch {
+    return { ok: false, reason: `spawn_subagent refused cwd "${rawCwd}": it does not exist` };
+  }
+  // Best-effort: if the project root itself cannot be realpath'd (should not
+  // happen in practice — it is the running process's own cwd), fall back to
+  // comparing against it verbatim rather than treating that as the child's
+  // failure.
+  const realRoot = await realpath(parentCwd).catch(() => parentCwd);
+  if (isSameOrDescendant(real, realRoot)) {
+    return { ok: true, cwd: real };
+  }
+  // Not inside the project root — the only other accepted shape is a verified
+  // worktree of the SAME repository (or a directory inside one).
+  for (const worktreeRoot of await verifiedWorktreeRoots(parentCwd)) {
+    if (isSameOrDescendant(real, worktreeRoot)) {
+      return { ok: true, cwd: real };
+    }
+  }
+  return {
+    ok: false,
+    reason:
+      `spawn_subagent refused cwd "${rawCwd}" (resolved: ${real}): it is neither the project root, ` +
+      "a descendant of it, nor a worktree of this repository",
+  };
+}
+
+function isSameOrDescendant(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(root.endsWith(path.sep) ? root : root + path.sep);
+}
+
+/**
+ * Flow 347 review F-001: the realpaths of this repository's worktrees that
+ * survive verification, for `resolveSubagentCwd`.
+ *
+ * `git worktree list` only echoes `<common-dir>/worktrees/<id>/gitdir`, a file
+ * anyone who can write under `.git/` can point at an arbitrary directory, so a
+ * listed path is a CANDIDATE, never an answer. Git runs only in `parentCwd`
+ * (never inside a candidate — a candidate's own config could run hooks or
+ * fsmonitor commands), and its output is parsed NUL-separated (`-z`) so a
+ * worktree path containing a newline cannot inject an extra `worktree` line.
+ * `prunable` entries (git itself thinks the worktree is gone) are skipped.
+ * A candidate is then accepted only when the files on disk agree, both ways:
+ *   - main worktree: `<candidate>/.git` is this repository's common dir;
+ *   - linked worktree: `<candidate>/.git` is a gitfile whose `gitdir:` resolves
+ *     to `<common-dir>/worktrees/<id>`, AND that entry's `gitdir` file resolves
+ *     back to `<candidate>/.git`.
+ * Any failure (not a git repo, git missing, unreadable file) yields no roots,
+ * so the caller refuses — fail-closed.
+ */
+async function verifiedWorktreeRoots(parentCwd: string): Promise<string[]> {
+  let commonDir: string;
+  let listing: string;
+  try {
+    const common = await execFileAsync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      cwd: parentCwd,
+    });
+    commonDir = await realpath(path.resolve(parentCwd, common.stdout.replace(/\r?\n$/, "")));
+    listing = (await execFileAsync("git", ["worktree", "list", "--porcelain", "-z"], { cwd: parentCwd })).stdout;
+  } catch {
+    return [];
+  }
+  const worktreesDir = path.join(commonDir, "worktrees");
+  const roots: string[] = [];
+  for (const record of parseWorktreeListZ(listing)) {
+    if (record.prunable) {
+      continue;
+    }
+    const verified = await verifyWorktreeCandidate(record.path, commonDir, worktreesDir);
+    if (verified !== undefined) {
+      roots.push(verified);
+    }
+  }
+  return roots;
+}
+
+/** Parse `git worktree list --porcelain -z`: NUL-terminated fields, an empty field ends a record. */
+function parseWorktreeListZ(stdout: string): { path: string; prunable: boolean }[] {
+  const records: { path: string; prunable: boolean }[] = [];
+  let current: { path: string; prunable: boolean } | undefined;
+  for (const field of stdout.split("\0")) {
+    if (field.length === 0) {
+      if (current !== undefined) {
+        records.push(current);
+      }
+      current = undefined;
+      continue;
+    }
+    if (field.startsWith("worktree ")) {
+      if (current !== undefined) {
+        records.push(current);
+      }
+      current = { path: field.slice("worktree ".length), prunable: false };
+    } else if (current !== undefined && (field === "prunable" || field.startsWith("prunable "))) {
+      current.prunable = true;
+    }
+  }
+  if (current !== undefined) {
+    records.push(current);
+  }
+  return records.filter((r) => r.path.length > 0 && path.isAbsolute(r.path));
+}
+
+/** Verify one listed worktree by reading files only; returns its realpath, or `undefined` when refused. */
+async function verifyWorktreeCandidate(
+  candidate: string,
+  commonDir: string,
+  worktreesDir: string,
+): Promise<string | undefined> {
+  try {
+    const realCandidate = await realpath(candidate);
+    const dotGit = path.join(realCandidate, ".git");
+    const dotGitStat = await lstat(dotGit);
+    if (dotGitStat.isDirectory()) {
+      // Main worktree: its `.git` IS the common dir.
+      return (await realpath(dotGit)) === commonDir ? realCandidate : undefined;
+    }
+    if (!dotGitStat.isFile()) {
+      return undefined;
+    }
+    const gitfile = await readFile(dotGit, "utf8");
+    const match = /^gitdir: (.+?)\r?\n?$/.exec(gitfile);
+    if (match === null) {
+      return undefined;
+    }
+    const adminDir = await realpath(path.resolve(realCandidate, match[1]!));
+    if (path.dirname(adminDir) !== worktreesDir) {
+      return undefined;
+    }
+    const backLink = (await readFile(path.join(adminDir, "gitdir"), "utf8")).replace(/\r?\n$/, "");
+    const backTarget = await realpath(path.resolve(adminDir, backLink));
+    return backTarget === (await realpath(dotGit)) ? realCandidate : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // The two profiles that used to be built here moved to
 // `src/harness/policy/profiles.ts` when `keryx serve` needed a profile it could
 // COMPARE against — and the source-level guard written for that comparison found
@@ -415,22 +696,61 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "(MAE multi-agent). Use for independent investigations, reviews, or research while " +
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
         "label?: string, max_tool_calls?: integer, max_rounds?: integer }. " +
-        "max_tool_calls caps actual native child tool invocations; max_rounds independently " +
-        "limits model rounds (default 10, capped at 24). External runtimes cannot accept these limits. " +
+        "max_tool_calls is ADVISORY: it never stops the child, it only sets when the child is warned " +
+        "(from 80% of it) to return its result; a hard tool-call cap exists only when the operator " +
+        `configures ${ENV_SUBAGENT_MAX_TOOL_CALLS}. max_rounds limits model rounds (default 10, capped ` +
+        "at 24). A child that hits its round budget or the operator's call cap gets one final round to " +
+        "submit a partial result, and the output's first line is then 'status: BudgetExhausted (...)'. " +
+        "External runtimes cannot accept these limits. " +
         "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
         "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
         "(light|standard|deep) to size the child's model against your own, and a 'runtime' " +
         "block to delegate the child to an external vendor coding CLI instead of running it " +
-        "in-process.",
+        "in-process. Optional 'cwd' runs the child's tools against a different directory than " +
+        "yours (e.g. a review worktree checked out at a PR head) — accepted only when it is your " +
+        "own project root, a descendant of it, or one of its git worktrees; a relative path " +
+        "resolves against your own cwd. Not supported for external (runtime.kind='external') children.",
       inputSchema: {
         type: "object",
         properties: {
           task: { type: "string" },
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
-          max_tool_calls: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
-          max_rounds: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+          /**
+           * Flow 347 T8: per-call working directory for the CHILD's tools and
+           * "Project root:" prompt line only — see `resolveSubagentCwd`'s doc
+           * comment for the exact acceptance rule and `SpawnSubagentToolDeps.cwd`
+           * for which parent-scoped concerns deliberately do NOT follow it.
+           * OPTIONAL and additive: an omitted value inherits the parent's own
+           * cwd, exactly as every dispatch before this field existed.
+           */
+          cwd: {
+            type: "string",
+            description:
+              "Working directory for the child's tools (relative paths resolve against your own cwd). " +
+              "Must be your project root, a descendant of it, or one of its git worktrees; refused " +
+              "otherwise. Unsupported when 'runtime.kind' is 'external'.",
+          },
+          max_tool_calls: {
+            type: "integer",
+            // Flow 347 review F-007: 0 would mean "about 0 calls" to the child
+            // while bounding nothing, so the schema and `invoke()` both require
+            // >= 1; omit the field for no advisory target.
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Advisory tool-call target. Never stops the child; from 80% of it every tool result tells " +
+              "the child what remains and to return its result.",
+          },
+          max_rounds: {
+            type: "integer",
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+            description:
+              "Model-round budget (default 10, capped at 24). On reaching it the child gets one final " +
+              "round to submit a partial result.",
+          },
           /**
            * Flow 204 — how much model this child's work is worth.
            *
@@ -512,17 +832,47 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       const mode: SubagentMode = input.mode === "general" ? "general" : "read_only";
       for (const field of ["max_tool_calls", "max_rounds"] as const) {
         const value = input[field];
-        const minimum = field === "max_rounds" ? 1 : 0;
+        const minimum = 1;
         if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum)) {
           return { status: "Error", output: `spawn_subagent ${field} must be a safe integer >= ${minimum}`, isError: true };
         }
       }
-      const maxToolCalls = input.max_tool_calls as number | undefined;
+      // Flow 347 T7 (AC4): the model's `max_tool_calls` is advisory (a warning
+      // threshold); only the operator's configured cap stops a child.
+      const advisoryToolCalls = input.max_tool_calls as number | undefined;
+      const configuredMaxToolCalls = deps.configuredMaxToolCalls ?? resolveSubagentMaxToolCalls();
       const maxRounds = Math.min(MAX_SUBAGENT_MAX_ROUNDS, (input.max_rounds as number | undefined) ?? DEFAULT_SUBAGENT_MAX_ROUNDS);
-      if ((maxToolCalls !== undefined || input.max_rounds !== undefined) &&
+      if ((advisoryToolCalls !== undefined || input.max_rounds !== undefined) &&
         typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external") {
         return { status: "Error", output: "External subagents do not support native tool-call or model-round limits; use supported runtime budgets.", isError: true };
       }
+      // Flow 347 T8 (AC6): validate `cwd` before anything is spawned — a
+      // refused `cwd` must produce an error result with no admission attempt,
+      // no ledger reservation, and no child.
+      if (input.cwd !== undefined && typeof input.cwd !== "string") {
+        return { status: "Error", output: "spawn_subagent cwd must be a string path", isError: true };
+      }
+      const rawCwd = input.cwd as string | undefined;
+      const isExternalRuntimeRequest =
+        typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external";
+      if (rawCwd !== undefined && isExternalRuntimeRequest) {
+        // The external runtime always runs the child in its OWN freshly-cut
+        // disposable worktree (see `createRunExternal`/`runExternalChild`) —
+        // there is no per-call cwd concept on that path to honour, so a
+        // dispatch that asks for both is refused rather than silently
+        // ignoring the one that cannot apply.
+        return {
+          status: "Error",
+          output: "spawn_subagent cwd is not supported for external (runtime.kind='external') children; " +
+            "they always run in their own disposable worktree.",
+          isError: true,
+        };
+      }
+      const cwdResolution = await resolveSubagentCwd(rawCwd, deps.cwd);
+      if (!cwdResolution.ok) {
+        return { status: "Error", output: cwdResolution.reason, isError: true };
+      }
+      const childCwd = cwdResolution.cwd;
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
       const workerId = `sub:${idSeq()}`;
@@ -880,7 +1230,13 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         };
       }
 
-      const cwd = deps.cwd;
+      // Flow 347 T8: the CHILD's tools, its slate/Anchors computation, and its
+      // "Project root:" prompt line below all follow `childCwd` (the resolved
+      // per-call `cwd`, or `deps.cwd` when none was given) — never `deps.cwd`
+      // directly from here on. Parent-scoped concerns (routing config
+      // location above, this ledger, the OS-temp ephemeral slate directory)
+      // deliberately keep reading `deps.cwd`.
+      const cwd = childCwd;
       const tools =
         mode === "read_only"
           ? [
@@ -1060,17 +1416,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
-          (maxToolCalls === undefined ? "" : `You may invoke at most ${maxToolCalls} tools in total. `) +
+          (configuredMaxToolCalls === undefined
+            ? ""
+            : `You may invoke at most ${configuredMaxToolCalls} tools in total (a hard limit). `) +
+          (advisoryToolCalls === undefined
+            ? ""
+            : `Aim to finish within about ${advisoryToolCalls} tool calls — a target, not a hard stop; ` +
+              "tool results will tell you when you are close. ") +
           `You have up to ${maxRounds} model turns (rounds) to complete this task — each round ` +
           "may include several tool calls; an identical call repeated does not start a new round " +
           "but is still capped at a few attempts, so do not retry the same query hoping for a " +
           "different answer. If a graph/symbol/wiki lookup returns empty or 'not found', that tool " +
           "has no index for this — do not re-run it with a slightly reworded query; switch tool " +
           "(e.g. a direct file read or a plain text/code search) or report the gap instead of " +
-          "spending rounds probing the same dead end. End with a short factual summary the parent can use.",
+          "spending rounds probing the same dead end. When a tool result says your budget is nearly " +
+          "spent, stop exploring and return your result. If a limit is reached you get one final round " +
+          "in which the only tool is submit_result — use it to hand back a partial result. " +
+          "End with a short factual summary the parent can use.",
         idSeq: () => idSeq(),
+        // Flow 347 T17: the child's OWN control-nudge nonce, never the parent's —
+        // a child that echoes its nudges back cannot hand the parent a marker
+        // the parent's instruction would accept.
+        controlNonce: generateControlNonce(),
         maxRounds,
-        ...(maxToolCalls === undefined ? {} : { maxToolCalls }),
+        ...(configuredMaxToolCalls === undefined ? {} : { maxToolCalls: configuredMaxToolCalls }),
+        subagentBudget: advisoryToolCalls === undefined ? {} : { advisoryToolCalls },
       };
 
       let assistant = "";
@@ -1353,7 +1723,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         const userLine =
           `## Subagent task (${mode})\n` +
           `${task}\n\n` +
-          `Project root: ${deps.cwd}\n` +
+          `Project root: ${childCwd}\n` +
           `Round budget: ${maxRounds} rounds — plan which tools to try before spending them; prefer a ` +
           "direct, targeted lookup (exact file path, exact symbol) over a broad/guessed one, and fall " +
           "back to a different tool rather than repeating a failed call.\n\n" +
@@ -1420,39 +1790,58 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // check whether `runAgentTurnCore` itself cut the turn short for one
         // of D2a's two internal reasons FIRST. No new detection here; this
         // only labels what `finishReason` (D2a) already computed.
-        const finishReason = turnResult?.finishReason;
-        const status: SubagentCompletionStatus =
-          finishReason === "budget" || finishReason === "tool-call-budget"
-            ? "BudgetExhausted"
-            : finishReason === "no-progress"
-              ? "NoProgress"
-              : "Completed";
+        const status = subagentStatusForFinishReason(turnResult?.finishReason);
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
         const isError = status !== "Completed";
+        // Flow 347 T7 (AC5): a child the harness stopped is never reported as
+        // `done`, and its slate folds as incomplete.
         emitFleetEvent({
           kind: "upsert",
           id: workerId,
           label,
-          status: "done",
-          detail: "done",
+          status: isError ? "failed" : "done",
+          detail: subagentFleetDetail(status),
           model: `${runModel.provider}/${runModel.model}`,
           task,
         });
-        await foldChildSlateAndCleanup("completed");
+        await foldChildSlateAndCleanup(isError ? "incomplete" : "completed");
         await fireSubagentStop(status);
+        const header =
+          `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
+          `MAE reservation: rounds≤${maxRounds} ` +
+          (configuredMaxToolCalls === undefined ? "" : `calls≤${configuredMaxToolCalls} `) +
+          (advisoryToolCalls === undefined ? "" : `calls~${advisoryToolCalls}(advisory) `) +
+          `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
+          (tierRecord === undefined ? "" : `${tierRecord}\n`);
+        if (status === "Completed") {
+          return { status, isError, output: `${header}--- summary ---\n${boundSummary(folded.text)}` };
+        }
+        const statusLine = formatStoppedStatusLine(status, turnResult);
+        const submitted = turnResult?.submittedResult;
+        // The submitted payload is child-authored text entering the parent's
+        // history, so it gets the same quarantine pass as the summary.
+        const resultBlock =
+          submitted !== undefined
+            ? foldChildSummary(
+                `--- submitted result (${submitted.status}) ---\n` +
+                  `summary: ${submitted.summary}\n` +
+                  `result:\n${typeof submitted.result === "string" ? submitted.result : JSON.stringify(submitted.result, null, 2)}`,
+              ).text
+            : // Flow 347 review F-008: `submitResultError` echoes child-controlled
+              // text (the tool name it called, its JSON keys), so the whole block
+              // — not just the last output — goes through the quarantine pass.
+              foldChildSummary(
+                `no result submitted${turnResult?.submitResultError !== undefined ? ` (${turnResult.submitResultError})` : ""}\n` +
+                  `--- last output ---\n${raw}`,
+              ).text;
+        const boundedResult = boundSummary(resultBlock);
         return {
           status,
           isError,
-          output:
-            `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
-            `MAE reservation: rounds≤${maxRounds} ` +
-            (maxToolCalls === undefined ? "" : `calls≤${maxToolCalls} `) +
-            `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
-            (tierRecord === undefined ? "" : `${tierRecord}\n`) +
-            `--- summary ---\n${boundSummary(folded.text)}`,
-          ...(status !== "Completed" ? { partial: boundSummary(folded.text) } : {}),
+          output: `${statusLine}\n${header}${boundedResult}`,
+          partial: boundedResult,
         };
       } catch (cause) {
         closed = true;

@@ -13,7 +13,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reviewCommand } from "./review";
+import { reviewCommand, runReviewers } from "./review";
 import type { StructuredReviewFinding } from "../review/types";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
@@ -1283,4 +1283,63 @@ test("`review learn --reviewer=` (empty value) is refused, not silently falling 
   await reviewCommand(["learn", "--reviewer=", "--dry-run"]);
   expect(process.exitCode).toBe(1);
   expect(errors.join("\n")).toContain("needs a value");
+});
+
+// Flow 347 T9, AC7: `.metaproject` in ROOT here has no `skills/gdskills/review`
+// (only the bare directory `beforeEach` creates), the exact shape a review
+// worktree that never ran a full `skills install` has — `data/`/`reviews/`
+// only. Before this fix `reviewers`/`reviewers --json` silently reported
+// `bundled: []`, which an agent read as "no reviewers exist" and skipped
+// required review passes.
+test("`review reviewers` falls back to the keryx package's bundled review skills when the project never installed any, and says so", async () => {
+  await reviewCommand(["reviewers"]);
+  expect(process.exitCode).toBe(0);
+  const output = logs.join("\n");
+  expect(output).toContain("source: package");
+  expect(output).toContain("review-orchestrator");
+  expect(output).not.toBe("");
+});
+
+test("`review reviewers --json` reports bundledSource and a non-empty bundled list from the package fallback", async () => {
+  await reviewCommand(["reviewers", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("package");
+  expect(Array.isArray(parsed.bundled)).toBe(true);
+  expect(parsed.bundled.length).toBeGreaterThan(0);
+  expect(parsed.bundled.map((reviewer: { name: string }) => reviewer.name)).toContain("review-orchestrator");
+});
+
+test("`review reviewers` reports `project` as the source once the project's own review directory is installed, even if empty", async () => {
+  await mkdir(path.join(ROOT, ".metaproject", "skills", "gdskills", "review"), { recursive: true });
+
+  await reviewCommand(["reviewers", "--json"]);
+  expect(process.exitCode).toBe(0);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("project");
+  expect(parsed.bundled).toEqual([]);
+});
+
+// Flow 347 T15 / F-004: the only prior `not-found` coverage exercised the pure
+// renderer (`reviewers.test.ts`), so neither the fail-closed `process.exitCode
+// = 1` nor the `--json` shape of a `not-found` inventory was ever driven
+// through the command itself — the exact exit the incident needs to hold so
+// an agent reading "no reviewers" cannot mistake it for success. `runReviewers`
+// takes the package lookup as an injectable dependency (flow 347 T15) purely
+// so this can force the real fallback-to-nothing path without deleting files
+// out of the keryx package the rest of the suite depends on.
+test("`review reviewers` exits 1 on a `not-found` bundled source, in text mode", async () => {
+  await runReviewers([], { bundledSkillMarkdownPath: () => undefined });
+  expect(process.exitCode).toBe(1);
+  const output = logs.join("\n");
+  expect(output).toContain("source: not-found");
+  expect(output).toContain("not found");
+});
+
+test("`review reviewers --json` exits 1 and reports `bundledSource: \"not-found\"`", async () => {
+  await runReviewers(["--json"], { bundledSkillMarkdownPath: () => undefined });
+  expect(process.exitCode).toBe(1);
+  const parsed = JSON.parse(logs.join("\n"));
+  expect(parsed.bundledSource).toBe("not-found");
+  expect(parsed.bundled).toEqual([]);
 });
