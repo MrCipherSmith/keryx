@@ -10,7 +10,7 @@
   "title": "Review orchestration fails closed: plan is display-only, exhausted subagents report, reviewer inventory and publication are checked",
   "status": "in-progress",
   "createdAt": "2026-09-27T08:21:53.406Z",
-  "updatedAt": "2026-09-27T08:38:46.636Z",
+  "updatedAt": "2026-09-27T09:11:47.312Z",
   "source": {
     "type": "description",
     "ref": null
@@ -120,7 +120,7 @@
       "id": "T6",
       "title": "Toolless reprompt narrowed + shell nudges get distinct provenance/envelope (items 8,9; AC8-AC9)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -136,39 +136,54 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Tool-call budget: one tool-free wrap-up round; spawn_subagent output/fleet/slate report BudgetExhausted (item 2; AC4-AC5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T08:47:36.502Z",
+            "outcome": "started",
+            "detail": "347-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "spawn_subagent optional cwd confined to project root or its git worktrees (item 6; AC6)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:02:35.004Z",
+            "outcome": "started",
+            "detail": "347-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -226,8 +241,14 @@
         "T10"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T09:11:47.312Z",
+            "outcome": "started",
+            "detail": "347-T11 orchestrator-run"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -373,6 +394,36 @@
       "at": "2026-09-27T08:38:46.636Z",
       "event": "ac-updated",
       "detail": "AC13: \"(new)\" -> \"When a child has used at least 80% of any applicable tool-call limit (advisory or configured) or round budget, every subsequent tool result it receives ends with one line stating what remains and telling it to return its result now; the line appears once per threshold crossing per result, not before the threshold. Covered by tests.\" (user decision 2026-09-27: T7 scope widened from 'wrap-up round' to A+B+C — the model no longer picks a hard call cap (A), an early warning replaces the surprise cutoff (B), and the final round is a forced structured submit_result (C); T7 had not started)"
+    },
+    {
+      "at": "2026-09-27T08:47:36.064Z",
+      "event": "task-done",
+      "detail": "T6: Toolless reprompt narrowed + shell nudges get distinct provenance/envelope (items 8,9; AC8-AC9)"
+    },
+    {
+      "at": "2026-09-27T08:47:36.502Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 347-T7"
+    },
+    {
+      "at": "2026-09-27T09:02:34.713Z",
+      "event": "task-done",
+      "detail": "T7: Tool-call budget: one tool-free wrap-up round; spawn_subagent output/fleet/slate report BudgetExhausted (item 2; AC4-AC5)"
+    },
+    {
+      "at": "2026-09-27T09:02:35.004Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 347-T8"
+    },
+    {
+      "at": "2026-09-27T09:11:47.024Z",
+      "event": "task-done",
+      "detail": "T8: spawn_subagent optional cwd confined to project root or its git worktrees (item 6; AC6)"
+    },
+    {
+      "at": "2026-09-27T09:11:47.312Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 347-T11 orchestrator-run"
     }
   ]
 }

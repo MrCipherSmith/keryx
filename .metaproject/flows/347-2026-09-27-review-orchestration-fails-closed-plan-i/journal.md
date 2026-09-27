@@ -54,3 +54,37 @@ The tool-call cap chosen by the parent model (15–22 in the incident) was arbit
 AC4/AC5 rewritten and AC13 appended via `keryx flow ac update` before T7 started.
 
 Follow-up flow (init when it starts, not now — ids get taken on main while a branch is open): D — `continue_subagent(id, extra_rounds)` resumes an exhausted child with its context instead of a fresh re-dispatch; E — reviewers persist findings incrementally (tool or round file) so budget, timeout or provider failure never loses finished work. When D lands, AC10 wording in review-orchestrator ("one re-dispatch with a larger budget") becomes "continue the child".
+
+## T6 accepted (DONE)
+
+- 151 tests pass (agent, store); typecheck clean. `"i"` was already gone on origin/main; `"will"` removed.
+- Envelope `[keryx shell — control nudge]`, provenance `harness` (types.ts union + store.ts resume allowlist).
+- Concern carried into T7: `buildRepeatedFailureHint` and the "Tool loop stopped" wrap-up still use bare `[system]` + provenance `project`; AC9 says every control nudge, so T7 converts them (it rewrites the wrap-up path anyway).
+- 2026-09-27T08:47:36.064Z - task-done: T6: Toolless reprompt narrowed + shell nudges get distinct provenance/envelope (items 8,9; AC8-AC9)
+- 2026-09-27T08:47:36.502Z - task-attempt: T7: started (attempt 1) — 347-T7
+
+## T7 accepted (DONE_WITH_CONCERNS)
+
+- Hard per-child call cap only via `KERYX_SUBAGENT_MAX_TOOL_CALLS` (mirrors `KERYX_SUBAGENT_TIMEOUT_MS`); model value is advisory. Warning line from 80%. Final round offers only `submit_result` (no provider toolChoice exists — forced by sole-tool + nudge + `parseSubmitResultInput`). A child makes at most max_rounds+1 requests.
+- Output first line `status: BudgetExhausted (…)` / `NoProgress`; fleet `failed` with detail `budget-exhausted`/`no-progress` (fleet type has no `partial`; accepted to avoid TUI churn); slate `incomplete`.
+- AC9 remainder done: repeated-failure hint and "Tool loop stopped" now harness envelope/provenance.
+- Tests: 502 pass on agent/budget/builtin/goal; the 3 failures (F5c, 2× makeGitApplyRunner) and acp-client 20 fail identically on clean origin/main (23 fail there) — machine git hook / ps environment, not this flow.
+- Open: live `harness run` demo for AC1/AC4 is T11.
+- 2026-09-27T09:02:34.713Z - task-done: T7: Tool-call budget: one tool-free wrap-up round; spawn_subagent output/fleet/slate report BudgetExhausted (item 2; AC4-AC5)
+- 2026-09-27T09:02:35.004Z - task-attempt: T8: started (attempt 1) — 347-T8
+
+## T8 accepted (DONE)
+
+- `cwd` resolved by realpath; accepted = project root, descendant, or `git worktree list` entry; refused before any admission/ledger reservation; refused with `runtime.kind: external` (external children have their own worktree).
+- Follows child cwd: tools, slate anchors, "Project root" prompt line. Stays at parent root: routing config, temp slate dir, MAE ledger.
+- Orchestrator fix before commit: the new test hard-coded the repo owner's noreply email to pass a local global git hook; replaced with the repo convention `test@test.com` + `commit --no-verify` in the throwaway fixture. 94 spawn-subagent tests pass; typecheck/lint clean (worker).
+- 2026-09-27T09:11:47.024Z - task-done: T8: spawn_subagent optional cwd confined to project root or its git worktrees (item 6; AC6)
+- 2026-09-27T09:11:47.312Z - task-attempt: T11: started (attempt 1) — 347-T11 orchestrator-run
+
+## T11 verification (orchestrator-run)
+
+- `bun run typecheck && bun run lint`: exit 0.
+- `bun run test:core`: branch 17728 pass / 238 fail; clean origin/main (0b7fc0b6) 17710 pass / 238 fail. The two sets of failing test names are identical (`comm` of sorted names: none only-on-branch, none only-on-base) — machine environment (global git commit hook refusing fixture authors, sandbox/ps), not this flow. Branch adds 18 passing tests.
+- Scripted-provider demo against the working tree (scripts outside the repo, `scratchpad/demo/`), re-run by the orchestrator:
+  - `bun run demo/ac1-plan-follow-through.ts` → default: `requests.length === 1: true`, `nudge appended to history: false`, operator line `[plan] Turn ending with actionable plan items remaining (follow-through is off)`; opt-in: `requests.length === 2`, provenance `harness`, envelope `[keryx shell — control nudge]`.
+  - `bun run demo/ac4-ac5-ac13-spawn-subagent.ts` → advisory `max_tool_calls: 3`, 5 calls: `result.status: Completed`, warning per result `[false,false,true,true,true]`, fleet `done`; configured cap 3: final request tools `["submit_result"]`, first line `status: BudgetExhausted (3/3 calls)`, submitted partial result present, fleet `failed` / `budget-exhausted`.
