@@ -648,18 +648,38 @@ export function bundledSkillMarkdownPath(category: string, name: string): string
 }
 
 /**
- * A resolved keryx-package file (e.g. from `bundledSkillMarkdownPath`), shown
- * relative to the package root instead of as an absolute path.
+ * The path segment every `bundledSkillMarkdownPath` candidate resolves
+ * through, once `..` segments are normalized away: `<pkg>/src/gdskills/bundled`
+ * in the source layout, and — because the built package ships its
+ * `src/gdskills/bundled` tree verbatim (see package.json `files`) and the
+ * second candidate walks `dist/../src/gdskills/bundled/...` — the same
+ * `src/gdskills/bundled` segment in the bundled layout too, regardless of
+ * whether the build emits `dist/gdskills/**` or one bundled `dist/cli.js`.
+ */
+const BUNDLED_TREE_MARKER = path.join("src", "gdskills", "bundled");
+
+/**
+ * A resolved keryx-package file or directory (e.g. from
+ * `bundledSkillMarkdownPath`, or `path.dirname` of its result), shown relative
+ * to the package root instead of as an absolute path.
  *
- * `here` (this module's directory) is always `<package root>/src/gdskills` or
- * `<package root>/dist/gdskills` — one level up from the root either way — so
- * `path.join(here, "..", "..")` is the package root in both the source and
- * built layouts `bundledSkillMarkdownPath` resolves against.
+ * Derived from the resolved candidate itself, not from this module's own
+ * depth under the package root (`here`): the build (`bun build ./src/cli.ts
+ * --outdir ./dist`) emits a single bundled `dist/cli.js`, so a build-time
+ * `here` is `<pkg>/dist`, one level shallower than the two-levels-up
+ * assumption a depth-based root would need — which silently resolved the root
+ * ABOVE the package and produced paths like
+ * `keryx/src/gdskills/bundled/skills/review/<name>` for an installed package
+ * (flow 347 R2-1). Finding the known `src/gdskills/bundled` marker in the
+ * already-resolved path is layout-independent by construction.
  */
 export function packageRelativePath(file: string): string {
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const packageRoot = path.join(here, "..", "..");
-  return path.relative(packageRoot, file).split(path.sep).join("/");
+  const normalized = path.normalize(file);
+  const markerIndex = normalized.lastIndexOf(BUNDLED_TREE_MARKER);
+  if (markerIndex === -1) {
+    throw new Error(`packageRelativePath: "${file}" does not resolve through a "${BUNDLED_TREE_MARKER}" tree; only paths from bundledSkillMarkdownPath are supported.`);
+  }
+  return normalized.slice(markerIndex).split(path.sep).join("/");
 }
 
 /**
