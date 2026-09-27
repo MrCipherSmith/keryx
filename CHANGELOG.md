@@ -54,6 +54,29 @@ All notable changes to `keryx` are documented here. The format follows
   which check failed in the gate's report line.
 - **Bare `keryx providers` prints the status summary, not usage.** Matches
   `keryx providers status`; `keryx providers --help` is unchanged.
+- **An unknown SUBCOMMAND of a known group now gets the same one-line
+  treatment, for ~38 groups, not just the top level and `keryx mcp`.**
+  Review round 1 of this flow found that `keryx health rn`, `keryx wiki
+  serach` and every other group with real subcommands still dumped that
+  group's full usage on a typo — only the top-level dispatch and `keryx mcp
+  <sub>` had been fixed. `keryx <group> <bad-subcommand>` now prints one
+  line to stderr — `Unknown command: rn. Did you mean: run? Run \`keryx
+  health --help\` for the list.` — naming that GROUP's own `--help`, not the
+  top-level one, and exits `1` with empty stdout. Implemented centrally in
+  `cli.ts`'s dispatch, driven by a hand-verified per-group subcommand table
+  (`src/lib/group-subcommands.ts`) — deliberately not derived from the
+  agent-callable command registry or the flat top-level usage block, both of
+  which are incomplete for several groups (e.g. `health` and `wiki`) and
+  would have produced false "unknown command" reports for real subcommands.
+  Covers: modules, projects, providers, routing, external, auth, version,
+  gdgraph, ctx, wiki, stack, health, metrics, test, memory, flow, job,
+  review, rules, standard, security, sandbox, integrate, integrations, mcp,
+  workspace, retention, forgetting, trigger, schedule, governance, hooks,
+  bundle, learn, sessions/session, serve, bus, dashboard, skills. Left out,
+  deliberately, wherever the first argument is a genuine positional (a path,
+  a free-text prompt, an id, an optional runtime name) rather than a closed
+  subcommand vocabulary, or where the group already manages its own
+  `--help`/error surface (`agents`, `shell`).
 
 ## [0.3.16] — 2026-09-27
 

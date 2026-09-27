@@ -18,12 +18,23 @@ keryx <command> [args] [flags]
 | `--version` | `-v` | Print the installed version and exit. |
 
 Running `keryx` with no command, or with `--help`/`-h`, prints the usage
-block. An unknown command or subcommand (flow 353, AC3) prints exactly one
-line to stderr — `Unknown command: <x>. Did you mean: <up to 3 close
-matches>? Run \`keryx --help\` for the list.`, the "Did you mean" clause
-omitted when nothing is within edit distance 2 — and exits with code `1`.
-It never prints the full usage block; that used to go to **stdout** on this
-same error path.
+block. An unknown top-level command (flow 353, AC3) prints exactly one line
+to stderr — `Unknown command: <x>. Did you mean: <up to 3 close matches>?
+Run \`keryx --help\` for the list.`, the "Did you mean" clause omitted when
+nothing is within edit distance 2 — and exits with code `1`. It never prints
+the full usage block; that used to go to **stdout** on this same error path.
+
+An unknown SUBCOMMAND of a group with a verified subcommand vocabulary
+(flow 353 review round 1) gets the identical one-line treatment, but naming
+that group's own help — `keryx health rn` → `Unknown command: rn. Did you
+mean: run? Run \`keryx health --help\` for the list.` Covers roughly forty
+groups (`modules`, `providers`, `wiki`, `health`, `memory`, `flow`, `mcp`,
+`skills`, … — see `src/lib/group-subcommands.ts` for the exact, hand-verified
+list and why it is not simply "every `CLI_ROUTES` verb"); a group not on
+that list, or a first argument that is a genuine positional (a path, an id,
+a free-text prompt) rather than a closed subcommand vocabulary, is
+unaffected and still reaches the handler's own usage on an unrecognised
+value.
 
 ## version
 

@@ -139,6 +139,7 @@ function moduleStems(module: string): string[] {
  */
 const CORE_COMMANDS: readonly string[] = [
   "help",
+  "doctor",
   "status",
   "modules status",
   "projects list",

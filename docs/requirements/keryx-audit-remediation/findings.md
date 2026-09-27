@@ -1,6 +1,6 @@
 # Audit ledger — 2026-09-27
 
-Version: 0.1.1
+Version: 0.1.2
 
 Source keys: `L` logic review, `S` security review, `A` architecture review,
 `G` deterministic gates, `R` flow 352 review round 1. Line numbers are as of
@@ -60,6 +60,7 @@ orchestrator reading the path unless marked *probe* (confirmed by a runnable
 | R-MIN1 | minor | `harness/external/env.ts` | `isDeniedForMcpChild` lives in `mcp-servers/spawn-env.ts` and is reached cross-subsystem; a shared home would say what it is. |
 | R-I1 | info | `harness/external/env.ts` | First-pass by-name check is case-sensitive; the shape check behind it catches the rest. |
 | R-I2 | info | `mcp-servers/spawn-env.ts` `GLUED_SECRET_RE` | Unanchored; no false positive found. |
+| S-11 | low | `mcp-servers/compat.ts` `parseGrokToml` | An unsupported TOML value form is echoed raw into the problem message — a Bearer token in an inline-table `headers` field would print in `mcp list --json` warnings, `mcp doctor` and the `/mcp` panel. Pre-existing; found by the flow 353 review round (S1). |
 
 ## Open — architecture debt
 

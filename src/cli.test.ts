@@ -2,7 +2,14 @@ import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { CLI_ROUTES, exitCodeForError, groupUsage, helpRequestedFor, shouldInterceptHelp } from "./cli";
+import {
+  CLI_ROUTES,
+  exitCodeForError,
+  groupUsage,
+  groupsWithKnownSubcommands,
+  helpRequestedFor,
+  shouldInterceptHelp,
+} from "./cli";
 import { ShellFlagError, shellCommand } from "./commands/shell";
 
 // RED tests for flow 021 (interactive `keryx` shell), T5 / AC3.
@@ -265,6 +272,60 @@ describe("keryx <unknown command> (AC3)", () => {
     expect(result.code).toBe(1);
     expect(result.stdout).toBe("");
     expect(result.stderr.trim()).toBe("Unknown command: zzzqxvvv. Run `keryx --help` for the list.");
+  });
+});
+
+// Flow 353 review round 1 (blocker L1): the same one-line treatment, but for
+// an unknown SUBCOMMAND of a known group (`keryx health rn`, `keryx wiki
+// serach`) — previously only the top-level dispatch and `keryx mcp <sub>`
+// had it; every other group with real subcommands still dumped its own full
+// usage. `groupsWithKnownSubcommands()` is the exact set `cli.ts`'s central
+// dispatch checks — iterating it (rather than a second, hand-written list)
+// means a group this file stops tracking cannot silently drop out of
+// coverage here too.
+describe("keryx <group> <unknown subcommand> (review round 1, L1)", () => {
+  test.each([...groupsWithKnownSubcommands()])("`keryx %s zzzqxvvv`: exit 1, one stderr line naming its own --help, empty stdout", async (group: string) => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunExpectingFailure([cliPath, group, "zzzqxvvv"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    const lines = result.stderr.split("\n").filter((line) => line.length > 0);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toBe(`Unknown command: zzzqxvvv. Run \`keryx ${group} --help\` for the list.`);
+  });
+
+  test("`keryx health rn` suggests `run`", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunExpectingFailure([cliPath, "health", "rn"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: rn. Did you mean: run? Run `keryx health --help` for the list.");
+  });
+
+  // "search" is not actually a real `wiki` subcommand (the real dispatch —
+  // status/new/index/collect/check-links/validate/freshness/refresh/verify/
+  // migrate-markers/ask/sections/enrich/context/backlinks, `commands/wiki.ts`
+  // — has no "search") — so "serach" gets no suggestion. The property this
+  // still proves is the one that matters: one stderr line, empty stdout,
+  // exit 1, never wiki's own full usage dump.
+  test("`keryx wiki serach`: one line, empty stdout, exit 1 (no real `search` subcommand to suggest)", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunExpectingFailure([cliPath, "wiki", "serach"]);
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe("");
+    expect(result.stderr.trim()).toBe("Unknown command: serach. Run `keryx wiki --help` for the list.");
+  });
+
+  test("a real subcommand of a checked group is unaffected (`keryx health status`, `keryx wiki ask`)", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const health = await runBunExpectingFailure([cliPath, "health", "status"]);
+    expect(health.code).toBe(0);
+    const wiki = await runBunExpectingFailure([cliPath, "wiki", "ask", "--help"]);
+    // `ask --help` is a question, not a claim about wiki's data — exit 0 either way is not the property under test here; only that it was NOT rejected as "unknown".
+    expect(wiki.stderr).not.toContain("Unknown command");
   });
 });
 

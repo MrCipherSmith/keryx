@@ -130,6 +130,8 @@ import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { helpCommand } from "./commands/help";
 import { doctorCommand } from "./commands/doctor";
 import { formatUnknownCommandMessage } from "./lib/suggest";
+import { GROUP_SUBCOMMANDS } from "./lib/group-subcommands";
+import { MCP_CONSUMER_SUBCOMMANDS } from "./commands/mcp-servers";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -216,6 +218,35 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   "__sandbox-net-forward": sandboxNetForwardCommand,
 };
 
+/**
+ * `mcp`'s consumer subcommands plus its retired publisher spellings
+ * (`install`/`uninstall`/`serve`, still handled by `mcpCommand` itself —
+ * `./commands/mcp.ts`) — the exact set that command's own dispatch accepts.
+ * Assembled here, not inside `group-subcommands.ts` (review round 1, L1):
+ * that module is deliberately zone-safe pure data (`src/lib` is the
+ * `shared` zone; `MCP_CONSUMER_SUBCOMMANDS` lives in `commands/mcp-servers.ts`,
+ * the `adapter` zone, and shared code must not import upward into it) —
+ * `cli.ts` is the composition root that already imports every adapter-zone
+ * command module directly, so it is the right place to merge the two.
+ */
+const MCP_KNOWN_SUBCOMMANDS: readonly string[] = [...MCP_CONSUMER_SUBCOMMANDS, "install", "uninstall", "serve"];
+
+/**
+ * The known first-subcommand vocabulary for `command`, or `undefined` when
+ * `command` either takes no subcommand at all or is not one this file has
+ * verified data for (see `group-subcommands.ts`'s own doc comment for why
+ * that set is deliberately not every `CLI_ROUTES` entry). Pure.
+ */
+export function knownSubcommandsFor(command: string): readonly string[] | undefined {
+  if (command === "mcp") return MCP_KNOWN_SUBCOMMANDS;
+  return GROUP_SUBCOMMANDS.get(command);
+}
+
+/** Every group name this file has verified subcommand data for — the table `cli.test.ts`'s coverage test iterates. */
+export function groupsWithKnownSubcommands(): readonly string[] {
+  return ["mcp", ...GROUP_SUBCOMMANDS.keys()];
+}
+
 export async function main(): Promise<void> {
   // The client supplies the model turn that core refuses to import.
   //
@@ -267,6 +298,24 @@ export async function main(): Promise<void> {
       // `trigger` subcommand but `run` — this is the fix for that class of
       // drift, applied without touching the "ask, don't do" guard above.
       await printCommandHelp(command);
+      return;
+    }
+    // Flow 353 review round 1 (blocker L1): the SAME one-line "unknown
+    // command" treatment as the top-level check below, but for a known
+    // group's first SUBCOMMAND — `keryx health rn`/`keryx wiki serach` used
+    // to reach the handler and print that handler's own full usage on
+    // stdout, the exact defect AC3 closes at the top level. Conservative on
+    // purpose: only fires for a group `knownSubcommandsFor` has verified
+    // data for, only when a first argument is actually present, and never
+    // for anything that looks like a flag (`--json`) or an already-checked
+    // `--help`/`-h` (the guard above already returned on those). A
+    // genuinely unknown group name still falls through to `route`
+    // undefined below, unaffected.
+    const known = knownSubcommandsFor(command);
+    const sub = args[1];
+    if (known !== undefined && sub !== undefined && !sub.startsWith("-") && !known.includes(sub)) {
+      console.error(formatUnknownCommandMessage(sub, known, `keryx ${command} --help`));
+      process.exitCode = 1;
       return;
     }
     await route(args.slice(1));

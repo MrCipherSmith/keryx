@@ -171,4 +171,35 @@ describe("keryx doctor (CLI) — --json shape and exit codes", () => {
     expect(out).toContain("keryx doctor");
     expect(out).not.toContain("version:");
   });
+
+  // Flow 353 review round 1 (blocker T1): every test above drives ONLY the
+  // exit-code arithmetic (`doctorFailed`) against a synthetic report — none
+  // of them proves `doctorCommand` itself ever actually SETS
+  // `process.exitCode` to 1 for a genuine failing check. This drives the
+  // real command end to end: `bunFloor` (`DoctorTestOverrides`, a seam that
+  // exists ONLY for this test — see its doc comment in `doctor.ts`) is set
+  // above the real, running Bun version, which fails ONLY the `bun` check
+  // (`meetsBunFloor` is a pure function of the two version strings and
+  // touches nothing else) while every other check still reads the real
+  // environment.
+  test("a real failing check (bun below an injected floor) sets `status: \"fail\"` in --json AND exits 1", async () => {
+    const impossibleFloor = ">=999.0.0";
+    const { out, code } = await runCaptured(() =>
+      doctorCommand(["--json"], process.cwd(), { bunFloor: impossibleFloor }),
+    );
+    const parsed = JSON.parse(out) as DoctorReport;
+    const bun = parsed.checks.find((c) => c.id === "bun");
+    expect(bun?.status).toBe("fail");
+    expect(bun?.detail).toContain(impossibleFloor);
+    expect(bun?.fix).toBeDefined();
+    expect(code).toBe(1);
+  });
+
+  test("the same injected failure sets exit 1 on the human-readable path too", async () => {
+    const { out, code } = await runCaptured(() =>
+      doctorCommand([], process.cwd(), { bunFloor: ">=999.0.0" }),
+    );
+    expect(out).toContain("✗ bun:");
+    expect(code).toBe(1);
+  });
 });

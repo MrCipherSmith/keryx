@@ -124,8 +124,15 @@ export function meetsBunFloor(current: string, floor: string): boolean {
   return true;
 }
 
-function checkBun(): DoctorCheck {
-  const floor = (packageJson as { engines?: { bun?: string } }).engines?.bun;
+/**
+ * `bunFloorOverride` (review round 1, T1) exists ONLY so a test can drive a
+ * genuine `fail` through the real `doctorCommand`/`buildDoctorReport` path —
+ * a floor from anywhere but `package.json` is not a real environment fact,
+ * so no production caller ever passes it; every real invocation reads the
+ * documented floor, unchanged.
+ */
+function checkBun(bunFloorOverride?: string): DoctorCheck {
+  const floor = bunFloorOverride ?? (packageJson as { engines?: { bun?: string } }).engines?.bun;
   const current = Bun.version;
   if (floor === undefined || meetsBunFloor(current, floor)) {
     return { id: "bun", status: "ok", detail: `Bun ${current}${floor ? ` (floor ${floor})` : ""}` };
@@ -313,6 +320,11 @@ async function checkWikiFreshness(cwd: string): Promise<DoctorCheck> {
   };
 }
 
+export interface DoctorTestOverrides {
+  /** Review round 1, T1: drive a genuine `bun` `fail` without touching `package.json` or the running Bun. Never set by a real caller. */
+  readonly bunFloor?: string;
+}
+
 /**
  * Build the whole report. Every check runs, regardless of any other one's
  * result — a broken MCP config must never hide a stale graph. Order here
@@ -321,10 +333,11 @@ async function checkWikiFreshness(cwd: string): Promise<DoctorCheck> {
 export async function buildDoctorReport(
   cwd: string,
   env: Record<string, string | undefined> = process.env,
+  overrides: DoctorTestOverrides = {},
 ): Promise<DoctorReport> {
   const checks = await Promise.all([
     checkVersionAvailability(),
-    Promise.resolve(checkBun()),
+    Promise.resolve(checkBun(overrides.bunFloor)),
     Promise.resolve(checkRipgrep()),
     Promise.resolve(checkSandbox()),
     Promise.resolve(checkProviders(env)),
@@ -355,7 +368,11 @@ export function formatDoctorReport(report: DoctorReport): string {
   return lines.join("\n");
 }
 
-export async function doctorCommand(args: string[] = [], cwd: string = process.cwd()): Promise<void> {
+export async function doctorCommand(
+  args: string[] = [],
+  cwd: string = process.cwd(),
+  overrides: DoctorTestOverrides = {},
+): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`keryx doctor [--json]
 
@@ -366,7 +383,7 @@ drift, Metaproject Standard warnings, stale .claude/worktrees entries, and
 graph/wiki freshness. Exits 0 unless something is a "fail".`);
     return;
   }
-  const report = await buildDoctorReport(cwd);
+  const report = await buildDoctorReport(cwd, process.env, overrides);
   if (args.includes("--json")) {
     console.log(JSON.stringify(report, null, 2));
   } else {

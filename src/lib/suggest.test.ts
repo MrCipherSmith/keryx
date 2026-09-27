@@ -27,6 +27,18 @@ test("suggestClosest on an empty query returns nothing", () => {
   expect(suggestClosest("", KNOWN)).toEqual([]);
 });
 
+// Flow 353 review round 1 (info T2): the boundary itself, not just "close"
+// vs "nonsense" — "bui" is `build` missing its last two characters (two
+// insertions restore it: distance exactly 2, the pinned ceiling), "bu" is
+// missing its last three (distance exactly 3, one past it).
+test("edit distance exactly at the ceiling (2) still suggests", () => {
+  expect(suggestClosest("bui", ["build"])).toEqual(["build"]);
+});
+
+test("edit distance one past the ceiling (3) suggests nothing", () => {
+  expect(suggestClosest("bu", ["build"])).toEqual([]);
+});
+
 test("formatUnknownCommandMessage with a suggestion", () => {
   expect(formatUnknownCommandMessage("docto", KNOWN)).toBe(
     "Unknown command: docto. Did you mean: doctor? Run `keryx --help` for the list.",
@@ -36,5 +48,11 @@ test("formatUnknownCommandMessage with a suggestion", () => {
 test("formatUnknownCommandMessage with no suggestion drops the clause entirely, not empty", () => {
   expect(formatUnknownCommandMessage("zzzqxvvv", KNOWN)).toBe(
     "Unknown command: zzzqxvvv. Run `keryx --help` for the list.",
+  );
+});
+
+test("formatUnknownCommandMessage: a custom helpCommand names the group's own --help, not the top-level one", () => {
+  expect(formatUnknownCommandMessage("rn", ["run", "status"], "keryx health --help")).toBe(
+    "Unknown command: rn. Did you mean: run? Run `keryx health --help` for the list.",
   );
 });
