@@ -1,6 +1,6 @@
 # Acceptance Layer — Metrics and Validation
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Why this document exists
 
@@ -127,6 +127,29 @@ W0 is worth keeping only if, after it ships:
   `none` means the escape hatch is being avoided for appearances;
 - the `exec` plus `invariant` share is large enough to make W1's runner worth
   building. If it lands far below the 26.6 % upper bound, W1 does not follow.
+
+## Reproducing these figures
+
+Both scripts live beside this document, read only the working tree, call no
+model and write nothing.
+
+```bash
+# measurements 1b and 1c — what the criteria already say, and the trend
+python3 docs/requirements/keryx-acceptance-layer/tools/measure-criteria-shape.py .
+
+# measurement 1 — retrospective disagreement against each flow's own diff
+python3 docs/requirements/keryx-acceptance-layer/tools/measure-disagreement.py
+```
+
+`measure-disagreement.py` reproduces the deterministic half of
+`src/flow/check-ac.ts` outside the codebase on purpose: running the real command
+over 126 flows would have called Jev 1,255 times. If that module's token
+extraction or marker list changes, this script drifts and its output stops being
+comparable — treat a divergence as a signal to re-derive, not as a finding.
+
+Figures above were taken 2026-09-28 and are the "before" arm. They are recorded
+and closed: re-running the scripts later measures a different corpus, which is
+the point of the "after" arm, not a correction of this one.
 
 ## Threats to validity
 

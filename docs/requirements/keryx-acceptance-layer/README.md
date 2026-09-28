@@ -1,6 +1,6 @@
 # Keryx Acceptance Layer
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Purpose
 
@@ -31,6 +31,7 @@ are unreliable" — did not survive contact with the data.
 | [specification.md](specification.md) | Format, storage, CLI surface, data contracts, integration points, acceptance criteria. |
 | [metrics-and-validation.md](metrics-and-validation.md) | The corpus measurements, the pre-registered falsifiers, and what fired. |
 | [implementation-plan.md](implementation-plan.md) | W0–W4, order, and the decision gates between them. |
+| [tools/](tools/) | The two measurement scripts behind metrics-and-validation. No model, no network, read-only. |
 
 ## Scope
 
