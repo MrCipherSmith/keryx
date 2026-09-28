@@ -143,9 +143,10 @@ function kinds(events: readonly ExternalEvent[]): string[] {
 // ---------------------------------------------------------------------------
 
 describe("codec lookup fails closed", () => {
-  test("both shipped agents resolve", () => {
+  test("every shipped codec agent resolves", () => {
     expect(getExternalCodec("codex-cli")).toBe(codexCliCodec);
     expect(getExternalCodec("claude-cli")).toBe(claudeCliCodec);
+    expect(getExternalCodec("antigravity-cli")).toBeDefined();
   });
 
   test("an unknown id yields undefined, never a default codec", () => {
@@ -156,7 +157,7 @@ describe("codec lookup fails closed", () => {
   });
 
   test("the list is enumerable and agrees with the codecs' own ids", () => {
-    expect(externalCodecIds()).toEqual(["codex-cli", "claude-cli"]);
+    expect(externalCodecIds()).toEqual(["codex-cli", "claude-cli", "antigravity-cli"]);
     expect(EXTERNAL_CODECS.map((codec) => codec.id)).toEqual(externalCodecIds());
   });
 });

@@ -1,0 +1,19 @@
+{
+  "agy": "1.2.12",
+  "keryx": "0.3.25",
+  "os": "linux",
+  "recordedAt": "2026-09-28",
+  "argv": [
+    "agy",
+    "-p",
+    "<prompt>",
+    "--output-format",
+    "stream-json",
+    "--sandbox",
+    "--print-timeout",
+    "150s"
+  ],
+  "prompt": "List the top-level files in this directory and say how many there are. Reply ONLY with a JSON object {\"summary\": \"<your answer>\"} and nothing else.",
+  "exit": 0,
+  "note": "Headless mode auto-denied the run_command tool; result is status SUCCESS with an empty response and denied_actions. stderr is in tool-denied.stderr.txt."
+}

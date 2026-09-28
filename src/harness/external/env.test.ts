@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import {
   ENV_EXTERNAL_DEPTH,
   EXTERNAL_ENV_DENY,
+  EXTERNAL_RUNTIME_CREDENTIAL_ALLOW,
   buildExternalChildEnv,
   canNestExternalChild,
   readExternalDepth,
@@ -186,6 +187,38 @@ describe("AC1: buildExternalChildEnv strips credential-shaped variables the old 
     expect(geminiEnv.GEMINI_API_KEY).toBe("gm-secret");
     expect(geminiEnv.GOOGLE_API_KEY).toBe("goog-secret");
     expect(geminiEnv).not.toHaveProperty("OPENAI_API_KEY");
+  });
+
+  test("AC5 (flow 357): an antigravity-cli child gets NONE of Google's, OpenAI's, Anthropic's or GitHub's credentials — only HOME/PATH pass", () => {
+    const parent: Record<string, string | undefined> = {
+      PATH: "/usr/bin",
+      HOME: "/home/op",
+      GOOGLE_API_KEY: "goog-secret",
+      GEMINI_API_KEY: "gm-secret",
+      GOOGLE_APPLICATION_CREDENTIALS: "/home/op/.gcp/sa.json",
+      OPENAI_API_KEY: "sk-openai-secret",
+      ANTHROPIC_API_KEY: "sk-ant-secret",
+      GITHUB_TOKEN: "ghp_deadbeef",
+      GH_TOKEN: "ghp_deadbeef",
+    };
+    const env = buildExternalChildEnv({ parent, depth: 0, runtimeId: "antigravity-cli" });
+    expect(env.PATH).toBe("/usr/bin");
+    expect(env.HOME).toBe("/home/op");
+    for (const key of [
+      "GOOGLE_API_KEY",
+      "GEMINI_API_KEY",
+      "GOOGLE_APPLICATION_CREDENTIALS",
+      "OPENAI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GITHUB_TOKEN",
+      "GH_TOKEN",
+    ]) {
+      expect(env).not.toHaveProperty(key);
+    }
+  });
+
+  test("EXTERNAL_RUNTIME_CREDENTIAL_ALLOW declares antigravity-cli as an empty list, not an absent entry", () => {
+    expect(EXTERNAL_RUNTIME_CREDENTIAL_ALLOW["antigravity-cli"]).toEqual([]);
   });
 
   test("an unrecognised runtimeId gets no exemption at all — fail closed", () => {

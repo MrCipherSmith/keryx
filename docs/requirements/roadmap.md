@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.18
+Version: 0.29.19
 
 ## Status
 
@@ -17,6 +17,13 @@ carrying the measurement that found it and the reason it was not done then.
 > merge. Only some were ever PUBLISHED: releases fire on a `v*` tag
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
+>
+> - **0.29.19**: `keryx-antigravity-agent` — Google's Antigravity CLI (`agy`)
+>   as a third line-stream external agent, **implemented read-only** (flow
+>   357, 0.3.26). keryx drives the operator's own logged-in binary in its
+>   documented headless mode and never touches Google credentials; the
+>   subscription-OAuth route was rejected because Google's terms name it a
+>   breach. On the `/external` block-list by default, one-time consent.
 >
 > - **0.29.18**: two packages for a product layer, both **draft — specification
 >   written, nothing implemented**, delivered together because the second
@@ -755,3 +762,4 @@ carrying the measurement that found it and the reason it was not done then.
 | [Keryx Shell Split](keryx-shell-split/README.md) | P1/P2 implemented (flows 276-278, PRs #623, #625, #631); P3/P4 not started | The two shell god-files were pinned by 17 test files reading them as text — 51 read sites of substrings, `indexOf` offset comparisons and fixed character windows — so a behaviour-preserving move failed tests that could not distinguish a move from a break. Down to 34 sites across 12 files. The seam work also found a live bug: `serve.ts` registered a `process.once` teardown handler that a repo-wide ban had never scanned for, so a second Ctrl-C killed `keryx serve` mid-drain. Remaining audits and the seam each waits on are listed in the package. |
 | [Keryx Audit Remediation](keryx-audit-remediation/README.md) | R1, R2 implemented (flow 354, PR #774, 0.3.18); R3–R5 draft | 22 confirmed findings from the 2026-09-27 audit left open: provider stream contracts (EOF mid tool-call, in-stream errors, call ids), harness/shell error boundaries, redaction entropy and injection evasions, outbound URL screening, eight import cycles, the secret scan and health gates on keryx's own tree. Same-day fixes (0.3.14–0.3.16) recorded as closed. |
 | [Keryx P0 Improvements](keryx-p0-improvements/README.md) | W5 implemented (flow 353, PR #773, 0.3.17); W1–W4 draft | Five workstreams from the competitive review against ten coding agents: external agents run live (W1), `/rewind` file snapshots (W2), review as a GitHub Action with verifier status (W3), remote approval transport (W4), first-hour fixes — `keryx doctor`, did-you-mean, `mcp list` exit codes, memory search, health detection (W5). Package carries the review and the P1/P2 backlog. |
+| [Keryx Antigravity Agent](keryx-antigravity-agent/README.md) | **implemented (read-only, flow 357, 0.3.26)**; live run through keryx recorded | Google's Antigravity CLI (`agy`) as a line-stream external agent: registry row, stream-json codec, empty credential allowlist, `/external` block-list default, one-time consent, tool denials reported as `Denied`. `worktree-write` refused until line-stream writes exist. |

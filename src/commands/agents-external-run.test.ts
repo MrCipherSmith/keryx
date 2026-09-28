@@ -17,6 +17,7 @@ import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { PassThrough } from "node:stream";
 import type { Interface } from "node:readline";
 import { answerAcpPermission, clampForeignMode } from "../harness/external/acp-permission";
+import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "../harness/external/supervise";
 import { agentsExternalCommand, terminalApprover, type AgentsExternalDeps } from "./agents-external";
 
 const FAKE_AGENT = fileURLToPath(new URL("../../fixtures/external/acp/fake-acp-agent.ts", import.meta.url));
@@ -62,6 +63,28 @@ function fakeWorktree(): { port: WorktreePort; created: string[]; removed: strin
   };
 }
 
+async function* toLines(items: readonly string[]): AsyncIterable<string> {
+  for (const item of items) yield item;
+}
+
+/** A fake process seam for a line-stream (codec) agent — flow 357, AC8. */
+function fakeSpawn(stdout: readonly string[], exitCode = 0): { port: ExternalSpawnPort; calls: Array<{ argv: readonly string[]; opts: ExternalSpawnOptions }> } {
+  const calls: Array<{ argv: readonly string[]; opts: ExternalSpawnOptions }> = [];
+  const port: ExternalSpawnPort = {
+    spawn(argv, opts): SpawnedProcess {
+      calls.push({ argv, opts });
+      return {
+        stdout: toLines(stdout),
+        stderr: toLines([]),
+        writeStdin: () => undefined,
+        kill: () => undefined,
+        exited: Promise.resolve(exitCode),
+      };
+    },
+  };
+  return { port, calls };
+}
+
 function deps(overrides: Partial<AgentsExternalDeps> = {}): AgentsExternalDeps & { lines: string[] } {
   const lines: string[] = [];
   return { lines, cwd: root, env: {}, configDir: root, log: (line) => lines.push(line), ...overrides };
@@ -97,10 +120,32 @@ describe("AC8 — named refusals before anything runs", () => {
     expect(errors.join("\n")).toContain('external agent "gemini-acp" is disabled');
   });
 
-  test("a line-stream agent is not driven by `run`", async () => {
-    await agentsExternalCommand(["run", "codex-cli", "--task", "look"], deps({ run: { config: ENABLED } }));
-    expect(process.exitCode).toBe(1);
-    expect(errors.join("\n")).toContain("drives ACP agents only");
+  test("a line-stream agent IS driven by `run` (flow 357 widened this from ACP-only)", async () => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn([
+      JSON.stringify({ type: "thread.started", thread_id: "t-1" }),
+      JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text: "ok" } }),
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }),
+    ]);
+    let outcome: ExternalChildOutcome | undefined;
+    await agentsExternalCommand(
+      ["run", "codex-cli", "--task", "look"],
+      deps({
+        run: {
+          config: ENABLED,
+          worktree: wt.port,
+          spawn: sp.port,
+          onOutcome: (o) => {
+            outcome = o;
+          },
+        },
+      }),
+    );
+    // Reaches the spawn port — the ACP-only refusal this used to hit is gone.
+    expect(sp.calls).toHaveLength(1);
+    expect(sp.calls[0]?.argv[0]).toBe("codex");
+    expect(outcome).toBeDefined();
+    expect(errors.join("\n")).not.toContain("drives ACP agents only");
   });
 
   test("a missing binary is Denied with a named reason, and the worktree is never cut", async () => {

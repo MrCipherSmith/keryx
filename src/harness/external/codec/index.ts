@@ -16,6 +16,7 @@
 //
 // Pure: importing this spawns nothing and reads nothing.
 import type { ExternalAgentCodec } from "../types";
+import { antigravityCliCodec } from "./antigravity-cli";
 import { claudeCliCodec } from "./claude-cli";
 import { codexCliCodec } from "./codex-cli";
 
@@ -26,7 +27,7 @@ import { codexCliCodec } from "./codex-cli";
  * list available agents, and a test that pins registry/codec agreement, both
  * need the set rather than a lookup.
  */
-export const EXTERNAL_CODECS: readonly ExternalAgentCodec[] = [codexCliCodec, claudeCliCodec];
+export const EXTERNAL_CODECS: readonly ExternalAgentCodec[] = [codexCliCodec, claudeCliCodec, antigravityCliCodec];
 
 /**
  * The codec for one dispatch id, or `undefined` when no codec ships for it.

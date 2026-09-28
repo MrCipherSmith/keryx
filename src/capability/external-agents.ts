@@ -50,7 +50,9 @@
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
-import { loadShellConfig } from "../lib/shell-config";
+import { isProviderIdExternal, loadExternalProvidersConfig } from "../lib/external-providers";
+import { ExternalBlockedError, resolveExternalSetting } from "../lib/external-switch";
+import { loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import type { CapabilityDescriptor } from "./wiring";
 
 /** Capability id for the external agent runtime, in the seam's `module.name` form. */
@@ -94,6 +96,19 @@ export interface ExternalAgentConfig {
   readonly model: string | null;
 }
 
+/**
+ * One agent's recorded one-time consent (flow 357, AC6) — for a vendor whose
+ * terms carry a residual risk beyond the generic `externalAgents.enabled`
+ * opt-in (today: `antigravity-cli`, see {@link EXTERNAL_AGENTS_REQUIRING_CONSENT}).
+ * Recorded once, at `externalAgents.consent[agentId]`, and never asked again.
+ */
+export interface ExternalAgentConsentRecord {
+  /** ISO-8601 timestamp the operator accepted, for the record. */
+  readonly acceptedAt: string;
+  /** The keryx version that showed the consent text, so a later re-ask policy has a baseline. */
+  readonly keryxVersion: string;
+}
+
 /** The `externalAgents` block of the user-global shell config (§3). */
 export interface ExternalAgentsConfig {
   /** Master switch. Nothing spawns while false. */
@@ -110,6 +125,8 @@ export interface ExternalAgentsConfig {
   readonly maxPromptBytes: number;
   /** Per-agent overrides, keyed by registry id. Absent ids fall back to {@link DEFAULT_AGENT_CONFIG}. */
   readonly agents: Readonly<Record<string, ExternalAgentConfig>>;
+  /** One-time per-agent consent (flow 357, AC6), keyed by registry id. Absent means "never asked". */
+  readonly consent: Readonly<Record<string, ExternalAgentConsentRecord>>;
 }
 
 /** What an agent with no explicit config entry gets. */
@@ -122,7 +139,28 @@ export const EXTERNAL_AGENTS_DEFAULTS: ExternalAgentsConfig = {
   defaultTimeoutMs: 600_000,
   maxPromptBytes: 65_536,
   agents: {},
+  consent: {},
 };
+
+/**
+ * Agents whose vendor terms/default data collection require the one-time
+ * consent above, beyond the generic `externalAgents.enabled` opt-in (flow
+ * 357, AC6). `antigravity-cli` is here because Google's Antigravity CLI sends
+ * prompts and agent actions ("Interactions") to Google by default; neither
+ * shipped codec agent needs it — `codex-cli`/`claude-cli` run entirely on the
+ * operator's own OpenAI/Anthropic subscription with no comparable notice.
+ */
+export const EXTERNAL_AGENTS_REQUIRING_CONSENT: ReadonlySet<string> = new Set(["antigravity-cli"]);
+
+/** Whether `agentId` needs {@link ExternalAgentConsentRecord} before it may be dispatched. */
+export function agentRequiresConsent(agentId: string): boolean {
+  return EXTERNAL_AGENTS_REQUIRING_CONSENT.has(agentId);
+}
+
+/** Whether `agentId` already has a recorded consent in `config`. */
+export function hasRecordedConsent(config: ExternalAgentsConfig, agentId: string): boolean {
+  return config.consent[agentId] !== undefined;
+}
 
 /**
  * Bounds on the two numeric knobs.
@@ -141,6 +179,15 @@ const PROMPT_BYTES_RANGE = { min: 1_024, max: 4 * 1_024 * 1_024 };
 function boundedInteger(value: unknown, range: { min: number; max: number }): number | undefined {
   if (typeof value !== "number" || !Number.isInteger(value)) return undefined;
   return value >= range.min && value <= range.max ? value : undefined;
+}
+
+/** Parse one consent entry defensively. `undefined` for anything not shaped like a record — a malformed entry means "never asked", never a forged "yes". */
+function parseConsentEntry(raw: unknown): ExternalAgentConsentRecord | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const entry = raw as { acceptedAt?: unknown; keryxVersion?: unknown };
+  if (typeof entry.acceptedAt !== "string" || entry.acceptedAt.length === 0) return undefined;
+  if (typeof entry.keryxVersion !== "string" || entry.keryxVersion.length === 0) return undefined;
+  return { acceptedAt: entry.acceptedAt, keryxVersion: entry.keryxVersion };
 }
 
 /** Parse one agent entry defensively; anything unrecognised falls back to the default. */
@@ -173,12 +220,21 @@ export function parseExternalAgentsConfig(raw: unknown): ExternalAgentsConfig {
     defaultTimeoutMs?: unknown;
     maxPromptBytes?: unknown;
     agents?: unknown;
+    consent?: unknown;
   };
 
   const agents: Record<string, ExternalAgentConfig> = {};
   if (typeof block.agents === "object" && block.agents !== null && !Array.isArray(block.agents)) {
     for (const [id, value] of Object.entries(block.agents as Record<string, unknown>)) {
       agents[id] = parseAgentEntry(value);
+    }
+  }
+
+  const consent: Record<string, ExternalAgentConsentRecord> = {};
+  if (typeof block.consent === "object" && block.consent !== null && !Array.isArray(block.consent)) {
+    for (const [id, value] of Object.entries(block.consent as Record<string, unknown>)) {
+      const parsed = parseConsentEntry(value);
+      if (parsed !== undefined) consent[id] = parsed;
     }
   }
 
@@ -191,6 +247,7 @@ export function parseExternalAgentsConfig(raw: unknown): ExternalAgentsConfig {
     maxPromptBytes:
       boundedInteger(block.maxPromptBytes, PROMPT_BYTES_RANGE) ?? EXTERNAL_AGENTS_DEFAULTS.maxPromptBytes,
     agents,
+    consent,
   };
 }
 
@@ -202,6 +259,78 @@ export function loadExternalAgentsConfig(dir?: string): ExternalAgentsConfig {
 /** This agent's config, or the default for an id the operator never mentioned. */
 export function agentConfig(config: ExternalAgentsConfig, agentId: string): ExternalAgentConfig {
   return config.agents[agentId] ?? DEFAULT_AGENT_CONFIG;
+}
+
+/**
+ * Persist one-time consent for `agentId` (flow 357, AC6) — merge-write over the
+ * RAW `externalAgents` block, so every other agent's consent and every other
+ * field survive exactly as the operator wrote them. Writing the parsed config
+ * back instead would materialise every default (`enabled: false`, the timeout,
+ * the prompt ceiling) into the file, freezing today's defaults for good.
+ * `keryxVersion`
+ * is a caller-supplied parameter rather than read here: this module is
+ * `capability/` (core zone), which may not import the CLI's own `VERSION`
+ * constant (`cli-registry.ts`, adapter zone — `import-zones.ts`'s "core never
+ * imports client or adapter" rule has no exception). Best-effort, like every
+ * other shell-config writer: a failed write means the operator is asked again
+ * next time, not that the dispatch silently proceeds unrecorded.
+ */
+export function recordExternalAgentConsent(agentId: string, keryxVersion: string, dir?: string): ExternalAgentsConfig {
+  const raw = loadShellConfig(dir).externalAgents;
+  const block = isPlainObject(raw) ? raw : {};
+  const consent = isPlainObject(block.consent) ? block.consent : {};
+  const record: ExternalAgentConsentRecord = { acceptedAt: new Date().toISOString(), keryxVersion };
+  saveShellConfig({ externalAgents: { ...block, consent: { ...consent, [agentId]: record } } }, dir);
+  return loadExternalAgentsConfig(dir);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Why {@link checkExternalAgentVendorGates} refused a dispatch. */
+export interface VendorGateRefusal {
+  readonly code: "external-blocked" | "consent-required";
+  readonly reason: string;
+}
+
+/**
+ * The two gates a subscription-vendor agent carries beyond `enabled` (flow
+ * 357, AC6), shared by EVERY path that spawns one — `keryx agents external
+ * run` and a model-initiated dispatch through `run-external-factory.ts` alike.
+ * A gate held by one entry point only is a gate the other one walks around.
+ *
+ *   1. `/external off` with the agent on the block-list → `external-blocked`,
+ *      worded as the same `ExternalBlockedError` a blocked LLM provider throws.
+ *   2. An agent {@link agentRequiresConsent} names, with no recorded consent →
+ *      `consent-required`. This function never asks: the interactive command
+ *      asks on a TTY before calling it with the recorded result, and every
+ *      other caller has no human to ask.
+ */
+export async function checkExternalAgentVendorGates(args: {
+  readonly agentId: string;
+  readonly cwd: string;
+  readonly config: ExternalAgentsConfig;
+  readonly configDir?: string;
+}): Promise<VendorGateRefusal | undefined> {
+  const { agentId, cwd, config, configDir } = args;
+  const setting = await resolveExternalSetting({ cwd, ...(configDir === undefined ? {} : { dir: configDir }) });
+  if (setting.value === "off") {
+    const providers = loadExternalProvidersConfig(configDir).config;
+    if (isProviderIdExternal(agentId, providers)) {
+      const reason = providers.providers.find((p) => p.id.toLowerCase() === agentId.toLowerCase())?.reason;
+      return { code: "external-blocked", reason: new ExternalBlockedError(`external agent "${agentId}"`, reason).message };
+    }
+  }
+  if (agentRequiresConsent(agentId) && !hasRecordedConsent(config, agentId)) {
+    return {
+      code: "consent-required",
+      reason:
+        `refused: consent-required — "${agentId}" needs one-time consent before its first dispatch; run ` +
+        `\`keryx agents external run ${agentId} --task "<a small read-only task>"\` in a terminal once to read and accept it.`,
+    };
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -34,6 +34,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import {
   agentConfig,
+  checkExternalAgentVendorGates,
   resolveExternalAgentsCapability,
   type ExternalAgentsConfig,
   type ExternalTransport,
@@ -391,6 +392,16 @@ export async function createRunExternal(
           ),
         );
       }
+      // Flow 357, AC6: the `/external` block-list and the one-time vendor
+      // consent, the same check `keryx agents external run` makes. Nobody is
+      // at a terminal here to be asked, so a missing consent is a refusal.
+      const vendorGate = await checkExternalAgentVendorGates({
+        agentId,
+        cwd: options.cwd,
+        config,
+        ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
+      });
+      if (vendorGate !== undefined) return report(denied(vendorGate.reason));
     }
 
     if (config.spawnDecision === "ask") {

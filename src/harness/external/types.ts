@@ -102,6 +102,14 @@ export interface ExternalRunInput {
   readonly resultSchema?: string;
   /** Forwarded to a native budget ceiling when the entry declares `budgetFlag`. */
   readonly maxCostUnits?: number;
+  /**
+   * The run's own wall-clock ceiling, in whole seconds, for a CLI whose print
+   * mode takes its OWN timeout flag (`agy --print-timeout`, flow 357). Ignored
+   * by codex/claude, which have no such flag. Assembled by `runtime.ts` from
+   * `RunExternalChildInput.timeoutMs`, not read from any config here — this
+   * type is codec input, not a place a codec reaches for global config.
+   */
+  readonly printTimeoutSeconds?: number;
 }
 
 /**

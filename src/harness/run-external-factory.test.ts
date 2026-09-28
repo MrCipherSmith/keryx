@@ -9,7 +9,8 @@
 // The transcript fed to the fake port is the REAL recorded one from
 // `fixtures/external/`, so the success path is proven against genuine vendor
 // bytes rather than against what the author imagined the CLI emits.
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
@@ -492,5 +493,46 @@ describe("the run-scoped observer", () => {
     await hook?.(request());
     // `/delegate` recognises its own run by this id and does not re-ask.
     expect(seen).toEqual(["sub:11111111-2222-3333-4444-555555555555"]);
+  });
+});
+
+describe("flow 357 AC6: a model-initiated dispatch carries the same vendor gates as `run`", () => {
+  function tempRoot(): string {
+    return realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-factory-agy-")));
+  }
+  const agy = request({ runtime: { kind: "external", agent: "antigravity-cli", sandbox: "read-only" } });
+
+  test("/external off refuses antigravity-cli before any worktree or spawn", async () => {
+    const root = tempRoot();
+    try {
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(path.join(root, ".metaproject", "tasks.config.json"), JSON.stringify({ external: "off" }));
+      const sp = fakeSpawn();
+      const wt = fakeWorktree();
+      const hook = await createRunExternal(options({ cwd: root, configDir: root, spawn: sp.port, worktree: wt.port }));
+      const result = await hook?.(agy);
+      expect(result?.status).toBe("Denied");
+      expect(result?.output).toContain("blocked by /external off");
+      expect(sp.calls).toHaveLength(0);
+      expect(wt.created).toHaveLength(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("no recorded consent refuses with consent-required — nobody is at a terminal to ask", async () => {
+    const root = tempRoot();
+    try {
+      const sp = fakeSpawn();
+      const wt = fakeWorktree();
+      const hook = await createRunExternal(options({ cwd: root, configDir: root, spawn: sp.port, worktree: wt.port }));
+      const result = await hook?.(agy);
+      expect(result?.status).toBe("Denied");
+      expect(result?.output).toContain("consent-required");
+      expect(sp.calls).toHaveLength(0);
+      expect(wt.created).toHaveLength(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

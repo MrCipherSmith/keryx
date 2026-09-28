@@ -1,0 +1,17 @@
+{
+  "agy": "1.2.12",
+  "keryx": "0.3.25",
+  "os": "linux",
+  "recordedAt": "2026-09-28",
+  "command": "bun src/cli.ts agents external run antigravity-cli --task \"Reply with the single word OK and nothing else. Do not use any tools.\" --json",
+  "notes": "AC8 (flow 357): a real dispatch through keryx's OWN agents-external run command, not a direct agy invocation — contrast with read-only-ok.stream.jsonl/.versions.json in this same directory, which are a raw agy transcript captured outside keryx and used to pin the codec's parsing against real event shapes. This pair is the end-to-end proof: the capability gate, the /external block-list check, one-time consent, the codec's argv/parse/classify, and the AC13 structured-result schema gate all ran for real and produced status Completed with a schema-valid final message. worktreePath in the outcome file has its absolute path redacted to '<worktree>'.",
+  "exit": 0,
+  "outcomeStatus": "Completed",
+  "skippedLines": 0,
+  "sessionRef": "06e38ece-463b-4758-850f-18c0c5c8fd8f",
+  "configBeforeAfter": {
+    "externalAgents.enabled": { "before": false, "after": false, "restored": true },
+    "externalAgents.consent[\"antigravity-cli\"]": { "before": "absent", "during": "recorded for the run", "after": "absent — removed so the operator reads and accepts the consent text themselves" },
+    "metaproject capability gdskills.external-agents": { "before": false, "after": false, "restored": true }
+  }
+}

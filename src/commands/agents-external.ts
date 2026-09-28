@@ -3,15 +3,26 @@
 //
 //   keryx agents external list  [--json] [--no-probe]
 //   keryx agents external probe <id> [--json]
-//   keryx agents external run <id> --task "<text>" [--unattended] [--write]   (flow 292)
+//   keryx agents external run <id> --task "<text>" [--unattended] [--write]   (flow 292, 357)
 //
 // `run` is the one subcommand that starts a real agent, and it spends the
-// operator's quota; it drives an ACP agent with keryx as its CLIENT, through
-// `runExternalChild` and every gate the runtime already has. `list` and `probe`
-// are read-only and neither spends subscription quota: the only process
-// either starts is the registry entry's own `detect` argv, which is
-// `--version`. keryx never opens a vendor credential store, not even to answer
-// "is the operator logged in?" (security-policy §1, `provider-auth` D-01).
+// operator's quota; it drives EITHER transport — an ACP agent with keryx as
+// its CLIENT, or a line-stream (codec) agent's one-way stream-json — through
+// the SAME `runExternalChild` and every gate the runtime already has (flow
+// 357 widened this from ACP-only: `runExternalChild` always drove both, only
+// this command's own early refusal did not). `list` and `probe` are read-only
+// and neither spends subscription quota: the only process either starts is
+// the registry entry's own `detect` argv, which is `--version`. keryx never
+// opens a vendor credential store, not even to answer "is the operator logged
+// in?" (security-policy §1, `provider-auth` D-01).
+//
+// `run` ALSO carries two gates specific to a subscription-vendor agent (flow
+// 357, AC6): the `/external` block-list (an agent on it is refused before
+// anything spawns, the same `ExternalBlockedError` a blocked LLM provider
+// already throws) and, for an agent `agentRequiresConsent` names, a one-time
+// TTY consent recorded at `externalAgents.consent[id]` — a non-TTY dispatch
+// with no recorded consent is refused with `consent-required` rather than
+// assuming "yes" on the operator's behalf.
 //
 // That prohibition is why this surface exists in the shape it does. Availability
 // has THREE states, and the third is not a placeholder:
@@ -44,6 +55,8 @@ import {
 import type { ExternalAgentEntry } from "../harness/external/types";
 import {
   agentConfig,
+  checkExternalAgentVendorGates,
+  recordExternalAgentConsent,
   resolveExternalAgentsCapability,
   type ExternalAgentsConfig,
 } from "../capability/external-agents";
@@ -56,6 +69,7 @@ import type { ExternalSpawnPort } from "../harness/external/supervise";
 import type { AcpChildOptions } from "../harness/external/acp-run";
 import { DEFAULT_MAX_EXTERNAL_DEPTH } from "../harness/run-external-factory";
 import type { AgentIO } from "./agent";
+import { VERSION } from "../cli-registry";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
 import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, style } from "../lib/ui";
@@ -86,9 +100,16 @@ export interface AgentsExternalRunSeams {
   /** Whether a human is at a terminal. Defaults to `process.stdin.isTTY`. */
   readonly isTTY?: boolean;
   readonly requestApproval?: AgentIO["requestApproval"];
-  /** Everything ACP-specific the runtime forwards (argv override, context, data dir…). */
+  /** Everything ACP-specific the runtime forwards (argv override, context, data dir…). Ignored for a line-stream agent. */
   readonly acp?: AcpChildOptions;
   readonly onOutcome?: (outcome: ExternalChildOutcome) => void;
+  /**
+   * One-time agent consent (flow 357, AC6). Defaults to a terminal y/N prompt
+   * (`terminalConsentApprover`). Only reached for an agent
+   * `agentRequiresConsent` names, and only once — a recorded consent short-
+   * circuits this entirely.
+   */
+  readonly requestConsent?: (entry: ExternalAgentEntry) => Promise<boolean>;
 }
 
 /** One registry entry paired with what detection was allowed to learn about it. */
@@ -337,8 +358,51 @@ export function terminalApprover(
 }
 
 /**
+ * The consent statement shown once for an agent `agentRequiresConsent` names
+ * (flow 357, AC6) — the terms-of-service residual risk and Google's default
+ * data collection, stated plainly rather than buried in a flag's `--help`
+ * text. `entry.label`/`entry.binary` keep this generic to any future agent
+ * that joins {@link agentRequiresConsent}'s set, even though only
+ * `antigravity-cli` does today.
+ */
+export function consentStatement(entry: ExternalAgentEntry): string {
+  return (
+    `${entry.label} (\`${entry.binary}\`) sends prompts and agent actions to Google by default ` +
+    `(Antigravity "Interactions" collection) once keryx drives it. Running the OFFICIAL binary ` +
+    `headlessly, the way you would run it by hand, is the boundary keryx stays inside — it never ` +
+    `reads, copies or proxies your Google/Antigravity credential (docs/requirements/` +
+    `keryx-antigravity-agent/brd.md). Using a third-party client to reach the Antigravity service ` +
+    `by other means is a breach of Google's Antigravity terms; driving the official CLI through its ` +
+    `own documented headless mode is not that, but the residual risk of Google changing its own terms ` +
+    `is yours to accept, not keryx's to absorb silently. Disable Google's own Interactions collection ` +
+    `in the Antigravity CLI's own settings if you do not want it, or run \`/external off\` to stop keryx ` +
+    `sending this agent anything at all. This is asked once; keryx will not ask again.`
+  );
+}
+
+/**
+ * A consent approver that asks on the terminal (flow 357, AC6): default `N`,
+ * same shape as {@link terminalApprover} and for the same reason — a
+ * subscription's own terms are not something a timeout or a blank line should
+ * be read as accepting.
+ */
+export function terminalConsentApprover(
+  io: { readonly input?: NodeJS.ReadableStream; readonly output?: NodeJS.WritableStream } = {},
+): (entry: ExternalAgentEntry) => Promise<boolean> {
+  return (entry) =>
+    new Promise((resolve) => {
+      const rl = createInterface({ input: io.input ?? process.stdin, output: io.output ?? process.stderr });
+      rl.question(`\n${consentStatement(entry)}\n\nAccept and continue? [y/N] `, (answer) => {
+        rl.close();
+        resolve(answer.trim().toLowerCase() === "y");
+      });
+    });
+}
+
+/**
  * `keryx agents external run <id> --task "<text>" [--unattended] [--write]`
- * (flow 292): drive one registry ACP agent, with keryx as its client.
+ * (flow 176, 292, 357): drive one registry agent — ACP (keryx as client) or
+ * line-stream (a codec) — through `runExternalChild`.
  *
  * The same gates as every other external run: the capability (with its
  * transport/CI hard disable), the per-agent config, the depth marker, the
@@ -366,16 +430,10 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
     process.exitCode = 1;
     return;
   }
-  if (transportOf(entry) !== "acp") {
-    console.error(
-      `\`run\` drives ACP agents only; "${id}" speaks the one-way line stream. Delegate to it from \`keryx shell\` with /delegate.`,
-    );
-    process.exitCode = 1;
-    return;
-  }
-
   const cwd = deps.cwd ?? process.cwd();
   const env = deps.env ?? process.env;
+  const isTTY = seams.isTTY ?? process.stdin.isTTY === true;
+
   const gate = await resolveExternalAgentsCapability({
     cwd,
     env,
@@ -394,8 +452,35 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
     return;
   }
 
+  // AC6: the `/external` block-list and the one-time vendor consent — the
+  // SAME check a model-initiated dispatch runs in `run-external-factory.ts`,
+  // so neither entry point walks around the other's gate. Consent is asked
+  // HERE only, on a TTY: a process with no human attached cannot give
+  // informed consent, and assuming "yes" would put the operator's account at
+  // risk without them ever seeing the terms.
+  const vendorGate = await checkExternalAgentVendorGates({
+    agentId: id,
+    cwd,
+    config: gate.config,
+    ...(deps.configDir === undefined ? {} : { configDir: deps.configDir }),
+  });
+  if (vendorGate !== undefined) {
+    if (vendorGate.code !== "consent-required" || !isTTY) {
+      console.error(vendorGate.reason);
+      process.exitCode = 1;
+      return;
+    }
+    const requestConsent = seams.requestConsent ?? terminalConsentApprover();
+    const accepted = await requestConsent(entry);
+    if (!accepted) {
+      console.error(`refused: consent declined for "${id}"`);
+      process.exitCode = 1;
+      return;
+    }
+    recordExternalAgentConsent(id, VERSION, deps.configDir);
+  }
+
   const write = args.includes("--write");
-  const isTTY = seams.isTTY ?? process.stdin.isTTY === true;
   const unattended = args.includes("--unattended") || !isTTY;
   const requestApproval = unattended ? undefined : (seams.requestApproval ?? terminalApprover());
   const timeoutRaw = optionValue(args, "--timeout");
@@ -470,14 +555,24 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
     lines.push(`cost: ${record.cost === "missing" ? "missing (not reported by the agent)" : `${record.cost.amount} ${record.cost.currency}`}`);
     if (record.patchArtifact !== undefined) lines.push(`patch (never applied): ${record.patchArtifact}`);
     if (record.sessionId !== undefined) lines.push(`session: ${record.sessionId}`);
+  } else {
+    // Line-stream transport (flow 357): no ACP record, but the codec still
+    // reports what it can — the resume handle, usage and the version-drift
+    // signal.
+    if (outcome.sessionRef !== undefined) lines.push(`conversation: ${outcome.sessionRef}`);
+    if (outcome.costUnits !== undefined) lines.push(`cost: ${outcome.costUnits}`);
+    if (outcome.skippedLines !== undefined && outcome.skippedLines > 0) {
+      lines.push(`unrecognised lines: ${outcome.skippedLines} (possible version drift)`);
+    }
   }
+  if (outcome.partial !== undefined) lines.push(`partial output: ${outcome.partial}`);
   lines.push("", outcome.output);
   return lines;
 }
 
 /** `--help` for the external surface. */
 export function printExternalHelp(): void {
-  helpTitle("keryx agents external", "inspect the external agent registry, or drive one ACP agent");
+  helpTitle("keryx agents external", "inspect the external agent registry, or drive one ACP or line-stream agent");
   helpUsage([
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",

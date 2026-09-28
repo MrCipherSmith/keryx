@@ -16,15 +16,20 @@ import {
   EXTERNAL_AGENTS_CAPABILITY_DESCRIPTOR,
   EXTERNAL_AGENTS_CAPABILITY_ID,
   EXTERNAL_AGENTS_DEFAULTS,
+  EXTERNAL_AGENTS_REQUIRING_CONSENT,
   agentConfig,
+  agentRequiresConsent,
   detectCi,
   detectTransport,
+  hasRecordedConsent,
   loadExternalAgentsConfig,
   manifestCapabilityState,
   parseExternalAgentsConfig,
+  recordExternalAgentConsent,
   resolveExternalAgentsCapability,
   type ExternalAgentsConfig,
 } from "./external-agents";
+import { loadShellConfig } from "../lib/shell-config";
 import { CAPABILITY_REGISTRY } from "./registry";
 
 let root: string;
@@ -286,5 +291,57 @@ describe("the gate", () => {
     await writeManifest(root, [{ id: EXTERNAL_AGENTS_CAPABILITY_ID, enabled: true, kind: "ceiling" }]);
     const gate = await resolveExternalAgentsCapability({ cwd: root, env: {}, config: EXTERNAL_AGENTS_DEFAULTS });
     expect(gate.ok).toBe(false);
+  });
+});
+
+describe("one-time agent consent (flow 357, AC6)", () => {
+  test("only antigravity-cli requires consent today", () => {
+    expect(agentRequiresConsent("antigravity-cli")).toBe(true);
+    expect(agentRequiresConsent("codex-cli")).toBe(false);
+    expect(agentRequiresConsent("claude-cli")).toBe(false);
+    expect(EXTERNAL_AGENTS_REQUIRING_CONSENT.has("antigravity-cli")).toBe(true);
+  });
+
+  test("a fresh config has no consent for any agent", () => {
+    expect(hasRecordedConsent(EXTERNAL_AGENTS_DEFAULTS, "antigravity-cli")).toBe(false);
+  });
+
+  test("a malformed consent entry parses as absent, never as a forged yes", () => {
+    const config = parseExternalAgentsConfig({ consent: { "antigravity-cli": { acceptedAt: 12345 } } });
+    expect(hasRecordedConsent(config, "antigravity-cli")).toBe(false);
+  });
+
+  test("a well-formed consent entry round-trips through parseExternalAgentsConfig", () => {
+    const config = parseExternalAgentsConfig({
+      consent: { "antigravity-cli": { acceptedAt: "2026-09-28T00:00:00.000Z", keryxVersion: "0.3.25" } },
+    });
+    expect(hasRecordedConsent(config, "antigravity-cli")).toBe(true);
+    expect(config.consent["antigravity-cli"]).toEqual({ acceptedAt: "2026-09-28T00:00:00.000Z", keryxVersion: "0.3.25" });
+  });
+
+  test("recordExternalAgentConsent persists it, and a later load sees it", () => {
+    const written = recordExternalAgentConsent("antigravity-cli", "0.3.25", root);
+    expect(hasRecordedConsent(written, "antigravity-cli")).toBe(true);
+
+    const reloaded = loadExternalAgentsConfig(root);
+    expect(hasRecordedConsent(reloaded, "antigravity-cli")).toBe(true);
+    expect(reloaded.consent["antigravity-cli"]?.keryxVersion).toBe("0.3.25");
+  });
+
+  test("recording consent for one agent never disturbs another agent's config or a prior consent", async () => {
+    recordExternalAgentConsent("antigravity-cli", "0.3.25", root);
+    const before = loadExternalAgentsConfig(root);
+    expect(before.consent["antigravity-cli"]).toBeDefined();
+
+    recordExternalAgentConsent("some-future-agent", "0.3.26", root);
+    const after = loadExternalAgentsConfig(root);
+    expect(after.consent["antigravity-cli"]).toEqual(before.consent["antigravity-cli"]);
+    expect(after.consent["some-future-agent"]?.keryxVersion).toBe("0.3.26");
+  });
+
+  test("recording consent writes only the consent key — no default is materialised into the file", async () => {
+    recordExternalAgentConsent("antigravity-cli", "0.3.25", root);
+    const raw = loadShellConfig(root).externalAgents as Record<string, unknown>;
+    expect(Object.keys(raw)).toEqual(["consent"]);
   });
 });
