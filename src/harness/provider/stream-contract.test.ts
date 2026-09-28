@@ -7,11 +7,12 @@
 // adapter's wire format makes a row structurally different, the test
 // documents exactly what that adapter does instead of silently skipping it).
 //
-// Fixed by this flow: the compat adapter's `flushPendingToolEnds` (row A) and
+// Fixed by flow 354: the compat adapter's `flushPendingToolEnds` (row A) and
 // the Gemini streaming loop's in-stream-error branch (row B) and `callId`
-// fallback (row C). Anthropic and openai (native) keep their PRE-EXISTING
-// behaviour on every row — this file pins that behaviour, it does not change
-// it.
+// fallback (row C). Fixed by flow 356 (L-16): the compat adapter's OWN
+// in-stream-error branch (row B), previously a documented gap. Anthropic and
+// openai (native) keep their PRE-EXISTING behaviour on every row — this file
+// pins that behaviour, it does not change it.
 //
 // OFFLINE / DETERMINISTIC: `fetch` is always injected; no test touches the
 // network or `globalThis.fetch`.
@@ -167,12 +168,15 @@ describe("row B — an in-stream error envelope/event", () => {
     expect(errors[0]?.error?.retryable).toBe(true);
   });
 
-  test("compat: CURRENT (unchanged, documented gap) — an in-band {error} envelope is not read at all; the stream ends with no terminal event whatsoever, not even a generic malformed", async () => {
-    // A DIFFERENT, out-of-scope gap from L-1 (which is specifically about a
-    // pending TOOL CALL at EOF): this record touches no tool call, so it hits
-    // the compat adapter's `sawStart && !sawFinish` fallthrough, which — unlike
-    // every other adapter's post-loop EOF handling — emits neither `model_end`
-    // nor a `malformed` `provider_error`. Documented here, not fixed here.
+  test("compat: CHANGED (L-16) — an in-band {error} envelope with no pending tool call becomes a provider_error classified like a pre-2xx error", async () => {
+    // A DIFFERENT gap from L-1 (which is specifically about a pending TOOL
+    // CALL at EOF): this record touches no tool call. It used to hit the
+    // compat adapter's `sawStart && !sawFinish` fallthrough, which — unlike
+    // every other adapter's post-loop EOF handling — emitted neither
+    // `model_end` nor a `malformed` `provider_error`: the stream ended with
+    // NO terminal event at all. Fixed by reading the `error` envelope the
+    // moment it arrives and classifying it the same way a pre-2xx HTTP error
+    // is (`classifyHttpError`).
     const sse = 'data: {"error":{"code":503,"status":"UNAVAILABLE","message":"backend overloaded"}}\n\n';
     const provider = new OpenAiCompatEngine(
       { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
@@ -180,7 +184,11 @@ describe("row B — an in-stream error envelope/event", () => {
     );
     const events = await collect(provider.stream(buildRequest("row-b-compat"), { attemptId: "row-b-compat" }));
 
-    expect(providerErrors(events)).toHaveLength(0);
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("unavailable");
+    expect(errors[0]?.error?.retryable).toBe(true);
+    expect(errors[0]?.error?.message).toContain("backend overloaded");
     expect(events.some((e) => e.kind === "model_end")).toBe(false);
   });
 

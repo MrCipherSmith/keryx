@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { readLogRecords } from "../security/service";
+import { readLogRecords } from "../impact-evidence";
 import {
   aliasHookToolName,
   buildShellHookRuntime,

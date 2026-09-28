@@ -40,7 +40,8 @@
 import { redactSensitiveText } from "../../../security/service";
 import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
-import { defaultRetryable } from "../provider-port";
+// A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
+import { retryableFor } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import { ThinkTagParser } from "./think-tag-parser";
 import { FieldThinkTagStripper } from "./think-tag-stripper";
@@ -52,7 +53,6 @@ import type {
   NormalizedUsage,
   ProviderCapabilities,
   ProviderDescription,
-  ProviderErrorKind,
   ProviderPort,
   StreamOptions,
 } from "../types";
@@ -220,12 +220,6 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-/** Resolve a concrete retry disposition, falling back for policy-conditional rows. */
-function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
-  const concrete = defaultRetryable(kind);
-  return concrete === undefined ? fallback : concrete;
 }
 
 /**
@@ -1135,6 +1129,35 @@ export class OpenAiCompatEngine implements ProviderPort {
           break;
         }
         const data = asRecord(parsed);
+
+        // L-16 (flow 356): an in-band `{"error":{…}}` envelope. Some
+        // OpenAI-compat gateways report a mid-stream failure as an ordinary
+        // SSE data record instead of closing the connection with a non-2xx
+        // status. This record carries no `choices` and no `usage`, so
+        // before this fix it was silently ignored: the loop kept reading,
+        // `sawFinish` never became true, and the stream ended with NO
+        // terminal event at all — unlike every other adapter's post-loop
+        // EOF handling, and unlike this SAME adapter's OWN handling of a
+        // pre-2xx HTTP error. Classified the same way (`classifyHttpError`),
+        // reusing whatever HTTP-like numeric code the gateway put in
+        // `error.code` and falling back to the 5xx bucket (retryable
+        // `unavailable`) when it did not — an in-band error at all is
+        // itself evidence of a backend fault, not a client mistake. A
+        // string `error.code`/`error.type` of `"context_length_exceeded"`
+        // with no numeric code is treated as the 400 case so it still maps
+        // to `context_overflow` rather than the generic fallback.
+        if (data.error !== undefined) {
+          const errorField = asRecord(data.error);
+          const numericStatus = asNumber(errorField.code);
+          const stringCode = asString(errorField.code) ?? asString(errorField.type);
+          const status = numericStatus ?? (stringCode === "context_length_exceeded" ? 400 : 500);
+          const classified = classifyHttpError(status, new Headers(), stringCode);
+          const reason = asString(errorField.message);
+          classified.message =
+            `${this.label} stream carried an in-band error` + (reason === undefined ? "" : `: ${reason}`);
+          malformed = classified;
+          break;
+        }
 
         // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
         if (data.usage !== undefined) {

@@ -5,7 +5,7 @@ import { optionValue } from "../lib/args";
 import { SAFE_BUN_SPAWN_ARGS } from "../lib/safe-exec";
 import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
-import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
+import { bunfigPreloadRoots, getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
 import { buildAffectedReport } from "../gdgraph/service";
 import { findCandidates } from "../gdgraph/find";
@@ -140,7 +140,10 @@ async function gdgraphCommandUnlocked(args: string[]): Promise<void> {
     }
 
     if (query === "orphans") {
-      const orphans = getOrphans(graph);
+      // A-8 (flow 356): a file `bunfig.toml` loads via `preload` (never by an
+      // `import` this graph's scan can see) is a root, not a dead file.
+      const roots = await bunfigPreloadRoots(process.cwd());
+      const orphans = getOrphans(graph, roots);
       const freshness = await graphFreshness();
       if (asJson) {
         console.log(JSON.stringify({ query: "orphans", orphans, freshness }, null, 2));

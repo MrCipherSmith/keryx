@@ -298,6 +298,37 @@ describe("the Grok subset, exactly", () => {
     expect(problems.map((p) => p.message).join()).toContain("does not support");
   });
 
+  test("S-11 (flow 356): an unsupported inline-table value never echoes its raw content into the problem message", () => {
+    // The shape the finding names: a Bearer token in an inline-table
+    // `headers` field. This reader does not support inline tables, so the
+    // value is refused — but the refusal message must never repeat the
+    // token, since it reaches `mcp list --json`, `mcp doctor` and the
+    // `/mcp` panel.
+    const { problems } = parseGrokToml(
+      "/g.toml",
+      '[mcp_servers.a]\nheaders = { Authorization = "Bearer sk-super-secret-token-12345" }\n',
+    );
+    const joined = problems.map((p) => p.message).join(" | ");
+    expect(joined).toContain("does not support");
+    expect(joined).toContain('"headers"');
+    expect(joined).not.toContain("sk-super-secret-token-12345");
+    expect(joined).not.toContain("Bearer");
+  });
+
+  test("S-11 (flow 356): a value-bearing line the key/value regex itself rejects never echoes the line either", () => {
+    // A stray leading dot on the key ("headers.Authorization") makes the
+    // whole line fail the key/value regex before `parseScalar` ever sees
+    // it — the OTHER leak path S-11 covers: the raw line (value included)
+    // used to be echoed verbatim in that branch too.
+    const { problems } = parseGrokToml(
+      "/g.toml",
+      '[mcp_servers.a]\nheaders.Authorization = "Bearer sk-super-secret-token-12345"\n',
+    );
+    const joined = problems.map((p) => p.message).join(" | ");
+    expect(joined).not.toContain("sk-super-secret-token-12345");
+    expect(joined).not.toContain("Bearer");
+  });
+
   test("BOUNDARY — an empty array is valid and empty", () => {
     const { servers, problems } = parseGrokToml("/g.toml", "[mcp_servers.a]\nargs = []\n");
     expect(problems).toEqual([]);

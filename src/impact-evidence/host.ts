@@ -6,7 +6,7 @@
 // exists so that answer comes from the registry, not from memory, the
 // moment W6/W5-b actually wires one up.
 
-import { HARNESS_ADAPTERS, surfacesOf } from "../../integrations";
+import { HARNESS_ADAPTERS, surfacesOf } from "../integrations";
 
 export type HostDeliveryStatus = "verified" | "experimental" | "not-registered";
 

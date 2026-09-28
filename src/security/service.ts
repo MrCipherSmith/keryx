@@ -120,32 +120,29 @@ export {
 export type { AuditFinding, AuditReport, AuditSeverity, ImportedBundleEntryKind, RunAuditOptions } from "./audit-harness";
 
 // Re-exported here for the same reason: `commands/security-impact-evidence.ts`
-// needs both the impact-evidence config helpers and the impact-evidence
-// module's own public door, without reaching past this facade into
-// `security/config.ts` or `security/impact-evidence/index.ts` directly.
+// needs the impact-evidence config helpers without reaching past this facade
+// into `security/config.ts` directly.
+//
+// A-1 (flow 356, audit remediation 3): this used to ALSO re-export the
+// impact-evidence module's own public door (`appendLogRecord`,
+// `computeImpactEvidence`, `createImpactEvidenceProvider`,
+// `hostDeliveryStatus`, `normalizeRequestFiles`, `readLogRecords`,
+// `renderEvidenceBlock`, plus their types) from `./impact-evidence` — a
+// re-export nothing but `commands/security-impact-evidence.ts` ever called,
+// which closed a three-cycle through `testing/related-report.ts`,
+// `testing/service.ts`, `metrics/lifecycle.ts`, `testing/coverage-map.ts`
+// back to `security/guard.ts` (`gdgraph query cycles`). The module moved out
+// from under `security/` entirely, to `src/impact-evidence/` (its own
+// core zone — it never imported `src/harness`/`src/commands` and its own
+// header already said "core zone" before the move), and its caller now
+// imports it directly; see that caller for the reasoning on why a direct
+// import there is not a facade bypass (it has none to bypass).
 export { resolveImpactEvidenceConfig, resolveImpactEvidenceConfigTrusted, verifyConfigChecksum } from "./config";
 // `loadSecurityConfig` is already bound above via the top-of-file import
 // (this module's own `analyze`/`createSecurityService` use it); re-exported
 // under that same binding rather than a second `from "./config"` re-export,
 // which would collide with it as a duplicate identifier.
 export { loadSecurityConfig };
-export {
-  appendLogRecord,
-  computeImpactEvidence,
-  createImpactEvidenceProvider,
-  hostDeliveryStatus,
-  normalizeRequestFiles,
-  readLogRecords,
-  renderEvidenceBlock,
-} from "./impact-evidence";
-export type {
-  ImpactEvidenceDecision,
-  ImpactEvidenceLogRecord,
-  ImpactEvidenceProfile,
-  ImpactEvidenceReason,
-  ImpactEvidenceRequest,
-} from "./impact-evidence";
-
 export function validateSerializedOutput(
   content: string,
   exemptExfil?: ExfilExemption,
@@ -301,6 +298,7 @@ export async function runScanPath(
     exclusions?: string[];
     recursive?: boolean;
     limits?: SecurityScanOptions["limits"];
+    respectIgnoreRules?: boolean;
   },
 ): Promise<{
   decision: SecurityDecision;
@@ -315,6 +313,7 @@ export async function runScanPath(
     ...(input.exclusions !== undefined ? { exclusions: input.exclusions } : {}),
     ...(input.recursive !== undefined ? { recursive: input.recursive } : {}),
     ...(input.limits !== undefined ? { limits: input.limits } : {}),
+    ...(input.respectIgnoreRules !== undefined ? { respectIgnoreRules: input.respectIgnoreRules } : {}),
   });
   const findings: SecurityFinding[] = [];
   const warnings: string[] = [];

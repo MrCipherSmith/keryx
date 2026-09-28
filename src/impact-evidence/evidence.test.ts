@@ -76,7 +76,7 @@ describe("computeImpactEvidence", () => {
   });
 
   test("AC9: importers section is verbatim `buildAffectedReport` JSON", async () => {
-    const { buildAffectedReport } = await import("../../gdgraph/affected-report");
+    const { buildAffectedReport } = await import("../gdgraph/affected-report");
     const direct = await buildAffectedReport(root, "src/a.ts");
 
     const evidence = await computeImpactEvidence(root, "src/a.ts");
@@ -92,7 +92,7 @@ describe("computeImpactEvidence", () => {
   // wiring, e.g. a stale re-export, would not show up there). This spies on
   // `console.log` around the real `gdgraphCommand` entry point instead.
   test("F22: importers section matches the actual `keryx gdgraph affected --json` command's stdout, not just the shared builder", async () => {
-    const { gdgraphCommand } = await import("../../commands/gdgraph");
+    const { gdgraphCommand } = await import("../commands/gdgraph");
     const loggedOut: string[] = [];
     const originalLog = console.log;
     console.log = (...parts: unknown[]) => {

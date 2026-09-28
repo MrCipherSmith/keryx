@@ -87,7 +87,8 @@
 //     `GeminiThoughtSignatureReplayData` and `toGeminiContents` below.
 
 import { isPrivateEgressHost } from "../../mutation/guard";
-import { defaultRetryable } from "../provider-port";
+// A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
+import { retryableFor } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   NormalizedError,
@@ -97,7 +98,6 @@ import type {
   NormalizedUsage,
   ProviderCapabilities,
   ProviderDescription,
-  ProviderErrorKind,
   ProviderPort,
   ProviderReplayItem,
   StreamOptions,
@@ -454,12 +454,6 @@ function parseToolInput(rawArguments: string): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-/** Resolve a concrete retry disposition, falling back for policy-conditional rows. */
-function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
-  const concrete = defaultRetryable(kind);
-  return concrete === undefined ? fallback : concrete;
 }
 
 /**

@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.23] — 2026-09-28
+
+### Fixed
+- **Four architecture import cycles cut** (A-1, A-2, A-3, A-5): `security/service.ts` no longer re-exports the impact-evidence module — it moved to its own `src/impact-evidence/` core zone; `CLI_ROUTES`/`printCommandHelp` moved out of `cli.ts` into a new `src/cli-registry.ts` (the `help` route resolves through a dynamic import so the module can't recreate the cycle with `commands/help.ts`); `keyFilesForPage` moved to `src/wiki/key-files.ts`; `parseJsonTolerant` moved to `src/mcp-servers/json-utils.ts`. `keryx gdgraph query cycles` now lists only the two already-accepted facade loops (A-4).
+- **`retryableFor` deduplicated across all four provider adapters** (A-6) — one copy, exported from `harness/provider/provider-port.ts`, replaces four byte-identical local copies; every adapter's retry-taxonomy tests pass unchanged. `mergeUsage` stays per-adapter: the four bodies map genuinely different provider-specific usage fields, so a shared helper would only add indirection.
+- **`keryx gdgraph query orphans` no longer reports a `bunfig.toml` `preload` file as dead code** (A-8) — `src/lib/test-preload.ts` and any other declared preload entry are now treated as graph roots instead of unreferenced files.
+- **`keryx security scan` respects the repository's own ignore rules and stopped running out of budget on its own tree** (G-2) — ignored paths (`.gitignore`, plus the hardcoded `.claude/worktrees`, `.git`, and `node_modules`) are skipped before they are opened and listed under the scan report's `coverage.skipped`; `--no-ignore` restores the previous behaviour. The default `maxFiles`/`maxBytes` scan ceiling was also raised (1,000 files / 8 MiB → 20,000 files / 128 MiB) to match this repository's own real, versioned size (measured at 9,556 files / 92.4 MiB after every ignore rule). `keryx security scan . --json` on this repository now reports `coverage.status: "complete"`.
+- **`keryx update` now lists, and on confirmation prunes, stale agent worktrees under `.claude/worktrees/`** (G-5) — only a worktree at least 7 days old with zero commits ahead of `main` and no uncommitted changes is ever offered; `--yes` skips the confirmation prompt for unattended/CI runs.
+- **`keryx doctor` run outside a keryx project no longer reads as a failure** — a directory with no `.metaproject/` now gets one `warn` line ("not a keryx project — run `keryx init`") in place of every project-scoped check, and the command exits 0 instead of failing on checks that were never going to pass.
+- **`keryx doctor`'s stale-worktree check, and `keryx update`'s new pruning, resolve `.claude/worktrees` beside the main checkout** (via `git rev-parse --git-common-dir`), not beside the current working directory — run from inside a linked agent worktree, both used to report no `.claude/worktrees` directory at all while the main checkout had many.
+- **An OpenAI-compatible-gateway stream carrying an in-band `{"error":…}` envelope with no pending tool call now ends the turn with a classified `provider_error`**, the same way a pre-2xx HTTP error from the same gateway would, instead of silently ending the stream with no terminal event at all.
+- **`parseGrokToml` no longer echoes a raw config value, or a whole raw config line, into its problem message** — a Bearer token in an unsupported inline-table `headers` field (or any other value/line this reader cannot parse) no longer prints in `mcp list --json` warnings, `mcp doctor`, or the `/mcp` panel; the message now names the key and the unsupported form only, never the value.
+
 ## [0.3.22] — 2026-09-28
 
 ### Fixed

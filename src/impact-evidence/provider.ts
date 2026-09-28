@@ -6,11 +6,11 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { isDestructiveCommand } from "../../lib/command-risk";
-import { commandWord, splitSegments } from "../../lib/shell-syntax";
-import { isPathInside, toPosix } from "../../lib/fs";
-import { loadSecurityConfig, resolveImpactEvidenceConfigTrusted } from "../config";
-import type { ImpactEvidenceConfig } from "../types";
+import { isDestructiveCommand } from "../lib/command-risk";
+import { commandWord, splitSegments } from "../lib/shell-syntax";
+import { isPathInside, toPosix } from "../lib/fs";
+import { loadSecurityConfig, resolveImpactEvidenceConfigTrusted } from "../security/config";
+import type { ImpactEvidenceConfig } from "../security/types";
 import { computeImpactEvidence, renderEvidenceBlock } from "./evidence";
 import { appendLogRecord, loadSessionState, saveSessionState } from "./state";
 import {

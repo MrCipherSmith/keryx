@@ -5,6 +5,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdirContained, writeContained } from "../lib/contained-write";
 import { installManagedHookOrWarn, removeManagedHookOrWarn } from "../lib/managed-git-hook";
+import {
+  claudeWorktreesDir,
+  findStaleWorktrees,
+  pruneWorktree,
+  resolveMainCheckoutRoot,
+  type StaleWorktreeCandidate,
+} from "../lib/git-worktrees";
+import { confirm } from "../lib/prompt";
 
 // R1-F20: `writeTextIfChanged`/`writeTextIfMissing`/`copyFileIfChanged`/the
 // module-directory scaffolders below all receive an absolute path already
@@ -193,6 +201,8 @@ type UpdateOptions = {
   noTasks: boolean;
   preview: boolean;
   resolution: DivergenceResolution | undefined;
+  /** G-5 (flow 356): skip the stale-worktree prune confirmation prompt (CI). */
+  yes: boolean;
 };
 
 export type DashboardBuildResult = {
@@ -291,6 +301,8 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     }
   }
 
+  await offerStaleWorktreePrune(projectRoot, options);
+
   const steps: string[] = [];
   if (options.hooks) {
     await runPostUpdateHooks(projectRoot);
@@ -299,6 +311,58 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   }
   steps.push(`Read ${style.cyan(".metaproject/index.md")} first; open ${style.cyan(".metaproject/routing.md")} for the full module map and intent router.`);
   nextSteps(steps);
+}
+
+/**
+ * G-5 (flow 356): list agent worktrees under `.claude/worktrees/` that are
+ * at least 7 days old, have zero commits ahead of `main`, and have no
+ * uncommitted changes — then, on confirmation (`--yes` skips the prompt for
+ * CI), prune them with `git worktree remove`.
+ *
+ * `.claude/worktrees` is resolved beside the MAIN checkout
+ * (`resolveMainCheckoutRoot`, `git rev-parse --git-common-dir`), not beside
+ * `projectRoot` — `keryx update` run from a LINKED worktree must find the
+ * SAME worktrees list a run from the main checkout would, for the same
+ * reason `keryx doctor`'s stale-worktree check does (AC6).
+ *
+ * Never fatal: outside a git repository, or with no `.claude/worktrees`
+ * directory at all, this is silently a no-op — most projects have neither.
+ */
+async function offerStaleWorktreePrune(projectRoot: string, options: UpdateOptions): Promise<void> {
+  const mainRoot = await resolveMainCheckoutRoot(projectRoot);
+  const worktreesDir = await claudeWorktreesDir(projectRoot);
+  if (mainRoot === undefined || worktreesDir === undefined) {
+    return;
+  }
+  const stale = await findStaleWorktrees(worktreesDir);
+  if (stale.length === 0) {
+    return;
+  }
+
+  heading("Stale agent worktrees");
+  note(`${stale.length} worktree(s) under .claude/worktrees/ are 7+ days old, merged into main, and clean:`);
+  for (const candidate of stale) {
+    console.log(`  ${style.dim(symbols.bullet)} ${candidate.name} ${style.dim(`(${Math.floor(candidate.ageDays)}d old)`)}`);
+  }
+
+  const proceed = options.yes || (await confirm(`Prune ${stale.length} stale worktree(s)?`, false));
+  if (!proceed) {
+    note("Not pruned. Re-run with --yes, or answer yes at the prompt, to remove them.");
+    return;
+  }
+
+  const results: { candidate: StaleWorktreeCandidate; ok: boolean; message?: string }[] = [];
+  for (const candidate of stale) {
+    const result = await pruneWorktree(mainRoot, candidate.path);
+    results.push({ candidate, ...result });
+  }
+  for (const { candidate, ok, message } of results) {
+    if (ok) {
+      console.log(`  ${style.green(symbols.ok)} pruned ${candidate.name}`);
+    } else {
+      console.log(`  ${style.red(symbols.cross)} could not prune ${candidate.name}${message ? `: ${message}` : ""}`);
+    }
+  }
 }
 
 type RefreshSummary = {
@@ -1708,6 +1772,7 @@ function parseUpdateArgs(args: string[]): UpdateOptions {
     noTasks: args.includes("--no-tasks"),
     preview: isPreviewRequested(args),
     resolution: parseDivergenceResolution(args),
+    yes: args.includes("--yes"),
   };
 }
 
@@ -1809,7 +1874,7 @@ function runtimeSourcePath(relativePath: string): string {
 
 function printHelp(): void {
   helpTitle("keryx update", "refresh .metaproject service files (data left untouched)");
-  helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks]"]);
+  helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks] [--yes]"]);
   heading("Default behavior");
   for (const line of [
     "updates managed runtime when present;",
@@ -1827,5 +1892,6 @@ function printHelp(): void {
     { flag: "--preview, --dry-run", desc: "Print the lifecycle plan (create/update/skip/conflict + base digests) and write nothing." },
     { flag: "--accept-version", desc: "Publish this version's content over lifecycle files a different version left divergent." },
     { flag: "--keep-existing", desc: "Leave divergent lifecycle files alone and record that this run did not publish them." },
+    { flag: "--yes", desc: "Skip the stale-worktree prune confirmation prompt (CI)." },
   ]);
 }

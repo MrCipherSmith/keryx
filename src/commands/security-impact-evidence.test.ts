@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { handleImpactEvidence } from "./security-impact-evidence";
-import { readLogRecords } from "../security/service";
+import { readLogRecords } from "../impact-evidence";
 
 async function snapshotTree(root: string): Promise<string[]> {
   const results: string[] = [];

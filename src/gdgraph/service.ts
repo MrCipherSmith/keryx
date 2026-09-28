@@ -8,7 +8,7 @@
 import { buildGraph } from "./build";
 import { computeAffected, type AffectedOptions, type AffectedResult } from "./affected";
 import { loadGdgraphConfig } from "./config";
-import { getCycles, getOrphans, loadGraph } from "./query";
+import { bunfigPreloadRoots, getCycles, getOrphans, loadGraph } from "./query";
 import { writeRepomap, type RepomapOptions, type RepomapResult } from "./repomap";
 import type { GraphData } from "./types";
 
@@ -90,7 +90,13 @@ export function createGdgraphService(): GdgraphService {
 
     async query(cwd, q) {
       const graph = await loadGraph(cwd);
-      return q === "cycles" ? getCycles(graph) : getOrphans(graph);
+      if (q === "cycles") {
+        return getCycles(graph);
+      }
+      // A-8 (flow 356): same roots as `commands/gdgraph.ts` — a `bunfig.toml`
+      // `preload` entry is a real caller this graph's scan cannot see.
+      const roots = await bunfigPreloadRoots(cwd);
+      return getOrphans(graph, roots);
     },
   };
 }

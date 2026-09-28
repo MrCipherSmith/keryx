@@ -72,7 +72,20 @@ export function getFilesDescribedBy(graph: GraphData, pageId: string): string[] 
   return [...files].sort();
 }
 
-export function getOrphans(graph: GraphData): string[] {
+/**
+ * `roots` (A-8, flow 356): files reached OUT OF BAND — never by any `import`
+ * statement this graph's builder can see, so they carry no inbound OR
+ * outbound edge and would otherwise report as orphans. `src/lib/
+ * test-preload.ts` is the motivating case: `bunfig.toml`'s `[test].preload`
+ * loads it before any test module runs, which is a real caller this scan
+ * simply cannot see (it is not written as an `import`). Reporting it dead is
+ * a false positive, not a finding — `bunfigPreloadRoots` below is the one
+ * caller (`commands/gdgraph.ts`, `gdgraph/service.ts`) resolves and passes
+ * in; a caller that does not know about a project's `bunfig.toml` (e.g. this
+ * module's own unit tests, `forgetting/propagation.ts`) omits it and gets
+ * the previous, unfiltered behaviour.
+ */
+export function getOrphans(graph: GraphData, roots: ReadonlySet<string> = new Set()): string[] {
   const inbound = new Set(
     graph.edges.filter((edge) => edge.kind !== "unresolved").map((edge) => edge.to),
   );
@@ -81,8 +94,47 @@ export function getOrphans(graph: GraphData): string[] {
   );
   return graph.nodes
     .map((node) => node.path)
-    .filter((file) => !inbound.has(file) && !outbound.has(file))
+    .filter((file) => !inbound.has(file) && !outbound.has(file) && !roots.has(file))
     .sort();
+}
+
+/**
+ * `bunfig.toml`'s declared `preload` entries, resolved to graph-relative
+ * paths (forward-slash, relative to `projectRoot` — the same shape
+ * `GraphNode.path` uses) — the roots {@link getOrphans} excludes (A-8).
+ *
+ * Handles the two shapes Bun actually reads a `preload` array from: a
+ * top-level `preload = […]` (`bun run`/`bunx`) and a table-scoped one
+ * (`[test]\npreload = […]`, this repository's own `bunfig.toml`). Not a
+ * general TOML parser — narrow on purpose, one array key, matching this
+ * repository's own `mcp-servers/compat.ts` precedent of a small reader over
+ * a dependency for one config shape. An absent or unreadable `bunfig.toml`
+ * yields no roots rather than an error: most projects this graph runs
+ * against have none at all.
+ */
+export async function bunfigPreloadRoots(projectRoot: string): Promise<Set<string>> {
+  const roots = new Set<string>();
+  let text: string;
+  try {
+    text = await readFile(path.join(projectRoot, "bunfig.toml"), "utf8");
+  } catch {
+    return roots;
+  }
+  const arrayPattern = /preload\s*=\s*\[([^\]]*)\]/gs;
+  const stringPattern = /"((?:[^"\\]|\\.)*)"|'([^']*)'/g;
+  for (const arrayMatch of text.matchAll(arrayPattern)) {
+    const body = arrayMatch[1] ?? "";
+    for (const stringMatch of body.matchAll(stringPattern)) {
+      const raw = stringMatch[1] ?? stringMatch[2] ?? "";
+      if (raw.length === 0) {
+        continue;
+      }
+      const absolute = path.resolve(projectRoot, raw);
+      const relative = path.relative(projectRoot, absolute).split(path.sep).join("/");
+      roots.add(relative);
+    }
+  }
+  return roots;
 }
 
 export function getAffected(

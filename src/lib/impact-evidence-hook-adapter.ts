@@ -70,12 +70,15 @@
 // `ImpactEvidenceInput` — `src/harness/hooks/*` is off limits for this task
 // (owned by T5) — so it is left as a documented follow-up rather than reached
 // around.
+// A-1 (flow 356): `../impact-evidence`, not `../security/service` — the
+// module moved out from under `src/security/` and `security/service.ts`
+// stopped re-exporting it.
 import {
   createImpactEvidenceProvider,
   type ImpactEvidenceDecision,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
-} from "../security/service";
+} from "../impact-evidence";
 import type { ImpactEvidenceInput, ImpactEvidenceProvider, ImpactEvidenceResult } from "../harness/hooks/builtins";
 
 export interface CreateShellImpactEvidenceProviderOptions {

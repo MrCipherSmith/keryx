@@ -21,7 +21,8 @@
 // nothing is ever persisted (storage-off).
 
 import { isPrivateEgressHost } from "../../mutation/guard";
-import { defaultRetryable } from "../provider-port";
+// A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
+import { retryableFor } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
   MessageReasoning,
@@ -241,12 +242,6 @@ function toResponsesInput(messages: readonly NormalizedMessage[], providerId: st
     });
   }
   return out;
-}
-
-/** Resolve a concrete retry disposition, falling back for policy-conditional rows. */
-function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
-  const concrete = defaultRetryable(kind);
-  return concrete === undefined ? fallback : concrete;
 }
 
 /**

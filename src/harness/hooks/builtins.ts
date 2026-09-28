@@ -78,7 +78,7 @@ export interface ImpactEvidenceInput {
    * field existed. This is a plain approval marker, never content the
    * operator had to type (W8's own `acknowledgement` field accepts any
    * non-empty string as a rollback-line OR a plain acknowledgement — see
-   * `security/impact-evidence/index.ts`'s F19 note on what today's PreToolUse
+   * `impact-evidence/index.ts`'s F19 note on what today's PreToolUse
    * delivery can and cannot round-trip).
    */
   acknowledgement?: string;

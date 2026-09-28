@@ -14,6 +14,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
 import {
   buildDoctorReport,
   doctorCommand,
@@ -37,6 +38,9 @@ const EXPECTED_CHECK_IDS = [
   "graph-freshness",
   "wiki-freshness",
 ];
+
+/** The five checks that run regardless of whether `cwd` is a keryx project. */
+const GLOBAL_CHECK_IDS = ["version", "bun", "ripgrep", "sandbox", "providers"];
 
 describe("meetsBunFloor", () => {
   test("above, at, and below the floor", () => {
@@ -99,14 +103,88 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
     expect(performance.now() - start).toBeLessThan(3000);
   });
 
-  test("a directory with nothing initialized at all (no .metaproject, no git) still returns every check id, never throws", async () => {
+  // Backlog item 12 (flow 356): a directory with no `.metaproject/` used to
+  // run every project-scoped check anyway — `standard` alone produced seven
+  // "Required file … is missing" `fail` lines, and the whole command exited
+  // 1, which reads as "keryx is broken" rather than "this directory has
+  // never been `keryx init`'d". Now it is ONE `warn` line, the five global
+  // checks still run, and nothing here is `fail`.
+  test("a directory with nothing initialized at all (no .metaproject, no git): one warn line replaces every project-scoped check, nothing is fail, never throws", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-bare-"));
     try {
       const report = await buildDoctorReport(root, {});
-      expect(report.checks.map((c) => c.id).sort()).toEqual([...EXPECTED_CHECK_IDS].sort());
+      const ids = report.checks.map((c) => c.id).sort();
+      expect(ids).toEqual([...GLOBAL_CHECK_IDS, "project"].sort());
+      const project = report.checks.find((c) => c.id === "project");
+      expect(project?.status).toBe("warn");
+      expect(project?.detail).toBe("not a keryx project — run `keryx init`");
+      expect(project?.fix).toBe("keryx init");
+      expect(doctorFailed(report)).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
+  });
+
+  test("a directory inside a real keryx project (has .metaproject) runs every project-scoped check as usual", async () => {
+    const report = await buildDoctorReport(process.cwd(), {});
+    expect(report.checks.map((c) => c.id).sort()).toEqual([...EXPECTED_CHECK_IDS].sort());
+    expect(report.checks.some((c) => c.id === "project")).toBe(false);
+  });
+
+  test("a plain git repo with no .metaproject at all is STILL 'not a keryx project' — a git boundary alone does not count", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-plain-git-"));
+    try {
+      const proc = Bun.spawn(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
+      await proc.exited;
+      const report = await buildDoctorReport(root, {});
+      const project = report.checks.find((c) => c.id === "project");
+      expect(project?.status).toBe("warn");
+      expect(project?.detail).toBe("not a keryx project — run `keryx init`");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // Backlog item 13 (flow 356): run from inside a LINKED worktree, the
+  // `worktrees` check used to look beside the WORKTREE's own cwd
+  // (`<worktree>/.claude/worktrees`, which never exists) instead of beside
+  // the MAIN checkout — "no .claude/worktrees directory" even when the main
+  // checkout has many. It must give the SAME answer from either place.
+  describe("worktrees check: resolves .claude/worktrees beside the MAIN checkout, not cwd (backlog item 13)", () => {
+    async function git(cwd: string, args: string[]): Promise<void> {
+      const proc = Bun.spawn(["git", ...args], { cwd, stdout: "ignore", stderr: "ignore" });
+      if ((await proc.exited) !== 0) throw new Error(`git ${args.join(" ")} failed`);
+    }
+
+    test("the main checkout and a linked worktree agree on the SAME .claude/worktrees entries", async () => {
+      const mainRoot = await mkdtemp(path.join(tmpdir(), "keryx-doctor-worktree-main-"));
+      try {
+        await git(mainRoot, ["init", "-q", "-b", "main"]);
+        await git(mainRoot, ["config", "user.email", "test@example.com"]);
+        await git(mainRoot, ["config", "user.name", "Test"]);
+        await writeFile(path.join(mainRoot, "README.md"), "root\n", "utf8");
+        await git(mainRoot, ["add", "."]);
+        await git(mainRoot, ["commit", "-q", "-m", "initial"]);
+
+        await mkdir(path.join(mainRoot, ".metaproject"), { recursive: true });
+
+        const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
+        await mkdir(worktreesDir, { recursive: true });
+        const linkedPath = path.join(worktreesDir, "agent-1");
+        await git(mainRoot, ["worktree", "add", "-q", "-b", "agent/agent-1", linkedPath, "main"]);
+
+        const fromMain = await buildDoctorReport(mainRoot, {});
+        const fromLinked = await buildDoctorReport(linkedPath, {});
+
+        const worktreesFromMain = fromMain.checks.find((c) => c.id === "worktrees");
+        const worktreesFromLinked = fromLinked.checks.find((c) => c.id === "worktrees");
+        expect(worktreesFromLinked).toEqual(worktreesFromMain);
+        // Both see the ONE registered worktree, not "no .claude/worktrees directory".
+        expect(worktreesFromMain?.detail).toContain("1 worktree(s)");
+      } finally {
+        await rm(mainRoot, { recursive: true, force: true });
+      }
+    });
   });
 
   test("providers: names only, never a credential value", async () => {

@@ -203,7 +203,7 @@ async function handleStatus(cwd: string): Promise<void> {
 async function handleScan(cwd: string, args: string[]): Promise<void> {
   const file = scanPathArgument(args);
   if (!file) {
-    console.error("Usage: keryx security scan <path> [--json] [--recursive|--no-recursive] [--exclude <path>] [--max-files <n>] [--max-bytes <n>]");
+    console.error("Usage: keryx security scan <path> [--json] [--recursive|--no-recursive] [--exclude <path>] [--max-files <n>] [--max-bytes <n>] [--no-ignore]");
     process.exitCode = 1;
     return;
   }
@@ -216,6 +216,10 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
   }
   const exclusions = scanOptionValues(args, "--exclude");
   const recursive = recursiveScanFlag(args);
+  // G-2 (flow 356): `--no-ignore` restores the pre-existing behaviour (every
+  // readable file counts against the limits, `.gitignore`/`.claude/
+  // worktrees` or not). Default is to respect ignore rules.
+  const respectIgnoreRules = !args.includes("--no-ignore");
   const projectRoot = resolveProjectRoot(cwd);
   // Contain before opening: the scanner reads whatever it is pointed at and
   // renders findings from the content, so an uncontained path turns a scanner
@@ -238,6 +242,7 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
     ...(maxBytes !== undefined
       ? { limits: { ...(maxFiles !== undefined ? { maxFiles } : {}), maxBytes } }
       : {}),
+    respectIgnoreRules,
   });
   const asJson = args.includes("--json");
 
@@ -249,7 +254,12 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
     surfaceWarnings(result.warnings);
     renderDecision(result.decision);
     if (result.report.coverage !== undefined) {
-      console.log(`  coverage: ${result.report.coverage.status} (${result.report.files?.filter((entry) => entry.status === "scanned").length ?? 0} scanned)`);
+      const skippedCount = result.report.coverage.skipped?.length ?? 0;
+      console.log(
+        `  coverage: ${result.report.coverage.status} (${result.report.files?.filter((entry) => entry.status === "scanned").length ?? 0} scanned` +
+          (skippedCount > 0 ? `, ${skippedCount} skipped by ignore rules` : "") +
+          ")",
+      );
     }
     console.log("");
     console.log(`  report: ${result.markdownPath}`);

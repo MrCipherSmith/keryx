@@ -234,8 +234,15 @@ const AVOIDABLE_SLACK = 15;
  * requires it to reuse. `capability` has no `service.ts`, so the edge counts
  * as unavoidable and does not move the ratchet above; every other core import
  * in `src/bus` goes through a facade (`security/service.ts`).
+ *
+ * `cli.ts` -> `cli-registry.ts` (flow 356, A-2): `cli.ts`'s one bypass
+ * (`import { setModelTurnPort } from "./sac/model-turn-port"` — `sac` has a
+ * facade, so this was always AVOIDABLE, just never fixed) moved verbatim
+ * into the new `cli-registry.ts` when the route table split out of `cli.ts`
+ * to break its cycle with `commands/help.ts`. Same one edge, same count —
+ * `cli.ts` itself now imports nothing from core at all.
  */
-const BYPASSING_ZONES = ["bus", "cli.ts", "commands", "harness", "mcp", "session", "tui"];
+const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "mcp", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {
@@ -379,7 +386,21 @@ test("exactly the known zones bypass a facade — a new one joining is a real ch
 test("some core zones have no service.ts, so the facade rule is unsatisfiable for them", async () => {
   const { unavoidable, facadeless } = await bypassSplit();
 
-  expect(facadeless).toEqual(["capability", "ctx", "gdskills", "metrics", "retention", "review", "sync", "trigger"]);
+  expect(facadeless).toEqual([
+    "capability",
+    "ctx",
+    "gdskills",
+    // Flow 356 (A-1): `src/impact-evidence/` joined the core zone with no
+    // `service.ts` of its own — its one caller (`commands/security-
+    // impact-evidence.ts`) imports it directly, which is exactly the shape
+    // this bucket exists to count without penalising it as a bypass.
+    "impact-evidence",
+    "metrics",
+    "retention",
+    "review",
+    "sync",
+    "trigger",
+  ]);
   // Load-bearing rather than theoretical: code really does import from them.
   expect(unavoidable).toBeGreaterThan(0);
 });
