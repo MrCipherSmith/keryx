@@ -3,6 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.25] — 2026-09-28
+
+### Fixed
+- **The idle-wake shell test no longer flakes on slow runners.** It fired background completions until the model was called, which left a gap after the shell took the first one where a second completion queued a second notification turn ahead of the operator's line. It now stops firing once the shell has taken one completion. This flake stopped the v0.3.24 release run once.
+- **Pull-request CI now runs the `scripts/` tests.** They ran only in the release workflow, so the retired-spelling check that stopped 0.3.23 could not fail a pull request. `test:core` includes `scripts/` (about 50 s).
+
 ## [0.3.24] — 2026-09-28
 
 ### Fixed

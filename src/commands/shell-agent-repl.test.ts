@@ -307,11 +307,16 @@ function lineQueue(): { lines: AsyncIterable<string>; push: (line: string) => vo
  * against it stopped the spam. Proof that this fake's contract matters, not
  * just its call signature.
  */
-function fakeJobRegistry(): { registry: JobRegistry; fire: () => void } {
+function fakeJobRegistry(): { registry: JobRegistry; fire: () => void; drained: () => number } {
   let onCompletion: (() => void) | undefined;
   let pending = false;
   let jobCounter = 0;
   return {
+    // How many completions the REPL has actually taken. A poll that fires until
+    // the model is called can fire a second time in the gap between the drain
+    // and the model call, which queues a second notification turn; firing until
+    // the first drain is what "one completion" means.
+    drained: () => jobCounter,
     registry: {
       onCompletion: (cb: () => void) => {
         onCompletion = cb;
@@ -629,11 +634,16 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (was a source
     // turn before "hello there" ever got a chance to run — which is exactly
     // the failure this comment is warning the next editor away from
     // reintroducing.
+    // Fire until the REPL has taken ONE completion, then stop: firing until
+    // the model is called left a window between the drain and the model call
+    // in which a second fire queued a second notification turn ahead of the
+    // operator's line (seen on slow CI runners, flows 354 and 356).
     await waitUntil(() => {
-      if (model.texts().length >= 1) return true;
+      if (jobs.drained() >= 1) return true;
       jobs.fire();
       return false;
-    }, `the idle wake to reach the model\n${session.output()}`);
+    }, `the idle wake to be taken\n${session.output()}`);
+    await waitUntil(() => model.texts().length >= 1, `the idle wake to reach the model\n${session.output()}`);
     expect(model.texts()[0]).toContain('task_id="job-1"');
 
     // BOUNDARY — an operator line's own turn carries the TYPED text, not a
