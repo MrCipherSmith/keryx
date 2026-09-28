@@ -151,6 +151,21 @@ describe("AC3: replaying the recorded live transcript through the real runtime",
     expect(result.output).not.toContain("dangerously");
     expect(result.skippedLines).toBe(0);
   });
+
+  test("a codex failure that merely mentions waiting for approval stays Error — the Denied marker is antigravity's own tag", async () => {
+    const sp = fakeSpawn(
+      [
+        JSON.stringify({ type: "thread.started", thread_id: "t-1" }),
+        JSON.stringify({ type: "turn.failed", error: { message: "stream ended while waiting for approval of a patch" } }),
+      ],
+      1,
+    );
+    const result = await runExternalChild(
+      baseInput({ runtime: { kind: "external", agent: "codex-cli", sandbox: "read-only" } }),
+      baseDeps({ spawn: sp.port }),
+    );
+    expect(result.status).toBe("Error");
+  });
 });
 
 describe("AC5: no credential and no Google config-dir path reaches the child or this codebase", () => {

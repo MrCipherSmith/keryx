@@ -194,11 +194,13 @@ const DENIED_CAUSE_MARKERS: readonly RegExp[] = [
   /usage limit/i,
   /rate limit/i,
   /quota/i,
-  // Flow 357: antigravity-cli's `WAITING` status — a tool call is blocked on a
+  // Flow 357: antigravity-cli's `WAITING` status and its auto-denied tools — a
   // permission decision the headless run cannot supply. That is "refused
   // pending approval", the same class this list already names, not a crash.
-  /waiting (for|on) .*(approval|permission)/i,
-  /blocked (on|waiting) .*(approval|permission)/i,
+  // Matched on the exact parenthesised tag the antigravity codec writes, not
+  // on loose wording, so a codex or claude error that merely mentions waiting
+  // for approval stays `Error`.
+  /\(blocked on approval\)/,
 ];
 
 /** A refusal that happened before any process existed. */
