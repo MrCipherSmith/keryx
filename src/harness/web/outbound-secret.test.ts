@@ -80,6 +80,55 @@ test("REG-F1 — a Gist-style '<slug>-<hex-id>' URL fetches", () => {
   expect(containsOutboundSecret(url)).toBe(false);
 });
 
+describe("REG-F2 (flow 355 review round 3): a known public paste/commit identifier fetches", () => {
+  test("the reviewer's exact Gist URL — gist.github.com/<user>/<hex32> — fetches", () => {
+    const url = "https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890";
+    expect(containsOutboundSecret(url)).toBe(false);
+  });
+
+  test("an anonymous gist — gist.github.com/<hex32> with no user segment — fetches", () => {
+    const url = "https://gist.github.com/a1b2c3d4e5f67890abcdef1234567890";
+    expect(containsOutboundSecret(url)).toBe(false);
+  });
+
+  test("a GitHub commit URL fetches", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect(containsOutboundSecret(`https://github.com/owner/repo/commit/${sha}`)).toBe(false);
+  });
+
+  test("a GitHub blob URL (file at a specific commit) fetches", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect(
+      containsOutboundSecret(`https://github.com/owner/repo/blob/${sha}/src/index.ts`),
+    ).toBe(false);
+  });
+
+  test("a GitLab commit URL fetches", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    expect(containsOutboundSecret(`https://gitlab.com/owner/repo/-/commit/${sha}`)).toBe(false);
+  });
+
+  test("the allowlist is host+path-shape only — a lookalike host is still checked normally", () => {
+    const hex32 = "a1b2c3d4e5f67890abcdef1234567890";
+    expect(containsOutboundSecret(`https://gist.github.com.evil.example/x/${hex32}`)).toBe(true);
+  });
+
+  test("a secret elsewhere in an allowlisted URL is still caught (only the identifier is exempted)", () => {
+    const hex32 = "a1b2c3d4e5f67890abcdef1234567890";
+    const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    expect(
+      containsOutboundSecret(`https://gist.github.com/someuser/${hex32}?token=${secret}`),
+    ).toBe(true);
+  });
+});
+
+describe("SEC-F3 (flow 355 review round 3), outbound path: accepted residual documented for findings.md S-8", () => {
+  test("an UNLABELLED word-slug-with-hex-tail (10-16 hex chars) still fetches — see entropy.ts header", () => {
+    const url = "https://exfil.example/log-report-deadbeef01234567";
+    expect(containsOutboundSecret(url)).toBe(false);
+  });
+});
+
 describe("F-REG-F3: containsOutboundSecret honours backends.entropy.enabled", () => {
   afterEach(() => {
     resetEntropyGateForTests();

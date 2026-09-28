@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.21] — 2026-09-28
+
+### Fixed
+- **A secret dressed as a word slug with a hex tail (`<word>-<word>-<hex>`) is now redacted when labelled** — the LABELLED path (`redactSensitiveText`, `security/detect/entropy.ts`) no longer consults any word-slug exemption at all; only an allow-shape, a hex blob, or separator-stripped entropy reaching the floor can qualify a labelled value. An UNLABELLED secret in the same shape, with a 10-16 character hex tail, remains an accepted, documented residual (see `findings.md` row S-8).
+- **A labelled secret preceded by an ordinary filler word ("password is: …") or split across an explicit shell-style line continuation (`export API_KEY=\` then the value on the next line) is now redacted** — `ADJACENT_LABEL` tolerates up to two closed-set filler words between the label and the connector, and a new `isAdjacentLabel` check recognises an explicit continuation marker (`=\`, `:\`, `= \`, or a bare `\`) at the end of the previous line.
+- **`web_fetch`/`web_search` no longer refuse an ordinary public Gist, GitHub commit/blob, or GitLab commit URL** — a small, documented host+path-shape allowlist in `harness/web/outbound-secret.ts` exempts `gist.github.com/<user>/<hex32>` (and the anonymous `/<hex32>` form), `github.com/…/commit/<sha40>` and `/…/blob/<sha40>/…`, and `gitlab.com/…/-/commit/<sha40>` from the outbound secret-shape check only; redaction of the same value in tool output is unchanged.
+- Fixed a stale header comment in `entropy.ts` that claimed `token=abcdefghijklmnopqrstuvwx12345678` was deliberately missed as "low-entropy" — the value is in fact maximal-entropy (all 32 characters distinct) and has always been caught; the comment now says so.
+- Fixed a flaky redaction test: `redact.test.ts`'s labelled/unlabelled UUID coverage now uses 20 fixed UUIDs (committed in the test, individually confirmed not to trip the unrelated `pii.credit-card` detector) instead of unseeded `crypto.randomUUID()` values, and asserts on the entropy redaction marker specifically rather than a looser "value is gone" check.
+- Also shipped in 0.3.19–0.3.20: `LABEL=VALUE` assignment shapes (`api_key=…`, `--token=…`) and camelCase labels (`apiKey: "…"`) are now recognised and redacted, closing a gap where `=` inside the token character class fused the label into the candidate and where camelCase had no non-alphanumeric boundary character at all.
+
 ## [0.3.20] — 2026-09-28
 
 ### Fixed
