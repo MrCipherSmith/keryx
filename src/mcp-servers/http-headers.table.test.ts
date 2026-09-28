@@ -522,6 +522,26 @@ describe("displayUrl is safe to print", () => {
   test("undefined is the empty string, not the word undefined", () => {
     expect(displayUrl(undefined)).toBe("");
   });
+
+  // S-9 (flow 355, AC5): a credential in a PATH segment, not just the query
+  // or userinfo — the case an operator's own history found in `mcp list`.
+  describe("a credential-shaped PATH segment is masked too", () => {
+    test("a 32-hex path segment is replaced with …", () => {
+      const shown = displayUrl("https://host/v1/0123456789abcdef0123456789abcdef/mcp");
+      expect(shown).toBe("https://host/v1/…/mcp");
+      expect(shown).not.toContain("0123456789abcdef0123456789abcdef");
+    });
+
+    test("BOUNDARY — an ordinary short path segment is untouched", () => {
+      expect(displayUrl("https://host/v1/users/mcp")).toBe("https://host/v1/users/mcp");
+    });
+
+    test("BOUNDARY — a long but ordinary word segment is untouched", () => {
+      expect(displayUrl("https://host/api/organization-settings/mcp")).toBe(
+        "https://host/api/organization-settings/mcp",
+      );
+    });
+  });
 });
 
 describe("referencedVariable names what the operator has to set", () => {

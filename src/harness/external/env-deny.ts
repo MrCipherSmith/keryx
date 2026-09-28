@@ -1,29 +1,11 @@
 // Environment names an external agent child never inherits. A leaf module:
 // `env.ts` and `mcp-servers/spawn-env.ts` both read these lists.
-
-/**
- * Variables removed by name, each for its own reason (security-policy §2.1).
- * Not alphabetised — grouped by the failure each prevents.
- */
-export const EXTERNAL_ENV_DENY: readonly string[] = [
-  // Break the subscription path, or silently redirect it to a third-party model
-  // while the result still carries the external agent's name.
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_AUTH_TOKEN",
-  "ANTHROPIC_BASE_URL",
-  "ANTHROPIC_MODEL",
-  // Config pointers that can re-set the variables above from inside a settings
-  // file. Stripping the variables while leaving the pointer achieves nothing.
-  "CLAUDE_CONFIG_DIR",
-  "CODEX_HOME",
-  // "You are running inside Claude Code" — a child that inherits it misidentifies
-  // its own context.
-  "CLAUDECODE",
-];
-
-/**
- * Namespaces swept rather than enumerated. A table of individual names is a table
- * that falls behind the vendor's next release, and this is exactly the kind of
- * list nobody notices has gone stale.
- */
-export const EXTERNAL_ENV_PREFIX_SWEEPS: readonly string[] = ["CLAUDE_CODE_", "KERYX_"];
+//
+// MOVED (flow 355, AC7 R-MIN1): the lists themselves now live in
+// `src/security/credential-shape.ts`, alongside `isDeniedForMcpChild` which
+// depends on them — a core module cannot import this one (`import-zones.ts`'s
+// zero-tolerance rule against a core owner importing client), so the data
+// moved instead of the rule bending. Re-exported here so every existing
+// importer of THIS module (`env.ts`, `spawn-env.ts`, both packages' tests) is
+// unaffected.
+export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../../security/credential-shape";

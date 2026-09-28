@@ -153,6 +153,11 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
       // neither `KEY`, `TOKEN` nor `SECRET` — an ordinary config path must
       // survive sharing a prefix with a credential shape.
       ["APPCONFIG", "/etc/app/config.yaml", false],
+      // R-I2 (flow 355 audit remediation 2): the glued shape is now ANCHORED
+      // to the name's own boundaries. Unanchored, `APITOKEN` matched inside
+      // `APITOKENIZER` too — a name that reads as "the thing that tokenizes
+      // API input", not a credential.
+      ["APITOKENIZER", "x", false],
     ],
   },
   {

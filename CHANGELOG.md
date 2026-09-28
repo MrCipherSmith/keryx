@@ -3,6 +3,67 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.19] — 2026-09-28
+
+### Fixed
+- **`redactSensitiveText` now catches opaque high-entropy secrets, not just
+  named patterns.** The one scrubber every tool output and web-fetched page
+  goes through (`src/security/redact.ts`) ran only the pattern detectors; a
+  bearer token or raw key with no recognized prefix reached the model
+  unredacted. It now also runs `security/detect/entropy.ts` — the same
+  thresholds `keryx security scan` uses — masking a qualifying match as
+  `[REDACTED:entropy]`. The entropy detector gained allow-shapes (a 40-hex
+  git commit SHA, a 7–12-hex short SHA, a UUID, an npm/yarn `sha256-`/
+  `sha512-` integrity string) so ordinary `git`/`bun`/`npm` output is never a
+  false positive — measured at zero across a 200-sample fixture of realistic
+  command output (`git log --oneline`, `git show --stat`, `bun test`
+  summaries, `npm`/`bun install` with integrity hashes, `ls -la`, `docker
+  ps`, stack traces with hex addresses).
+- **The prompt-injection phrase detectors now survive a line break or a
+  Cyrillic/Greek homoglyph.** `security/detect/injection.ts`'s phrase gaps
+  excluded newlines (`[^.\n]{0,N}`), so a trigger phrase wrapped across a
+  line — "Ignore all previous\ninstructions" — was not detected though
+  nothing about the attack changed at the line break; a period still ends a
+  gap. Matching now also runs on a length-preserving confusables fold
+  (Cyrillic/Greek look-alikes, plus NFKC when it does not change length), so
+  "Ignіre all previous instructions" (a Cyrillic і substituted for the
+  Latin 'o') is caught too.
+- **`web_fetch`/`web_search` now refuse to send secret-shaped content off
+  the machine.** Both tools checked the target host was public but never
+  whether the model-supplied URL or query itself carried a credential.
+  `harness/web/outbound-secret.ts` runs the same pattern-and-entropy floor
+  `redactSensitiveText` uses on the URL/query BEFORE any network connection,
+  refusing with `"outbound secret-shaped content"` and recording an
+  `egress.outbound-secret` incident (`.metaproject/data/security/
+  incidents/`) when it fires.
+- **`keryx mcp list`, `mcp doctor --json`, and the trust prompt no longer
+  print a credential that lives in a URL PATH segment.** `displayUrl`
+  (`mcp-servers/http-headers.ts`) elided query strings and userinfo but kept
+  the path verbatim — `https://host/v1/<token>/mcp` showed the token in
+  full, which is exactly how a live credential was once seen in `mcp list`
+  output. Any path segment of 16 or more characters that matches a secret
+  pattern or the entropy detector's shape is now replaced with `…`; a short
+  or ordinary segment (`v1`, `mcp`, `users`) is untouched.
+- **The win32 device-code verification URL no longer opens through a
+  shell.** `lib/oauth/open-url.ts` ran `cmd /c start "" <url>`, and `cmd.exe`
+  re-tokenises its own command line — a `verification_uri` containing `&`
+  could run a second command. The win32 plan now validates the scheme
+  (`https`, or `http` to loopback only) and a strict RFC-3986-based
+  character allowlist before spawning `rundll32 url.dll,FileProtocolHandler
+  <url>` with the url as a single, unparsed argv entry.
+- **The third-party-child credential filter moved to a shared, better-named
+  home, is now fully case-insensitive, and no longer over-matches a glued
+  compound.** `isDeniedForMcpChild` — the shape check that decides what a
+  spawned MCP server or an external agent CLI's environment may keep — moved
+  from `mcp-servers/spawn-env.ts` to `src/security/credential-shape.ts`,
+  the single home both callers now import through the security facade.
+  `harness/external/env.ts`'s own by-name denial list is now compared
+  case-insensitively rather than relying on the shape check behind it to
+  catch a lower-case spelling. The glued-compound regex (`PRIVATEKEY`,
+  `REFRESHTOKEN`, `DBPASS`, …) is now anchored to the variable name's own
+  boundaries, so it no longer matches inside an unrelated longer name (e.g.
+  `APITOKENIZER`).
+
 ## [0.3.18] — 2026-09-28
 
 ### Fixed

@@ -7,12 +7,16 @@ import type { DetectorMatch, SecurityLocation } from "./types";
 import { detectSecrets } from "./detect/secrets";
 import { detectPii } from "./detect/pii";
 import { detectExfil } from "./detect/exfil";
+import { detectEntropy } from "./detect/entropy";
 
 // Redaction and hashing safety (specification.md §10a).
 //
 // - Masks are FIXED-WIDTH and length-hiding: a secret always becomes the constant
-//   token `[REDACTED:secret]`; PII uses a typed constant (`[REDACTED:email]`).
-//   Never a partial reveal, never length-preserving.
+//   token `[REDACTED:secret]`; PII uses a typed constant (`[REDACTED:email]`); a
+//   high-entropy match with no NAMED shape (S-6, flow 355) becomes
+//   `[REDACTED:entropy]`, distinguishing "matched a known credential pattern"
+//   from "merely high-entropy near a sensitive word". Never a partial reveal,
+//   never length-preserving.
 // - `redactedPreview` shows only surrounding NON-sensitive context with the span
 //   replaced by the mask — never a prefix/suffix of the sensitive value.
 // - `hash` is HMAC-SHA256(value, key) with a per-project key stored local-only.
@@ -118,18 +122,32 @@ export function applyRedaction(content: string, matches: DetectorMatch[]): strin
   return out;
 }
 
-// Scrub secret, PII, and auto-fetch exfil spans from free text using the
-// deterministic detector floor (regex only — no model, no config, no IO), then
-// fixed-width redact. Used
+// Scrub secret, PII, auto-fetch exfil, and high-entropy spans from free text
+// using the deterministic detector floor (regex + entropy — no model, no
+// config, no IO), then fixed-width redact. Used
 // to sanitise TOOL OUTPUT before it is appended to provider-bound agent history:
 // a contained shell command that reads a credential (`cat ~/.aws/credentials`,
 // `env`) must not leak the raw value into the model context and onward to the
 // provider (finding F3). Pure; returns the input unchanged when nothing matches.
+//
+// S-6 (flow 355, AC2): the pattern-only pass never caught an opaque bearer
+// token or a bare high-entropy key with no NAMED shape — this is the one
+// scrubber every tool output goes through (`commands/agent.ts`'s turn loop)
+// and web content (`harness/web/web-content.ts`), so that gap reached the
+// model on every session. `detectEntropy` runs the SAME thresholds `keryx
+// security scan` uses, and its own allow-shapes (git SHAs, UUIDs, npm/yarn
+// integrity strings — `entropy.ts`'s `isAllowShapedValue`) keep the false-
+// positive rate on ordinary command output at zero (flow 355 AC2 fixture).
 export function redactSensitiveText(text: string): string {
   if (text.length === 0) {
     return text;
   }
-  const matches = [...detectSecrets(text), ...detectPii(text), ...detectExfil(text)];
+  const matches = [
+    ...detectSecrets(text),
+    ...detectPii(text),
+    ...detectExfil(text),
+    ...detectEntropy(text),
+  ];
   if (matches.length === 0) {
     return text;
   }

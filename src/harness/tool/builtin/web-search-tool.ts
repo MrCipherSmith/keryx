@@ -1,6 +1,7 @@
 import { redactSensitiveText } from "../../../security/redact";
 import type { SearchResponse } from "../../search";
 import { isUnsafeExternalInstruction } from "../../web/web-content";
+import { containsOutboundSecret, recordOutboundSecretFinding } from "../../web/outbound-secret";
 import type { InteractiveTool } from "./interactive-tools";
 
 export type SearchToolResult =
@@ -29,8 +30,18 @@ function render(response: SearchResponse): string | undefined {
   return lines.join("\n").trim();
 }
 
+/** Test-only/logging seam; `webSearchTool`'s second parameter. */
+export interface WebSearchDeps {
+  /**
+   * Where the S-8 refusal incident (§14) is recorded. Left absent, a refusal
+   * still happens but nothing is logged — see `web-fetch-tool.ts`'s identical
+   * field for why `process.cwd()` is not a safe default here.
+   */
+  cwd?: string;
+}
+
 /** Agent tool with no provider fallback: the service owns active-state checks. */
-export function webSearchTool(service: SearchToolService): InteractiveTool {
+export function webSearchTool(service: SearchToolService, deps: WebSearchDeps = {}): InteractiveTool {
   return {
     definition: {
       name: "web_search",
@@ -42,7 +53,17 @@ export function webSearchTool(service: SearchToolService): InteractiveTool {
       if (typeof input.query !== "string" || input.query.trim().length === 0) {
         return { output: "web_search: query must be a non-empty string", isError: true };
       }
-      const response = await service.search(input.query.trim());
+      const query = input.query.trim();
+      // S-8 (flow 355, AC4): refuse BEFORE any network connection.
+      if (containsOutboundSecret(query)) {
+        // Only when a caller names a project — see `web-fetch-tool.ts`'s
+        // identical guard for why `process.cwd()` is not a safe fallback here.
+        if (deps.cwd !== undefined) {
+          await recordOutboundSecretFinding(deps.cwd, "web_search", "query");
+        }
+        return { output: "web_search: outbound secret-shaped content", isError: true };
+      }
+      const response = await service.search(query);
       if (!response.ok) {
         return {
           output: response.reason === "no-active-provider"

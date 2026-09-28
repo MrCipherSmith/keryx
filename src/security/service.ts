@@ -58,6 +58,26 @@ import { sourceForFileRead as sourceForFileReadInternal } from "./read-source";
 export { redactSensitiveText } from "./redact";
 
 /**
+ * Re-exported here for the same reason as `redactSensitiveText` above: S-8
+ * (flow 355, AC4) needs the pattern and entropy detectors to check OUTBOUND
+ * content (`harness/web/outbound-secret.ts`, `web_fetch`/`web_search`'s
+ * pre-flight) without reaching past this facade into `security/detect/*`
+ * directly, and `appendIncident` to record the refusal (§14) without reaching
+ * past it into `security/incidents.ts` directly.
+ */
+export { detectSecrets } from "./detect/secrets";
+export { detectEntropy, looksSecretShaped } from "./detect/entropy";
+export { appendIncident } from "./incidents";
+
+/**
+ * Re-exported here for the same reason (R-MIN1, flow 355 AC7): both
+ * `mcp-servers/spawn-env.ts` and `harness/external/env.ts` need the
+ * credential-shape classifier without reaching past this facade into
+ * `security/credential-shape.ts` directly.
+ */
+export { isDeniedForMcpChild } from "./credential-shape";
+
+/**
  * Re-exported here for the same reason as `redactSensitiveText` above: this is
  * the facade, and a caller that needs to know whether a file read is
  * `trusted-project` or `untrusted-external` (`ctx.ts`'s `redactRaw` call,

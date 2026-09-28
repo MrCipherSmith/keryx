@@ -97,3 +97,30 @@ describe("the case redactSensitiveText's own contract names", () => {
     expect(redactSensitiveText(code)).toBe(code);
   });
 });
+
+describe("S-6 (flow 355, AC2): the entropy detector runs after the pattern pass", () => {
+  test("an opaque 43-char base64 bearer token with no named shape is redacted", () => {
+    const token = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const scrubbed = redactSensitiveText(`Authorization: Bearer ${token}`);
+    expect(scrubbed).not.toContain(token);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  test("a 40-hex git commit SHA is left untouched", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const text = `api_key file changed in commit ${sha}`;
+    expect(redactSensitiveText(text)).toBe(text);
+  });
+
+  test("a UUID is left untouched", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const text = `credential id: ${uuid}`;
+    expect(redactSensitiveText(text)).toBe(text);
+  });
+
+  test("an npm/yarn sha512- integrity string is left untouched", () => {
+    const integrity = `sha512-${"A".repeat(50)}==`;
+    const text = `resolved "https://registry.npmjs.org/foo/-/foo-1.0.0.tgz", auth integrity ${integrity}`;
+    expect(redactSensitiveText(text)).toBe(text);
+  });
+});

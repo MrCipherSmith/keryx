@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { detectEntropy } from "./entropy";
+import { detectEntropy, looksSecretShaped } from "./entropy";
 
 test("does NOT flag a PascalCase identifier near an 'api' substring (the reported FP)", () => {
   // `...VariablesApi` puts "api" in the label window before `PipelineVariablesStore`,
@@ -98,4 +98,38 @@ test("STILL flags a hyphenated token whose segments are alphanumeric, not words"
   // hyphens: every segment here is mixed alphanumeric, so it is not a slug.
   const input = "secret = xoxb-A1b2C3d4E5f6-G7h8I9j0K1l2-MnOpQ7rStU9vWxYz";
   expect(detectEntropy(input).length).toBeGreaterThanOrEqual(1);
+});
+
+// --- flow 355 (audit remediation 2), S-6 / AC2: allow-shapes ---------------
+
+test("does NOT flag a 40-hex git commit SHA even right next to a sensitive label", () => {
+  const sha = "0123456789abcdef0123456789abcdef01234567"; // 40 hex chars
+  expect(sha.length).toBe(40);
+  expect(detectEntropy(`api_key file: ${sha}`)).toEqual([]);
+});
+
+test("does NOT flag a UUID even right next to a sensitive label", () => {
+  const uuid = "550e8400-e29b-41d4-a716-446655440000";
+  expect(detectEntropy(`credential id: ${uuid}`)).toEqual([]);
+});
+
+test("does NOT flag an npm/yarn sha512- integrity string even near a sensitive label", () => {
+  const integrity = `sha512-${"A".repeat(50)}==`;
+  expect(detectEntropy(`auth integrity="${integrity}"`)).toEqual([]);
+});
+
+test("STILL flags an opaque high-entropy bearer token with no named shape", () => {
+  // The AC2 positive case: a random-looking base64 bearer token near "auth".
+  const token = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+  expect(token.length).toBe(43);
+  const matches = detectEntropy(`Authorization: Bearer ${token}`);
+  expect(matches.length).toBe(1);
+  expect(matches[0]?.value).toBe(token);
+  expect(matches[0]?.mask).toBe("entropy");
+});
+
+test("looksSecretShaped: the label-free shape check a URL path segment can use (S-9)", () => {
+  expect(looksSecretShaped("0123456789abcdef0123456789abcdef")).toBe(true); // 32-hex blob
+  expect(looksSecretShaped("users")).toBe(false);
+  expect(looksSecretShaped("0123456789abcdef0123456789abcdef01234567")).toBe(false); // allow-shaped (git SHA)
 });

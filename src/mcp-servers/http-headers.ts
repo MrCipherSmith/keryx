@@ -22,6 +22,7 @@
 // rather than a header.
 
 import type { McpServerEntry } from "./config";
+import { detectSecrets, looksSecretShaped } from "../security/service";
 
 /**
  * A header whose value came out of expansion empty.
@@ -323,6 +324,35 @@ function elideCredentialText(raw: string): string {
   );
 }
 
+/** Segments this short are never worth masking — `v1`, `mcp`, `api`, `users`. */
+const MASKED_SEGMENT_MIN_LENGTH = 16;
+
+/**
+ * Replace a credential-shaped PATH segment with `…` (S-9, flow 355 AC5).
+ *
+ * Checked per segment, not on the whole path: a real credential occupies one
+ * whole segment between two slashes (`/v1/<token>/mcp`), and masking segment-
+ * by-segment is what lets `v1` and `mcp` survive untouched either side of it.
+ * A segment shorter than {@link MASKED_SEGMENT_MIN_LENGTH} is never even
+ * tested — that floor is what keeps an ordinary path component (a resource
+ * name, a short id) from ever being a candidate.
+ *
+ * Two independent tests, either is enough: `detectSecrets` for a NAMED
+ * provider-key shape landing in a path rather than a header, and
+ * `looksSecretShaped` (the entropy detector's shape gate, unlabelled — see
+ * its own doc comment for why a path segment needs no neighbouring "key"
+ * word) for an opaque high-entropy token with no named shape.
+ */
+function maskSecretShapedPathSegments(pathname: string): string {
+  return pathname
+    .split("/")
+    .map((segment) => {
+      if (segment.length < MASKED_SEGMENT_MIN_LENGTH) return segment;
+      return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? "…" : segment;
+    })
+    .join("/");
+}
+
 /**
  * A URL safe to print.
  *
@@ -341,11 +371,15 @@ function elideCredentialText(raw: string): string {
  * list`, the `/mcp` view, and the TRUST PROMPT, which is the moment the
  * operator is deciding.
  *
- * Known and deliberate: the PATH is kept. `https://host/v1/sk-live-x/mcp`
- * still shows the secret. Eliding the path would make the row unable to
- * say which endpoint it is, which is most of why it is shown; a
- * credential in a path segment is also not a form any of the MCP
- * vendors use. Recorded rather than silently accepted.
+ * UPDATED (S-9, flow 355 AC5): the path used to be kept verbatim on the
+ * grounds that eliding it would make the row unable to say which endpoint it
+ * is, and that no MCP vendor puts a credential in a path segment. The second
+ * half was disproved by an operator's own history — a live credential in
+ * `keryx mcp list` output, in exactly this position. Every path SEGMENT of 16
+ * or more characters that matches a secret pattern or the entropy detector's
+ * shape (`maskSecretShapedPathSegments` below) is now replaced with `…`; a
+ * short or ordinary segment (`v1`, `mcp`, `users`) is untouched, so the row
+ * still says which endpoint it is for the overwhelming common case.
  */
 export function displayUrl(raw: string | undefined): string {
   if (raw === undefined) return "";
@@ -361,7 +395,8 @@ export function displayUrl(raw: string | undefined): string {
     const parsed = new URL(raw);
     const query = parsed.search === "" ? "" : "?…";
     const auth = parsed.username === "" ? "" : "…@";
-    return `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}${query}`;
+    const pathname = maskSecretShapedPathSegments(parsed.pathname);
+    return `${parsed.protocol}//${auth}${parsed.host}${pathname}${query}`;
   } catch {
     // Unparseable. Elide by text rather than surrendering the string.
     return elideCredentialText(raw);

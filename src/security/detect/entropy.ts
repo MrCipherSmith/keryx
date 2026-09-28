@@ -23,6 +23,27 @@ const LABEL_WINDOW = 40;
 // still not a secret.
 const HEX_BLOB = /^[0-9a-f]{24,}$/i;
 
+// Allow-shapes (S-6 / flow 355 AC2): value SHAPES that must never be treated as
+// a secret, whatever their entropy and however close a sensitive label sits.
+// Checked on the candidate BEFORE the label/entropy gates below get a say, so
+// `redactSensitiveText` calling this detector on every tool output (S-6) never
+// masks a git commit SHA, a UUID, or an npm/yarn integrity string — all three
+// are printed constantly by ordinary `git`/`bun`/`npm` output this redactor now
+// sees for the first time.
+const FULL_GIT_SHA_RE = /^[0-9a-f]{40}$/i;
+const SHORT_GIT_SHA_RE = /^[0-9a-f]{7,12}$/i;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const INTEGRITY_RE = /^(?:sha256|sha512)-[A-Za-z0-9+/]+=*$/;
+
+function isAllowShapedValue(value: string): boolean {
+  return (
+    FULL_GIT_SHA_RE.test(value) ||
+    SHORT_GIT_SHA_RE.test(value) ||
+    UUID_RE.test(value) ||
+    INTEGRITY_RE.test(value)
+  );
+}
+
 // Only the text after the last newline — the label window must never reach into
 // a neighbouring line.
 function lastLineOf(before: string): string {
@@ -68,6 +89,58 @@ function shannonEntropy(value: string): number {
   return entropy;
 }
 
+/**
+ * The shape decision alone, with NO label requirement: allow-shapes excluded,
+ * an identifier/slug excluded, then hex-blob-or-entropy-floor. Used by
+ * `detectEntropy` (which adds the label gate on top) and, unlabelled, by
+ * `looksSecretShaped` below — a URL PATH SEGMENT (`displayUrl`, S-9) has no
+ * neighbouring "key"/"token" word to look back for; its POSITION between two
+ * slashes is the only signal it will ever carry, so the label gate does not
+ * apply there.
+ */
+function shapeQualifiesAsSecret(head: string): { qualifies: boolean; entropy: number } {
+  if (isAllowShapedValue(head)) {
+    return { qualifies: false, entropy: 0 };
+  }
+  // Code identifiers (camelCase / PascalCase / snake_case) routinely exceed
+  // 20 chars and sit near an "api"/"key" substring embedded in a NEIGHBOURING
+  // identifier — e.g. `PipelineVariablesStore` right after `...VariablesApi` —
+  // producing false positives. Real credentials are random blobs that almost
+  // always contain a digit or a base64 symbol; an alpha/underscore/hyphen-only
+  // token is an identifier, not a secret. Require a secret-shaped character.
+  // `/` was deliberately DROPPED from this gate: it made every filesystem
+  // path ≥20 chars a secret candidate (`src/security/detect/entropy` has no
+  // digit and no base64 symbol, but plenty of slashes), which is how real
+  // filenames reached agents as `[REDACTED:secret]` and could not be opened.
+  // A base64 blob that contains `/` in practice also contains digits or `+`/`=`.
+  if (!/[0-9]/.test(head) && !/[+=]/.test(head)) {
+    return { qualifies: false, entropy: 0 };
+  }
+  // Hyphen/underscore-delimited word slugs — ADR filenames, flow directories,
+  // kebab-case identifiers — are never credentials, even though a version-like
+  // digit segment satisfies the shape gate above.
+  if (isWordSlug(head)) {
+    return { qualifies: false, entropy: 0 };
+  }
+  const entropy = shannonEntropy(head);
+  const hexBlob = HEX_BLOB.test(head);
+  if (entropy < 3.6 && !hexBlob) {
+    return { qualifies: false, entropy };
+  }
+  return { qualifies: true, entropy };
+}
+
+/**
+ * True when `value` looks like a credential by SHAPE alone — allow-shapes,
+ * identifier/slug, and hex-blob-or-entropy, with no sensitive-label
+ * requirement. For a caller whose CONTEXT already is the label (a URL path
+ * segment; `displayUrl`, S-9): matched against the whole value, not a TOKEN
+ * regex head, since the caller has already isolated the candidate.
+ */
+export function looksSecretShaped(value: string): boolean {
+  return shapeQualifiesAsSecret(value).qualifies;
+}
+
 export function detectEntropy(content: string): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
   TOKEN.lastIndex = 0;
@@ -79,29 +152,8 @@ export function detectEntropy(content: string): DetectorMatch[] {
     // span but never earns the match, so `identifier.someMethodName` cannot pass
     // a gate its head would fail.
     const head = TOKEN_HEAD.exec(value)?.[0] ?? value;
-    // Code identifiers (camelCase / PascalCase / snake_case) routinely exceed
-    // 20 chars and sit near an "api"/"key" substring embedded in a NEIGHBOURING
-    // identifier — e.g. `PipelineVariablesStore` right after `...VariablesApi` —
-    // producing false positives. Real credentials are random blobs that almost
-    // always contain a digit or a base64 symbol; an alpha/underscore/hyphen-only
-    // token is an identifier, not a secret. Require a secret-shaped character.
-    // `/` was deliberately DROPPED from this gate: it made every filesystem
-    // path ≥20 chars a secret candidate (`src/security/detect/entropy` has no
-    // digit and no base64 symbol, but plenty of slashes), which is how real
-    // filenames reached agents as `[REDACTED:secret]` and could not be opened.
-    // A base64 blob that contains `/` in practice also contains digits or `+`/`=`.
-    if (!/[0-9]/.test(head) && !/[+=]/.test(head)) {
-      continue;
-    }
-    // Hyphen/underscore-delimited word slugs — ADR filenames, flow directories,
-    // kebab-case identifiers — are never credentials, even though a version-like
-    // digit segment satisfies the shape gate above.
-    if (isWordSlug(head)) {
-      continue;
-    }
-    const entropy = shannonEntropy(head);
-    const hexBlob = HEX_BLOB.test(head);
-    if (entropy < 3.6 && !hexBlob) {
+    const { qualifies, entropy } = shapeQualifiesAsSecret(head);
+    if (!qualifies) {
       continue;
     }
     // The label look-back is bounded to the CURRENT LINE. It used to run over
@@ -123,7 +175,12 @@ export function detectEntropy(content: string): DetectorMatch[] {
       start: m.index,
       end: m.index + value.length,
       value,
-      mask: "secret",
+      // Its own mask (flow 355, S-6/AC2), not "secret": `redactSensitiveText`
+      // now runs this detector on every tool output, and `[REDACTED:entropy]`
+      // tells the model (and a human reading a transcript) that the value was
+      // never matched to a NAMED credential shape — it was only high-entropy
+      // near a sensitive word, which is a weaker, sometimes-wrong signal.
+      mask: "entropy",
       remediation: "Verify this high-entropy value is not a live credential.",
     });
   }

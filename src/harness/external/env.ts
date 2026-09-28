@@ -41,11 +41,15 @@
 // TARGET runtime itself authenticates with (`EXTERNAL_RUNTIME_CREDENTIAL_ALLOW`
 // below), so a subscription login via its own config dir keeps working while
 // every other provider's key still does not cross the boundary.
-import { isDeniedForMcpChild } from "../../mcp-servers/spawn-env";
+// `isDeniedForMcpChild` moved to `src/security/credential-shape.ts` (R-MIN1,
+// flow 355 AC7) and is reached here through the security facade, not through
+// the sibling `mcp-servers` package it used to be imported from directly.
+import { isDeniedForMcpChild } from "../../security/service";
 import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "./env-deny";
 
-// The name lists live in a leaf module so `spawn-env.ts` can read them without
-// importing this file back (it would close an import cycle).
+// Re-exported for this module's own existing importers (`spawn-env.test.ts`
+// imports both names from HERE, not from `./env-deny`). The lists themselves
+// now live in `security/credential-shape.ts` — see `env-deny.ts`'s header.
 export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "./env-deny";
 
 
@@ -106,7 +110,14 @@ export interface ExternalEnvInput {
  * `undefined`, so the result is directly usable as a spawn environment.
  */
 export function buildExternalChildEnv(input: ExternalEnvInput): Record<string, string> {
-  const denied = new Set(EXTERNAL_ENV_DENY);
+  // R-I1 (flow 355, AC7): compared against the RAW key before, so
+  // `anthropic_api_key` (lower-case) matched neither this Set nor the prefix
+  // sweep below and depended entirely on the shape check further down to be
+  // caught at all — and a by-name-only entry with no credential SHAPE
+  // (`ANTHROPIC_MODEL`, `CLAUDE_CONFIG_DIR`, `CLAUDECODE`) has no shape check
+  // behind it to catch what a case mismatch let through. Upper-cased both
+  // sides, matching `isDeniedForMcpChild`'s own convention.
+  const denied = new Set(EXTERNAL_ENV_DENY.map((name) => name.toUpperCase()));
   const allowedForThisRuntime = new Set(
     (EXTERNAL_RUNTIME_CREDENTIAL_ALLOW[input.runtimeId] ?? []).map((name) => name.toUpperCase()),
   );
@@ -114,12 +125,13 @@ export function buildExternalChildEnv(input: ExternalEnvInput): Record<string, s
 
   for (const [key, value] of Object.entries(input.parent)) {
     if (value === undefined) continue;
-    if (denied.has(key)) continue;
-    if (EXTERNAL_ENV_PREFIX_SWEEPS.some((prefix) => key.startsWith(prefix))) continue;
+    const upper = key.toUpperCase();
+    if (denied.has(upper)) continue;
+    if (EXTERNAL_ENV_PREFIX_SWEEPS.some((prefix) => upper.startsWith(prefix.toUpperCase()))) continue;
     // Same shape check `spawn-env.ts` runs for an MCP server child — see this
     // file's header for why a second hand list was rejected — skipped only for
     // the name(s) this specific target authenticates with.
-    if (!allowedForThisRuntime.has(key.toUpperCase()) && isDeniedForMcpChild(key, value)) continue;
+    if (!allowedForThisRuntime.has(upper) && isDeniedForMcpChild(key, value)) continue;
     env[key] = value;
   }
 
