@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.17
+Version: 0.29.18
 
 ## Status
 
@@ -18,6 +18,36 @@ carrying the measurement that found it and the reason it was not done then.
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
 >
+> - **0.29.18**: two packages for a product layer, both **draft — specification
+>   written, nothing implemented**, delivered together because the second
+>   consumes the first.
+>
+>   `keryx-acceptance-layer` — a declared verification kind per acceptance
+>   criterion (`exec`, `invariant`, `judged`, `none`), inside the sealed
+>   `acceptance-criteria.md`, reported at freeze and never gating; plus a split
+>   of the PRD success contract into release criteria and outcome criteria.
+>   Grounded in three measurements over this repository's own corpus taken
+>   2026-09-28 and reproducible from the scripts committed with it: 2,705
+>   criteria with 96% confirmed and zero bound to an executable check; 3.9%
+>   disagreement between confirmation and the deterministic facts of
+>   `flow check-ac`, i.e. confirmations are largely honest; 26.8% of criteria
+>   the facts cannot judge at all; and a chronological trend in which claiming
+>   verification grew 4.9% → 13.7% while naming a test file stayed flat near 4%.
+>   Both falsification criteria recorded before the measurements fired, and the
+>   package was rewritten from "confirmations are unreliable" to "a quarter of
+>   criteria are unverifiable by form".
+>
+>   `keryx-product-module` — the two questions no module answers: why are we
+>   doing this and for whom, and did it help. A `product` module with four
+>   deterministic commands that call no model — `index` derives an intent set
+>   from flows and packages, `open` lists intents closed in code and never
+>   checked for effect, `map` states what the product claims and how much is
+>   proven, `admit` narrows what a new idea may collide with before work starts
+>   — plus one advisory skill invoked only on a non-empty candidate set. The
+>   non-goals are load-bearing: no gate, no new subagents, no mandatory step, no
+>   re-emitted activity report, and no module named after a role. The plan
+>   carries an explicit bulk budget and stops after `index`/`open` to read one
+>   number before building further.
 > - **0.29.17**: `keryx-p0-improvements` **W5 implemented** (flow 353, PR #773, 0.3.17: `keryx doctor`/`/doctor`, did-you-mean, `mcp list` exit codes, memory search stemming, health tests detection, bare providers); `keryx-audit-remediation` **R1 and R2 implemented** (flow 354, PR #774, 0.3.18: four-adapter stream contract, cached tokens, sequential-loop error boundary reaching trigger outcomes, shell cleanups; 11 of 22 ledger rows closed). Remaining order agreed with the operator: R3 → R4+R5 → W1 → W2 → W3 → W4; work paused after flow 354.
 > - **0.29.16**: two new packages from the 2026-09-27 audit and competitive review, both **draft — specification written, nothing implemented**: `keryx-audit-remediation` (22 open findings in providers, harness/shell, security depth, architecture debt, own-tree gates; what was fixed the same day in 0.3.14–0.3.16 is listed as closed) and `keryx-p0-improvements` (W1 external agents run live, W2 `/rewind`, W3 review as a GitHub Action, W4 remote approval, W5 first hour; competitive matrix and P1/P2 backlog inside the package).
 > - **0.29.15**: new package `keryx-agent-platform-expansion`, **draft — specification written, nothing implemented**. Eight workstreams: stack-aware skills/rules catalog with install profiles and catalog governance gates (W1), agent definitions compiled into dispatch contracts (W2), consent-gated self-learning loop incl. reviewer profiles (W3), portable bundles and cross-harness memory handoff (W4), one harness adapter registry with a generated capability matrix (W5), lifecycle hooks in `keryx shell` that only tighten policy (W6), gdgraph/gdctx correctness fixes and benchmark (W7), harness-config security audit and impact-evidence gate (W8). Rollout in waves 0–4, correctness first.
