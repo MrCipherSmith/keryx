@@ -54,6 +54,9 @@ import type { TerminalState } from "../session/slate-terminal-state";
 // yet. Colocated sibling of `shell-exec-tool.ts`; see this flow's journal.md.
 import { createJobRegistry, shellJobKillTool, shellJobOutputTool } from "../harness/tool/builtin/background-job-registry";
 import type { TaskCompletion } from "../harness/tool/builtin/background-job-registry";
+import type { ShellHookContext } from "./agent-hooks";
+import type { HookFireResult, HookRuntime } from "../harness/hooks/runtime";
+import type { HookRegistration } from "../harness/hooks/types";
 
 /** A fixed control-nudge nonce for tests that compare exact nudge text. */
 const TEST_NONCE = "testNonce_347";
@@ -4303,6 +4306,127 @@ test("F-002 regression (flow 171 T10): the `!plan.ok` sequential fallback degrad
   expect(invoked).toEqual(["s1"]); // s2 never reached invoke() — it failed at the approval gate
   expect(toolResultOutputs).toEqual(["spawned:s1", expect.stringContaining("sequential fallback error")]);
   expect(systemMessages.some((s) => s.includes("running sequentially"))).toBe(true);
+});
+
+/** A minimal fake `HookRuntime`: scripted per-event outcome, records every `fire()` call (mirrors `run.hooks.test.ts`'s own `fakeHookRuntime`). */
+function fakeHookRuntime(): { runtime: HookRuntime; fires: { event: string; payload: Record<string, unknown> }[] } {
+  const fires: { event: string; payload: Record<string, unknown> }[] = [];
+  const runtime: HookRuntime = {
+    interactive: true,
+    registrations: (): readonly HookRegistration[] => [],
+    inheritedHookIds: () => [],
+    forChild: () => runtime,
+    fire: async (event, payload): Promise<HookFireResult> => {
+      fires.push({ event, payload });
+      return { decisions: [], additionalContext: [], records: [], warnings: [], anomalies: [] };
+    },
+  };
+  return { runtime, fires };
+}
+
+test("AC4 (flow 354, L-12): a throwing tool.invoke in the SEQUENTIAL loop degrades to an error tool result, the turn finishes normally, and the Stop hook still fires", async () => {
+  // `risk: "read"` auto-allows — no approval prompt, no concurrent spawn
+  // machinery involved, so this exercises `executeCall`'s bare
+  // `await tool.invoke(...)` through the sequential per-call loop directly
+  // (the SAME loop the concurrent path's `runConcurrentSpawnBatch` sits
+  // alongside, not inside).
+  const throwingTool: InteractiveTool = {
+    definition: {
+      name: "throwing_tool",
+      description: "always throws",
+      inputSchema: { type: "object", properties: {}, additionalProperties: false },
+      risk: "read",
+    },
+    invoke: async () => {
+      throw new Error("boom");
+    },
+  };
+  const round: Partial<NormalizedEvent>[] = [
+    { kind: "tool_call_start", toolCallId: "c1", toolName: "throwing_tool" },
+    { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+    { kind: "model_end" },
+  ];
+  const done: Partial<NormalizedEvent>[] = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
+  const { provider } = scriptedProvider([round, done]);
+  const { runtime, fires } = fakeHookRuntime();
+  const hooks: ShellHookContext = { runtime, sessionId: "s1", runId: "r1" };
+  const toolResultOutputs: string[] = [];
+  const io: AgentIO = { write: () => {}, onToolResult: (_name, r) => toolResultOutputs.push(r.output) };
+  const history: NormalizedMessage[] = [];
+
+  // Before the fix, `throwingTool.invoke`'s rejection propagated uncaught
+  // through `executeCall` and the bare sequential `await` above it, out of
+  // `runAgentTurnCore` and past `runAgentTurn`'s `try` (which has no matching
+  // `catch`, only a `finally`) — the whole turn's promise rejected, and
+  // `fireStopHookBestEffort` (called right after the core resolves) never
+  // ran. This `await` resolving, not rejecting, IS the regression assertion.
+  const result = await runAgentTurn(
+    io,
+    { provider, providerId: "s", modelId: "m", tools: [throwingTool], systemInstruction: "sys", idSeq: fixedIdSeq(), hooks },
+    history,
+    "call the throwing tool",
+  );
+
+  expect(toolResultOutputs).toHaveLength(1);
+  expect(toolResultOutputs[0]).toContain("throwing_tool failed");
+  expect(toolResultOutputs[0]).toContain("boom");
+  // A clean model-driven finish (not a budget/no-progress cutoff) leaves
+  // `finishReason` unset — the tool error degraded to a result, it did not
+  // truncate the turn.
+  expect(result.finishReason).toBeUndefined();
+  // The Stop hook still fired exactly once, proving `runAgentTurn` returned
+  // normally instead of rejecting past `fireStopHookBestEffort`.
+  const stopFires = fires.filter((f) => f.event === "Stop");
+  expect(stopFires).toHaveLength(1);
+  // Review r1 (item 1, MAJOR regression): the caught throw is still visible
+  // on the result — the unattended trigger dispatchers' crash detection
+  // (which used to rely on the promise rejecting) reads this instead.
+  expect(result.caughtToolErrors).toEqual([{ toolName: "throwing_tool", message: "boom" }]);
+});
+
+test("review r1 (item 1): a throwing spawn_subagent call in the CONCURRENT batch's own defensive floor also lands in caughtToolErrors", async () => {
+  // Two `spawn_subagent` calls, both no-op approved (risk "delegate" needs an
+  // approver) — qualifies for `runConcurrentSpawnBatch`'s concurrent path
+  // (2+ candidates). `requestApproval` throws for the SECOND call, driving
+  // the `!plan.ok` sequential-fallback floor's own try/catch (F-002) — the
+  // same floor `agent.test.ts`'s existing F-002 regression test already
+  // exercises, now asserting the NEW field on top of its existing assertions.
+  const spawnTool = delegateSpawnTool(async (input) => ({ output: `spawned:${String(input.task)}`, isError: false }));
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_tool, input) => {
+      if (input.includes('"s2"')) {
+        throw new Error("approval channel exploded");
+      }
+      return true;
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxSubagentConcurrency: 0, // forces the `!plan.ok` fallback loop, same as the existing F-002 test
+  };
+  const history: NormalizedMessage[] = [];
+
+  const result = await runAgentTurn(io, deps, history, "spawn two things, one approval throws");
+
+  expect(result.caughtToolErrors).toEqual([
+    { toolName: "spawn_subagent", message: expect.stringContaining("approval channel exploded") },
+  ]);
 });
 
 // --- flow 173 (background shell jobs) AC6: shell_job_output/shell_job_kill

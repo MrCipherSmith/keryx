@@ -749,37 +749,23 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     expect(slateIndex).toBeGreaterThan(joinIndex);
   });
 
-  // AC7 (flow 352 audit): `leaveBus()`/`releaseLease()` no longer sit inline
-  // at each deliberate `return` — they moved into the ONE `finally` wrapping
-  // the whole loop, so a turn that THROWS out of `runOperatorLine` (not only
-  // a deliberate `/exit`/EOF `return`) reaches them too. This test now checks
-  // the same ordering guarantee (bus left before the lease is released) at
-  // its new single location, and that both `/exit` and EOF still return from
-  // INSIDE the try that finally protects.
-  test("/exit and end-of-input both return from inside the loop's try, whose one finally leaves the bus before releasing the lease", () => {
-    const tryIndex = replBody.indexOf("  try {\n    for (;;) {");
-    // Anchored on its own doc comment, not a bare `"} finally {"` — the loop
-    // body itself contains an EARLIER, unrelated inner `try/finally` (the
-    // task-notification completion branch's spinner/busWorking cleanup).
-    const finallyIndex = replBody.indexOf("} finally {\n    // AC7:", tryIndex);
-    expect(tryIndex).toBeGreaterThan(0);
-    expect(finallyIndex).toBeGreaterThan(tryIndex);
-
-    const finallyBlock = replBody.slice(finallyIndex, finallyIndex + 200);
-    expect(finallyBlock.indexOf("leaveBus();")).toBeGreaterThanOrEqual(0);
-    expect(finallyBlock.indexOf("leaveBus();")).toBeLessThan(finallyBlock.indexOf("releaseLease();"));
-
-    const exitIndex = replBody.indexOf('if (command === "/exit" || command === "/quit") {');
-    const eofIndex = replBody.indexOf("SLATE-5 close trigger: shell exit (end of input");
-    expect(exitIndex).toBeGreaterThan(tryIndex);
-    expect(exitIndex).toBeLessThan(finallyIndex);
-    expect(eofIndex).toBeGreaterThan(tryIndex);
-    expect(eofIndex).toBeLessThan(finallyIndex);
-  });
+  // R-I3 (flow 352 review round, closed by flow 354): the source-text audit
+  // that used to sit here — checking, by string offset, that the loop's one
+  // `finally` orders `leaveBus()` before `releaseLease()` — is deleted. It
+  // duplicated a RUNTIME assertion that already exists and is strictly
+  // stronger: `shell-agent-repl.test.ts`'s
+  // `describe("AC7 (flow 352 audit) — a turn that throws out of
+  // runOperatorLine still releases the lease and leaves the bus", ...)`
+  // drives a real crashing turn through a real `SessionLeaseHandle`/
+  // `BusClient` and observes the ACTUAL released/left transition, not merely
+  // that two literals appear in the expected order in the source text.
+  // `shell-source-audits.test.ts` tracks the removal.
 
   test("/new calls bus.setSession before announcing the new session", () => {
     const newIndex = replBody.indexOf('command === "/new" || command === "/clear"');
-    const newBlock = replBody.slice(newIndex, newIndex + 1400);
+    // Widened for flow 354's L-14 fix (the `lastToolOutput`/`lastToolName`
+    // reset lands ahead of this window's own content, inside the same branch).
+    const newBlock = replBody.slice(newIndex, newIndex + 1800);
     const setSessionIndex = newBlock.indexOf("await bus?.setSession(live.summary.id);");
     expect(setSessionIndex).toBeGreaterThanOrEqual(0);
     expect(setSessionIndex).toBeLessThan(newBlock.indexOf("New session"));

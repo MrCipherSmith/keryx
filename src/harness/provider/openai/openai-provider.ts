@@ -254,12 +254,16 @@ function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
  * {@link NormalizedUsage}. `NormalizedUsage` has no dedicated reasoning-token
  * field — the caller folds `output_tokens_details.reasoning_tokens` into the
  * event body's `unknownExtensions` under a namespaced key instead of
- * discarding it.
+ * discarding it. `cacheReadTokens` (flow 354, L-11) is
+ * `usage.input_tokens_details.cached_tokens` — a SUBSET of `inputTokens`
+ * (OpenAI documents cache hits as still-counted input tokens, billed at a
+ * discount), never added on top of it.
  */
 function mergeUsage(
   inputTokens: number | undefined,
   outputTokens: number | undefined,
   totalTokens: number | undefined,
+  cacheReadTokens: number | undefined,
 ): NormalizedUsage {
   const usage: NormalizedUsage = { exact: true };
   if (inputTokens !== undefined) {
@@ -272,6 +276,9 @@ function mergeUsage(
     usage.totalTokens = totalTokens;
   } else if (inputTokens !== undefined || outputTokens !== undefined) {
     usage.totalTokens = (inputTokens ?? 0) + (outputTokens ?? 0);
+  }
+  if (cacheReadTokens !== undefined) {
+    usage.cacheReadTokens = cacheReadTokens;
   }
   return usage;
 }
@@ -559,9 +566,19 @@ export class OpenAiProvider implements ProviderPort {
       // `budget.maxOutputTokens` is required/always-populated on every
       // `NormalizedRequest` (every call site defaults it — see
       // `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode fallback),
-      // but this engine used to silently drop it rather than serialize it —
-      // always send it, unconditionally, so a configured override actually
-      // reaches the wire.
+      // and this engine used to silently drop it rather than serialize it on
+      // the NATIVE (API-key) branch — sent unconditionally there so a
+      // configured override actually reaches the wire.
+      //
+      // The Codex (ChatGPT-subscription) branch does NOT send it, because the
+      // endpoint rejects it (flow 354, L-10, AC2). Probed 2026-09-28 against
+      // `https://chatgpt.com/backend-api/codex/responses` with this adapter's
+      // own request construction and a model the subscription serves
+      // (`gpt-6-luna`): with the field -> HTTP 400
+      // `{"detail":"Unsupported parameter: max_output_tokens"}`; the same
+      // request without it -> HTTP 200. Recorded in the flow journal. A
+      // configured output budget therefore cannot reach this surface; the
+      // turn budget still bounds the round on the keryx side.
       ...(codex === undefined ? { max_output_tokens: request.budget.maxOutputTokens } : { store: false, tool_choice: "auto", parallel_tool_calls: true, tools: [] }),
       // `temperature` stays conditional: genuinely absent (not merely
       // defaulted) on every request until an operator configures one (AC3).
@@ -918,9 +935,12 @@ export class OpenAiProvider implements ProviderPort {
             const outputTokens = asNumber(usage.output_tokens);
             const totalTokens = asNumber(usage.total_tokens);
             const reasoningTokens = asNumber(asRecord(usage.output_tokens_details).reasoning_tokens);
+            // L-11: `promptCaching: true` (this adapter's `describe()`) was
+            // advertised but never actually read — cache hits reached nobody.
+            const cacheReadTokens = asNumber(asRecord(usage.input_tokens_details).cached_tokens);
             const usageBody: EventBody = {
               kind: "usage_update",
-              usage: mergeUsage(inputTokens, outputTokens, totalTokens),
+              usage: mergeUsage(inputTokens, outputTokens, totalTokens, cacheReadTokens),
             };
             if (reasoningTokens !== undefined) {
               usageBody.unknownExtensions = { "openai.reasoning_tokens": reasoningTokens };

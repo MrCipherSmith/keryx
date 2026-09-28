@@ -932,6 +932,24 @@ export class GeminiProvider implements ProviderPort {
         }
         const chunk = asRecord(parsed);
 
+        // L-2: a 200 stream can still carry an in-band `{"error":{…}}`
+        // envelope (Google's documented shape, same as a non-2xx response
+        // body) instead of ever reaching a `finishReason` — e.g. a 503
+        // discovered mid-stream. Route it through the SAME classifier a
+        // pre-2xx failure uses so its `kind`/`retryable` (a 503 envelope is
+        // `retryable: true`) survive instead of falling through to the
+        // generic post-loop "truncated stream" `malformed`.
+        const errorEnvelope = asRecord(chunk.error);
+        if (Object.keys(errorEnvelope).length > 0) {
+          const classified = classifyGeminiError(asNumber(errorEnvelope.code) ?? 0, asString(errorEnvelope.status));
+          const envelopeMessage = asString(errorEnvelope.message);
+          malformed = {
+            ...classified,
+            message: redact(envelopeMessage !== undefined && envelopeMessage.length > 0 ? envelopeMessage : "Gemini stream carried an in-band error envelope"),
+          };
+          break;
+        }
+
         if (!sawFirstChunk) {
           sawFirstChunk = true;
           bodies.push({ kind: "model_start" });
@@ -965,7 +983,14 @@ export class GeminiProvider implements ProviderPort {
             // enable) — args arrive whole in this one chunk, so this maps to
             // tool_call_start immediately followed by tool_call_end, no
             // tool_call_delta in between.
-            const callId = asString(functionCall.id) ?? callName;
+            // L-3: `functionCall.id` is absent on plenty of live responses;
+            // falling back to the bare `callName` collided when the SAME
+            // tool is called twice in one response (`linkToolCalls` then
+            // pairs the two results by occurrence, and can attribute a
+            // result to the wrong call). `functionCallIndexInRound` — already
+            // tracked for the thought-signature replay below — makes the
+            // fallback unique within this response instead.
+            const callId = asString(functionCall.id) ?? `${callName}#${functionCallIndexInRound}`;
             const argsInput = JSON.stringify(asRecord(functionCall.args));
             bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
             bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });

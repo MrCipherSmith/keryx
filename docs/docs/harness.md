@@ -33,6 +33,15 @@ Swapping the model changes neither the loop, the tool registry, nor the policy.
 The `fake` provider replays a recorded transcript, which is what makes the loop
 testable with no network at all.
 
+Every full adapter (`anthropic`, `openai`, `gemini`, the OpenAI-compatible
+engine behind the gateways above) normalizes to the same event stream, and a
+shared contract test (`src/harness/provider/stream-contract.test.ts`) pins
+three cases identically across all four: a stream that ends mid tool-call
+(a `provider_error` naming the pending call, never a synthesized result), an
+in-stream error envelope (classified into the same retry taxonomy a pre-2xx
+failure gets), and a tool call the provider sent with no id (a synthetic id,
+unique within the response, so two same-named calls never collide).
+
 ## Sessions
 
 Sessions are **per project** — isolated by git root, or by absolute cwd outside a

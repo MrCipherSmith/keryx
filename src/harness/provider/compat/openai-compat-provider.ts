@@ -228,11 +228,21 @@ function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
   return concrete === undefined ? fallback : concrete;
 }
 
-/** Merge the gateway's split token counts into a single exact {@link NormalizedUsage}. */
+/**
+ * Merge the gateway's split token counts into a single exact
+ * {@link NormalizedUsage}. `cacheReadTokens` (review r1, item 4) is
+ * `usage.prompt_tokens_details.cached_tokens` — confirmed against x.ai (see
+ * `OpenAiCompatCapabilityGrant.streamUsage`'s own doc comment: the SAME
+ * request returns `prompt_tokens: 638, cached_tokens: 512` with
+ * `stream_options.include_usage` set) — a SUBSET of `promptTokens`, never
+ * additional to it, mirroring `NormalizedUsage.cacheReadTokens`'s own
+ * contract.
+ */
 function mergeUsage(
   promptTokens: number | undefined,
   completionTokens: number | undefined,
   totalTokens: number | undefined,
+  cacheReadTokens: number | undefined,
 ): NormalizedUsage {
   const usage: NormalizedUsage = { exact: true };
   if (promptTokens !== undefined) {
@@ -245,6 +255,9 @@ function mergeUsage(
     usage.totalTokens = totalTokens;
   } else if (promptTokens !== undefined || completionTokens !== undefined) {
     usage.totalTokens = (promptTokens ?? 0) + (completionTokens ?? 0);
+  }
+  if (cacheReadTokens !== undefined) {
+    usage.cacheReadTokens = cacheReadTokens;
   }
   return usage;
 }
@@ -1001,6 +1014,19 @@ export class OpenAiCompatEngine implements ProviderPort {
       return "idx:0";
     };
 
+    // L-1: the id of the first still-open `pendingTools` entry (started,
+    // never ended), or `undefined` when nothing is pending. Read-only —
+    // never mutates `pendingTools` — so a caller can check "should this EOF
+    // be malformed?" without side effects.
+    const pendingToolCallStillAccumulating = (): string | undefined => {
+      for (const acc of pendingTools.values()) {
+        if (!acc.ended) {
+          return acc.id;
+        }
+      }
+      return undefined;
+    };
+
     const flushPendingToolEnds = (): void => {
       for (const acc of pendingTools.values()) {
         if (acc.ended) {
@@ -1119,6 +1145,7 @@ export class OpenAiCompatEngine implements ProviderPort {
               asNumber(usage.prompt_tokens),
               asNumber(usage.completion_tokens),
               asNumber(usage.total_tokens),
+              asNumber(asRecord(usage.prompt_tokens_details).cached_tokens),
             ),
           });
         }
@@ -1287,6 +1314,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         parser.push(trailing);
       }
       const torn = parser.flush();
+      const pendingToolCallId = pendingToolCallStillAccumulating();
       // A torn trailing record is a truncated/malformed attempt (no model_end).
       if (torn.length > 0) {
         malformed = {
@@ -1303,9 +1331,23 @@ export class OpenAiCompatEngine implements ProviderPort {
           retryable: retryableFor("malformed", false),
           message: "empty response body",
         };
+      } else if (pendingToolCallId !== undefined) {
+        // L-1: the socket closed with a tool call still accumulating — no
+        // `[DONE]`, no `finish_reason` ever flushed it. Synthesizing a
+        // `tool_call_end` here would hand the caller a truncated JSON
+        // argument string as if it were complete; this is a malformed
+        // stream instead, naming the call so the caller can see which one
+        // never finished. `pendingTools` preserves insertion order (a `Map`),
+        // so the first still-open entry is the call that started accumulating
+        // first — the one the shared contract test (`stream-contract.test.ts`)
+        // expects named.
+        malformed = {
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: `${this.label} SSE stream ended while a tool call was still accumulating`,
+          detail: { pendingToolCallId },
+        };
       } else {
-        // Defensive: stream ended without finish_reason but with pending tools.
-        flushPendingToolEnds();
         // A clean stream that reached `[DONE]` or a `finish_reason` completes
         // with a terminal `model_end` (emitted after any usage_update). `[DONE]`
         // always exits above, so only the bare-`finish_reason` case reaches

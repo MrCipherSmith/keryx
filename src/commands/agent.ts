@@ -722,6 +722,32 @@ export interface RunAgentTurnResult {
   submittedResult?: SubmittedResult;
   /** Flow 347 T7 (AC5): why the wrap-up round produced no valid result, when it ran and none was submitted. */
   submitResultError?: string;
+  /**
+   * Flow 354 review r1 (item 1, MAJOR regression): a tool `invoke`/
+   * `requestApproval` callback that THREW during this turn — caught by this
+   * turn's own defensive boundary (the sequential loop's try/catch, AC4/
+   * L-12; or the concurrent spawn batch's own floors, F-002) and degraded to
+   * an `isError:true` tool result instead of crashing the turn. Present
+   * (non-empty) only when at least one call actually threw; absent
+   * otherwise. NEVER set for an ordinary tool result that merely REPORTS
+   * failure (`isError:true` from a tool that ran to completion and said so)
+   * — only for a genuine caught exception.
+   *
+   * Before L-12 hardened the sequential loop, a throwing tool crashed
+   * `runAgentTurn`'s own promise, which is what the unattended trigger
+   * callers (`trigger-dispatch.ts`'s `dispatchLocked`, `trigger-agent-
+   * task.ts`'s `runLocked`) used as their ONLY crash signal — a run whose
+   * tool crashed was otherwise recorded "completed". This field restores
+   * that signal without reintroducing the crash: both callers fold a
+   * non-empty list into their own crash/outcome classification.
+   */
+  caughtToolErrors?: CaughtToolError[];
+}
+
+/** One tool call whose `invoke`/`requestApproval` callback threw, caught by {@link runAgentTurnCore}'s own defensive boundary. See {@link RunAgentTurnResult.caughtToolErrors}. */
+export interface CaughtToolError {
+  toolName: string;
+  message: string;
 }
 
 /**
@@ -1970,8 +1996,15 @@ export async function runAgentTurn(
     controlNonce,
     systemInstruction: `${deps.systemInstruction}\n\n${buildControlMarkerInstruction(controlNonce)}`,
   };
+  // Flow 354 review r1 (item 1): same "don't touch the core's many internal
+  // `return`s" posture as SLATE-5's `finally` below — a fresh sink per turn,
+  // threaded into `runAgentTurnCore` (and from there into
+  // `runConcurrentSpawnBatch`), read back here once the core settles,
+  // regardless of which internal `return` fired.
+  const caughtToolErrors: CaughtToolError[] = [];
   try {
-    const result = await runAgentTurnCore(io, turnDeps, history, userLine, options);
+    const coreResult = await runAgentTurnCore(io, turnDeps, history, userLine, options, caughtToolErrors);
+    const result = caughtToolErrors.length > 0 ? { ...coreResult, caughtToolErrors } : coreResult;
     await fireStopHookBestEffort(io, deps, result);
     return result;
   } finally {
@@ -2163,6 +2196,11 @@ async function runAgentTurnCore(
   history: NormalizedMessage[],
   userLine: string,
   options: RunAgentTurnOptions = {},
+  // Flow 354 review r1 (item 1): sink for {@link RunAgentTurnResult.caughtToolErrors}
+  // — `runAgentTurn` owns the array and reads it back after this call
+  // settles, so this function's own many internal `return`s never need
+  // touching (same posture its own doc comment already states for SLATE-5).
+  caughtToolErrors: CaughtToolError[] = [],
 ): Promise<RunAgentTurnResult> {
   // Session-store append time (T7, AC15): each message pushed below is
   // stamped with the time it entered `history` HERE, not with whatever
@@ -3104,6 +3142,7 @@ async function runAgentTurnCore(
             hasInvocationCapacity,
             reserveInvocation,
             signal,
+            caughtToolErrors,
           )
         : undefined;
 
@@ -3312,25 +3351,47 @@ async function runAgentTurnCore(
       // dispatch for a call that already ran. Every other call (including a
       // lone `spawn_subagent` not part of a qualifying concurrent group)
       // executes exactly as before.
-      const result =
-        concurrentSpawnResults?.get(call.id) ??
-        (await executeCall(
-          call,
-          toolByName,
-          io.requestApproval,
-          io.permissionMode,
-          io.readOnly,
-          io.onAutoApproved,
-          hasInvocationCapacity,
-          reserveInvocation,
-          invocationBudget.maxCalls,
-          signal,
-          deps.busLeases,
-          deps.hardDeny === undefined
-            ? undefined
-            : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
-          deps.hooks,
-        ));
+      const precomputedResult = concurrentSpawnResults?.get(call.id);
+      let result: InteractiveToolResult;
+      if (precomputedResult !== undefined) {
+        result = precomputedResult;
+      } else {
+        try {
+          result = await executeCall(
+            call,
+            toolByName,
+            io.requestApproval,
+            io.permissionMode,
+            io.readOnly,
+            io.onAutoApproved,
+            hasInvocationCapacity,
+            reserveInvocation,
+            invocationBudget.maxCalls,
+            signal,
+            deps.busLeases,
+            deps.hardDeny === undefined
+              ? undefined
+              : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
+            deps.hooks,
+          );
+        } catch (err) {
+          // AC4 (flow 354, L-12): same posture as the concurrent path's own
+          // defensive floor (`runConcurrentSpawnBatch`'s sequential fallback,
+          // "F-002" above) and every approver in this file — a throwing
+          // `tool.invoke` or `requestApproval` callback degrades to a
+          // per-call error result, never a crashed turn that skips the
+          // `Stop` hook (`fireStopHookBestEffort`, only reached once
+          // `runAgentTurnCore` returns normally).
+          const message = err instanceof Error ? err.message : String(err);
+          result = { output: `${call.name} failed: ${message}`, isError: true };
+          // Review r1 (item 1, MAJOR regression): recorded so a caller that
+          // used to treat "the turn's promise rejected" as its only crash
+          // signal (the unattended trigger dispatchers) can still tell a
+          // genuine caught exception apart from an ordinary `isError` tool
+          // result — see `RunAgentTurnResult.caughtToolErrors`'s own doc.
+          caughtToolErrors.push({ toolName: call.name, message });
+        }
+      }
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -4052,6 +4113,10 @@ async function runConcurrentSpawnBatch(
   // aborted parent turn reached every other tool but not a concurrently
   // spawned child.
   signal: AbortSignal | undefined,
+  // Review r1 (item 1, MAJOR regression): same sink `runAgentTurnCore`
+  // passes its own sequential loop — see `RunAgentTurnResult.
+  // caughtToolErrors`'s doc. Both defensive floors below push into it.
+  caughtToolErrors: CaughtToolError[],
 ): Promise<Map<string, InteractiveToolResult>> {
   const maxConcurrency = deps.maxSubagentConcurrency ?? DEFAULT_MAX_SUBAGENT_CONCURRENCY;
   const perTaskRuntimeMs = NOMINAL_CONCURRENT_SPAWN_RUNTIME_MS;
@@ -4105,6 +4170,7 @@ async function runConcurrentSpawnBatch(
           output: `subagent call ${call.id} failed: sequential fallback error: ${message}`,
           isError: true,
         });
+        caughtToolErrors.push({ toolName: call.name, message });
       }
     }
     return results;
@@ -4160,6 +4226,11 @@ async function runConcurrentSpawnBatch(
     const results = new Map<string, InteractiveToolResult>();
     for (const call of spawnCalls) {
       const settled = partialResults?.get(call.id);
+      if (settled === undefined) {
+        // This call never got a genuine settled result — degraded here by
+        // the caught wave error, not by its own `invoke()` reporting failure.
+        caughtToolErrors.push({ toolName: call.name, message });
+      }
       results.set(
         call.id,
         settled ?? {

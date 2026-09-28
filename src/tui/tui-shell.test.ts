@@ -812,6 +812,61 @@ test('recordTurnTaskCostBestEffort: a passed category is recorded verbatim, not 
   }
 });
 
+// Flow 354 (L-11) — `cacheReadTokens` (a SUBSET of `inputTokens`) is billed
+// at `estimateTaskCostUsd`'s cached-input discount, not the full input rate.
+// "openai"/"gpt-5.6" is curated (`model-profile.ts`'s `CURATED_SEED`:
+// priceInputPerMillion 1.25, priceOutputPerMillion 10) so `loadModelProfiles`
+// returns a real price on the FIRST read of a fresh `userConfigDir`, with no
+// setup write needed.
+test("recordTurnTaskCostBestEffort: cacheReadTokens is billed at the cached-input rate, not the full input rate", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "openai",
+      modelId: "gpt-5.6",
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadTokens: 400_000,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("openai", "gpt-5.6", "default");
+    expect(store[key]).toHaveLength(1);
+    // 600k full-price tokens @ $1.25/M + 400k cached tokens @ $1.25/M * 50% = 0.75 + 0.25 = $1.00.
+    // Treating every token as full price (the pre-fix behaviour) would be $1.25 — strictly more.
+    expect(store[key]![0]!.costUsd).toBeCloseTo(1.0, 6);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// Review r1 (item 2): the 50% discount is OpenAI's own documented rate — a
+// non-OpenAI provider (curated "anthropic"/"claude-sonnet-5": priceInputPerMillion 3)
+// has no researched cached-input rate here, so its cacheReadTokens are billed
+// at the FULL input rate rather than fabricating a discount.
+test("recordTurnTaskCostBestEffort: a non-OpenAI provider's cacheReadTokens are billed at the full input rate, not discounted", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-non-openai-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-5",
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+      cacheReadTokens: 400_000,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("anthropic", "claude-sonnet-5", "default");
+    expect(store[key]).toHaveLength(1);
+    // 1,000,000 tokens @ $3/M, all at full price — cacheReadTokens changes nothing here.
+    expect(store[key]![0]!.costUsd).toBeCloseTo(3.0, 6);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // The `input.category ?? "default"` fallback (`tui-shell.ts`) — an omitted
 // category (routing off, a non-operator turn, every classifier stage
 // refused) still records, under `"default"`, exactly as before this flow's

@@ -1313,13 +1313,48 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { res
   });
 }
 
-/** `undefined` when either price is `"unknown"` or `profile` itself is — never a fabricated number, mirroring `NumericProfileField`'s own "unknown, never 0" contract. */
-function estimateTaskCostUsd(profile: ModelProfile | undefined, inputTokens: number, outputTokens: number): number | undefined {
+/**
+ * OpenAI's documented flat discount on cache-READ input tokens — 50% of the
+ * standard input price, the same fraction across every model that supports
+ * prompt caching (research: OpenAI's published Responses/Chat pricing).
+ * Applied here rather than as a new per-model `ModelProfile` field: it is a
+ * provider-wide constant, not a per-model fact `model-profile.ts` would need
+ * to store, refresh, or let an operator override.
+ */
+const OPENAI_CACHED_INPUT_DISCOUNT = 0.5;
+
+/**
+ * `undefined` when either price is `"unknown"` or `profile` itself is — never
+ * a fabricated number, mirroring `NumericProfileField`'s own "unknown, never
+ * 0" contract. `cacheReadTokens` (flow 354, L-11) is a SUBSET of
+ * `inputTokens` (never additional to it — see `NormalizedUsage.
+ * cacheReadTokens`'s own doc), billed at `OPENAI_CACHED_INPUT_DISCOUNT` ONLY
+ * for `providerId` `"openai"`/`"openai-codex"` (review r1, item 2): that rate
+ * is OpenAI's own documented number, and nothing here confirms any OTHER
+ * provider that might one day report `cacheReadTokens` discounts it by the
+ * same fraction — an other-provider cache hit is billed at the FULL input
+ * rate until its own rate is researched, never a fabricated guess. Absent/`0`
+ * `cacheReadTokens`, or a non-OpenAI `providerId`, reproduces the pre-L-11
+ * all-full-price calculation exactly.
+ */
+function estimateTaskCostUsd(
+  profile: ModelProfile | undefined,
+  providerId: string,
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadTokens?: number,
+): number | undefined {
   if (profile === undefined) return undefined;
   const priceIn = profile.priceInputPerMillion.value;
   const priceOut = profile.priceOutputPerMillion.value;
   if (priceIn === "unknown" || priceOut === "unknown") return undefined;
-  return (inputTokens / 1_000_000) * priceIn + (outputTokens / 1_000_000) * priceOut;
+  // 1 = full input rate (no discount) — the honest default until a provider's
+  // OWN cached-input rate is researched and named here explicitly.
+  const cachedInputDiscount = providerId === "openai" || providerId === "openai-codex" ? OPENAI_CACHED_INPUT_DISCOUNT : 1;
+  const cacheRead = cacheReadTokens !== undefined && cacheReadTokens > 0 ? Math.min(cacheReadTokens, inputTokens) : 0;
+  const fullPriceInputTokens = inputTokens - cacheRead;
+  const inputCost = (fullPriceInputTokens / 1_000_000) * priceIn + (cacheRead / 1_000_000) * priceIn * cachedInputDiscount;
+  return inputCost + (outputTokens / 1_000_000) * priceOut;
 }
 
 /**
@@ -1350,6 +1385,8 @@ export async function recordTurnTaskCostBestEffort(input: {
   readonly modelId: string;
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /** Flow 354 (L-11): this turn's summed `usage.cacheReadTokens` — a SUBSET of `inputTokens`, never additional. */
+  readonly cacheReadTokens?: number;
   readonly success: boolean;
   readonly category?: RoutingCategory;
   readonly userConfigDir?: string;
@@ -1359,7 +1396,7 @@ export async function recordTurnTaskCostBestEffort(input: {
   try {
     const profiles = loadModelProfiles(input.userConfigDir);
     const profile = profiles[profileKey(input.providerId, input.modelId)];
-    const costUsd = estimateTaskCostUsd(profile, input.inputTokens, input.outputTokens);
+    const costUsd = estimateTaskCostUsd(profile, input.providerId, input.inputTokens, input.outputTokens, input.cacheReadTokens);
     await appendTaskCostRecord(
       {
         providerId: input.providerId,
@@ -8465,10 +8502,15 @@ export async function launchTuiAgentShell(opts: {
       // note on why an ever-growing chain here is fine).
       let turnInputTokens = 0;
       let turnOutputTokens = 0;
+      // Flow 354 (L-11): summed the same way as `turnInputTokens`/
+      // `turnOutputTokens` above — `usage.cacheReadTokens` is a SUBSET of
+      // `inputTokens`, so this is never added to `turnInputTokens` itself.
+      let turnCacheReadTokens = 0;
       const prevOnUsageForCost = io.onUsage;
       io.onUsage = (usage) => {
         turnInputTokens += usage.inputTokens ?? 0;
         turnOutputTokens += usage.outputTokens ?? 0;
+        turnCacheReadTokens += usage.cacheReadTokens ?? 0;
         prevOnUsageForCost?.(usage);
       };
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
@@ -8666,6 +8708,7 @@ export async function launchTuiAgentShell(opts: {
           modelId: deps.modelId,
           inputTokens: turnInputTokens,
           outputTokens: turnOutputTokens,
+          ...(turnCacheReadTokens > 0 ? { cacheReadTokens: turnCacheReadTokens } : {}),
           success: !turnFailed,
           ...(turnCategory !== undefined ? { category: turnCategory } : {}),
         });

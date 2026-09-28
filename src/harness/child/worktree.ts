@@ -112,6 +112,14 @@ export interface WorktreePort {
  * Create a worktree for every `worktree`-mode assignment, in a stable order
  * (sorted by `taskId`), returning a map of `worktreeId -> path`. Shared-mode
  * assignments are skipped. The only impure step (delegated to `port`).
+ *
+ * L-13 (flow 354): a later `create()` throwing used to leave every worktree
+ * this call already created behind — a real leak, since a caller that never
+ * gets its `paths` map back has no id to `port.remove()` them by either.
+ * On a throw, this now removes (best-effort — a `remove()` failure never
+ * masks the original error, and a later removal is still attempted) every
+ * worktree THIS call created, in the same order it created them, before
+ * rethrowing the original error unchanged.
  */
 export async function provisionWorktrees(
   assignments: readonly WorktreeAssignment[],
@@ -121,11 +129,25 @@ export async function provisionWorktrees(
   const ordered = [...assignments]
     .filter((a): a is Extract<WorktreeAssignment, { mode: "worktree" }> => a.mode === "worktree")
     .sort((a, b) => (a.taskId < b.taskId ? -1 : a.taskId > b.taskId ? 1 : 0));
-  for (const assignment of ordered) {
-    const created = await port.create(assignment.worktreeId);
-    paths.set(created.worktreeId, created.path);
+  const createdIds: string[] = [];
+  try {
+    for (const assignment of ordered) {
+      const created = await port.create(assignment.worktreeId);
+      createdIds.push(created.worktreeId);
+      paths.set(created.worktreeId, created.path);
+    }
+    return paths;
+  } catch (cause) {
+    for (const worktreeId of createdIds) {
+      try {
+        await port.remove(worktreeId);
+      } catch {
+        // Best-effort cleanup: the original `create()` failure is what the
+        // caller needs to see, never masked by a removal that also failed.
+      }
+    }
+    throw cause;
   }
-  return paths;
 }
 
 /**
