@@ -277,7 +277,19 @@ export function parseGrokToml(file: string, text: string): CompatServers {
       const first = (arrayHeader[1] as string).split(".")[0]?.trim().replace(/^(["'])(.*)\1$/, "$2");
       current = undefined;
       if (first === "mcp_servers") {
-        problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+        // SEC-356-02 (review round 1): NEVER echo `line` here — an
+        // `[[mcp_servers…]]` header's bracket CONTENT is caller-chosen text
+        // (a marketplace-source URL, a server name someone crafted to look
+        // like a header) that can carry a secret-shaped string, and this
+        // message reaches `mcp list --json` warnings, `mcp doctor` and the
+        // `/mcp` panel — the exact sinks S-11 closed for the key/value
+        // sites. Naming the line number and the rule that rejected it
+        // (array-of-tables headers are not a shape `mcp_servers` supports)
+        // is enough to find and fix it in the file.
+        problems.push({
+          file,
+          message: `line ${lineNo}: an array-of-tables header ("[[mcp_servers…]]") is not a shape this reader understands — servers are named tables, never an array`,
+        });
       }
       continue;
     }
@@ -299,7 +311,12 @@ export function parseGrokToml(file: string, text: string): CompatServers {
     // attacker-chosen. `[[hooks]]` itself now takes the array-of-tables
     // branch above; closing the table is the property both branches keep.
     if (line.startsWith("[")) {
-      problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+      // SEC-356-02 (review round 1): NEVER echo `line` here — see
+      // {@link describeUnrecognizedBracketLine}'s own doc comment.
+      problems.push({
+        file,
+        message: `line ${lineNo}: not a header this reader recognizes (${describeUnrecognizedBracketLine(line)})`,
+      });
       current = undefined;
       continue;
     }
@@ -394,6 +411,28 @@ function describeUnsupportedTomlValue(raw: string): string {
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) return "a date/time value";
   if (text.startsWith("'") || text.startsWith('"""') || text.startsWith("'''")) return "a quoting style this reader does not read";
   return "an unrecognized TOML value";
+}
+
+/**
+ * Name the SHAPE of a bracketed line this reader refused as a header,
+ * never its content (SEC-356-02, review round 1, same discipline as
+ * {@link describeUnsupportedTomlValue}) — a rejected `[…]`/`[[…]]` line can
+ * carry a secret-shaped string (a server name or marketplace URL someone
+ * crafted, or a stray value that merely starts with `[`), and this message
+ * reaches the same sinks: `mcp list --json`, `mcp doctor`, the `/mcp`
+ * panel.
+ */
+function describeUnrecognizedBracketLine(line: string): string {
+  if (!line.endsWith("]")) {
+    return "missing a closing bracket";
+  }
+  if (line.startsWith("[[") && !line.endsWith("]]")) {
+    return "an array-of-tables header missing its second closing bracket";
+  }
+  if (!line.startsWith("[[") && line.slice(1, -1).includes("[")) {
+    return "an extra opening bracket inside a table header";
+  }
+  return "an unrecognized bracket shape";
 }
 
 /** A string, boolean, integer or array of strings. Anything else: undefined. */

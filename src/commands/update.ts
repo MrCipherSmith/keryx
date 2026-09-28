@@ -340,7 +340,16 @@ async function offerStaleWorktreePrune(projectRoot: string, options: UpdateOptio
   }
 
   heading("Stale agent worktrees");
-  note(`${stale.length} worktree(s) under .claude/worktrees/ are 7+ days old, merged into main, and clean:`);
+  // Review round 1, REG-2: stated precisely — "clean" alone overstated the
+  // guarantee. "No blocking changes" covers what's actually checked: zero
+  // commits ahead of main, no tracked/untracked change, and no gitignored
+  // file present other than the allowlisted carry-overs (node_modules,
+  // .metaproject/data, dist) `hasUncommittedChanges` exempts.
+  note(
+    `${stale.length} worktree(s) under .claude/worktrees/ are 7+ days old, merged into main, and have ` +
+      "no blocking changes (no commits ahead, no tracked/untracked edits, no gitignored file besides " +
+      "node_modules/.metaproject/data/dist):",
+  );
   for (const candidate of stale) {
     console.log(`  ${style.dim(symbols.bullet)} ${candidate.name} ${style.dim(`(${Math.floor(candidate.ageDays)}d old)`)}`);
   }

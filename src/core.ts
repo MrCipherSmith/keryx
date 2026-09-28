@@ -17,10 +17,27 @@
  *
  * WHAT IS BEHIND THE DOOR
  *
- * The ten declared owner facades, each under its own namespace. Namespaces
- * rather than a flat `export *` for two reasons: ten facades re-exporting into
- * one flat scope silently drops any name two of them share, and a caller
- * reading `core.wiki.…` can see which owner it is talking to.
+ * The ten declared owner facades, each under its own namespace, plus
+ * `impactEvidence` (review round 1, REG-1): flow 356 (A-1) moved the
+ * impact-evidence module's public door out of `security/service.ts`'s
+ * re-export (cutting a real import cycle) without giving it a replacement
+ * door here, silently dropping `core.security.readLogRecords` and its six
+ * siblings from the published surface with no compile-time warning to an
+ * external consumer. `core.impactEvidence.*` is the replacement door — see
+ * `src/impact-evidence/index.ts` for the module's own public door this
+ * re-exports. Namespaces rather than a flat `export *` for two reasons:
+ * eleven facades re-exporting into one flat scope silently drops any name
+ * two of them share, and a caller reading `core.wiki.…` can see which owner
+ * it is talking to.
+ *
+ * BREAKING (core API, flow 356 review round 1 / REG-1): `core.security.{
+ * appendLogRecord, computeImpactEvidence, createImpactEvidenceProvider,
+ * hostDeliveryStatus, normalizeRequestFiles, readLogRecords,
+ * renderEvidenceBlock}` (plus their five re-exported types) moved to
+ * `core.impactEvidence.*`. Pre-1.0 churn, recorded here and in
+ * `scratch-changelog.md` rather than silently restoring the old
+ * `security/service.ts` re-export, which would recreate the import cycle
+ * A-1 cut.
  *
  * Everything else in `src/` stays private. `src/ctx/` has no `service.ts` yet
  * and so has no door here; adding one belongs to whoever owns that directory.
@@ -46,6 +63,7 @@
 export * as flow from "./flow/service";
 export * as gdgraph from "./gdgraph/service";
 export * as health from "./health/service";
+export * as impactEvidence from "./impact-evidence";
 export * as job from "./job/service";
 export * as memory from "./memory/service";
 export * as sac from "./sac/service";

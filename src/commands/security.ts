@@ -254,12 +254,23 @@ async function handleScan(cwd: string, args: string[]): Promise<void> {
     surfaceWarnings(result.warnings);
     renderDecision(result.decision);
     if (result.report.coverage !== undefined) {
-      const skippedCount = result.report.coverage.skipped?.length ?? 0;
+      const skipped = result.report.coverage.skipped ?? [];
       console.log(
         `  coverage: ${result.report.coverage.status} (${result.report.files?.filter((entry) => entry.status === "scanned").length ?? 0} scanned` +
-          (skippedCount > 0 ? `, ${skippedCount} skipped by ignore rules` : "") +
+          (skipped.length > 0 ? `, ${skipped.length} skipped by ignore rules` : "") +
           ")",
       );
+      // SEC-356-01 (review round 1): a terse skipped COUNT alone is easy to
+      // skim past — name up to 5 of the actual paths, and say both how to
+      // see the rest (--json) and how to stop skipping them (--no-ignore).
+      // Secret-bearing filenames (.env, *.pem, id_rsa*, …) are never in this
+      // list at all: `scanContainedPath` scans those even when ignored, so
+      // their absence here is not a gap this message needs to caveat.
+      if (skipped.length > 0) {
+        const shown = skipped.slice(0, 5);
+        console.log(`    skipped: ${shown.join(", ")}${skipped.length > shown.length ? `, +${skipped.length - shown.length} more` : ""}`);
+        console.log("    (--json lists every skipped path; --no-ignore scans them too)");
+      }
     }
     console.log("");
     console.log(`  report: ${result.markdownPath}`);

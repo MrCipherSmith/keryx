@@ -112,7 +112,15 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
   test("a directory with nothing initialized at all (no .metaproject, no git): one warn line replaces every project-scoped check, nothing is fail, never throws", async () => {
     const root = await mkdtemp(path.join(tmpdir(), "keryx-doctor-bare-"));
     try {
-      const report = await buildDoctorReport(root, {});
+      // Review round 1 (L2/TEST-1): hermetic against ambient filesystem
+      // state. Before the fix, `isKeryxProject` delegated to
+      // `resolveProjectRoot`'s unceilinged upward walk, so a `.metaproject`
+      // living anywhere above this mkdtemp() fixture — directly in `/tmp`
+      // itself was the exact reproduction on the review machine — flipped
+      // this to "is a keryx project" and the test failed. Injecting the
+      // ceiling at `root` proves the result no longer depends on anything
+      // above it, ambient or not.
+      const report = await buildDoctorReport(root, {}, { homeDir: root });
       const ids = report.checks.map((c) => c.id).sort();
       expect(ids).toEqual([...GLOBAL_CHECK_IDS, "project"].sort());
       const project = report.checks.find((c) => c.id === "project");
@@ -122,6 +130,27 @@ describe("buildDoctorReport — shape (AC1: {checks:[{id,status,detail,fix?}]})"
       expect(doctorFailed(report)).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("review round 1 (L2/TEST-1): a decoy .metaproject in the fixture's PARENT is never reached once the ceiling is injected at the fixture itself", async () => {
+    const base = await mkdtemp(path.join(tmpdir(), "keryx-doctor-decoy-"));
+    try {
+      // The decoy sits in `base` — the fixture's parent, one level ABOVE
+      // where the check runs from — never inside `root` itself. Without a
+      // bounded, injectable ceiling this is indistinguishable from the real
+      // ancestor-pollution bug the sibling "nothing initialized" test pins:
+      // an unceilinged upward walk from `root` would climb straight into
+      // `base` and wrongly report a keryx project.
+      await mkdir(path.join(base, ".metaproject"), { recursive: true });
+      const root = path.join(base, "project");
+      await mkdir(root, { recursive: true });
+      const report = await buildDoctorReport(root, {}, { homeDir: root });
+      const project = report.checks.find((c) => c.id === "project");
+      expect(project?.status).toBe("warn");
+      expect(project?.detail).toBe("not a keryx project — run `keryx init`");
+    } finally {
+      await rm(base, { recursive: true, force: true });
     }
   });
 

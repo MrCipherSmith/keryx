@@ -4,7 +4,7 @@
 // `.claude/worktrees` must resolve to the same place from the main checkout
 // and from a linked worktree.
 
-import { mkdir, rm, utimes, writeFile } from "node:fs/promises";
+import { mkdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -54,6 +54,21 @@ async function addWorktree(name: string, branch: string): Promise<string> {
   const worktreePath = path.join(worktreesDir, name);
   await git(mainRoot, ["worktree", "add", "-q", "-b", branch, worktreePath, "main"]);
   return worktreePath;
+}
+
+/**
+ * A worktree branched from a `main` that already carries `gitignore` as a
+ * COMMITTED `.gitignore` — so the worktree starts zero commits ahead, and
+ * whatever the test writes afterward that matches those rules is genuinely
+ * gitignored-but-uncommitted, not merely untracked. Committing `.gitignore`
+ * IN the worktree itself would put it one commit ahead of `main`, which is
+ * exactly the confound REG-2's tests need to avoid.
+ */
+async function addWorktreeWithGitignore(name: string, branch: string, gitignore: string): Promise<string> {
+  await writeFile(path.join(mainRoot, ".gitignore"), gitignore, "utf8");
+  await git(mainRoot, ["add", ".gitignore"]);
+  await git(mainRoot, ["commit", "-q", "-m", "add .gitignore"]);
+  return addWorktree(name, branch);
 }
 
 describe("resolveMainCheckoutRoot / claudeWorktreesDir", () => {
@@ -128,6 +143,69 @@ describe("the safety boundary: commits ahead of main, or uncommitted changes, ar
   test("no local main branch at all: commitsAheadOfMain is undefined, never treated as zero", async () => {
     const worktreePath = await addWorktree("orphan", "agent/orphan");
     expect(await commitsAheadOfMain(worktreePath, "no-such-branch")).toBeUndefined();
+  });
+});
+
+describe("review round 1, REG-2: a gitignored file is NOT invisible to hasUncommittedChanges", () => {
+  test("the reviewer's own repro — a committed .gitignore listing .env plus a real, uncommitted, gitignored .env — blocks pruning", async () => {
+    const worktreePath = await addWorktreeWithGitignore("secret-env", "agent/secret-env", ".env\n");
+    await writeFile(path.join(worktreePath, ".env"), "AWS_SECRET_ACCESS_KEY=not-a-real-secret\n", "utf8");
+    await ageDir(worktreePath, 30);
+
+    // Before REG-2, plain `git status --porcelain` never reports .env at
+    // all (it's gitignored) — this is exactly the false "clean" the bug
+    // relied on.
+    expect(await commitsAheadOfMain(worktreePath, "main")).toBe(0);
+    expect(await hasUncommittedChanges(worktreePath)).toBe(true);
+
+    const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
+    const stale = await findStaleWorktrees(worktreesDir, { maxAgeDays: 7 });
+    expect(stale.map((s) => s.name)).not.toContain("secret-env");
+  });
+
+  test("a worktree whose only ignored content is a node_modules symlink IS still prunable", async () => {
+    const worktreePath = await addWorktreeWithGitignore("nm-symlink", "agent/nm-symlink", "node_modules\n");
+    const target = await mkdtemp(path.join(tmpdir(), "keryx-git-worktrees-nm-target-"));
+    try {
+      await symlink(target, path.join(worktreePath, "node_modules"));
+      await ageDir(worktreePath, 30);
+
+      expect(await commitsAheadOfMain(worktreePath, "main")).toBe(0);
+      expect(await hasUncommittedChanges(worktreePath)).toBe(false);
+
+      const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
+      const stale = await findStaleWorktrees(worktreesDir, { maxAgeDays: 7 });
+      expect(stale.map((s) => s.name)).toContain("nm-symlink");
+    } finally {
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+
+  test("an ignored file OUTSIDE the allowlist (a local override, not node_modules/.metaproject/data/dist) still blocks pruning", async () => {
+    const worktreePath = await addWorktreeWithGitignore(
+      "local-override",
+      "agent/local-override",
+      "local.settings.json\n",
+    );
+    await writeFile(path.join(worktreePath, "local.settings.json"), "{}\n", "utf8");
+    await ageDir(worktreePath, 30);
+
+    expect(await hasUncommittedChanges(worktreePath)).toBe(true);
+  });
+
+  test("ignored .metaproject/data and dist directories are allowlisted carry-overs, same as node_modules", async () => {
+    const worktreePath = await addWorktreeWithGitignore(
+      "carry-overs",
+      "agent/carry-overs",
+      ".metaproject/data/\ndist/\n",
+    );
+    await mkdir(path.join(worktreePath, ".metaproject", "data"), { recursive: true });
+    await writeFile(path.join(worktreePath, ".metaproject", "data", "scratch.json"), "{}\n", "utf8");
+    await mkdir(path.join(worktreePath, "dist"), { recursive: true });
+    await writeFile(path.join(worktreePath, "dist", "cli.js"), "// built\n", "utf8");
+    await ageDir(worktreePath, 30);
+
+    expect(await hasUncommittedChanges(worktreePath)).toBe(false);
   });
 });
 

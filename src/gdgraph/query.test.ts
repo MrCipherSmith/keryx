@@ -86,6 +86,30 @@ describe("bunfigPreloadRoots: reads bunfig.toml preload entries as graph-relativ
     }
   });
 
+  test("review round 1, L3: a commented-out preload line is not a root", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-bunfig-"));
+    try {
+      await withBunfig('# preload = ["./ghost.ts"]\n');
+      const roots = await bunfigPreloadRoots(root);
+      expect(roots).toEqual(new Set());
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("review round 1, L3: a commented-out preload line beside a real, active one only collects the active entry", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-bunfig-"));
+    try {
+      await withBunfig(
+        '# preload = ["./ghost.ts"]\n[test]\npreload = ["./src/lib/test-preload.ts"]\n',
+      );
+      const roots = await bunfigPreloadRoots(root);
+      expect(roots).toEqual(new Set(["src/lib/test-preload.ts"]));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("a bunfig.toml with no preload key at all yields no roots", async () => {
     root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-bunfig-"));
     try {

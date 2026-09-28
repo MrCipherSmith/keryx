@@ -159,8 +159,9 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // imports adapter code itself.
   { segment: "trigger", zone: "core" },
   // The published package's one public door (`exports["."]`), which re-exports
-  // the ten declared owner facades and nothing else. It is core BY
-  // CONSTRUCTION, and `src/core-package.test.ts` is what proves it stays so.
+  // the eleven declared owner facades (review round 1, REG-1, added
+  // `impactEvidence`) and nothing else. It is core BY CONSTRUCTION, and
+  // `src/core-package.test.ts` is what proves it stays so.
   { segment: "core.ts", zone: "core" },
   // Flow 291: the governance report's aggregation library — pure readers over
   // flow.json, review manifests and the trigger ledger, with no provider

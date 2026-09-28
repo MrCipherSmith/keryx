@@ -192,6 +192,70 @@ describe("row B — an in-stream error envelope/event", () => {
     expect(events.some((e) => e.kind === "model_end")).toBe(false);
   });
 
+  test("compat: FIXED (review round 1, L1) — an unrecognized non-numeric in-band error.code is NOT retryable, unlike the old unconditional ?? 500 default", async () => {
+    // OpenAI's real invalid_api_key / invalid_request_error shape: a
+    // non-numeric error.code the compat engine has never heard of. Before
+    // the L1 fix this defaulted to status 500 -> classifyHttpError ->
+    // retryable "unavailable", so a bad key surfaced as a retryable server
+    // outage and the harness burned retries on a request that could never
+    // succeed.
+    const sse =
+      'data: {"error":{"code":"invalid_api_key","type":"invalid_request_error","message":"Incorrect API key provided"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-invalid-key"), { attemptId: "row-b-compat-invalid-key" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.retryable).toBe(false);
+    expect(errors[0]?.error?.message).toContain("Incorrect API key provided");
+  });
+
+  test("compat: FIXED (review round 1, L1) — a known-transient non-numeric in-band error.code (rate_limit_exceeded) stays retryable", async () => {
+    const sse = 'data: {"error":{"code":"rate_limit_exceeded","message":"slow down"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-rate-limit"), { attemptId: "row-b-compat-rate-limit" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("rate_limit");
+    expect(errors[0]?.error?.retryable).toBe(true);
+  });
+
+  test("compat: CURRENT (unchanged by L1) — a numeric in-band error.code of 429 still classifies as retryable rate_limit", async () => {
+    const sse = 'data: {"error":{"code":429,"message":"slow down"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-429"), { attemptId: "row-b-compat-429" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("rate_limit");
+    expect(errors[0]?.error?.retryable).toBe(true);
+  });
+
+  test("compat: CURRENT (unchanged by L1) — an in-band error.code of context_length_exceeded still classifies as non-retryable context_overflow", async () => {
+    const sse =
+      'data: {"error":{"code":"context_length_exceeded","message":"This model\'s maximum context length is 200000 tokens."}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-context-overflow"), { attemptId: "row-b-compat-context-overflow" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("context_overflow");
+    expect(errors[0]?.error?.retryable).toBe(false);
+  });
+
   test("anthropic: CURRENT (unchanged) — its own event:error SSE event classifies via classifySseErrorType (overloaded_error -> overloaded, retryable)", async () => {
     const sse = [
       'event: message_start\ndata: {"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":10,"output_tokens":1}}}\n\n',

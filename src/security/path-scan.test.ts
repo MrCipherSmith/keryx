@@ -125,3 +125,67 @@ describe("scanContainedPath: respects the repository's own ignore rules by defau
     expect(result.contents.map((c) => c.path)).toEqual(["plain/file.ts"]);
   });
 });
+
+describe("scanContainedPath: a secret-bearing filename is scanned even when ignored (SEC-356-01, review round 1)", () => {
+  test("the reviewer's own repro — a gitignored .env holding fake credentials — is found, and coverage stays complete", async () => {
+    await initGitFixture();
+    await writeFile(path.join(root, ".gitignore"), ".env\n", "utf8");
+    await writeFile(
+      path.join(root, ".env"),
+      "AWS_SECRET_ACCESS_KEY=not-a-real-secret\nGITHUB_TOKEN=ghp_not-a-real-token\n",
+      "utf8",
+    );
+    await writeFile(path.join(root, "src.ts"), "export const ok = 1;\n", "utf8");
+
+    const result = await scanContainedPath({ ownerRoot: root, targetPath: root });
+
+    expect(result.coverage.status).toBe("complete");
+    expect(result.contents.some((c) => c.path === ".env")).toBe(true);
+    const envContent = result.contents.find((c) => c.path === ".env");
+    expect(envContent?.content).toContain("AWS_SECRET_ACCESS_KEY");
+    expect(result.coverage.skipped ?? []).not.toContain(".env");
+    const envRow = result.files.find((f) => f.path === ".env");
+    expect(envRow?.status).toBe("scanned");
+  });
+
+  test("a variant secret-bearing name (.env.production) at the top level is scanned too", async () => {
+    await initGitFixture();
+    await writeFile(path.join(root, ".gitignore"), ".env.production\n", "utf8");
+    await writeFile(path.join(root, ".env.production"), "API_KEY=not-a-real-key\n", "utf8");
+
+    const result = await scanContainedPath({ ownerRoot: root, targetPath: root });
+
+    expect(result.contents.some((c) => c.path === ".env.production")).toBe(true);
+  });
+
+  test("a secret-bearing file nested inside an otherwise-ignored directory is found up to the documented depth", async () => {
+    await initGitFixture();
+    await writeFile(path.join(root, ".gitignore"), "config/\n", "utf8");
+    await mkdir(path.join(root, "config", "deploy", "prod"), { recursive: true });
+    await writeFile(path.join(root, "config", "deploy", "prod", "id_rsa"), "not-a-real-key\n", "utf8");
+    // A non-secret-named file at the same nesting stays unscanned — the
+    // carve-out is name-driven, not "everything under an ignored dir once
+    // ANY secret name is found inside it".
+    await writeFile(path.join(root, "config", "deploy", "prod", "notes.txt"), "unrelated\n", "utf8");
+
+    const result = await scanContainedPath({ ownerRoot: root, targetPath: root });
+
+    expect(result.contents.some((c) => c.path === "config/deploy/prod/id_rsa")).toBe(true);
+    expect(result.contents.some((c) => c.path === "config/deploy/prod/notes.txt")).toBe(false);
+    // The ignored directory itself is still reported as skipped (the
+    // carve-out is a peek, not a blanket unskip).
+    expect(result.coverage.skipped ?? []).toContain("config");
+  });
+
+  test("the hardcoded always-ignored directories (node_modules, .git, .claude/worktrees) are never peeked into for secret names", async () => {
+    await initGitFixture();
+    await mkdir(path.join(root, "node_modules", "some-package"), { recursive: true });
+    await writeFile(path.join(root, "node_modules", "some-package", ".env"), "SHOULD_NOT_BE_SCANNED=1\n", "utf8");
+    await writeFile(path.join(root, "src.ts"), "export const ok = 1;\n", "utf8");
+
+    const result = await scanContainedPath({ ownerRoot: root, targetPath: root });
+
+    expect(result.contents.some((c) => c.path.includes("node_modules"))).toBe(false);
+    expect(result.coverage.status).toBe("complete");
+  });
+});

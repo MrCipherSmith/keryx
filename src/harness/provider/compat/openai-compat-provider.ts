@@ -275,6 +275,45 @@ function mergeUsage(
  * (this file never read `code` at all) surfaced as a bare `invalid_request`
  * with no `/compact` hint reachable downstream.
  */
+/**
+ * L-16 (flow 356) in-band `error.code`/`error.type` strings known to signal a
+ * transient, backend-side condition, mapped to the synthesized HTTP status
+ * {@link classifyHttpError} already knows how to turn into the matching
+ * retryable kind. Every code NOT in this map — including every genuinely
+ * non-retryable OpenAI-shaped code (`invalid_api_key`,
+ * `invalid_request_error`, `content_policy_violation`, …) — falls through to
+ * the 400/`invalid_request` (non-retryable) bucket in
+ * {@link inBandErrorStatusFor}, never the 500/`unavailable` (retryable) one:
+ * review round 1 finding L1 caught the previous unconditional `?? 500`
+ * default silently turning an unrecognized, typically non-retryable code
+ * (e.g. a bad API key) into a retryable "unavailable" server outage.
+ */
+const TRANSIENT_IN_BAND_ERROR_STATUS: Readonly<Record<string, number>> = {
+  context_length_exceeded: 400,
+  rate_limit_exceeded: 429,
+  server_error: 500,
+  overloaded: 500,
+  overloaded_error: 500,
+  timeout: 500,
+  timeout_error: 500,
+  service_unavailable: 500,
+};
+
+/**
+ * Resolve the synthesized HTTP status for an L-16 in-band error envelope
+ * whose `error.code` was not a number. A code absent from
+ * {@link TRANSIENT_IN_BAND_ERROR_STATUS} synthesizes 400 (non-retryable
+ * `invalid_request` via {@link classifyHttpError}), not 500 — an unmapped
+ * code is NOT evidence of a backend fault, unlike a genuine 5xx or a known
+ * transient code.
+ */
+function inBandErrorStatusFor(stringCode: string | undefined): number {
+  if (stringCode === undefined) {
+    return 400;
+  }
+  return TRANSIENT_IN_BAND_ERROR_STATUS[stringCode] ?? 400;
+}
+
 function classifyHttpError(status: number, headers: Headers, code?: string): NormalizedError {
   if (status === 401 || status === 403) {
     // A refused credential or account. The same request cannot succeed on retry.
@@ -1140,17 +1179,18 @@ export class OpenAiCompatEngine implements ProviderPort {
         // EOF handling, and unlike this SAME adapter's OWN handling of a
         // pre-2xx HTTP error. Classified the same way (`classifyHttpError`),
         // reusing whatever HTTP-like numeric code the gateway put in
-        // `error.code` and falling back to the 5xx bucket (retryable
-        // `unavailable`) when it did not — an in-band error at all is
-        // itself evidence of a backend fault, not a client mistake. A
-        // string `error.code`/`error.type` of `"context_length_exceeded"`
-        // with no numeric code is treated as the 400 case so it still maps
-        // to `context_overflow` rather than the generic fallback.
+        // `error.code` when there is one. Without a numeric code, review
+        // round 1 finding L1: an in-band error is NOT, by itself, evidence
+        // of a backend fault — only a code KNOWN to be transient
+        // ({@link inBandErrorStatusFor}) synthesizes the retryable 5xx/429
+        // bucket; every other (including unrecognized) string code
+        // synthesizes the non-retryable 400 bucket instead of defaulting to
+        // a retryable "unavailable" server outage.
         if (data.error !== undefined) {
           const errorField = asRecord(data.error);
           const numericStatus = asNumber(errorField.code);
           const stringCode = asString(errorField.code) ?? asString(errorField.type);
-          const status = numericStatus ?? (stringCode === "context_length_exceeded" ? 400 : 500);
+          const status = numericStatus ?? inBandErrorStatusFor(stringCode);
           const classified = classifyHttpError(status, new Headers(), stringCode);
           const reason = asString(errorField.message);
           classified.message =

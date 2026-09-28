@@ -112,6 +112,49 @@ export function getOrphans(graph: GraphData, roots: ReadonlySet<string> = new Se
  * yields no roots rather than an error: most projects this graph runs
  * against have none at all.
  */
+/**
+ * Strip `#`-to-end-of-line comments from `text`, leaving string literals
+ * (single- or double-quoted, double-quoted honoring a `\"` escape) alone —
+ * a `#` inside a string is content, not a comment start. Review round 1,
+ * L3: without this, a commented-out `# preload = […]` line still matched
+ * {@link bunfigPreloadRoots}'s array pattern, since that pattern searched
+ * the raw text with no comment awareness.
+ */
+function stripTomlComments(text: string): string {
+  let result = "";
+  let quote: '"' | "'" | undefined;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (quote !== undefined) {
+      result += ch;
+      if (ch === "\\" && quote === '"' && i + 1 < text.length) {
+        result += text[i + 1];
+        i++;
+        continue;
+      }
+      if (ch === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      result += ch;
+      continue;
+    }
+    if (ch === "#") {
+      const newlineIndex = text.indexOf("\n", i);
+      if (newlineIndex === -1) {
+        break;
+      }
+      i = newlineIndex - 1;
+      continue;
+    }
+    result += ch;
+  }
+  return result;
+}
+
 export async function bunfigPreloadRoots(projectRoot: string): Promise<Set<string>> {
   const roots = new Set<string>();
   let text: string;
@@ -120,9 +163,14 @@ export async function bunfigPreloadRoots(projectRoot: string): Promise<Set<strin
   } catch {
     return roots;
   }
-  const arrayPattern = /preload\s*=\s*\[([^\]]*)\]/gs;
+  // Review round 1, L3: strip `#` comments (outside string literals) before
+  // matching, and anchor the key to a line start — a commented-out
+  // `# preload = […]` line must never contribute a root, and a key that
+  // merely ENDS in "preload" mid-line must never match either.
+  const stripped = stripTomlComments(text);
+  const arrayPattern = /^[ \t]*preload\s*=\s*\[([^\]]*)\]/gm;
   const stringPattern = /"((?:[^"\\]|\\.)*)"|'([^']*)'/g;
-  for (const arrayMatch of text.matchAll(arrayPattern)) {
+  for (const arrayMatch of stripped.matchAll(arrayPattern)) {
     const body = arrayMatch[1] ?? "";
     for (const stringMatch of body.matchAll(stringPattern)) {
       const raw = stringMatch[1] ?? stringMatch[2] ?? "";

@@ -156,6 +156,90 @@ function safeReason(error: unknown): string {
 const ALWAYS_IGNORED_RELATIVE_DIRS = [".claude/worktrees", ".git", "node_modules"];
 
 /**
+ * SEC-356-01 (review round 1): a gitignored FILENAME matching one of these
+ * patterns is scanned even with `respectIgnoreRules: true` — `.env` is the
+ * single most common place a developer leaves a genuine live credential,
+ * and it (along with the rest of this list) is gitignored in nearly every
+ * real project, so a plain "skip everything ignored" scan used to miss
+ * every one of them, reporting `coverage.status: "complete"` while never
+ * opening the exact file most likely to hold a real secret. Basename-only,
+ * case-sensitive (matching `git`'s own pathspec default).
+ */
+const SECRET_BEARING_NAME_PATTERNS: RegExp[] = [
+  /^\.env$/,
+  /^\.env\..+$/,
+  /\.pem$/,
+  /\.key$/,
+  /\.p12$/,
+  /\.pfx$/,
+  /^id_rsa/,
+  /^id_ed25519/,
+  /^\.npmrc$/,
+  /^\.pypirc$/,
+  /^\.netrc$/,
+  /^credentials/,
+  /\.tfvars$/,
+  /^\.git-credentials$/,
+  /^secrets\./,
+  /^service-account.*\.json$/,
+];
+
+function looksSecretBearingByName(basename: string): boolean {
+  return SECRET_BEARING_NAME_PATTERNS.some((pattern) => pattern.test(basename));
+}
+
+/**
+ * How many levels BELOW an ignored directory {@link scanContainedPath}
+ * looks for a secret-bearing filename (SEC-356-01) — 0 is the ignored
+ * directory's own immediate children, up through 2 more levels below that
+ * (3 levels total). Kept small and documented rather than unbounded: this
+ * carve-out exists to catch a `.env`-shaped file a developer left at or
+ * near the top of an ignored tree, not to defeat `.gitignore` for an
+ * entire generated output directory a project deliberately excludes
+ * wholesale — an ignored directory is still never otherwise opened, and
+ * nothing but a NAME-matched file ever counts against the scan's
+ * byte/file budget or reaches its output.
+ */
+const SECRET_SCAN_IGNORED_DEPTH = 3;
+
+/**
+ * Walk `dirAbsolute` (already known to be an ignored directory) for
+ * secret-bearing filenames, up to {@link SECRET_SCAN_IGNORED_DEPTH} levels
+ * below it. Returns the absolute paths of files that matched. Best-effort:
+ * an unreadable directory (or one that vanished) yields no matches rather
+ * than throwing — this is a carve-out on top of the ignore skip, not a new
+ * traversal failure mode.
+ */
+async function secretBearingFilesIn(dirAbsolute: string, remainingDepth: number): Promise<string[]> {
+  let entries: string[];
+  try {
+    entries = (await readdir(dirAbsolute)).sort();
+  } catch {
+    return [];
+  }
+  const matches: string[] = [];
+  for (const entry of entries) {
+    const entryPath = path.join(dirAbsolute, entry);
+    let entryStat: Awaited<ReturnType<typeof stat>>;
+    try {
+      entryStat = await stat(entryPath);
+    } catch {
+      continue;
+    }
+    if (entryStat.isDirectory()) {
+      if (remainingDepth > 0) {
+        matches.push(...(await secretBearingFilesIn(entryPath, remainingDepth - 1)));
+      }
+      continue;
+    }
+    if (entryStat.isFile() && looksSecretBearingByName(entry)) {
+      matches.push(entryPath);
+    }
+  }
+  return matches;
+}
+
+/**
  * The repository's own ignored paths, relative to `ownerRoot`, POSIX-style
  * (`git`'s own output shape) — files and directories `.gitignore` (plus
  * `core.excludesFile`, `.git/info/exclude` — everything `--exclude-standard`
@@ -280,23 +364,56 @@ export async function scanContainedPath(input: SecurityScanOptions): Promise<Sec
     if (respectIgnoreRules) {
       const normalized = displayPath.split(path.sep).join("/");
       if (isIgnoredPath(ignoredPaths, normalized)) {
-        // Never `incomplete()`: a path the repository itself says to ignore
-        // is not evidence THIS scan is incomplete — it is evidence the scan
-        // correctly declined to open something outside its policy scope.
-        // Checked BEFORE `realpath()`/`stat()`, deliberately: it means the
-        // traversal never descends into an ignored DIRECTORY at all (what
-        // keeps a large ignored subtree from eating the byte/file budget),
-        // and never resolves an ignored SYMLINK either — `node_modules`
-        // joins {@link ALWAYS_IGNORED_RELATIVE_DIRS} for exactly this
-        // reason: it is a symlink pointing OUTSIDE `ownerRoot` on this
-        // machine, and resolving it first would have reported "external
-        // target refused" (a real `incomplete()`) before this check ever
-        // ran, for content this scan was never going to open anyway.
-        files.push({ path: displayPath, status: "skipped", reason: "excluded by ignore rules" });
-        if (!skippedByIgnore.includes(displayPath)) {
-          skippedByIgnore.push(displayPath);
+        const basename = path.basename(displayPath);
+        // SEC-356-01 (review round 1): never carved out inside the three
+        // HARDCODED always-ignored directories — `.git` internals,
+        // `node_modules` (which may be a symlink OUTSIDE `ownerRoot`; see
+        // {@link ALWAYS_IGNORED_RELATIVE_DIRS}'s own doc comment for why
+        // even `stat()`-ing it here would be the wrong call), and agent
+        // worktree scratch trees. The carve-out exists for a project's OWN
+        // `.gitignore` rules, not for these.
+        const inHardcodedIgnore = ALWAYS_IGNORED_RELATIVE_DIRS.some(
+          (dir) => normalized === dir || normalized.startsWith(`${dir}/`),
+        );
+        if (!inHardcodedIgnore && looksSecretBearingByName(basename)) {
+          // Fall through to the normal stat/read pipeline below, exactly as
+          // if this entry were not ignored — a secret-bearing FILENAME is
+          // scanned regardless of `.gitignore`.
+        } else {
+          // Never `incomplete()`: a path the repository itself says to
+          // ignore is not evidence THIS scan is incomplete — it is evidence
+          // the scan correctly declined to open something outside its
+          // policy scope. Checked BEFORE `realpath()`/`stat()` for the
+          // common case, deliberately: it means the traversal never
+          // descends into an ignored DIRECTORY at all (what keeps a large
+          // ignored subtree from eating the byte/file budget), and never
+          // resolves an ignored SYMLINK either.
+          //
+          // The ONE exception: a directory that is neither hardcoded-ignore
+          // nor itself secret-named is still peeked into — up to
+          // {@link SECRET_SCAN_IGNORED_DEPTH} levels — purely to find a
+          // secret-bearing filename nested inside it (SEC-356-01); anything
+          // that peek does not match stays unscanned, uncounted, and
+          // unopened, same as before.
+          if (!inHardcodedIgnore) {
+            let ignoredStat: Awaited<ReturnType<typeof stat>> | undefined;
+            try {
+              ignoredStat = await stat(candidate);
+            } catch {
+              ignoredStat = undefined;
+            }
+            if (ignoredStat?.isDirectory() === true) {
+              for (const match of await secretBearingFilesIn(candidate, SECRET_SCAN_IGNORED_DEPTH - 1)) {
+                await visit(match, depth + 1);
+              }
+            }
+          }
+          files.push({ path: displayPath, status: "skipped", reason: "excluded by ignore rules" });
+          if (!skippedByIgnore.includes(displayPath)) {
+            skippedByIgnore.push(displayPath);
+          }
+          return;
         }
-        return;
       }
     }
 

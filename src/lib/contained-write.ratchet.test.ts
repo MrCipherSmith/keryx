@@ -25,7 +25,7 @@ import path from "node:path";
 
 // R700-04 (review round PR #700): widened to cover the modules the review
 // named as writing through raw `node:fs` primitives outside the ratchet's
-// reach — `src/learning`, `src/security/impact-evidence`,
+// reach — `src/learning`, `src/impact-evidence` (moved out of `src/security/` in flow 356, A-1),
 // `src/security/audit-harness`, `src/stack` and the `gdskills`
 // manifest/governance subtrees. Each directory added here was first checked
 // by hand for any file NOT owned by this fix (flow 319 lane B) that also
@@ -36,7 +36,7 @@ const COVERED_DIRS = [
   "src/rules",
   "src/bundle",
   "src/learning",
-  "src/security/impact-evidence",
+  "src/impact-evidence",
   "src/security/audit-harness",
   "src/stack",
   "src/gdskills/manifest",

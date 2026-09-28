@@ -59,19 +59,71 @@ export type StaleWorktreeCandidate = {
 };
 
 /**
- * `git status --porcelain` in `worktreePath` is non-empty, OR the command
- * itself failed. A failure to determine cleanliness is NOT clean — this
- * function answers "is it safe to assume nothing would be lost", and an
- * unanswerable question is not a yes.
+ * Ignored paths a `.claude/worktrees/*` agent checkout always carries —
+ * regenerable install/build output, never source a human wrote — that
+ * {@link hasUncommittedChanges} must NOT treat as a reason to refuse a
+ * prune. Matched at the entry itself or anywhere beneath it
+ * (`node_modules/whatever` still matches `node_modules`).
+ *
+ * Review round 1, REG-2: everything ELSE ignored-but-present (a real,
+ * uncommitted `.env` with local secrets, scratch notes, a local override
+ * file) DOES block a prune. Before this list existed, NOTHING ignored
+ * blocked one — `git status --porcelain` never reports ignored paths at
+ * all, so a worktree holding only a committed `.gitignore` (listing `.env`)
+ * plus a real, uncommitted, gitignored `.env` read as fully clean and was
+ * deleted with no warning and no `--force`.
+ */
+const ALWAYS_IGNORED_CARRY_OVER = ["node_modules", ".metaproject/data", "dist"];
+
+/** Is `entryPath` (forward-slash, as `git status --porcelain` prints it, trailing `/` stripped) an allowlisted carry-over per {@link ALWAYS_IGNORED_CARRY_OVER}? */
+function isAllowedIgnoredCarryOver(entryPath: string): boolean {
+  const normalized = entryPath.replace(/\/+$/, "");
+  return ALWAYS_IGNORED_CARRY_OVER.some(
+    (allowed) => normalized === allowed || normalized.startsWith(`${allowed}/`),
+  );
+}
+
+/**
+ * `worktreePath` has a real tracked/untracked change (any `git status
+ * --porcelain` line that is not an ignored-file report), OR an ignored path
+ * is present that is NOT one of {@link ALWAYS_IGNORED_CARRY_OVER}, OR the
+ * command itself failed. A failure to determine cleanliness is NOT clean —
+ * this function answers "is it safe to assume nothing would be lost", and
+ * an unanswerable question is not a yes.
+ *
+ * Review round 1, REG-2: reads `--ignored=matching` (`!! <path>` lines)
+ * alongside the ordinary porcelain output — a plain `git status
+ * --porcelain` is blind to gitignored content entirely, which is exactly
+ * how a worktree holding a real, uncommitted, gitignored secret file used
+ * to read as clean.
  */
 export async function hasUncommittedChanges(worktreePath: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["git", "status", "--porcelain"], { cwd: worktreePath, stdout: "pipe", stderr: "ignore" });
+    const proc = Bun.spawn(["git", "status", "--porcelain", "--ignored=matching"], {
+      cwd: worktreePath,
+      stdout: "pipe",
+      stderr: "ignore",
+    });
     const out = await new Response(proc.stdout).text();
     if ((await proc.exited) !== 0) {
       return true;
     }
-    return out.trim().length > 0;
+    for (const rawLine of out.split("\n")) {
+      if (rawLine.length === 0) {
+        continue;
+      }
+      if (rawLine.startsWith("!! ")) {
+        const entryPath = rawLine.slice(3).trim();
+        if (!isAllowedIgnoredCarryOver(entryPath)) {
+          return true;
+        }
+        continue;
+      }
+      // Any other porcelain line (staged, unstaged, untracked-not-ignored) is
+      // a real change — never allowlisted, unlike an ignored path.
+      return true;
+    }
+    return false;
   } catch {
     return true;
   }
