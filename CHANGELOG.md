@@ -3,6 +3,56 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.20] — 2026-09-28
+
+### Fixed
+- **A secret re-chunked into hyphenated pieces no longer bypasses redaction
+  or the outbound-egress check.** `security/detect/entropy.ts`'s `isWordSlug`
+  exempted a hyphen/underscore-segmented run from the entropy gate whenever
+  every segment was pure-alpha, pure-digit, or a short letter-then-digit
+  "tag" — with no check on the RECONSTITUTED value's own randomness. A real
+  secret formatted as `aK-9-dQ-2-rN-…` or word-wrapped as
+  `log-<scrambled-case letters+digits>-id` sailed through `looksSecretShaped`,
+  `redactSensitiveText` (S-6), and `containsOutboundSecret` (S-8)
+  untouched. Fixed: a segment now only counts as a real word or version tag
+  if its letters are plainly cased (all-lowercase, all-uppercase, or
+  Capitalised) — language never scrambles case letter-by-letter, but a
+  hyphen-chunked secret often does.
+- **An ordinary Medium or GitHub Gist URL no longer gets refused by
+  `web_fetch`.** Those sites' common `<slug>-<hex-id>` URL convention (one is
+  already linked from this repo's own
+  `docs/requirements/keryx-wiki-graph-next/README.md`) interleaves letters
+  and digits in its trailing id many times, which failed every existing
+  slug-segment shape and fell through to the entropy gate. A slug's LAST
+  segment is now recognised as a public post/gist id when it is a 10-16
+  character pure-hex run.
+- **The generic (non-URL) redaction scan no longer flags ordinary paths and
+  comments that merely mention a sensitive word nearby.** `TOKEN` still
+  compounded any `/`-bearing run (a relative doc link, a filesystem path)
+  into one candidate, and the label look-back was same-line PROXIMITY (40
+  characters), not true adjacency — a "Credential Masking" heading two
+  sentences before an unrelated ADR link, a GitHub noreply email's local
+  part near an unrelated "key", a Python `from_attributes=True` near "the
+  API.", and a `passlib/bcrypt/argon2` comment near "password" were all
+  false positives on this repository's own real `git log`/docs content.
+  Fixed: a match now requires the label to be genuinely ADJACENT (the label
+  word, its continuation, then only quotes/`:`/`=`/whitespace before the
+  value), and a `/`-bearing candidate is decomposed into its pieces and
+  scored separately, the same principle a URL's own path segments already
+  get.
+- **A labelled UUID is now redacted reliably, not about 75% of the time.**
+  `bareShapeQualifies`'s own 3.6-bit entropy floor ran BEFORE the label was
+  ever consulted, so whether a UUID explicitly called out as leaked
+  (`"leaked credential: <uuid>"`) was redacted depended on how its own hex
+  digits happened to repeat — the canonical RFC 4122 example UUID (entropy
+  3.39) was not. An allow-shape (UUID, full git commit SHA, npm/yarn
+  integrity string) now qualifies regardless of its own entropy once a label
+  is confirmed adjacent to it.
+- Real-file sweep over `bun.lock`, `CHANGELOG.md`, `git log -p -30 --stat`,
+  and every `docs/**/*.md`: 48 `[REDACTED:entropy]` matches before this fix
+  (6 false positives — the 5 label-proximity shapes above plus the Medium
+  URL), 41 after (0 false positives remaining).
+
 ## [0.3.19] — 2026-09-28
 
 ### Fixed
