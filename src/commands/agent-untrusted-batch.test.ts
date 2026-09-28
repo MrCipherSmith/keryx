@@ -198,3 +198,136 @@ test("a batch whose every call the untrusted gate refused (by the user) no longe
   expect(requests).toHaveLength(3);
   expect(requests[2]?.tools).toBeDefined();
 });
+
+// A browser MCP call returns third-party text, then the model calls it again
+// in the SAME turn. One explicit answer must satisfy both gates for that exact
+// call; an earlier answer must not authorize the next call.
+for (const mode of ["ask", "trust", "auto"] as const) {
+  test(`${mode}: consecutive MCP calls receive at most one prompt per call after untrusted output`, async () => {
+    const { provider } = scriptedProvider([
+      [{ kind: "tool_call_start", toolCallId: "m1", toolName: "use_tool" },
+        { kind: "tool_call_end", toolCallId: "m1", input: JSON.stringify({ tool_name: "playwright__browser_navigate", tool_input: {} }) }],
+      [{ kind: "tool_call_start", toolCallId: "m2", toolName: "use_tool" },
+        { kind: "tool_call_end", toolCallId: "m2", input: JSON.stringify({ tool_name: "playwright__browser_snapshot", tool_input: {} }) }],
+      [{ kind: "text_delta", text: "done" }],
+    ]);
+    const prompts: Array<{ tool: string; untrustedOrigin: boolean | undefined; destructive: boolean | undefined }> = [];
+    let invoked = 0;
+    const tool: InteractiveTool = {
+      definition: { name: "use_tool", description: "", risk: "destructive", inputSchema: { type: "object", properties: {} } },
+      invoke: async () => { invoked++; return { output: "browser output", isError: false, untrusted: true }; },
+    };
+    const io: AgentIO = {
+      write: () => {}, permissionMode: () => mode,
+      requestApproval: async (name, _input, meta) => {
+        prompts.push({ tool: name, untrustedOrigin: meta?.untrustedOrigin, destructive: meta?.destructive });
+        return true;
+      },
+    };
+    await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [tool], systemInstruction: "test", idSeq: fixedIdSeq() }, [], "browse");
+    expect(invoked).toBe(2);
+    expect(prompts).toEqual(mode === "auto"
+      ? [{ tool: "use_tool", untrustedOrigin: true, destructive: true }]
+      : [{ tool: "use_tool", untrustedOrigin: undefined, destructive: true },
+         { tool: "use_tool", untrustedOrigin: true, destructive: true }]);
+  });
+}
+
+test("auto: a denied tainted MCP call cannot run, and a new turn is not tainted", async () => {
+  const { provider } = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "m1", toolName: "use_tool" }, { kind: "tool_call_end", toolCallId: "m1", input: "{}" }],
+    [{ kind: "tool_call_start", toolCallId: "m2", toolName: "use_tool" }, { kind: "tool_call_end", toolCallId: "m2", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = 0;
+  let asked = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "", risk: "destructive", inputSchema: { type: "object", properties: {} } },
+    invoke: async () => { invoked++; return { output: "third-party", isError: false, untrusted: true }; },
+  };
+  const io: AgentIO = {
+    write: () => {}, permissionMode: () => "auto",
+    requestApproval: async (_name, _input, meta) => { expect(meta?.untrustedOrigin).toBe(true); asked++; return false; },
+  };
+  const history: import("../harness/provider/types").NormalizedMessage[] = [];
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [tool], systemInstruction: "test", idSeq: fixedIdSeq() }, history, "browse");
+  expect(invoked).toBe(1);
+  expect(asked).toBe(1);
+  const next = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "m3", toolName: "use_tool" }, { kind: "tool_call_end", toolCallId: "m3", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  await runAgentTurn(io, { provider: next.provider, providerId: "scripted", modelId: "test", tools: [tool], systemInstruction: "test", idSeq: fixedIdSeq() }, history, "new request");
+  expect(invoked).toBe(2);
+  expect(asked).toBe(1);
+});
+
+test("auto: no approver fails closed after external output", async () => {
+  const { provider } = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "m1", toolName: "use_tool" }, { kind: "tool_call_end", toolCallId: "m1", input: "{}" }],
+    [{ kind: "tool_call_start", toolCallId: "m2", toolName: "use_tool" }, { kind: "tool_call_end", toolCallId: "m2", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "", risk: "destructive", inputSchema: { type: "object", properties: {} } },
+    invoke: async () => { invoked++; return { output: "external", isError: false, untrusted: true }; },
+  };
+  await runAgentTurn({ write: () => {}, permissionMode: () => "auto" },
+    { provider, providerId: "scripted", modelId: "test", tools: [tool], systemInstruction: "test", idSeq: fixedIdSeq() }, [], "browse");
+  expect(invoked).toBe(1);
+});
+
+test("auto: tainted write with operator confirmation shows its card in the ONE prompt", async () => {
+  const { provider } = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "w", toolName: "web_fetch" }, { kind: "tool_call_end", toolCallId: "w", input: "{}" }],
+    [{ kind: "tool_call_start", toolCallId: "c", toolName: "schedule_create" }, { kind: "tool_call_end", toolCallId: "c", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = false;
+  const cardTool: InteractiveTool = {
+    definition: { name: "schedule_create", description: "", risk: "write", inputSchema: { type: "object", properties: {} } },
+    confirmation: async () => ({ card: ["Create schedule?"], token: "one" }),
+    invoke: async () => { invoked = true; return { output: "ok", isError: false }; },
+  };
+  const prompts: Array<{ untrustedOrigin: boolean | undefined; alwaysAsk: boolean | undefined; card: readonly string[] | undefined }> = [];
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async (_n, _i, meta) => {
+    prompts.push({ untrustedOrigin: meta?.untrustedOrigin, alwaysAsk: meta?.alwaysAsk, card: meta?.card });
+    return true;
+  } };
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [webFetchRead, cardTool], systemInstruction: "test", idSeq: fixedIdSeq() }, [], "schedule it");
+  expect(prompts).toEqual([{ untrustedOrigin: true, alwaysAsk: true, card: ["Create schedule?"] }]);
+  expect(invoked).toBe(true);
+});
+
+test("a stale fingerprint never authorizes a tainted action in auto mode", async () => {
+  const { provider } = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "w", toolName: "web_fetch" }, { kind: "tool_call_end", toolCallId: "w", input: "{}" }],
+    [{ kind: "tool_call_start", toolCallId: "s", toolName: "shell_exec" }, { kind: "tool_call_end", toolCallId: "s", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = false;
+  let asked = 0;
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", requestApproval: async (_n, _i, meta) => {
+    expect(meta?.untrustedOrigin).toBe(true);
+    asked++;
+    return { approved: true, fingerprint: "another-call" };
+  } };
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [webFetchRead, shellTool(() => { invoked = true; })], systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch then execute");
+  expect(asked).toBe(1);
+  expect(invoked).toBe(false);
+});
+
+test("read-only /plan denies a tainted action without asking even under auto", async () => {
+  const { provider } = scriptedProvider([
+    [{ kind: "tool_call_start", toolCallId: "w", toolName: "web_fetch" }, { kind: "tool_call_end", toolCallId: "w", input: "{}" }],
+    [{ kind: "tool_call_start", toolCallId: "s", toolName: "shell_exec" }, { kind: "tool_call_end", toolCallId: "s", input: "{}" }],
+    [{ kind: "text_delta", text: "done" }],
+  ]);
+  let invoked = false;
+  let asked = 0;
+  const io: AgentIO = { write: () => {}, permissionMode: () => "auto", readOnly: () => true, requestApproval: async () => { asked++; return true; } };
+  await runAgentTurn(io, { provider, providerId: "scripted", modelId: "test", tools: [webFetchRead, shellTool(() => { invoked = true; })], systemInstruction: "test", idSeq: fixedIdSeq() }, [], "fetch then execute");
+  expect(asked).toBe(0);
+  expect(invoked).toBe(false);
+});

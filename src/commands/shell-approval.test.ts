@@ -171,3 +171,14 @@ test("review #661: `flow confirm` is never offered or stored as an 'always' gran
   });
   expect(ev.sacReviewConfirmation).toBe(true);
 });
+
+test("untrusted-origin shell approval cannot be answered by a saved grant", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git status" }),
+    meta: { fingerprint: "fp", destructive: false, untrustedOrigin: true },
+    sessionAllow: new Set(), fingerprintAtStart: "start", io: cleanIo,
+  });
+  expect(ev.autoApprove).toBe(false);
+  expect(ev.untrustedOrigin).toBe(true);
+  expect(formatShellApprovalHints(ev).join(" ")).toContain("untrusted external content");
+});

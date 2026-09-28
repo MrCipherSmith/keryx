@@ -3241,80 +3241,20 @@ async function runAgentTurnCore(
       // `spawn_subagent` pre-pass above keeps the shape test: it decides before any
       // result exists, and a spawned child cannot be un-spawned by a later refusal.
       const isPureReadTool = risk === "read" && !DURABLE_READ_TOOL_NAMES.has(call.name);
-      if (!isPureReadTool && untrustedContentSeen) {
-        // ASK, do not silently refuse (operator decision, 2026-09-22).
-        //
-        // This used to refuse every non-pure-read call outright the moment any
-        // untrusted content entered the turn — no prompt, no way to continue,
-        // which in a live session reads as "the turn is dead": `use_tool` (and
-        // therefore `search_tool`, whose tool DESCRIPTIONS are third-party
-        // prose) latches `untrustedContentSeen`, and every later `shell_exec` /
-        // `apply_patch` / `use_tool` / `slate_write_seed` in that same turn came
-        // back refused. The security property that defended is real and is KEPT:
-        // content still cannot authorize a call. What changes is who is asked —
-        // a human now is, and a human answer IS authorization.
-        //
-        // Deliberately NOT routed through `resolveApprovalDecision`. A mode
-        // (`trust`, `auto`) is standing consent for the operator's own commands;
-        // letting it answer this question would mean an unread web page could
-        // obtain a shell command with no human in the loop at all.
-        // `ApprovalMeta.untrustedOrigin` tells the prompt why it is being asked.
-        //
-        // Fail-closed where nobody can answer: an `unattended` run (SLATE-11) or
-        // any caller with no `requestApproval` wired keeps the old refusal, so
-        // the gate never becomes "content may authorize itself when nobody is
-        // watching".
-        const approver = io.requestApproval;
-        if (deps.unattended === true || approver === undefined) {
-          const result: InteractiveToolResult = {
-            output: "tool blocked: external web content cannot authorize further tool calls in this turn",
-            isError: true,
-          };
-          if (deps.unattended === true) {
-            io.onUnattendedDenial?.(call.name, "untrusted external content in this turn cannot authorize the call");
-          }
-          io.onToolResult?.(call.name, result);
-          history.push({ role: "tool", content: withBudgetWarning(result.output), provenance: "tool", toolCallId: call.id, ts: now() });
-          io.onHistoryChange?.("tool");
-          gateBlockedAny = true;
-          continue;
-        }
-        const taintFingerprint = toolCallHash(call.name, call.input);
-        let taintApproved: boolean;
-        try {
-          const response = await approver(call.name, call.input, {
-            fingerprint: taintFingerprint,
-            destructive: risk === "destructive",
-            untrustedOrigin: true,
-          });
-          taintApproved = isApprovalFor(response, taintFingerprint);
-        } catch (err) {
-          // Same posture as every other approval path: a throwing approver
-          // degrades to a per-call refusal, never a crashed turn (F-002).
-          const result: InteractiveToolResult = {
-            output: `${call.name} not executed: the approval prompt failed (${
-              err instanceof Error ? err.message : String(err)
-            })`,
-            isError: true,
-          };
-          io.onToolResult?.(call.name, result);
-          history.push({ role: "tool", content: withBudgetWarning(result.output), provenance: "tool", toolCallId: call.id, ts: now() });
-          io.onHistoryChange?.("tool");
-          gateBlockedAny = true;
-          continue;
-        }
-        if (!taintApproved) {
-          const result: InteractiveToolResult = {
-            output:
-              "tool blocked: external web content cannot authorize this call, and the user did not authorize it either",
-            isError: true,
-          };
-          io.onToolResult?.(call.name, result);
-          history.push({ role: "tool", content: withBudgetWarning(result.output), provenance: "tool", toolCallId: call.id, ts: now() });
-          io.onHistoryChange?.("tool");
-          gateBlockedAny = true;
-          continue;
-        }
+      const untrustedOrigin = !isPureReadTool && untrustedContentSeen;
+      // No human can answer in unattended mode; neither auto nor a risk gate
+      // may lift this floor. Interactive calls combine both asks in executeCall.
+      if (untrustedOrigin && deps.unattended === true) {
+        const result: InteractiveToolResult = {
+          output: "tool blocked: external web content cannot authorize further tool calls in this turn",
+          isError: true,
+        };
+        io.onUnattendedDenial?.(call.name, "untrusted external content in this turn cannot authorize the call");
+        io.onToolResult?.(call.name, result);
+        history.push({ role: "tool", content: withBudgetWarning(result.output), provenance: "tool", toolCallId: call.id, ts: now() });
+        io.onHistoryChange?.("tool");
+        gateBlockedAny = true;
+        continue;
       }
       io.onToolCall?.(call.name, call.input);
       // Look up the reservation the pre-pass above already computed for this
@@ -3373,6 +3313,7 @@ async function runAgentTurnCore(
               ? undefined
               : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
             deps.hooks,
+            untrustedOrigin,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4398,6 +4339,9 @@ async function executeCall(
   // reproduces every pre-T9 code path unchanged (see `AgentDeps.hooks`'s doc
   // comment).
   hooks?: ShellHookContext,
+  // An external result in this turn cannot authorize this call. Force a real
+  // approval through the SAME risk/hook gate, not a second prompt ahead of it.
+  untrustedOrigin = false,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -4446,6 +4390,7 @@ async function executeCall(
     }
   }
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+  const untrustedDenial = "tool blocked: external web content cannot authorize this call, and the user did not authorize it either";
   const isReadOnly = readOnly?.() ?? false;
   // Flow 306 (W6 T9): fired ONCE per call, after schema validation/capacity/
   // hardDeny and BEFORE every risk-gate branch below consults it — never
@@ -4513,7 +4458,7 @@ async function executeCall(
         isError: true,
       };
     }
-    if (gated.decision === "auto") {
+    if (gated.decision === "auto" && !untrustedOrigin) {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -4529,9 +4474,10 @@ async function executeCall(
                 ? { publishLeaseDetail: `held by @${publishLeaseHolder.name} — "${publishLeaseHolder.reason}"` }
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
+              ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: `command not approved by the user; not executed`, isError: true };
+        return { output: untrustedOrigin ? untrustedDenial : "command not approved by the user; not executed", isError: true };
       }
     }
   } else if (risk === "delegate") {
@@ -4556,7 +4502,7 @@ async function executeCall(
         isError: true,
       };
     }
-    if (gated.decision === "auto") {
+    if (gated.decision === "auto" && !untrustedOrigin) {
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -4567,9 +4513,10 @@ async function executeCall(
               fingerprint,
               destructive: false,
               ...(gated.hookAsked ? { hookAsk: true } : {}),
+              ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: `subagent spawn not approved by the user; not executed`, isError: true };
+        return { output: untrustedOrigin ? untrustedDenial : "subagent spawn not approved by the user; not executed", isError: true };
       }
     }
   } else if (risk === "write") {
@@ -4618,7 +4565,7 @@ async function executeCall(
         isError: true,
       };
     }
-    if (gated.decision === "auto") {
+    if (gated.decision === "auto" && !untrustedOrigin) {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -4631,11 +4578,12 @@ async function executeCall(
               ...(credentials ? { credentials } : {}),
               ...(card !== undefined ? { alwaysAsk: true, card } : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
+              ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         if (confirmationToken !== undefined) tool.confirmationDeclined?.(confirmationToken);
         return {
-          output: card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
+          output: untrustedOrigin ? untrustedDenial : card !== undefined ? `${call.name} not confirmed by the operator; nothing was written or installed` : `patch not approved by the user; not executed`,
           isError: true,
         };
       }
@@ -4662,14 +4610,14 @@ async function executeCall(
     if (gated.decision === "deny") {
       return { output: gated.denyMessage ?? `tool "${call.name}" refused by a policy hook`, isError: true };
     }
-    if (gated.decision === "ask") {
+    if (gated.decision === "ask" || untrustedOrigin) {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
         requestApproval === undefined
           ? false
-          : await requestApproval(call.name, call.input, { fingerprint, destructive: false, hookAsk: true });
+          : await requestApproval(call.name, call.input, { fingerprint, destructive: false, ...(gated.hookAsked ? { hookAsk: true } : {}), ...(untrustedOrigin ? { untrustedOrigin: true } : {}) });
       if (!isApprovalFor(response, fingerprint)) {
-        return { output: `${call.name} not approved by the user; not executed`, isError: true };
+        return { output: untrustedOrigin ? untrustedDenial : `${call.name} not approved by the user; not executed`, isError: true };
       }
     }
   } else {
