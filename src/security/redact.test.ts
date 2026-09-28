@@ -167,10 +167,88 @@ describe("F-SEC-F2 (flow 355 review, PR #776): a label overrides an allow-shape"
     expect(scrubbed).not.toContain(uuid);
   });
 
+  // SEC-F2 (flow 355 review round 2, residual): `bareShapeQualifies`'s own
+  // 3.6-bit entropy floor used to run BEFORE the label was consulted at all,
+  // so a labelled UUID's redaction depended on whether its own hex digits
+  // happened to repeat enough to clear the floor — the canonical RFC 4122
+  // example UUID (entropy 3.39) did not. Test with a representative sample,
+  // not one hand-picked value that happens to clear the floor by luck.
+  test("the canonical RFC 4122 example UUID (below the entropy floor) is redacted when labelled", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const scrubbed = redactSensitiveText(`leaked credential: ${uuid}`);
+    expect(scrubbed).not.toContain(uuid);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  // TEST-F1 (flow 355 review round 3): this used to draw 20 UNSEEDED
+  // `crypto.randomUUID()` values and assert `not.toContain(uuid)` on the
+  // labelled half — a real detector, but the WRONG one, could also make that
+  // assertion pass: `pii.credit-card`'s Luhn check is unrelated to this
+  // file's entropy.ts diff, yet a random UUID's digit run can occasionally
+  // pass it, replacing the value with `[REDACTED:cc]` instead of
+  // `[REDACTED:entropy]` and producing a red run roughly one time in four.
+  // Fixed two ways: (1) 20 FIXED UUIDs, committed here, so the sample is
+  // deterministic across every run — no more "reproduced once in 4 runs";
+  // (2) the next test asserts, ONCE, that none of these 20 fixtures trips
+  // `pii.credit-card` on their own — a canary against silent drift in that
+  // UNRELATED detector's regex re-poisoning this fixture again — and this
+  // test itself asserts only the ENTROPY/secret redaction marker, not a
+  // looser "the raw value is gone" check that any detector could satisfy.
+  const FIXED_UUIDS = [
+    "f7813ab3-5012-4e71-9fc3-653d498cb79d",
+    "6c2b6eca-918c-44c6-b77c-d10199ba8114",
+    "2de6d562-dd32-4bdc-be9a-603eb11bcb67",
+    "994c28cd-08ba-4a06-be4e-5a58878c7a75",
+    "92a31105-a47e-4e04-a6e1-1bfa185c4125",
+    "2dde8c83-4283-4ce7-aa76-fcde8f62306e",
+    "76f73ce0-7b6e-44c4-ab6f-c8829c58ec40",
+    "a834a3f9-9eac-454d-9424-836004a20fd8",
+    "2a84e5d4-2134-4fd0-b283-b3b68f3fb20a",
+    "d5d35dca-25f2-44e9-a94f-8913bd365d79",
+    "f25a18d6-6e9f-4625-b936-6d37ae1c047a",
+    "f4923350-97ec-45be-8413-e4aa36276bef",
+    "e67a368b-8490-471a-9132-ea48e1e3cd30",
+    "08069024-779a-4bec-9b70-7016ec4c6f2f",
+    "4d58e4d7-341b-42b4-8f08-206dd318431a",
+    "dfa0b7ce-f0d7-4723-92d7-7e04b3f0d0f0",
+    "531b2d3f-b8b6-4879-bc1e-d9d7a2a462cd",
+    "f358768a-4e70-4162-91db-67582e6b4a9a",
+    "a122e415-ffdf-4f11-9ba7-c784094ab844",
+    "e63aca54-e1e7-4096-9849-b02155b89efd",
+  ];
+
+  test("canary: none of the 20 fixed UUID fixtures trips the UNRELATED pii.credit-card detector on its own", () => {
+    for (const uuid of FIXED_UUIDS) {
+      const scrubbed = redactSensitiveText(`request id: ${uuid}`);
+      expect(scrubbed).not.toContain("[REDACTED:cc]");
+    }
+  });
+
+  test("20 fixed UUIDs: ALL redacted with the entropy marker when labelled, NONE redacted when unlabelled", () => {
+    for (const uuid of FIXED_UUIDS) {
+      const labelled = redactSensitiveText(`leaked credential: ${uuid}`);
+      expect(labelled).toBe(`leaked credential: [REDACTED:entropy]`);
+      const unlabelled = redactSensitiveText(`request id: ${uuid}`);
+      expect(unlabelled).toBe(`request id: ${uuid}`);
+    }
+  });
+
   test("a LABELLED sha512- integrity-shaped string is redacted", () => {
     const integrity = "sha512-9WYDliBTiEXPIkZ5Zc32qJ6b7QP2b6m5v2kDEe57lecTulaDIuNTPy3Ry4G==";
     const scrubbed = redactSensitiveText(`leaked auth secret: ${integrity}`);
     expect(scrubbed).not.toContain(integrity);
+  });
+});
+
+describe("SEC-F3 (flow 355 review round 3): no slug exemption survives adjacency to a real label", () => {
+  test("the reviewer's exact input — a word-slug-with-hex-tail secret IS redacted when labelled", () => {
+    const scrubbed = redactSensitiveText("leaked api_key: log-report-deadbeef01234567");
+    expect(scrubbed).toBe("leaked api_key: [REDACTED:entropy]");
+  });
+
+  test("the same value, UNLABELLED, is unchanged (accepted residual, see findings.md S-8)", () => {
+    const text = "log-report-deadbeef01234567 appeared in the log";
+    expect(redactSensitiveText(text)).toBe(text);
   });
 });
 

@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.3.20] — 2026-09-28
+## [0.3.22] — 2026-09-28
 
 ### Fixed
 - **Public review reports no longer attribute a run to the operator's GitHub
@@ -15,6 +15,66 @@ All notable changes to `keryx` are documented here. The format follows
   the selector resolves after the turn has already settled.** A guarded idle
   drain takes the forced item first or the FIFO head; it never dispatches while
   the main turn, pause lease or cancellation handoff is active.
+
+## [0.3.21] — 2026-09-28
+
+### Fixed
+- **A secret dressed as a word slug with a hex tail (`<word>-<word>-<hex>`) is now redacted when labelled** — the LABELLED path (`redactSensitiveText`, `security/detect/entropy.ts`) no longer consults any word-slug exemption at all; only an allow-shape, a hex blob, or separator-stripped entropy reaching the floor can qualify a labelled value. An UNLABELLED secret in the same shape, with a 10-16 character hex tail, remains an accepted, documented residual (see `findings.md` row S-8).
+- **A labelled secret preceded by an ordinary filler word ("password is: …") or split across an explicit shell-style line continuation (`export API_KEY=\` then the value on the next line) is now redacted** — `ADJACENT_LABEL` tolerates up to two closed-set filler words between the label and the connector, and a new `isAdjacentLabel` check recognises an explicit continuation marker (`=\`, `:\`, `= \`, or a bare `\`) at the end of the previous line.
+- **`web_fetch`/`web_search` no longer refuse an ordinary public Gist, GitHub commit/blob, or GitLab commit URL** — a small, documented host+path-shape allowlist in `harness/web/outbound-secret.ts` exempts `gist.github.com/<user>/<hex32>` (and the anonymous `/<hex32>` form), `github.com/…/commit/<sha40>` and `/…/blob/<sha40>/…`, and `gitlab.com/…/-/commit/<sha40>` from the outbound secret-shape check only; redaction of the same value in tool output is unchanged.
+- Fixed a stale header comment in `entropy.ts` that claimed `token=abcdefghijklmnopqrstuvwx12345678` was deliberately missed as "low-entropy" — the value is in fact maximal-entropy (all 32 characters distinct) and has always been caught; the comment now says so.
+- Fixed a flaky redaction test: `redact.test.ts`'s labelled/unlabelled UUID coverage now uses 20 fixed UUIDs (committed in the test, individually confirmed not to trip the unrelated `pii.credit-card` detector) instead of unseeded `crypto.randomUUID()` values, and asserts on the entropy redaction marker specifically rather than a looser "value is gone" check.
+- Also shipped in 0.3.19–0.3.20: `LABEL=VALUE` assignment shapes (`api_key=…`, `--token=…`) and camelCase labels (`apiKey: "…"`) are now recognised and redacted, closing a gap where `=` inside the token character class fused the label into the candidate and where camelCase had no non-alphanumeric boundary character at all.
+
+## [0.3.20] — 2026-09-28
+
+### Fixed
+- **A secret re-chunked into hyphenated pieces no longer bypasses redaction
+  or the outbound-egress check.** `security/detect/entropy.ts`'s `isWordSlug`
+  exempted a hyphen/underscore-segmented run from the entropy gate whenever
+  every segment was pure-alpha, pure-digit, or a short letter-then-digit
+  "tag" — with no check on the RECONSTITUTED value's own randomness. A real
+  secret formatted as `aK-9-dQ-2-rN-…` or word-wrapped as
+  `log-<scrambled-case letters+digits>-id` sailed through `looksSecretShaped`,
+  `redactSensitiveText` (S-6), and `containsOutboundSecret` (S-8)
+  untouched. Fixed: a segment now only counts as a real word or version tag
+  if its letters are plainly cased (all-lowercase, all-uppercase, or
+  Capitalised) — language never scrambles case letter-by-letter, but a
+  hyphen-chunked secret often does.
+- **An ordinary Medium or GitHub Gist URL no longer gets refused by
+  `web_fetch`.** Those sites' common `<slug>-<hex-id>` URL convention (one is
+  already linked from this repo's own
+  `docs/requirements/keryx-wiki-graph-next/README.md`) interleaves letters
+  and digits in its trailing id many times, which failed every existing
+  slug-segment shape and fell through to the entropy gate. A slug's LAST
+  segment is now recognised as a public post/gist id when it is a 10-16
+  character pure-hex run.
+- **The generic (non-URL) redaction scan no longer flags ordinary paths and
+  comments that merely mention a sensitive word nearby.** `TOKEN` still
+  compounded any `/`-bearing run (a relative doc link, a filesystem path)
+  into one candidate, and the label look-back was same-line PROXIMITY (40
+  characters), not true adjacency — a "Credential Masking" heading two
+  sentences before an unrelated ADR link, a GitHub noreply email's local
+  part near an unrelated "key", a Python `from_attributes=True` near "the
+  API.", and a `passlib/bcrypt/argon2` comment near "password" were all
+  false positives on this repository's own real `git log`/docs content.
+  Fixed: a match now requires the label to be genuinely ADJACENT (the label
+  word, its continuation, then only quotes/`:`/`=`/whitespace before the
+  value), and a `/`-bearing candidate is decomposed into its pieces and
+  scored separately, the same principle a URL's own path segments already
+  get.
+- **A labelled UUID is now redacted reliably, not about 75% of the time.**
+  `bareShapeQualifies`'s own 3.6-bit entropy floor ran BEFORE the label was
+  ever consulted, so whether a UUID explicitly called out as leaked
+  (`"leaked credential: <uuid>"`) was redacted depended on how its own hex
+  digits happened to repeat — the canonical RFC 4122 example UUID (entropy
+  3.39) was not. An allow-shape (UUID, full git commit SHA, npm/yarn
+  integrity string) now qualifies regardless of its own entropy once a label
+  is confirmed adjacent to it.
+- Real-file sweep over `bun.lock`, `CHANGELOG.md`, `git log -p -30 --stat`,
+  and every `docs/**/*.md`: 48 `[REDACTED:entropy]` matches before this fix
+  (6 false positives — the 5 label-proximity shapes above plus the Medium
+  URL), 41 after (0 false positives remaining).
 
 ## [0.3.19] — 2026-09-28
 

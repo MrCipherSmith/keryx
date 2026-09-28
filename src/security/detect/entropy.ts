@@ -11,14 +11,14 @@ import type { DetectorMatch } from "../types";
 //   `host/path/…/<sha40>` was ONE joined candidate. That escaped the
 //   allow-shapes (the joined string is not a bare `<sha40>`, so
 //   `isAllowShapedValue` never matched it) AND picked up a false label from
-//   a hostname substring (`SENSITIVE_LABEL` had no boundary check at all, so
+//   a hostname substring (the label check had no boundary check at all, so
 //   "api" inside "api.github.com" counted). Fixed by never treating a URL's
 //   host+path+query+fragment as one run: `findUrlSpans`/`urlComponentSpans`
 //   below decompose a URL into its PATH SEGMENTS, QUERY VALUES and FRAGMENT
 //   and evaluate each SEPARATELY (label-free — see `looksSecretShaped`'s own
 //   comment for why), and the generic per-line scan SKIPS any span inside a
 //   recognised URL so the two paths never double- or mis-handle the same
-//   bytes. `SENSITIVE_LABEL` also gained a boundary check (word/segment,
+//   bytes. The label check also gained a boundary check (word/segment,
 //   `_`/space/`:`/`(`/`)` count as boundaries, a bare concatenation like
 //   "apiary" does not) — real, but secondary to the URL fix: a dot-joined
 //   hostname label ("api.github.com") still LOOKS boundary-legal by that
@@ -84,6 +84,67 @@ import type { DetectorMatch } from "../types";
 // pre-flight check call this ONE function on a component's text — there is
 // no second, independent shape decision to drift out of sync with it again.
 //
+// REVIEW ROUND 2, PASS 2 (flow 355 review round 2 fix package) — four more
+// findings, all inside this same shared shape gate:
+//
+//   SEC-F1 (blocker) — `isWordSlug` exempted a hyphen/underscore run from the
+//   entropy gate whenever every segment was PURE alpha, PURE digit, or a
+//   single letter-run/digit-run "tag", with no check on the RECONSTITUTED
+//   value's own randomness — so a real secret, re-chunked into single-
+//   character-class pieces (`aK-9-dQ-2-rN-…`) or wrapped as
+//   `log-<scrambled-case letters+digits>-id`, sailed through as a "slug".
+//   The gap was that a PURE-alpha segment counted as a legitimate word
+//   regardless of its CASING, and `isSingleTransitionTag`'s letter run had no
+//   length or casing bound either. Fixed: a segment only counts as a real
+//   word if it is plainly cased — all-lowercase, all-uppercase (an acronym),
+//   or Capitalised (one leading uppercase letter, the rest lowercase);
+//   language never scrambles case letter-by-letter, but a hyphen-chunked
+//   secret often does by construction. The same casing rule, plus a short
+//   length bound, now applies to a single-transition tag's letter run too, so
+//   `cp311`/`x86`/`aarch64` (a handful of characters, plainly cased) still
+//   qualify while `abcdefghijklmnopqrstuvwxyzAB1234` (29 scrambled-case
+//   letters before its digit run) does not. See `isPlainCasedWord`,
+//   `isSingleTransitionTag`, `isWordSlug`.
+//
+//   REG-F1 (major) — the flip side of the same rule made it TOO strict:
+//   Medium's and GitHub Gist's `<slug>-<hex-id>` URL convention ends in a
+//   trailing id that interleaves letters and digits many times
+//   (`…-actually-fresh-3a9bae9ec8f9`), which fails every segment shape above
+//   and poisoned the whole slug, so an entirely ordinary public URL already
+//   linked from this repo's own docs was refused. Fixed: `isSlugHexTail`
+//   grants the SAME "structured, not random" carve-out to a segment that is
+//   the LAST segment of an otherwise-valid word slug and is itself a 10-16
+//   character pure-hex run — a public post/gist id, not a secret. Bounded to
+//   the final segment only and to that length window so this cannot become a
+//   second segmented-secret loophole the way an unbounded carve-out would.
+//
+//   LOG-F1 (major) — the generic (non-URL) per-line scan still compounded any
+//   `/`-bearing run into ONE candidate (a relative doc link, a filesystem
+//   path), and `SENSITIVE_LABEL`'s 40-char lookback was same-line PROXIMITY,
+//   not true adjacency — any ordinary occurrence of "key"/"password"/"api"/
+//   "credential" earlier in the same line/comment was enough to label
+//   unrelated text (a "Credential Masking" heading two sentences before an
+//   ADR link; "the API." before an unrelated Python assignment; "password" in
+//   a sentence before a library-name comment). Fixed: the generic scan now
+//   requires `ADJACENT_LABEL` — the label word, its continuation, then only
+//   quotes/`:`/`=`/whitespace up to the value — for EVERY match, not only to
+//   override an allow-shape; and a `/`-bearing candidate is decomposed into
+//   its `/`-delimited pieces and scored piece by piece (`firstQualifyingSlashPiece`),
+//   the same decomposition principle a URL's own path segments already get,
+//   so a long ordinary path is never flagged on its TOTAL length alone.
+//
+//   SEC-F2 (major, residual of round 1's F-SEC-F2) — the label-overrides-
+//   allow-shape fix was correct, but `bareShapeQualifies`'s OWN entropy floor
+//   (3.6 bits, no hex-blob match possible for a hyphenated UUID) ran BEFORE
+//   the label was ever consulted, so a labelled UUID's redaction depended on
+//   whether its own hex digits happened to repeat enough to clear the floor —
+//   the canonical RFC 4122 example UUID (entropy 3.39) did not. Fixed:
+//   `labelledPieceQualifies` — reached only once a label is already confirmed
+//   adjacent — lets an allow-shape (UUID / full git SHA / npm-yarn integrity
+//   string) qualify REGARDLESS of its own entropy. The floor exists to spare
+//   UNLABELLED prose from a false positive; that purpose does not apply once
+//   a label has already, explicitly, called the value out as leaked.
+//
 // REVIEW ROUND 3 — pre-existing on `main`, found squarely inside what S-6
 // promises: `api_key=kd8Fj2LmQp9xZr4TvWn7Yb3` (a plain, non-URL, LABELLED
 // assignment) was not redacted. Two separate gaps, both in how a label is
@@ -99,15 +160,86 @@ import type { DetectorMatch } from "../types";
 //     two separate tokens. Fixed by `LABEL_ASSIGNMENT_RE` below, a dedicated
 //     pass that finds the assignment directly and evaluates only the VALUE.
 //   - `apiKey: "…"` (camelCase) was ALSO missed, for an unrelated reason:
-//     `SENSITIVE_LABEL`'s boundary check (F-LOG-F1) required a NON-alphanumeric
+//     the label's boundary check (F-LOG-F1) required a NON-alphanumeric
 //     character on both sides of the label word, and camelCase has none
 //     between "api" and "Key". Fixed by also accepting a following UPPERCASE
 //     letter as a valid trailing boundary.
 //
-// `token=abcdefghijklmnopqrstuvwx12345678` is DELIBERATELY still missed: its
-// value is low-entropy (a near-sequential alphabet-then-digits run), so the
-// usual 3.6-bit floor correctly does not fire — the fix is about recognising
-// the label, never about lowering the floor a recognised label sits next to.
+// `token=abcdefghijklmnopqrstuvwx12345678` IS caught, and correctly so: all
+// 32 characters are DISTINCT, so its Shannon entropy is exactly log2(32) = 5
+// — the maximum a 32-character string can have, comfortably above the
+// 3.6-bit floor. It LOOKS low-complexity to a human (a near-sequential
+// alphabet-then-digits run), but this file's entropy model only sees a
+// probability distribution over characters, never their ORDER — a sequence
+// that reads as "boring" to a person is not the same thing as low-entropy by
+// this measure. See `entropy.test.ts`'s own "R3 — the coordinator's own
+// 'low-entropy' example is actually maximal-entropy and IS caught" test.
+//
+// REVIEW ROUND 3, PASS 2 (flow 355 review round 3, PR #779) — three more
+// findings, all structural rather than another carve-out on top of the
+// last one:
+//
+//   SEC-F3 (blocker) — `isSlugHexTail`, REG-F1's own fix, reopened SEC-F1's
+//   bypass class: `labelledPieceQualifies` used to call `bareShapeQualifies`
+//   FIRST and fall back to `isAllowShapedValue` only when that returned
+//   `qualifies: false` — so a real secret dressed as `<word>-<word>-<hex>`
+//   (`log-report-deadbeef01234567`) hit `isWordSlug`'s slug exemption and was
+//   never redacted, even with an adjacent `api_key:` label. The word-slug
+//   exemption exists ONLY to spare an UNLABELLED, ordinary slug (an ADR
+//   filename, a Gist-style URL) from a false positive; it has no business
+//   running at all once a label has already, explicitly, called a value out
+//   as a secret. Fixed structurally, not by tightening the slug shape again:
+//   `labelledPieceQualifies` no longer calls `bareShapeQualifies` — and so
+//   never consults `isWordSlug`/`isSlugHexTail` — under ANY circumstance. A
+//   labelled value now qualifies when (a) it is an allow-shape (SEC-F2,
+//   unchanged), (b) it is a hex blob (`isHexBlob`), or (c) its entropy,
+//   computed with separators (`-`/`_`/`.`/`+`) stripped out FIRST, reaches
+//   the 3.6-bit floor — stripping separators first is what stops a
+//   hyphen-chunked secret's per-segment structure from masking its own
+//   reconstituted randomness, the exact property SEC-F1's `isWordSlug`
+//   rewrite already cared about for the unlabelled path.
+//
+//   Accepted residual, UNLABELLED path only (recorded in `findings.md` row
+//   S-8): `isSlugHexTail` still exempts a slug's last segment when it is a
+//   10-16 character pure-hex run (40-64 bits) — bounded to that window
+//   deliberately (REG-F1's own reasoning). An UNLABELLED secret dressed as a
+//   slug with a hex tail SHORTER than 17 hex characters is therefore still
+//   not caught by shape alone; nothing about SEC-F3 changes this, because
+//   SEC-F3 is entirely about the LABELLED path, where no slug exemption is
+//   consulted at all any more. A labelled instance of the exact same value
+//   IS caught (SEC-F3, above).
+//
+//   LOG-F2 (major) — `ADJACENT_LABEL` requires the connector immediately
+//   after the label with nothing between them, so an ordinary filler word
+//   ("password IS: <secret>") went unlabelled, and the label look-back never
+//   crossed a newline, so a label ending its own line with an explicit
+//   shell-style continuation marker (`export API_KEY=\`, value on the next
+//   line) did too. Fixed with two narrow, closed-set additions — neither
+//   reopens LOG-F1's proximity-window class, since both still require the
+//   label to be genuinely adjacent to SOMETHING concrete: `ADJACENT_LABEL`
+//   now tolerates up to two words from a small closed filler-word set
+//   between the label and the connector (`FILLER_WORDS`); and
+//   `isAdjacentLabel` additionally treats a value as labelled when its own
+//   line is otherwise empty up to that point AND the previous line ends in
+//   an explicit label + continuation marker (`=\`, `:\`, `= \`, or a bare
+//   `\` right after the label — `CONTINUATION_LABEL_LINE_RE`). A label that
+//   merely happens to be the last word on the previous line, with no
+//   continuation marker, is NOT treated as adjacent — that broader form
+//   stays an accepted, undocumented-elsewhere residual, not a second
+//   proximity window reopened under a new name.
+//
+//   REG-F2 (major) — REG-F1 only reached a hex tail that is the LAST segment
+//   of an already-valid word slug; a GitHub Gist URL's real, common shape
+//   (`gist.github.com/<user>/<32-hex-id>`) is a SINGLE bare path segment
+//   that never reaches `isWordSlug` at all, so it fell straight to the
+//   unconditional hex-blob branch and `web_fetch` still refused it. This is
+//   entirely an OUTBOUND-check gap, not a redaction one, so it is fixed in
+//   `harness/web/outbound-secret.ts`, not here — a small, documented host +
+//   path-shape allowlist for public paste/commit identifiers
+//   (`isKnownPublicIdentifierUrl`), consulted ONLY by `containsOutboundSecret`
+//   before it ever reaches this file's shape/entropy checks. Redaction in
+//   TOOL OUTPUT (S-6) is unchanged: the same value arriving in output is
+//   still evaluated exactly as before.
 
 const SENSITIVE_LABEL_WORDS = "key|secret|token|password|passwd|api|credential|auth|bearer";
 // Boundary-aware (F-LOG-F1): a label word must sit at the start/end of the
@@ -134,17 +266,70 @@ const SENSITIVE_LABEL_WORDS = "key|secret|token|password|passwd|api|credential|a
 // were redacted.
 const caseless = (words: string): string =>
   words.replace(/[a-z]/g, (ch) => `[${ch}${ch.toUpperCase()}]`);
-const SENSITIVE_LABEL = new RegExp(
-  `(?:^|[^A-Za-z0-9])(${caseless(SENSITIVE_LABEL_WORDS)})(?:$|[^A-Za-z0-9]|(?=[A-Z]))`,
-);
 
 // A label that ENDS the text before a value: the label word, an optional
 // continuation (`_KEY`, `Key`), then only quotes, `:`/`=` and whitespace.
-// Used to decide whether a label may override an allow-shape (see the
-// per-line scan in `detectEntropy`).
+//
+// LOG-F1 (review round 2): this used to gate only whether a label could
+// override an allow-shape; a SEPARATE, merely-proximate check
+// (`SENSITIVE_LABEL`, same-line, 40 characters back) was enough to label
+// anything else. That proximity check is gone — the per-line scan in
+// `detectEntropy` now requires THIS adjacency check for every match, not
+// just an allow-shape override. A same-line window was far too permissive
+// once real prose/comments are the input rather than a config line: a
+// "Credential Masking" heading two sentences before an unrelated relative
+// doc link, a GitHub noreply email's local part near an unrelated "key", a
+// Python `from_attributes=True` assignment near "the API.", a
+// `passlib/bcrypt/argon2` library-name comment near "password" — none of
+// those labels are ADJACENT to the value they used to tag.
+//
+// LOG-F2 (review round 3): a closed, bounded set of filler/copula words —
+// never open-ended prose — is now tolerated between the label and the
+// connector ("password IS: <secret>", "token SET TO <secret>"). Bounded to
+// AT MOST TWO such words so this cannot regrow into LOG-F1's same-line
+// proximity window: an arbitrary sentence between a label and an unrelated
+// value still does not match, because none of ITS words are in this set.
+const FILLER_WORDS = "is|was|set|to|the|value|now";
 const ADJACENT_LABEL = new RegExp(
-  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*["']?\\s*[:=]?\\s*["']?$`,
+  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*` +
+    `(?:\\s+(?:${caseless(FILLER_WORDS)})){0,2}` +
+    `["']?\\s*[:=]?\\s*["']?$`,
 );
+
+// LOG-F2 (review round 3), the cross-line half: a label ending its OWN line
+// with an explicit shell/script line-continuation marker — `export
+// API_KEY=\`, a bare trailing `\` — and the value starting the NEXT line.
+// Deliberately narrow: this fires ONLY on an explicit continuation marker,
+// never merely "a label happened to be the last thing on the previous
+// line" (which would reopen LOG-F1's own proximity-window class under a new
+// name). `isAdjacentLabel` below is the only caller.
+const CONTINUATION_LABEL_LINE_RE = new RegExp(
+  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*["']?\\s*[:=]?\\s*\\\\\\s*$`,
+);
+
+/**
+ * Whether the value starting at `start` in `content` is ADJACENT to a
+ * sensitive label — same-line (`ADJACENT_LABEL`, unchanged in scope) or,
+ * LOG-F2, the value's own line is otherwise empty up to this point AND the
+ * previous line ends in a label + continuation marker
+ * (`CONTINUATION_LABEL_LINE_RE`).
+ */
+function isAdjacentLabel(content: string, start: number): boolean {
+  const before = lastLineOf(content.slice(Math.max(0, start - LABEL_WINDOW), start));
+  if (ADJACENT_LABEL.test(before)) {
+    return true;
+  }
+  if (before.trim().length > 0) {
+    return false;
+  }
+  const lineStart = content.lastIndexOf("\n", start - 1);
+  if (lineStart < 0) {
+    return false;
+  }
+  const prevLineStart = content.lastIndexOf("\n", lineStart - 1) + 1;
+  const prevLine = content.slice(prevLineStart, lineStart);
+  return CONTINUATION_LABEL_LINE_RE.test(prevLine);
+}
 
 // LABEL=VALUE assignment shapes (review round 3): `=` sits inside `TOKEN`'s
 // own character class (needed for base64 padding), so `api_key=<value>` was
@@ -152,8 +337,9 @@ const ADJACENT_LABEL = new RegExp(
 // this file's header. `LABEL: VALUE`/`LABEL:VALUE` never had this problem
 // (`:` is not in `TOKEN`'s class) and needs no separate handling here. This
 // finds the assignment directly and captures only the VALUE; the label is
-// satisfied by construction, so the caller applies `bareShapeQualifies` (no
-// allow-shape exemption — F-SEC-F2) with the usual entropy floor. The
+// satisfied by construction, so the caller applies `labelledPieceQualifies`
+// (SEC-F2 / SEC-F3 — no allow-shape exemption, no word-slug exemption
+// either) with the usual entropy floor. The
 // optional `[A-Za-z0-9_-]*` after the label word absorbs a continuation
 // (`_KEY` from `API_KEY`, `Key` from `apiKey`) up to the connector; an
 // optional quote on either side of `=` covers a JSON-ish `"api_key"= "…"`
@@ -217,19 +403,60 @@ function lastLineOf(before: string): string {
 // (letter-digit-letter-digit…) and is therefore still NOT a slug, so real
 // credentials keep flowing through this gate.
 //
+// A "plainly cased" letter run — all-lowercase, all-uppercase (an acronym
+// like `ADR`), or Capitalised (one leading uppercase letter, the rest
+// lowercase). Real language never hops between cases letter-by-letter; a
+// secret re-chunked into hyphen-joined pieces (SEC-F1:
+// `aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8`) routinely does. This is the
+// gate that decides whether an alpha segment (or a single-transition tag's
+// letter run) counts as a real word at all.
+function isPlainCasedWord(letters: string): boolean {
+  return /^[a-z]+$/.test(letters) || /^[A-Z]+$/.test(letters) || /^[A-Z][a-z]*$/.test(letters);
+}
+
+// A real platform/version tag's letter run is a handful of characters
+// (`cp`, `x86`, `aarch64`, `win32`) — bounding it stops a scrambled-case
+// secret chunk from posing as a "tag" merely by transitioning from a letter
+// run to a digit run once (SEC-F1's `log-<29 scrambled-case letters><digits>-id`
+// variant: technically single-transition, but nothing like a real tag).
+const TAG_MAX_LETTER_RUN = 8;
+
 // The single-transition tag shape (flow 355 review round 2): a package
 // manager filename's platform/version tags — `cp311`, `x86`, `manylinux_2_17`
 // — are exactly as non-random as a pure word or a pure number, but the
 // original rule rejected the WHOLE slug over one such segment
 // (`numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.whl`, a false positive a
 // `pip`/`uv` install produces constantly). A segment that transitions AT MOST
-// once between a letter-run and a digit-run either direction is the same
-// kind of "structured, not random" evidence a pure segment is; a segment
-// that alternates more than once (`A1b2C3d4E5f6`) still is not, and still
-// poisons the whole check — `entropy.test.ts`'s own hyphenated-token test
-// pins that this stays flagged.
+// once between a letter-run and a digit-run either direction, with a SHORT,
+// plainly-cased letter run, is the same kind of "structured, not random"
+// evidence a pure segment is; a segment that alternates more than once
+// (`A1b2C3d4E5f6`), or whose letter run is long or scrambled-case
+// (`abcdefghijklmnopqrstuvwxyzAB1234`, SEC-F1 round 2), still is not, and
+// still poisons the whole check — `entropy.test.ts`'s own hyphenated-token
+// test pins that a genuinely mixed segment stays flagged.
 function isSingleTransitionTag(segment: string): boolean {
-  return /^[A-Za-z]+[0-9]+$/.test(segment) || /^[0-9]+[A-Za-z]+$/.test(segment);
+  const letterThenDigit = /^([A-Za-z]+)([0-9]+)$/.exec(segment);
+  if (letterThenDigit !== null) {
+    const letters = letterThenDigit[1] as string;
+    return letters.length <= TAG_MAX_LETTER_RUN && isPlainCasedWord(letters);
+  }
+  const digitThenLetter = /^([0-9]+)([A-Za-z]+)$/.exec(segment);
+  if (digitThenLetter !== null) {
+    const letters = digitThenLetter[2] as string;
+    return letters.length <= TAG_MAX_LETTER_RUN && isPlainCasedWord(letters);
+  }
+  return false;
+}
+
+// REG-F1: Medium's and GitHub Gist's common `<slug>-<hex-id>` URL convention
+// — a public post/gist id, not a secret, but one that interleaves letters and
+// digits many times (`3a9bae9ec8f9`) and so fails every other segment shape.
+// Bounded to 10-16 hex characters AND to the slug's LAST segment only — never
+// a mid-slug segment — so this cannot become a second segmented-secret
+// loophole the way an unbounded "any hex-ish segment is fine" rule would.
+const SLUG_HEX_TAIL_RE = /^[0-9a-f]{10,16}$/i;
+function isSlugHexTail(segment: string): boolean {
+  return SLUG_HEX_TAIL_RE.test(segment);
 }
 
 function isWordSlug(value: string): boolean {
@@ -238,15 +465,25 @@ function isWordSlug(value: string): boolean {
     return false;
   }
   let words = 0;
-  for (const segment of segments) {
-    const isAlpha = /^[A-Za-z]+$/.test(segment);
+  for (let i = 0; i < segments.length; i += 1) {
+    const segment = segments[i] as string;
     const isDigits = /^[0-9]+$/.test(segment);
-    if (!isAlpha && !isDigits && !isSingleTransitionTag(segment)) {
-      return false;
+    if (isDigits) {
+      continue;
     }
-    if (isAlpha && segment.length >= 3) {
-      words += 1;
+    if (isPlainCasedWord(segment)) {
+      if (segment.length >= 3) {
+        words += 1;
+      }
+      continue;
     }
+    if (isSingleTransitionTag(segment)) {
+      continue;
+    }
+    if (i === segments.length - 1 && isSlugHexTail(segment)) {
+      continue;
+    }
+    return false;
   }
   return words >= 1;
 }
@@ -488,6 +725,88 @@ export function looksSecretShapedIn(text: string): boolean {
   return secretShapedCandidatesIn(text).length > 0;
 }
 
+// ---------------------------------------------------------------------------
+// The generic (non-URL, non-LABEL=VALUE) per-line scan's own shape decision
+// (LOG-F1, SEC-F2 — see this file's header). Reached ONLY once a label has
+// already been confirmed ADJACENT to the candidate, never on proximity alone.
+// ---------------------------------------------------------------------------
+
+/**
+ * SEC-F2 / SEC-F3: the LABELLED path's OWN shape decision — deliberately NOT
+ * `bareShapeQualifies`. That function's word-slug exemption (`isWordSlug`,
+ * including `isSlugHexTail`) exists ONLY to spare an UNLABELLED, ordinary
+ * slug (an ADR filename, a Gist-style URL) from a false positive; it must
+ * never run at all once a label has already, explicitly, called a value out
+ * as a secret (SEC-F3: `log-report-deadbeef01234567` sailed through
+ * `bareShapeQualifies`'s slug gate even with an adjacent `api_key:` label).
+ * A labelled value qualifies when:
+ *   (a) it is an allow-shape (UUID / full git SHA / npm-yarn integrity
+ *       string, SEC-F2) — regardless of its own entropy;
+ *   (b) it is a hex blob (`isHexBlob`); or
+ *   (c) it contains a digit or a base64 symbol (`+`/`=` — the same
+ *       "identifier vs credential" floor `bareShapeQualifies` applies to the
+ *       UNLABELLED path: a real credential is almost always a random blob
+ *       containing one of these, while an alpha/underscore/hyphen-only run
+ *       is far more often an ordinary identifier), AND its entropy, computed
+ *       with separators (`-`/`_`/`.`/`+`) stripped out FIRST, reaches the
+ *       3.6-bit floor — stripping separators first is what stops a
+ *       hyphen-chunked secret's per-segment structure from masking its own
+ *       reconstituted randomness. Without this precondition, an ordinary
+ *       camelCase identifier assigned right after a label word (`const
+ *       keyResolution = resolveJevApiKeyResolution(...)` — a REAL function
+ *       name found by this file's own real-file sweep) reads as high-entropy
+ *       prose and gets falsely redacted; the reviewer's own SEC-F3 input
+ *       (`log-report-deadbeef01234567`) has digits and is unaffected by this
+ *       precondition.
+ * No slug/word/tag exemption is consulted on this path, under any
+ * circumstance — see this file's header, SEC-F3.
+ */
+function labelledPieceQualifies(piece: string): { entropy: number } | null {
+  if (isAllowShapedValue(piece)) {
+    return { entropy: shannonEntropy(piece) };
+  }
+  if (isHexBlob(piece)) {
+    return { entropy: shannonEntropy(piece) };
+  }
+  if (!/[0-9]/.test(piece) && !/[+=]/.test(piece)) {
+    return null;
+  }
+  const withoutSeparators = piece.replace(/[-_.+]/g, "");
+  const entropy = shannonEntropy(withoutSeparators.length > 0 ? withoutSeparators : piece);
+  if (entropy >= 3.6) {
+    return { entropy };
+  }
+  return null;
+}
+
+interface SlashPieceMatch {
+  readonly offset: number;
+  readonly length: number;
+  readonly entropy: number;
+}
+
+/**
+ * LOG-F1: a `/`-joined compound (a relative doc link, a filesystem path) is
+ * decomposed into its `/`-delimited pieces and scored piece by piece — the
+ * same decomposition principle a URL's own path segments already get (see
+ * `urlComponentSpans`) — so a long ordinary path is never flagged purely
+ * because its TOTAL length crosses the entropy floor; only a PIECE that is
+ * itself secret-shaped narrows the eventual match down to itself.
+ */
+function firstQualifyingSlashPiece(head: string): SlashPieceMatch | null {
+  let offset = 0;
+  for (const piece of head.split("/")) {
+    if (piece.length > 0) {
+      const found = labelledPieceQualifies(piece);
+      if (found !== null) {
+        return { offset, length: piece.length, entropy: found.entropy };
+      }
+    }
+    offset += piece.length + 1; // +1 for the '/' separator itself.
+  }
+  return null;
+}
+
 export function detectEntropy(content: string): DetectorMatch[] {
   const matches: DetectorMatch[] = [];
   const urlSpans = findUrlSpans(content);
@@ -511,7 +830,11 @@ export function detectEntropy(content: string): DetectorMatch[] {
 
   // LABEL=VALUE assignments (review round 3) — see `LABEL_ASSIGNMENT_RE`'s own
   // comment. Skipped inside a URL span: a query's `key=value` pair is already
-  // handled, label-free, by the component pass above.
+  // handled, label-free, by the component pass above. The label is satisfied
+  // by construction (the regex only matches with one present), so this is a
+  // LABELLED path — SEC-F3 (review round 3) — and goes through
+  // `labelledPieceQualifies`, never `bareShapeQualifies`, so a value dressed
+  // as a word slug gets no exemption here either.
   LABEL_ASSIGNMENT_RE.lastIndex = 0;
   let am: RegExpExecArray | null;
   while ((am = LABEL_ASSIGNMENT_RE.exec(content)) !== null) {
@@ -524,9 +847,9 @@ export function detectEntropy(content: string): DetectorMatch[] {
     if (urlSpans.some((u) => start < u.end && end > u.start)) {
       continue;
     }
-    const { qualifies, entropy } = bareShapeQualifies(value);
-    if (qualifies) {
-      matches.push(buildMatch(start, end, value, entropy));
+    const found = labelledPieceQualifies(value);
+    if (found !== null) {
+      matches.push(buildMatch(start, end, value, found.entropy));
     }
   }
 
@@ -547,33 +870,44 @@ export function detectEntropy(content: string): DetectorMatch[] {
     if (matches.some((existing) => start < existing.end && end > existing.start)) {
       continue;
     }
+    // LOG-F1: the label must be genuinely ADJACENT — the label word, its
+    // continuation, then only quotes/`:`/`=`/whitespace before the value —
+    // checked BEFORE shape now, for two reasons. First, proximity anywhere in
+    // the 40-char window no longer labels ANYTHING (a same-line window was far
+    // too permissive once real prose/comments are the input, not a config
+    // line: a "Credential Masking" heading two sentences before an unrelated
+    // relative doc link, a noreply email's local part near an unrelated
+    // "key", a Python assignment near "the API.", a library-name comment near
+    // "password"). Second, SEC-F2 needs to know a label is already present
+    // before deciding whether an allow-shape should be overridden — the
+    // label look-back is bounded to the CURRENT LINE, unchanged from before:
+    // it used to run over raw offsets, so a "credential"/"key" word on the
+    // PREVIOUS line labelled this line's token. LOG-F2 (review round 3):
+    // `isAdjacentLabel` additionally recognises a bounded filler-word gap
+    // and an explicit cross-line continuation marker — see its own comment.
+    if (!isAdjacentLabel(content, start)) {
+      continue;
+    }
     // Every gate below judges the HEAD segment — the part that qualified as a
     // credential candidate on its own. A dotted tail rides along into the masked
     // span but never earns the match, so `identifier.someMethodName` cannot pass
     // a gate its head would fail.
     const head = TOKEN_HEAD.exec(value)?.[0] ?? value;
-    const { qualifies, entropy } = bareShapeQualifies(head);
-    if (!qualifies) {
+    if (head.includes("/")) {
+      const piece = firstQualifyingSlashPiece(head);
+      if (piece === null) {
+        continue;
+      }
+      const pieceStart = start + piece.offset;
+      const pieceEnd = pieceStart + piece.length;
+      matches.push(buildMatch(pieceStart, pieceEnd, content.slice(pieceStart, pieceEnd), piece.entropy));
       continue;
     }
-    // The label look-back is bounded to the CURRENT LINE. It used to run over
-    // raw offsets, so a "credential"/"key" word on the PREVIOUS line labelled
-    // this line's token — making redaction depend on unrelated neighbouring
-    // output, and the same string mask in one context but not another.
-    const before = lastLineOf(content.slice(Math.max(0, start - LABEL_WINDOW), start));
-    if (!SENSITIVE_LABEL.test(before)) {
+    const found = labelledPieceQualifies(head);
+    if (found === null) {
       continue;
     }
-    // Label present: an allow-shape is overridden (F-SEC-F2) only when the
-    // label is ADJACENT — the label word, its continuation, and nothing but a
-    // separator between it and this value (`token: <sha>`, `"api_key": "<uuid>"`).
-    // A label merely somewhere in the window does not: in a lockfile line
-    // `"path-key": ["path-key@3.1.1", "", {}, "sha512-…"]` the "key" names a
-    // package and the integrity string is public.
-    if (isAllowShapedValue(head) && !ADJACENT_LABEL.test(before)) {
-      continue;
-    }
-    matches.push(buildMatch(start, end, value, entropy));
+    matches.push(buildMatch(start, end, value, found.entropy));
   }
   return matches.sort((a, b) => a.start - b.start);
 }

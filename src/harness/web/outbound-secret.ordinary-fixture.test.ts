@@ -93,6 +93,19 @@ const ORDINARY_URLS: string[] = [
   "https://ru.wikipedia.org/wiki/%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0", // Москва (Moscow)
   "https://en.wikipedia.org/wiki/Special:Random",
   "https://en.wikipedia.org/wiki/Byzantine_fault",
+
+  // REG-F1 (flow 355 review round 2): Medium's and GitHub Gist's common
+  // `<slug>-<hex-id>` URL convention — a public post/gist id, not a secret.
+  // The Medium URL is the EXACT one already linked from this repo's own
+  // docs/requirements/keryx-wiki-graph-next/README.md.
+  "https://medium.com/real-time-data-evolution/rag-architecture-in-2026-how-to-keep-retrieval-actually-fresh-3a9bae9ec8f9",
+  "https://gist.github.com/someuser/keryx-audit-remediation-notes-3a9bae9ec8f9",
+
+  // REG-F2 (flow 355 review round 3): a Gist's REAL, common shape — a bare
+  // 32-hex id, not a word slug with a hex tail — plus a plain GitHub commit
+  // URL, both from the reviewer's own repro.
+  "https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890",
+  "https://github.com/owner/repo/commit/0123456789abcdef0123456789abcdef01234567",
 ];
 
 // DOCUMENTED DECISION (not a bug): a Google Docs/Drive file id is
@@ -128,7 +141,19 @@ describe("ordinary outbound fixture (flow 355 review round 2): 60+ realistic url
   // above). Excluded from the redaction assertion and reported separately
   // rather than silently patched in an unrelated detector this flow does not
   // own.
-  const REDACTION_EXCEPTIONS = new Set(["https://arxiv.org/abs/2103.00020"]);
+  // REG-F2 (flow 355 review round 3): the Gist's bare-hex32-id shape is an
+  // OUTBOUND-only exemption (`outbound-secret.ts`'s host+path allowlist) by
+  // design — `entropy.ts`'s redaction path (S-6/S-9) is deliberately
+  // unchanged, and an UNLABELLED 32-hex path segment is still caught there
+  // via the unconditional hex-blob branch (it is not a git-SHA/UUID/integrity
+  // allow-shape, so nothing exempts it there). This is the documented
+  // asymmetry stated in `outbound-secret.ts`'s own REG-F2 comment: a value
+  // already fetched costs nothing to identify later in tool output, while
+  // refusing an ordinary outbound fetch is a pure loss.
+  const REDACTION_EXCEPTIONS = new Set([
+    "https://arxiv.org/abs/2103.00020",
+    "https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890",
+  ]);
 
   test("none of them is redacted in tool output (arXiv id / pii.phone excepted — see comment)", () => {
     const redacted = ORDINARY_URLS.filter(
@@ -156,6 +181,10 @@ describe("crafted-secret recall (flow 355 review rounds 1 and 2): still caught a
     "https://x.example/c#K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI",
     "https://x.example/webhooks/K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI",
     "https://my-bucket.s3.amazonaws.com/r.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd",
+    // SEC-F1 (flow 355 review round 2): a real secret re-segmented into
+    // single-character-class chunks joined by '-' used to defeat `isWordSlug`'s
+    // shape check entirely.
+    "https://exfil.example/aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8",
   ];
 
   test("every round-1/round-2 crafted secret URL is still refused outbound", () => {
