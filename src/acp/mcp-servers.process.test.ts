@@ -226,9 +226,9 @@ describe("AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the r
       const use = callsOf(client, "use_tool");
       expect(use.announced).toHaveLength(1);
       const useAsks = asks.filter((ask) => askedTool(ask).name === "use_tool");
-      // Two: search_tool's result is third-party text (`untrusted`), so the
-      // taint gate asks first, then use_tool's own `destructive` risk asks.
-      expect(useAsks).toHaveLength(2);
+      // One prompt covers both search_tool's untrusted output and
+      // use_tool's own destructive risk for this exact call.
+      expect(useAsks).toHaveLength(1);
       for (const ask of useAsks) expect(askedTool(ask).toolCallId).toBe(use.announced[0]?.toolCallId);
       // T13 finding 6: every `use_tool` call shares one title, so a client
       // remembering "always" by title would approve EVERY tool of every client
@@ -320,11 +320,9 @@ describe("AC3/AC5/AC6/AC7 — a client's stdio MCP server, end to end over the r
 
 describe("untrusted MCP output, then a gated local call (approve-before-announce, now reachable over ACP)", () => {
   // `use_tool`'s result is `untrusted: true`, which latches the turn's taint
-  // gate: the NEXT non-read call is asked BEFORE `onToolCall` announces it
-  // (`commands/agent.ts`), then asked again by its own risk branch. Flow 285
-  // made `agent-io.ts` announce such a call once and let the later
-  // `onToolCall` adopt it; that path had no live caller over ACP until client
-  // MCP servers existed. These pin it over the real pipe.
+  // gate: the NEXT non-read call needs one human approval combined with
+  // its normal risk gate (`commands/agent.ts`). ACP still announces the
+  // call once and closes that same id after the answer, over the real pipe.
   const rounds = (marker: string): FixtureRound[] => [
     toolRound("u1", "use_tool", { tool_name: ECHO_FQN, tool_input: { text: "tainting" } }),
     toolRound("x1", "shell_exec", { command: `touch ${marker}` }),
@@ -344,8 +342,8 @@ describe("untrusted MCP output, then a gated local call (approve-before-announce
       expect(shell.announced).toHaveLength(1);
       const id = shell.announced[0]?.toolCallId;
       const shellAsks = asks.filter((ask) => askedTool(ask).name === "shell_exec");
-      // Two asks — the taint gate's, then the shell risk branch's — both on the one id.
-      expect(shellAsks).toHaveLength(2);
+      // One ask covers both the untrusted origin and the shell risk on this id.
+      expect(shellAsks).toHaveLength(1);
       for (const ask of shellAsks) expect(askedTool(ask).toolCallId).toBe(id);
       expect(shell.closed).toHaveLength(1);
       expect(shell.closed[0]?.toolCallId).toBe(id);

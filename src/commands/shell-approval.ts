@@ -51,6 +51,7 @@ export type ShellApprovalEval = {
    * `publishLease`) it is never remembered even if the caller offered to.
    */
   hookAsk: boolean;
+  untrustedOrigin: boolean;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -83,6 +84,7 @@ export function evaluateShellApproval(input: {
   const publishLease = input.meta?.publishLease === true;
   const publishLeaseDetail = input.meta?.publishLeaseDetail;
   const hookAsk = input.meta?.hookAsk === true;
+  const untrustedOrigin = input.meta?.untrustedOrigin === true;
   const audit = io.loadAudit();
   for (const pattern of audit.permissions.allow) {
     input.sessionAllow.add(pattern);
@@ -94,6 +96,7 @@ export function evaluateShellApproval(input: {
     !sacReviewConfirmation &&
     !publishLease &&
     !hookAsk &&
+    !untrustedOrigin &&
     isShellCommandAllowed(command, [...input.sessionAllow]);
   return {
     command,
@@ -103,6 +106,7 @@ export function evaluateShellApproval(input: {
     publishLease,
     ...(publishLeaseDetail !== undefined ? { publishLeaseDetail } : {}),
     hookAsk,
+    untrustedOrigin,
     autoApprove,
     rejected: audit.rejected,
     tampered,
@@ -156,6 +160,9 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   }
   if (evaled.hookAsk) {
     lines.push("a policy hook asked about this call — will not be remembered");
+  }
+  if (evaled.untrustedOrigin) {
+    lines.push("follows untrusted external content — will not be remembered");
   }
   if (evaled.publishLease) {
     // Flow 275 F1 (specification §4.4): name the lease's holder and reason

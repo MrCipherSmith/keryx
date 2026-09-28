@@ -296,6 +296,9 @@ test("shouldAutoApproveReadOnlySpawn: hookAsk overrides the read_only fast path 
   // A `PreToolUse` hook tightened THIS spawn to `ask` — must not be waved
   // through, exactly like `publishLease`/`credentials` never are.
   expect(shouldAutoApproveReadOnlySpawn("read_only", true)).toBe(false);
+  // A tainted call needs the operator even when the child is read-only.
+  expect(shouldAutoApproveReadOnlySpawn("read_only", false, true)).toBe(false);
+  expect(shouldAutoApproveReadOnlySpawn("read_only", false, false)).toBe(true);
   // `general` mode was never auto-approved and hookAsk changes nothing there.
   expect(shouldAutoApproveReadOnlySpawn("general", undefined)).toBe(false);
   expect(shouldAutoApproveReadOnlySpawn("general", true)).toBe(false);

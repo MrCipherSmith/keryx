@@ -6,6 +6,11 @@ All notable changes to `keryx` are documented here. The format follows
 ## [0.3.19] — 2026-09-28
 
 ### Fixed
+- **Browser and other MCP tools no longer ask twice for the same call.**
+  One approval now covers both the tool's risk and untrusted external
+  content seen earlier in the turn, including ACP clients. `trust` still
+  asks for each destructive MCP call, and `auto` still asks after external
+  content; an approval cannot be reused for another call.
 - **`redactSensitiveText` now catches opaque high-entropy secrets, not just
   named patterns.** The one scrubber every tool output and web-fetched page
   goes through (`src/security/redact.ts`) ran only the pattern detectors; a

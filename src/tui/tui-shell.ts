@@ -1435,8 +1435,8 @@ export function isShellApproved(answer: string): boolean {
  * `publishLease`/`credentials` already get) is unit-testable without
  * mounting the whole TUI shell.
  */
-export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined): boolean {
-  return mode === "read_only" && hookAsk !== true;
+export function shouldAutoApproveReadOnlySpawn(mode: string, hookAsk: boolean | undefined, untrustedOrigin?: boolean): boolean {
+  return mode === "read_only" && hookAsk !== true && untrustedOrigin !== true;
 }
 
 /**
@@ -5083,7 +5083,7 @@ export async function launchTuiAgentShell(opts: {
         // shortcut. A `PreToolUse` hook that tightened THIS read_only spawn to
         // `ask` must actually reach the operator, exactly like the `general`
         // branch below, not be waved through by the read_only fast path.
-        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk)) {
+        if (shouldAutoApproveReadOnlySpawn(mode, meta?.hookAsk, meta?.untrustedOrigin)) {
           // Auto-approved without a prompt, so the transcript line is the ONLY
           // record that a child was started and at what privilege. It is not
           // dimmed: an auto-approval the user cannot notice is an auto-approval
@@ -5101,7 +5101,9 @@ export async function launchTuiAgentShell(opts: {
         const id = await chrome.withOverlay(() =>
           showComposerChoice(otui, r, chrome.dock, {
             title:
-              mode === "read_only" ? "Spawn read-only subagent? (policy hook asked)" : "Spawn general subagent?",
+              mode === "read_only"
+                ? meta?.hookAsk === true ? "Spawn read-only subagent? (policy hook asked)" : "Spawn read-only subagent? (follows untrusted content)"
+                : "Spawn general subagent?",
             subtitle: taskPreview,
             cancelId: "deny",
             onOpen: () => chrome.blurComposer(),
@@ -5419,7 +5421,7 @@ export async function launchTuiAgentShell(opts: {
           ev.publishLeaseDetail,
           // Flow 306 (W6 T9): never offer to remember while a `PreToolUse`
           // hook asked about this specific call.
-          ev.hookAsk,
+          ev.hookAsk || ev.untrustedOrigin,
         ),
       );
       input.focus();
