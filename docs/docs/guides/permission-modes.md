@@ -31,6 +31,27 @@ credential/permission files (`auth.json`, `permissions.json`,
 a compromised or confused turn cannot use `auto` mode to grant itself new
 authority.
 
+## Trusting one MCP tool for the session
+
+An MCP tool called through `use_tool` always counts as destructive, so it asks
+even under `trust`. In `trust` mode the prompt therefore also offers `T` (the
+TUI dock: "Trust this tool (this session)") next to approve and deny. It skips
+future prompts for that **exact** tool name, for this interactive session only —
+never a wildcard, never a whole server, and never written to disk. The model
+cannot add to it, and `/new` and resuming a session clear it.
+
+Two rules keep the grant from becoming a way around the approval gate:
+
+- **Bound to the tool's definition.** The grant remembers a fingerprint of the
+  tool's name, description and input schema as the server reported them when you
+  said yes. If a later call finds a different definition (or the tool is gone),
+  the grant is dropped and the call asks again.
+- **Not offered, and not honoured, next to untrusted content.** When the turn
+  already holds external content (a web result or any MCP tool result, including
+  one from the trusted tool itself), the call asks even for a trusted tool, and
+  the prompt does not offer `T` — it says why instead. The grant applies again
+  from the next turn.
+
 ## Setting the mode
 
 **One-shot, from the command line:**

@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.27] — 2026-09-28
+
+### Added
+- **Trust a single MCP tool for the rest of a shell session** (flow 359 hardens it) — in `trust` mode the `use_tool` approval prompt offers `T` (readline) / "Trust this tool (this session)" (TUI dock). The grant is the exact qualified tool name, lives only in memory for that interactive session, is cleared by `/new` and by resuming another session, and only a validated operator answer can add to it: the model cannot. A `PreToolUse` hook that asks still asks.
+
+### Security
+- **A trust grant never lifts the untrusted-content floor.** In a turn that holds external content (a web result, or any MCP tool result, the trusted tool's own included) a trusted tool asks like any other, the prompt does not offer `T`, and it says why. The grant applies again in the next turn.
+- **A trust grant is bound to the tool's definition, not only its name.** The session grant stores a fingerprint of the tool's name, description and input schema; if the server changes any of them, or the tool disappears, the grant is dropped and the call asks again.
+
 ## [0.3.26] — 2026-09-28
 
 ### Added

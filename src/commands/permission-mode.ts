@@ -112,7 +112,9 @@ export type ApprovalGateDecision = "auto" | "ask" | "deny";
  *     per-patch-target for `write`); a destructive action still asks.
  *     The agent driver has one narrowly scoped exception ABOVE this generic
  *     risk decision: a human-approved, session-only grant for an exact MCP
- *     FQN can bypass repeat `use_tool` prompts in `trust` mode.
+ *     FQN can bypass repeat `use_tool` prompts in `trust` mode. It is bound to
+ *     the tool's definition (a changed description or schema asks again) and
+ *     does not apply in a turn that holds untrusted external content.
  *   - `auto`  — bypass the prompt for everything except `credentials`. This
  *     is the deliberately dangerous mode (mirrors Claude Code's
  *     `bypassPermissions` / grok-build's yolo mode) — the caller is
