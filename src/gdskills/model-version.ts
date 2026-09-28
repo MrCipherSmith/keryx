@@ -27,6 +27,9 @@ const SHORT_DIGITS_TOKEN = /^\d{1,2}$/;
 /** 6-8 bare digits — a date/snapshot stamp (`20250514`), not a version, even though it also matches `BARE_DIGITS_TOKEN`. Always refused, whether it stands alone or (already impossible, since it is never "short") inside a run. */
 const DATE_LIKE_TOKEN = /^\d{6,8}$/;
 
+/** A snapshot stamp as a dated id ends with it (`-20250514`, `-250514`): exactly 8 or exactly 6 digits. Dropped before grouping so it cannot merge into the version run before it. */
+const TRAILING_DATE_TOKEN = /^(?:\d{8}|\d{6})$/;
+
 /**
  * A short numeric token immediately followed by the letter `o` (`4o` in
  * `gpt-4o`) — a vendor "numbered variant" id shape distinct from a dotted
@@ -181,10 +184,14 @@ function parseVersionGroup(group: VersionGroup): number | undefined {
  * version groups (no version present) or MORE than one (ambiguous — two
  * separate numeric runs elsewhere in the id) both yield `undefined` rather
  * than a guess, same as a single group whose own shape `parseVersionGroup`
- * does not trust (a date-like token, or a run longer than 3).
+ * does not trust (a date-like token, or a run longer than 3). A trailing
+ * snapshot date is ignored first, so `claude-sonnet-4-5-20250929` reads as 4.5.
  */
 export function parseModelVersion(modelId: string): number | undefined {
-  const groups = findVersionGroups(tokenize(modelId));
+  const tokens = tokenize(modelId);
+  const last = tokens.at(-1);
+  if (tokens.length > 1 && last !== undefined && TRAILING_DATE_TOKEN.test(last)) tokens.pop();
+  const groups = findVersionGroups(tokens);
   if (groups.length !== 1) return undefined;
   return parseVersionGroup(groups[0]!);
 }

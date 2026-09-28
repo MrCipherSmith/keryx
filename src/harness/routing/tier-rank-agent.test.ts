@@ -155,10 +155,64 @@ describe("the provider-backed agent", () => {
       runTurn: async () => {
         calls += 1;
         if (calls === 1) throw new Error("down");
-        return ok("{}");
+        return ok('{"order":["acme-terra","acme-luna","acme-sol"]}');
       },
     });
     await expect(agent(REQUEST)).rejects.toThrow("down");
-    await expect(agent({ ...REQUEST, candidates: [...REQUEST.candidates, { modelId: "acme-sol" }] })).resolves.toBe("{}");
+    await expect(agent({ ...REQUEST, candidates: [...REQUEST.candidates, { modelId: "acme-sol" }] })).resolves.toContain("acme-sol");
+  });
+
+  test("two concurrent calls for one catalogue run one turn", async () => {
+    let calls = 0;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const agent = createTierRankAgent({
+      runTurn: async () => {
+        calls += 1;
+        await gate;
+        return ok('{"order":["acme-terra","acme-luna"]}');
+      },
+    });
+    const first = agent(REQUEST);
+    const second = agent(REQUEST);
+    release();
+    expect(await first).toBe(await second);
+    expect(calls).toBe(1);
+  });
+
+  test("an unusable answer is remembered like a failure and not re-requested inside the window", async () => {
+    for (const text of ['{"order": ["acme-terra", "acme-lu', "not json at all", '{"order":["acme-luna"]}', '{"order":["ghost-1","ghost-2"]}']) {
+      let calls = 0;
+      let clock = 1_000;
+      const agent = createTierRankAgent({
+        now: () => clock,
+        runTurn: async () => {
+          calls += 1;
+          return ok(text);
+        },
+      });
+      await expect(agent(REQUEST)).rejects.toThrow("unusable answer");
+      await expect(agent(REQUEST)).rejects.toThrow("remembered");
+      expect(calls).toBe(1);
+      clock += RANK_FAILURE_MEMO_MS + 1;
+      await expect(agent(REQUEST)).rejects.toThrow("unusable answer");
+      expect(calls).toBe(2);
+    }
+  });
+
+  test("the request's signal and base URL reach the turn", async () => {
+    const seen: { signal?: AbortSignal | undefined; baseUrl?: string | undefined }[] = [];
+    const agent = createTierRankAgent({
+      runTurn: async (input) => {
+        seen.push({ signal: input.signal, baseUrl: input.baseUrl });
+        return ok('{"order":["acme-terra","acme-luna"]}');
+      },
+    });
+    const controller = new AbortController();
+    await agent({ ...REQUEST, signal: controller.signal, baseUrl: "http://localhost:9/v1" });
+    expect(seen[0]!.signal).toBe(controller.signal);
+    expect(seen[0]!.baseUrl).toBe("http://localhost:9/v1");
   });
 });

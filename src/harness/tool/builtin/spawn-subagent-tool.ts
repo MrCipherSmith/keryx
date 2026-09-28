@@ -1058,6 +1058,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           agent: deps.tierRank.agent,
           ...(deps.tierRank.cache !== undefined ? { cache: deps.tierRank.cache } : {}),
           ...(tierPrices !== undefined ? { prices: tierPrices } : {}),
+          ...(parent.baseUrl !== undefined ? { baseUrl: parent.baseUrl } : {}),
         });
         if (tierResolution.source === "agent-ranked") {
           tierMap = applyTierResolution(tierMap, tierResolution);

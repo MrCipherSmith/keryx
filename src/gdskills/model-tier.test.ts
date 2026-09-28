@@ -38,6 +38,7 @@ import {
   MODEL_TIERS,
   parseModelTier,
   parseRankAnswer,
+  RANK_MAX_CANDIDATES,
   parseSkillModelTier,
   rankCatalogueHash,
   rankDiscoveredModels,
@@ -1127,5 +1128,59 @@ describe("flow 358 AC6 — agent-ranked is a recorded resolution source", () => 
     expect(
       await validateJson({ ...dispatch, model: { ...decision, tier_resolution: "guessed" } }, schema),
     ).not.toEqual([]);
+  });
+});
+
+describe("flow 358 review — dated ids, timeout abort, candidate cap", () => {
+  test("a dated Opus 4.1 session never resolves deep to a dated Opus 4, and a dated 4 session moves up to 4.1", () => {
+    const opus41 = "claude-opus-4-1-20250805";
+    const opus4 = "claude-opus-4-20250514";
+    const both = claude(opus41, opus4, "claude-sonnet-4-5-20250929");
+    expect(resolveTierModel(on(opus41), "deep", both).modelId).toBe(opus41);
+    const up = resolveTierModel(on(opus4), "deep", both);
+    expect(up.modelId).toBe(opus41);
+    expect(up.reasonId).toBe("picked-newer-generation");
+    expect(rankDiscoveredModels(on(opus41), both).ranked[0]!.modelId).toBe(opus41);
+  });
+
+  test("the request carries a signal that is aborted when the call times out, and the base URL", async () => {
+    let seen: TierRankRequest | undefined;
+    const agent: TierRankAgent = (request) => {
+      seen = request;
+      return new Promise<string>(() => {});
+    };
+    const resolved = await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, {
+      agent,
+      timeoutMs: 20,
+      baseUrl: "http://localhost:9/v1",
+    });
+    expect(resolved.reasonId).toBe("agent-failed");
+    expect(seen!.baseUrl).toBe("http://localhost:9/v1");
+    expect(seen!.signal).toBeDefined();
+    expect(seen!.signal!.aborted).toBe(true);
+  });
+
+  test("the signal stays live while the call is within its time", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent });
+    expect(requests[0]!.signal!.aborted).toBe(false);
+  });
+
+  test("a 60-model catalogue shows the agent at most the cap, keeping the session model and the largest classes", async () => {
+    // The session model names no size word, so the ranking is refused and the agent is asked.
+    const filler = Array.from({ length: 57 }, (_, i) => `acme-m${String(i).padStart(2, "0")}`);
+    const models = ["acme-opus-2", "acme-sonnet-2", "acme-zeta", ...filler];
+    const session = { providerId: "acme", modelId: "acme-zeta" };
+    const { agent, requests } = fakeAgent(orderOf("acme-opus-2", "acme-sonnet-2", "acme-zeta"));
+    await resolveTierModelWithAgent(session, "deep", [{ name: "acme", models }], { agent });
+    const request = requests[0]!;
+    expect(request.candidates.length).toBeLessThanOrEqual(RANK_MAX_CANDIDATES);
+    expect(request.candidates.length).toBe(RANK_MAX_CANDIDATES);
+    const ids = request.candidates.map((c) => c.modelId);
+    expect(ids).toContain("acme-zeta");
+    expect(ids).toContain("acme-opus-2");
+    expect(ids).toContain("acme-sonnet-2");
+    const listed = JSON.parse(request.prompt.split("Models: ")[1]!) as unknown[];
+    expect(listed.length).toBe(RANK_MAX_CANDIDATES);
   });
 });

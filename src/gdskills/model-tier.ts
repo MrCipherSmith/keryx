@@ -861,6 +861,10 @@ export interface TierRankRequest {
   readonly runOn: { readonly providerId: string; readonly modelId: string };
   /** The full prompt, built by {@link buildRankPrompt}; a host may send it as is. */
   readonly prompt: string;
+  /** Aborted when the call times out, so a host stops the paid turn instead of only waiting less. */
+  readonly signal?: AbortSignal | undefined;
+  /** The session provider's base URL when it has one; the agent runs on the same provider. */
+  readonly baseUrl?: string | undefined;
 }
 
 /** The agent port: raw answer text in, raw text out. Validation is this module's job. */
@@ -879,13 +883,40 @@ export interface TierAgentOptions {
   readonly prices?: ModelPrices | undefined;
   /** Upper bound on one agent call. Default {@link RANK_AGENT_TIMEOUT_MS}. */
   readonly timeoutMs?: number | undefined;
+  /** The session provider's base URL, handed to the agent so its turn goes to the same endpoint. */
+  readonly baseUrl?: string | undefined;
 }
 
 /** The bound on one agent call: a dispatch must never hang on a ranking helper. */
 export const RANK_AGENT_TIMEOUT_MS = 20_000;
 
+/** The most candidates one ranking call shows the agent; its answer is capped at a few hundred tokens, so a bigger list could never be answered in full. */
+export const RANK_MAX_CANDIDATES = 24;
+
 /** Bumped when the prompt or answer contract changes, so an old cached order is never reused. */
 const RANK_CONTRACT_VERSION = 1;
+
+/** At most {@link RANK_MAX_CANDIDATES} ids: the session model, then the deterministic ranking's best (size class, then version), then unranked ids by name. */
+function capCandidates(ids: readonly string[], sessionModelId: string, ranking: ModelRanking): string[] {
+  if (ids.length <= RANK_MAX_CANDIDATES) return [...ids];
+  const byKey = new Map(ids.map((id) => [normaliseModelId(id), id] as const));
+  const sessionKey = normaliseModelId(sessionModelId);
+  const priority = [
+    sessionKey,
+    ...ranking.ranked.map((r) => normaliseModelId(r.modelId)),
+    ...[...byKey.keys()].sort(),
+  ];
+  const picked: string[] = [];
+  const taken = new Set<string>();
+  for (const key of priority) {
+    if (picked.length >= RANK_MAX_CANDIDATES) break;
+    const id = byKey.get(key);
+    if (id === undefined || taken.has(key)) continue;
+    taken.add(key);
+    picked.push(id);
+  }
+  return picked;
+}
 
 /** The candidate list the agent sees: discovered ids plus the session model, sorted, with prices. */
 function agentCandidates(
@@ -901,8 +932,9 @@ function agentCandidates(
     seen.add(key);
     ids.push(id);
   }
-  ids.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  return ids.map((modelId) => {
+  const kept = capCandidates(ids, session.modelId, ranking);
+  kept.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return kept.map((modelId) => {
     const price = priceOf(prices, modelId);
     return { modelId, inputPerMillion: price?.inputPerMillion, outputPerMillion: price?.outputPerMillion };
   });
@@ -1008,10 +1040,13 @@ export function parseRankAnswer(raw: unknown, allowed: readonly string[], sessio
   return { ok: true, order, dropped };
 }
 
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+function withTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms`)), ms);
+    timer = setTimeout(() => {
+      onTimeout();
+      reject(new Error(`timed out after ${ms} ms`));
+    }, ms);
   });
   return Promise.race([work, timeout]).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
@@ -1077,6 +1112,7 @@ export async function resolveTierWithAgent(
   }
 
   if (order === undefined) {
+    const controller = new AbortController();
     const request: TierRankRequest = {
       providerId: session.providerId,
       sessionModel: session.modelId,
@@ -1084,12 +1120,15 @@ export async function resolveTierWithAgent(
       candidates,
       runOn,
       prompt: buildRankPrompt(candidates),
+      signal: controller.signal,
+      ...(options.baseUrl !== undefined ? { baseUrl: options.baseUrl } : {}),
     };
     let answer: string;
     try {
       answer = await withTimeout(
         (async () => agent(request))(),
         options.timeoutMs ?? RANK_AGENT_TIMEOUT_MS,
+        () => controller.abort(),
       );
     } catch (error) {
       return failed(errorText(error));

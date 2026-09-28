@@ -20,6 +20,7 @@ import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, writeOwnerOnlyFileAtomic } from "../../lib/config-dir";
 import { withFileLock } from "../../lib/fs";
 import {
+  parseRankAnswer,
   rankCatalogueHash,
   type ModelPrices,
   type TierRankAgent,
@@ -38,7 +39,7 @@ const CACHE_LOCK = { timeoutMs: 3_000, retryMs: 15, staleMs: 10_000 } as const;
 /** Output budget for one ranking answer: a JSON list of ids is a few hundred tokens at most. */
 const RANK_MAX_OUTPUT_TOKENS = 512;
 
-/** How long a failed ranking is remembered in this process, so a dead provider is asked once, not per dispatch. */
+/** How long a failed or unusable ranking is remembered in this process, so a dead or unhelpful provider is asked once, not per dispatch. */
 export const RANK_FAILURE_MEMO_MS = 5 * 60_000;
 
 const RANK_SYSTEM_PROMPT =
@@ -146,22 +147,20 @@ export interface TierRankAgentDeps {
 /**
  * The real agent: one provider turn on `request.runOn`, which the module already
  * resolved to the light tier of the session's own provider. It throws on a missing
- * credential or a provider error — the module turns any throw into "the session
- * model stays" — and remembers a failure for {@link RANK_FAILURE_MEMO_MS} in this
- * process so a dead or credential-less provider costs one attempt, not one per
- * dispatch.
+ * credential, a provider error or an UNUSABLE answer (malformed, truncated, not
+ * placing the session model, foreign ids only) — the module turns any throw into
+ * "the session model stays". Any such outcome is remembered for
+ * {@link RANK_FAILURE_MEMO_MS} in this process, and concurrent calls for one
+ * catalogue share a single turn, so a dead, credential-less or unhelpful provider
+ * costs one attempt, not one per dispatch.
  */
 export function createTierRankAgent(deps: TierRankAgentDeps = {}): TierRankAgent {
   const run = deps.runTurn ?? runModelTurn;
   const now = deps.now ?? Date.now;
   const failures = new Map<string, { at: number; message: string }>();
+  const inFlight = new Map<string, Promise<string>>();
 
-  return async (request: TierRankRequest): Promise<string> => {
-    const key = rankCatalogueHash(request.providerId, request.candidates);
-    const failed = failures.get(key);
-    if (failed !== undefined && now() - failed.at < RANK_FAILURE_MEMO_MS) {
-      throw new Error(`${failed.message} (remembered for this process)`);
-    }
+  const ask = async (request: TierRankRequest, key: string): Promise<string> => {
     try {
       const result = await run({
         ...deps.turnOptions,
@@ -172,16 +171,38 @@ export function createTierRankAgent(deps: TierRankAgentDeps = {}): TierRankAgent
         maxOutputTokens: RANK_MAX_OUTPUT_TOKENS,
         temperature: 0,
         requestId: "keryx-tier-rank",
+        ...(request.signal !== undefined ? { signal: request.signal } : {}),
+        ...(request.baseUrl !== undefined ? { baseUrl: request.baseUrl } : {}),
       });
       if (!result.credentialAvailable) throw new Error(`no credential for provider "${request.runOn.providerId}"`);
       if (result.error !== undefined) throw new Error(result.error.message ?? "the provider reported an error");
       if (result.text.trim().length === 0) throw new Error("the provider returned no text");
+      const checked = parseRankAnswer(
+        result.text,
+        request.candidates.map((c) => c.modelId),
+        request.sessionModel,
+      );
+      if (!checked.ok) throw new Error(`unusable answer: ${checked.error}`);
       return result.text;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      failures.set(key, { at: now(), message });
+      failures.set(key, { at: now(), message: error instanceof Error ? error.message : String(error) });
       throw error;
     }
+  };
+
+  return async (request: TierRankRequest): Promise<string> => {
+    const key = rankCatalogueHash(request.providerId, request.candidates);
+    const failed = failures.get(key);
+    if (failed !== undefined && now() - failed.at < RANK_FAILURE_MEMO_MS) {
+      throw new Error(`${failed.message} (remembered for this process)`);
+    }
+    const pending = inFlight.get(key);
+    if (pending !== undefined) return pending;
+    const started = ask(request, key).finally(() => {
+      inFlight.delete(key);
+    });
+    inFlight.set(key, started);
+    return started;
   };
 }
 
