@@ -2,6 +2,7 @@
 // Newest flow first. `[`/`]` switch flows; ↑/↓ scroll the active tab body.
 
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
+import { formatAcKindLines } from "./ac-kinds-surface";
 import { sortFlowsNewestFirst, type AcMarker, type FlowInspectorItem } from "./inspector-sources";
 
 export const FLOWS_COMMAND = "/flows";
@@ -265,6 +266,7 @@ export function presentFlows(
   let selected = 0;
   let listScroll = 0;
   let detailScroll = 0;
+  let acScroll = 0;
   let listNode: { content: string } | undefined;
   let detailNode: { content: string } | undefined;
   let acNode: { content: string } | undefined;
@@ -304,7 +306,9 @@ export function presentFlows(
     if (checking) {
       return ["Checking…", "", "Running `keryx flow check-ac` against the frozen criteria — this can take a few seconds."];
     }
-    const raw = item !== undefined ? formatAcCheckLines(item) : ["No flow selected."];
+    // Acceptance layer W0 (AC13): each criterion's verification kind and the
+    // freeze distribution line lead the tab, above the cached check markers.
+    const raw = item !== undefined ? [...formatAcKindLines(item), "", ...formatAcCheckLines(item)] : ["No flow selected."];
     const withError = checkError !== undefined ? [...raw, "", `Error: ${checkError}`] : raw;
     return wrapLines(withError.join("\n"), tabWidth).split("\n");
   };
@@ -320,7 +324,8 @@ export function presentFlows(
       detailNode.content = windowLines(detailLines(), detailScroll, bodyRows).join("\n");
     }
     if (acNode !== undefined) {
-      acNode.content = windowLines(acLines(), 0, bodyRows).join("\n");
+      acScroll = clampScroll(acScroll, acLines().length, bodyRows);
+      acNode.content = windowLines(acLines(), acScroll, bodyRows).join("\n");
     }
   };
 
@@ -334,6 +339,7 @@ export function presentFlows(
     }
     selected = clamped;
     detailScroll = 0;
+    acScroll = 0;
     paintSelection();
   };
 
@@ -355,7 +361,8 @@ export function presentFlows(
         return;
       }
       if (tabId === "ac") {
-        acNode = paintLines(otui, renderer, body, windowLines(acLines(), 0, bodyRows));
+        acScroll = clampScroll(acScroll, acLines().length, bodyRows);
+        acNode = paintLines(otui, renderer, body, windowLines(acLines(), acScroll, bodyRows));
         return;
       }
       detailScroll = clampScroll(detailScroll, detailLines().length, bodyRows);
@@ -436,6 +443,12 @@ export function presentFlows(
         } else {
           moveSelection(selected + 1);
         }
+        return;
+      }
+      if (handle.activeTab() === "ac" && (token === "pageup" || token === "pagedown")) {
+        const step = token === "pageup" ? -bodyRows : bodyRows;
+        acScroll = clampScroll(acScroll + step, acLines().length, bodyRows);
+        paintSelection();
         return;
       }
       if (onDetail && (token === "pageup" || token === "pagedown")) {

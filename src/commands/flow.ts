@@ -7,8 +7,10 @@ import {
   acCriterionKnown,
   confirmPreconditionError,
   createFlowService,
+  describeAcKind,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
+  renderAcKindDistribution,
   validateCriterionName,
 } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
@@ -714,6 +716,68 @@ async function runSimple(args: string[], action: "freeze" | "start" | "unblock")
   const id = requireId(args);
   const flow = await getService()[action]({ cwd: process.cwd(), id });
   console.log(`  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)}`);
+  if (action === "freeze") {
+    await printAcKindDistribution(process.cwd(), flow.id);
+  }
+}
+
+/**
+ * Acceptance layer W0: the kind distribution `flow freeze` prints after the
+ * freeze. REPORTS, NEVER REFUSES — it runs after the freeze has been written and
+ * swallows its own failures, so nothing about a kind (or a malformed marker) can
+ * change the outcome of the freeze that already happened.
+ */
+async function printAcKindDistribution(cwd: string, id: string): Promise<void> {
+  try {
+    const { report, errors } = await getService().acKinds({ cwd, id });
+    for (const line of renderAcKindDistribution(report)) {
+      console.log(`  ${style.dim(line)}`);
+    }
+    for (const error of errors) {
+      console.log(`  ${style.yellow(WARN)} ${error.id}: ${error.message} ${style.dim("(read as unclassified)")}`);
+    }
+    if (errors.length > 0) {
+      note(`\`keryx flow ac kinds ${id}\` names each malformed marker. The freeze went through: a kind never refuses one.`);
+    }
+  } catch {
+    // Reporting only. A failure to read the distribution must not turn a successful freeze into an error.
+  }
+}
+
+/**
+ * Acceptance layer W0: `keryx flow ac kinds <id> [--json]` — the distribution and
+ * the per-criterion kind, read from the flow's current criteria file. Read-only.
+ * Exits non-zero on a malformed marker (naming the criterion), zero otherwise;
+ * an `unclassified` criterion is not an error.
+ */
+async function runAcKinds(args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const { positionals } = parseAcArgs(
+    args.filter((arg) => arg !== "--json"),
+    "kinds",
+    [],
+    1,
+  );
+  const id = requireId(positionals);
+  const { report, errors } = await getService().acKinds({ cwd: process.cwd(), id });
+  if (errors.length > 0) {
+    process.exitCode = 1;
+  }
+  if (asJson) {
+    console.log(JSON.stringify({ ...report, errors }, null, 2));
+    return;
+  }
+  heading(`Flow ${report.flowId}: acceptance kinds`);
+  for (const [criterionId, record] of Object.entries(report.criteria)) {
+    console.log(`  ${style.bold(criterionId.padEnd(5))} ${describeAcKind(record)}`);
+  }
+  console.log("");
+  for (const line of renderAcKindDistribution(report)) {
+    console.log(`  ${line}`);
+  }
+  for (const error of errors) {
+    console.error(`${style.red(symbols.cross)} ${error.id}: ${error.message}`);
+  }
 }
 
 async function runTask(args: string[]): Promise<void> {
@@ -919,6 +983,9 @@ async function runAc(args: string[]): Promise<void> {
     }
     return;
   }
+  if (sub === "kinds") {
+    return await runAcKinds(args.slice(1));
+  }
   if (sub === "reseal") {
     const { positionals, values } = parseAcArgs(args.slice(1), "reseal", AC_RESEAL_FLAGS, 1);
     const id = requireId(positionals);
@@ -934,7 +1001,7 @@ async function runAc(args: string[]): Promise<void> {
     return;
   }
   throw new Error(
-    'Usage: keryx flow ac <confirm <id> <ACn> | update <id> --reason "<why>" [--criterion ACn --text "<criterion>"] | reseal <id> --reason "<why>"> ...',
+    'Usage: keryx flow ac <confirm <id> <ACn> | update <id> --reason "<why>" [--criterion ACn --text "<criterion>"] | reseal <id> --reason "<why>" | kinds <id> [--json]> ...',
   );
 }
 
@@ -1345,6 +1412,7 @@ function printHelp(): void {
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
+    "keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)",
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",

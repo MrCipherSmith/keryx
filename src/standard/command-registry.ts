@@ -520,6 +520,23 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   },
   {
     module: "tasks",
+    command: "flow ac kinds",
+    summary:
+      "Read a flow's acceptance-criteria.md and report each criterion's verification kind — exec, invariant, " +
+      "judged, none or unclassified — from its trailing `[verify: ...]` marker, with the distribution and the " +
+      "runnable coverage. Reads only: never gates, never runs a check, never calls a model. Exits 1 when a " +
+      "marker is malformed, naming the criterion; that criterion reads unclassified.",
+    intent: ["виды проверки критериев", "flow ac kinds", "acceptance criteria verification kinds", "ac coverage"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON, with the per-criterion records and any marker errors" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
+  },
+  {
+    module: "tasks",
     command: "flow complete",
     summary:
       "Run the completion gates (acceptance criteria, pull-request or main-merge, base branch, tasks, owner, " +

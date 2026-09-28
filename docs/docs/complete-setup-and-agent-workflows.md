@@ -656,6 +656,7 @@ entries.
 | `keryx flow ac confirm <id> <ACn> --note "<evidence>" [--signed-by "<name>"]` | Confirm an acceptance criterion; appends a signature. |
 | `keryx flow ac update <id> --reason "<reason>"` | Re-freeze changed criteria (as already edited). |
 | `keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<reason>"` | Rewrite/append one criterion's text, then re-freeze. |
+| `keryx flow ac kinds <id> [--json]` | Read-only: each criterion's verification kind (`exec`, `invariant`, `judged`, `none`, `unclassified`) from its trailing `[verify: ...]` marker, with the distribution and runnable coverage. Information only, never a gate. |
 | `keryx flow implemented <id> --pr <url>` | Record implementation and PR. |
 | `keryx flow complete <id> [--comment] [--signed-by "<name>"] [--confirm-token <token>]` | Run completion gates and finish; appends a completion signature. |
 | `keryx flow confirm <id>` | In a terminal: mint the confirmation token a flow created with `--require-confirmation` needs to complete. |

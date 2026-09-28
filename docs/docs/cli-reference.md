@@ -3220,6 +3220,7 @@ keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
+keryx flow ac kinds <id> [--json]
 keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
@@ -3238,7 +3239,7 @@ keryx flow schema [--out <path>]
 | `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, owner, latest signature, tasks, recent history. |
-| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
+| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
@@ -3250,6 +3251,7 @@ keryx flow schema [--out <path>]
 | `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
 | `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the only behaviour before flow 293). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
 | `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
+| `ac kinds <id>` | `--json` | Report each criterion's verification kind, the distribution and the runnable coverage, read from the criteria file (see [verification kinds](#verification-kinds)). Read-only, no model call; exits `1` when a marker is malformed, naming the criterion. |
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
@@ -3272,6 +3274,45 @@ When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci`/`gateway` mode can fail the gate and hold the flow in
 `in-progress`. The gate is omitted entirely when the module is disabled.
+
+### Verification kinds
+
+A criterion may end with one trailing marker that says how it is verified. The
+marker is part of the criterion line, so the freeze checksum covers it:
+
+```markdown
+- AC1: the parser rejects two markers [verify: exec `bun test src/flow/ac-kinds-errors.test.ts`]
+- AC2: no code path refuses a freeze on a kind [verify: invariant `bun test src/flow/ac-kinds-never-gates.test.ts`]
+- AC3: the wording is clear to a new reader [verify: judged]
+- AC4: the release is announced [verify: none — a person posts it]
+```
+
+| Kind | Meaning |
+|---|---|
+| `exec` | a command whose exit code decides the criterion |
+| `invariant` | a command that must keep passing after the work |
+| `judged` | a person reads the evidence |
+| `none` | honestly unverifiable; the reason is required |
+| `unclassified` | no marker — every criterion written before kinds existed |
+
+Rules the parser keeps: a marker inside a code span is prose, not a marker; two
+markers outside code are an error; the marker must be the last thing on the line
+and close with `]`. An unmarked criterion is `unclassified`, never `none` — a
+missing decision is not a decision that nothing can be checked.
+
+`acKinds` on `flow.json` is **derived** from `acceptance-criteria.md` at
+`flow freeze` and `flow ac update`; the file stays the source of truth. A flow
+frozen before kinds existed has no `acKinds`, which reads as fully unclassified
+(not as zero criteria). A kind is **information only**: it never refuses a
+freeze, a confirmation or a completion, and it never makes a step mandatory.
+`flow check-ac` strips the marker before it looks at a criterion's wording.
+
+Where it shows up: the distribution block printed by `flow freeze`;
+`flow ac kinds <id> [--json]` (exit `1` naming the criterion on a malformed
+marker); an `acceptance coverage` line per flow in `keryx governance report`
+(a flow with no `acKinds` counts as fully unclassified); and the AC tab of the
+TUI `/flows` modal, one row per criterion under the distribution block
+(`PgUp`/`PgDn` scroll it).
 
 ### `flow check-ac`
 

@@ -90,7 +90,9 @@ otuiTest("AC3: header shows generated_at/filters/all_projects; ↑/↓/j/k scrol
     await settle(h);
     expect(modal!.visibleLines()[0]).toBe(allLines[1 + bodyRows]);
     // Far past the end: clamped so the LAST line is visible on the last row.
-    for (let i = 0; i < 20; i += 1) h.mockInput.pressKey(PAGE_DOWN);
+    // (The report gained an acceptance-coverage line per flow, so 20 pages no
+    // longer reach the end; press enough to be far past it whatever its length.)
+    for (let i = 0; i < 60; i += 1) h.mockInput.pressKey(PAGE_DOWN);
     await settle(h);
     expect(modal!.visibleLines().at(-1)).toBe(allLines.at(-1));
     expect(modal!.visibleLines()).toHaveLength(bodyRows);

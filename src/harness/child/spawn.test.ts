@@ -406,6 +406,7 @@ function makeSpyFlowService(
     unblock: notImplemented("unblock", calls),
     check: notImplemented("check", calls),
     renumber: notImplemented("renumber", calls),
+    acKinds: notImplemented("acKinds", calls),
   };
   return { service, calls };
 }

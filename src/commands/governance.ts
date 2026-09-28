@@ -121,6 +121,10 @@ ledger (.metaproject/data/trigger/runs.jsonl). Never re-runs a gate, never
 calls a model or a network service. A figure nobody recorded is reported as
 "not recorded", never as zero.
 
+Each flow also shows its acceptance coverage: how many criteria are runnable
+(exec or invariant) of all of them. A flow frozen before verification kinds
+existed reads as fully unclassified, not as zero criteria.
+
 \`report\` writes .metaproject/data/governance/artifacts/latest.md and
 latest.json (schema-versioned), then prints the report. \`show\` reprints the
 most recently written report without regenerating it.

@@ -413,6 +413,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       unblock: notImplemented("unblock", calls),
       check: notImplemented("check", calls),
       renumber: notImplemented("renumber", calls),
+      acKinds: notImplemented("acKinds", calls),
     };
 
     const port = createTaskManagerFlowPort(service);

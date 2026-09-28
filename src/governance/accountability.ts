@@ -2,8 +2,9 @@
 // every `flow complete` attempt's gates decided. Pure projections over an
 // already-loaded `FlowState`; nothing here reads a file or calls a gate.
 
+import { readAcKindRecords, reportFromRecords } from "../flow/ac-kinds";
 import type { FlowState } from "../flow/types";
-import type { CriterionConfirmation, FlowConfirmations, FlowGateOutcomes } from "./types";
+import type { CriterionConfirmation, FlowAcceptance, FlowConfirmations, FlowGateOutcomes } from "./types";
 
 /**
  * AC3: join `acConfirmed` (which knows WHEN but never WHO) with `signatures`
@@ -51,6 +52,31 @@ export function summarizeConfirmations(flow: FlowState): FlowConfirmations {
             ...(completionSignature.confirmation ? { confirmation: completionSignature.confirmation } : {}),
           },
   };
+}
+
+/**
+ * Acceptance layer W0: verification-kind coverage from the DERIVED `acKinds`.
+ *
+ * An absent (or unreadable-shaped) `acKinds` is a flow frozen before kinds
+ * existed: it reads as FULLY `unclassified` over `criteriaInFile` criteria, never
+ * as zero criteria and never as `none`. `criteriaInFile` is what the caller
+ * counted in the criteria file; `undefined` means it could not be read, and the
+ * total stays `undefined` rather than becoming a zero.
+ */
+export function summarizeAcceptance(flow: FlowState, criteriaInFile: number | undefined): FlowAcceptance {
+  const records = readAcKindRecords(flow.acKinds);
+  if (records === undefined) {
+    const total = criteriaInFile;
+    return {
+      recorded: false,
+      frozen: flow.acChecksum !== null,
+      total,
+      counts: { exec: 0, invariant: 0, judged: 0, none: 0, unclassified: total ?? 0 },
+      runnable: 0,
+    };
+  }
+  const report = reportFromRecords(flow.id, records);
+  return { recorded: true, total: report.total, counts: { ...report.counts }, runnable: report.runnable };
 }
 
 /**
