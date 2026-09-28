@@ -1,6 +1,6 @@
 # Keryx Acceptance Layer
 
-Version: 0.2.0
+Version: 0.3.0
 
 ## Purpose
 
@@ -43,6 +43,9 @@ are unreliable" — did not survive contact with the data.
   kind rather than acquiring one at freeze.
 - An executable runner for the `exec` and `invariant` kinds, and the right to
   gate `flow ac confirm` — for those kinds only (W1).
+- A split of the PRD success contract into release criteria and outcome
+  criteria, so a package states what should change and not only what was built
+  (W5).
 
 ## Non-goals
 

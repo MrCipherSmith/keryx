@@ -1,6 +1,6 @@
 # Acceptance Layer — PRD
 
-Version: 0.1.0
+Version: 0.3.0
 
 ## Problem
 
@@ -37,6 +37,22 @@ number, the habit of *claiming* verification in prose grew from 4.9 % (flows
 it. The habit of *naming* what verifies the criterion did not move: 4.4 % then,
 5.0 % now. The discipline emerged on its own and stopped where it had nowhere to
 land. There is no field, no format, and nothing asks.
+
+
+### The same gap, one level up
+
+The corpus was also read at the level above a criterion. Every requirements
+package states success criteria, and sampling four of them —
+`keryx-p0-improvements`, `keryx-agent-bus`, `shared-agent-context-receipts-provenance`
+and `keryx-jev-router` — every criterion is a **release** criterion: three
+committed transcripts, the weekly job green twice, AC1–AC22 green, no regression
+in the suites, a restore under two seconds.
+
+Not one states what should change for the person the work is for. At the
+criterion level 26.8 % cannot be verified at all; at the package level the
+success criteria can all be verified and verify the wrong thing — that the
+artefact was built, not that it helped. The engineering acceptance here is
+stronger than common practice. The product acceptance is absent.
 
 ## Goal
 
@@ -106,7 +122,26 @@ The acceptance criteria in [specification.md](specification.md) carry their
 kinds. If the format is unpleasant to write, that is discovered here, before any
 code exists.
 
+
+### R6 — The PRD states outcome criteria as well as release criteria
+
+The PRD contract splits success into two lists.
+
+- **Release criteria** — what exists and passes. This is what the contract asks
+  for today and it stays unchanged.
+- **Outcome criteria** — what should change, for whom, and how it will be seen.
+  Each one names its observation, or declares `not measured — <reason>`.
+
+`not measured` is deliberate and mirrors the `none` kind: a package that cannot
+observe its outcome says so, rather than dressing a release criterion as one. A
+package whose outcome list is entirely `not measured` is valid and visible; a
+package with no outcome list at all is not.
+
+The docpack Verify phase gains the corresponding rule, beside R4's.
+
 ## Success criteria
+
+### Release criteria
 
 - Every criterion of the flow implementing W0 carries a kind, and at least one
   of each of the four kinds appears — including at least one honest `none`.
@@ -118,6 +153,19 @@ code exists.
   verification field, and that failure names the requirement.
 - Measurement 2 becomes possible: the share of criteria that received each kind,
   reported per flow.
+
+### Outcome criteria
+
+- The share of new criteria carrying a kind rises from 0 % to a majority within
+  ten flows. Observed by `flow ac kinds` across those flows.
+- At least one criterion in those ten is honestly `none`. Observed the same way.
+  Zero `none` means the escape hatch is being avoided for appearances, which is
+  a worse outcome than a low `exec` share.
+- A reader who did not write the flow can tell, without opening the criteria
+  file, which criteria were checked and which were accepted unverified.
+  `not measured — no instrument for this; it is a judgement a reader makes, and
+  the evidence is whether anyone asks for the criteria file after reading the
+  distribution.`
 
 ## Risks
 

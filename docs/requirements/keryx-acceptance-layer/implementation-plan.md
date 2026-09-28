@@ -1,10 +1,10 @@
 # Acceptance Layer — Implementation Plan
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Shape
 
-Five workstreams. Only W0 is implementation-ready. Each later workstream sits
+Six workstreams. Only W0 is implementation-ready. Each later workstream sits
 behind a decision gate that reads a measurement, not an opinion.
 
 | W | Workstream | Size | State |
@@ -14,6 +14,7 @@ behind a decision gate that reads a measurement, not an opinion.
 | W2 | `keryx eval` — a gate for probabilistic behaviour | medium | behind gate G2 |
 | W3 | Portable conformance report | medium | behind gate G1 |
 | W4 | docpack ↔ flow loop, and attachment to a ticket | large | behind gate G3 |
+| W5 | Outcome criteria in the PRD contract | small | ships with W0 |
 
 ## W0 — the only one to start now
 
@@ -31,6 +32,20 @@ Sequence inside the flow:
 
 Steps 1–3 are independently useful: if the flow stops there, the project has a
 parser, a report and a distribution, and nothing is half-built.
+
+## W5 — ships with W0, not after it
+
+W5 is a rule change in `requirements-package-standard.mdc` and one more check in
+the docpack Verify phase. It has no code and no gate of its own, and it belongs
+with W0 for one reason: both make an unverifiable thing declare itself rather
+than hide. Splitting them would ship half a principle.
+
+It is listed separately only because it is measured separately — the share of
+packages carrying a non-empty outcome list, before and after.
+
+There is no decision gate on W5. If outcome lists turn out to be universally
+`not measured`, that is itself the finding, and it is a finding worth having in
+writing rather than a reason to withdraw the rule.
 
 ## Decision gates
 

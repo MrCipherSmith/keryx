@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.18
+Version: 0.29.19
 
 ## Status
 
@@ -18,6 +18,20 @@ carrying the measurement that found it and the reason it was not done then.
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
 >
+> - **0.29.19**: `keryx-acceptance-layer` gains **W5** and the measurement
+>   scripts. Reading the corpus one level up — the requirements packages
+>   themselves — found the mirror of the criterion-level gap: sampling four PRDs,
+>   every stated success criterion is a RELEASE criterion (transcripts committed,
+>   jobs green, AC green, no regression, a restore under two seconds) and none
+>   states what should change for the person the work is for. At the criterion
+>   level 26.8% cannot be verified; at the package level the success criteria all
+>   can and verify the wrong thing. W5 splits the PRD success contract into
+>   release criteria and outcome criteria, each outcome naming its observation or
+>   declaring `not measured — <reason>`, mirroring the `none` kind. It ships with
+>   W0 and carries no decision gate: universally `not measured` outcome lists
+>   would themselves be the finding. Both baseline measurement scripts are now
+>   committed under the package's `tools/`, so the figures it quotes are
+>   reproducible rather than merely described.
 > - **0.29.18**: new package `keryx-acceptance-layer`, **draft — specification
 >   written, nothing implemented**. A declared verification kind per acceptance
 >   criterion (`exec`, `invariant`, `judged`, `none`), inside the sealed

@@ -1,6 +1,6 @@
 # Acceptance Layer — Specification
 
-Version: 0.1.0
+Version: 0.2.0
 
 ## Module identity
 
@@ -141,3 +141,5 @@ the implementing flow's journal.
 - AC8: `requirements-package-standard.mdc` states the per-requirement verification field, and the docpack Verify phase fails a package whose requirement omits it, naming that requirement [verify: judged]
 - AC9: The format proved workable in practice: the implementing flow's own criteria carry kinds, at least one is honestly `none`, and the journal records any line that was awkward to write [verify: none — a judgement about writing ergonomics, which no check can settle; the journal entry is the evidence and a human reads it]
 - AC10: `bun run typecheck` is clean and the full `src/flow` suite passes on the branch [verify: exec `bun run typecheck && bun test src/flow`]
+- AC11: `requirements-package-standard.mdc` splits the PRD success contract into release criteria and outcome criteria, states that an outcome criterion names its observation or declares `not measured — <reason>`, and the docpack Verify phase fails a package that has no outcome list while accepting one whose entries are all `not measured` [verify: judged]
+- AC12: This package's own PRD carries both lists, and its outcome list contains at least one entry that is honestly `not measured` with a reason [verify: exec `grep -q 'not measured —' docs/requirements/keryx-acceptance-layer/prd.md`]
