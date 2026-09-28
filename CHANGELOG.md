@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.26] — 2026-09-28
+
+### Added
+- **Google's Antigravity CLI (`agy`) ships as a third external agent, read-only** (flow 357) — a new registry row (`antigravity-cli`, label "Antigravity"), a line-stream codec (`src/harness/external/codec/antigravity-cli.ts`) parsing `agy -p --output-format stream-json`'s `init`/`step_update`/`result` events against a recorded live transcript, and an empty `EXTERNAL_RUNTIME_CREDENTIAL_ALLOW` entry (it has no API-key auth path — only its own subscription login under `HOME`). `worktree-write` is declared (the CLI supports it) and refused with `not-implemented`, same as every other line-stream agent today.
+- **`antigravity-cli` sits on the `/external` block-list by default and needs one-time consent before its first dispatch** — Google collects prompts and agent actions ("Interactions") by default, so `/external off` refuses a dispatch before anything spawns (the same `ExternalBlockedError` a blocked LLM provider already gets), and a TTY-only consent prompt, recorded once at `externalAgents.consent["antigravity-cli"]`, is required before the first run; a non-TTY dispatch with no recorded consent is refused with `consent-required` rather than assuming "yes". Both gates hold for a model-initiated dispatch (`/delegate`, `spawn_subagent`) as well as for `run`.
+- **A tool `agy` auto-denies in headless mode is reported as `Denied`, not as success** — measured live: `agy` reports `status: SUCCESS` with an empty answer and lists the refusal in `result.denied_actions`. keryx names each denied action and points at a `permissions.allow` rule in `agy`'s own settings; it never passes `--dangerously-skip-permissions`. Tool calls show up as tool events instead of unrecognised lines.
+- **`keryx agents external run` now drives line-stream (codec) agents, not only ACP ones** — `codex-cli`, `claude-cli` and `antigravity-cli` can all be run directly (`keryx agents external run <id> --task "…"`), not only delegated to from the interactive shell; `runExternalChild` already supported both transports, only this command's own early refusal did not.
+- **A real, recorded live run proves the `antigravity-cli` path end to end** — `fixtures/external/live/antigravity-cli/2026-09-28/keryx-run-ok.{outcome,versions}.json`, produced through `keryx agents external run antigravity-cli` itself (agy 1.2.12), completed with a schema-valid structured result and zero unrecognised transcript lines.
+
 ## [0.3.25] — 2026-09-28
 
 ### Fixed

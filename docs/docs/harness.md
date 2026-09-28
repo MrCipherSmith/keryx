@@ -174,16 +174,60 @@ keryx agents monitor <events-file>    # offline fleet report over a recorded log
 ## External children: a vendor CLI as a child agent
 
 keryx can hand a bounded, **read-only** piece of work to a coding CLI you already
-have installed — `codex exec` or `claude -p` — as a child of this same harness.
-The vendor's own client authenticates itself from its own configuration and does
-the work on your subscription; keryx supplies the isolation, the budget, the
-supervision and the completion. Two agents ship, described as data in one
-registry, with a pure codec each owning that CLI's argv, its event vocabulary and
-its failure classification.
+have installed — `codex exec`, `claude -p`, or Google's Antigravity CLI (`agy -p
+--output-format stream-json`) — as a child of this same harness. The vendor's own
+client authenticates itself from its own configuration and does the work on your
+subscription; keryx supplies the isolation, the budget, the supervision and the
+completion. Three line-stream agents ship this way, plus one ACP agent (below),
+described as data in one registry, with a pure codec each owning that CLI's argv,
+its event vocabulary and its failure classification.
 
-**Nothing here has ever been run against a real vendor process.** The whole layer
-is verified offline against recorded transcripts in `fixtures/external/`, on a
-machine with neither CLI installed.
+The whole layer is verified offline against recorded transcripts in
+`fixtures/external/`, on a machine with neither CLI installed; `antigravity-cli`
+additionally has one committed real run,
+`fixtures/external/live/antigravity-cli/2026-09-28/`, produced through
+`keryx agents external run antigravity-cli` itself, not by hand.
+
+#### `agy` — install, login, consent, data collection
+
+Google's Antigravity CLI is a third one-way line-stream agent, reached through
+its own documented headless print mode. It needs three things beyond the
+generic switch above before its first dispatch:
+
+1. **Install `agy`** and complete **one interactive login** — exactly the login
+   an operator would do to use it by hand. keryx never opens `~/.gemini/` or any
+   other Google credential store, not even to check whether a login exists; the
+   subscription is reached only by running your own logged-in binary.
+2. **One-time consent.** Google's Antigravity CLI sends prompts and agent
+   actions ("Interactions") to Google **by default**. The first dispatch, at a
+   real terminal, shows this plainly and asks you to accept it; the answer is
+   recorded once at `externalAgents.consent["antigravity-cli"]` in the keryx
+   user config and never asked again. A non-interactive dispatch with no
+   recorded consent is refused (`consent-required`) rather than assuming "yes"
+   on your behalf.
+3. **`antigravity-cli` ships on the `/external` block-list by default**
+   (`external-providers.json`), for the same reason as the consent text: Google
+   collects prompts and agent actions by default. `/external off` (or `keryx
+   external off`) refuses a dispatch to it before anything spawns, with the
+   same `ExternalBlockedError` a blocked LLM provider already gets.
+
+Both gates hold on every path that starts `agy`: `keryx agents external run`
+and a model-initiated dispatch (`/delegate`, `spawn_subagent`) alike. Only
+`run` at a real terminal can ask for consent; every other path refuses until
+it has been given once there.
+
+**Tools need an allow-rule in `agy`'s own settings.** Headless mode cannot ask
+you to approve a tool call, so `agy` auto-denies one (a shell command, for
+example) and still reports success, often with an empty answer. keryx reads
+the denials `agy` lists on its final result and reports the run as `Denied`,
+naming each denied action. To let a tool through, add a
+`permissions.allow` rule for it in `agy`'s `settings.json`. keryx never passes
+`--dangerously-skip-permissions`, even though `agy` suggests it.
+
+**Read-only only, same as the other two.** `worktree-write` is a registry-valid
+contract value `agy` itself supports, and this release refuses it with
+`not-implemented` — line-stream (codec) agents have no write path at all yet;
+only the ACP agent below does.
 
 ### Off by default, hard disabled where it matters
 
@@ -240,7 +284,9 @@ whole `CLAUDE_CODE_*` and `KERYX_*` namespaces, then every credential-shaped
 variable by the same shape rules an MCP server child gets (`SSH_AUTH_SOCK`,
 `GIT_ASKPASS`, cloud credential files, `GITHUB_TOKEN`, other providers' keys) —
 except the key the target CLI signs in with (`OPENAI_API_KEY` for Codex,
-`GEMINI_API_KEY`/`GOOGLE_API_KEY` for Gemini) — plus a nesting-depth marker added
+`GEMINI_API_KEY`/`GOOGLE_API_KEY` for Gemini). `agy` gets no exemption at
+all — it has no API-key auth path, only its own subscription login under
+`HOME`, so there is nothing to exempt it FROM. Plus a nesting-depth marker added
 afterwards and honoured **on entry**, so a keryx started from inside an external
 child refuses to start another. The tool roster is restricted: `claude` runs with
 `--tools Read Grep Glob`, an allow-list over the built-in roster rather than a
@@ -277,10 +323,12 @@ keryx agents external run <id> --task "<text>" [--unattended] [--write]
 ```
 
 `list` and `probe` are read-only and spend no quota — the only process either
-starts is `--version`. `run` drives an ACP agent (`transport: acp`, today
-`gemini-acp`) with keryx as its ACP **client**: a third transport beside the
-line-stream codecs and the codex MCP supervisor, on the same spawn seam,
-worktree and gates. Its permission questions go through keryx's approval gate
+starts is `--version`. `run` drives EITHER transport on the same spawn seam,
+worktree and gates: a line-stream (codec) agent (`codex-cli`, `claude-cli`,
+`antigravity-cli`) through its own codec, or an ACP agent (`transport: acp`,
+today `gemini-acp`) with keryx as its ACP **client** — a third transport beside
+the line-stream codecs and the codex MCP supervisor. Its permission questions go
+through keryx's approval gate
 with the mode lowered to `ask`, its `fs/*` requests are served by keryx inside
 the worktree, and its own internal tools stay outside keryx's view — see the
 [ACP client guide](./guides/acp-client.md). Full reference:

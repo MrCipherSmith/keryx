@@ -62,6 +62,36 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
       "`--allowed-tools`, which is a permission rule and does not restrict it).",
   },
   {
+    // Flow 357: Google's Antigravity CLI, driven headlessly through its own
+    // documented `-p --output-format stream-json` mode. keryx never touches a
+    // Google credential (README, `keryx-antigravity-agent`) — the subscription
+    // is reached only by running the operator's own logged-in `agy` binary.
+    id: "antigravity-cli",
+    label: "Antigravity",
+    binary: "agy",
+    detect: ["--version"],
+    // `agy --version` prints a bare `1.2.12`, no prefix — verified on 1.2.12.
+    versionPattern: "(\\d+\\.\\d+\\.\\d+)",
+    knownGoodRange: { min: "1.2.12" },
+    sandboxModes: ["read-only", "worktree-write"],
+    // `agy --help` documents `--input-format stream-json` for print mode, the
+    // same shape claude's steerable run uses. Declared true because the CLI
+    // itself supports it (this field records CLI capability, not what this
+    // release's codec implements — see the module doc above); the codec does
+    // not implement `buildStreamingArgv`/`encodeStdinMessage` yet because the
+    // NDJSON message shape that mode expects is unverified against a real run.
+    streamingInput: true,
+    // Resume handle is READ off `init.conversation_id`, never assigned by
+    // keryx — same shape as codex's `thread_id`.
+    resumable: true,
+    reportsCost: false,
+    budgetFlag: false,
+    notes:
+      "Headless print mode, official binary only; keryx never reads a Google credential. " +
+      "A tool call the operator cannot approve in a headless run leaves the turn `WAITING`, " +
+      "not a crash — classified as blocked-on-approval, not a failure of the CLI.",
+  },
+  {
     // Flow 292: keryx as an ACP CLIENT. No codec — the wire is two-way JSON-RPC,
     // driven by `superviseAcpRun`. `worktree-write` here means what it says: the
     // agent's writes that reach keryx over `fs/write_text_file` land in the

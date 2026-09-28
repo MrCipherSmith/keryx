@@ -1,0 +1,19 @@
+{
+  "agy": "1.2.12",
+  "keryx": "0.3.25",
+  "os": "linux",
+  "recordedAt": "2026-09-28",
+  "argv": [
+    "agy",
+    "-p",
+    "<prompt>",
+    "--output-format",
+    "stream-json",
+    "--sandbox",
+    "--print-timeout",
+    "120s"
+  ],
+  "prompt": "Reply with the single word OK and nothing else. Do not use any tools.",
+  "exit": 0,
+  "stderr": ""
+}

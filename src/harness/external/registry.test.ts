@@ -19,8 +19,8 @@ const CODEX = getExternalAgent("codex-cli") as ExternalAgentEntry;
 const CLAUDE = getExternalAgent("claude-cli") as ExternalAgentEntry;
 
 describe("registry shape", () => {
-  test("ships exactly the agents this release specifies: two codec agents and one ACP agent (flow 292)", () => {
-    expect(externalAgentIds()).toEqual(["codex-cli", "claude-cli", "gemini-acp"]);
+  test("ships exactly the agents this release specifies: three codec agents and one ACP agent (flow 176, 292, 357)", () => {
+    expect(externalAgentIds()).toEqual(["codex-cli", "claude-cli", "antigravity-cli", "gemini-acp"]);
   });
 
   test("every codec agent has a codec; the ACP agent has none and says so by transport", () => {

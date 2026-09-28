@@ -49,6 +49,10 @@ export interface ExternalProvidersConfig {
  *     vendors hosted under jurisdictions/terms where a prompt may be
  *     retained or trained on — connecting to them directly (not only via
  *     OpenRouter) sends the same private work just as surely.
+ *   - `antigravity-cli`: Google's Antigravity CLI (`agy`) — the external agent
+ *     runtime's registry id, not a keryx LLM provider (flow 357). Google
+ *     collects prompts and agent actions ("Interactions") by default once a
+ *     dispatch reaches it; `/external off` stops keryx sending it anything.
  *   - the `modelPatterns` vendor prefixes (`deepseek/*`, `minimax/*`,
  *     `z-ai/*`/`zhipu/*`/`glm/*`, `moonshotai/*`, `qwen/*`/`alibaba/*`,
  *     `baidu/*`, `tencent/*`, `bytedance/*`, `01-ai/*`): the SAME vendors,
@@ -77,6 +81,7 @@ export const DEFAULT_EXTERNAL_PROVIDERS_CONFIG: ExternalProvidersConfig = {
     { id: "zai", reason: "Z.AI (GLM) — direct API, prompts may be retained/trained on under its terms." },
     { id: "zai-coding", reason: "Z.AI GLM Coding Plan — same vendor/terms as \"zai\"." },
     { id: "moonshot", reason: "Moonshot (Kimi) — direct API, prompts may be retained/trained on under its terms." },
+    { id: "antigravity-cli", reason: "Google Antigravity CLI — Google collects prompts and agent actions (Interactions) by default." },
   ],
   modelPatterns: [
     { pattern: "deepseek/*", reason: "DeepSeek via OpenRouter — same vendor as the direct \"deepseek\" provider." },

@@ -13,6 +13,14 @@ Each run is recorded as a keryx session. keryx does **not** contain what the
 agent does with its own tools. The [limits](#what-keryx-cannot-control) section
 says exactly what that means.
 
+`keryx agents external run` also drives the other transport, one-way
+**line-stream** agents (`codex-cli`, `claude-cli`, `antigravity-cli`) through
+their own codec rather than two-way JSON-RPC — the same command, the same
+gates, but no MCP server offer and no permission bridge, because a line-stream
+agent never asks keryx anything mid-run. See [Harness → External children](../harness.md#external-children-a-vendor-cli-as-a-child-agent)
+for that path, and its `agy` (Antigravity CLI) subsection for the install,
+login, one-time consent and data-collection notes specific to that agent.
+
 !!! warning "The MCP server keryx hands the agent reads the whole real project"
     The agent works in a throwaway worktree, but the read-only MCP server keryx
     offers it is started for the **real project root**, not the worktree. Its

@@ -68,10 +68,17 @@ export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "./env-deny";
  * A subscription login is untouched by any of this: it lives in the CLI's own
  * config dir (`CODEX_HOME`, Claude's credential store, `gemini`'s), reached
  * through `HOME`/`PATH`, neither of which this module ever strips.
+ *
+ * `antigravity-cli` (flow 357) has NO entry, and none is coming: `agy` has no
+ * API-key auth path at all, only its own subscription login under `HOME`, so
+ * there is nothing to exempt it FROM — same reasoning as `claude-cli`'s
+ * absence above, restated here because a reader who only sees an empty list
+ * on the registry row should not have to guess whether that is an oversight.
  */
 export const EXTERNAL_RUNTIME_CREDENTIAL_ALLOW: Readonly<Record<string, readonly string[]>> = {
   "codex-cli": ["OPENAI_API_KEY"],
   "gemini-acp": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
+  "antigravity-cli": [],
 };
 
 /**

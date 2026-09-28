@@ -194,6 +194,13 @@ const DENIED_CAUSE_MARKERS: readonly RegExp[] = [
   /usage limit/i,
   /rate limit/i,
   /quota/i,
+  // Flow 357: antigravity-cli's `WAITING` status and its auto-denied tools — a
+  // permission decision the headless run cannot supply. That is "refused
+  // pending approval", the same class this list already names, not a crash.
+  // Matched on the exact parenthesised tag the antigravity codec writes, not
+  // on loose wording, so a codex or claude error that merely mentions waiting
+  // for approval stays `Error`.
+  /\(blocked on approval\)/,
 ];
 
 /** A refusal that happened before any process existed. */
@@ -437,6 +444,11 @@ export async function runExternalChild(
         // The inline form for claude, the staged file for codex — see
         // `resultSchemaInline` above.
         resultSchema: resultSchemaInline,
+        // Read only by antigravity-cli's own `--print-timeout` flag (flow
+        // 357); every other codec ignores it. Rounded UP so the CLI's own
+        // internal ceiling is never tighter than the wall-clock kill this
+        // runtime already enforces via `supervisionConfig.timeoutMs` below.
+        printTimeoutSeconds: Math.ceil(input.timeoutMs / 1000),
       };
 
       // Steerable when the caller asked AND this agent has a streaming shape.

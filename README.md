@@ -474,16 +474,23 @@ What is in it today:
   log (`keryx agents monitor <events-file>`).
 - **Vendor CLIs as child agents — off by default.** keryx can hand a bounded,
   **read-only** task to a coding CLI you already have installed (`codex exec`,
-  `claude -p`) and host it as a child of the same harness: a disposable git
+  `claude -p`, or Google's Antigravity CLI, `agy -p --output-format
+  stream-json`) and host it as a child of the same harness: a disposable git
   worktree, a stripped environment, a restricted tool roster, the same budget
   ledger and depth caps, and the same completion. `keryx agents external list`
-  shows the registry; `/delegate <agent> <task>` starts a run. It takes an
-  explicit opt-in in your own user config, and is hard disabled on a remote
-  transport and under CI. keryx never reads a vendor credential store — not even to check
-  whether you are logged in — so it reports *"installed … login not verified —
-  keryx cannot know"* rather than a tick. **No vendor sanction is claimed**, and
-  nothing here has yet been run against a real vendor process: the whole layer is
-  verified offline against recorded transcripts.
+  shows the registry; `keryx agents external run <id> --task "…"` or
+  `/delegate <agent> <task>` starts a run. It takes an explicit opt-in in your
+  own user config, and is hard disabled on a remote transport and under CI.
+  keryx never reads a vendor credential store — not even to check whether you
+  are logged in — so it reports *"installed … login not verified — keryx
+  cannot know"* rather than a tick. **No vendor sanction is claimed.**
+  `antigravity-cli` additionally sits on the `/external` block-list by default
+  (Google collects prompts and agent actions by default) and needs one-time
+  TTY consent before its first dispatch, recorded and never asked again; a
+  real recorded run lives under
+  `fixtures/external/live/antigravity-cli/2026-09-28/`, produced through
+  keryx's own `agents external run`. `codex-cli`/`claude-cli` remain verified
+  offline against recorded transcripts.
 - **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
