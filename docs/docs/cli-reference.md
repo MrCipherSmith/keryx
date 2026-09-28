@@ -3652,6 +3652,42 @@ absent routing table leaves every category on tier words alone. Both
 same block — nothing is written outside the project (no
 `~/.codex/config.toml` edit).
 
+#### How a tier becomes a model
+
+Tiers are anchored on the session model: `standard` is the session model, `deep`
+is a larger candidate above it, and `light` is the next size step below it. Size
+comes from the size words in the discovered ids, and version is a second axis:
+within one family and vendor a newer generation outranks an older one, and an
+older-generation model that is also pricier than the session model is never chosen
+for `deep`. The resolution source is recorded on every dispatch as
+`tier_resolution`:
+
+| Value | Meaning |
+|---|---|
+| `discovered` | Ranking worked and a model other than the session's was assigned. |
+| `session-ranked` | Ranking worked and the tier is the session model itself. |
+| `session-fallback` | Ranking was refused or ambiguous; the session model is kept, and `tier_reasons` says why. |
+| `agent-ranked` | The deterministic ranking could not settle the tier and the fallback agent ordered the candidates. |
+
+`tier_reasons` ends with a `resolve:<reason>` entry naming the rule that resolved
+the tier (for example `resolve:kept-older-generation-pricier`).
+
+**The agent fallback** runs only for a tier the deterministic ranking cannot settle.
+It compares candidate models; it never rates how hard a task is. It is shown
+discovered model ids and the prices from `model-profiles.json` (a missing price is
+left out, never sent as zero) and must answer JSON. Ids it was not shown are
+dropped, the session model must be placed in the order, and it can never put
+`standard` or `deep` below the session model. A failure, timeout (20 s) or malformed
+answer yields the session model. It runs on the light tier of the session's own
+provider, so no other provider is called. A validated order is cached in
+`tier-rank-cache.json` next to `model-profiles.json`, keyed by a hash of the
+catalogue; an unchanged catalogue makes zero further calls, and a failure is
+remembered in memory for five minutes rather than on disk.
+
+`keryx review tier` prints `tier_resolution` (including `agent-ranked`) and pins a
+model id only when the agent picked one other than the session's; the interactive
+shell's `spawn_subagent` records the same source and reason in its run-trace row.
+
 Disable it per project with `.metaproject/tasks.config.json`:
 
 ```json

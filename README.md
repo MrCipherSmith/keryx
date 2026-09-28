@@ -757,6 +757,24 @@ credential:
 - `keryx memory reflect --narrate` — a narrative summary of project memory
 - `keryx health explain <target> --narrate` — a readable explanation of a health result
 - `keryx wiki enrich` — model-written wiki pages (skips pages without a credential)
+- the model-tier fallback — when discovered model names alone cannot say which model
+  is bigger, one short call on the light tier of your own provider orders the
+  candidate models (see below)
+
+**Model tiers follow the session model and its generation.** `light`, `standard`
+and `deep` are anchored on the model your session runs: `standard` is that model,
+`deep` is the next size step above it, `light` the next size step below it (an Opus
+session with Sonnet and Haiku discovered gets Sonnet for light, Haiku only when
+nothing sits between). Within one family a newer version outranks an older one, and
+an older-generation model that costs more than the session model is never picked as
+`deep`. When the size words and versions cannot settle a tier (the ranking is refused,
+or the only larger candidate is an older generation), keryx asks a small fallback
+agent to order the candidates. It sees only the discovered model ids and the prices
+in your model profiles, never a task, a diff or your text. Its answer is validated
+(ids it was not given are dropped), cached by a hash of the catalogue, and recorded as
+`tier_resolution: agent-ranked`; a failure, timeout or malformed answer keeps the
+session model. `keryx review tier` prints the resolution, and the shell's tier row
+shows tier, source and reason for every dispatch.
 
 Semantic embeddings and ML security classifiers are not bundled in the current
 release. Memory search uses lexical retrieval, and security scanning uses

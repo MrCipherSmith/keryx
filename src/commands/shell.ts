@@ -53,6 +53,7 @@ import { catalogFingerprintResolver, catalogResolver, isMcpToolCall, promptUseTo
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createTierRankHost } from "../harness/routing/tier-rank-agent";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -3738,6 +3739,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           }
           return [...byName.values()];
         },
+        // Flow 358: when the size words and version cannot settle a `model_tier`
+        // (ranking refused, or only an older-generation larger class above the
+        // session), a one-shot call on this provider's light tier orders the
+        // discovered models. Its answer is cached on disk by catalogue hash and
+        // recorded as `agent-ranked`; any failure keeps the session model.
+        tierRank: createTierRankHost(),
         // Finding 1 fix: thread the LIVE getter through so a dispatched
         // subagent's Seeds/Anchors actually fold into this TUI session's
         // slate once it opens — `createSpawnSubagentTool` calls this at fold

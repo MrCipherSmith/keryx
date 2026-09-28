@@ -46,11 +46,17 @@ import { openSlate, type SlateSessionRef } from "../../../session/slate-lifecycl
 import { composeAbortSignals } from "../../../lib/abort-compose";
 import { withFileLock } from "../../../lib/fs";
 import {
+  applyTierResolution,
   buildTierMap,
   MODEL_TIERS,
   parseModelTier,
+  rankDiscoveredModels,
   resolveTierModel,
+  resolveTierWithAgent,
   type DiscoveredProvider,
+  type ModelPrices,
+  type TierRankAgent,
+  type TierRankCache,
 } from "../../../gdskills/model-tier";
 import type { ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
@@ -340,6 +346,19 @@ export interface SpawnSubagentToolDeps {
    * through rather than mapping it down to bare names.
    */
   getDetectedProviders: () => readonly { name: string; models?: readonly string[] }[];
+  /**
+   * Flow 358 — the tier-ranking agent fallback, all of it optional. Absent, a
+   * tier the size words and version cannot settle keeps the session model, exactly
+   * as before. Present, that one situation (ranking refused, or an older-generation
+   * larger class as the only candidate) asks `agent` — which compares discovered
+   * model ids and profile prices, never the task — and the answer is recorded as
+   * `agent-ranked`. `prices` supplies the session provider's profile prices.
+   */
+  tierRank?: {
+    agent: TierRankAgent;
+    cache?: TierRankCache;
+    prices?: (providerId: string) => ModelPrices;
+  };
   idSeq?: () => string;
   clock?: () => string;
   /** Parent run/session ids for MAE linkage (defaults generated once). */
@@ -1020,6 +1039,31 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
       }
       const dispatchModelRequest: ChildModelRequest | undefined =
         requestedTier !== undefined ? { kind: "tier", tier: requestedTier } : categoryModelRequest;
+      // The recording half of the same decision (dispatch schema
+      // `model.tier_resolution` / `model.model_discovery`): WHICH of the three
+      // outcomes produced the child's model, and what was on the table when it
+      // did. Derived from the same pure, deterministic resolution the map above
+      // is built from — same session, same catalogue, same answer — so the record
+      // cannot drift from the map that is actually applied.
+      let tierMap = buildTierMap(session, catalog);
+      const tierPrices = deps.tierRank?.prices?.(session.providerId);
+      let tierResolution =
+        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog, undefined, tierPrices);
+      if (requestedTier !== undefined && deps.tierRank !== undefined) {
+        // Flow 358: only reaches the agent when the deterministic answer is refused
+        // or ambiguous; every other dispatch resolves without a single extra call.
+        // A failure inside is a resolution too (the session model, with the reason),
+        // so nothing here can fail the dispatch.
+        tierResolution = await resolveTierWithAgent(session, requestedTier, rankDiscoveredModels(session, catalog), {
+          agent: deps.tierRank.agent,
+          ...(deps.tierRank.cache !== undefined ? { cache: deps.tierRank.cache } : {}),
+          ...(tierPrices !== undefined ? { prices: tierPrices } : {}),
+        });
+        if (tierResolution.source === "agent-ranked") {
+          tierMap = applyTierResolution(tierMap, tierResolution);
+        }
+      }
+
       const ctx: SubagentContext = {
         parentRunId,
         parentSessionId,
@@ -1037,18 +1081,9 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           // built. Total over the tier vocabulary by construction, so a
           // `{kind:"tier"}` request can never hit that resolver's fail-closed
           // `unknown model tier` denial.
-          tiers: buildTierMap(session, catalog),
+          tiers: tierMap,
         },
       };
-      // The recording half of the same decision (dispatch schema
-      // `model.tier_resolution` / `model.model_discovery`): WHICH of the three
-      // outcomes produced the child's model, and what was on the table when it
-      // did. Derived from the same pure, deterministic resolution the map above
-      // is built from — same session, same catalogue, same answer — so the record
-      // cannot drift from the map that is actually applied.
-      const tierResolution =
-        requestedTier === undefined ? undefined : resolveTierModel(session, requestedTier, catalog);
-
       const attemptId = idSeq();
       const branchId = idSeq();
       const reservationId = idSeq();
@@ -1115,7 +1150,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         tierResolution === undefined
           ? undefined
           : `model tier ${tierResolution.tier} → ${runModel.provider}/${runModel.model} ` +
-            `[${tierResolution.source}] ${tierResolution.reason}`;
+            `[${tierResolution.source}] ${tierResolution.reason}` +
+            (tierResolution.agent === undefined
+              ? ""
+              : ` (agent ${tierResolution.agent.trigger}, ran on ${tierResolution.agent.runOn.providerId}/${tierResolution.agent.runOn.modelId}, ` +
+                `${tierResolution.agent.cacheHit ? "cache hit" : "asked"}${tierResolution.agent.failure === null ? "" : `, failed: ${tierResolution.agent.failure}`})`);
       // --- External runtime seam (flow 176) ---------------------------------
       // Reached only when the dispatch asks for it AND the host wired the hook,
       // so every existing call site falls straight through. Read BEFORE the

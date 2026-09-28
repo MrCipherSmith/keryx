@@ -178,3 +178,33 @@ describe("reviewer-input requires prior findings on a fix round", () => {
     expect(errors.some((e) => e.path.includes("status"))).toBe(true);
   });
 });
+
+describe("flow 358 AC6 — the reviewer input accepts an agent-ranked model block", () => {
+  const agentRanked = (): Record<string, unknown> => {
+    const base = baseInput();
+    return {
+      ...base,
+      model: {
+        tier: "deep",
+        tier_reasons: ["base:standard", "floor:blast-radius", "resolve:agent-picked-above"],
+        provider: "acme",
+        model: "acme-sol",
+        tier_resolution: "agent-ranked",
+        model_discovery: {
+          provider: "acme",
+          candidates: ["acme-sol", "acme-terra", "acme-luna"],
+          ranked: [],
+          session_rank: null,
+          fallback_reason: "no size marker on the session model",
+        },
+      },
+    };
+  };
+
+  test("agent-ranked validates, and a spelling outside the enum is still refused", async () => {
+    expect(await validateJson(agentRanked(), SCHEMA)).toEqual([]);
+    const bad = agentRanked();
+    bad.model = { ...(bad.model as Record<string, unknown>), tier_resolution: "guessed" };
+    expect((await validateJson(bad, SCHEMA)).length).toBeGreaterThan(0);
+  });
+});

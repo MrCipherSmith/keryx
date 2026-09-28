@@ -57,13 +57,14 @@ candidate set. `src/gdskills/model-tier.ts` then:
 | Tier | Resolves to |
 |---|---|
 | `standard` | the session's model, always |
-| `deep` | the highest-ranked discovered model **strictly above** the session's, else the session's |
-| `light` | the lowest-ranked discovered model **strictly below** the session's, else the session's |
+| `deep` | the best discovered model **above** the session's — a larger size class, or a NEWER generation of the session model's own family — else the session's |
+| `light` | the **next size step below** the session's (an Opus-class session takes the Sonnet class, not the Haiku class), else the session's; the smallest class only when nothing sits between |
 
 Anchoring on the session model is what makes "never a downgrade" checkable
 rather than hoped for: a tier can only move away from the session model in the
 direction its own name points, and a candidate at the session's own rank is a
-lateral move and never taken.
+lateral move and never taken. An OLDER sibling of the session's own family is
+never `light` or `deep` either.
 
 ## What the hints are, and what they are not
 
@@ -83,13 +84,24 @@ residue, and it is kept in the smallest shape that works:
 A model whose name is a codename carrying no size is unrankable by design. That
 is the honest outcome, not a gap to be patched with folklore.
 
-**Version is deliberately not ranked here.** `rankModelId` never parses a
-version number out of an id — two ids in the same size-word family but a
-different generation (an older vs. a newer numbered release of the same
-line) rank IDENTICALLY through this resolution, and a
-`standard`/`light`/`deep` dispatch never distinguishes between them. That
-stays true for `spawn_subagent` and `keryx review tier` after the decision
-below; it is a DIFFERENT consumer's rule, not this one's.
+**Version is a second axis, not a size hint (flow 358).** `rankModelId` still
+never parses a version number out of an id: the size words order size CLASSES.
+Generation is ordered separately, and only within **the same family and
+vendor** — the id with its version tokens removed (`familyKey`) must match. A
+newer release outranks an older one of its own family, so a session on the
+older one resolves `deep` to the newer sibling, and a session on the newer one
+never resolves `light` or `deep` to the older. A version number is **never**
+compared across families: a higher number on one line says nothing about a
+different line.
+
+**A larger class of an older generation is ambiguous, not "above".** When the
+only discovered models above the session are a larger size class whose version is
+older than the session's, size words alone cannot call them stronger, and
+`deep` must not move onto a model that is older-generation and — by the
+profile price — the more expensive one. Without an agent the tier keeps the
+session's model as `session-fallback`, with the reason recorded (reason id
+`kept-older-generation`, or `kept-older-generation-pricier` when the profile
+price shows it costs more). The agent fallback below is the only other way out.
 
 The routing "derived default table" (`deriveDefaultTable`,
 `src/harness/routing/derive-default-table.ts`, flow 327/PRD §6.3) is that
@@ -102,8 +114,9 @@ version ranks higher there — the family word (a size marker from this same
 `MODEL_RANK_HINTS` list) already carries the size class, so version is free
 to order generations within it. That table reuses
 `rankModelId`/`MODEL_RANK_HINTS` UNMODIFIED for the size axis and adds its
-own separate, conservative version parse on top of it — nothing above
-changes for this module's own tier resolution.
+own separate, conservative version parse on top of it. Since flow 358 the tier
+resolution reads the same version parse (`src/gdskills/model-version.ts`, shared
+so neither module imports the other).
 
 That version parse (`parseModelVersion`/`familyKey`, round 2) reads BOTH a
 dotted id (`vendor-opus-5.5`, `gemini-3.8-flash`) and a real
@@ -151,6 +164,35 @@ Degrading capability because discovery failed is the worst of the three outcomes
 Do not "fix" a fallback by adding model ids to the code. Add a size word to the
 hints if one genuinely applies, or leave it: running on the session's model is a
 correct answer.
+
+## The agent fallback: comparing candidate models, nothing else
+
+When the ranking is **refused** but the provider did report other models, or a
+tier is **ambiguous** (an older-generation larger class, above), an injected
+agent may be asked to put the candidate models in order. It is a port
+(`TierRankAgent`): `src/gdskills/model-tier.ts` holds no network and no
+filesystem, the caller supplies the real one, and a test supplies a fake.
+
+Its limits are the point:
+
+- **It compares candidate models and never rates a task's own difficulty.** It is
+  shown no task, no diff and no user text — only the discovered ids and the
+  profile prices — and it is asked one question: which of these models is more
+  capable than which. The tier is still computed by `assignTier` from signals
+  the orchestrator holds.
+- It must answer JSON, `{"order": [...]}`, best first, and must place the session's
+  own model. An id that was not discovered is dropped. An agent error, a
+  timeout, a malformed answer, or one that leaves out the session's model
+  resolves to the session's model, exactly as without an agent.
+- It never places `standard` or `deep` below the session: `deep` is only ever taken
+  from above the session in its order, `standard` is never asked. A larger
+  class of an older generation that costs more than the session's model is
+  refused whatever it says.
+- The result is cached by a hash of the candidate catalogue with prices, so an
+  identical catalogue asks once.
+- It runs on the **light** tier of the session's own provider — the cheap step
+  below the session, or the session model itself when nothing sits below.
+- A resolution it produced is recorded `tier_resolution: agent-ranked`.
 
 ## Where this actually runs
 
@@ -236,8 +278,9 @@ arithmetic straight back in the caller's head.
 
 ## Adaptive: `inherit: true`
 
-A model is named only when discovery assigned one **other than** the session's
-(`tier_resolution: discovered`). In every other case — no session named, ranking
+A model is named only when discovery — or, failing that, the agent fallback —
+assigned one **other than** the session's (`tier_resolution: discovered` or
+`agent-ranked`). In every other case — no session named, ranking
 refused, or the tier resolving to the session's own model — the block carries the
 tier and `inherit: true`, and the **host** resolves it against the models its own
 dispatch tool offers:
@@ -255,18 +298,19 @@ fallback. Exit status is always 0.
 ## Recording the decision
 
 The dispatch carries the tier, the ordered rule ids that produced it, which of
-the three outcomes occurred, and what was on the table when it did —
-`model.tier`, `model.tier_reasons`, `model.tier_resolution` and
+the outcomes occurred, and what was on the table when it did —
+`model.tier`, `model.tier_reasons` (the assignment rule ids, then `resolve:<reason id>` for the resolution), `model.tier_resolution` and
 `model.model_discovery` in
 `.metaproject/core/gdskills/contracts/subagent-dispatch.schema.json`.
 
-`tier_resolution` distinguishes three facts that must not be flattened:
+`tier_resolution` distinguishes four facts that must not be flattened:
 
 | Value | Means |
 |---|---|
 | `discovered` | a discovered model was assigned to this tier |
 | `session-ranked` | ranking worked and placed the tier at the session's model |
-| `session-fallback` | ranking was refused; the session's model is kept |
+| `session-fallback` | ranking was refused or was ambiguous; the session's model is kept |
+| `agent-ranked` | the agent fallback put the candidates in order and its answer was used |
 
 "Fell back to the session model" and "assigned the session model because it
 ranked there" are different facts. A run that cannot be explained afterwards is
@@ -286,6 +330,9 @@ recording them is one copy rather than four decisions.
   the resolution code.
 - Take the candidate set from runtime detection. Never from a literal list of
   what exists.
+- The agent fallback compares candidate models. Never ask any model to rate a
+  task's own difficulty, and never let the fallback place `standard` or `deep`
+  below the session's model.
 - When the candidates cannot be ranked, the block is adaptive (`inherit: true`).
   The host never goes below its session model for `standard` or `deep`, and takes
   a lighter class only for a `light` tier.
