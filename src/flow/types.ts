@@ -4,6 +4,7 @@
 // function over a task list, not a shape flow state carries.
 import type { NextTaskDecision } from "./machine";
 import type { Identity } from "./identity";
+import type { AcKindError, AcKindReport, AcKindRecord } from "./ac-kinds";
 export type { Identity, IdentityBasis } from "./identity";
 
 export type FlowStatus =
@@ -287,6 +288,17 @@ export type FlowState = {
    * outcomes)" section for the full reasoning.
    */
   completionAttempts?: FlowCompletionAttempt[] | undefined;
+  /**
+   * Acceptance layer W0: the verification kind of each criterion, keyed by
+   * `ACn`, DERIVED from the sealed `acceptance-criteria.md` at `flow freeze`
+   * and rewritten by `flow ac update`. The file is the source of truth and its
+   * checksum protects it; this field may be regenerated from the file at any
+   * time, and a disagreement between the two is a parser bug, never a
+   * decision. ABSENT on every flow frozen before the field existed — readers
+   * treat absence as "every criterion unclassified", never as "no criteria"
+   * and never as `none`. Nothing gates on it.
+   */
+  acKinds?: Record<string, AcKindRecord> | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
 };
@@ -587,6 +599,13 @@ export interface FlowService {
     text?: string | undefined;
   }): Promise<FlowState>;
   acReseal(input: { cwd: string; id: string; reason: string }): Promise<FlowState>;
+  /**
+   * Acceptance layer W0: parse the verification kinds out of a flow's CURRENT
+   * `acceptance-criteria.md`. Read-only — no lock, no history, no write — and
+   * it reports; it never refuses anything. A malformed marker comes back in
+   * `errors` (that criterion reads `unclassified` in `report`).
+   */
+  acKinds(input: { cwd: string; id: string }): Promise<{ report: AcKindReport; errors: readonly AcKindError[] }>;
   implemented(input: { cwd: string; id: string; prUrl: string }): Promise<FlowState>;
   /**
    * Set or change a flow's owner (AC1, AC2). Always requires a non-empty

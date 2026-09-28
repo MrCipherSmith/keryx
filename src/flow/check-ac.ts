@@ -31,6 +31,7 @@ import type { ScopedRegion } from "../review/scope";
 import { redactSensitiveText } from "../security/service";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
+import { stripVerifyMarker } from "./ac-kinds";
 
 // ---------------------------------------------------------------------------
 // Parsing: acceptance-criteria.md -> AcCriterion[]
@@ -149,6 +150,18 @@ export function classifyNotCheckable(criterionText: string): NotCheckableClassif
   };
 }
 
+/**
+ * {@link classifyNotCheckable} over a criterion, with its trailing
+ * `[verify: …]` marker removed first (acceptance layer W0). The marker is
+ * metadata about how the criterion is verified; a command inside it
+ * (`` [verify: exec `keryx health run`] ``) must not make the criterion read as
+ * a "health passing" one. A criterion with no marker is classified exactly as
+ * before.
+ */
+export function classifyAcCriterionNotCheckable(criterion: AcCriterion): NotCheckableClassification | undefined {
+  return classifyNotCheckable(stripVerifyMarker(criterion.text));
+}
+
 // ---------------------------------------------------------------------------
 // AC2: token extraction + deterministic facts
 // ---------------------------------------------------------------------------
@@ -188,7 +201,11 @@ export interface AcFacts {
  * when Jev is never asked (AC4's "without Jev configured" path).
  */
 export function computeAcFacts(criterion: AcCriterion, diffText: string, changedFiles: readonly string[]): AcFacts {
-  const tokens = extractCriterionTokens(criterion.text);
+  // Acceptance layer W0: a trailing `[verify: …]` marker is metadata about HOW the
+  // criterion is verified, not something the criterion names. Strip it before
+  // token extraction so a marker's backticked command never becomes an "artefact"
+  // the diff must contain. Text with no trailing marker passes through unchanged.
+  const tokens = extractCriterionTokens(stripVerifyMarker(criterion.text));
   const tokensPresent = tokens.filter((token) => diffText.includes(token) || changedFiles.some((file) => file.includes(token)));
   const tokensAbsent = tokens.filter((token) => !tokensPresent.includes(token));
   const testFiles = changedFiles.filter((file) => /\.(test|spec)\.[a-z]+$/i.test(file));

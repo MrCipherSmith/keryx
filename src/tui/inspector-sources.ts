@@ -9,7 +9,15 @@ import type { FlowState } from "../flow/types";
 // flow check-ac`/the advisory notices already cached. Through the flow
 // facade (`../flow/service`), not `../flow/check-ac` directly — import
 // policy rule 2 only excuses an edge whose target is a `service.ts`.
-import { acCheckCacheKey, acCheckCachePath, readAcCheckCache, statusLabel, type AcCheckStatus } from "../flow/service";
+import {
+  acCheckCacheKey,
+  acCheckCachePath,
+  readAcCheckCache,
+  readAcKindRecords,
+  statusLabel,
+  type AcCheckStatus,
+  type AcKindRecord,
+} from "../flow/service";
 // Review finding: staleness used to compare only the CRITERIA CHECKSUM half
 // of the cache key, so a criteria-unchanged-but-diff-changed flow still read
 // as fresh. The full key needs the diff too, and computing a diff is a git
@@ -72,6 +80,12 @@ export type FlowInspectorItem = {
    * two wrong answers).
    */
   acCheckStale?: boolean | "unknown";
+  /**
+   * Acceptance layer W0: the flow's DERIVED verification kinds, keyed by `ACn`.
+   * Absent for a flow frozen before kinds existed — the AC tab then says "not
+   * recorded", never an empty list.
+   */
+  acKinds?: Readonly<Record<string, AcKindRecord>>;
 };
 
 /** Flow 328, AC7: one criterion's cached status, for the /flows sidebar and detail tab. */
@@ -251,6 +265,10 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
         const item = flowItemFromState(flow, dir);
         if (await isCompletionInterrupted(cwd, flow, dir)) {
           item.interrupted = interruptedCompletionLine(flow.id);
+        }
+        const kinds = readAcKindRecords(flow.acKinds);
+        if (kinds !== undefined) {
+          item.acKinds = kinds;
         }
         // Flow 328, AC7: never triggers a Jev call — shows the last cached
         // check-ac result, or nothing ("not run" is the marker-less default).

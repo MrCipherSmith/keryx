@@ -63,9 +63,24 @@ document changes.
 - goal;
 - users;
 - requirements;
-- success criteria;
+- success criteria, split into two lists (see Success Contract below);
 - risks;
 - recommendation.
+
+### Success Contract
+
+The PRD's success criteria are two lists, never one:
+
+- **Release criteria** are checkable when the work ships: a test, a command, a
+  file, a count. Each is something a release can be blocked on.
+- **Outcome criteria** are what should be true some time after release: adoption,
+  a measured change, a behavior seen in use. Each outcome criterion either names
+  the observation that would confirm it (what is looked at, where, and when) or
+  declares `not measured — <reason>`.
+
+An outcome criterion with neither an observation nor a `not measured — <reason>`
+is not a criterion. A list whose every entry is `not measured` is acceptable: it
+is honest. A PRD with no outcome list at all is not.
 
 ## Specification Contract
 
@@ -77,7 +92,23 @@ document changes.
 - CLI or skill surface;
 - data contracts;
 - integration points;
-- acceptance criteria.
+- acceptance criteria;
+- a verification field on every requirement (see Verification Field below).
+
+### Verification Field
+
+Every requirement in the specification carries one verification field, in the
+same vocabulary a flow criterion's trailing marker uses:
+
+```markdown
+Verification: exec `<command>`            # a command whose exit code decides it
+Verification: invariant `<command>`       # a command that must keep passing
+Verification: judged                      # a person reads the evidence
+Verification: none — <reason>             # honestly unverifiable, with the reason
+```
+
+`exec` and `invariant` name a backticked command; `none` names its reason after
+an em dash. A requirement with no field is a defect, not a `none`.
 
 ## Verification Contract
 
@@ -88,6 +119,11 @@ Before finishing:
 - verify README links to all package files;
 - verify schemas are referenced from specification when present;
 - verify status is honest: `draft`, `spec ready`, `implemented`, or `future`;
+- verify every specification requirement carries a `Verification:` field, and
+  fail the package when one does not, naming that requirement;
+- verify the PRD has both a release-criteria list and an outcome-criteria list,
+  and fail the package when the outcome list is missing (an outcome list whose
+  entries are all `not measured — <reason>` passes);
 - update `docs/requirements/roadmap.md` when the package represents a module or
   standard capability.
 

@@ -109,10 +109,8 @@ Add optional files only when justified:
 Write concise Markdown with explicit headings. Required contracts:
 
 - README: purpose, status, document index, scope, related modules.
-- PRD: problem, goal, users, requirements, success criteria, risks,
-  recommendation.
-- Specification: identity, structure, manifest/config, CLI/skill surface, data
-  contracts, integrations, acceptance criteria.
+- PRD: problem, goal, users, requirements, success criteria (a release list and an outcome list; an outcome criterion names its observation or declares `not measured — <reason>`), risks, recommendation.
+- Specification: identity, structure, manifest/config, CLI/skill surface, data contracts, integrations, acceptance criteria; every requirement carries a `Verification:` field (`exec`/`invariant` with a backticked command, `judged`, or `none — <reason>`).
 
 When updating existing docs, preserve useful content and bump versions.
 
@@ -125,6 +123,7 @@ Run a local verification pass:
 - README links to every package file;
 - schema files are valid JSON;
 - specification references schemas when present;
+- every requirement has a `Verification:` field (a package with a requirement that omits it FAILS, naming that requirement); the PRD has a release list and an outcome list (no outcome list FAILS; an outcome list whose entries are all `not measured — <reason>` passes);
 - roadmap is updated for new module/standard capabilities;
 - no implementation status is overstated.
 
@@ -154,6 +153,7 @@ Do not emit the Final Response until all of these hold:
 - Every Markdown file in the package carries a `Version`, and every file you changed has a bumped one.
 - `README.md` links to every file in the package; the specification links to each schema it defines.
 - Every `schemas/*.json` parses as valid JSON.
+- Every specification requirement carries a `Verification:` field, and the PRD carries both a release list and an outcome list; a package missing either was reported as `verification: fail`, naming the requirement.
 - `docs/requirements/roadmap.md` is updated when the package represents a new module or capability, or the report states why it does not.
 - No implementation claim appears that code does not support; anything unbuilt is marked planned or future.
 - `docpack-review` has been run in Phase 5 and reports zero blockers. Remaining warnings appear verbatim in `remaining_gaps`.

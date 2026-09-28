@@ -623,9 +623,12 @@ Grouped by what you are trying to do, not by internal module layout.
   rounds-with-cost/rounds-total count for partial coverage), project-wide
   trigger spend (never attributed to a flow — the run record carries no flow
   reference), who confirmed each acceptance criterion and who signed
-  completion (with identity basis), and every `flow complete` attempt's gate
-  outcomes. A figure nobody recorded is reported as "not recorded", never as
-  zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
+  completion (with identity basis), every `flow complete` attempt's gate
+  outcomes, and each flow's acceptance coverage — how many criteria carry a
+  runnable `[verify: exec ...]` or `[verify: invariant ...]` marker (a flow
+  with no recorded kinds counts as fully unclassified; see `keryx flow ac kinds`
+  in the [CLI reference](docs/docs/cli-reference.md#verification-kinds)). A
+  figure nobody recorded is reported as "not recorded", never as zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
   same convention `keryx health run` uses; `--all-projects` also covers every
   project in the user-global registry. In the TUI, the sidebar's
   **Governance** row shows `no report — click to run`,

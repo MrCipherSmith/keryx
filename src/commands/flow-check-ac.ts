@@ -23,7 +23,7 @@ import {
   acPath,
   assertAcIntact,
   batchAcCheckItems,
-  classifyNotCheckable,
+  classifyAcCriterionNotCheckable,
   computeAcFacts,
   evaluatedVerdict,
   factsOnlyVerdict,
@@ -292,7 +292,7 @@ export async function runCheckAc(cwd: string, id: string, opts: CheckAcOptions =
 
   const notCheckable: AcCheckVerdict[] = [];
   const checkableCriteria = criteria.filter((criterion) => {
-    const classification = classifyNotCheckable(criterion.text);
+    const classification = classifyAcCriterionNotCheckable(criterion);
     if (classification === undefined) return true;
     notCheckable.push(notCheckableVerdict(criterion, classification.reason));
     return false;

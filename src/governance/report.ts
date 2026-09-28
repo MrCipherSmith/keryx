@@ -8,7 +8,7 @@ import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { listProjects } from "../lib/project-registry";
 import { collectProjectGovernance } from "./aggregate";
-import type { FlowDispatch, GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
+import type { FlowAcceptance, FlowDispatch, GovernanceFilters, GovernanceReport, GovernanceReportRead, ProjectGovernance } from "./types";
 
 export const GOVERNANCE_SCHEMA_VERSION = 1 as const;
 
@@ -110,6 +110,28 @@ function identityLine(identity: { value: string | null; basis: string; source: s
   return `${identity.value ?? "unknown"} [${identity.basis}]`;
 }
 
+/**
+ * Acceptance layer W0: the per-flow coverage column. A flow with no recorded
+ * kinds — frozen before they existed, or read from a report stored before this
+ * field did (`acceptance` undefined) — is FULLY unclassified, stated as such; it
+ * is never printed as `0/0` and never as `none`.
+ */
+export function renderAcceptanceLine(acceptance: FlowAcceptance | undefined): string {
+  if (acceptance === undefined || !acceptance.recorded) {
+    const total = acceptance?.total;
+    return total === undefined
+      ? "acceptance coverage: not recorded (predates verification kinds; every criterion reads unclassified)"
+      : `acceptance coverage: 0/${total} runnable (0%) — all ${total} unclassified (predates verification kinds)`;
+  }
+  const { counts } = acceptance;
+  const total = acceptance.total ?? 0;
+  const percent = total === 0 ? 0 : Math.round((acceptance.runnable / total) * 100);
+  return (
+    `acceptance coverage: ${acceptance.runnable}/${total} runnable (${percent}%) — ` +
+    `exec ${counts.exec}, invariant ${counts.invariant}, judged ${counts.judged}, none ${counts.none}, unclassified ${counts.unclassified}`
+  );
+}
+
 /** Markdown rendering — the human half of the artifact pair (AC6). */
 export function renderGovernanceMarkdown(report: GovernanceReport): string {
   const lines: string[] = [
@@ -157,6 +179,8 @@ export function renderGovernanceMarkdown(report: GovernanceReport): string {
           `output_tokens=${tokens(flow.spend.outputTokens)} (rounds=${flow.spend.roundsWithOutputTokens}), ` +
           `rounds_with_cost=${flow.spend.roundsWithCost}/${flow.spend.roundsTotal}`,
       );
+
+      lines.push(renderAcceptanceLine(flow.acceptance));
 
       if (!flow.confirmations.recorded) {
         lines.push("confirmations: not recorded (predates signing)");

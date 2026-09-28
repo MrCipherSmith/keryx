@@ -36,6 +36,22 @@ export { CONFIRMATION_CAVEAT } from "./confirm-token";
 // the zone's internals (import policy, rule 2 — `client-imports-core-internal`
 // only excuses a `service.ts` target).
 export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
+// Acceptance layer W0: the verification-kind vocabulary, re-exported so the CLI,
+// governance and the TUI reach it through this facade (import policy, rule 2).
+export {
+  AC_KINDS,
+  buildAcKindReport,
+  describeAcKind,
+  readAcKindRecords,
+  renderAcKindDistribution,
+  reportFromRecords,
+  stripVerifyMarker,
+  type AcKind,
+  type AcKindError,
+  type AcKindRecord,
+  type AcKindReport,
+} from "./ac-kinds";
+import { buildAcKindReport, type AcKindRecord } from "./ac-kinds";
 // Flow 344: re-exported so a client reads the review-gate config path
 // through THIS facade rather than `./review-gate`'s internals (import
 // policy, rule 2) — `src/commands/review-jev-profile.ts` is the first
@@ -47,6 +63,7 @@ export {
   acCheckCacheKey,
   acCheckCachePath,
   batchAcCheckItems,
+  classifyAcCriterionNotCheckable,
   classifyNotCheckable,
   computeAcFacts,
   evaluatedVerdict,
@@ -124,6 +141,16 @@ import type {
   AttemptOutcome,
   TaskAttempts,
 } from "./types";
+
+/**
+ * The `acKinds` record map derived from a flow's current criteria file.
+ * Pure derivation: a criterion whose marker is malformed reads `unclassified`
+ * (the error itself is what `flow ac kinds` reports). Never throws on content.
+ */
+async function deriveAcKinds(cwd: string, dir: string, flowId: string): Promise<Record<string, AcKindRecord>> {
+  const { report } = buildAcKindReport(flowId, await readFile(acPath(cwd, dir), "utf8"));
+  return { ...report.criteria };
+}
 
 /**
  * Append one attempt to a task, returning the counter it now carries.
@@ -499,6 +526,10 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         );
       }
       flow.acChecksum = await acChecksum(cwd, dir);
+      // Acceptance layer W0: record the derived kinds beside the seal. Reports,
+      // never refuses — a malformed marker reads `unclassified` here and is named
+      // by `flow ac kinds`; it does not stop the freeze.
+      flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
       flow.status = "ready";
       return save(cwd, dir, flow, "frozen", `${criteria.length} criteria; checksum recorded`);
       });
@@ -768,9 +799,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           detail = `${normalizedCriterion}: "${previousText ?? "(new)"}" -> "${normalizedText}" (${reason.trim()})`;
         }
         flow.acChecksum = await acChecksum(cwd, dir);
+        // Acceptance layer W0: the derived kinds are re-parsed from the file that was
+        // just re-sealed, in the same write, so the field and the seal never disagree.
+        flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
         flow.acConfirmed = {}; // criteria changed - prior confirmations are void
         return save(cwd, dir, flow, "ac-updated", detail);
       });
+    },
+
+    async acKinds({ cwd, id }) {
+      const { dir, flow } = await load(cwd, id);
+      return buildAcKindReport(flow.id, await readFile(acPath(cwd, dir), "utf8"));
     },
 
     /**

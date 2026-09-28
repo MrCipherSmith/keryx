@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.29] — 2026-09-28
+
+### Added
+- **Verification kinds on acceptance criteria** (flow 361, W0) — a criterion may end with one trailing marker: `[verify: exec `cmd`]`, `[verify: invariant `cmd`]`, `[verify: judged]` or `[verify: none — reason]`. The marker is part of the criterion line, so the freeze checksum covers it. A marker quoted in backticks is prose; two markers outside code, or a marker that is not last or does not close with `]`, is an error. An unmarked criterion is `unclassified`, never `none`. Nothing gates on a kind: freeze, `ac update`, confirm and complete behave exactly as before, and no existing criterion is migrated.
+- **`keryx flow ac kinds <id> [--json]`** — reads the criteria file and reports each criterion's kind, the distribution and the runnable coverage. Read-only, no model call; exits `1` naming the criterion when a marker is malformed (that criterion reads `unclassified`).
+- **`flow freeze` prints the distribution** and records a derived `acKinds` map on `flow.json`; `flow ac update` re-parses it in the same write as the new checksum. The file stays the source of truth; a malformed marker warns but never refuses.
+- **Governance coverage** — `keryx governance report` shows an `acceptance coverage` line per flow. A flow with no `acKinds` reads as fully unclassified, not as zero criteria.
+- **TUI** — the AC tab of `/flows` lists each criterion's kind under the same distribution block (`PgUp`/`PgDn` scroll it); a flow frozen before kinds existed says "not recorded".
+- **Requirements standard** — `requirements-package-standard` requires a `Verification:` field on every specification requirement and splits the PRD's success criteria into release criteria and outcome criteria (an outcome criterion names its observation or declares `not measured — <reason>`). The `docpack-orchestrator` Verify phase fails a package that omits either, and accepts an outcome list whose entries are all `not measured`.
+
+### Changed
+- `flow check-ac` strips a trailing verification marker before it extracts a criterion's tokens or decides it is not checkable, so a marker's command text is never read as the criterion's wording. Unmarked criteria are byte-identical.
+
 ## [0.3.28] — 2026-09-28
 
 ### Added

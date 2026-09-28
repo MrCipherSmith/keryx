@@ -8,6 +8,7 @@
 // `src/trigger/record.ts`'s `TriggerRunCost`, and `src/flow/identity.ts`'s
 // `Identity` for the precedent this mirrors.
 
+import type { AcKind } from "../flow/ac-kinds";
 import type { FlowCompletionAttempt, GateOutcome, Identity, SignatureConfirmation } from "../flow/types";
 import type { TriggerRunCost, TriggerRunOutcomeKind, UnattendedDenial } from "../trigger/record";
 
@@ -182,6 +183,26 @@ export type FlowGateOutcomes =
   | { recorded: false }
   | { recorded: true; attempts: FlowCompletionAttempt[] };
 
+/**
+ * Acceptance layer W0: how many of a flow's criteria carry a verification kind
+ * (`exec` / `invariant` are the runnable ones). Read from the DERIVED
+ * `flow.acKinds`.
+ *
+ * `recorded: false` means `flow.json` has no `acKinds` at all — the flow was
+ * frozen before verification kinds existed. It is NOT "zero criteria" and NOT
+ * "every criterion is `none`": every criterion reads `unclassified`, and
+ * `total` is the number of criteria in the criteria file. `total` is
+ * `undefined` only when the field is absent AND the criteria file cannot be
+ * read, so a missing file never masquerades as zero criteria.
+ */
+export type FlowAcceptance = {
+  recorded: boolean;
+  total: number | undefined;
+  counts: Record<AcKind, number>;
+  /** `exec` + `invariant`. */
+  runnable: number;
+};
+
 export type FlowGovernance = {
   id: string;
   dir: string;
@@ -194,6 +215,8 @@ export type FlowGovernance = {
   spend: FlowReviewSpend;
   confirmations: FlowConfirmations;
   gateOutcomes: FlowGateOutcomes;
+  /** Acceptance layer W0: verification-kind coverage. Absent on a report stored before it existed — readers treat that as fully unclassified. */
+  acceptance: FlowAcceptance;
   /** Flow 297 (AC1, AC2): unattended trigger-dispatch runs this flow named, plus their denials and open reservations. */
   dispatch: FlowDispatch;
 };
