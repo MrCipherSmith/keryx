@@ -1206,7 +1206,9 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
 
   test("/new (and /clear) closes the OLD slate before a fresh SlateSessionRef is created for the new session dir", () => {
     const newBlockStart = replBody.indexOf('command === "/new" || command === "/clear"');
-    const newBlock = replBody.slice(newBlockStart, newBlockStart + 900);
+    // Widened for flow 354's L-14 fix (the `lastToolOutput`/`lastToolName`
+    // reset lands between the close call and this reassignment).
+    const newBlock = replBody.slice(newBlockStart, newBlockStart + 1300);
     const closeIndex = newBlock.indexOf(closeCall);
     const reassignIndex = newBlock.indexOf("slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };");
     expect(closeIndex).toBeGreaterThanOrEqual(0);

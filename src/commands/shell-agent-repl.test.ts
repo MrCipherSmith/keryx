@@ -100,12 +100,21 @@ async function repl(
     port?: MetaprojectPort;
     session?: Partial<ShellSessionOpts>;
     configDir?: string;
+    /** Flow 354 (L-15) — see `runAgentRepl`'s own `rich.onCompletionWaitersSize` doc. */
+    onCompletionWaitersSize?: (size: number) => void;
   } = {},
 ): Promise<string> {
   const out: string[] = [];
   await runAgentRepl(
     linesFrom(...lines),
-    { printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s) },
+    {
+      printPrompt: () => {},
+      safeBoundary: undefined,
+      write: (s) => out.push(s),
+      ...(opts.onCompletionWaitersSize !== undefined
+        ? { onCompletionWaitersSize: opts.onCompletionWaitersSize }
+        : {}),
+    },
     opts.deps ?? fakeDeps(),
     opts.port ?? fakePort(),
     // `enabled: false` skips session persistence — the documented test default
@@ -726,6 +735,55 @@ describe("flow 173 AC7 — runAgentRepl sweeps background jobs on real session e
     await repl(["/new", "/exit"], { deps: fakeDeps({ sweepBackgroundJobs: async () => { swept += 1; } }) });
     // Exactly one sweep — from the trailing /exit, not from /new.
     expect(swept).toBe(1);
+  });
+});
+
+describe("L-14 (flow 354) — /new and /clear reset lastToolOutput/lastToolName so a later /expand reports nothing", () => {
+  test("/new then /expand: the previous session's tool output is gone, not re-printed", async () => {
+    const tool = fakeShellExecTool("read"); // risk "read" auto-allows — no approval prompt in the way.
+    const provider = toolCallProvider("shell_exec", JSON.stringify({ command: "git status" }));
+    const out = await repl(["run a command", "/new", "/expand", "/exit"], {
+      deps: fakeDeps({ tools: [tool], provider, idSeq: () => randomUUID() }),
+    });
+
+    expect(out).toContain("Nothing to expand — no tool output yet.");
+    // Before the fix, `/expand` here re-printed the ABANDONED session's
+    // collapsed tool output as an expanded block (`▾ shell_exec (…)` —
+    // `expandedToolOutput`'s header, from `blockLabel`) instead of reporting
+    // nothing — that glyph appears nowhere else in this transcript.
+    expect(out).not.toContain("▾");
+  });
+
+  test("/clear then /expand: same reset, under sessions-off (/clear and /new share one branch)", async () => {
+    const tool = fakeShellExecTool("read");
+    const provider = toolCallProvider("shell_exec", JSON.stringify({ command: "git status" }));
+    const out = await repl(["run a command", "/clear", "/expand", "/exit"], {
+      deps: fakeDeps({ tools: [tool], provider, idSeq: () => randomUUID() }),
+    });
+
+    expect(out).toContain("Nothing to expand — no tool output yet.");
+    expect(out).not.toContain("▾");
+  });
+});
+
+describe("L-15 (flow 354) — completionWaiters stays bounded, not one leaked entry per operator line", () => {
+  test("100 operator lines with no background completions leave at most 2 live completion waiters", async () => {
+    const jobs = fakeJobRegistry();
+    const model = textOnlyProvider("ok");
+    const sizes: number[] = [];
+    const lines = Array.from({ length: 100 }, (_, i) => `line ${i}`);
+    lines.push("/exit");
+
+    await repl(lines, {
+      deps: fakeDeps({ tools: [], jobRegistry: jobs.registry, provider: model.provider, idSeq: () => randomUUID() }),
+      onCompletionWaitersSize: (size) => sizes.push(size),
+    });
+
+    // Before the fix, EVERY operator line pushed a new waiter that nothing
+    // ever removed (the loser of a `Promise.race` its own call already
+    // settled) — 100 lines would have left ~100 live closures, not ≤2.
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(2);
   });
 });
 

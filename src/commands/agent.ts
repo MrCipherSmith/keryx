@@ -3312,25 +3312,43 @@ async function runAgentTurnCore(
       // dispatch for a call that already ran. Every other call (including a
       // lone `spawn_subagent` not part of a qualifying concurrent group)
       // executes exactly as before.
-      const result =
-        concurrentSpawnResults?.get(call.id) ??
-        (await executeCall(
-          call,
-          toolByName,
-          io.requestApproval,
-          io.permissionMode,
-          io.readOnly,
-          io.onAutoApproved,
-          hasInvocationCapacity,
-          reserveInvocation,
-          invocationBudget.maxCalls,
-          signal,
-          deps.busLeases,
-          deps.hardDeny === undefined
-            ? undefined
-            : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
-          deps.hooks,
-        ));
+      const precomputedResult = concurrentSpawnResults?.get(call.id);
+      let result: InteractiveToolResult;
+      if (precomputedResult !== undefined) {
+        result = precomputedResult;
+      } else {
+        try {
+          result = await executeCall(
+            call,
+            toolByName,
+            io.requestApproval,
+            io.permissionMode,
+            io.readOnly,
+            io.onAutoApproved,
+            hasInvocationCapacity,
+            reserveInvocation,
+            invocationBudget.maxCalls,
+            signal,
+            deps.busLeases,
+            deps.hardDeny === undefined
+              ? undefined
+              : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
+            deps.hooks,
+          );
+        } catch (err) {
+          // AC4 (flow 354, L-12): same posture as the concurrent path's own
+          // defensive floor (`runConcurrentSpawnBatch`'s sequential fallback,
+          // "F-002" above) and every approver in this file — a throwing
+          // `tool.invoke` or `requestApproval` callback degrades to a
+          // per-call error result, never a crashed turn that skips the
+          // `Stop` hook (`fireStopHookBestEffort`, only reached once
+          // `runAgentTurnCore` returns normally).
+          result = {
+            output: `${call.name} failed: ${err instanceof Error ? err.message : String(err)}`,
+            isError: true,
+          };
+        }
+      }
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must

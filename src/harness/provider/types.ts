@@ -77,6 +77,13 @@ export interface NormalizedError {
   providerRequestId?: string;
   /** Optional bounded backoff hint (ms) for retryable rows. */
   retryAfterMs?: number;
+  /**
+   * Structured, kind-specific extra data. Today only `pendingToolCallId`
+   * (flow 354, L-1): the id of the tool call still accumulating when the
+   * stream ended mid tool-call — a `malformed` EOF, never a completed
+   * `tool_call_end`. Absent for every other error.
+   */
+  detail?: { pendingToolCallId?: string };
 }
 
 /**
@@ -129,6 +136,17 @@ export interface NormalizedUsage {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  /**
+   * Cache-read (prompt-cache hit) input tokens. Filled by the OpenAI adapter
+   * from `usage.input_tokens_details.cached_tokens` (flow 354, L-11), which
+   * OpenAI documents as a SUBSET of `inputTokens` (never additional to it —
+   * a cache hit is still an input token, just billed at a discount).
+   * Absent when the provider did not report it. Anthropic's own cache-read
+   * count (`cache_read_input_tokens`) is ADDITIONAL to its `input_tokens`,
+   * not a subset — a different accounting shape this field does not (yet)
+   * carry; out of scope for L-11, which names only the OpenAI adapter.
+   */
+  cacheReadTokens?: number;
   /** True only when the counts above are provider-reported exact values. */
   exact?: boolean;
 }

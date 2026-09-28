@@ -132,4 +132,66 @@ describe("lifecycle via fake WorktreePort (AC4)", () => {
     const assignment = { taskId: "z", mode: "worktree", worktreeId: worktreeIdFor("z") } as const;
     expect(() => resolveChildCwd(assignment, "/repo", new Map())).toThrow();
   });
+
+  // Flow 354, L-13: a later `create()` throwing used to leave every worktree
+  // already created behind — this pins the rollback.
+  test("L-13: a later create() throwing removes the worktrees THIS call already created, then rethrows", async () => {
+    const failingTasks: WorktreeTask[] = [
+      { taskId: "a", policy: ISO, allowedActions: ["write"] },
+      { taskId: "b", policy: ISO, allowedActions: ["write"] },
+      { taskId: "c", policy: ISO, allowedActions: ["write"] },
+    ];
+    const plan = planWorktrees(failingTasks);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+
+    const calls: string[] = [];
+    const boom = new Error("git worktree add failed for c");
+    const port: WorktreePort = {
+      async create(id) {
+        if (id === worktreeIdFor("c")) throw boom;
+        calls.push(`create:${id}`);
+        return { worktreeId: id, path: `/wt/${id}` };
+      },
+      async remove(id) {
+        calls.push(`remove:${id}`);
+      },
+      async merge(id, into) {
+        calls.push(`merge:${id}->${into}`);
+        return { worktreeId: id, ok: true };
+      },
+    };
+
+    await expect(provisionWorktrees(plan.assignments, port)).rejects.toBe(boom);
+    // "a" and "b" were created before "c" threw (stable taskId order) and are
+    // both removed, in the same order — no worktree from this call survives
+    // the failure, and the original error is unchanged.
+    expect(calls).toEqual([`create:${worktreeIdFor("a")}`, `create:${worktreeIdFor("b")}`, `remove:${worktreeIdFor("a")}`, `remove:${worktreeIdFor("b")}`]);
+  });
+
+  test("L-13: a failing remove() during rollback never masks the original create() error", async () => {
+    const failingTasks: WorktreeTask[] = [
+      { taskId: "a", policy: ISO, allowedActions: ["write"] },
+      { taskId: "b", policy: ISO, allowedActions: ["write"] },
+    ];
+    const plan = planWorktrees(failingTasks);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) throw new Error(plan.reason);
+
+    const boom = new Error("git worktree add failed for b");
+    const port: WorktreePort = {
+      async create(id) {
+        if (id === worktreeIdFor("b")) throw boom;
+        return { worktreeId: id, path: `/wt/${id}` };
+      },
+      async remove() {
+        throw new Error("remove also failed");
+      },
+      async merge(id) {
+        return { worktreeId: id, ok: true };
+      },
+    };
+
+    await expect(provisionWorktrees(plan.assignments, port)).rejects.toBe(boom);
+  });
 });

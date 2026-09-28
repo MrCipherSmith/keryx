@@ -1634,6 +1634,14 @@ export async function runAgentRepl(
      * `runShell` has always taken its writer this way (`io.write`).
      */
     write?: (s: string) => void;
+    /**
+     * Test-only observability seam (flow 354, L-15): invoked with
+     * `completionWaiters.length` every time this REPL registers a new
+     * completion waiter. Never read for any runtime decision — production
+     * callers omit it; a test passes it to pin the waiter count stays
+     * bounded without reaching into this function's closure.
+     */
+    onCompletionWaitersSize?: (size: number) => void;
   },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
@@ -1755,7 +1763,18 @@ export async function runAgentRepl(
       return settled;
     }
     const completion = new Promise<{ kind: "completion" }>((resolve) => {
+      // L-15 (flow 354): this function is only ever awaited sequentially —
+      // one call per main-loop iteration, never overlapping — so a waiter
+      // left behind from an EARLIER call whose `pendingLine` won the race is
+      // an orphan: that race already settled and nothing will ever await it
+      // again. Dropping every previous waiter before registering this
+      // call's own keeps the array bounded at the number of live background
+      // jobs (which resolve/clear themselves via `onCompletion` below) plus
+      // this one in-flight entry, instead of growing by one per operator
+      // line for the life of the session.
+      completionWaiters = [];
       completionWaiters.push(() => resolve({ kind: "completion" }));
+      rich.onCompletionWaitersSize?.(completionWaiters.length);
     });
     const winner = await Promise.race([pendingLine, completion]);
     if (winner.kind !== "completion") {
@@ -2621,6 +2640,12 @@ export async function runAgentRepl(
           continue;
         }
         await closeSlateSession(slateSession, mintTimestampAttemptId);
+        // L-14 (flow 354): `/new`/`/clear` abandon this session's history —
+        // the collapsed tool-output cache `/expand` reads must go with it,
+        // or a `/expand` right after prints the ABANDONED session's last
+        // tool result instead of "nothing to expand".
+        lastToolOutput = undefined;
+        lastToolName = undefined;
         if (nextLive !== undefined) {
           live = nextLive;
           history = [];

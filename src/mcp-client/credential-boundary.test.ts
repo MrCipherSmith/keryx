@@ -3,6 +3,25 @@
 // `keryx-external-agent-runtime`'s own D-01 compliance is verified (flow
 // 182, T13).
 //
+// R-M3 (flow 352 review round, closed by flow 354): as of this writing,
+// `gatedSuperviseCodexMcpRun`/`superviseCodexMcpRun` (`../harness/external/
+// supervise-mcp.ts`) have NO production (non-test) caller anywhere in this
+// codebase — every reference outside that module's own file is a `.test.ts`
+// (`supervise-mcp.test.ts`, `live-elicitation.smoke.test.ts`) or a doc
+// comment naming it in passing (`acp-client.ts`, `mcp-client/client.ts`).
+// Confirmed via `keryx ctx rg "gatedSuperviseCodexMcpRun|superviseCodexMcpRun"
+// src` and re-checkable the same way. This suite is therefore GREEN BY
+// VACANCY for a live AC1 credential-boundary claim: it proves the module's
+// OWN two invariants below in isolation, not that a real call path never
+// leaks a credential — there is no real call path yet. What it pins for a
+// future caller: (1) this module never reads `process.env` itself (checked
+// statically below), and (2) whatever `env` a future caller hands it via
+// `McpSpawnOptions.env`/`SuperviseCodexMcpInput.env` reaches `client.connect`
+// UNCHANGED — never augmented, widened, or read from a global inside this
+// module. A future caller still owns building that `env` correctly (the
+// same way `buildExternalChildEnv` does for the sibling runtime this module
+// mirrors) — this suite cannot and does not check that caller-side step.
+//
 // The original package's D-01 evidence (`src/harness/external/env.test.ts`,
 // `src/harness/external/runtime.test.ts`) proves `buildExternalChildEnv`
 // strips every credential-shaped variable a spawned child does not itself

@@ -115,7 +115,11 @@ describe("AC1 — clean text-stream SYNTHETIC fixture normalizes to the exact No
     expect(events[2]).toMatchObject({ kind: "text_delta", text: "NYC is sunny." });
 
     const usageEvent = events[3]!;
-    expect(usageEvent.usage).toEqual({ inputTokens: 25, outputTokens: 9, totalTokens: 34, exact: true });
+    // Flow 354 (L-11): the fixture reports `input_tokens_details.cached_tokens: 0`
+    // explicitly (a real reported value, not an absent field), so `cacheReadTokens`
+    // is `0`, not omitted — see the dedicated L-11 describe block below for the
+    // "genuinely absent -> omitted" case.
+    expect(usageEvent.usage).toEqual({ inputTokens: 25, outputTokens: 9, totalTokens: 34, cacheReadTokens: 0, exact: true });
 
     // Wire-request shape (Responses API, POST /v1/responses, stream:true).
     expect(calls).toHaveLength(1);
@@ -166,6 +170,43 @@ describe("flow 268 — max_output_tokens/temperature reach the Responses API pay
     const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
     expect(body.max_output_tokens).toBe(1024);
     expect("temperature" in body).toBe(false);
+  });
+});
+
+// L-10 (flow 354, AC2): a live probe against the ChatGPT-subscription
+// Responses endpoint (recorded in the flow journal, 2026-09-28, model
+// `gpt-6-luna`) returned HTTP 400 "Unsupported parameter: max_output_tokens"
+// with the field and HTTP 200 without it. The Codex branch's omission is
+// therefore required; the native/API-key branch keeps sending it (test above).
+describe("L-10 (flow 354) — the Codex (ChatGPT-subscription) branch deliberately omits max_output_tokens", () => {
+  test("the Codex branch never sends max_output_tokens, regardless of budget.maxOutputTokens", async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(TEXT_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant(), codex: { accountId: "acct-fixture" } });
+    const request: NormalizedRequest = {
+      ...buildRequest("request-codex-max-output"),
+      budget: { maxOutputTokens: 4096, runReservation: 4096 },
+    };
+    await collectEvents(provider.stream(request, { attemptId: "attempt-codex-max-output" }));
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect("max_output_tokens" in body).toBe(false);
+    // The rest of the Codex-only payload shape is unaffected by this decision.
+    expect(body.store).toBe(false);
+  });
+
+  test("the native (API-key) branch is unaffected: max_output_tokens is still sent unconditionally", async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(TEXT_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request: NormalizedRequest = {
+      ...buildRequest("request-native-max-output"),
+      budget: { maxOutputTokens: 4096, runReservation: 4096 },
+    };
+    await collectEvents(provider.stream(request, { attemptId: "attempt-native-max-output" }));
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.max_output_tokens).toBe(4096);
   });
 });
 
@@ -265,6 +306,49 @@ describe("AC1 — response.incomplete and response.failed terminate as provider_
     expect(events[0]!.kind).toBe("provider_error");
     expect(events[0]!.error?.kind).toBe("invalid_request");
     expect(events[0]!.error?.message).toContain("internal error");
+  });
+});
+
+// Flow 354 (L-11): `promptCaching: true` (this adapter's `describe()`) was
+// advertised but `usage.input_tokens_details.cached_tokens` was never read —
+// cache hits reached nobody. `cacheReadTokens` is a SUBSET of `inputTokens`
+// (OpenAI bills a cache hit as a discounted input token, not an extra one).
+describe("L-11 (flow 354) — usage.input_tokens_details.cached_tokens populates cacheReadTokens", () => {
+  test("a response.completed usage payload with cached_tokens sets the normalized usage's cacheReadTokens", async () => {
+    const sse = [
+      'event: response.completed\ndata: {"type":"response.completed","sequence_number":0,"response":{"id":"resp_cached","status":"completed","usage":{"input_tokens":2000,"output_tokens":50,"total_tokens":2050,"input_tokens_details":{"cached_tokens":1200}}}}\n\n',
+    ].join("");
+    const { fetch: fetchMock } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const deps: OpenAiProviderDeps = { fetch: fetchMock, grant: validGrant() };
+    const provider = new OpenAiProvider(deps);
+    const events = await collectEvents(provider.stream(buildRequest("request-cached"), { attemptId: "attempt-cached" }));
+
+    const usageEvent = events.find((evt) => evt.kind === "usage_update");
+    expect(usageEvent?.usage).toEqual({
+      inputTokens: 2000,
+      outputTokens: 50,
+      totalTokens: 2050,
+      cacheReadTokens: 1200,
+      exact: true,
+    });
+  });
+
+  test("no input_tokens_details on the wire leaves cacheReadTokens absent, not zero", async () => {
+    const sse = [
+      'event: response.completed\ndata: {"type":"response.completed","sequence_number":0,"response":{"id":"resp_no_cache","status":"completed","usage":{"input_tokens":25,"output_tokens":9,"total_tokens":34}}}\n\n',
+    ].join("");
+    const { fetch: fetchMock } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const deps: OpenAiProviderDeps = { fetch: fetchMock, grant: validGrant() };
+    const provider = new OpenAiProvider(deps);
+    const events = await collectEvents(provider.stream(buildRequest("request-no-cache"), { attemptId: "attempt-no-cache" }));
+
+    const usageEvent = events.find((evt) => evt.kind === "usage_update");
+    expect(usageEvent?.usage).toEqual({ inputTokens: 25, outputTokens: 9, totalTokens: 34, exact: true });
+    expect(usageEvent?.usage?.cacheReadTokens).toBeUndefined();
   });
 });
 

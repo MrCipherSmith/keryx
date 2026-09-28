@@ -3,6 +3,63 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.18] — 2026-09-28
+
+### Fixed
+- **The four provider adapters now agree on a truncated stream, an
+  in-stream error, and a missing tool-call id.** A shared contract test
+  (`src/harness/provider/stream-contract.test.ts`) runs the same three rows
+  against `anthropic`, `openai`, `gemini`, and the OpenAI-compatible engine:
+  (a) a stream that ends while a tool call is still accumulating now yields
+  exactly one `provider_error` (`kind: "malformed"`, naming the pending call
+  in `detail.pendingToolCallId`) instead of the compat adapter silently
+  synthesizing a `tool_call_end` from truncated JSON; (b) Gemini's streaming
+  loop now classifies an in-band `{"error":{…}}` envelope through the same
+  taxonomy a pre-2xx failure gets (a 503 envelope mid-stream is now
+  `retryable: true`, not a generic non-retryable `malformed`); (c) a Gemini
+  tool call sent with no id now gets a synthetic id unique within the
+  response (`${name}#${index}`), so two same-named calls in one response no
+  longer collide onto one id and have a result attributed to the wrong call.
+- **The ChatGPT-subscription branch's missing `max_output_tokens` is now
+  documented as required, not accidental.** A probe against the subscription
+  Responses endpoint returns HTTP 400 `Unsupported parameter:
+  max_output_tokens`; the comment beside the omission and a test now say so.
+- **OpenAI cache-read tokens are no longer silently dropped from cost
+  accounting.** `usage.input_tokens_details.cached_tokens` now populates the
+  normalized usage's `cacheReadTokens` (mirroring the field Anthropic's own
+  usage carries); `keryx shell`'s per-turn cost estimate applies OpenAI's
+  documented 50% cached-input discount to those tokens instead of billing
+  every input token at full price.
+- **A throwing tool no longer crashes an agent turn and skips the `Stop`
+  hook.** The sequential tool-call loop (`src/commands/agent.ts`) now wraps
+  each call in the same defensive try/catch the concurrent subagent-spawn
+  path already had: a `tool.invoke`/`requestApproval` callback that throws
+  degrades to an `isError: true` tool result, the turn finishes normally, and
+  the `Stop` hook still fires.
+- **`/new` and `/clear` in `keryx shell` no longer leave `/expand` pointing
+  at the abandoned session.** Both now reset the collapsed tool-output cache
+  `/expand` reads, so running it right after prints "Nothing to expand"
+  instead of the previous session's last tool result.
+- **`keryx shell`'s idle-completion waiter no longer leaks one closure per
+  operator line.** A waiter from an earlier, already-settled read/completion
+  race is now dropped before a new one is registered — bounded at roughly one
+  live entry instead of growing for the life of the session when background
+  completions rarely fire.
+- **`provisionWorktrees` no longer leaks a partially-provisioned batch.** If
+  a later `git worktree add` throws, every worktree the same call already
+  created is now removed (best-effort, never masking the original error)
+  before the failure is rethrown.
+- **Two audit-ledger findings closed as documentation-accuracy fixes.** The
+  `credential-boundary.test.ts` header no longer implies live AC1 coverage it
+  doesn't have — it now states plainly that the guarded functions have no
+  production caller today. A duplicate source-text audit in
+  `shell-bus.test.ts` (already covered by a stronger runtime test in
+  `shell-agent-repl.test.ts`) is removed.
+
+Audit ledger: `docs/requirements/keryx-audit-remediation/findings.md` rows
+L-1, L-2, L-3, L-10, L-11, L-12, L-13, L-14, L-15, R-M3, R-I3 closed; L-9
+stays open pending a Gemini credential to probe against.
+
 ## [0.3.17] — 2026-09-27
 
 ### Added
