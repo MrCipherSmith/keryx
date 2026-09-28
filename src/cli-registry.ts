@@ -25,6 +25,7 @@
 //
 // `cli.ts` keeps `main()`, `printHelp()`, `exitCodeForError()` and the
 // startup safety guard, and imports everything below from here.
+// retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command (moved here from cli.ts, flow 356)
 
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";

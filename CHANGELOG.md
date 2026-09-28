@@ -3,6 +3,11 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.24] — 2026-09-28
+
+### Fixed
+- **Release 0.3.23 did not reach npm.** Its release workflow stopped on the retired-spelling check: the help text moved from `cli.ts` to `cli-registry.ts` (flow 356) without the file-level declaration `cli.ts` carried, and two new texts spelled `keryx mcp serve`. 0.3.24 carries the declaration and the current spelling; it contains everything listed under 0.3.23.
+
 ## [0.3.23] — 2026-09-28
 
 ### Fixed
