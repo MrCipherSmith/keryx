@@ -300,6 +300,7 @@ import {
 import type { QueuedMainQuestion } from "./main-queue";
 import {
   formatMainQueueMarker,
+  drainIdleMainQueue,
   parseQueueCommand,
   removeMainQueueItem,
   editMainQueueItem,
@@ -7546,6 +7547,22 @@ export async function launchTuiAgentShell(opts: {
             const id = `mq${mainQueueSeq++}`;
             mainQueue.push({ id, question: line, displayQuestion: displayLine });
             paintMainQueue();
+            // The recipient choice is asynchronous. The turn may have settled
+            // while its dock was open, before the settle handler saw this item.
+            // Drain now if idle; otherwise the usual settle/release path owns it.
+            drainIdleMainQueue(mainQueue, {
+              isIdle: () =>
+                !destroyed &&
+                !chrome.isBusy() &&
+                !foregroundOperation.isActive &&
+                !forceHandoff.isAwaitingSettlement &&
+                leaseView()?.held() !== true,
+              takeForced: () => forceHandoff.takeNext(),
+              dispatch: (next) => {
+                paintMainQueue();
+                runLine(next.question);
+              },
+            });
           } else {
             appendUserEcho(otui, r, transcript, {
               id: `side-q${uid++}`,

@@ -118,3 +118,23 @@ export function reinsertMainQueueItem<T extends QueuedMainQuestion>(
   next.splice(insertAt, 0, item);
   return next;
 }
+
+/**
+ * Drain a late main-queue choice only after the main turn is truly idle.
+ * The caller supplies the live guard and repaints before dispatch. Taking the
+ * forced item first preserves the existing settle/lease-release priority.
+ */
+export function drainIdleMainQueue<T extends QueuedMainQuestion>(
+  items: T[],
+  options: {
+    isIdle: () => boolean;
+    takeForced: () => T | undefined;
+    dispatch: (item: T) => void;
+  },
+): boolean {
+  if (!options.isIdle()) return false;
+  const next = options.takeForced() ?? items.shift();
+  if (next === undefined) return false;
+  options.dispatch(next);
+  return true;
+}
