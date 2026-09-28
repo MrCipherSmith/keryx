@@ -37,9 +37,23 @@ test("does NOT flag a filesystem path near a sensitive label (the `/` shape gate
   expect(detectEntropy("api docs at docs/decisions/keryx-harness/index")).toEqual([]);
 });
 
-test("does NOT flag an ADR filename slug even with a version-like digit segment", () => {
+test("does NOT flag an UNLABELLED ADR filename slug even with a version-like digit segment", () => {
   expect(detectEntropy("ADR-0008-interactive-shell-delegate-risk-gate.md")).toEqual([]);
-  expect(detectEntropy("token: ADR-0008-interactive-shell-delegate-risk-gate.md")).toEqual([]);
+});
+
+test("SEC-F3 (flow 355 review round 3): a LABELLED ADR-style slug IS now flagged — no slug exemption survives adjacency to a real label", () => {
+  // Before SEC-F3, `labelledPieceQualifies` fell back through
+  // `bareShapeQualifies`, whose word-slug exemption (`isWordSlug`) exempted
+  // this UNCONDITIONALLY, labelled or not — which is exactly how a real
+  // secret dressed as a word slug (`log-report-deadbeef01234567`) bypassed
+  // an adjacent `api_key:` label. Once the labelled path stopped consulting
+  // any slug exemption at all, an ordinary documentation slug that happens
+  // to sit right after a real label reads exactly like a labelled secret by
+  // shape (its separator-stripped entropy clears the floor) — a deliberate,
+  // accepted trade-off; see `labelledPieceQualifies`'s own comment.
+  const matches = detectEntropy("token: ADR-0008-interactive-shell-delegate-risk-gate.md");
+  expect(matches.length).toBe(1);
+  expect(matches[0]?.value).toBe("ADR-0008-interactive-shell-delegate-risk-gate");
 });
 
 test("the label window is bounded to the current line", () => {
@@ -340,4 +354,69 @@ test("R3 — the coordinator's own 'low-entropy' example is actually maximal-ent
   const matches = detectEntropy(`token=${value}`);
   expect(matches.length).toBe(1);
   expect(matches[0]?.value).toBe(value);
+});
+
+// --- flow 355 review round 3, pass 2 (PR #779 round-3 review): SEC-F3, LOG-F2 ---
+
+describe("SEC-F3 (flow 355 review round 3): the LABELLED path consults no slug exemption at all", () => {
+  test("the reviewer's exact input — a word-slug-with-hex-tail secret IS redacted when labelled", () => {
+    const matches = detectEntropy("leaked api_key: log-report-deadbeef01234567");
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe("log-report-deadbeef01234567");
+  });
+
+  test("the same value, UNLABELLED, still passes — looksSecretShaped stays false (accepted residual, see findings.md S-8)", () => {
+    expect(looksSecretShaped("log-report-deadbeef01234567")).toBe(false);
+    expect(detectEntropy("log-report-deadbeef01234567 appeared in the log")).toEqual([]);
+  });
+
+  test("the unlabelled Medium URL (REG-F1) still passes — the unlabelled path is untouched by SEC-F3", () => {
+    const url =
+      "https://medium.com/real-time-data-evolution/rag-architecture-in-2026-how-to-keep-retrieval-actually-fresh-3a9bae9ec8f9";
+    expect(detectEntropy(url)).toEqual([]);
+  });
+});
+
+describe("LOG-F2 (flow 355 review round 3): ADJACENT_LABEL tolerates a filler word and an explicit line continuation", () => {
+  test("the reviewer's exact input — 'password is: <secret>' IS redacted", () => {
+    const matches = detectEntropy("password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe("kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+  });
+
+  test("a label ending its own line in an explicit continuation ('export API_KEY=\\') labels the value on the NEXT line", () => {
+    const content = "export API_KEY=\\\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz";
+    const matches = detectEntropy(content);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe("kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+  });
+
+  test("a bare trailing backslash after a label also continues onto the next line", () => {
+    const content = "the token \\\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz";
+    const matches = detectEntropy(content);
+    expect(matches.length).toBe(1);
+    expect(matches[0]?.value).toBe("kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz");
+  });
+
+  test("does NOT regress the LOG-F1 false-positive fixtures — a same-line label two sentences away stays unlabelled", () => {
+    const withoutLabel = "harmless-line-here.md\ndocs/decisions/0008-shell-gate.md";
+    const withLabel =
+      "ADR-0007-tls-terminate-https-credential-masking.md\ndocs/decisions/0008-shell-gate.md";
+    expect(detectEntropy(withoutLabel)).toEqual(detectEntropy(withLabel));
+    expect(detectEntropy(withLabel)).toEqual([]);
+  });
+
+  test("does NOT regress: a label on the PREVIOUS line with no continuation marker stays a residual (not adjacent)", () => {
+    // "password is:" ends the previous line with no `\` continuation marker —
+    // deliberately narrower than the reviewer's own "label ends one line,
+    // value starts the next" framing; see entropy.ts's header for why only
+    // an EXPLICIT continuation marker crosses a line, not any label-ending line.
+    const content = "password is:\nkd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz";
+    expect(detectEntropy(content)).toEqual([]);
+  });
+
+  test("an arbitrary sentence between a label and an unrelated value is still NOT adjacent (filler stays a closed set)", () => {
+    const content = "the password everyone always forgets is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz";
+    expect(detectEntropy(content)).toEqual([]);
+  });
 });

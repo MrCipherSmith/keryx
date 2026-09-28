@@ -59,6 +59,70 @@ import {
 // outbound fetch trades a false refusal for zero exfiltration risk, while
 // redacting inbound output trades nothing — the content already arrived.
 
+// REG-F2 (flow 355 review round 3): REG-F1 only reached a hex tail that is
+// the LAST segment of an already-valid word slug (`entropy.ts`'s
+// `isSlugHexTail`); a GitHub Gist URL's real, common shape —
+// `gist.github.com/<user>/<32-hex-id>` — is a SINGLE bare path segment that
+// never reaches `isWordSlug` at all, so it fell straight to the unconditional
+// hex-blob branch and `web_fetch` still refused an entirely ordinary, public
+// URL. A small, DOCUMENTED host + path-shape allowlist for public
+// paste/commit identifiers, consulted ONLY here (the OUTBOUND check) — never
+// by `entropy.ts`'s redaction path (S-6/S-9), which is unaffected: the same
+// value arriving in TOOL OUTPUT is still redacted exactly as before, since a
+// value that already arrived costs nothing to identify later, while refusing
+// an ordinary outbound fetch is a pure loss. Shape-only, host-gated — never a
+// name/label — so this cannot become a bypass for an actual secret placed at
+// one of these exact host+path shapes on an attacker-controlled domain: the
+// host check is an exact hostname match, not a substring/suffix one.
+const HEX32_FRAGMENT = "[0-9a-f]{32}";
+const SHA40_FRAGMENT = "[0-9a-f]{40}";
+const GIST_HEX32_PATH_RE = new RegExp(`^/(?:[^/]+/)?(${HEX32_FRAGMENT})/?$`, "i");
+const GITHUB_COMMIT_OR_BLOB_PATH_RE = new RegExp(`/(?:commit|blob)/(${SHA40_FRAGMENT})(?:/|$)`, "i");
+const GITLAB_COMMIT_PATH_RE = new RegExp(`/-/commit/(${SHA40_FRAGMENT})(?:/|$)`, "i");
+
+/**
+ * The known-public-identifier substring in `url`, if any — `gist.github.com`
+ * `/<user>/<hex32>` or `/<hex32>`; `github.com` `/…/commit/<sha40>` or
+ * `/…/blob/<sha40>/…`; `gitlab.com` `/-/commit/<sha40>`. Returns the matched
+ * identifier itself (never the whole URL), so only that value is exempted —
+ * a secret elsewhere in the SAME url (an unrelated query parameter, say) is
+ * still caught.
+ */
+function knownPublicIdentifierIn(url: URL): string | null {
+  const host = url.hostname.toLowerCase();
+  if (host === "gist.github.com") {
+    return GIST_HEX32_PATH_RE.exec(url.pathname)?.[1] ?? null;
+  }
+  if (host === "github.com") {
+    return GITHUB_COMMIT_OR_BLOB_PATH_RE.exec(url.pathname)?.[1] ?? null;
+  }
+  if (host === "gitlab.com") {
+    return GITLAB_COMMIT_PATH_RE.exec(url.pathname)?.[1] ?? null;
+  }
+  return null;
+}
+
+/**
+ * `text` with any known-public-identifier substring (see
+ * `knownPublicIdentifierIn`) replaced by an equal-length, non-secret-shaped
+ * placeholder — never dropped, so every OTHER offset/component in `text`
+ * scans exactly as before. Returns `text` unchanged when it is not a URL, or
+ * matches no allowlisted host+path shape.
+ */
+function stripKnownPublicIdentifier(text: string): string {
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return text;
+  }
+  const identifier = knownPublicIdentifierIn(url);
+  if (identifier === null) {
+    return text;
+  }
+  return text.replace(identifier, "0".repeat(identifier.length));
+}
+
 function safeDecodeComponent(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -114,15 +178,21 @@ function anyComponentLooksSecret(text: string): boolean {
 
 /** True when `text` (a URL or a search query) carries secret-shaped content. */
 export function containsOutboundSecret(text: string): boolean {
-  if (detectSecrets(text).length > 0) {
+  // REG-F2: a known public paste/commit identifier (Gist id, GitHub/GitLab
+  // commit SHA) is swapped for an equal-length, non-secret-shaped placeholder
+  // BEFORE any of the checks below run, so none of them ever sees it — every
+  // other component of `text` (an unrelated query parameter, say) still
+  // scans unchanged.
+  const scanText = stripKnownPublicIdentifier(text);
+  if (detectSecrets(scanText).length > 0) {
     return true;
   }
   // F-REG-F3: honours `backends.entropy.enabled`, the same gate
   // `redactSensitiveText` now respects — see `security/entropy-gate.ts`.
-  if (isEntropyBackendEnabled() && detectEntropy(text).length > 0) {
+  if (isEntropyBackendEnabled() && detectEntropy(scanText).length > 0) {
     return true;
   }
-  return anyComponentLooksSecret(text);
+  return anyComponentLooksSecret(scanText);
 }
 
 /**
