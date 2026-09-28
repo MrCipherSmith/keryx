@@ -86,6 +86,8 @@ export type FlowInspectorItem = {
    * recorded", never an empty list.
    */
   acKinds?: Readonly<Record<string, AcKindRecord>>;
+  /** `false` when the criteria are not frozen yet, so absent `acKinds` is not a legacy flow. */
+  acFrozen?: boolean;
 };
 
 /** Flow 328, AC7: one criterion's cached status, for the /flows sidebar and detail tab. */
@@ -267,6 +269,7 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
           item.interrupted = interruptedCompletionLine(flow.id);
         }
         const kinds = readAcKindRecords(flow.acKinds);
+        item.acFrozen = flow.acChecksum !== null;
         if (kinds !== undefined) {
           item.acKinds = kinds;
         }

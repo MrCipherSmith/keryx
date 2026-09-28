@@ -119,6 +119,9 @@ function identityLine(identity: { value: string | null; basis: string; source: s
 export function renderAcceptanceLine(acceptance: FlowAcceptance | undefined): string {
   if (acceptance === undefined || !acceptance.recorded) {
     const total = acceptance?.total;
+    if (acceptance?.frozen === false) {
+      return `acceptance coverage: not frozen yet (${total ?? 0} criteria drafted; kinds are read at freeze)`;
+    }
     return total === undefined
       ? "acceptance coverage: not recorded (predates verification kinds; every criterion reads unclassified)"
       : `acceptance coverage: 0/${total} runnable (0%) — all ${total} unclassified (predates verification kinds)`;

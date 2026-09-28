@@ -197,6 +197,8 @@ export type FlowGateOutcomes =
  */
 export type FlowAcceptance = {
   recorded: boolean;
+  /** `false` when the criteria are not frozen yet (no checksum): the absent `acKinds` is then "not frozen yet", not "predates kinds". */
+  frozen?: boolean;
   total: number | undefined;
   counts: Record<AcKind, number>;
   /** `exec` + `invariant`. */

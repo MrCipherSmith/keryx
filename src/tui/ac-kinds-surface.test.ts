@@ -98,6 +98,12 @@ describe("the AC tab renders each criterion's kind", () => {
     expect(painted).not.toContain("(no criteria)");
   });
 
+  test("a flow whose criteria are not frozen yet says so, not that it predates kinds", () => {
+    const painted = paintedAcTab({ ...BASE, acFrozen: false });
+    expect(painted).toContain("not frozen yet");
+    expect(painted).not.toContain("frozen before kinds existed");
+  });
+
   test("formatAcKindLines is the same block the CLI prints", () => {
     const lines = formatAcKindLines(CLASSIFIED);
     expect(lines[0]).toStartWith("acceptance kinds:");

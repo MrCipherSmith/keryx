@@ -151,6 +151,29 @@ describe("flow ac update keeps acKinds and the seal in step", () => {
 });
 
 describe("flow ac reseal", () => {
+  test("re-derives acKinds from the file the new seal covers", async () => {
+    const root = await realRepo();
+    try {
+      const service = createFlowService(deps());
+      const created = await service.init({ cwd: root, title: "Reseal kinds" });
+      const dir = path.basename(created.dir);
+      const file = path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md");
+      const body = (verify: string): string => `# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds ${verify}\n`;
+      await writeFile(file, body("[verify: judged]"), "utf8");
+      const frozen = await service.freeze({ cwd: root, id: dir });
+      expect(frozen.acKinds?.["AC1"]).toEqual({ kind: "judged" });
+
+      await writeFile(file, body("[verify: exec `bun test x.test.ts`]"), "utf8");
+      await git(root, ["add", "-A"]);
+      await git(root, ["commit", "-q", "-m", "criteria edited after freeze"]);
+
+      const resealed = await service.acReseal({ cwd: root, id: dir, reason: "file committed after the seal" });
+      expect(resealed.acKinds?.["AC1"]).toEqual({ kind: "exec", check: "bun test x.test.ts" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("re-seals a stale checksum over an unchanged file and KEEPS the confirmations", async () => {
     const root = await realRepo();
     try {

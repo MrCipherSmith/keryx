@@ -95,7 +95,10 @@ describe("a kind never gates a freeze, a confirmation or a completion", () => {
     console.log = (...args: unknown[]) => void logs.push(args.map(String).join(" "));
     await flowCommand(["freeze", id]);
     expect(process.exitCode ?? 0).toBe(0);
-    expect(logs.join("\n")).toContain("AC1");
+    const output = logs.join("\n");
+    expect(output).toContain("AC1: `exec` requires a backticked command");
+    expect(output).toContain("(read as unclassified)");
+    expect(output).not.toContain("AC2:");
     expect((await createFlowService(deps()).get({ cwd: ROOT, id })).status).toBe("ready");
   });
 
@@ -172,9 +175,9 @@ describe("where a kind is read", () => {
 
   test("the store, the state machine and the confirm/complete gates never read a kind", async () => {
     const repo = path.resolve(import.meta.dir, "..", "..");
-    for (const file of ["store.ts", "machine.ts", "ac-reseal.ts", "confirm-token.ts"]) {
-      const text = await readFile(path.join(repo, "src", "flow", file), "utf8").catch(() => null);
-      if (text === null) continue;
+    for (const file of ["store.ts", "machine.ts", "ac-reseal.ts", "confirm-token.ts", "review-gate.ts"]) {
+      // A renamed gate file must fail here, not pass by being absent.
+      const text = await readFile(path.join(repo, "src", "flow", file), "utf8");
       expect(text).not.toMatch(/acKinds|ac-kinds|AcKind/);
     }
   });

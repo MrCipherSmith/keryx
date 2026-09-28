@@ -852,6 +852,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           );
         }
         flow.acChecksum = current;
+        flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
         // acConfirmed is deliberately preserved: the criteria this flow was
         // confirmed against are the criteria on disk right now.
         return save(cwd, dir, flow, "ac-resealed", reason);

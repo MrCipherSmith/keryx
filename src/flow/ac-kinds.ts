@@ -91,8 +91,8 @@ function scanMarkers(text: string): MarkerScan {
     occurrences += 1;
     lastStart = at;
   }
-  const end = masked.trimEnd().length;
-  return { occurrences, lastStart, trailing: occurrences > 0 && end > lastStart && masked[end - 1] === "]", end };
+  const end = text.trimEnd().length;
+  return { occurrences, lastStart, trailing: occurrences > 0 && end > lastStart && text[end - 1] === "]", end };
 }
 
 /**
@@ -102,7 +102,7 @@ function scanMarkers(text: string): MarkerScan {
  */
 export function stripVerifyMarker(text: string): string {
   const scan = scanMarkers(text);
-  if (!scan.trailing) return text;
+  if (!scan.trailing || scan.occurrences !== 1) return text;
   return text.slice(0, scan.lastStart).trimEnd();
 }
 

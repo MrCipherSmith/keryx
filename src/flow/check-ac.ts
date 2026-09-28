@@ -255,7 +255,7 @@ function questionFor(criterion: AcCriterion): AcCheckQuestion {
     type: "noul",
     instructions:
       `Given the deterministic facts and the redacted diff evidence above, does this change LIKELY SATISFY this frozen ` +
-      `acceptance criterion? Criterion ${criterion.id}: ${redactSensitiveText(criterion.text)}`,
+      `acceptance criterion? Criterion ${criterion.id}: ${redactSensitiveText(stripVerifyMarker(criterion.text))}`,
   };
 }
 

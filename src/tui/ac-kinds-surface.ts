@@ -20,6 +20,9 @@ const ID_WIDTH = 5;
  */
 export function formatAcKindLines(item: FlowInspectorItem): string[] {
   if (item.acKinds === undefined) {
+    if (item.acFrozen === false) {
+      return ["Verification kinds: not frozen yet (kinds are read when the criteria are frozen)."];
+    }
     return [
       "Verification kinds: not recorded (this flow was frozen before kinds existed; every criterion reads unclassified).",
     ];

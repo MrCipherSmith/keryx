@@ -8,7 +8,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { flowCommand } from "../commands/flow";
-import { parseAcKinds } from "./ac-kinds";
+import { parseAcKinds, stripVerifyMarker } from "./ac-kinds";
 import { createFlowService } from "./service";
 import type { FlowServiceDeps } from "./types";
 
@@ -26,6 +26,20 @@ describe("malformed markers are parse errors naming the criterion", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0]?.id).toBe("AC7");
     expect(errors[0]?.message).toContain("second");
+  });
+
+  test("anything after the marker, even a code span or a bracket, makes it not the last thing on the line", () => {
+    for (const line of [
+      "- AC1: see `a` [verify: judged] `b`",
+      "- AC1: x [verify: exec `bun test x`] `keep.ts`",
+      "- AC1: x [verify: judged] and [1]",
+    ]) {
+      expect(errorsFor(line)).toHaveLength(1);
+    }
+    for (const text of ["see `a` [verify: judged] `b`", "x [verify: exec `bun test x`] `keep.ts`"]) {
+      expect(stripVerifyMarker(text)).toBe(text);
+    }
+    expect(stripVerifyMarker("x [verify: judged]")).toBe("x");
   });
 
   test("exec without a backticked command", () => {

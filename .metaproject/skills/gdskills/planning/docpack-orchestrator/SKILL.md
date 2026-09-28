@@ -109,8 +109,8 @@ Add optional files only when justified:
 Write concise Markdown with explicit headings. Required contracts:
 
 - README: purpose, status, document index, scope, related modules.
-- PRD: problem, goal, users, requirements, success criteria (a release list and an outcome list; an outcome criterion names its observation or declares `not measured — <reason>`), risks, recommendation.
-- Specification: identity, structure, manifest/config, CLI/skill surface, data contracts, integrations, acceptance criteria; every requirement carries a `Verification:` field (`exec`/`invariant` with a backticked command, `judged`, or `none — <reason>`).
+- PRD: problem, goal, users, requirements (each `R<n>` carries a `Verification:` field: `exec`/`invariant` with a backticked command, `judged`, or `none — <reason>`), success criteria (a release list and an outcome list; an outcome criterion names its observation or declares `not measured — <reason>`), risks, recommendation.
+- Specification: identity, structure, manifest/config, CLI/skill surface, data contracts, integrations, acceptance criteria.
 
 When updating existing docs, preserve useful content and bump versions.
 
@@ -123,7 +123,7 @@ Run a local verification pass:
 - README links to every package file;
 - schema files are valid JSON;
 - specification references schemas when present;
-- every requirement has a `Verification:` field (a package with a requirement that omits it FAILS, naming that requirement); the PRD has a release list and an outcome list (no outcome list FAILS; an outcome list whose entries are all `not measured — <reason>` passes);
+- every PRD requirement has a `Verification:` field (a package with a requirement that omits it FAILS, naming that requirement); the PRD has a release list and an outcome list (no outcome list FAILS; an outcome list whose entries are all `not measured — <reason>` passes);
 - roadmap is updated for new module/standard capabilities;
 - no implementation status is overstated.
 

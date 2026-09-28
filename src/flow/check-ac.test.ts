@@ -176,6 +176,12 @@ describe("batchAcCheckItems", () => {
     return { criterion, facts, matchedHunks: [], changedFiles: [] };
   }
 
+  test("the question sent to the model is identical for a marked criterion and its unmarked twin", () => {
+    const marked = batchAcCheckItems([item("AC1", "the panel shows the count [verify: exec `bun test src/x.test.ts`]")]);
+    const plain = batchAcCheckItems([item("AC1", "the panel shows the count")]);
+    expect(marked[0]!.questions["AC1"]).toEqual(plain[0]!.questions["AC1"]!);
+  });
+
   test("packs small items into a single batch", () => {
     const batches = batchAcCheckItems([item("AC1", "short one"), item("AC2", "short two")]);
     expect(batches).toHaveLength(1);

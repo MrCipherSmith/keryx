@@ -128,6 +128,16 @@ describe("summarizeAcceptance and renderAcceptanceLine", () => {
     expect(renderAcceptanceLine(summary)).not.toContain("0/0");
   });
 
+  test("an unfrozen flow reads not frozen yet; a frozen flow with no kinds predates them", () => {
+    const draft = summarizeAcceptance({ id: "1", acChecksum: null } as never, 3);
+    expect(draft.frozen).toBe(false);
+    expect(renderAcceptanceLine(draft)).toContain("not frozen yet");
+    expect(renderAcceptanceLine(draft)).not.toContain("predates");
+    const legacy = summarizeAcceptance({ id: "1", acChecksum: "sha256:abc" } as never, 3);
+    expect(legacy.frozen).toBe(true);
+    expect(renderAcceptanceLine(legacy)).toContain("predates verification kinds");
+  });
+
   test("a report stored before the field existed renders as not recorded", () => {
     expect(renderAcceptanceLine(undefined)).toContain("not recorded");
   });

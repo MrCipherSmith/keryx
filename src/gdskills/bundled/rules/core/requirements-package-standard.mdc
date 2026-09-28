@@ -62,7 +62,7 @@ document changes.
 - problem;
 - goal;
 - users;
-- requirements;
+- requirements, each carrying a verification field (see Verification Field below);
 - success criteria, split into two lists (see Success Contract below);
 - risks;
 - recommendation.
@@ -92,12 +92,11 @@ is honest. A PRD with no outcome list at all is not.
 - CLI or skill surface;
 - data contracts;
 - integration points;
-- acceptance criteria;
-- a verification field on every requirement (see Verification Field below).
+- acceptance criteria.
 
 ### Verification Field
 
-Every requirement in the specification carries one verification field, in the
+Every requirement in the PRD (each `R<n>` under Requirements) carries one verification field, in the
 same vocabulary a flow criterion's trailing marker uses:
 
 ```markdown
@@ -119,7 +118,7 @@ Before finishing:
 - verify README links to all package files;
 - verify schemas are referenced from specification when present;
 - verify status is honest: `draft`, `spec ready`, `implemented`, or `future`;
-- verify every specification requirement carries a `Verification:` field, and
+- verify every PRD requirement carries a `Verification:` field, and
   fail the package when one does not, naming that requirement;
 - verify the PRD has both a release-criteria list and an outcome-criteria list,
   and fail the package when the outcome list is missing (an outcome list whose

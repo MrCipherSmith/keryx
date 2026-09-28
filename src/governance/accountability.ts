@@ -69,6 +69,7 @@ export function summarizeAcceptance(flow: FlowState, criteriaInFile: number | un
     const total = criteriaInFile;
     return {
       recorded: false,
+      frozen: flow.acChecksum !== null,
       total,
       counts: { exec: 0, invariant: 0, judged: 0, none: 0, unclassified: total ?? 0 },
       runnable: 0,
