@@ -10,7 +10,7 @@
 // THIS repository's own long-lived `.metaproject/` (flow 356's own worktree)
 // are local runtime-state drift — `.metaproject/data/{tasks,health,mcp}`
 // never having been populated because nothing in this particular worktree
-// ever ran `keryx tasks`/`keryx health run`/`keryx mcp serve` — not a code
+// ever ran `keryx tasks`/`keryx health run`/`keryx serve-mcp` — not a code
 // defect a fresh tree reproduces.
 
 import { mkdtemp, rm } from "node:fs/promises";
