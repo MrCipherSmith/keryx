@@ -1412,6 +1412,7 @@ function printHelp(): void {
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
+    "keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)",
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",

@@ -116,8 +116,8 @@ Usage:
   keryx governance show [--json]
 
 Reads what is already recorded — flow.json (owner, signatures, acConfirmed,
-completionAttempts, acKinds), review package manifests (cost), and the trigger
-run ledger (.metaproject/data/trigger/runs.jsonl). Never re-runs a gate, never
+completionAttempts), review package manifests (cost), and the trigger run
+ledger (.metaproject/data/trigger/runs.jsonl). Never re-runs a gate, never
 calls a model or a network service. A figure nobody recorded is reported as
 "not recorded", never as zero.
 

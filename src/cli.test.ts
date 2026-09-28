@@ -230,7 +230,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity\n",
       "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
     ],
+    governance: [
+      "\nEach flow also shows its acceptance coverage: how many criteria are runnable\n(exec or invariant) of all of them. A flow frozen before verification kinds\nexisted reads as fully unclassified, not as zero criteria.\n",
+    ],
     flow: [
+      "  keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)\n",
       "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
     ],
   };
