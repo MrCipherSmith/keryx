@@ -917,7 +917,8 @@ neither reads `config.mode` (see their Exit cells above).
 - `src/security/detect/` — the deterministic detectors: `secrets.ts`, `entropy.ts`, `pii.ts` (checksum-validated structured PII), `injection.ts`, `egress.ts`, `exfil.ts` (markdown-image/EchoLeak), `mcp.ts` (MCP-manifest scan), plus `index.ts` (`runDetectors` + overlap dedup); opt-in model adapters live under `detect/injection/adapter.ts` (Prompt Guard 2) and `detect/pii/ner-adapter.ts` (NER).
 - `src/security/agent-hooks/runtimes.ts` — multi-runtime agent-hook registry; `src/security/eval/harness.ts` — labeled-corpus red-team eval harness.
 - `src/security/resolve.ts` — finding construction, action precedence, injection→egress escalation, confidence gate, `computeGate`.
-- `src/security/redact.ts` — fixed-width masks, safe `redactedPreview`, local-only HMAC key management + `hmacHash`.
+- `src/security/redact.ts` — fixed-width masks, safe `redactedPreview`, local-only HMAC key management + `hmacHash`; `redactSensitiveText` runs the pattern detectors plus `detect/entropy.ts`.
+- `src/security/credential-shape.ts` — `isDeniedForMcpChild`: whether a name/value pair looks like a credential, shared by the MCP-server and external-agent-CLI child-environment filters.
 - `src/security/self-protect.ts` — config-checksum / mode-downgrade / disabled-policy self-protection.
 - `src/security/report.ts` — report building + committable artifact writing.
 - `src/security/config.ts` — `DEFAULT_SECURITY_CONFIG`, load/merge, `computeConfigChecksum`/`verifyConfigChecksum`, `validateSecurityConfig`.
@@ -960,6 +961,29 @@ Asset Resolver: a **Prompt Guard 2** injection adapter (`detect/injection/adapte
 `backends.injectionModel`) and an **NER PII** adapter (`detect/pii/ner-adapter.ts`,
 `backends.piiModel`). All remain leak-safe and degrade to the deterministic rule
 detectors when a dependency/asset is unavailable.
+
+**Audit remediation 2 (flow 355, security depth).** `redactSensitiveText`
+(`redact.ts`) now runs the entropy detector — the SAME thresholds `keryx
+security scan` uses — after the pattern pass, so an opaque high-entropy
+credential with no named prefix (a bearer token, a raw key) is masked as
+`[REDACTED:entropy]` instead of reaching the model unredacted; a small set of
+allow-shapes (a 40-hex git commit SHA, a 7–12-hex short SHA, a UUID, an
+`npm`/`yarn` `sha256-`/`sha512-` integrity string) is exempted so ordinary
+`git`/`bun`/`npm` output is never a false positive (measured at zero on a
+200-sample fixture of realistic command output). `detect/injection.ts` folds a
+small Cyrillic/Greek confusables map (plus length-preserving NFKC) before
+matching and its phrase gaps now allow a line break, so a trigger phrase split
+across a wrapped line or spelled with a homoglyph is still caught.
+`web_fetch`/`web_search` (`harness/web/outbound-secret.ts`) run the same
+pattern-and-entropy floor on the model-supplied URL/query BEFORE any network
+connection, refusing with `outbound secret-shaped content` and recording an
+`egress.outbound-secret` incident when it fires — the egress-side twin of
+`redactSensitiveText`, since redaction alone only ever cleaned up what came
+back. `displayUrl` (`mcp-servers/http-headers.ts`) additionally masks any path
+segment of 16+ characters that is credential-shaped, and
+`isDeniedForMcpChild` (the third-party-child environment filter) moved to
+`src/security/credential-shape.ts` as the shared home for both the MCP-server
+and external-agent-CLI callers.
 
 **Data & artifacts.** Config `.metaproject/security.config.json` (seed-once). Data
 root `.metaproject/data/security/` with subtrees `artifacts/` (committable

@@ -202,6 +202,20 @@ const SESSION_STATE_MODULES = [
  * lanes that own `src/harness/tool/**` and `src/commands/memory.ts`; when they
  * do, `AVOIDABLE_SLACK` below forces this number back down rather than letting
  * it sit above reality.
+ *
+ * RAISED 150 → 151, then REVERTED to 150 (flow 355, audit remediation 2,
+ * R-MIN1, then its own review round's F-ARCH-F1): moving
+ * `isDeniedForMcpChild` to `src/security/credential-shape.ts` needed
+ * `EXTERNAL_ENV_DENY`/`EXTERNAL_ENV_PREFIX_SWEEPS` to move with it — a core
+ * module cannot import `harness/external/env-deny.ts` (RULE 1, zero
+ * tolerance) — and `env-deny.ts`'s re-export of them briefly went straight
+ * to `security/credential-shape.ts`, an avoidable bypass that raised this
+ * number for no reason a facade could not have avoided. `env-deny.ts` now
+ * re-exports both constants through `security/service.ts` — the facade —
+ * instead, exactly like every other new import this lane added
+ * (`spawn-env.ts`, `harness/external/env.ts`, `mcp-servers/http-headers.ts`,
+ * `harness/web/outbound-secret.ts`), so the ceiling never needed to move at
+ * all.
  */
 const AVOIDABLE_BYPASS_CEILING = 150;
 

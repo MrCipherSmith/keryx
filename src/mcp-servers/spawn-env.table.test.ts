@@ -153,6 +153,23 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
       // neither `KEY`, `TOKEN` nor `SECRET` — an ordinary config path must
       // survive sharing a prefix with a credential shape.
       ["APPCONFIG", "/etc/app/config.yaml", false],
+      // R-I2 (flow 355 audit remediation 2): the glued shape is now ANCHORED
+      // to the name's own boundaries. Unanchored, `APITOKEN` matched inside
+      // `APITOKENIZER` too — a name that reads as "the thing that tokenizes
+      // API input", not a credential.
+      ["APITOKENIZER", "x", false],
+      // F-SEC-F3 (flow 355 review round, PR #776): the anchor above was
+      // PREFIX-side (`(^|_)PREFIX…`), which broke in the opposite direction —
+      // a real prefix preceded by anything else at all evaded entirely. The
+      // anchor is now on the SUFFIX side; these seven all still end in one of
+      // the glued shapes and must still be caught.
+      ["PRODDBPASS", "x", true],
+      ["MYPRIVATEKEY", "x", true],
+      ["USERREFRESHTOKEN", "x", true],
+      ["LEGACYACCESSTOKEN", "x", true],
+      ["V2APITOKEN", "x", true],
+      ["OAUTHACCESSTOKEN", "x", true],
+      ["SNOWFLAKEDBPASS", "x", true],
     ],
   },
   {

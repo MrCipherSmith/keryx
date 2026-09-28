@@ -204,3 +204,36 @@ describe("AC1: buildExternalChildEnv strips credential-shaped variables the old 
     expect(env).not.toHaveProperty("SOME_SERVICE_URL");
   });
 });
+
+describe("R-I1 (flow 355 audit remediation 2): the by-name denial is case-insensitive", () => {
+  // `ANTHROPIC_MODEL`/`CLAUDE_CONFIG_DIR`/`CLAUDECODE` carry no credential
+  // SHAPE at all — nothing in `isDeniedForMcpChild` would catch a lower-case
+  // spelling of these, so the by-name list itself has to compare case-
+  // insensitively, not rely on the shape check "behind it" to catch the rest.
+  test("a lower-case ANTHROPIC_API_KEY is still stripped", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", anthropic_api_key: "sk-ant-secret" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("anthropic_api_key");
+  });
+
+  test("a lower-case ANTHROPIC_MODEL is stripped though it has no credential shape", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", anthropic_model: "claude-x" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("anthropic_model");
+  });
+
+  test("a lower-case CLAUDE_CODE_ prefix is still swept", () => {
+    const env = buildExternalChildEnv({
+      parent: { PATH: "/usr/bin", claude_code_something: "1" },
+      depth: 0,
+      runtimeId: "claude-cli",
+    });
+    expect(env).not.toHaveProperty("claude_code_something");
+  });
+});

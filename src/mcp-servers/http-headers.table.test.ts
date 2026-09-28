@@ -522,6 +522,45 @@ describe("displayUrl is safe to print", () => {
   test("undefined is the empty string, not the word undefined", () => {
     expect(displayUrl(undefined)).toBe("");
   });
+
+  // S-9 (flow 355, AC5): a credential in a PATH segment, not just the query
+  // or userinfo — the case an operator's own history found in `mcp list`.
+  describe("a credential-shaped PATH segment is masked too", () => {
+    test("a 32-hex path segment is replaced with …", () => {
+      const shown = displayUrl("https://host/v1/0123456789abcdef0123456789abcdef/mcp");
+      expect(shown).toBe("https://host/v1/…/mcp");
+      expect(shown).not.toContain("0123456789abcdef0123456789abcdef");
+    });
+
+    test("BOUNDARY — an ordinary short path segment is untouched", () => {
+      expect(displayUrl("https://host/v1/users/mcp")).toBe("https://host/v1/users/mcp");
+    });
+
+    test("BOUNDARY — a long but ordinary word segment is untouched", () => {
+      expect(displayUrl("https://host/api/organization-settings/mcp")).toBe(
+        "https://host/api/organization-settings/mcp",
+      );
+    });
+
+    // F-REG-F2 (flow 355 review round, PR #776): a digits-only run is never a
+    // "hex blob" — Shannon entropy over a base-10 alphabet cannot reach the
+    // 3.6-bit floor at ANY length, so a purely numeric id must never ride the
+    // hex-blob shape check around that floor.
+    test("BOUNDARY — a 24-digit numeric order id stays visible", () => {
+      const url = "https://host/orders/123456789012345678901234/mcp";
+      expect(displayUrl(url)).toBe(url);
+    });
+
+    test("BOUNDARY — a 30-digit numeric id stays visible", () => {
+      const url = "https://host/orders/123456789012345678901234567890/mcp";
+      expect(displayUrl(url)).toBe(url);
+    });
+
+    test("a 32-char hex token (has a-f letters) is still masked", () => {
+      const shown = displayUrl("https://host/orders/0123456789abcdef0123456789abcdef/mcp");
+      expect(shown).toBe("https://host/orders/…/mcp");
+    });
+  });
 });
 
 describe("referencedVariable names what the operator has to set", () => {
