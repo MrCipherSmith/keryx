@@ -49,7 +49,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
-import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
+import { catalogFingerprintResolver, catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -2114,7 +2114,10 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
-  agentIo.trustedMcpTools = new Set<string>();
+  agentIo.trustedMcpTools = new Map<string, string>();
+  // The live catalog's current definition fingerprint, read fresh on every
+  // call: a grant holds only while the tool's definition still matches it.
+  agentIo.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
   // Flow 268 T16 (AC11): this readline session's own `/reasoning` override —
   // local to THIS function (unlike the TUI, readline agent mode has no
   // `/model`-style deps rebuild, so there is no second `AgentDeps` build that
@@ -2669,6 +2672,7 @@ export async function runAgentRepl(
         } else {
           history = [];
           archive = [];
+          agentIo.trustedMcpTools?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
       } else if (command === "/compact") {
@@ -4325,6 +4329,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        mcpRuntime: () => mcpRuntime,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         // flow 268: `initialModelParams` is resolved once above (same

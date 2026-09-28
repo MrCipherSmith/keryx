@@ -27,6 +27,7 @@
 // SERVER, WHICH TOOL, and WHAT ARGUMENTS, and no ordering of keys chosen
 // by the model may push any of those three out of view.
 
+import { toolDefinitionFingerprint } from "./catalog";
 import { parseJsonTolerant } from "./config";
 import { sanitiseForDisplay } from "./tools";
 
@@ -271,6 +272,7 @@ export function renderUseToolApprovalLines(
   meta?: {
     readonly destructive?: boolean | undefined;
     readonly untrustedOrigin?: boolean | undefined;
+    readonly mcpTrustWithheld?: boolean | undefined;
   },
 ): string[] {
   const lines = [
@@ -288,13 +290,46 @@ export function renderUseToolApprovalLines(
   if (meta?.destructive === true) {
     lines.push("  this tool is treated as destructive — it is a third party's code");
   }
-  if (meta?.untrustedOrigin === true) {
-    // `agent.ts`'s untrusted-content gate asks instead of refusing; this is the
-    // line that tells the operator the call follows external content the model
-    // just read, so the prompt is answerable rather than merely prompt-shaped.
-    lines.push("  ⚠ follows untrusted external content — that content cannot authorize this call");
+  for (const notice of untrustedOriginNotices(meta)) {
+    lines.push(`  ${notice}`);
   }
   return lines;
+}
+
+/**
+ * The untrusted-content notices both approval surfaces show, one line each.
+ *
+ * `agent.ts`'s untrusted-content gate asks instead of refusing; the first line
+ * tells the operator the call follows external content the model just read, so
+ * the prompt is answerable rather than merely prompt-shaped. The second says why
+ * the "trust this tool" option is missing when it would otherwise be there: a
+ * tainted turn must not be able to induce a lasting grant. Shared by the
+ * readline prompt and the TUI dock so the two cannot drift.
+ */
+export function untrustedOriginNotices(meta?: {
+  readonly untrustedOrigin?: boolean | undefined;
+  readonly mcpTrustWithheld?: boolean | undefined;
+}): string[] {
+  if (meta?.untrustedOrigin !== true) return [];
+  const notices = ["⚠ follows untrusted external content — that content cannot authorize this call"];
+  if (meta.mcpTrustWithheld === true) {
+    notices.push("trust for this session is not offered: this turn contains external content");
+  }
+  return notices;
+}
+
+/**
+ * Whether a surface may offer the exact-tool session grant. The host asked for
+ * it (`mcpTrustAvailable`), the call is bound to a fingerprint, the catalog
+ * resolves the name, and — the floor — the turn holds no untrusted content.
+ * Checked again here, not only in `agent.ts`, so a surface fed a meta that
+ * carries both flags still withholds the option.
+ */
+export function mcpTrustOffered(
+  meta: { readonly mcpTrustAvailable?: boolean | undefined; readonly fingerprint?: string | undefined; readonly untrustedOrigin?: boolean | undefined } | undefined,
+  resolvable: boolean,
+): boolean {
+  return meta?.mcpTrustAvailable === true && meta.untrustedOrigin !== true && meta.fingerprint !== undefined && resolvable;
 }
 
 /**
@@ -355,6 +390,7 @@ export async function promptUseToolApproval(
         readonly fingerprint?: string | undefined;
         readonly untrustedOrigin?: boolean | undefined;
         readonly mcpTrustAvailable?: boolean | undefined;
+        readonly mcpTrustWithheld?: boolean | undefined;
       }
     | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
@@ -363,7 +399,7 @@ export async function promptUseToolApproval(
 ): Promise<ApprovalVerdict> {
   const paint = style ?? { yellow: (t) => t, dim: (t) => t, green: (t) => t, red: (t) => t };
   const described = describeUseToolApproval(input, resolve);
-  const canTrust = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined && resolve?.(described.fqn) !== undefined;
+  const canTrust = mcpTrustOffered(meta, resolve?.(described.fqn) !== undefined);
   const lines = renderUseToolApprovalLines(described, meta);
 
   io.out("\n");
@@ -428,5 +464,22 @@ export function catalogResolver(
     if (catalog === undefined) return undefined;
     const entry = catalog.entries.find((candidate) => candidate.fqn === fqn);
     return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
+  };
+}
+
+/**
+ * The current definition fingerprint for an FQN, from the catalog that will
+ * execute the call — or `undefined` when the catalog no longer holds the tool.
+ * A session trust grant is stored against this value and compared with it on
+ * every later call (see `toolDefinitionFingerprint`).
+ */
+export function catalogFingerprintResolver(
+  catalog:
+    | { entries: readonly { fqn: string; description?: string | undefined; inputSchema?: Record<string, unknown> | undefined }[] }
+    | undefined,
+): (fqn: string) => string | undefined {
+  return (fqn) => {
+    const entry = catalog?.entries.find((candidate) => candidate.fqn === fqn);
+    return entry === undefined ? undefined : toolDefinitionFingerprint(entry);
   };
 }

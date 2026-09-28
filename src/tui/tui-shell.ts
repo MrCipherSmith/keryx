@@ -157,12 +157,15 @@ import {
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
   APPROVAL_ALLOW_ID,
+  catalogFingerprintResolver,
   catalogResolver,
   describeUseToolApproval,
   mcpDockVerdict,
+  mcpTrustOffered,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
   summariseUseToolApproval,
+  untrustedOriginNotices,
 } from "../mcp-servers/approval-render";
 import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -5213,8 +5216,10 @@ export async function launchTuiAgentShell(opts: {
           inputJson,
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
         );
-        const canTrustMcp = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined &&
-          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined;
+        const canTrustMcp = mcpTrustOffered(
+          meta,
+          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined,
+        );
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -5231,6 +5236,11 @@ export async function launchTuiAgentShell(opts: {
               content: otui.t`${dimChunk(otui, `  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
             }),
           );
+        }
+        // The same untrusted-content notices the readline prompt prints, so the
+        // dock says why the trust option is missing while the floor is on.
+        for (const notice of untrustedOriginNotices(meta)) {
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${notice}`)}` }));
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
@@ -5591,7 +5601,10 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
-    io.trustedMcpTools = new Set<string>();
+    io.trustedMcpTools = new Map<string, string>();
+    // Read fresh on every call: a grant holds only while the tool's definition
+    // in the live catalog still matches the fingerprint stored with it.
+    io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
     // Read-only ("plan") posture — orthogonal to `permissionMode` (see
     // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
