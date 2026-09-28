@@ -260,7 +260,8 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
       //
       // It is what routes every MCP call into the agent's own approval
       // branch, which is fail-closed when there is no approver and still
-      // asks under `trust` — the whole of AC7, satisfied by the gate keryx
+      // asks under `trust` unless the operator explicitly granted this exact
+      // tool for this session — AC7, satisfied by the gate keryx
       // already hardened rather than by a second one here (D-05).
       //
       // It is ALSO what keeps `use_tool` out of a read-only side worker:

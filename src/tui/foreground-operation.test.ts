@@ -236,3 +236,18 @@ test("flow 219: an approval resolved after disposal remains denied", async () =>
 
   expect(await result).toBe(false);
 });
+
+
+test("foreground facade shares MCP grants but denies their use after losing ownership", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const trustedMcpTools = new Set(["playwright__snapshot"]);
+  const io: AgentIO = { write: () => {}, trustedMcpTools, permissionMode: () => "trust", readOnly: () => false };
+  const facade = createForegroundAgentIoFacade(owner, operation, io);
+  expect(facade.trustedMcpTools).toBe(trustedMcpTools);
+  expect(facade.permissionMode?.()).toBe("trust");
+  expect(facade.readOnly?.()).toBe(false);
+  owner.settle(operation);
+  expect(facade.readOnly?.()).toBe(true);
+  expect(facade.permissionMode?.()).toBe("ask");
+});

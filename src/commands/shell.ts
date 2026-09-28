@@ -2114,6 +2114,7 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  agentIo.trustedMcpTools = new Set<string>();
   // Flow 268 T16 (AC11): this readline session's own `/reasoning` override —
   // local to THIS function (unlike the TUI, readline agent mode has no
   // `/model`-style deps rebuild, so there is no second `AgentDeps` build that
@@ -2224,6 +2225,7 @@ export async function runAgentRepl(
         openLeased({ cwd: sessionCwd, provider: deps.providerId, model: deps.modelId }),
       );
       holdLease(next.lease);
+      agentIo.trustedMcpTools?.clear();
       return next.handle;
     } catch (cause) {
       agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);

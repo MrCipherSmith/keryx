@@ -252,5 +252,9 @@ export function createForegroundAgentIoFacade(
       if (accepts()) io.onAutoApproved?.(tool, input, meta);
     },
     permissionMode: () => (accepts() ? io.permissionMode?.() ?? "ask" : "ask"),
+    // Share the session grant set with the shell, but never let a stale turn
+    // use it: readOnly denies every mutating tool when ownership is lost.
+    ...(io.trustedMcpTools === undefined ? {} : { trustedMcpTools: io.trustedMcpTools }),
+    readOnly: () => !accepts() || (io.readOnly?.() ?? false),
   };
 }

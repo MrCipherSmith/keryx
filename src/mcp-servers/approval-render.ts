@@ -339,7 +339,7 @@ export type ApprovalIo = {
   readonly readLine: () => Promise<string | undefined>;
 };
 
-export type ApprovalVerdict = false | true | { approved: true; fingerprint: string };
+export type ApprovalVerdict = false | true | { approved: true; fingerprint: string; trustMcpTool?: true };
 
 /** `y` / `yes`, case-insensitive, and nothing else. Never "always". */
 export function isApprovalYes(answer: string): boolean {
@@ -354,6 +354,7 @@ export async function promptUseToolApproval(
         readonly destructive?: boolean | undefined;
         readonly fingerprint?: string | undefined;
         readonly untrustedOrigin?: boolean | undefined;
+        readonly mcpTrustAvailable?: boolean | undefined;
       }
     | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
@@ -362,21 +363,21 @@ export async function promptUseToolApproval(
 ): Promise<ApprovalVerdict> {
   const paint = style ?? { yellow: (t) => t, dim: (t) => t, green: (t) => t, red: (t) => t };
   const described = describeUseToolApproval(input, resolve);
+  const canTrust = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined && resolve?.(described.fqn) !== undefined;
   const lines = renderUseToolApprovalLines(described, meta);
 
   io.out("\n");
   for (const [index, line] of lines.entries()) {
     io.out(`${gutter}${index === 0 ? paint.yellow(line) : paint.dim(line)}\n`);
   }
-  // No `A=always`: the grant pattern would be a qualified tool name the
-  // MODEL supplied, written into the operator's permission file.
-  io.out(`\n${gutter}${paint.dim("[y/N] ")}`);
+  io.out(`\n${gutter}${paint.dim(canTrust ? "[y/N/T=trust this tool for session] " : "[y/N] ")}`);
 
   const answer = (await io.readLine()) ?? "";
-  const approved = isApprovalYes(answer);
-  io.out(approved ? paint.green("approved\n") : paint.red("denied\n"));
+  const trust = canTrust && /^t(rust)?$/i.test(answer.trim());
+  const approved = trust || isApprovalYes(answer);
+  io.out(approved ? paint.green(trust ? "approved · trusted for this session\n" : "approved\n") : paint.red("denied\n"));
   if (!approved) return false;
-  return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+  return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint, ...(trust ? { trustMcpTool: true as const } : {}) } : true;
 }
 
 /**
@@ -395,6 +396,15 @@ export const APPROVAL_ALLOW_ID = "allow";
 
 export function isDockApproval(id: string | undefined): boolean {
   return id === APPROVAL_ALLOW_ID;
+}
+
+/** One-shot allow, exact-tool session grant, or denial — no fourth outcome. */
+export function mcpDockVerdict(id: string, canTrust: boolean, fingerprint: string | undefined): ApprovalVerdict {
+  if (isDockApproval(id)) return true;
+  if (id === "trust-mcp" && canTrust && fingerprint !== undefined) {
+    return { approved: true, fingerprint, trustMcpTool: true };
+  }
+  return false;
 }
 
 /**

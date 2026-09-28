@@ -24,6 +24,7 @@ import {
   catalogResolver,
   isApprovalYes,
   isDockApproval,
+  mcpDockVerdict,
   promptUseToolApproval,
   type ApprovalIo,
 } from "./approval-render";
@@ -74,6 +75,17 @@ describe("the readline prompt returns what the operator actually said", () => {
 
   test("and a DENIAL never carries one", async () => {
     expect(await promptUseToolApproval(fakeIo("n"), CALL, { fingerprint: "fp-1" })).toBe(false);
+  });
+  test("trust requires a catalog-resolved tool and a fingerprinted trust-mode request", async () => {
+    const resolve = catalogResolver({ entries: [{ fqn: "linear__create_issue", server: "linear", rawName: "create_issue" }] });
+    const io = fakeIo("t");
+    expect(await promptUseToolApproval(io, CALL, { fingerprint: "fp-1", mcpTrustAvailable: true }, resolve)).toEqual({
+      approved: true, fingerprint: "fp-1", trustMcpTool: true,
+    });
+    expect(io.written()).toContain("T=trust this tool for session");
+    expect(await promptUseToolApproval(fakeIo("t"), CALL, { fingerprint: "fp-1", mcpTrustAvailable: true }, () => undefined)).toBe(false);
+    expect(await promptUseToolApproval(fakeIo("t"), CALL, { fingerprint: "fp-1" }, resolve)).toBe(false);
+    expect(await promptUseToolApproval(fakeIo("t"), CALL, { mcpTrustAvailable: true }, resolve)).toBe(false);
   });
 });
 
@@ -193,4 +205,14 @@ describe("catalogResolver — the wiring both surfaces share", () => {
     expect(io.written()).toContain("github__notes");
     expect(io.written()).toContain("exfil");
   });
+});
+
+
+test("MCP dock grants only the exact trust choice when offered and fingerprinted", () => {
+  expect(mcpDockVerdict("allow", false, undefined)).toBe(true);
+  expect(mcpDockVerdict("trust-mcp", true, "fp")).toEqual({ approved: true, fingerprint: "fp", trustMcpTool: true });
+  expect(mcpDockVerdict("trust-mcp", false, "fp")).toBe(false);
+  expect(mcpDockVerdict("trust-mcp", true, undefined)).toBe(false);
+  expect(mcpDockVerdict("deny", true, "fp")).toBe(false);
+  expect(mcpDockVerdict("__cancel__", true, "fp")).toBe(false);
 });

@@ -159,7 +159,7 @@ import {
   APPROVAL_ALLOW_ID,
   catalogResolver,
   describeUseToolApproval,
-  isDockApproval,
+  mcpDockVerdict,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
   summariseUseToolApproval,
@@ -5213,6 +5213,8 @@ export async function launchTuiAgentShell(opts: {
           inputJson,
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
         );
+        const canTrustMcp = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined &&
+          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined;
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -5242,18 +5244,18 @@ export async function launchTuiAgentShell(opts: {
             onOpen: () => chrome.blurComposer(),
             signal: foregroundOperation.signal,
             options: [
-              // No "always" option. `described.rememberable` is typed
-              // `false` so this cannot be added back by forgetting to check.
               { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
+              ...(canTrustMcp
+                ? [{ id: "trust-mcp", label: "Trust this tool (this session)", description: `Skip future approvals for ${described.fqn} in trust mode` }]
+                : []),
               { id: "deny", label: "Deny", description: "the tool call is refused", recommended: true },
             ],
           }),
         );
         input.focus();
-        // `isDockApproval`, not an inline `id === "allow"`, and not three
-        // copies of it. A reviewer inverted this comparison — so "Deny"
-        // approved — and the full suite stayed green.
-        const allowed = isDockApproval(id);
+        // Keep the allow/trust/deny mapping in a tested, fail-closed helper.
+        const verdict = mcpDockVerdict(id, canTrustMcp, meta?.fingerprint);
+        const allowed = verdict !== false;
         setMainAgent("running", allowed ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
@@ -5263,7 +5265,7 @@ export async function launchTuiAgentShell(opts: {
               : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn} denied`)}`,
           }),
         );
-        return allowed;
+        return verdict;
       }
 
       if (tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) {
@@ -5589,6 +5591,7 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
+    io.trustedMcpTools = new Set<string>();
     // Read-only ("plan") posture — orthogonal to `permissionMode` (see
     // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
@@ -5696,6 +5699,8 @@ export async function launchTuiAgentShell(opts: {
         splash?.removeIfShown();
       }
       liveSession = opened.handle;
+      // A new/resumed conversation is a new trust boundary within this shell.
+      io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;

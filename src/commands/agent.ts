@@ -136,9 +136,12 @@ export interface ApprovalMeta {
    * `resolveApprovalDecision`: a permission mode is the operator's standing
    * statement about THEIR OWN commands, and cannot answer "external content
    * asked for this — do YOU authorize it?". Neither `trust` nor `auto` stands
-   * in for that answer, and no remembered grant does either.
+   * in for that answer; the sole exception is an explicit, session-local grant
+   * for one exact MCP FQN, made by the operator at a prior approval prompt.
    */
   untrustedOrigin?: boolean;
+  /** Offer an exact-FQN, session-only grant, never a wildcard. */
+  mcpTrustAvailable?: boolean;
   /**
    * Flow 295 (AC7): the call is one only the operator can confirm (a tool with
    * `InteractiveTool.confirmation`, e.g. `schedule_create`). An approver must show
@@ -175,8 +178,10 @@ export interface ApprovalMeta {
  * fingerprint the approver was given, otherwise the driver treats the answer as
  * a denial. That closes the gap where "the user said yes" and "this is what
  * runs" are two independent facts that merely happen to line up.
+ * `trustMcpTool` is accepted only for `use_tool`, in trust mode, after that
+ * fingerprint check; hosts must offer it only for catalog-resolved MCP tools.
  */
-export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string };
+export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
 
 /** Rendering sink for agent mode. Assistant text streams through `write`. */
 export interface AgentIO {
@@ -279,6 +284,8 @@ export interface AgentIO {
    * getter, never a missing `requestApproval`.
    */
   permissionMode?: () => PermissionMode;
+  /** Explicit operator grants, isolated to this interactive shell session. */
+  trustedMcpTools?: Set<string>;
   /**
    * The session's current read-only ("plan") posture (see
    * `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring for the
@@ -3314,6 +3321,7 @@ async function runAgentTurnCore(
               : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
             deps.hooks,
             untrustedOrigin,
+            io.trustedMcpTools,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4342,6 +4350,7 @@ async function executeCall(
   // An external result in this turn cannot authorize this call. Force a real
   // approval through the SAME risk/hook gate, not a second prompt ahead of it.
   untrustedOrigin = false,
+  trustedMcpTools?: Set<string>,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -4450,6 +4459,10 @@ async function executeCall(
       publishLease,
     });
     const gated = composeWithHook(call.name, rawDecision, hookResult, hookInteractive);
+    // The model supplies this name, but cannot grant it: only a validated
+    // operator response from the host below can put it in the session set.
+    const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
+    const trustedMcp = mode === "trust" && mcpFqn !== undefined && trustedMcpTools?.has(mcpFqn) === true;
     if (gated.decision === "deny") {
       return {
         output: gated.hookTightened
@@ -4458,7 +4471,7 @@ async function executeCall(
         isError: true,
       };
     }
-    if (gated.decision === "auto" && !untrustedOrigin) {
+    if ((gated.decision === "auto" && !untrustedOrigin) || (trustedMcp && !gated.hookAsked && !isReadOnly)) {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
@@ -4475,9 +4488,13 @@ async function executeCall(
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
+              ...(mcpFqn !== undefined && mode === "trust" && !gated.hookAsked ? { mcpTrustAvailable: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: untrustedOrigin ? untrustedDenial : "command not approved by the user; not executed", isError: true };
+      }
+      if (mcpFqn !== undefined && typeof response === "object" && response.trustMcpTool === true && mode === "trust" && !gated.hookAsked) {
+        trustedMcpTools?.add(mcpFqn);
       }
     }
   } else if (risk === "delegate") {
