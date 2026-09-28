@@ -8,6 +8,7 @@ import { detectSecrets } from "./detect/secrets";
 import { detectPii } from "./detect/pii";
 import { detectExfil } from "./detect/exfil";
 import { detectEntropy } from "./detect/entropy";
+import { isEntropyBackendEnabled } from "./entropy-gate";
 
 // Redaction and hashing safety (specification.md §10a).
 //
@@ -146,7 +147,10 @@ export function redactSensitiveText(text: string): string {
     ...detectSecrets(text),
     ...detectPii(text),
     ...detectExfil(text),
-    ...detectEntropy(text),
+    // F-REG-F3 (flow 355 review round): honours `backends.entropy.enabled`,
+    // the same gate `keryx security scan` already applies — see
+    // `entropy-gate.ts`'s header for why this is a cache, not a config load.
+    ...(isEntropyBackendEnabled() ? detectEntropy(text) : []),
   ];
   if (matches.length === 0) {
     return text;

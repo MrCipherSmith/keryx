@@ -63,6 +63,86 @@ All notable changes to `keryx` are documented here. The format follows
   `REFRESHTOKEN`, `DBPASS`, …) is now anchored to the variable name's own
   boundaries, so it no longer matches inside an unrelated longer name (e.g.
   `APITOKENIZER`).
+- A URL's own host or path no longer defeats the entropy redactor or the
+  outbound-secret check. The entropy detector's token pattern included `/`,
+  so a URL's `host/path/…/<sha>` was scored as ONE joined run — that escaped
+  the allow-shapes (the joined string is not a bare SHA) and could pick up a
+  false "sensitive label" from a hostname substring like `api.github.com`.
+  `security/detect/entropy.ts` now decomposes a recognised URL into its path
+  segments, query values and fragment and evaluates each separately and
+  label-free; `harness/web/outbound-secret.ts`'s pre-flight check calls the
+  SAME shared function (not a second, independent copy) so a secret hiding
+  behind an anonymous query param name, or a percent-encoded param name, is
+  still caught before anything is fetched.
+- A `+`-joined multi-word search query (`q=bun+test+timeout+flaky` — exactly
+  what `web_search` sends on the wire) was scored as one high-entropy run and
+  refused/redacted. `+` is now swapped for a literal space before
+  re-tokenising a URL component, matching the space convention
+  `application/x-www-form-urlencoded` already uses.
+- A versioned package tarball URL (`typescript-5.6.3.tgz`, and similar
+  npm/PyPI/crates shapes) was evaluated as one whole path segment in the
+  outbound check instead of being re-tokenised the way the redaction path
+  already was, and refused `web_fetch`. Both surfaces now call the identical
+  shared re-tokenising function, so they cannot answer differently for the
+  same bytes again.
+- A Python wheel filename's platform/version tags (`cp311`, `manylinux_2_17`,
+  `x86_64`) broke the word-slug exemption entirely, since a single
+  letter+digit segment used to reject the whole slug. A segment that
+  transitions at most once between a letter-run and a digit-run (either
+  direction) is now treated as structured, not random — same as a pure word
+  or a pure number — while a segment that alternates more than once still is
+  not and still blocks the exemption.
+- A sensitive label next to a value now overrides an allow-shape instead of
+  losing to it. `'leaked token: <40-hex sha>'` used to stay unredacted
+  because the SHA "looked like" an ordinary git commit hash; an explicit
+  adjacent label (`token`, `key`, `secret`, `credential`, `auth`, `bearer`,
+  word/segment-bounded) now wins, and the allow-shape only still applies when
+  nothing labels the value at all.
+- A purely numeric value is never treated as a "hex blob" any more. A
+  24-or-more-digit order id, phone number or timestamp could be masked by
+  `redactSensitiveText` and by `displayUrl`'s path-segment masking; both now
+  require at least one a–f letter before accepting a value as hex-shaped —
+  closing the gap rather than narrowing it, since a base-10 alphabet's
+  Shannon entropy can never reach the redaction floor at any length.
+- The environment-variable credential filter's "glued compound" rule is
+  anchored on the correct side. `PRODDBPASS`, `MYPRIVATEKEY`,
+  `USERREFRESHTOKEN`, `LEGACYACCESSTOKEN`, `V2APITOKEN`, `OAUTHACCESSTOKEN`
+  and `SNOWFLAKEDBPASS` all evaded the previous (prefix-anchored) fix; the
+  glued shape is now anchored at the SUFFIX end instead, which catches all
+  seven while still allowing `APITOKENIZER`/`TOKENIZERS_PARALLELISM`/
+  `KEYBOARD_LAYOUT`/`APPCONFIG`.
+- Disabling the entropy backend in `security.config.json` now actually
+  disables it everywhere, including the outbound check's per-component scan,
+  not just the whole-string pass.
+- An avoidable import-policy bypass introduced while moving the
+  credential-shape classifier has been removed, and the ratchet in
+  `import-policy.live.test.ts` is back at its previous ceiling.
+- Removed dead code (`SHORT_GIT_SHA_RE`): no value under 13 characters can
+  ever satisfy the entropy-or-hex-blob floor, allow-shape or not.
+
+Documented (not fixed — deliberate, recorded rather than papered over):
+- The outbound-secret check cannot see a credential deliberately split across
+  two or more params/segments, each individually below the shape threshold —
+  there is no single value for a per-value check to test.
+- A presigned URL's signature (AWS `X-Amz-Signature`, GCS `X-Goog-Signature`,
+  an Azure SAS `sig=`) is refused by `web_fetch`'s outbound check exactly
+  like any other secret-shaped query value; fetching a presigned URL is out
+  of scope for that tool by design. The SAME value arriving in tool output is
+  correctly redacted, not refused, by `redactSensitiveText`.
+- A Google Docs/Drive file id is capability-like (whoever holds it can open
+  the file) and is treated the same way: refused outbound, redacted in tool
+  output.
+
+Found, not fixed (pre-existing, unrelated subsystem, flagged for a separate
+decision): `detect/pii.ts`'s `pii.phone` pattern matches an arXiv paper id's
+`YYMM.NNNNN` shape (e.g. `2103.00020`) as a phone number and redacts it. Not
+touched here — it is not an entropy or outbound-check defect.
+- **A package name no longer counts as a secret label.** The camelCase
+  label boundary matched lowercase letters too, and any label word only had
+  to appear somewhere nearby, so lockfile lines for `keyv`,
+  `eslint-visitor-keys` or `path-key` had their public integrity hashes
+  redacted. A label now overrides an allow-listed shape (SHA, UUID,
+  integrity) only when it sits directly before the value.
 
 ## [0.3.18] — 2026-09-28
 

@@ -272,16 +272,25 @@ const SECRET_SUBSTRING_RE =
  * GLUED directly onto the prefix is what keeps `PRIVATE_REGISTRY_URL` (an
  * underscore between them) out while catching `PRIVATEKEY` (none).
  *
- * ANCHORED to the name's own boundaries (R-I2, flow 355 AC7): the whole
- * glued shape must sit at the start/end of the name or directly against a
- * `_`, not float anywhere inside it. Unanchored, `APITOKEN` matched inside
- * `APITOKENIZER` too — a name that reads as "the thing that tokenizes API
- * input", not a credential, and would have been stripped from the child
- * environment for no reason (`spawn-env.table.test.ts`'s `APITOKENIZER`
- * boundary row pins this).
+ * ANCHORED (R-I2, flow 355 AC7 — then RE-ANCHORED, flow 355 review round
+ * F-SEC-F3): the first version anchored the PREFIX side, `(^|_)PREFIX…`,
+ * which was wrong in the opposite direction from the original unanchored
+ * regex — it now REQUIRED the prefix to start the name (or follow a `_`),
+ * so `PRODDBPASS`, `MYPRIVATEKEY`, `USERREFRESHTOKEN`, `LEGACYACCESSTOKEN`,
+ * `V2APITOKEN`, `OAUTHACCESSTOKEN` and `SNOWFLAKEDBPASS` all evaded — a
+ * REAL prefix (`GLUED_SECRET_RE`'s own `DBPASS`/`PRIVATEKEY`/etc.) preceded
+ * by ANYTHING else at all was no longer glued-suffix shaped as far as this
+ * regex was concerned. The anchor belongs on the SUFFIX side instead: the
+ * credential shape a glued compound ends WITH is what makes it dangerous —
+ * `PRODDBPASS` is exactly as much a password variable as `DBPASS` is — and
+ * the prefix may be preceded by anything. `APITOKENIZER`/
+ * `TOKENIZERS_PARALLELISM`/`KEYBOARD_LAYOUT` stay allowed under EITHER
+ * anchoring, because none of them has the suffix at the true end of the
+ * name (or against a `_`) — `APITOKENIZER` has "IZER" after "TOKEN", not a
+ * boundary.
  */
 const GLUED_SECRET_RE =
-  /(^|_)(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|(^|_)DB(PASS|PWD)($|_)/;
+  /(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|DB(PASS|PWD)($|_)/;
 
 /**
  * Connection strings that conventionally carry an inline password.

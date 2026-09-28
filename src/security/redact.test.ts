@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { redactSensitiveText } from "./redact";
+import { resetEntropyGateForTests, setEntropyBackendEnabledForTests } from "./entropy-gate";
 
 // F3: tool output is scrubbed before it enters provider-bound agent history, so a
 // command that reads a credential does not leak the raw value into the model
@@ -106,21 +107,171 @@ describe("S-6 (flow 355, AC2): the entropy detector runs after the pattern pass"
     expect(scrubbed).toContain("[REDACTED:entropy]");
   });
 
-  test("a 40-hex git commit SHA is left untouched", () => {
+  test("an UNLABELLED 40-hex git commit SHA is left untouched", () => {
     const sha = "0123456789abcdef0123456789abcdef01234567";
-    const text = `api_key file changed in commit ${sha}`;
+    const text = `commit ${sha} landed`;
     expect(redactSensitiveText(text)).toBe(text);
   });
 
-  test("a UUID is left untouched", () => {
-    const uuid = "550e8400-e29b-41d4-a716-446655440000";
-    const text = `credential id: ${uuid}`;
+  test("an UNLABELLED UUID is left untouched", () => {
+    const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    const text = `request id: ${uuid}`;
     expect(redactSensitiveText(text)).toBe(text);
   });
 
-  test("an npm/yarn sha512- integrity string is left untouched", () => {
-    const integrity = `sha512-${"A".repeat(50)}==`;
-    const text = `resolved "https://registry.npmjs.org/foo/-/foo-1.0.0.tgz", auth integrity ${integrity}`;
+  test("an UNLABELLED npm/yarn sha512- integrity string is left untouched", () => {
+    const integrity = "sha512-9WYDliBTiEXPIkZ5Zc32qJ6b7QP2b6m5v2kDEe57lecTulaDIuNTPy3Ry4G==";
+    const text = `resolved "https://registry.npmjs.org/foo/-/foo-1.0.0.tgz", integrity ${integrity}`;
     expect(redactSensitiveText(text)).toBe(text);
   });
+});
+
+describe("F-REG-F3 (flow 355 review, PR #776): honours backends.entropy.enabled", () => {
+  afterEach(() => {
+    resetEntropyGateForTests();
+  });
+
+  test("entropy stays off: an opaque bearer token is NOT redacted when the backend is disabled", () => {
+    setEntropyBackendEnabledForTests(false);
+    const token = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const text = `Authorization: Bearer ${token}`;
+    expect(redactSensitiveText(text)).toBe(text);
+  });
+
+  test("entropy on: the SAME opaque bearer token is redacted when the backend is enabled", () => {
+    setEntropyBackendEnabledForTests(true);
+    const token = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const scrubbed = redactSensitiveText(`Authorization: Bearer ${token}`);
+    expect(scrubbed).not.toContain(token);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  test("a NAMED pattern (not entropy) is still redacted regardless of the entropy gate", () => {
+    setEntropyBackendEnabledForTests(false);
+    const scrubbed = redactSensitiveText("aws_access_key_id = AKIAIOSFODNN7EXAMPLE");
+    expect(scrubbed).not.toContain("AKIAIOSFODNN7EXAMPLE");
+  });
+});
+
+describe("F-SEC-F2 (flow 355 review, PR #776): a label overrides an allow-shape", () => {
+  test("a LABELLED 40-hex SHA is redacted", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const scrubbed = redactSensitiveText(`leaked api_key: ${sha}`);
+    expect(scrubbed).not.toContain(sha);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  test("a LABELLED UUID is redacted", () => {
+    const uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    const scrubbed = redactSensitiveText(`leaked credential: ${uuid}`);
+    expect(scrubbed).not.toContain(uuid);
+  });
+
+  test("a LABELLED sha512- integrity-shaped string is redacted", () => {
+    const integrity = "sha512-9WYDliBTiEXPIkZ5Zc32qJ6b7QP2b6m5v2kDEe57lecTulaDIuNTPy3Ry4G==";
+    const scrubbed = redactSensitiveText(`leaked auth secret: ${integrity}`);
+    expect(scrubbed).not.toContain(integrity);
+  });
+});
+
+describe("F-LOG-F1 (flow 355 review, PR #776): URLs are decomposed, not joined into one run", () => {
+  test("a commit-detail URL with a SHA in the path passes through unchanged", () => {
+    const sha = "0123456789abcdef0123456789abcdef01234567";
+    const url = `https://api.github.com/repos/o/r/commits/${sha}`;
+    expect(redactSensitiveText(url)).toBe(url);
+  });
+
+  test("a secret-free webhook URL passes through unchanged (no 'api' hostname false label)", () => {
+    const url = "https://api.example.com/webhooks/abc";
+    expect(redactSensitiveText(url)).toBe(url);
+  });
+
+  test("an opaque secret as a URL path segment is still redacted", () => {
+    const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const scrubbed = redactSensitiveText(`https://api.example.com/webhooks/${secret}`);
+    expect(scrubbed).not.toContain(secret);
+  });
+
+  // Review round 2: the coordinator's own probe found these two exact URLs
+  // still redacted — see `detect/entropy.ts`'s header for the root cause
+  // (a versioned filename evaluated whole; a `+`-joined query never split).
+  test("BOUNDARY (review round 2) — an npm tarball URL with a version number is untouched", () => {
+    const url = "https://registry.npmjs.org/typescript/-/typescript-5.6.3.tgz";
+    expect(redactSensitiveText(url)).toBe(url);
+  });
+
+  test("BOUNDARY (review round 2) — a plus-joined multi-word search query is untouched", () => {
+    const url = "https://www.google.com/search?q=bun+test+timeout+flaky";
+    expect(redactSensitiveText(url)).toBe(url);
+  });
+});
+
+describe("R3 (flow 355 review round 3): LABEL=VALUE and camelCase labels, the common shapes", () => {
+  const value = "kd8Fj2LmQp9xZr4TvWn7Yb3";
+
+  test("API_KEY=… (uppercase, already worked via detectSecrets's named pattern)", () => {
+    const scrubbed = redactSensitiveText(`API_KEY=${value}`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("api_key=… (lowercase — the reported gap)", () => {
+    const scrubbed = redactSensitiveText(`api_key=${value}`);
+    expect(scrubbed).not.toContain(value);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  test('apiKey: "…" (camelCase — the second reported gap)', () => {
+    const scrubbed = redactSensitiveText(`apiKey: "${value}"`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test('"api_key": "…" (JSON, already worked)', () => {
+    const scrubbed = redactSensitiveText(`"api_key": "${value}"`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("--api-key … (CLI flag, space-separated, already worked)", () => {
+    const scrubbed = redactSensitiveText(`--api-key ${value}`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("--token=… (CLI flag with '=', no separator before the label)", () => {
+    const scrubbed = redactSensitiveText(`--token=${value}`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("export OPENAI_API_KEY=… (shell export, already worked via detectSecrets)", () => {
+    const scrubbed = redactSensitiveText(`export OPENAI_API_KEY=${value}`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("Authorization: token … (header, already worked)", () => {
+    const scrubbed = redactSensitiveText(`Authorization: token ${value}`);
+    expect(scrubbed).not.toContain(value);
+  });
+
+  test("BOUNDARY — a genuinely low-entropy labelled value stays unmasked (the floor is not bypassed)", () => {
+    const lowEntropy = `${"z".repeat(24)}1`;
+    const text = `api_key=${lowEntropy}`;
+    expect(redactSensitiveText(text)).toBe(text);
+  });
+});
+
+// Flow 355, orchestrator probe after review round 3: the camelCase label
+// boundary `(?=[A-Z])` matched lowercase letters under the `i` flag, so a
+// package NAME containing a label word ("keyv", "eslint-visitor-keys") turned
+// every bun.lock line naming it into a labelled line and its public integrity
+// hash was redacted. Real lines from this repository's bun.lock.
+test("a lockfile line whose package name contains a label word keeps its integrity hash", () => {
+  const lines = [
+    '    "keyv": ["keyv@5.6.0", "", { "dependencies": { "@keyv/serialize": "^1.1.1" } }, "sha512-CYDD3SOtsHtyXeEORYRx2qBtpDJFjRTGXUtmNEMGyzYOKj1TE3tycdlho7kvRmD3hEsRnDlPFJ3Ra4F2cz1Q2A=="],',
+    '    "eslint-visitor-keys": ["eslint-visitor-keys@5.0.1", "", {}, "sha512-tD40eHxA35h0PEIZNeIjkHoDR4YjjJp34biM0mDvplBe//mB+IHCqHDGV7pxF+7MklTvighcCPPZC7ynWyjdTA=="],',
+    // The label word ends a JSON key here, but the key names a package, not the value.
+    '    "path-key": ["path-key@3.1.1", "", {}, "sha512-ecdbF0M9W1oKcB3E1vEX5wBgMAhI5UhhqnESa6vHAjRdOLnIkHPPUc9LWNDD2ZBnlSnaWvbuMfnqz8Ul1pk0A=="],',
+  ];
+  for (const line of lines) expect(redactSensitiveText(line)).toBe(line);
+  // BOUNDARY: an adjacent label still overrides the allow-shape (F-SEC-F2).
+  expect(redactSensitiveText("leaked token: 503c20c60ceb7755c389a6ce0ed7756b0537037a")).toContain("[REDACTED");
+  // BOUNDARY: a real camelCase label still counts.
+  expect(redactSensitiveText('apiKey: "kd8Fj2LmQp9xZr4TvWn7Yb3"')).not.toContain("kd8Fj2LmQp9xZr4TvWn7Yb3");
 });

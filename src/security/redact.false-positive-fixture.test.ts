@@ -141,14 +141,27 @@ function buildFixture(): string[] {
     );
   }
 
+  // 8. URLs (flow 355 review round, PR #776, F-LOG-F1 + follow-up) — 4
+  // outputs. The exact two URLs the finding named, plus a GitHub raw URL and
+  // an npm tarball URL whose integrity hash rides in the QUERY string rather
+  // than after it.
+  outputs.push(
+    `https://api.github.com/repos/o/r/commits/${hexOf(4000, 40)}`,
+    "https://api.example.com/webhooks/abc",
+    "https://raw.githubusercontent.com/example-org/example-repo/main/src/index.ts",
+    `https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz?integrity=sha512-${base64ish(4001, 64)}%3D%3D`,
+  );
+
   return outputs;
 }
 
-describe("S-6 (flow 355, AC2): false-positive fixture over 200 realistic tool outputs", () => {
+describe("S-6 (flow 355, AC2): false-positive fixture over 200+ realistic tool outputs", () => {
   const fixture = buildFixture();
 
-  test("the fixture has exactly 200 realistic outputs", () => {
-    expect(fixture.length).toBe(200);
+  // Grown from 200 to 204 in the flow's own review round (PR #776,
+  // F-LOG-F1 follow-up): 4 URL-shaped outputs added to category 8.
+  test("the fixture has exactly 204 realistic outputs", () => {
+    expect(fixture.length).toBe(204);
   });
 
   test("the entropy detector's false-positive count on this fixture is 0", () => {
@@ -162,5 +175,28 @@ describe("S-6 (flow 355, AC2): false-positive fixture over 200 realistic tool ou
       console.log("entropy false positives:", falsePositives.map((f) => f.i));
     }
     expect(falsePositives.length).toBe(0);
+  });
+});
+
+describe("a presigned URL's signature is a TRUE positive, not a false one", () => {
+  // DOCUMENTED DECISION (flow 355 review round, PR #776): an AWS
+  // `X-Amz-Signature` (same class as GCS `X-Goog-Signature`, an Azure SAS
+  // `sig=`) is a live, credential-bearing value for the URL's validity
+  // window — redacting it out of TOOL OUTPUT is correct, not a bug this
+  // fixture should paper over. This is the deliberately asymmetric twin of
+  // `outbound-secret.ts`'s decision to REFUSE the same shape outbound; see
+  // that module's header for why the two directions differ.
+  test("a signed S3 URL's X-Amz-Signature value IS redacted", () => {
+    const signature = hexOf(5000, 64);
+    const url =
+      `https://my-bucket.s3.amazonaws.com/reports/2026-q3.pdf` +
+      `?X-Amz-Algorithm=AWS4-HMAC-SHA256` +
+      `&X-Amz-Date=20260928T000000Z` +
+      `&X-Amz-Expires=3600` +
+      `&X-Amz-SignedHeaders=host` +
+      `&X-Amz-Signature=${signature}`;
+    const scrubbed = redactSensitiveText(url);
+    expect(scrubbed).not.toContain(signature);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
   });
 });

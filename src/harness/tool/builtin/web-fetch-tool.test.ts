@@ -72,6 +72,44 @@ test("web_fetch refuses a URL carrying secret-shaped content BEFORE any network 
   }
 });
 
+// F-SEC-F1 (flow 355 review round, PR #776): a secret-shaped VALUE must be
+// caught wherever it sits in the URL, regardless of the param/segment name.
+test("web_fetch refuses an anonymous query param carrying an opaque secret ('?d=')", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "keryx-web-fetch-outbound-"));
+  try {
+    let calls = 0;
+    const runner: WebWorkerRunner = { run: async () => { calls += 1; return { ok: true, value: { status: 200, contentType: "text/plain", body: "no" } }; } };
+    const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+    const tool = webFetchTool({ lookup: publicLookup, runner, cwd });
+    const result = await tool.invoke({ url: `https://x.example/c?d=${secret}` });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("outbound secret-shaped content");
+    expect(calls).toBe(0);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+});
+
+test("web_fetch refuses a secret in the URL FRAGMENT", async () => {
+  let calls = 0;
+  const runner: WebWorkerRunner = { run: async () => { calls += 1; return { ok: true, value: { status: 200, contentType: "text/plain", body: "no" } }; } };
+  const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+  const tool = webFetchTool({ lookup: publicLookup, runner });
+  const result = await tool.invoke({ url: `https://x.example/c#${secret}` });
+  expect(result.isError).toBe(true);
+  expect(calls).toBe(0);
+});
+
+test("web_fetch refuses a percent-encoded param NAME hiding a secret VALUE ('t%6fken=')", async () => {
+  let calls = 0;
+  const runner: WebWorkerRunner = { run: async () => { calls += 1; return { ok: true, value: { status: 200, contentType: "text/plain", body: "no" } }; } };
+  const secret = "K9dQnR2zVbT8pXeYfWmC1oLaHsJtUvBgNq3rDcZk0AI";
+  const tool = webFetchTool({ lookup: publicLookup, runner });
+  const result = await tool.invoke({ url: `https://x.example/c?t%6fken=${secret}` });
+  expect(result.isError).toBe(true);
+  expect(calls).toBe(0);
+});
+
 test("web_fetch still fetches a URL whose path carries an ordinary commit SHA (S-8 boundary)", async () => {
   const sha40 = "0123456789abcdef0123456789abcdef01234567";
   const tool = webFetchTool({

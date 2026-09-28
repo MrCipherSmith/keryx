@@ -541,6 +541,25 @@ describe("displayUrl is safe to print", () => {
         "https://host/api/organization-settings/mcp",
       );
     });
+
+    // F-REG-F2 (flow 355 review round, PR #776): a digits-only run is never a
+    // "hex blob" — Shannon entropy over a base-10 alphabet cannot reach the
+    // 3.6-bit floor at ANY length, so a purely numeric id must never ride the
+    // hex-blob shape check around that floor.
+    test("BOUNDARY — a 24-digit numeric order id stays visible", () => {
+      const url = "https://host/orders/123456789012345678901234/mcp";
+      expect(displayUrl(url)).toBe(url);
+    });
+
+    test("BOUNDARY — a 30-digit numeric id stays visible", () => {
+      const url = "https://host/orders/123456789012345678901234567890/mcp";
+      expect(displayUrl(url)).toBe(url);
+    });
+
+    test("a 32-char hex token (has a-f letters) is still masked", () => {
+      const shown = displayUrl("https://host/orders/0123456789abcdef0123456789abcdef/mcp");
+      expect(shown).toBe("https://host/orders/…/mcp");
+    });
   });
 });
 

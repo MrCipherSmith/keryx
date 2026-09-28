@@ -66,16 +66,35 @@ export { redactSensitiveText } from "./redact";
  * past it into `security/incidents.ts` directly.
  */
 export { detectSecrets } from "./detect/secrets";
-export { detectEntropy, looksSecretShaped } from "./detect/entropy";
+export { detectEntropy, looksSecretShaped, looksSecretShapedIn } from "./detect/entropy";
 export { appendIncident } from "./incidents";
+/**
+ * F-REG-F3 (flow 355 review round): the outbound check must honour
+ * `backends.entropy.enabled` the same way `redactSensitiveText` does now —
+ * reached through this facade rather than `security/entropy-gate.ts` directly.
+ */
+export {
+  isEntropyBackendEnabled,
+  resetEntropyGateForTests,
+  setEntropyBackendEnabledForTests,
+} from "./entropy-gate";
 
 /**
  * Re-exported here for the same reason (R-MIN1, flow 355 AC7): both
  * `mcp-servers/spawn-env.ts` and `harness/external/env.ts` need the
  * credential-shape classifier without reaching past this facade into
  * `security/credential-shape.ts` directly.
+ *
+ * `EXTERNAL_ENV_DENY`/`EXTERNAL_ENV_PREFIX_SWEEPS` join it here too
+ * (F-ARCH-F1, flow 355 review round): they moved to this module along with
+ * `isDeniedForMcpChild`, and `harness/external/env-deny.ts` (client zone)
+ * now re-exports them from THIS facade rather than from
+ * `security/credential-shape.ts` directly — the previous direct import was
+ * an avoidable `client-imports-core-internal` bypass that pushed
+ * `import-policy.live.test.ts`'s ratchet up for no reason a facade could not
+ * have avoided.
  */
-export { isDeniedForMcpChild } from "./credential-shape";
+export { isDeniedForMcpChild, EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "./credential-shape";
 
 /**
  * Re-exported here for the same reason as `redactSensitiveText` above: this is
