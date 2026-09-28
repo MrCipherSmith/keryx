@@ -228,11 +228,21 @@ function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
   return concrete === undefined ? fallback : concrete;
 }
 
-/** Merge the gateway's split token counts into a single exact {@link NormalizedUsage}. */
+/**
+ * Merge the gateway's split token counts into a single exact
+ * {@link NormalizedUsage}. `cacheReadTokens` (review r1, item 4) is
+ * `usage.prompt_tokens_details.cached_tokens` — confirmed against x.ai (see
+ * `OpenAiCompatCapabilityGrant.streamUsage`'s own doc comment: the SAME
+ * request returns `prompt_tokens: 638, cached_tokens: 512` with
+ * `stream_options.include_usage` set) — a SUBSET of `promptTokens`, never
+ * additional to it, mirroring `NormalizedUsage.cacheReadTokens`'s own
+ * contract.
+ */
 function mergeUsage(
   promptTokens: number | undefined,
   completionTokens: number | undefined,
   totalTokens: number | undefined,
+  cacheReadTokens: number | undefined,
 ): NormalizedUsage {
   const usage: NormalizedUsage = { exact: true };
   if (promptTokens !== undefined) {
@@ -245,6 +255,9 @@ function mergeUsage(
     usage.totalTokens = totalTokens;
   } else if (promptTokens !== undefined || completionTokens !== undefined) {
     usage.totalTokens = (promptTokens ?? 0) + (completionTokens ?? 0);
+  }
+  if (cacheReadTokens !== undefined) {
+    usage.cacheReadTokens = cacheReadTokens;
   }
   return usage;
 }
@@ -1132,6 +1145,7 @@ export class OpenAiCompatEngine implements ProviderPort {
               asNumber(usage.prompt_tokens),
               asNumber(usage.completion_tokens),
               asNumber(usage.total_tokens),
+              asNumber(asRecord(usage.prompt_tokens_details).cached_tokens),
             ),
           });
         }

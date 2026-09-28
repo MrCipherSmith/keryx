@@ -4378,6 +4378,55 @@ test("AC4 (flow 354, L-12): a throwing tool.invoke in the SEQUENTIAL loop degrad
   // normally instead of rejecting past `fireStopHookBestEffort`.
   const stopFires = fires.filter((f) => f.event === "Stop");
   expect(stopFires).toHaveLength(1);
+  // Review r1 (item 1, MAJOR regression): the caught throw is still visible
+  // on the result — the unattended trigger dispatchers' crash detection
+  // (which used to rely on the promise rejecting) reads this instead.
+  expect(result.caughtToolErrors).toEqual([{ toolName: "throwing_tool", message: "boom" }]);
+});
+
+test("review r1 (item 1): a throwing spawn_subagent call in the CONCURRENT batch's own defensive floor also lands in caughtToolErrors", async () => {
+  // Two `spawn_subagent` calls, both no-op approved (risk "delegate" needs an
+  // approver) — qualifies for `runConcurrentSpawnBatch`'s concurrent path
+  // (2+ candidates). `requestApproval` throws for the SECOND call, driving
+  // the `!plan.ok` sequential-fallback floor's own try/catch (F-002) — the
+  // same floor `agent.test.ts`'s existing F-002 regression test already
+  // exercises, now asserting the NEW field on top of its existing assertions.
+  const spawnTool = delegateSpawnTool(async (input) => ({ output: `spawned:${String(input.task)}`, isError: false }));
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ task: "s1" }) },
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "spawn_subagent" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ task: "s2" }) },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_tool, input) => {
+      if (input.includes('"s2"')) {
+        throw new Error("approval channel exploded");
+      }
+      return true;
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnTool],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxSubagentConcurrency: 0, // forces the `!plan.ok` fallback loop, same as the existing F-002 test
+  };
+  const history: NormalizedMessage[] = [];
+
+  const result = await runAgentTurn(io, deps, history, "spawn two things, one approval throws");
+
+  expect(result.caughtToolErrors).toEqual([
+    { toolName: "spawn_subagent", message: expect.stringContaining("approval channel exploded") },
+  ]);
 });
 
 // --- flow 173 (background shell jobs) AC6: shell_job_output/shell_job_kill

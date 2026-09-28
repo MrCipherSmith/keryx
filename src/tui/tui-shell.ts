@@ -1328,11 +1328,18 @@ const OPENAI_CACHED_INPUT_DISCOUNT = 0.5;
  * a fabricated number, mirroring `NumericProfileField`'s own "unknown, never
  * 0" contract. `cacheReadTokens` (flow 354, L-11) is a SUBSET of
  * `inputTokens` (never additional to it — see `NormalizedUsage.
- * cacheReadTokens`'s own doc) billed at `OPENAI_CACHED_INPUT_DISCOUNT`;
- * absent/`0` reproduces the pre-L-11 all-full-price calculation exactly.
+ * cacheReadTokens`'s own doc), billed at `OPENAI_CACHED_INPUT_DISCOUNT` ONLY
+ * for `providerId` `"openai"`/`"openai-codex"` (review r1, item 2): that rate
+ * is OpenAI's own documented number, and nothing here confirms any OTHER
+ * provider that might one day report `cacheReadTokens` discounts it by the
+ * same fraction — an other-provider cache hit is billed at the FULL input
+ * rate until its own rate is researched, never a fabricated guess. Absent/`0`
+ * `cacheReadTokens`, or a non-OpenAI `providerId`, reproduces the pre-L-11
+ * all-full-price calculation exactly.
  */
 function estimateTaskCostUsd(
   profile: ModelProfile | undefined,
+  providerId: string,
   inputTokens: number,
   outputTokens: number,
   cacheReadTokens?: number,
@@ -1341,10 +1348,12 @@ function estimateTaskCostUsd(
   const priceIn = profile.priceInputPerMillion.value;
   const priceOut = profile.priceOutputPerMillion.value;
   if (priceIn === "unknown" || priceOut === "unknown") return undefined;
+  // 1 = full input rate (no discount) — the honest default until a provider's
+  // OWN cached-input rate is researched and named here explicitly.
+  const cachedInputDiscount = providerId === "openai" || providerId === "openai-codex" ? OPENAI_CACHED_INPUT_DISCOUNT : 1;
   const cacheRead = cacheReadTokens !== undefined && cacheReadTokens > 0 ? Math.min(cacheReadTokens, inputTokens) : 0;
   const fullPriceInputTokens = inputTokens - cacheRead;
-  const inputCost =
-    (fullPriceInputTokens / 1_000_000) * priceIn + (cacheRead / 1_000_000) * priceIn * OPENAI_CACHED_INPUT_DISCOUNT;
+  const inputCost = (fullPriceInputTokens / 1_000_000) * priceIn + (cacheRead / 1_000_000) * priceIn * cachedInputDiscount;
   return inputCost + (outputTokens / 1_000_000) * priceOut;
 }
 
@@ -1387,7 +1396,7 @@ export async function recordTurnTaskCostBestEffort(input: {
   try {
     const profiles = loadModelProfiles(input.userConfigDir);
     const profile = profiles[profileKey(input.providerId, input.modelId)];
-    const costUsd = estimateTaskCostUsd(profile, input.inputTokens, input.outputTokens, input.cacheReadTokens);
+    const costUsd = estimateTaskCostUsd(profile, input.providerId, input.inputTokens, input.outputTokens, input.cacheReadTokens);
     await appendTaskCostRecord(
       {
         providerId: input.providerId,

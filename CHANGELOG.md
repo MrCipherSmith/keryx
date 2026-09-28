@@ -59,6 +59,40 @@ All notable changes to `keryx` are documented here. The format follows
 Audit ledger: `docs/requirements/keryx-audit-remediation/findings.md` rows
 L-1, L-2, L-3, L-10, L-11, L-12, L-13, L-14, L-15, R-M3, R-I3 closed; L-9
 stays open pending a Gemini credential to probe against.
+- **A tool crash during an unattended trigger run ("keryx trigger") is
+  recorded as a failed run again, not a silent completion.** AC4/L-12's
+  sequential-loop error boundary (0.3.18) stopped a throwing tool from
+  crashing the whole turn — but the two unattended trigger dispatchers
+  (`trigger-dispatch.ts`'s `dispatchLocked`, `trigger-agent-task.ts`'s
+  `runLocked`) used exactly that crash (the turn's promise rejecting) as
+  their only signal that something went wrong. `RunAgentTurnResult` now
+  carries `caughtToolErrors` — populated by both the sequential loop and the
+  concurrent spawn-batch's own defensive floor — and both trigger callers
+  fold a non-empty list into their existing crash/outcome classification, so
+  the run is recorded failed with the tool name and message, same as before
+  AC4/L-12.
+- **The OpenAI cached-input cost discount no longer applies to every
+  provider.** `estimateTaskCostUsd`'s 50% cached-token discount (0.3.18,
+  L-11) is OpenAI's own documented rate — it now applies only for
+  `providerId` `"openai"`/`"openai-codex"`; every other provider's
+  `cacheReadTokens` are billed at the full input rate until that provider's
+  own rate is researched and named, never a fabricated discount.
+- **The OpenAI-compatible engine (OpenRouter, DeepSeek, Z.AI, x.ai, …) now
+  reports cache-read tokens too.** `usage.prompt_tokens_details.cached_tokens`
+  (confirmed against x.ai) now populates the normalized usage's
+  `cacheReadTokens`, the same field the native OpenAI adapter fills.
+- **The runtime test that replaced the deleted "leaves the bus before
+  releasing the lease" source-text audit (R-I3) now actually checks that
+  ordering.** It previously proved both cleanup steps ran on a crashing turn
+  but not their order; it now wraps the real `BusClient.leave()` to confirm
+  the session lease is still held at the moment the bus is left.
+
+- `docs/requirements/keryx-audit-remediation/findings.md`: version 0.2.0 →
+  0.2.1. New row **L-16** (open, low): the OpenAI-compatible adapter's
+  streaming loop silently drops an in-band `{"error":…}` envelope that
+  touches no tool call — no `model_end`, no `provider_error` — a narrower,
+  deliberately-deferred gap distinct from L-1. Pinned by
+  `stream-contract.test.ts`, not fixed in this round.
 
 ## [0.3.17] — 2026-09-27
 

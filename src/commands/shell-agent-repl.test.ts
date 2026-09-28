@@ -818,7 +818,7 @@ describe("AC7 (flow 352 audit) — a turn that throws out of runOperatorLine sti
     }
   });
 
-  test("a crashing turn still leaves the lease released and the bus joined-then-left, same as EOF/`/exit`", async () => {
+  test("a crashing turn still leaves the lease released and the bus joined-then-left, same as EOF/`/exit`, and leaves the bus BEFORE releasing the lease", async () => {
     const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
     const busBox: { current: BusClient | undefined } = { current: undefined };
     const q = lineQueue();
@@ -848,6 +848,21 @@ describe("AC7 (flow 352 audit) — a turn that throws out of runOperatorLine sti
     await waitUntil(() => busBox.current !== undefined, "bus join");
     expect(leaseBox.current).toBeDefined();
 
+    // Review r1 (item 3): the deleted source-text audit
+    // (`shell-bus.test.ts`'s old "one finally leaves the bus before
+    // releasing the lease") checked this ORDERING, which the runtime test
+    // above did not — only that both eventually happened. Wrap the REAL
+    // client's `leave()` to record whether the lease is STILL held at the
+    // moment it runs, proving `leaveBus()` fires strictly before
+    // `releaseLease()`, not merely that both fire.
+    const client = busBox.current!;
+    const originalLeave = client.leave.bind(client);
+    let leaseStillHeldWhenBusLeft: boolean | undefined;
+    client.leave = (): void => {
+      leaseStillHeldWhenBusLeft = leaseBox.current !== undefined;
+      originalLeave();
+    };
+
     q.push("hello");
 
     let rejected: unknown;
@@ -862,6 +877,8 @@ describe("AC7 (flow 352 audit) — a turn that throws out of runOperatorLine sti
     // never reached either deliberate `return`.
     expect(leaseBox.current).toBeUndefined();
     expect(busBox.current).toBeUndefined();
+    // The ordering itself: the bus was left WHILE the lease was still held.
+    expect(leaseStillHeldWhenBusLeft).toBe(true);
   });
 });
 

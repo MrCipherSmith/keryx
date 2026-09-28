@@ -228,3 +228,42 @@ test("flow 267 / AC4: a 400 body with error.code 'context_length_exceeded' class
   expect((await errorFor(json({ error: { code: "context_length_exceeded" } }, 429))).kind).toBe("rate_limit");
   expect((await errorFor(json({ error: { code: "some_other_code" } }, 400))).kind).toBe("invalid_request");
 });
+
+// Review r1 (item 4): confirmed against x.ai (this file's own doc comment on
+// `OpenAiCompatCapabilityGrant.streamUsage` — the SAME request returns
+// `prompt_tokens: 638, cached_tokens: 512` with `stream_options.include_usage`
+// set) — `usage.prompt_tokens_details.cached_tokens` was never read.
+test("review r1 (item 4): usage.prompt_tokens_details.cached_tokens populates the normalized usage's cacheReadTokens", async () => {
+  const sse = [
+    'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+    'data: {"choices":[],"usage":{"prompt_tokens":638,"completion_tokens":12,"total_tokens":650,"prompt_tokens_details":{"cached_tokens":512}}}\n\n',
+    "data: [DONE]\n\n",
+  ].join("");
+  const fetchMock = Object.assign((async () => new Response(sse, { status: 200 })) as unknown as typeof fetch, {
+    preconnect: (_input: string | URL) => {},
+  });
+  const provider = new OpenAiCompatEngine({ grant, fetch: fetchMock }, identity);
+  const events: NormalizedEvent[] = [];
+  for await (const event of provider.stream(request, { attemptId: "cache-01" })) events.push(event);
+
+  const usageEvent = events.find((e) => e.kind === "usage_update");
+  expect(usageEvent?.usage).toMatchObject({ inputTokens: 638, outputTokens: 12, totalTokens: 650, cacheReadTokens: 512 });
+});
+
+test("review r1 (item 4): no prompt_tokens_details on the wire leaves cacheReadTokens absent, not zero", async () => {
+  const sse = [
+    'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n',
+    'data: {"choices":[],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}\n\n',
+    "data: [DONE]\n\n",
+  ].join("");
+  const fetchMock = Object.assign((async () => new Response(sse, { status: 200 })) as unknown as typeof fetch, {
+    preconnect: (_input: string | URL) => {},
+  });
+  const provider = new OpenAiCompatEngine({ grant, fetch: fetchMock }, identity);
+  const events: NormalizedEvent[] = [];
+  for await (const event of provider.stream(request, { attemptId: "cache-02" })) events.push(event);
+
+  const usageEvent = events.find((e) => e.kind === "usage_update");
+  expect(usageEvent?.usage).toMatchObject({ inputTokens: 10, outputTokens: 2, totalTokens: 12 });
+  expect(usageEvent?.usage?.cacheReadTokens).toBeUndefined();
+});

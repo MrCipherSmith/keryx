@@ -109,6 +109,16 @@ export interface DispatchDeps {
   readonly now?: () => Date;
   /** Build the unattended sandbox. Default: `planUnattendedSandbox` against this host. */
   readonly planSandbox?: (input: UnattendedSandboxInput) => UnattendedSandboxPlan;
+  /**
+   * Review r1 (item 1, MAJOR regression): extra tools appended to the
+   * unattended roster (AC5). Test-only — every real caller omits it. Lets a
+   * test drive `runAgentTurn`'s `caughtToolErrors` (AC4/L-12's own defensive
+   * boundary) through the REAL `dispatchLocked` wiring, with a tool whose
+   * `invoke()` throws, rather than reaching for a tool in the fixed roster
+   * (`buildUnattendedRoster`), which is deliberately defensive and never
+   * throws in practice.
+   */
+  readonly extraTools?: readonly InteractiveTool[];
 }
 
 // Flow 300 T5: the two posture strings moved to `../trigger/describe.ts`, where
@@ -791,7 +801,7 @@ async function dispatchLocked(
     const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
 
     try {
-      const tools = buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox));
+      const tools = [...buildUnattendedRoster(worktree, unattendedRunner(worktree, sandbox)), ...(deps.extraTools ?? [])];
       const toolNames = tools.map((t) => t.definition.name);
       // Flow 306 (W6 T9, AC9): every unattended entry point builds its hook
       // runtime with `interactive: false` and the `unattended-untrusted`
@@ -855,6 +865,16 @@ async function dispatchLocked(
         signal: controller.signal,
       });
       finishReason = result.finishReason;
+      if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {
+        // Review r1 (item 1, MAJOR regression): before AC4 (flow 354, L-12)
+        // hardened `runAgentTurn`'s sequential tool loop, a throwing tool
+        // made this call reject, which the `catch` below turned into
+        // `crashed` — a run whose tool crashed is now recorded "completed"
+        // unless read explicitly here. Same `crashed`/`why` classification,
+        // same "failed" outcome, now driven by the result field instead of a
+        // rejection.
+        crashed = result.caughtToolErrors.map((e) => `${e.toolName}: ${e.message}`).join("; ");
+      }
     } catch (error) {
       crashed = error instanceof Error ? error.message : String(error);
     } finally {

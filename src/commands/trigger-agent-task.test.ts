@@ -13,6 +13,7 @@ import { runTriggerOnce } from "./trigger";
 import { scrubGrantedOutput } from "./trigger-agent-task";
 import { planUnattendedSandbox, type UnattendedSandboxPlan } from "../harness/process/sandbox/unattended";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort, StreamOptions } from "../harness/provider/types";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { scheduleStorePath } from "../trigger/config";
 import { appendTriggerRunRecord, openReservations, readTriggerRuns, type TriggerRunRecord } from "../trigger/record";
 import { addConfirmedSchedule, readScheduleStore } from "../trigger/store";
@@ -211,6 +212,35 @@ describe("AC2: one unattended turn, and a report the dispatcher writes", () => {
     const tools = (provider.requests[0] as { tools?: { name: string }[] }).tools?.map((t) => t.name) ?? [];
     expect(tools).not.toContain("apply_patch");
     expect(tools).toContain("shell_exec");
+  });
+
+  test("review r1 (item 1, MAJOR regression): a tool that throws is recorded as a crashed/failed run, not a silent completion", async () => {
+    // AC4 (flow 354, L-12) hardened `runAgentTurn`'s sequential tool loop so a
+    // throwing tool no longer makes the turn's promise reject — this used to
+    // be the ONLY crash signal `runLocked` had. `RunAgentTurnResult.
+    // caughtToolErrors` restores it: this test drives a REAL throwing tool
+    // (`extraTools`, a test-only seam — every real roster/granted tool is
+    // deliberately defensive and never throws) through the real dispatch
+    // wiring and asserts the run is still recorded failed.
+    await addConfirmedSchedule(root, entry({ mode: "trust" }));
+    const throwingTool: InteractiveTool = {
+      definition: {
+        name: "throwing_test_tool",
+        description: "test-only: always throws",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        risk: "read",
+      },
+      invoke: async () => {
+        throw new Error("tool boom");
+      },
+    };
+    const provider = scripted([toolCall("throwing_test_tool", {}, "c1"), finalText("done")]);
+    await run(provider, "check-github", { extraTools: [throwingTool] });
+
+    const record = await lastRecord();
+    expect(record.outcome).toBe("failed");
+    expect(record.detail).toContain("throwing_test_tool");
+    expect(record.detail).toContain("tool boom");
   });
 });
 

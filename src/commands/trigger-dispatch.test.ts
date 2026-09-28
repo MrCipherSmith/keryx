@@ -20,6 +20,7 @@ import { flowServiceDeps } from "./flow";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
 import type { NormalizedEvent, NormalizedRequest, ProviderDescription, ProviderPort, StreamOptions } from "../harness/provider/types";
+import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { triggersConfigPath } from "../trigger/config";
 import { appendTriggerRunRecord, readTriggerRuns, type TriggerRunRecord } from "../trigger/record";
 import { withFileLock } from "../lib/fs";
@@ -254,6 +255,43 @@ describe("AC1/AC2/AC5/AC6: a dispatch drives the next task from never-started to
     expect(record.detail).toContain("provider error");
     expect(record.cost).toEqual({ recorded: true, usd: ROUND_1_USD, tokens: { input: 1000, output: 200 } });
     const t1 = ((await flowJson())["tasks"] as { id: string; status: string; attempts?: { log: { outcome: string; detail?: string }[] } }[]).find((t) => t.id === "T1")!;
+    expect(t1.status).not.toBe("done");
+    expect(t1.attempts?.log.map((e) => e.outcome)).toEqual(["started", "failed"]);
+  });
+
+  test("review r1 (item 1, MAJOR regression): a tool that throws is recorded as a crashed/failed run, not a silent completion", async () => {
+    await writeTriggers([dispatchEntry()]);
+    // AC4 (flow 354, L-12) hardened `runAgentTurn`'s sequential tool loop so a
+    // throwing tool no longer makes the turn's promise reject — this used to
+    // be the ONLY crash signal `dispatchLocked` had. `RunAgentTurnResult.
+    // caughtToolErrors` restores it: this test drives a REAL throwing tool
+    // (`extraTools`, a test-only seam — every real roster tool is
+    // deliberately defensive and never throws) through the real dispatch
+    // wiring and asserts the run is still recorded failed.
+    const throwingTool: InteractiveTool = {
+      definition: {
+        name: "throwing_test_tool",
+        description: "test-only: always throws",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        risk: "read",
+      },
+      invoke: async () => {
+        throw new Error("tool boom");
+      },
+    };
+    const provider = scripted([
+      [USAGE_ROUND_1, ...toolCall("throwing_test_tool", {}), { kind: "model_end" }],
+      [USAGE_NONE, { kind: "text_delta", text: "done" }, { kind: "model_end" }],
+    ]);
+    await run(provider, { extraTools: [throwingTool] });
+
+    expect(process.exitCode).toBe(1);
+    const record = await lastRecord();
+    expect(record.outcome).toBe("failed");
+    expect(record.dispatch?.closing).toBe("failed");
+    expect(record.detail).toContain("throwing_test_tool");
+    expect(record.detail).toContain("tool boom");
+    const t1 = ((await flowJson())["tasks"] as { id: string; status: string; attempts?: { log: { outcome: string }[] } }[]).find((t) => t.id === "T1")!;
     expect(t1.status).not.toBe("done");
     expect(t1.attempts?.log.map((e) => e.outcome)).toEqual(["started", "failed"]);
   });

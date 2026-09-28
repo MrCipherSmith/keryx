@@ -104,6 +104,16 @@ export interface AgentTaskDeps {
   readonly now?: () => Date;
   /** The environment granted tools run with (default `process.env`) — the operator's own. */
   readonly grantedEnv?: Record<string, string | undefined>;
+  /**
+   * Review r1 (item 1, MAJOR regression): extra tools appended to the roster
+   * built for this run. Test-only — every real caller omits it. Lets a test
+   * drive `runAgentTurn`'s `caughtToolErrors` (AC4/L-12's own defensive
+   * boundary) through the REAL `runLocked` wiring, with a tool whose
+   * `invoke()` throws, rather than reaching for a tool in the fixed roster
+   * (`builtinReadOnlyTools`, `shellExecTool`, every granted-tool wrapper) —
+   * all of which are deliberately defensive and never throw in practice.
+   */
+  readonly extraTools?: readonly InteractiveTool[];
 }
 
 const GRANTED_TIMEOUT_MS = 30_000;
@@ -511,7 +521,12 @@ async function runLocked(
         .map((id) => grantedToolSpec(id))
         .filter((spec): spec is GrantedToolSpec => spec !== undefined)
         .map((spec) => grantedTool(spec, action, grantedCwd, env, grantedCalls, binaries.realpaths, extraSecrets, binaries.stats));
-      const tools = [...builtinReadOnlyTools(projectRoot), shellExecTool(workdir, sandboxedRunner(workdir, sandbox)), ...granted];
+      const tools = [
+        ...builtinReadOnlyTools(projectRoot),
+        shellExecTool(workdir, sandboxedRunner(workdir, sandbox)),
+        ...granted,
+        ...(deps.extraTools ?? []),
+      ];
       const offending = tools.filter((t) => UNATTENDED_EXCLUDED_TOOLS.includes(t.definition.name));
       if (offending.length > 0) throw new Error(`agent-task roster must not offer: ${offending.map((t) => t.definition.name).join(", ")}`);
       const provider = guardUsage(built as ProviderPort, () => meter.markUsageMissing());
@@ -564,6 +579,15 @@ async function runLocked(
       };
       const result = await runAgentTurn(io, agentDeps, history, buildAgentTaskPrompt(entry, action), { signal: controller.signal });
       finishReason = result.finishReason;
+      if (result.caughtToolErrors !== undefined && result.caughtToolErrors.length > 0) {
+        // Review r1 (item 1, MAJOR regression): before AC4 (flow 354, L-12)
+        // hardened `runAgentTurn`'s sequential tool loop, a throwing tool
+        // made this call reject, which the `catch` below turned into
+        // `crashed` — a run whose tool crashed is now recorded "completed"
+        // unless read explicitly here. Same `crashed`/`why` classification,
+        // now driven by the result field instead of a rejection.
+        crashed = result.caughtToolErrors.map((e) => `${e.toolName}: ${e.message}`).join("; ");
+      }
     } catch (error) {
       crashed = error instanceof Error ? error.message : String(error);
     } finally {
