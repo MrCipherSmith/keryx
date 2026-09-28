@@ -340,6 +340,12 @@ Background Jobs. The projection itself is covered behaviorally in the same
 test file; this source audit only pins the integration order until the shell
 layout has an injectable or queryable composition seam.
 
+### Added by the late main-queue recipient choice
+
+`tui/main-queue.test.ts` reads `tui-shell.ts` once to pin the idle-drain helper
+to the asynchronous Main recipient branch. The queue timing and forced/FIFO
+behaviour are tested directly through that helper in the same test file.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -365,6 +371,7 @@ tui/busy-dispatch.test.ts | tui/tui-shell.ts | 1
 tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
+tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1

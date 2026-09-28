@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.22] — 2026-09-28
+
+### Fixed
+- **Public review reports no longer attribute a run to the operator's GitHub
+  account.** `How this review was run` lists the workflow, models, tools,
+  skills and subagents that actually participated; missing facts are marked
+  `not recorded`, never guessed from the active `gh` login. The bundled and
+  installed review-orchestrator templates have the same privacy rule.
+- **A message queued through the busy-turn recipient selector now runs when
+  the selector resolves after the turn has already settled.** A guarded idle
+  drain takes the forced item first or the FIFO head; it never dispatches while
+  the main turn, pause lease or cancellation handoff is active.
+
 ## [0.3.21] — 2026-09-28
 
 ### Fixed

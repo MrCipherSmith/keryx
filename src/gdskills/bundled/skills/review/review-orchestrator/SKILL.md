@@ -1587,10 +1587,12 @@ Fix: <concrete>
 - <what was checked> — <how>
 
 ### How this review was run
-- **Run by:** @<gh-login> with `review-orchestrator`
+- **Workflow:** `review-orchestrator`
 - **Scope:** `<base>..<head>`, round N, PR #N
-- **Orchestrator:** `review-orchestrator`
-- **<actual model name>:** <reviewers on that model>
+- **Models:** <actual models and reviewers, or not recorded>
+- **Tools:** <tools actually invoked, or not recorded>
+- **Skills:** <skills actually used, or not recorded>
+- **Subagents:** <dispatched reviewers and models, or none when confirmed; otherwise not recorded>
 - **Not run:** <reviewer — reason>
 - **Verification:** <mode>; confirmed N, refuted N, unverifiable N, unverified N
 ```
@@ -1663,17 +1665,15 @@ Automation values, names unchanged:
 
 Default is do not publish. No resolvable PR number means skip and say so.
 
-The comment is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Say who ran the orchestrator and which reviewers ran; do not sign the comment as them.
+The comment is the report rendered from `templates/review-report.md`, English, with the domain file chosen above (`templates/pr-comment-frontend.md` / `templates/pr-comment-backend.md`) — never a summary written freehand. It does not use a tool heading, a finding table, or a meta table. It does not carry a co-author line, a `Generated with` trailer, or any sentence that names a vendor or a product as the author. Name the workflow and reviewers that actually ran, with models, tools, skills and subagents. Never identify the operator from `gh auth status`, git config or a credential; do not sign the comment as a person, reviewer or model.
 
 The follow-up file path and the metadata rules (real model names, Run vs Not run, no `adaptive` in the model slot) live in that same template. Write the body to a temp file and post with `gh pr comment <n> --body-file <file>`.
 
 **No GitHub write without an approved draft.** Before ANY write — the comment, a thread reply, `keryx review comments reply`, a review — show the user the rendered body and wait for explicit approval of that body.
 Picking A or B above chooses *whether* to publish, not *what*; a comment is public and cannot be unsent. With no user to answer (a dispatched run), do not write: hand the rendered body back to the caller.
 
-Re-read head and the thread immediately before posting. If head moved, re-check
-the findings against the new head and name the commits that were not reviewed.
-Do not post a finding another reviewer already filed on this head; if yours
-extends theirs, cite theirs.
+Re-read head and thread before posting. If head moved, re-check findings
+and name unchecked commits. Do not duplicate findings; cite extended ones.
 
 ## Job Context Awareness
 

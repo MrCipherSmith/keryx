@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
+  drainIdleMainQueue,
   editMainQueueItem,
   formatMainQueueMarker,
   parseQueueCommand,
@@ -78,4 +80,80 @@ test("parseQueueCommand rejects unknown actions and malformed positions", () => 
   expect(parseQueueCommand("remove -1")).toBeUndefined();
   expect(parseQueueCommand("remove abc")).toBeUndefined();
   expect(parseQueueCommand("remove 1.5")).toBeUndefined();
+});
+
+
+test("late main choice after turn settlement starts its queued item exactly once", async () => {
+  const items: QueuedMainQuestion[] = [];
+  const dispatched: string[] = [];
+  let busy = true;
+  let chooseMain!: () => void;
+  const choice = new Promise<void>((resolve) => { chooseMain = resolve; });
+  const drain = () => drainIdleMainQueue(items, {
+    isIdle: () => !busy,
+    takeForced: () => undefined,
+    dispatch: (item) => { dispatched.push(item.question); busy = true; },
+  });
+  const submit = (async () => { await choice; items.push(q("late", "late question")); drain(); })();
+  busy = false;
+  expect(drain()).toBe(false); // settlement saw an empty queue
+  chooseMain();
+  await submit; // the selector resolves AFTER settlement
+  expect(dispatched).toEqual(["late question"]);
+  expect(items).toHaveLength(0);
+  busy = false;
+  expect(drain()).toBe(false);
+  expect(dispatched).toHaveLength(1);
+});
+
+test("a main choice made before settlement waits, then dispatches only once", async () => {
+  const items = [q("queued", "queued question")];
+  const dispatched: string[] = [];
+  let busy = true;
+  const opts = {
+    isIdle: () => !busy,
+    takeForced: () => undefined,
+    dispatch: (item: QueuedMainQuestion) => { dispatched.push(item.question); busy = true; },
+  };
+  expect(drainIdleMainQueue(items, opts)).toBe(false);
+  expect(items).toHaveLength(1);
+  busy = false;
+  expect(drainIdleMainQueue(items, opts)).toBe(true);
+  expect(dispatched).toEqual(["queued question"]);
+  expect(items).toHaveLength(0);
+});
+
+test("a late choice honours forced priority, FIFO, hold, and disposed guards", () => {
+  const items = [q("old", "old"), q("late", "late")];
+  const dispatched: string[] = [];
+  let forced: QueuedMainQuestion | undefined = q("force", "force");
+  let held = true;
+  let disposed = false;
+  const opts = {
+    isIdle: () => !held && !disposed,
+    takeForced: () => { const next = forced; forced = undefined; return next; },
+    dispatch: (item: QueuedMainQuestion) => { dispatched.push(item.question); },
+  };
+  expect(drainIdleMainQueue(items, opts)).toBe(false);
+  expect(forced?.id).toBe("force");
+  held = false;
+  expect(drainIdleMainQueue(items, opts)).toBe(true);
+  expect(dispatched).toEqual(["force"]);
+  expect(items.map((item) => item.id)).toEqual(["old", "late"]);
+  expect(drainIdleMainQueue(items, opts)).toBe(true);
+  disposed = true;
+  expect(drainIdleMainQueue(items, opts)).toBe(false);
+  expect(dispatched).toEqual(["force", "old"]);
+  expect(items.map((item) => item.id)).toEqual(["late"]);
+});
+
+test("the busy recipient choice wires the idle drain after adding to the main queue", () => {
+  const source = readFileSync(new URL("./tui-shell.ts", import.meta.url), "utf8");
+  const choice = source.slice(source.indexOf('if (chosen === "main")'), source.indexOf('} else {', source.indexOf('if (chosen === "main")')));
+  expect(choice).toContain("mainQueue.push(");
+  expect(choice).toContain("drainIdleMainQueue(mainQueue, {");
+  expect(choice.indexOf("mainQueue.push(")).toBeLessThan(choice.indexOf("drainIdleMainQueue(mainQueue, {"));
+  for (const guard of ["!destroyed", "!chrome.isBusy()", "!foregroundOperation.isActive", "!forceHandoff.isAwaitingSettlement", "leaseView()?.held() !== true"]) {
+    expect(choice).toContain(guard);
+  }
 });

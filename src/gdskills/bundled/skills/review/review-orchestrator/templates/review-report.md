@@ -95,14 +95,19 @@ Do not list a checklist item that was not checked. Do not praise.
 
 ## How this review was run
 
-A list, not a meta table. Keep every fact the old Meta table carried.
+A factual run inventory, not an author or account signature. List only steps
+confirmed by the run record; never infer an operator identity from `gh auth`,
+git config, a credential or a PR author. Use `not recorded` when evidence for
+a tool, skill or model is unavailable; use `none` only when the run proves none.
 
 ```markdown
 ### How this review was run
-- **Run by:** @<gh-login> with `review-orchestrator`. Severity and lanes per the repository review rules, else the canonical rubric in this skill.
+- **Workflow:** `review-orchestrator`; severity and lanes per the repository review rules, else the canonical rubric in this skill.
 - **Scope:** `<base>..<head>`, round N, PR #N. Unchecked commits: <list or none>.
-- **Orchestrator:** `review-orchestrator`
-- **<actual model name>:** <reviewers dispatched on it, comma-separated>
+- **Models:** <actual model names and the reviewers that ran on each; or not recorded>.
+- **Tools:** <tools actually invoked for this review and their roles; or not recorded>.
+- **Skills:** <skills actually loaded or executed and their roles; or not recorded>.
+- **Subagents:** <dispatched subagents, their reviewer roles and actual models; or none when confirmed, otherwise not recorded>.
 - **Fallback:** <reviewer> via `general-purpose` because <native agent type unavailable | no bundled agent>. Or `none`.
 - **Not run:** <reviewer> — <short reason>. Or `none`.
 - **Selection:** <auto-detected scope | explicit flags | optional groups the user picked>
@@ -118,8 +123,8 @@ Model rules, unchanged from the old metadata table:
 - Name the model that actually ran. Never write `adaptive`, `inherit`,
   `unsupported`, or `current-session` in the model slot.
 - Group reviewers under the model they ran on. One bullet per model.
-- `Model strategy` (`ask` or `adaptive`) goes on the Run by line or under
-  Selection, not in place of a model name.
+- `Model strategy` (`ask` or `adaptive`) goes under Selection, never in
+  place of an actual model name.
 - Keep **Run** complete. If Not run is long, group it with counts and notable
   names; the full list belongs in the follow-up file.
 
