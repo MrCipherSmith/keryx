@@ -135,6 +135,7 @@ describe("AC8 — named refusals before anything runs", () => {
           config: ENABLED,
           worktree: wt.port,
           spawn: sp.port,
+          detect: async () => ({ binaryFound: true }),
           onOutcome: (o) => {
             outcome = o;
           },

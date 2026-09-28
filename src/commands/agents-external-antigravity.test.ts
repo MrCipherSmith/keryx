@@ -85,8 +85,11 @@ const AGY_TRANSCRIPT = [
   JSON.stringify({ event: "result", result: { conversation_id: "conv-test", status: "SUCCESS", response: "OK\n", duration_seconds: 1, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 2 } } }),
 ];
 
+// The binary probe is a seam: CI has neither `agy` nor `codex` installed, so a
+// run that is meant to reach the spawn port must say the binary is found.
 function deps(overrides: Partial<AgentsExternalDeps> = {}): AgentsExternalDeps {
-  return { cwd: root, env: {}, configDir: root, ...overrides };
+  const { run, ...rest } = overrides;
+  return { cwd: root, env: {}, configDir: root, run: { detect: async () => ({ binaryFound: true }), ...run }, ...rest };
 }
 
 describe("AC6: the /external block-list refuses antigravity-cli before anything spawns", () => {
