@@ -4,6 +4,7 @@ import {
 } from "../../web/sandboxed-web-transport";
 import { createSystemWebWorkerRunner } from "../../web/web-worker-runner";
 import type { HostLookup } from "../../web/web-policy";
+import { containsOutboundSecret, recordOutboundSecretFinding } from "../../web/outbound-secret";
 import type { InteractiveTool } from "./interactive-tools";
 
 export interface WebFetchDeps {
@@ -12,6 +13,13 @@ export interface WebFetchDeps {
   lookup?: HostLookup;
   runner?: WebWorkerRunner;
   now?: () => string;
+  /**
+   * Where the S-8 refusal incident (§14) is recorded. Left absent, a refusal
+   * still happens but nothing is logged — there is no safe default here
+   * (unlike other project-scoped state) because `process.cwd()` in a TEST
+   * process is the test runner's directory, not an operator's project.
+   */
+  cwd?: string;
 }
 
 function transportFor(deps: WebFetchDeps): SandboxedWebTransport {
@@ -39,6 +47,17 @@ export function webFetchTool(deps: WebFetchDeps = {}): InteractiveTool {
     invoke: async (input) => {
       if (typeof input.url !== "string") {
         return { output: "web_fetch: url must be an absolute HTTPS URL without credentials", isError: true };
+      }
+      // S-8 (flow 355, AC4): refuse BEFORE any network connection — the check
+      // above only validates shape, not what a model put in the URL itself.
+      if (containsOutboundSecret(input.url)) {
+        // Only when a caller names a project: falling back to `process.cwd()`
+        // would write a real incident file under whatever directory the TEST
+        // RUNNER happens to be started from, not the operator's project.
+        if (deps.cwd !== undefined) {
+          await recordOutboundSecretFinding(deps.cwd, "web_fetch", "url");
+        }
+        return { output: "web_fetch: outbound secret-shaped content", isError: true };
       }
       const result = await transport.fetchPage({ url: input.url, providerId: "web_fetch" });
       return result.ok

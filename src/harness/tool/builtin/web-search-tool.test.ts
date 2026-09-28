@@ -1,4 +1,7 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { webSearchTool } from "./web-search-tool";
 import { RATE_LIMITED_SEARCH_ERROR } from "../../search/connection-message";
 
@@ -76,4 +79,24 @@ test("web_search tells the agent not to retry a rate-limited search", async () =
   const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }) });
   const result = await tool.invoke({ query: "keryx" });
   expect(result.output).toContain("Do not retry or rephrase");
+});
+
+// S-8 (flow 355, AC4): a model-assembled query may itself carry secret-shaped
+// content that must never leave the machine as a search request.
+test("web_search refuses a query carrying secret-shaped content BEFORE any provider call", async () => {
+  const cwd = mkdtempSync(path.join(tmpdir(), "keryx-web-search-outbound-"));
+  try {
+    let calls = 0;
+    const token = `sk-${"A".repeat(24)}`;
+    const tool = webSearchTool(
+      { search: async () => { calls += 1; return { ok: true, value: { query: "x", providerId: "duckduckgo", results: [] } }; } },
+      { cwd },
+    );
+    const result = await tool.invoke({ query: `leaked key ${token}` });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("outbound secret-shaped content");
+    expect(calls).toBe(0);
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
 });

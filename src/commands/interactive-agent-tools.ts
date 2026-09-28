@@ -207,8 +207,8 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
     ...metaprojectTools,
-    webFetchTool(),
-    webSearchTool(input.searchController),
+    webFetchTool({ cwd: input.cwd }),
+    webSearchTool(input.searchController, { cwd: input.cwd }),
     shellExecTool(input.cwd, undefined, jobRegistry),
     // Flow 266: the task tools proper, plus the two old names kept as
     // deprecated aliases for one release. `observer` is what decides whether a
