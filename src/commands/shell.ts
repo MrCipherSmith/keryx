@@ -2672,6 +2672,7 @@ export async function runAgentRepl(
         } else {
           history = [];
           archive = [];
+          agentIo.trustedMcpTools?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
       } else if (command === "/compact") {
@@ -4328,6 +4329,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        mcpRuntime: () => mcpRuntime,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         // flow 268: `initialModelParams` is resolved once above (same
