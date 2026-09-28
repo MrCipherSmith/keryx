@@ -1,6 +1,6 @@
 # Keryx P0 Improvements — after the 2026-09-27 competitive review
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## Purpose
 
@@ -25,8 +25,24 @@ their first hour.
 
 ## Status
 
-**draft — specification written, nothing implemented.** Each workstream is
-sized for one flow; W2 and W4 carry the most design risk (see the PRD).
+Updated 2026-09-28. One workstream shipped; four are specification-ready.
+
+| W | Status | Where |
+|---|---|---|
+| W5 First hour | **implemented** — flow 353, PR #773, release 0.3.17 | `keryx doctor` / `/doctor`, did-you-mean for every group, `mcp list` exit codes, `memory search` stemming + hint, health `tests` detection, bare `providers` |
+| W1 External agents run for real | draft — spec ready | — |
+| W2 `/rewind` | draft — spec ready | — |
+| W3 Review as a GitHub Action | draft — spec ready | — |
+| W4 Remote approval | draft — spec ready | — |
+
+**Agreed order for the rest** (operator, helyx, 2026-09-28): audit-remediation
+flow 2 (R3 security depth, corpus measurement first) → audit-remediation flow 3
+(R4 architecture, R5 gates) → W1 → W2 → W3 → W4. One flow per workstream,
+frozen AC from [specification.md](specification.md) §8, a verifier-backed
+review round against the PR head before merge, one release per flow. Work is
+paused after flow 354; nothing is in flight.
+
+W2 and W4 carry the most design risk (see the PRD).
 
 ## Document index
 

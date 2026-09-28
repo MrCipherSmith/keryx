@@ -1,6 +1,6 @@
 # Backlog — improvements not in the P0 package
 
-Version: 0.1.0
+Version: 0.1.1
 
 The rest of what the 2026-09-27 competitive review found worth doing. Each
 entry names what was measured or observed, and why it is not P0. Companion to
@@ -101,7 +101,23 @@ Observed: Codex CLI voice on by default (moderate confidence); helyx already
 speaks replies.
 Why not P0: low demand from the operator; helyx covers the use.
 
-### 12. Architecture debt
+### 12. `keryx doctor` outside a keryx project reads as a failure
+
+Observed 2026-09-28 (0.3.17): in a directory with no `.metaproject/`, the
+Standard check reports `fail` with seven "Required file … is missing" errors
+and the command exits 1. Better: detect "not a keryx project" once, print one
+`warn` line with `keryx init` as the fix, skip the project-scoped checks and
+exit 0.
+Why not P0: W5 shipped; a one-check follow-up.
+
+### 13. `keryx doctor`'s stale-worktree check looks relative to cwd
+
+Observed 2026-09-28: run inside a linked worktree it said "no
+`.claude/worktrees` directory" while the main checkout had 59 worktrees. It
+should resolve `git rev-parse --git-common-dir` and look beside that.
+Why not P0: same as 12.
+
+### 14. Architecture debt
 
 Cycles, `retryableFor` duplication, the `tui-shell.ts` split — tracked in
 [keryx-audit-remediation](../keryx-audit-remediation/README.md) R4.

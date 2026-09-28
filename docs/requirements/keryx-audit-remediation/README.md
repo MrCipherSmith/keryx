@@ -1,6 +1,6 @@
 # Keryx Audit Remediation — 2026-09-27
 
-Version: 0.1.0
+Version: 0.1.1
 
 ## Purpose
 
@@ -17,7 +17,17 @@ sees the whole audit in one place, and are not requirements of this package.
 
 ## Status
 
-**draft — specification written, nothing in this package implemented.**
+Updated 2026-09-28. **R1 and R2 implemented** (flow 354, PR #774, release
+0.3.18): the four-adapter stream contract, `cached_tokens` accounting, the
+sequential tool loop's error boundary (and `caughtToolErrors` reaching
+trigger outcomes), `/new`/`/clear` resetting `/expand`, bounded completion
+waiters, `provisionWorktrees` cleanup, honest test headers. L-10 was decided
+by a live probe: the ChatGPT-subscription endpoint rejects
+`max_output_tokens`. Ledger: 11 of 22 rows closed; L-9 open (no Gemini
+credential), L-16 open (compat in-band error without a pending call, found
+by the flow 354 review). **R3, R4, R5 remain draft — specification written,
+not implemented.** Next flows, in order: R3 (after the corpus measurement),
+then R4 + R5. See [findings.md](findings.md) for per-row status.
 
 Already closed, outside this package:
 
@@ -26,6 +36,7 @@ Already closed, outside this package:
 | 0.3.14 | #766 | `openai-codex` and `gemini` classified as network providers; `spawn_subagent` works on the ChatGPT subscription again. |
 | 0.3.15 | #770 | External-agent credential strip, cross-origin redirect credential, sub-agent timeout quarantine, glued MCP secret names, `oauth` in the trust fingerprint, abort propagation to sub-agents, agent-REPL lease/bus `finally`, SIGINT job sweep (flow 352, AC1–AC8). |
 | 0.3.16 | #771 | Chat-REPL lease/bus `finally`, wrap-up abort reported as interruption, deep-enrich abort-listener leak (flow 352 review round 1: B-1, M-1, M-2). |
+| 0.3.18 | #774 | This package's R1 and R2 (flow 354). |
 
 ## Document index
 
