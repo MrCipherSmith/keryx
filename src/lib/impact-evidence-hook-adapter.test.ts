@@ -2,7 +2,7 @@
 // adapter's own mapping — request shape, outcome->decision mapping, and the
 // crash-propagates contract.
 import { describe, expect, test } from "bun:test";
-import type { ImpactEvidenceDecision, ImpactEvidenceRequest } from "../security/service";
+import type { ImpactEvidenceDecision, ImpactEvidenceRequest } from "../impact-evidence";
 import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
 
 function decision(overrides: Partial<ImpactEvidenceDecision> = {}): ImpactEvidenceDecision {

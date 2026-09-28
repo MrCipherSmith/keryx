@@ -6,11 +6,17 @@
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { isDestructiveCommand } from "../../lib/command-risk";
-import { commandWord, splitSegments } from "../../lib/shell-syntax";
-import { isPathInside, toPosix } from "../../lib/fs";
-import { loadSecurityConfig, resolveImpactEvidenceConfigTrusted } from "../config";
-import type { ImpactEvidenceConfig } from "../types";
+import { isDestructiveCommand } from "../lib/command-risk";
+import { commandWord, splitSegments } from "../lib/shell-syntax";
+import { isPathInside, toPosix } from "../lib/fs";
+// Review round 1, ARCH-R1-F1: through the security zone's stated facade
+// (`security/service.ts`), matching `commands/security-impact-evidence.ts`'s
+// own usage of these two helpers — not `../security/config` directly, which
+// is a cross-owner reference that skips the facade the project otherwise
+// disciplines strictly (invisible to import-policy.ts, since security and
+// impact-evidence resolve to the same core zone bucket).
+import { loadSecurityConfig, resolveImpactEvidenceConfigTrusted } from "../security/service";
+import type { ImpactEvidenceConfig } from "../security/types";
 import { computeImpactEvidence, renderEvidenceBlock } from "./evidence";
 import { appendLogRecord, loadSessionState, saveSessionState } from "./state";
 import {

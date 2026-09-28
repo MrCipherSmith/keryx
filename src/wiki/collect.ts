@@ -196,13 +196,11 @@ export function computeModuleKeyFiles(graph: GraphData): Map<string, string[]> {
   return byPagePath;
 }
 
-/** Look up a page's key files in a `computeModuleKeyFiles` index. Empty for non-`component` pages (no module key-files concept applies). */
-export function keyFilesForPage(
-  index: ReadonlyMap<string, string[]>,
-  page: Pick<WikiPage, "relativePath">,
-): string[] {
-  return index.get(page.relativePath) ?? [];
-}
+// A-3 (flow 356): `keyFilesForPage` moved to `./key-files` to break the
+// collect.ts -> provenance.ts -> describes.ts -> collect.ts cycle
+// (`describes.ts` used to import it from here). Re-exported so this file's
+// OTHER callers (`wiki/enrich.ts`, `collect.test.ts`) are unaffected.
+export { keyFilesForPage, type ModuleKeyFilesIndex } from "./key-files";
 
 // Mirrors `service.ts:1212-1218`'s `moduleNameFromProjectPath` exactly.
 function moduleNameFromPath(filePath: string): string {

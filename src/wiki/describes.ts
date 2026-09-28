@@ -23,7 +23,10 @@
 // §4.4.1).
 
 import type { DescribesOrigin } from "../gdgraph/types";
-import { keyFilesForPage } from "./collect";
+// A-3 (flow 356): imported from the leaf module, not `./collect` — `collect.ts`
+// imports `./provenance` imports `./describes` (this file), so importing
+// `keyFilesForPage` back from `./collect` closed that loop.
+import { keyFilesForPage } from "./key-files";
 import type { WikiPage } from "./types";
 
 export interface DescribeEntry {

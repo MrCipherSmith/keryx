@@ -423,7 +423,7 @@ export const INSTRUCTIONS_ZED: SurfaceAdapter = {
 //     also carry `additionalContext` — the built-in `keryx.impact-evidence`)
 //     registration on `PreToolUse` injects `additionalContext` before a tool
 //     runs. This is the exact surface W8's `hostDeliveryStatus()`
-//     (`src/security/impact-evidence/host.ts`) checks for by flag name.
+//     (`src/impact-evidence/host.ts`) checks for by flag name.
 //   - `inject-context`: the same `context` class on any OTHER event (most
 //     usefully `UserPromptSubmit`) — the general capability `ORIENT_*`'s
 //     Claude/Codex/Cursor-specific host hooks give those harnesses; here it

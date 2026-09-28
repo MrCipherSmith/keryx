@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { ContainedWriteError } from "../../lib/contained-write";
+import { ContainedWriteError } from "../lib/contained-write";
 import { appendLogRecord, impactEvidenceDataRoot, loadSessionState, saveSessionState } from "./state";
 
 describe("impact-evidence session state", () => {

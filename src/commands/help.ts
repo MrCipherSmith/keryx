@@ -13,7 +13,12 @@
 // This file is an ADAPTER (`src/commands/**`) and reaches the HELP_GROUPS
 // table only through the core facade `../standard/service` — see the zone
 // note at the top of `src/standard/help-groups.ts`.
-import { CLI_ROUTES, printCommandHelp } from "../cli";
+//
+// A-2 (flow 356): imported from `../cli-registry`, not `../cli` — `cli.ts`
+// imports THIS file's `helpCommand` (dynamically, as `CLI_ROUTES.help`), so
+// a static import back from `cli.ts` would recreate the cycle `cli-registry.ts`
+// exists to cut. See that file's header comment.
+import { CLI_ROUTES, printCommandHelp } from "../cli-registry";
 import {
   closestHelpTopics,
   findSlashEntry,

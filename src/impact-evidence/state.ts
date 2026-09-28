@@ -3,9 +3,9 @@
 
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { pathExists } from "../../lib/fs";
-import { appendContained, writeContained } from "../../lib/contained-write";
-import { readJsonObjectFile } from "../../lib/json";
+import { pathExists } from "../lib/fs";
+import { appendContained, writeContained } from "../lib/contained-write";
+import { readJsonObjectFile } from "../lib/json";
 import type { ImpactEvidenceLogEvent, ImpactEvidenceLogRecord } from "./types";
 
 export interface ImpactEvidenceSessionState {

@@ -22,6 +22,7 @@
 import packageJson from "../../package.json" with { type: "json" };
 import { readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { checkVersion } from "../lib/version-check";
 import { resolveProjectRoot } from "../lib/contained-path";
@@ -33,6 +34,8 @@ import { runDoctor as runStandardDoctor } from "../standard/service";
 import { harnessAdapterIds, doctorIntegration } from "../integrations/service";
 import { checkGraphStaleness } from "../gdgraph/service";
 import { readWikiFreshnessMetric } from "../health/service";
+import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
+import { gitToplevel } from "../lib/clone-scope";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
 
@@ -75,9 +78,19 @@ async function registeredWorktrees(cwd: string): Promise<Set<string>> {
  * (removed by hand, or by a `git worktree remove` whose directory delete
  * failed and left the shell behind). Both are what `git worktree prune`
  * exists to clean up; this only REPORTS them; it never deletes anything.
+ *
+ * Backlog item 13 (flow 356): `.claude/worktrees` is resolved beside the
+ * MAIN checkout (`resolveMainCheckoutRoot`, `git rev-parse
+ * --git-common-dir`), not beside `cwd` — run from inside a LINKED worktree,
+ * `path.join(cwd, ".claude", "worktrees")` used to say "no .claude/worktrees
+ * directory" while the main checkout had dozens, because it was looking
+ * beside the wrong root. `git worktree list` itself is unaffected by this
+ * (it already answers the same way from any worktree of one repo), so only
+ * the directory this check reads needs to change.
  */
 async function checkWorktrees(cwd: string): Promise<DoctorCheck> {
-  const worktreesDir = path.join(cwd, ".claude", "worktrees");
+  const mainRoot = (await resolveMainCheckoutRoot(cwd)) ?? cwd;
+  const worktreesDir = path.join(mainRoot, ".claude", "worktrees");
   let entries: string[];
   try {
     entries = (await readdir(worktreesDir, { withFileTypes: true }))
@@ -323,24 +336,140 @@ async function checkWikiFreshness(cwd: string): Promise<DoctorCheck> {
 export interface DoctorTestOverrides {
   /** Review round 1, T1: drive a genuine `bun` `fail` without touching `package.json` or the running Bun. Never set by a real caller. */
   readonly bunFloor?: string;
+  /**
+   * Review round 1, L2/TEST-1: the ceiling {@link isKeryxProject}'s
+   * outside-a-repo upward walk stops at (inclusive — see
+   * {@link findMetaprojectUpward}). Defaults to `os.homedir()`. Tests inject
+   * a fixture-local directory here so a stray `.metaproject` anywhere above
+   * the REAL `$HOME` (or above the OS temp directory the fixture happens to
+   * sit under) can never change the result — never set by a real caller.
+   */
+  readonly homeDir?: string;
 }
+
+/**
+ * Directories `findMetaprojectUpward` must never check or cross, even when a
+ * stray `.metaproject`/`.git` ends up directly inside one. The filesystem
+ * root is never a project boundary, and neither is the OS temp directory: a
+ * bare `mkdtemp()` fixture (this project's own tests, and any concurrent
+ * process sharing the machine) routinely leaves debris there, and review
+ * round 1 (L2/TEST-1) reproduced `keryx doctor`'s own new "not a keryx
+ * project" test failing because of exactly that — a `.metaproject` living
+ * directly in `/tmp` on the review machine.
+ */
+function isExcludedProjectRootCandidate(dir: string): boolean {
+  return dir === path.parse(dir).root || dir === "/tmp" || dir === tmpdir();
+}
+
+/**
+ * Walk upward from `cwd` looking for a `.metaproject/`, never checking or
+ * crossing `ceiling`'s PARENT (i.e. `ceiling` itself is the last directory
+ * checked) nor any {@link isExcludedProjectRootCandidate} directory
+ * encountered along the way. Returns the directory holding `.metaproject/`,
+ * or `undefined` when none was found within bounds.
+ */
+function findMetaprojectUpward(cwd: string, ceiling: string): string | undefined {
+  let current = path.resolve(cwd);
+  const resolvedCeiling = path.resolve(ceiling);
+  for (;;) {
+    if (isExcludedProjectRootCandidate(current)) {
+      return undefined;
+    }
+    if (existsSync(path.join(current, ".metaproject"))) {
+      return current;
+    }
+    if (current === resolvedCeiling) {
+      return undefined;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return undefined;
+    }
+    current = parent;
+  }
+}
+
+/**
+ * Is there a `.metaproject/` at or above `cwd`? Deliberately narrower than
+ * `resolveProjectRoot` (which also stops at a bare `.git`, no `.metaproject`
+ * required, for OTHER callers that only need a repository boundary) —
+ * backlog item 12 is specifically about the ABSENCE of a Metaproject
+ * workspace, so a plain git repo with none still reads as "not a keryx
+ * project" here.
+ *
+ * Review round 1 (L2/TEST-1): unlike `resolveProjectRoot`, the upward walk
+ * here is BOUNDED, never delegating to that generic unceilinged walker.
+ * Inside a git repository, the bound is the repo's own toplevel (`git
+ * rev-parse --show-toplevel`) — the project is the nearest `.metaproject` at
+ * or below it. Outside a repository, the bound is `$HOME` (its PARENT is
+ * never checked), and the OS temp directory / filesystem root are never
+ * considered candidates either way — an ancestor of a bare `mkdtemp()`
+ * fixture (or of any unrelated directory on a shared machine) acquiring a
+ * stray `.git`/`.metaproject` must never flip this to `true`.
+ *
+ * Also checks the MAIN checkout (same `resolveMainCheckoutRoot` as the
+ * `worktrees` check, backlog item 13) when `cwd` itself has none: an agent
+ * worktree under `.claude/worktrees/<name>` never carries its own
+ * `.metaproject/` — that lives only in the main checkout — so without this,
+ * `keryx doctor` run from inside one would misreport a real keryx project
+ * as uninitialized. The main-checkout root, resolved via git's own
+ * `--git-common-dir` plumbing, needs no separate bound: it can never resolve
+ * to a bare temp directory in the first place.
+ */
+async function isKeryxProject(cwd: string, overrides: DoctorTestOverrides = {}): Promise<boolean> {
+  const toplevel = await gitToplevel(cwd);
+  const ceiling = toplevel ?? overrides.homeDir ?? homedir();
+  if (findMetaprojectUpward(cwd, ceiling) !== undefined) {
+    return true;
+  }
+  const mainRoot = await resolveMainCheckoutRoot(cwd);
+  return mainRoot !== undefined && existsSync(path.join(mainRoot, ".metaproject"));
+}
+
+/**
+ * Backlog item 12 (flow 356): outside a keryx project, `doctor` used to run
+ * every project-scoped check against a directory with no `.metaproject/` —
+ * `checkStandard` alone produced SEVEN "Required file … is missing" `fail`
+ * lines and exit 1, which reads as "keryx is broken" rather than "run
+ * `keryx init`". Detected ONCE, here: one `warn` line replaces every
+ * project-scoped check, and the command exits 0 (the global, non-project
+ * checks below still run and can still genuinely `fail`, e.g. Bun below the
+ * documented floor — that is a real problem with no project involved).
+ */
+const NOT_A_KERYX_PROJECT_CHECK: DoctorCheck = {
+  id: "project",
+  status: "warn",
+  detail: "not a keryx project — run `keryx init`",
+  fix: "keryx init",
+};
 
 /**
  * Build the whole report. Every check runs, regardless of any other one's
  * result — a broken MCP config must never hide a stale graph. Order here
  * is the order AC1 lists them in, which is also render/JSON order.
+ *
+ * Project-scoped checks (mcp, integrations, standard, worktrees, graph/wiki
+ * freshness) are skipped entirely outside a keryx project (backlog item 12)
+ * — {@link NOT_A_KERYX_PROJECT_CHECK} stands in for all six.
  */
 export async function buildDoctorReport(
   cwd: string,
   env: Record<string, string | undefined> = process.env,
   overrides: DoctorTestOverrides = {},
 ): Promise<DoctorReport> {
-  const checks = await Promise.all([
+  const globalChecks = await Promise.all([
     checkVersionAvailability(),
     Promise.resolve(checkBun(overrides.bunFloor)),
     Promise.resolve(checkRipgrep()),
     Promise.resolve(checkSandbox()),
     Promise.resolve(checkProviders(env)),
+  ]);
+
+  if (!(await isKeryxProject(cwd, overrides))) {
+    return { checks: [...globalChecks, NOT_A_KERYX_PROJECT_CHECK] };
+  }
+
+  const projectChecks = await Promise.all([
     Promise.resolve(checkMcp(cwd)),
     checkIntegrations(cwd),
     checkStandard(cwd),
@@ -348,7 +477,7 @@ export async function buildDoctorReport(
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),
   ]);
-  return { checks };
+  return { checks: [...globalChecks, ...projectChecks] };
 }
 
 /** Exit-code predicate, extracted so it is testable against a synthetic report without needing a real environment to produce a genuine "fail". */

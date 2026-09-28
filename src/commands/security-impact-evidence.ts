@@ -4,20 +4,27 @@
 // is reachable only by calling `handleImpactEvidence` directly (as this
 // file's own tests do).
 
+// A-1 (flow 356, audit remediation 3): the impact-evidence module itself
+// moved to `src/impact-evidence/` (its own core zone, no `service.ts` of its
+// own) and is imported directly here — there is no facade to reach past.
+// `security/service.ts` still fronts the security-config helpers below, which
+// are genuinely `security/config.ts`'s.
 import {
   appendLogRecord,
   computeImpactEvidence,
   createImpactEvidenceProvider,
   hostDeliveryStatus,
-  loadSecurityConfig,
   normalizeRequestFiles,
   readLogRecords,
-  redactSensitiveText,
   renderEvidenceBlock,
-  resolveImpactEvidenceConfigTrusted,
-  verifyConfigChecksum,
   type ImpactEvidenceProfile,
   type ImpactEvidenceRequest,
+} from "../impact-evidence";
+import {
+  loadSecurityConfig,
+  redactSensitiveText,
+  resolveImpactEvidenceConfigTrusted,
+  verifyConfigChecksum,
 } from "../security/service";
 import path from "node:path";
 import { optionValue } from "../lib/args";

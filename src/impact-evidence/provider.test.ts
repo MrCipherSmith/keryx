@@ -12,8 +12,8 @@ import {
 } from "./provider";
 import { loadSessionState, readLogRecords } from "./state";
 import type { ImpactEvidence, ImpactEvidenceRequest } from "./types";
-import type { ImpactEvidenceConfig } from "../types";
-import { computeConfigChecksum, mergeSecurityConfig, renderSecurityConfig } from "../config";
+import type { ImpactEvidenceConfig } from "../security/types";
+import { computeConfigChecksum, mergeSecurityConfig, renderSecurityConfig } from "../security/config";
 
 const DEFAULT_CONFIG: ImpactEvidenceConfig = { enabled: true, strict: false, exemptGlobs: [], dampenAfter: 3 };
 

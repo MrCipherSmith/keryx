@@ -86,3 +86,16 @@ export function defaultRetryable(kind: ProviderErrorKind): boolean | undefined {
       return undefined;
   }
 }
+
+/**
+ * Resolve a concrete retry disposition, falling back for policy-conditional
+ * rows (A-6, flow 356): byte-identical in all four full adapters
+ * (anthropic, openai, gemini, openai-compat) before this move — each one
+ * separately re-implemented this exact two-line wrapper over
+ * {@link defaultRetryable} rather than sharing it. Moved here once; every
+ * adapter imports this instead of defining its own copy.
+ */
+export function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
+  const concrete = defaultRetryable(kind);
+  return concrete === undefined ? fallback : concrete;
+}

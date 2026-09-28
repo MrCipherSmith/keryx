@@ -40,7 +40,8 @@
 import { redactSensitiveText } from "../../../security/service";
 import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
-import { defaultRetryable } from "../provider-port";
+// A-6 (flow 356): the shared wrapper, not a local copy — see `provider-port.ts`'s doc comment.
+import { retryableFor } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import { ThinkTagParser } from "./think-tag-parser";
 import { FieldThinkTagStripper } from "./think-tag-stripper";
@@ -52,7 +53,6 @@ import type {
   NormalizedUsage,
   ProviderCapabilities,
   ProviderDescription,
-  ProviderErrorKind,
   ProviderPort,
   StreamOptions,
 } from "../types";
@@ -222,12 +222,6 @@ function asNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/** Resolve a concrete retry disposition, falling back for policy-conditional rows. */
-function retryableFor(kind: ProviderErrorKind, fallback: boolean): boolean {
-  const concrete = defaultRetryable(kind);
-  return concrete === undefined ? fallback : concrete;
-}
-
 /**
  * Merge the gateway's split token counts into a single exact
  * {@link NormalizedUsage}. `cacheReadTokens` (review r1, item 4) is
@@ -281,6 +275,45 @@ function mergeUsage(
  * (this file never read `code` at all) surfaced as a bare `invalid_request`
  * with no `/compact` hint reachable downstream.
  */
+/**
+ * L-16 (flow 356) in-band `error.code`/`error.type` strings known to signal a
+ * transient, backend-side condition, mapped to the synthesized HTTP status
+ * {@link classifyHttpError} already knows how to turn into the matching
+ * retryable kind. Every code NOT in this map — including every genuinely
+ * non-retryable OpenAI-shaped code (`invalid_api_key`,
+ * `invalid_request_error`, `content_policy_violation`, …) — falls through to
+ * the 400/`invalid_request` (non-retryable) bucket in
+ * {@link inBandErrorStatusFor}, never the 500/`unavailable` (retryable) one:
+ * review round 1 finding L1 caught the previous unconditional `?? 500`
+ * default silently turning an unrecognized, typically non-retryable code
+ * (e.g. a bad API key) into a retryable "unavailable" server outage.
+ */
+const TRANSIENT_IN_BAND_ERROR_STATUS: Readonly<Record<string, number>> = {
+  context_length_exceeded: 400,
+  rate_limit_exceeded: 429,
+  server_error: 500,
+  overloaded: 500,
+  overloaded_error: 500,
+  timeout: 500,
+  timeout_error: 500,
+  service_unavailable: 500,
+};
+
+/**
+ * Resolve the synthesized HTTP status for an L-16 in-band error envelope
+ * whose `error.code` was not a number. A code absent from
+ * {@link TRANSIENT_IN_BAND_ERROR_STATUS} synthesizes 400 (non-retryable
+ * `invalid_request` via {@link classifyHttpError}), not 500 — an unmapped
+ * code is NOT evidence of a backend fault, unlike a genuine 5xx or a known
+ * transient code.
+ */
+function inBandErrorStatusFor(stringCode: string | undefined): number {
+  if (stringCode === undefined) {
+    return 400;
+  }
+  return TRANSIENT_IN_BAND_ERROR_STATUS[stringCode] ?? 400;
+}
+
 function classifyHttpError(status: number, headers: Headers, code?: string): NormalizedError {
   if (status === 401 || status === 403) {
     // A refused credential or account. The same request cannot succeed on retry.
@@ -1135,6 +1168,36 @@ export class OpenAiCompatEngine implements ProviderPort {
           break;
         }
         const data = asRecord(parsed);
+
+        // L-16 (flow 356): an in-band `{"error":{…}}` envelope. Some
+        // OpenAI-compat gateways report a mid-stream failure as an ordinary
+        // SSE data record instead of closing the connection with a non-2xx
+        // status. This record carries no `choices` and no `usage`, so
+        // before this fix it was silently ignored: the loop kept reading,
+        // `sawFinish` never became true, and the stream ended with NO
+        // terminal event at all — unlike every other adapter's post-loop
+        // EOF handling, and unlike this SAME adapter's OWN handling of a
+        // pre-2xx HTTP error. Classified the same way (`classifyHttpError`),
+        // reusing whatever HTTP-like numeric code the gateway put in
+        // `error.code` when there is one. Without a numeric code, review
+        // round 1 finding L1: an in-band error is NOT, by itself, evidence
+        // of a backend fault — only a code KNOWN to be transient
+        // ({@link inBandErrorStatusFor}) synthesizes the retryable 5xx/429
+        // bucket; every other (including unrecognized) string code
+        // synthesizes the non-retryable 400 bucket instead of defaulting to
+        // a retryable "unavailable" server outage.
+        if (data.error !== undefined) {
+          const errorField = asRecord(data.error);
+          const numericStatus = asNumber(errorField.code);
+          const stringCode = asString(errorField.code) ?? asString(errorField.type);
+          const status = numericStatus ?? inBandErrorStatusFor(stringCode);
+          const classified = classifyHttpError(status, new Headers(), stringCode);
+          const reason = asString(errorField.message);
+          classified.message =
+            `${this.label} stream carried an in-band error` + (reason === undefined ? "" : `: ${reason}`);
+          malformed = classified;
+          break;
+        }
 
         // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
         if (data.usage !== undefined) {

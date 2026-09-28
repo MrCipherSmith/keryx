@@ -1,6 +1,6 @@
 # Keryx Audit Remediation — 2026-09-27
 
-Version: 0.1.1
+Version: 0.2.0
 
 ## Purpose
 
@@ -17,17 +17,34 @@ sees the whole audit in one place, and are not requirements of this package.
 
 ## Status
 
-Updated 2026-09-28. **R1 and R2 implemented** (flow 354, PR #774, release
-0.3.18): the four-adapter stream contract, `cached_tokens` accounting, the
-sequential tool loop's error boundary (and `caughtToolErrors` reaching
-trigger outcomes), `/new`/`/clear` resetting `/expand`, bounded completion
-waiters, `provisionWorktrees` cleanup, honest test headers. L-10 was decided
-by a live probe: the ChatGPT-subscription endpoint rejects
-`max_output_tokens`. Ledger: 11 of 22 rows closed; L-9 open (no Gemini
-credential), L-16 open (compat in-band error without a pending call, found
-by the flow 354 review). **R3, R4, R5 remain draft — specification written,
-not implemented.** Next flows, in order: R3 (after the corpus measurement),
-then R4 + R5. See [findings.md](findings.md) for per-row status.
+Updated 2026-09-28 (flow 356). **R1, R2, R3, R4, R5 all implemented.**
+
+- **R1/R2** (flow 354, PR #774, release 0.3.18): the four-adapter stream
+  contract, `cached_tokens` accounting, the sequential tool loop's error
+  boundary (and `caughtToolErrors` reaching trigger outcomes), `/new`/`/clear`
+  resetting `/expand`, bounded completion waiters, `provisionWorktrees`
+  cleanup, honest test headers. L-10 was decided by a live probe: the
+  ChatGPT-subscription endpoint rejects `max_output_tokens`. L-9 stayed open
+  (no Gemini credential on the build machine).
+- **R3** (flow 355, releases 0.3.19–0.3.21, three review rounds): entropy-based
+  redaction (S-6), injection-detector Unicode-confusable/newline evasion
+  (S-7), outbound secret-shaped URL/query screening for `web_fetch`/
+  `web_search` (S-8), token-shaped path segments masked in displayed URLs
+  (S-9), the Windows browser-open command line no longer re-tokenised through
+  a shell (S-10), `isDeniedForMcpChild` moved to a shared core home with its
+  case-sensitivity and glued-name-anchoring fixed (R-MIN1/R-I1/R-I2).
+- **R4/R5 and the two remaining L/S rows** (flow 356, this release): every
+  open architecture-debt row (A-1 through A-8), every open tooling/dogfood
+  row (G-2, G-4, G-5 — G-3 stays open, out of this package's frozen scope),
+  the deferred compat in-band-error gap (L-16), and the Grok TOML value-echo
+  leak (S-11).
+
+Ledger: every row carries `fixed` or `accepted`, with a test name, except
+G-3 (`health run`'s `tests`/`coverage` sources on keryx's own tree), which
+this package never took on. See [findings.md](findings.md) for the
+per-row detail — in particular A-4 (facade loops, accepted, reconfirmed as
+the only two left) and G-4 (accepted: not reproducible on a fresh tree, the
+original warnings were local runtime-state drift on the audit machine).
 
 Already closed, outside this package:
 

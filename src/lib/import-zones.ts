@@ -88,6 +88,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "acp", zone: "adapter" },
   // The CLI entry point itself: a transport, not an owner and not the runtime.
   { segment: "cli.ts", zone: "adapter" },
+  // Flow 356 (A-2): the CLI's route table and help-rendering, split out of
+  // `cli.ts` to break a cycle with `commands/help.ts` (see `cli-registry.ts`'s
+  // header). Same zone as `cli.ts` — it imports the same ~60 adapter-zone
+  // command modules `cli.ts` used to import directly.
+  { segment: "cli-registry.ts", zone: "adapter" },
 
   // Client — model/provider registry, turn loop, session, TUI, agents.
   { segment: "harness", zone: "client" },
@@ -154,8 +159,9 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // imports adapter code itself.
   { segment: "trigger", zone: "core" },
   // The published package's one public door (`exports["."]`), which re-exports
-  // the ten declared owner facades and nothing else. It is core BY
-  // CONSTRUCTION, and `src/core-package.test.ts` is what proves it stays so.
+  // the eleven declared owner facades (review round 1, REG-1, added
+  // `impactEvidence`) and nothing else. It is core BY CONSTRUCTION, and
+  // `src/core-package.test.ts` is what proves it stays so.
   { segment: "core.ts", zone: "core" },
   // Flow 291: the governance report's aggregation library — pure readers over
   // flow.json, review manifests and the trigger ledger, with no provider
@@ -217,6 +223,19 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // importing it, since core may never import client (see this table's header
   // comment) — see that file's own comment for why the duplication is safe.
   { segment: "learning", zone: "core" },
+  // Flow 356 (A-1, audit remediation 3): the impact-evidence gate
+  // (`computeImpactEvidence`, the session-state log, the provider, the host-
+  // delivery status check) — deterministic composition over the gdgraph
+  // affected report, the related-tests report and memory caveats, no
+  // provider registry and no model call. Moved out from under `src/security/`
+  // (where it used to live as `security/impact-evidence/`) specifically to
+  // break a cycle: `security/service.ts` re-exported it for its one caller,
+  // `commands/security-impact-evidence.ts`, and that re-export closed a loop
+  // back through `testing/service.ts`/`metrics/lifecycle.ts` to
+  // `security/guard.ts`. It has no `service.ts` of its own — its single
+  // adapter caller imports it directly, which is why this is a new
+  // FACADELESS core zone rather than a bypass of one.
+  { segment: "impact-evidence", zone: "core" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

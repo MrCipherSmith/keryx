@@ -33,7 +33,14 @@
 import path from "node:path";
 import os from "node:os";
 import { isDefiniteAbsence, readConfigFile } from "../lib/config-dir";
-import { parseJsonTolerant, type McpConfigProblem, type McpServerEntry } from "./config";
+import { parseJsonTolerant } from "./json-utils";
+// A-5 (flow 356): TYPE-ONLY — `config.ts` imports `compatFiles`/
+// `readCompatFile` from this file, so a VALUE import back from `./config`
+// closed the loop `gdgraph query cycles` reported. `McpConfigProblem`/
+// `McpServerEntry` are only ever used here as types (never constructed or
+// called), so a type-only import keeps the same names available without
+// creating a runtime edge back to `config.ts`.
+import type { McpConfigProblem, McpServerEntry } from "./config";
 
 /**
  * Which other tool a server came from.
@@ -270,7 +277,19 @@ export function parseGrokToml(file: string, text: string): CompatServers {
       const first = (arrayHeader[1] as string).split(".")[0]?.trim().replace(/^(["'])(.*)\1$/, "$2");
       current = undefined;
       if (first === "mcp_servers") {
-        problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+        // SEC-356-02 (review round 1): NEVER echo `line` here — an
+        // `[[mcp_servers…]]` header's bracket CONTENT is caller-chosen text
+        // (a marketplace-source URL, a server name someone crafted to look
+        // like a header) that can carry a secret-shaped string, and this
+        // message reaches `mcp list --json` warnings, `mcp doctor` and the
+        // `/mcp` panel — the exact sinks S-11 closed for the key/value
+        // sites. Naming the line number and the rule that rejected it
+        // (array-of-tables headers are not a shape `mcp_servers` supports)
+        // is enough to find and fix it in the file.
+        problems.push({
+          file,
+          message: `line ${lineNo}: an array-of-tables header ("[[mcp_servers…]]") is not a shape this reader understands — servers are named tables, never an array`,
+        });
       }
       continue;
     }
@@ -292,7 +311,12 @@ export function parseGrokToml(file: string, text: string): CompatServers {
     // attacker-chosen. `[[hooks]]` itself now takes the array-of-tables
     // branch above; closing the table is the property both branches keep.
     if (line.startsWith("[")) {
-      problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+      // SEC-356-02 (review round 1): NEVER echo `line` here — see
+      // {@link describeUnrecognizedBracketLine}'s own doc comment.
+      problems.push({
+        file,
+        message: `line ${lineNo}: not a header this reader recognizes (${describeUnrecognizedBracketLine(line)})`,
+      });
       current = undefined;
       continue;
     }
@@ -304,14 +328,28 @@ export function parseGrokToml(file: string, text: string): CompatServers {
 
     const pair = /^([A-Za-z_][A-Za-z0-9_-]*)\s*=\s*(.+)$/.exec(line);
     if (pair === null) {
-      problems.push({ file, message: `line ${lineNo}: cannot read "${line}" as a TOML key/value` });
+      // S-11 (flow 356): NEVER echo the raw line here — the part after `=`
+      // is a config VALUE (a Grok config's `headers` table routinely carries
+      // a bearer token), and this branch is reachable for a value-bearing
+      // line the key regex above just rejected. Naming the line number is
+      // enough to find it in the file; the line's own content is not this
+      // problem's to repeat into `mcp list --json`/`mcp doctor`/the `/mcp`
+      // panel.
+      problems.push({ file, message: `line ${lineNo}: cannot read this line as a TOML key/value` });
       continue;
     }
     const value = parseScalar(pair[2] as string);
     if (value === undefined) {
+      // S-11 (flow 356): the ORIGINAL message interpolated `pair[2]` — the
+      // raw, unparsed value — directly into the problem text. A Bearer token
+      // in an inline-table `headers` field (`headers = { Authorization =
+      // "Bearer sk-…" }`, a TOML form this reader does not support) printed
+      // verbatim in `mcp list --json` warnings, `mcp doctor` and the `/mcp`
+      // panel. Name the KEY (already just an identifier, never secret-
+      // shaped) and the unsupported FORM, never the value itself.
       problems.push({
         file,
-        message: `line ${lineNo}: value for "${pair[1] as string}" is a TOML form this reader does not support (${pair[2] as string})`,
+        message: `line ${lineNo}: value for "${pair[1] as string}" is a TOML form this reader does not support (${describeUnsupportedTomlValue(pair[2] as string)})`,
       });
       // The whole SERVER is poisoned, not just this key.
       //
@@ -355,6 +393,46 @@ function stripComment(line: string): string {
     if (ch === "#" && !quoted) return line.slice(0, i);
   }
   return line;
+}
+
+/**
+ * Name the SHAPE of a TOML value this reader refused, never its content
+ * (S-11, flow 356) — the caller interpolates this into a problem message
+ * that reaches `mcp list --json`/`mcp doctor`/the `/mcp` panel, and a
+ * refused value is exactly the kind of thing worth refusing to repeat: an
+ * inline table (`headers = { Authorization = "Bearer …" }`) is Grok's own
+ * shape for a credential-bearing field.
+ */
+function describeUnsupportedTomlValue(raw: string): string {
+  const text = raw.trim();
+  if (text.startsWith("{") && text.endsWith("}")) return "an inline table";
+  if (text.startsWith("[") && text.endsWith("]")) return "an array with an unsupported element";
+  if (/^[+-]?\d+\.\d+$/.test(text) || /^[+-]?(inf|nan)$/i.test(text)) return "a float";
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return "a date/time value";
+  if (text.startsWith("'") || text.startsWith('"""') || text.startsWith("'''")) return "a quoting style this reader does not read";
+  return "an unrecognized TOML value";
+}
+
+/**
+ * Name the SHAPE of a bracketed line this reader refused as a header,
+ * never its content (SEC-356-02, review round 1, same discipline as
+ * {@link describeUnsupportedTomlValue}) — a rejected `[…]`/`[[…]]` line can
+ * carry a secret-shaped string (a server name or marketplace URL someone
+ * crafted, or a stray value that merely starts with `[`), and this message
+ * reaches the same sinks: `mcp list --json`, `mcp doctor`, the `/mcp`
+ * panel.
+ */
+function describeUnrecognizedBracketLine(line: string): string {
+  if (!line.endsWith("]")) {
+    return "missing a closing bracket";
+  }
+  if (line.startsWith("[[") && !line.endsWith("]]")) {
+    return "an array-of-tables header missing its second closing bracket";
+  }
+  if (!line.startsWith("[[") && line.slice(1, -1).includes("[")) {
+    return "an extra opening bracket inside a table header";
+  }
+  return "an unrecognized bracket shape";
 }
 
 /** A string, boolean, integer or array of strings. Anything else: undefined. */

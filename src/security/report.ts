@@ -129,6 +129,9 @@ function renderScanMetadata(report: SecurityReport): string {
     sections.push(`- status: ${report.coverage.status}`);
     sections.push(`- required: ${report.coverage.required}`);
     sections.push(`- reasons: ${report.coverage.reasons.length > 0 ? report.coverage.reasons.join(", ") : "none"}`);
+    if (report.coverage.skipped !== undefined && report.coverage.skipped.length > 0) {
+      sections.push(`- skipped (ignore rules): ${report.coverage.skipped.join(", ")}`);
+    }
   }
   if (report.files !== undefined) {
     sections.push("", "## Files");

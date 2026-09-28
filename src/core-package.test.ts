@@ -69,7 +69,13 @@ const SRC = path.join(ROOT, "src");
 /** The module `exports["."]` publishes — the one door into core. */
 const CORE_ENTRY = "src/core.ts";
 
-/** The ten declared public facades the core entry re-exports. */
+/**
+ * The ten declared public facades the core entry re-exports whose module
+ * lives at `src/<facade>/service.ts` — every one EXCEPT
+ * {@link IMPACT_EVIDENCE_FACADE}, whose module is named and shaped
+ * differently (see below), so it is checked separately rather than folded
+ * into this array and its `service.ts` assumption.
+ */
 const FACADES = [
   "flow",
   "gdgraph",
@@ -82,6 +88,31 @@ const FACADES = [
   "testing",
   "wiki",
 ] as const;
+
+/**
+ * Review round 1, REG-1: the eleventh published facade, added when A-1
+ * (flow 356) removed `security/service.ts`'s re-export of the
+ * impact-evidence module's public door without giving it a replacement —
+ * silently dropping `core.security.readLogRecords` and six siblings from
+ * the published surface with no compile-time warning. Named separately from
+ * {@link FACADES}: its module is `src/impact-evidence/index.ts` (its own
+ * public door, per that module's header), not a `service.ts` at
+ * `src/impactEvidence/`.
+ *
+ * `IMPACT_EVIDENCE_ENTRY` names `provider.ts`, not `index.ts`, for the
+ * shipped-graph presence check below: `index.ts` is a PURE named-re-export
+ * facade with no runtime statements of its own (measured directly — a
+ * release build of `src/core.ts` never attributes any sourcemap segment to
+ * it, unlike the ten `service.ts` facades above, which all carry real code
+ * alongside their re-exports and so do appear). `provider.ts` is a real leaf
+ * module `index.ts` re-exports from, so its presence proves the same thing
+ * the ten facades' `service.ts` presence proves.
+ */
+const IMPACT_EVIDENCE_FACADE = "impactEvidence";
+const IMPACT_EVIDENCE_ENTRY = "src/impact-evidence/provider.ts";
+
+/** Every published facade name, core-graph-`service.ts` ones and the impact-evidence one together — the full `Object.keys(core)` surface. */
+const ALL_FACADES = [...FACADES, IMPACT_EVIDENCE_FACADE] as const;
 
 /**
  * Five `src/session/` modules that are in the core graph ON PURPOSE.
@@ -314,14 +345,92 @@ test("the core entry's shipped graph was really read (sentinel against an empty 
   // appears among its own sourcemap's `sources` depends on the shape of the
   // entry (measured: a named-re-export facade like `src/sac/service.ts` does
   // not appear; an `export * as` entry does), so asserting the entry's own name
-  // would be asserting a bundler detail. All ten declared facades appearing is
-  // the property that says the right thing was built.
+  // would be asserting a bundler detail. All eleven declared facades
+  // appearing is the property that says the right thing was built.
   for (const facade of FACADES) {
     expect({ facade, shipped: coreGraph.includes(`src/${facade}/service.ts`) }).toEqual({
       facade,
       shipped: true,
     });
   }
+  expect({
+    facade: IMPACT_EVIDENCE_FACADE,
+    shipped: coreGraph.includes(IMPACT_EVIDENCE_ENTRY),
+  }).toEqual({ facade: IMPACT_EVIDENCE_FACADE, shipped: true });
+});
+
+test("review round 1, REG-1: core.security and core.impactEvidence member names are pinned", async () => {
+  // A-1 (flow 356) removed `security/service.ts`'s re-export of the
+  // impact-evidence module's public door with NOTHING in this file
+  // asserting on `core.security`'s member list — the break shipped with
+  // every other test green. Pinning both namespaces' exact runtime member
+  // names here means a future accidental removal (from either namespace)
+  // fails loudly instead of silently narrowing the published surface again.
+  const security = await import("./security/service");
+  const impactEvidence = await import("./impact-evidence");
+
+  expect(Object.keys(security).sort()).toEqual([
+    "EXTERNAL_ENV_DENY",
+    "EXTERNAL_ENV_PREFIX_SWEEPS",
+    "addBaselineEntry",
+    "analyze",
+    "appendIncident",
+    "applyAuditProposal",
+    "auditGate",
+    "createSecurityService",
+    "defaultBaselinePath",
+    "detectEntropy",
+    "detectSecrets",
+    "isDeniedForMcpChild",
+    "isEntropyBackendEnabled",
+    "loadSecurityConfig",
+    "looksSecretShaped",
+    "looksSecretShapedIn",
+    "memoizeResolved",
+    "redactSensitiveText",
+    "resetEntropyGateForTests",
+    "resolveImpactEvidenceConfig",
+    "resolveImpactEvidenceConfigTrusted",
+    "runGate",
+    "runHarnessAudit",
+    "runReport",
+    "runScan",
+    "runScanPath",
+    "scanContent",
+    "setEntropyBackendEnabledForTests",
+    "sourceForFileRead",
+    "validateSerializedOutput",
+    "verifyConfigChecksum",
+  ]);
+  // None of the seven functions BREAKING (core API) moved off `core.security`.
+  for (const moved of [
+    "appendLogRecord",
+    "computeImpactEvidence",
+    "createImpactEvidenceProvider",
+    "hostDeliveryStatus",
+    "normalizeRequestFiles",
+    "readLogRecords",
+    "renderEvidenceBlock",
+  ]) {
+    expect(Object.keys(security)).not.toContain(moved);
+  }
+
+  expect(Object.keys(impactEvidence).sort()).toEqual([
+    "IMPACT_EVIDENCE_HOOK_ID",
+    "appendLogRecord",
+    "computeImpactEvidence",
+    "createImpactEvidenceProvider",
+    "hostDeliveryStatus",
+    "impactEvidenceDataRoot",
+    "impactEvidenceHookClass",
+    "loadSessionState",
+    "logPath",
+    "normalizeRequestFiles",
+    "readLogRecords",
+    "renderEvidenceBlock",
+    "sanitizeSessionId",
+    "saveSessionState",
+  ]);
 });
 
 test("the core entry ships no provider registry, model selection, credential read or LLM call (AFC-19)", () => {
@@ -559,7 +668,7 @@ test("a consumer reaches the ten doors and nothing else — the exports map, res
   );
   expect({ exitCode: door.exitCode, out: door.out.trim() }).toEqual({
     exitCode: 0,
-    out: [...FACADES].sort().join(","),
+    out: [...ALL_FACADES].sort().join(","),
   });
 
   const deep = probe(

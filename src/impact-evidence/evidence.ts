@@ -2,10 +2,10 @@
 // for one file. No writes — session state and logging live in `state.ts`,
 // consulted only by `provider.ts`.
 
-import { buildAffectedReport } from "../../gdgraph/affected-report";
-import { buildRelatedTestsReport } from "../../testing/related-report";
-import { collectEntries } from "../../memory/store";
-import { toPosix } from "../../lib/fs";
+import { buildAffectedReport } from "../gdgraph/affected-report";
+import { buildRelatedTestsReport } from "../testing/related-report";
+import { collectEntries } from "../memory/store";
+import { toPosix } from "../lib/fs";
 import type { ImpactEvidence, MemoryCaveatEntry } from "./types";
 
 function normalizeForCompare(file: string): string {

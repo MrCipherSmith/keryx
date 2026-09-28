@@ -7,11 +7,12 @@
 // adapter's wire format makes a row structurally different, the test
 // documents exactly what that adapter does instead of silently skipping it).
 //
-// Fixed by this flow: the compat adapter's `flushPendingToolEnds` (row A) and
+// Fixed by flow 354: the compat adapter's `flushPendingToolEnds` (row A) and
 // the Gemini streaming loop's in-stream-error branch (row B) and `callId`
-// fallback (row C). Anthropic and openai (native) keep their PRE-EXISTING
-// behaviour on every row — this file pins that behaviour, it does not change
-// it.
+// fallback (row C). Fixed by flow 356 (L-16): the compat adapter's OWN
+// in-stream-error branch (row B), previously a documented gap. Anthropic and
+// openai (native) keep their PRE-EXISTING behaviour on every row — this file
+// pins that behaviour, it does not change it.
 //
 // OFFLINE / DETERMINISTIC: `fetch` is always injected; no test touches the
 // network or `globalThis.fetch`.
@@ -167,12 +168,15 @@ describe("row B — an in-stream error envelope/event", () => {
     expect(errors[0]?.error?.retryable).toBe(true);
   });
 
-  test("compat: CURRENT (unchanged, documented gap) — an in-band {error} envelope is not read at all; the stream ends with no terminal event whatsoever, not even a generic malformed", async () => {
-    // A DIFFERENT, out-of-scope gap from L-1 (which is specifically about a
-    // pending TOOL CALL at EOF): this record touches no tool call, so it hits
-    // the compat adapter's `sawStart && !sawFinish` fallthrough, which — unlike
-    // every other adapter's post-loop EOF handling — emits neither `model_end`
-    // nor a `malformed` `provider_error`. Documented here, not fixed here.
+  test("compat: CHANGED (L-16) — an in-band {error} envelope with no pending tool call becomes a provider_error classified like a pre-2xx error", async () => {
+    // A DIFFERENT gap from L-1 (which is specifically about a pending TOOL
+    // CALL at EOF): this record touches no tool call. It used to hit the
+    // compat adapter's `sawStart && !sawFinish` fallthrough, which — unlike
+    // every other adapter's post-loop EOF handling — emitted neither
+    // `model_end` nor a `malformed` `provider_error`: the stream ended with
+    // NO terminal event at all. Fixed by reading the `error` envelope the
+    // moment it arrives and classifying it the same way a pre-2xx HTTP error
+    // is (`classifyHttpError`).
     const sse = 'data: {"error":{"code":503,"status":"UNAVAILABLE","message":"backend overloaded"}}\n\n';
     const provider = new OpenAiCompatEngine(
       { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
@@ -180,8 +184,76 @@ describe("row B — an in-stream error envelope/event", () => {
     );
     const events = await collect(provider.stream(buildRequest("row-b-compat"), { attemptId: "row-b-compat" }));
 
-    expect(providerErrors(events)).toHaveLength(0);
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("unavailable");
+    expect(errors[0]?.error?.retryable).toBe(true);
+    expect(errors[0]?.error?.message).toContain("backend overloaded");
     expect(events.some((e) => e.kind === "model_end")).toBe(false);
+  });
+
+  test("compat: FIXED (review round 1, L1) — an unrecognized non-numeric in-band error.code is NOT retryable, unlike the old unconditional ?? 500 default", async () => {
+    // OpenAI's real invalid_api_key / invalid_request_error shape: a
+    // non-numeric error.code the compat engine has never heard of. Before
+    // the L1 fix this defaulted to status 500 -> classifyHttpError ->
+    // retryable "unavailable", so a bad key surfaced as a retryable server
+    // outage and the harness burned retries on a request that could never
+    // succeed.
+    const sse =
+      'data: {"error":{"code":"invalid_api_key","type":"invalid_request_error","message":"Incorrect API key provided"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-invalid-key"), { attemptId: "row-b-compat-invalid-key" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.retryable).toBe(false);
+    expect(errors[0]?.error?.message).toContain("Incorrect API key provided");
+  });
+
+  test("compat: FIXED (review round 1, L1) — a known-transient non-numeric in-band error.code (rate_limit_exceeded) stays retryable", async () => {
+    const sse = 'data: {"error":{"code":"rate_limit_exceeded","message":"slow down"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-rate-limit"), { attemptId: "row-b-compat-rate-limit" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("rate_limit");
+    expect(errors[0]?.error?.retryable).toBe(true);
+  });
+
+  test("compat: CURRENT (unchanged by L1) — a numeric in-band error.code of 429 still classifies as retryable rate_limit", async () => {
+    const sse = 'data: {"error":{"code":429,"message":"slow down"}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-429"), { attemptId: "row-b-compat-429" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("rate_limit");
+    expect(errors[0]?.error?.retryable).toBe(true);
+  });
+
+  test("compat: CURRENT (unchanged by L1) — an in-band error.code of context_length_exceeded still classifies as non-retryable context_overflow", async () => {
+    const sse =
+      'data: {"error":{"code":"context_length_exceeded","message":"This model\'s maximum context length is 200000 tokens."}}\n\n';
+    const provider = new OpenAiCompatEngine(
+      { grant: { network: true, baseUrl: COMPAT_IDENTITY.defaultBaseUrl, allowLoopback: true }, fetch: fetchMockFor(sse) },
+      COMPAT_IDENTITY,
+    );
+    const events = await collect(provider.stream(buildRequest("row-b-compat-context-overflow"), { attemptId: "row-b-compat-context-overflow" }));
+
+    const errors = providerErrors(events);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.error?.kind).toBe("context_overflow");
+    expect(errors[0]?.error?.retryable).toBe(false);
   });
 
   test("anthropic: CURRENT (unchanged) — its own event:error SSE event classifies via classifySseErrorType (overloaded_error -> overloaded, retryable)", async () => {

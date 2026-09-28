@@ -11,6 +11,7 @@
 import path from "node:path";
 import { keryxConfigDir, isDefiniteAbsence, readConfigFile } from "../lib/config-dir";
 import { compatFiles, readCompatFile } from "./compat";
+import { parseJsonTolerant } from "./json-utils";
 
 /** One server as written in a config file. Shape mirrors the package schema. */
 export type McpServerEntry = {
@@ -148,23 +149,12 @@ export const MAX_SERVER_NAME_LENGTH = 40;
 /** The only document version this keryx understands. Absent reads as this. */
 export const SCHEMA_VERSION = 1;
 
-/**
- * `JSON.parse`, minus a leading byte-order mark.
- *
- * EXPORTED and shared, because the first version of this put the strip in
- * `parseConfigFile` alone — one of the three readers of these same files.
- * The result was two surfaces disagreeing about one file: `keryx mcp list`
- * read a BOM'd config perfectly while `keryx mcp add` refused it, and
- * `keryx mcp enable` reported success while silently skipping the
- * sticky-flag cleanup. Worse, a BOM on the OVERLAY made `disable` not take
- * effect: the overrides were "ignored" and the server started.
- *
- * Windows editors write a BOM by default. It is not a syntax error the
- * operator made.
- */
-export function parseJsonTolerant(text: string): unknown {
-  return JSON.parse(text.replace(/^\uFEFF/, "")) as unknown;
-}
+// A-5 (flow 356): `parseJsonTolerant` moved to `./json-utils` to break the
+// config.ts <-> compat.ts cycle (`compat.ts` imported it from here, and this
+// file imports `compatFiles`/`readCompatFile` from `compat.ts`). Re-exported
+// so this file's other callers (`approval-render.ts`, `credentials.ts`,
+// `trust.ts`, this module's own uses below) are unaffected.
+export { parseJsonTolerant } from "./json-utils";
 
 /**
  * The largest timeout that survives `setTimeout`.

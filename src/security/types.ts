@@ -160,6 +160,8 @@ export type SecurityReport = {
     status: "complete" | "incomplete";
     required: boolean;
     reasons: string[];
+    /** Paths the repository's own ignore rules excluded (G-2, flow 356). */
+    skipped?: string[];
   };
   files?: Array<{
     path: string;

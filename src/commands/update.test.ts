@@ -845,3 +845,48 @@ test("keryx update: an actual module-flag change still bumps metaproject.json's 
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+// G-5 (flow 356, audit remediation 3): `keryx update` lists agent worktrees
+// under `.claude/worktrees/` that are stale (old, merged, clean) and prunes
+// them ONLY after confirmation — `--yes` skips the interactive prompt for
+// CI. `confirm()` (`src/lib/prompt.ts`) already returns its default (`false`)
+// when stdin is not a TTY, which `bun test` never is, so the no-`--yes`
+// branch below exercises the real "declined" path rather than a fake one.
+test("keryx update --yes prunes a stale, merged, clean worktree under .claude/worktrees/", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-stale-worktree-"));
+  try {
+    gitForUpdateIdempotency(root, ["init", "-q", "-b", "main"]);
+    gitForUpdateIdempotency(root, ["config", "user.email", "test@test.com"]);
+    gitForUpdateIdempotency(root, ["config", "user.name", "test"]);
+    await writeFile(path.join(root, "README.md"), "root\n", "utf8");
+    gitForUpdateIdempotency(root, ["add", "-A"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "init"]);
+
+    await withCwd(root, async () => {
+      await initCommand(["--yes"]);
+    });
+
+    const worktreesDir = path.join(root, ".claude", "worktrees");
+    await mkdir(worktreesDir, { recursive: true });
+    const stalePath = path.join(worktreesDir, "agent-1");
+    gitForUpdateIdempotency(root, ["worktree", "add", "-q", "-b", "agent/agent-1", stalePath, "main"]);
+    const past = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const { utimes } = await import("node:fs/promises");
+    await utimes(stalePath, past, past);
+
+    // No --yes: stdin is not a TTY under `bun test`, so `confirm()` declines
+    // and the worktree survives.
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime"]);
+    });
+    expect(existsSync(stalePath)).toBe(true);
+
+    // --yes: skips the prompt and prunes.
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--yes"]);
+    });
+    expect(existsSync(stalePath)).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);

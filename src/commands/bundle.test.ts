@@ -16,9 +16,30 @@ import { bundleCommand } from "./bundle";
 
 const tempDirs: string[] = [];
 
+/**
+ * A fresh, isolated project-scope root under the OS temp directory.
+ *
+ * `bundleCommand` (`src/commands/bundle.ts#resolveBundleProjectRoot`)
+ * resolves its project root by walking UPWARD from `cwd` for the nearest
+ * `.metaproject`/`.git` (R1-F24) — with no ceiling, the same unbounded-walk
+ * shape review round 1's L2/TEST-1 found in `doctor.ts`'s `isKeryxProject`.
+ * A freshly `mkdtemp()`'d directory carries neither marker of its own (that
+ * is what `bundle import` is about to CREATE), so before this fix, the walk
+ * continued past it into the OS temp directory itself — and if `/tmp`
+ * happened to already carry a stray `.metaproject` (ambient pollution, or
+ * this very leak from an earlier run), every subsequent test in this file
+ * silently wrote its fixture into THAT shared `/tmp/.metaproject` instead
+ * of its own isolated root, and left it there for unrelated tests (in this
+ * file and elsewhere) to trip over. Stamping an EMPTY `.git` directly
+ * inside the fresh root the moment it is created makes THIS directory the
+ * walk's stopping point unconditionally — the same authoritative boundary
+ * `resolveProjectRoot` itself looks for — so no test here can ever escape
+ * upward into `/tmp`, ambient pollution or not.
+ */
 async function makeTempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(path.join(tmpdir(), prefix));
   tempDirs.push(dir);
+  await mkdir(path.join(dir, ".git"), { recursive: true });
   return dir;
 }
 
