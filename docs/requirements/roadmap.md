@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.17
+Version: 0.29.18
 
 ## Status
 
@@ -18,6 +18,26 @@ carrying the measurement that found it and the reason it was not done then.
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
 >
+> - **0.29.18**: new package `keryx-product-module`, **draft — specification
+>   written, nothing implemented**. Every module here answers a question: where
+>   does this live, why is it built this way, what did we decide, what state is
+>   the work in, is it correct, is it safe to publish. Two questions have no
+>   module — why are we doing this and for whom, and did it help. The package
+>   specifies a `product` module that answers both: `index` derives an intent set
+>   from flows and requirements packages, `open` lists intents closed in code and
+>   never checked for effect, `map` states what the product claims and how much is
+>   proven, `admit` narrows what a new idea may collide with before work starts.
+>   All four are deterministic and call no model; one advisory skill runs only on
+>   a non-empty candidate set. The non-goals are load-bearing: no gate, no new
+>   subagents, no mandatory step, no activity report, and no module named after a
+>   role — a module per job title would re-import the org chart the work is
+>   dissolving. Depends on `keryx-acceptance-layer` W0. The plan carries an
+>   explicit bulk budget and stops after `index`/`open` to read one number: how
+>   many of the closed intents were ever checked for effect. `theory.md` records
+>   the derivation and separates what is established (job deconstruction,
+>   skills-based organisations, the K-shaped role split) from what is not — the
+>   same deconstruction running toward absorption by one operator rather than
+>   distribution across many, with no tooling built for it.
 > - **0.29.17**: `keryx-p0-improvements` **W5 implemented** (flow 353, PR #773, 0.3.17: `keryx doctor`/`/doctor`, did-you-mean, `mcp list` exit codes, memory search stemming, health tests detection, bare providers); `keryx-audit-remediation` **R1 and R2 implemented** (flow 354, PR #774, 0.3.18: four-adapter stream contract, cached tokens, sequential-loop error boundary reaching trigger outcomes, shell cleanups; 11 of 22 ledger rows closed). Remaining order agreed with the operator: R3 → R4+R5 → W1 → W2 → W3 → W4; work paused after flow 354.
 > - **0.29.16**: two new packages from the 2026-09-27 audit and competitive review, both **draft — specification written, nothing implemented**: `keryx-audit-remediation` (22 open findings in providers, harness/shell, security depth, architecture debt, own-tree gates; what was fixed the same day in 0.3.14–0.3.16 is listed as closed) and `keryx-p0-improvements` (W1 external agents run live, W2 `/rewind`, W3 review as a GitHub Action, W4 remote approval, W5 first hour; competitive matrix and P1/P2 backlog inside the package).
 > - **0.29.15**: new package `keryx-agent-platform-expansion`, **draft — specification written, nothing implemented**. Eight workstreams: stack-aware skills/rules catalog with install profiles and catalog governance gates (W1), agent definitions compiled into dispatch contracts (W2), consent-gated self-learning loop incl. reviewer profiles (W3), portable bundles and cross-harness memory handoff (W4), one harness adapter registry with a generated capability matrix (W5), lifecycle hooks in `keryx shell` that only tighten policy (W6), gdgraph/gdctx correctness fixes and benchmark (W7), harness-config security audit and impact-evidence gate (W8). Rollout in waves 0–4, correctness first.
