@@ -79,7 +79,8 @@
           "enum": [
             "discovered",
             "session-ranked",
-            "session-fallback"
+            "session-fallback",
+            "agent-ranked"
           ]
         },
         "model_discovery": {

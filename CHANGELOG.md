@@ -3,6 +3,18 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.28] — 2026-09-28
+
+### Added
+- **Model-tier resolution is generation-aware** (flow 358) — within one family and vendor, a newer version now outranks an older one (`sonnet 5` over `5`, `opus 5.5` over `4.8`). A session on a newer model with an older, pricier model discovered never resolves `deep` to the older model: it keeps the session model, and `tier_resolution` / `tier_reasons` record why (`resolve:kept-older-generation-pricier`). `tier_reasons` now ends with a `resolve:<reason>` entry on every decision.
+- **`light` is the next size step below the session model** — an Opus session with Sonnet and Haiku discovered gets Sonnet; Haiku is taken only when nothing sits between.
+- **An agent fallback ranks candidate models when the deterministic ranking is refused or ambiguous** — one short call on the light tier of the session's own provider, shown discovered model ids and profile prices only (never a task), validated (foreign ids dropped, session model must be placed, standard/deep never below the session), cached by a catalogue hash in `tier-rank-cache.json`, and recorded as the new `tier_resolution: agent-ranked` (added to the dispatch and reviewer-input schemas). A failure, timeout or malformed answer keeps the session model. The rule states that it compares candidate models and never rates a task's own difficulty.
+- **`keryx review tier` and the shell's `spawn_subagent` row show the resolution source** — including `agent-ranked` and, for the agent, its trigger, the model it ran on and whether the answer came from cache.
+- The curated Anthropic lineup and seed profiles gain Opus 5.5 and Sonnet 5.5.
+
+### Changed
+- The Claude Code subagent alias map (`deep` → `opus`, `standard` → `sonnet`, `light` → `haiku`) is unchanged and now has a regression test.
+
 ## [0.3.27] — 2026-09-28
 
 ### Added

@@ -1,4 +1,5 @@
-// Flow 204, T19-T22 / AC14-AC17.
+// Flow 204, T19-T22 / AC14-AC17; flow 358 (generation-aware tiers, agent fallback) is the
+// last describe block at the bottom of this file.
 //
 // Five things are under test, and the order below is the order they matter in:
 //
@@ -26,22 +27,32 @@ import { describe, expect, test } from "bun:test";
 import { loadSchema, validateJson } from "./contracts";
 import {
   assignTier,
+  buildRankPrompt,
   buildTierMap,
   concreteModelDeclarations,
   decideDispatchModel,
+  decideDispatchModelWithAgent,
   DEFAULT_MODEL_TIER,
   isModelTier,
   MODEL_RANK_HINTS,
   MODEL_TIERS,
   parseModelTier,
+  parseRankAnswer,
+  RANK_MAX_CANDIDATES,
   parseSkillModelTier,
+  rankCatalogueHash,
   rankDiscoveredModels,
   rankModelId,
   resolveTierFromRanking,
   resolveTierModel,
+  resolveTierModelWithAgent,
   SKILL_TIER_KEY,
   type DiscoveredProvider,
+  type ModelPrices,
   type SessionModelContext,
+  type TierRankAgent,
+  type TierRankCache,
+  type TierRankRequest,
 } from "./model-tier";
 import { resolveChildModel } from "../harness/child/model";
 import type { PolicyProfile } from "../harness/policy/types";
@@ -58,12 +69,12 @@ const INSTALLED_SKILLS = path.join(REPO_ROOT, ".metaproject", "skills", "gdskill
  * be testing the wrong thing.
  */
 const CATALOG: readonly DiscoveredProvider[] = [
-  { name: "anthropic", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { name: "anthropic", models: ["claude-sonnet-4-5", "claude-opus-4-8", "claude-haiku-4-5"] },
   { name: "fake", models: ["fake-echo"] },
 ];
 
 /** Session on the middle model of a catalogue with one above and one below it. */
-const CLAUDE_SESSION: SessionModelContext = { providerId: "anthropic", modelId: "claude-sonnet-5" };
+const CLAUDE_SESSION: SessionModelContext = { providerId: "anthropic", modelId: "claude-sonnet-4-5" };
 
 /**
  * A provider whose model ids are CODENAMES. Nothing in a codename says how
@@ -214,7 +225,7 @@ describe("ranking: size words applied to whatever was discovered", () => {
 
   test("provider matching is case- and whitespace-insensitive", () => {
     const ranking = rankDiscoveredModels(
-      { providerId: " Anthropic ", modelId: "claude-sonnet-5" },
+      { providerId: " Anthropic ", modelId: "claude-sonnet-4-5" },
       CATALOG,
     );
     expect(ranking.usable).toBe(true);
@@ -509,16 +520,16 @@ describe("AC16: tier assignment is deterministic from signals the orchestrator h
     const decision = decideDispatchModel(CLAUDE_SESSION, { scope: "blast-radius" }, CATALOG);
     expect(decision).toEqual({
       tier: "deep",
-      tier_reasons: ["base:standard", "floor:blast-radius"],
+      tier_reasons: ["base:standard", "floor:blast-radius", "resolve:picked-above"],
       provider: "anthropic",
       model: "claude-opus-4-8",
       tier_resolution: "discovered",
       model_discovery: {
         provider: "anthropic",
-        candidates: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"],
+        candidates: ["claude-sonnet-4-5", "claude-opus-4-8", "claude-haiku-4-5"],
         ranked: [
           { model: "claude-opus-4-8", rank: 1 },
-          { model: "claude-sonnet-5", rank: 0 },
+          { model: "claude-sonnet-4-5", rank: 0 },
           { model: "claude-haiku-4-5", rank: -1 },
         ],
         session_rank: 0,
@@ -721,19 +732,18 @@ describe("AC17: the model-selection rule permits adaptive selection", () => {
     }
   });
 
-  // Item 2 (review of PR #718 / operator decision 2026-09-25): the rule
-  // documents that THIS module's own tier resolution deliberately never
-  // ranks by version, and separately documents the routing "derived
-  // default table"'s own, different, version-within-family rule — so a
-  // reader of either text cannot mistake one consumer's policy for the
-  // other's.
-  test("documents version is not ranked here, and the routing layer's separate 2026-09-25 version-within-family decision", () => {
+  // Flow 358 replaced the 2026-09-25 statement that this module never ranks by
+  // version: generation is now a SECOND axis, ordered only within one family and
+  // vendor, while `rankModelId` itself still reads size words alone. The routing
+  // layer's separate version-within-family decision stays documented next to it.
+  test("documents version as a second axis within one family and vendor, and the routing layer's separate 2026-09-25 decision", () => {
     for (const file of trees) {
       const text = readFileSync(file, "utf8");
-      expect(text).toMatch(/version is deliberately not ranked here/i);
+      expect(text).toMatch(/version is a second axis/i);
+      expect(text).toMatch(/never\s+parses a version number out of an id/i);
       expect(text).toContain("deriveDefaultTable");
       expect(text).toContain("2026-09-25");
-      expect(text).toMatch(/same family and vendor/i);
+      expect(text).toMatch(/same family and\s+vendor/i);
     }
   });
 });
@@ -764,4 +774,413 @@ test("a catalogue nothing can rank is a fallback, not a ranking that found nothi
   const withOne = rankDiscoveredModels(session, [{ name: "acme", models: ["acme-chat", "acme-opus"] }]);
   expect(withOne.usable).toBe(true);
   expect(withOne.ranked).toHaveLength(1);
+});
+
+// ---------------------------------------------------------------------------
+// Flow 358 — generation-aware tiers and the agent fallback.
+//
+// Every id below is a literal in THIS file; the module under test still holds none.
+// The agent is a FAKE injected function: no network, no provider, no filesystem.
+// ---------------------------------------------------------------------------
+
+const claude = (...models: string[]): readonly DiscoveredProvider[] => [{ name: "anthropic", models }];
+const on = (modelId: string): SessionModelContext => ({ providerId: "anthropic", modelId });
+
+/** A fake agent that answers a fixed text and counts how often it was called. */
+function fakeAgent(answer: string | ((request: TierRankRequest) => string | Promise<string>)) {
+  const requests: TierRankRequest[] = [];
+  const agent: TierRankAgent = async (request) => {
+    requests.push(request);
+    return typeof answer === "function" ? answer(request) : answer;
+  };
+  return { agent, requests };
+}
+
+const orderOf = (...ids: string[]) => JSON.stringify({ order: ids });
+
+function memoryCache(): TierRankCache & { readonly entries: Map<string, readonly string[]> } {
+  const entries = new Map<string, readonly string[]>();
+  return {
+    entries,
+    get: async (key) => entries.get(key),
+    set: async (key, order) => {
+      entries.set(key, order);
+    },
+  };
+}
+
+// The ambiguous case AC2 names: a Sonnet-5 session, with an OLDER-generation Opus and a Haiku.
+const SONNET5_CATALOG = claude("claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5");
+const SONNET5 = on("claude-sonnet-5");
+const OPUS_PRICIER: ModelPrices = {
+  "claude-sonnet-5": { inputPerMillion: 3, outputPerMillion: 15 },
+  "claude-opus-4-8": { inputPerMillion: 15, outputPerMillion: 75 },
+  "claude-haiku-4-5": { inputPerMillion: 1, outputPerMillion: 5 },
+};
+
+describe("flow 358 AC1 — a newer generation of the same family outranks an older one", () => {
+  test("sonnet 5 vs 5.5, both directions", () => {
+    const both = claude("claude-sonnet-5", "claude-sonnet-5-5");
+    const up = resolveTierModel(on("claude-sonnet-5"), "deep", both);
+    expect(up.modelId).toBe("claude-sonnet-5-5");
+    expect(up.source).toBe("discovered");
+    expect(up.reasonId).toBe("picked-newer-generation");
+
+    // From the newer one, the older sibling is never deep and never light.
+    for (const tier of ["deep", "light"] as const) {
+      const down = resolveTierModel(on("claude-sonnet-5-5"), tier, both);
+      expect(down.modelId).toBe("claude-sonnet-5-5");
+    }
+  });
+
+  test("opus 4.8 vs 5.5, both directions, hyphenated and dotted spellings", () => {
+    for (const [older, newer] of [
+      ["claude-opus-4-8", "claude-opus-5-5"],
+      ["claude-opus-4.8", "claude-opus-5.5"],
+    ] as const) {
+      const both = claude(older, newer);
+      expect(resolveTierModel(on(older), "deep", both).modelId).toBe(newer);
+      expect(resolveTierModel(on(newer), "deep", both).modelId).toBe(newer);
+      expect(resolveTierModel(on(newer), "light", both).modelId).toBe(newer);
+    }
+  });
+
+  test("the ranked order puts the newer sibling first, and versions never cross families", () => {
+    const ranking = rankDiscoveredModels(on("claude-opus-4-8"), claude("claude-opus-4-8", "claude-opus-5-5", "claude-haiku-4-5"));
+    expect(ranking.ranked.map((m) => m.modelId)[0]).toBe("claude-opus-5-5");
+    // A higher number on a DIFFERENT family is no evidence of anything: haiku 9 is still below opus 4.8.
+    const cross = resolveTierModel(on("claude-opus-4-8"), "deep", claude("claude-opus-4-8", "claude-haiku-9"));
+    expect(cross.modelId).toBe("claude-opus-4-8");
+    expect(resolveTierModel(on("claude-opus-4-8"), "light", claude("claude-opus-4-8", "claude-haiku-9")).modelId).toBe("claude-haiku-9");
+  });
+});
+
+describe("flow 358 AC2 — a Sonnet-5 session never resolves deep to an older, pricier model", () => {
+  test("without an agent the session is kept, and the record says why", () => {
+    const resolved = resolveTierModel(SONNET5, "deep", SONNET5_CATALOG);
+    expect(resolved.modelId).toBe("claude-sonnet-5");
+    expect(resolved.source).toBe("session-fallback");
+    expect(resolved.reasonId).toBe("kept-older-generation");
+  });
+
+  test("with prices the reason says the older model also costs more", () => {
+    const resolved = resolveTierModel(SONNET5, "deep", SONNET5_CATALOG, MODEL_RANK_HINTS, OPUS_PRICIER);
+    expect(resolved.modelId).toBe("claude-sonnet-5");
+    expect(resolved.reasonId).toBe("kept-older-generation-pricier");
+    expect(resolved.reason).toContain("claude-opus-4-8");
+  });
+
+  test("tier_resolution and tier_reasons of the dispatch record carry the reason", () => {
+    const decision = decideDispatchModel(SONNET5, { scope: "blast-radius" }, SONNET5_CATALOG, MODEL_RANK_HINTS, OPUS_PRICIER);
+    expect(decision.tier).toBe("deep");
+    expect(decision.model).toBe("claude-sonnet-5");
+    expect(decision.tier_resolution).toBe("session-fallback");
+    expect(decision.tier_reasons).toContain("resolve:kept-older-generation-pricier");
+  });
+
+  test("an agent cannot put an older, pricier model on deep either", async () => {
+    const { agent } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    const resolved = await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent, prices: OPUS_PRICIER });
+    expect(resolved.modelId).toBe("claude-sonnet-5");
+    expect(resolved.source).toBe("agent-ranked");
+    expect(resolved.reasonId).toBe("agent-veto-older-generation");
+  });
+
+  test("without price evidence the agent settles the ambiguity", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    const resolved = await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.trigger).toBe("ambiguous");
+    expect(resolved.modelId).toBe("claude-opus-4-8");
+    expect(resolved.source).toBe("agent-ranked");
+  });
+});
+
+describe("flow 358 AC3 — light is the next size step down", () => {
+  const trio = claude("claude-opus-4-8", "claude-sonnet-4-5", "claude-haiku-4-5");
+
+  test("an Opus session with sonnet and haiku discovered gets sonnet", () => {
+    const resolved = resolveTierModel(on("claude-opus-4-8"), "light", trio);
+    expect(resolved.modelId).toBe("claude-sonnet-4-5");
+    expect(resolved.source).toBe("discovered");
+  });
+
+  test("haiku is taken only when nothing sits between", () => {
+    expect(resolveTierModel(on("claude-opus-4-8"), "light", claude("claude-opus-4-8", "claude-haiku-4-5")).modelId).toBe("claude-haiku-4-5");
+    expect(resolveTierModel(on("claude-sonnet-4-5"), "light", trio).modelId).toBe("claude-haiku-4-5");
+    // The smallest class has nothing below it: the session stays.
+    expect(resolveTierModel(on("claude-haiku-4-5"), "light", trio).modelId).toBe("claude-haiku-4-5");
+  });
+});
+
+describe("flow 358 AC4/AC5 — the agent fallback", () => {
+  const CODENAMES = [{ name: "openai", models: ["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"] }] as const;
+
+  test("a refused ranking is ordered by the agent; foreign ids are dropped", async () => {
+    const { agent, requests } = fakeAgent(orderOf("gpt-5.6", "gpt-imaginary-9", "gpt-5.6-terra", "gpt-5.6-luna"));
+    const deep = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent });
+    expect(deep.modelId).toBe("gpt-5.6");
+    expect(deep.source).toBe("agent-ranked");
+    expect(deep.agent?.trigger).toBe("refused");
+    expect(deep.agent?.dropped).toEqual(["gpt-imaginary-9"]);
+    expect(deep.agent?.order).toEqual(["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"]);
+    expect(requests[0]!.candidates.map((c) => c.modelId)).toEqual(["gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra"]);
+
+    const light = await resolveTierModelWithAgent(CODENAME_SESSION, "light", CODENAMES, { agent });
+    expect(light.modelId).toBe("gpt-5.6-luna");
+    expect(light.source).toBe("agent-ranked");
+  });
+
+  test("a foreign id alone is never a model: the answer must still place the session model", async () => {
+    const { agent } = fakeAgent(orderOf("gpt-imaginary-9", "gpt-5.6"));
+    const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent });
+    expect(resolved.modelId).toBe(CODENAME_SESSION.modelId);
+    expect(resolved.source).toBe("session-fallback");
+    expect(resolved.agent?.failure).toContain("session model");
+  });
+
+  test("an agent that throws yields the session model", async () => {
+    const { agent } = fakeAgent(() => {
+      throw new Error("provider unavailable");
+    });
+    const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent });
+    expect(resolved.modelId).toBe(CODENAME_SESSION.modelId);
+    expect(resolved.source).toBe("session-fallback");
+    expect(resolved.reasonId).toBe("agent-failed");
+    expect(resolved.agent?.failure).toContain("provider unavailable");
+  });
+
+  test("an agent that never answers is cut off by the timeout", async () => {
+    const agent: TierRankAgent = () => new Promise<string>(() => {});
+    const started = Date.now();
+    const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent, timeoutMs: 20 });
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(resolved.modelId).toBe(CODENAME_SESSION.modelId);
+    expect(resolved.agent?.failure).toContain("timed out");
+  });
+
+  test("a malformed answer yields the session model", async () => {
+    for (const answer of ["gpt-5.6 is best", "{}", '{"order": "gpt-5.6"}', '{"order": [1, 2]}', ""]) {
+      const { agent } = fakeAgent(answer);
+      const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent });
+      expect(resolved.modelId).toBe(CODENAME_SESSION.modelId);
+      expect(resolved.source).toBe("session-fallback");
+    }
+  });
+
+  test("a fenced answer and a bare array are both read", async () => {
+    for (const answer of [
+      "```json\n" + orderOf("gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna") + "\n```",
+      JSON.stringify(["gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"]),
+      "Here you go: " + orderOf("GPT-5.6", "gpt-5.6-terra", "gpt-5.6-luna"),
+    ]) {
+      const { agent } = fakeAgent(answer);
+      const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent });
+      expect(resolved.modelId).toBe("gpt-5.6");
+      expect(resolved.source).toBe("agent-ranked");
+    }
+  });
+
+  test("parseRankAnswer maps ids back to the discovered spelling", () => {
+    const parsed = parseRankAnswer(orderOf("CLAUDE-OPUS-4-8", "claude-sonnet-5"), ["claude-opus-4-8", "claude-sonnet-5"], "claude-sonnet-5");
+    expect(parsed).toEqual({ ok: true, order: ["claude-opus-4-8", "claude-sonnet-5"], dropped: [] });
+    expect(parseRankAnswer(undefined, ["a"], "a").ok).toBe(false);
+  });
+
+  test("standard is the session and never asks the agent", async () => {
+    const { agent, requests } = fakeAgent(orderOf("gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"));
+    const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "standard", CODENAMES, { agent });
+    expect(resolved.modelId).toBe(CODENAME_SESSION.modelId);
+    expect(requests).toHaveLength(0);
+  });
+
+  test("a deterministic answer never asks the agent", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-haiku-4-5", "claude-sonnet-4-5", "claude-opus-4-8"));
+    const resolved = await resolveTierModelWithAgent(CLAUDE_SESSION, "deep", CATALOG, { agent });
+    expect(resolved.modelId).toBe("claude-opus-4-8");
+    expect(resolved.source).toBe("discovered");
+    expect(requests).toHaveLength(0);
+  });
+
+  test("never places standard or deep below the session, whatever the agent orders", async () => {
+    // Refused ranking: the agent ranks the session LAST, so nothing sits above it.
+    const last = fakeAgent(orderOf("gpt-5.6", "gpt-5.6-luna", "gpt-5.6-terra"));
+    const refused = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent: last.agent });
+    expect(refused.modelId).not.toBe("gpt-5.6-luna");
+    // The order puts gpt-5.6 above the session, so it is the pick; luna is below and never deep.
+    expect(refused.modelId).toBe("gpt-5.6");
+    const bottom = fakeAgent(orderOf("gpt-5.6-terra", "gpt-5.6", "gpt-5.6-luna"));
+    const kept = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent: bottom.agent });
+    expect(kept.modelId).toBe(CODENAME_SESSION.modelId);
+    expect(kept.reasonId).toBe("agent-kept-session");
+
+    // Ambiguous case: the agent puts Haiku on top; size words still say it is below, so deep keeps the session.
+    const upsideDown = fakeAgent(orderOf("claude-haiku-4-5", "claude-sonnet-5", "claude-opus-4-8"));
+    const ambiguous = await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent: upsideDown.agent });
+    expect(ambiguous.modelId).toBe("claude-sonnet-5");
+
+    for (const tier of ["standard", "deep"] as const) {
+      const resolved = await resolveTierModelWithAgent(SONNET5, tier, SONNET5_CATALOG, { agent: upsideDown.agent });
+      expect(resolved.modelId).toBe("claude-sonnet-5");
+    }
+  });
+
+  test("the answer is cached by the catalogue hash: a hit is zero agent calls", async () => {
+    const cache = memoryCache();
+    const { agent, requests } = fakeAgent(orderOf("gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"));
+    const first = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent, cache });
+    expect(requests).toHaveLength(1);
+    expect(first.agent?.cacheHit).toBe(false);
+    expect(cache.entries.has(first.agent!.catalogueHash)).toBe(true);
+
+    // Same catalogue, other tier: one entry serves both.
+    const second = await resolveTierModelWithAgent(CODENAME_SESSION, "light", CODENAMES, { agent, cache });
+    expect(requests).toHaveLength(1);
+    expect(second.agent?.cacheHit).toBe(true);
+    expect(second.modelId).toBe("gpt-5.6-luna");
+
+    // Different prices are a different catalogue: a new key, a new call.
+    const priced: ModelPrices = { "gpt-5.6": { inputPerMillion: 9 } };
+    const third = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent, cache, prices: priced });
+    expect(requests).toHaveLength(2);
+    expect(third.agent?.catalogueHash).not.toBe(first.agent?.catalogueHash);
+  });
+
+  test("a cached order that names a foreign id is re-checked, and a broken cache is only a miss", async () => {
+    const poisoned: TierRankCache = {
+      get: async () => ["not-a-model"],
+      set: async () => {},
+    };
+    const { agent, requests } = fakeAgent(orderOf("gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"));
+    const resolved = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent, cache: poisoned });
+    expect(requests).toHaveLength(1);
+    expect(resolved.modelId).toBe("gpt-5.6");
+
+    const broken: TierRankCache = {
+      get: async () => {
+        throw new Error("disk full");
+      },
+      set: async () => {
+        throw new Error("disk full");
+      },
+    };
+    const again = await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent, cache: broken });
+    expect(again.modelId).toBe("gpt-5.6");
+  });
+
+  test("the agent runs on the light tier of the session's own provider", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent });
+    expect(requests[0]!.runOn).toEqual({ providerId: "anthropic", modelId: "claude-haiku-4-5" });
+
+    // A refused ranking has no cheaper step: it runs on the session's own model, same provider.
+    const refused = fakeAgent(orderOf("gpt-5.6", "gpt-5.6-terra", "gpt-5.6-luna"));
+    await resolveTierModelWithAgent(CODENAME_SESSION, "deep", CODENAMES, { agent: refused.agent });
+    expect(refused.requests[0]!.runOn).toEqual({ providerId: "openai", modelId: "gpt-5.6-terra" });
+  });
+
+  test("the prompt carries ids and profile prices only, and says it compares models, not tasks", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent, prices: OPUS_PRICIER });
+    const request = requests[0]!;
+    expect(request.prompt).toBe(buildRankPrompt(request.candidates));
+    expect(request.prompt).toContain("You are not given a task");
+    expect(request.prompt).toContain("claude-opus-4-8");
+    expect(request.prompt).toContain("75");
+    expect(request.candidates.every((c) => Object.keys(c).every((k) => ["modelId", "inputPerMillion", "outputPerMillion"].includes(k)))).toBe(true);
+  });
+
+  test("the catalogue hash is stable, order-sensitive on content, and provider-scoped", () => {
+    const a = [{ modelId: "a", inputPerMillion: 1 }, { modelId: "b" }];
+    expect(rankCatalogueHash("p", a)).toBe(rankCatalogueHash("p", a));
+    expect(rankCatalogueHash("p", a)).not.toBe(rankCatalogueHash("q", a));
+    expect(rankCatalogueHash("p", a)).not.toBe(rankCatalogueHash("p", [{ modelId: "a", inputPerMillion: 2 }, { modelId: "b" }]));
+  });
+});
+
+describe("flow 358 AC6 — agent-ranked is a recorded resolution source", () => {
+  test("a decision that came from the agent validates against the dispatch schema", async () => {
+    const { agent } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    const decision = await decideDispatchModelWithAgent(SONNET5, { scope: "blast-radius" }, SONNET5_CATALOG, { agent });
+    expect(decision.tier_resolution).toBe("agent-ranked");
+    expect(decision.tier_reasons.at(-1)).toBe("resolve:agent-picked-above");
+
+    const schema = await loadSchema("subagent-dispatch");
+    const dispatch = {
+      contract_version: "1.0.0",
+      run_id: "r1",
+      dispatch_id: "d1",
+      orchestrator: "review-orchestrator",
+      target_skill: "review-logic",
+      task: { title: "t", description: "d" },
+      acceptance_criteria: ["AC6"],
+      context_refs: [],
+      files_to_read: [],
+      constraints: [],
+      allowed_actions: ["read"],
+      output_contract: { schema: "subagent-result", artifact_path: "a.json" },
+      budget: {},
+      model: decision,
+      provenance: { created_at: "2026-09-28T00:00:00Z", created_by: "test" },
+    };
+    expect(await validateJson(dispatch, schema)).toEqual([]);
+    // Non-vacuity: a spelling outside the enum is refused.
+    expect(
+      await validateJson({ ...dispatch, model: { ...decision, tier_resolution: "guessed" } }, schema),
+    ).not.toEqual([]);
+  });
+});
+
+describe("flow 358 review — dated ids, timeout abort, candidate cap", () => {
+  test("a dated Opus 4.1 session never resolves deep to a dated Opus 4, and a dated 4 session moves up to 4.1", () => {
+    const opus41 = "claude-opus-4-1-20250805";
+    const opus4 = "claude-opus-4-20250514";
+    const both = claude(opus41, opus4, "claude-sonnet-4-5-20250929");
+    expect(resolveTierModel(on(opus41), "deep", both).modelId).toBe(opus41);
+    const up = resolveTierModel(on(opus4), "deep", both);
+    expect(up.modelId).toBe(opus41);
+    expect(up.reasonId).toBe("picked-newer-generation");
+    expect(rankDiscoveredModels(on(opus41), both).ranked[0]!.modelId).toBe(opus41);
+  });
+
+  test("the request carries a signal that is aborted when the call times out, and the base URL", async () => {
+    let seen: TierRankRequest | undefined;
+    const agent: TierRankAgent = (request) => {
+      seen = request;
+      return new Promise<string>(() => {});
+    };
+    const resolved = await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, {
+      agent,
+      timeoutMs: 20,
+      baseUrl: "http://localhost:9/v1",
+    });
+    expect(resolved.reasonId).toBe("agent-failed");
+    expect(seen!.baseUrl).toBe("http://localhost:9/v1");
+    expect(seen!.signal).toBeDefined();
+    expect(seen!.signal!.aborted).toBe(true);
+  });
+
+  test("the signal stays live while the call is within its time", async () => {
+    const { agent, requests } = fakeAgent(orderOf("claude-opus-4-8", "claude-sonnet-5", "claude-haiku-4-5"));
+    await resolveTierModelWithAgent(SONNET5, "deep", SONNET5_CATALOG, { agent });
+    expect(requests[0]!.signal!.aborted).toBe(false);
+  });
+
+  test("a 60-model catalogue shows the agent at most the cap, keeping the session model and the largest classes", async () => {
+    // The session model names no size word, so the ranking is refused and the agent is asked.
+    const filler = Array.from({ length: 57 }, (_, i) => `acme-m${String(i).padStart(2, "0")}`);
+    const models = ["acme-opus-2", "acme-sonnet-2", "acme-zeta", ...filler];
+    const session = { providerId: "acme", modelId: "acme-zeta" };
+    const { agent, requests } = fakeAgent(orderOf("acme-opus-2", "acme-sonnet-2", "acme-zeta"));
+    await resolveTierModelWithAgent(session, "deep", [{ name: "acme", models }], { agent });
+    const request = requests[0]!;
+    expect(request.candidates.length).toBeLessThanOrEqual(RANK_MAX_CANDIDATES);
+    expect(request.candidates.length).toBe(RANK_MAX_CANDIDATES);
+    const ids = request.candidates.map((c) => c.modelId);
+    expect(ids).toContain("acme-zeta");
+    expect(ids).toContain("acme-opus-2");
+    expect(ids).toContain("acme-sonnet-2");
+    const listed = JSON.parse(request.prompt.split("Models: ")[1]!) as unknown[];
+    expect(listed.length).toBe(RANK_MAX_CANDIDATES);
+  });
 });

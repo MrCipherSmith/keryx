@@ -60,9 +60,26 @@ test("parseModelVersion: real hyphenated Anthropic ids (claude-opus-4-8, claude-
 test("parseModelVersion: conservative — no numeric token, more than one version group, a too-long run, or a date-like token all yield undefined, never a guess", () => {
   expect(parseModelVersion("claude-sonnet")).toBeUndefined(); // no version at all
   expect(parseModelVersion("claude-opus-4-8-2-1")).toBeUndefined(); // four adjacent short tokens — too long a run
-  expect(parseModelVersion("claude-opus-4-8-20250514")).toBeUndefined(); // a short run followed immediately by a date — the whole run is invalid (mixed shape)
   expect(parseModelVersion("claude-opus-20250514")).toBeUndefined(); // date-like (8 digits), still refused
   expect(parseModelVersion("model-4-5-and-6-7")).toBeUndefined(); // two SEPARATE version groups — ambiguous
+});
+
+test("parseModelVersion: a trailing snapshot date is ignored, so dated Anthropic ids parse to their version", () => {
+  expect(parseModelVersion("claude-sonnet-4-20250514")).toBe(4);
+  expect(parseModelVersion("claude-sonnet-4-5-20250929")).toBe(4.5);
+  expect(parseModelVersion("claude-opus-4-1-20250805")).toBe(4.1);
+  expect(parseModelVersion("claude-3-5-haiku-20241022")).toBe(3.5);
+  expect(parseModelVersion("claude-opus-4-8-20250514")).toBe(4.8);
+  expect(parseModelVersion("claude-sonnet-4-250514")).toBe(4);
+  // Undated spellings are untouched.
+  expect(parseModelVersion("claude-sonnet-5-5")).toBe(5.5);
+  expect(parseModelVersion("claude-opus-4.8")).toBe(4.8);
+  expect(parseModelVersion("gpt-5.1-mini")).toBe(5.1);
+  expect(parseModelVersion("claude-sonnet")).toBeUndefined();
+  // A dated newer model outranks a dated older one in the same family.
+  expect(parseModelVersion("claude-sonnet-4-5-20250929")!).toBeGreaterThan(parseModelVersion("claude-sonnet-4-20250514")!);
+  expect(parseModelVersion("claude-opus-4-1-20250805")!).toBeGreaterThan(parseModelVersion("claude-opus-4-20250514")!);
+  expect(familyKey("claude-sonnet-4-5-20250929")).toBe(familyKey("claude-sonnet-4-20250514"));
 });
 
 test("parseModelVersion: gpt-4o parses as version 4 (the trailing letter is a variant tag, never part of the number)", () => {
