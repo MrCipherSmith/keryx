@@ -55,6 +55,31 @@ test("BOUNDARY (review round 2) — a plus-joined multi-word search query fetche
   expect(containsOutboundSecret("https://www.google.com/search?q=bun+test+timeout+flaky")).toBe(false);
 });
 
+// Review round 2, second pass: SEC-F1 and REG-F1, both inside the same
+// `isWordSlug` shape gate `containsOutboundSecret` relies on through
+// `detect/entropy.ts`'s label-free component scan.
+
+test("SEC-F1 — a real secret re-chunked into single-character-class pieces is STILL refused", () => {
+  const segmented = "aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8";
+  expect(containsOutboundSecret(`https://exfil.example/${segmented}`)).toBe(true);
+});
+
+test("SEC-F1 — the 'natural-looking' word-wrapped variant is STILL refused", () => {
+  const wrapped = "log-abcdefghijklmnopqrstuvwxyzAB1234-id";
+  expect(containsOutboundSecret(`https://x.example/${wrapped}`)).toBe(true);
+});
+
+test("REG-F1 — the exact Medium URL linked from this repo's own docs fetches", () => {
+  const url =
+    "https://medium.com/real-time-data-evolution/rag-architecture-in-2026-how-to-keep-retrieval-actually-fresh-3a9bae9ec8f9";
+  expect(containsOutboundSecret(url)).toBe(false);
+});
+
+test("REG-F1 — a Gist-style '<slug>-<hex-id>' URL fetches", () => {
+  const url = "https://gist.github.com/someuser/keryx-audit-remediation-notes-3a9bae9ec8f9";
+  expect(containsOutboundSecret(url)).toBe(false);
+});
+
 describe("F-REG-F3: containsOutboundSecret honours backends.entropy.enabled", () => {
   afterEach(() => {
     resetEntropyGateForTests();

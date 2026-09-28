@@ -167,6 +167,29 @@ describe("F-SEC-F2 (flow 355 review, PR #776): a label overrides an allow-shape"
     expect(scrubbed).not.toContain(uuid);
   });
 
+  // SEC-F2 (flow 355 review round 2, residual): `bareShapeQualifies`'s own
+  // 3.6-bit entropy floor used to run BEFORE the label was consulted at all,
+  // so a labelled UUID's redaction depended on whether its own hex digits
+  // happened to repeat enough to clear the floor — the canonical RFC 4122
+  // example UUID (entropy 3.39) did not. Test with a representative sample,
+  // not one hand-picked value that happens to clear the floor by luck.
+  test("the canonical RFC 4122 example UUID (below the entropy floor) is redacted when labelled", () => {
+    const uuid = "550e8400-e29b-41d4-a716-446655440000";
+    const scrubbed = redactSensitiveText(`leaked credential: ${uuid}`);
+    expect(scrubbed).not.toContain(uuid);
+    expect(scrubbed).toContain("[REDACTED:entropy]");
+  });
+
+  test("20 random UUIDs: ALL redacted when labelled, NONE redacted when unlabelled", () => {
+    for (let i = 0; i < 20; i += 1) {
+      const uuid = crypto.randomUUID();
+      const labelled = redactSensitiveText(`leaked credential: ${uuid}`);
+      expect(labelled).not.toContain(uuid);
+      const unlabelled = redactSensitiveText(`request id: ${uuid}`);
+      expect(unlabelled).toBe(`request id: ${uuid}`);
+    }
+  });
+
   test("a LABELLED sha512- integrity-shaped string is redacted", () => {
     const integrity = "sha512-9WYDliBTiEXPIkZ5Zc32qJ6b7QP2b6m5v2kDEe57lecTulaDIuNTPy3Ry4G==";
     const scrubbed = redactSensitiveText(`leaked auth secret: ${integrity}`);
