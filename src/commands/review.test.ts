@@ -140,6 +140,24 @@ test("every documented flag is still accepted", async () => {
   expect(process.exitCode).toBe(0);
 });
 
+test("`review scope --help` prints usage and does not scan a diff", async () => {
+  await reviewCommand(["scope", "--help"]);
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("keryx review scope");
+  expect(out).toContain("--scoped-diff");
+  expect(out).not.toContain("files_seen");
+});
+
+test("`review tier -h` prints usage and does not compute a tier", async () => {
+  await reviewCommand(["tier", "-h"]);
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("keryx review tier");
+  expect(out).toContain("inherit: true");
+  expect(out).not.toContain("tier_reasons:");
+});
+
 // ---------------------------------------------------------------------------
 // AC14: the disposition, from the command line
 // ---------------------------------------------------------------------------

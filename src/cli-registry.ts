@@ -520,6 +520,9 @@ const HELP_SAFE_VERBS: ReadonlySet<string> = new Set(["skills", "memory", "secur
  */
 const SAFE_SUBCOMMAND_HELP: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["skills", new Set(["doctor", "uninstall", "scout", "eval", "judge-check", "stocktake"])],
+  // Not the whole `review` group: ingest/complete/comments reply write.
+  // scope and tier only print usage and return.
+  ["review", new Set(["scope", "tier"])],
   ["memory", new Set(["handoff"])],
   ["security", new Set(["audit-harness", "impact-evidence"])],
 ]);

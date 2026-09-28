@@ -480,6 +480,14 @@ test("skills/memory/security --help defers to the real handler for the bare verb
   expect(shouldInterceptHelp("security", ["scan", "--help"])).toBe(true);
 });
 
+test("review scope and tier --help reach the handler; ingest --help stays intercepted", () => {
+  expect(shouldInterceptHelp("review", ["scope", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("review", ["tier", "--help"])).toBe(false);
+  expect(shouldInterceptHelp("review", ["tier", "-h"])).toBe(false);
+  expect(shouldInterceptHelp("review", ["ingest", "--help"])).toBe(true);
+  expect(shouldInterceptHelp("review", ["--help"])).toBe(true);
+});
+
 test("every dispatched group either has its own usage lines or falls back to the full help", () => {
   const missing = Object.keys(CLI_ROUTES).filter((name) => groupUsage(name) === undefined);
   // `session` is the singular ALIAS of `sessions` (`CLI_ROUTES.session ===

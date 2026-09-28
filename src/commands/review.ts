@@ -394,6 +394,8 @@ const LEARN_FLAGS = ["--pr", "--reviewer", "--dry-run", "--json"] as const;
 const SCOPE_FLAGS = [
   "--context",
   "--path",
+  "--help",
+  "-h",
   "--diff",
   "--ref",
   "--base",
@@ -470,6 +472,8 @@ const BLAST_RADIUS_FLAGS = [
 ] as const;
 
 const TIER_FLAGS = [
+  "--help",
+  "-h",
   "--scope",
   "--fix-attempt",
   "--forced-strategy-change",
@@ -1131,6 +1135,10 @@ async function applyReviewRoutingCategory(
 }
 
 async function runTier(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printTierHelp();
+    return;
+  }
   rejectUnknownFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
   const { session, source } = sessionModelFromArgs(args);
@@ -3054,6 +3062,10 @@ function parseVerificationMode(raw: string | undefined): ManagedReviewInput["ver
  * here is fetching the diff and choosing where the answer is written.
  */
 async function runScope(args: string[]): Promise<void> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printScopeHelp();
+    return;
+  }
   rejectUnknownFlags(args, SCOPE_FLAGS, "scope");
   const contextLines = parseContextLines(optionValue(args, "--context"));
   const pathList = optionValue(args, "--path");
@@ -3686,6 +3698,42 @@ function targetKindFromArgs(mode: ManagedReviewMode, args: string[]): ReviewTarg
     throw new Error(`Invalid --target. Use one of: ${REVIEW_TARGET_KINDS.join(", ")}`);
   }
   return value as ReviewTargetKind;
+}
+
+function printScopeHelp(): void {
+  console.log(`keryx review scope — usage:
+
+  keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
+                     [--json | --scoped-diff] [--append <file>] [--reviewers a,b]
+
+Deterministic pre-filter, no model call. Drops generated, lockfile, snapshot,
+vendored and minified paths, drops whitespace-only and comment-only change
+blocks, and bounds each retained change to +/-${DEFAULT_CONTEXT_LINES} lines.
+Prints the retained scope AND every drop with its reason. --json is the document
+review ingest --scope reads. --scoped-diff is what a reviewer is handed.
+--append replaces an existing ## Pre-filter scope block. --reviewers only scales
+the printed cost estimate.
+`);
+}
+
+function printTierHelp(): void {
+  console.log(`keryx review tier — usage:
+
+  keryx review tier [--scope <scope>] [--fix-attempt <n>] [--forced-strategy-change]
+                    [--findings <n>] [--diff-lines <n>]
+                    [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
+                    [--session-provider <id>] [--session-model <id>]
+                    [--from-shell-config] [--catalog <file|->] [--json]
+
+Computes the dispatch model block from signals the orchestrator already holds.
+There is no --tier flag. Base tier is standard. --scope blast-radius and
+--forced-strategy-change floor at deep. --fix-attempt >= 2 raises one tier.
+A small diff, or verifier execution/site-check, may allow light. --security
+never goes below standard. Reviewer name is not a signal.
+
+A model id is printed only when discovery assigned one other than the session model.
+Otherwise the block carries the tier and inherit: true. Exit status is 0.
+`);
 }
 
 function printHelp(): void {
