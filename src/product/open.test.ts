@@ -1,4 +1,4 @@
-// Flow 362, AC4-AC5: `product open` lists the intents closed in code with no
+// Flow 362, AC2: `product open` lists the intents closed in code with no
 // observation, each with its flow and outcome criterion or the literal
 // `not measured — no instrument stated`, under a header that splits the
 // never-checked count three ways.

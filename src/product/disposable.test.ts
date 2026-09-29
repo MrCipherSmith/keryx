@@ -1,4 +1,4 @@
-// Flow 362, AC3: `.metaproject/data/product/` is disposable. `index` writes
+// Flow 362, AC4: `.metaproject/data/product/` is disposable. `index` writes
 // nowhere else, nothing reads product data from anywhere else, and deleting the
 // directory then rebuilding gives an equivalent index.
 

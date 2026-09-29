@@ -6338,7 +6338,9 @@ export async function launchTuiAgentShell(opts: {
       })();
     };
     const showProduct = (): void => {
-      void openProduct(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys });
+      void openProduct(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys }).catch(() => {
+        io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
+      });
     };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);

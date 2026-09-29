@@ -12,6 +12,8 @@ import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 
 export const PRODUCT_COMMAND = "/product";
 
+const UNUSABLE_INDEX = "The product index could not be used. Run `keryx product index`.";
+
 export const PRODUCT_FOOTER = [
   { key: "↑/↓", label: "scroll" },
   { key: "esc", label: "close" },
@@ -114,7 +116,7 @@ export async function openProduct(
   options: OpenProductOptions,
 ): Promise<ModalHandle | undefined> {
   const { cwd, ...rest } = options;
-  const load = await loadOpenReport(cwd);
+  const load = await loadOpenReport(cwd).catch((): OpenLoad => ({ ok: false, message: UNUSABLE_INDEX }));
   return presentProductOpen(
     (hostOtui, hostChrome, input) => openModal(hostOtui as typeof otui, hostChrome as typeof chrome, input),
     otui,

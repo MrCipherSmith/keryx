@@ -51,6 +51,12 @@ export interface IntentCounts {
 
 export interface IntentIndex {
   readonly schemaVersion: 1;
+  /**
+   * sha256 of the sources the index was read from (their paths and contents,
+   * and the package names). `product open` recomputes it: a different value
+   * means the flows or requirements changed after the index was built.
+   */
+  readonly fingerprint: string;
   readonly intents: readonly Intent[];
   /** Entries with no extractable intent statement. */
   readonly unusable: number;
@@ -62,7 +68,7 @@ export interface IntentIndex {
 export type IndexRead =
   | { readonly state: "absent" }
   | { readonly state: "malformed"; readonly reason: string }
-  | { readonly state: "present"; readonly index: IntentIndex; readonly mtimeMs: number };
+  | { readonly state: "present"; readonly index: IntentIndex };
 
 export interface OpenEntry {
   readonly id: string;

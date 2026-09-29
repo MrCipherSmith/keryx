@@ -2583,9 +2583,11 @@ outcome-observed: <date> <what was seen>
 ```
 
 `index` reads it, and that flow leaves the `open` list. Nothing writes the line
-for you. When the index is missing, or older than the newest flow file, `open`
-exits non-zero and names `keryx product index` instead of answering from stale
-data.
+for you. The index stores a content fingerprint of the flows and requirements
+it was read from. When the index is missing or unreadable, or the fingerprint no
+longer matches the tree, `open` exits non-zero and names `keryx product index`
+instead of answering from stale data. Only content counts, not file times: a
+restored or replaced directory is caught, and a bare `touch` is not.
 
 The index is disposable. `.metaproject/data/product/` can be deleted at any time
 and `keryx product index` rebuilds an equivalent one. In the TUI, `/product` shows the same

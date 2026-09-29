@@ -1,4 +1,4 @@
-// Flow 362, AC1-AC3: the intent index reads every flow and requirements package
+// Flow 362, AC1: the intent index reads every flow and requirements package
 // it can see with zero failures, orders them stably, is byte-identical on a
 // second run, and reports how many entries state no intent.
 //
@@ -8,10 +8,10 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { buildIntentIndex } from "./corpus";
-import { extractFlowIntent } from "./extract";
+import { extractFlowIntent, sectionOf, statementFrom } from "./extract";
 import { FIXTURE_COUNTS, copyFixtureRepo } from "./fixtures/repo";
 import { indexPath, serializeIndex, writeIntentIndex } from "./store";
 
@@ -72,6 +72,35 @@ describe("corpus", () => {
     await Bun.write(path.join(root, ".metaproject", "flows", "006-2026-01-06-array", "flow.json"), "[]");
     const index = await buildIntentIndex(root);
     expect(index.failures).toEqual([".metaproject/flows/006-2026-01-06-array: flow.json is not an object"]);
+  });
+
+  test("a flow.json that is not JSON gives one fixed failure line, whatever the runtime's parser says", async () => {
+    const root = await fixtureRoot();
+    await Bun.write(path.join(root, ".metaproject", "flows", "006-2026-01-06-garbled", "flow.json"), "{ not json,");
+    const index = await buildIntentIndex(root);
+    expect(index.failures).toEqual([".metaproject/flows/006-2026-01-06-garbled: flow.json is not valid JSON"]);
+  });
+
+  test("a flow source that exists but cannot be read is a fixed failure line, not a throw or a silent gap", async () => {
+    const root = await fixtureRoot();
+    // A directory where the file should be: readFile fails with EISDIR, not ENOENT.
+    await mkdir(path.join(root, ".metaproject", "flows", "003-2026-01-03-no-criterion", "journal.md"), { recursive: true }).catch(async () => {
+      await rm(path.join(root, ".metaproject", "flows", "003-2026-01-03-no-criterion", "journal.md"));
+      await mkdir(path.join(root, ".metaproject", "flows", "003-2026-01-03-no-criterion", "journal.md"));
+    });
+    const index = await buildIntentIndex(root);
+    expect(index.failures).toEqual([".metaproject/flows/003-2026-01-03-no-criterion/journal.md: cannot be read"]);
+    expect(index.counts.flows).toBe(FIXTURE_COUNTS.flows - 1);
+  });
+
+  test("a requirements source that cannot be read is a fixed failure line, not a throw", async () => {
+    const root = await fixtureRoot();
+    const spec = path.join(root, "docs", "requirements", "alpha-package", "specification.md");
+    await rm(spec);
+    await mkdir(spec);
+    const index = await buildIntentIndex(root);
+    expect(index.failures).toEqual(["docs/requirements/alpha-package/specification.md: cannot be read"]);
+    expect(index.counts.docpacks).toBe(FIXTURE_COUNTS.docpacks - 1);
   });
 
   test("a project with no flows and no requirements indexes to an empty index", async () => {
@@ -137,6 +166,26 @@ describe("extraction", () => {
   });
 });
 
+describe("section reading is code-fence aware", () => {
+  const fenced = ["## Problem", "", "```md", "## Outcome", "Not a heading.", "```", "", "Checkout fails on a stale token."].join("\n");
+
+  test("a heading inside a fence does not start a section", () => {
+    expect(sectionOf(["```", "## Outcome", "hidden", "```"].join("\n"), /^outcome$/i)).toBeNull();
+    expect(statementFrom(["```", "## Problem", "Fake statement.", "```", "", "## Expected Outcome", "Real one."].join("\n"), [/^problem$/i, /^expected outcome$/i])).toBe("Real one.");
+  });
+
+  test("a heading-looking line inside a fence does not end the section around it", () => {
+    expect(sectionOf(fenced, /^problem$/i)).toContain("Checkout fails on a stale token.");
+    const body = sectionOf(["## Problem", "text", "~~~", "# not a heading", "~~~", "more", "## Next"].join("\n"), /^problem$/i);
+    expect(body).toBe(["text", "~~~", "# not a heading", "~~~", "more"].join("\n"));
+  });
+
+  test("an unclosed fence swallows the rest, and a longer closing fence still closes", () => {
+    expect(sectionOf(["## A", "````", "```", "## B", "````", "## C", "after"].join("\n"), /^c$/i)).toBe("after");
+    expect(sectionOf(["## A", "```", "## B", "body"].join("\n"), /^b$/i)).toBeNull();
+  });
+});
+
 describe("determinism", () => {
   test("flows come first in numeric id order, then requirements packages by name", async () => {
     const index = await buildIntentIndex(await fixtureRoot());
@@ -160,7 +209,7 @@ describe("determinism", () => {
       return value;
     });
     expect(keys.filter((key) => /generated|built|indexedAt|timestamp|createdAt/i.test(key))).toEqual([]);
-    expect(Object.keys(index).sort()).toEqual(["counts", "failures", "intents", "schemaVersion", "unusable"]);
+    expect(Object.keys(index).sort()).toEqual(["counts", "failures", "fingerprint", "intents", "schemaVersion", "unusable"]);
   });
 
   test("the counts partition the closed intents", async () => {

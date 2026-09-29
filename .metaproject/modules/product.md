@@ -16,8 +16,9 @@ nothing here gates a flow, calls a model or runs by itself.
   no intent)
 - `keryx product open [--json]` (intents closed in code with no observation,
   each with its flow and outcome criterion, or `not measured — no instrument
-  stated`; refuses to answer from a missing or stale index and names
-  `keryx product index`)
+  stated`; refuses to answer from a missing, unreadable or stale index and names
+  `keryx product index`; stale means the index's content fingerprint of the
+  flow and requirements files differs from the tree, never a file time)
 
 An observation is a line beginning `outcome-observed:` in the flow's
 `journal.md`. `index` reads it, and that flow leaves the `open` list.
@@ -25,4 +26,5 @@ An observation is a line beginning `outcome-observed:` in the flow's
 ## Data
 
 - `data/product/index.json` (disposable: delete `data/product/` and `index`
-  rebuilds an equivalent index, byte for byte)
+  rebuilds an equivalent index, byte for byte; it carries the sha256
+  `fingerprint` of the sources it was read from, and no clock)

@@ -1,4 +1,4 @@
-// Flow 362, AC11: `/product` lists the intents closed in code that nobody looked
+// Flow 362, AC9: `/product` lists the intents closed in code that nobody looked
 // back at, with the never-checked count in the header. Asserted on the ROWS the
 // modal paints, not only on the formatter that feeds them.
 
@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { rm } from "node:fs/promises";
 import { buildIntentIndex } from "../product/corpus";
 import { copyFixtureRepo } from "../product/fixtures/repo";
-import { buildOpenReport, loadOpenReport, writeIntentIndex, type OpenLoad } from "../product/service";
+import { buildOpenReport, indexPath, loadOpenReport, writeIntentIndex, type OpenLoad } from "../product/service";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { isProductCommand, presentProductOpen, type PresentProductOptions } from "./product-open-surface";
 
@@ -136,6 +136,28 @@ describe("/product renders the open list", () => {
     expect(painted).toContain("keryx product index");
     expect(painted).not.toContain("never checked for effect");
   });
+});
+
+describe("/product over a hand-edited index", () => {
+  const broken: Array<[string, (index: Record<string, unknown>) => void]> = [
+    ["no failures list", (index) => void delete index.failures],
+    ["empty counts", (index) => void (index.counts = {})],
+    ["an intent with no outcome", (index) => void delete (index.intents as Array<Record<string, unknown>>)[0]?.outcome],
+  ];
+  for (const [name, mutate] of broken) {
+    test(`${name} paints the message that names \`keryx product index\`, and no count`, async () => {
+      const root = await copyFixtureRepo();
+      roots.push(root);
+      const index = JSON.parse(JSON.stringify(await buildIntentIndex(root))) as Record<string, unknown>;
+      mutate(index);
+      await Bun.write(indexPath(root), JSON.stringify(index));
+      const load = await loadOpenReport(root);
+      expect(load.ok).toBe(false);
+      const painted = open(load).painted();
+      expect(painted).toContain("keryx product index");
+      expect(painted).not.toContain("never checked for effect");
+    });
+  }
 });
 
 describe("/product routing", () => {

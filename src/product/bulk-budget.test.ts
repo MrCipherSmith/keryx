@@ -1,4 +1,4 @@
-// Flow 362, AC9: the module's bulk is a budget. One module, two commands, no
+// Flow 362, AC8: the module's bulk is a budget. One module, two commands, no
 // skill, no subagent, no gate. This pins the counts so a later addition (a map
 // command, an admit step, a skill) has to edit this file on purpose.
 

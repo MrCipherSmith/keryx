@@ -62,12 +62,17 @@ const REBUILD = "Run `keryx product index`.";
 
 /** Read the index, refuse to answer from a missing or stale one, and say which command rebuilds it. */
 export async function loadOpenReport(cwd: string): Promise<OpenLoad> {
-  const read = await readIntentIndex(cwd);
-  if (read.state === "absent") return { ok: false, message: `No product index yet. ${REBUILD}` };
-  if (read.state === "malformed") return { ok: false, message: `The product index is unreadable (${read.reason}). ${REBUILD}` };
-  const staleness = await checkStaleness(cwd, read.index, read.mtimeMs);
-  if (staleness.stale) return { ok: false, message: `The product index is out of date (${staleness.reason}). ${REBUILD}` };
-  return { ok: true, report: buildOpenReport(read.index) };
+  try {
+    const read = await readIntentIndex(cwd);
+    if (read.state === "absent") return { ok: false, message: `No product index yet. ${REBUILD}` };
+    if (read.state === "malformed") return { ok: false, message: `The product index is unreadable (${read.reason}). ${REBUILD}` };
+    const staleness = await checkStaleness(cwd, read.index);
+    if (staleness.stale) return { ok: false, message: `The product index is out of date (${staleness.reason}). ${REBUILD}` };
+    return { ok: true, report: buildOpenReport(read.index) };
+  } catch {
+    // Whatever went wrong reading it, the answer is the same: the index cannot be used, rebuild it.
+    return { ok: false, message: `The product index could not be used. ${REBUILD}` };
+  }
 }
 
 export function renderIndexSummary(index: IntentIndex, file: string): string {

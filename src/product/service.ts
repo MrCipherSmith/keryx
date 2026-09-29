@@ -2,7 +2,7 @@
 // here (import policy, rule 2); nothing outside `src/product/` imports a
 // sibling file.
 
-export { buildIntentIndex } from "./corpus";
+export { buildIntentIndex, corpusFingerprint } from "./corpus";
 export { NO_INSTRUMENT } from "./extract";
 export {
   buildOpenReport,

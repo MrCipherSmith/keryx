@@ -19,17 +19,45 @@ function headingLevel(line: string): number {
   return match?.[1]?.length ?? 0;
 }
 
+/** The fence marker a line opens or closes (` ``` ` or `~~~`, up to three spaces of indent), or null. */
+function fenceOf(line: string): { char: string; length: number; rest: string } | null {
+  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  return match === null ? null : { char: (match[1] ?? "")[0] ?? "", length: (match[1] ?? "").length, rest: match[2] ?? "" };
+}
+
+/** The level of each line's heading, 0 where the line is not a heading — and always 0 inside a fenced code block. */
+function headingLevels(lines: readonly string[]): number[] {
+  const levels: number[] = [];
+  let open: { char: string; length: number } | null = null;
+  for (const line of lines) {
+    const fence = fenceOf(line);
+    if (open !== null) {
+      levels.push(0);
+      if (fence !== null && fence.char === open.char && fence.length >= open.length && fence.rest.trim() === "") open = null;
+      continue;
+    }
+    if (fence !== null && !(fence.char === "`" && fence.rest.includes("`"))) {
+      open = { char: fence.char, length: fence.length };
+      levels.push(0);
+      continue;
+    }
+    levels.push(headingLevel(line));
+  }
+  return levels;
+}
+
 /** Body of the first section whose heading matches, up to the next heading of the same or a higher level. */
 export function sectionOf(markdown: string, heading: RegExp): string | null {
   const lines = markdown.split(/\r?\n/);
-  const start = lines.findIndex((line) => headingLevel(line) > 0 && heading.test(line.replace(/^#{1,6}\s+/, "").trim()));
+  const levels = headingLevels(lines);
+  const start = lines.findIndex((line, i) => (levels[i] ?? 0) > 0 && heading.test(line.replace(/^#{1,6}\s+/, "").trim()));
   if (start === -1) return null;
-  const level = headingLevel(lines[start] ?? "");
+  const level = levels[start] ?? 0;
   const body: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    const next = headingLevel(line);
+  for (let i = start + 1; i < lines.length; i++) {
+    const next = levels[i] ?? 0;
     if (next > 0 && next <= level) break;
-    body.push(line);
+    body.push(lines[i] ?? "");
   }
   return body.join("\n");
 }
@@ -111,7 +139,13 @@ function closedAtOf(flow: FlowJsonShape): string | null {
 
 /** Throws on a flow.json that is not a JSON object; the caller counts that as a failure. */
 export function extractFlowIntent(source: FlowSource, repoPath: string): Intent {
-  const parsed: unknown = JSON.parse(source.flowJson);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(source.flowJson);
+  } catch {
+    // Fixed text: a runtime's own parse message differs between Bun and Node and would break byte-identity.
+    throw new Error("flow.json is not valid JSON");
+  }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) throw new Error("flow.json is not an object");
   const flow = parsed as FlowJsonShape;
   const description = source.description ?? "";
