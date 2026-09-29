@@ -3,6 +3,11 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.34] — 2026-09-29
+
+### Fixed
+- **`keryx flow outcome author` was unreachable from the command line in 0.3.33** — the router in `cli.ts` refuses a subcommand that `src/lib/group-subcommands.ts` does not list, and `outcome` was missing from the `flow` list, so the command answered `Unknown command: outcome` before the handler ran. The 0.3.33 tests called `flowCommand` directly and never went through the router. A new test compares every `case` in the `flow` switch with the router's list and runs the command through the real `cli.ts`.
+
 ## [0.3.33] — 2026-09-29
 
 ### Added
