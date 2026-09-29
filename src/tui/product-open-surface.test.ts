@@ -108,7 +108,7 @@ describe("/product renders the open list", () => {
     expect(rows.indexOf("flow 005  Bump the lockfile")).toBeLessThan(rows.indexOf("flow 001  Retry checkout on a stale token"));
   });
 
-  // Flow 365 (AC7): the author is on each block, from the same lines `keryx product open` prints.
+  // Flow 365 (AC5): the author is on each block, from the same lines `keryx product open` prints.
   test("each block names the outcome author: recorded, or unknown for a flow without the field", async () => {
     const root = await copyFixtureRepo();
     roots.push(root);

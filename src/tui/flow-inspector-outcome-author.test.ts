@@ -1,4 +1,4 @@
-// Flow 365, AC7: the TUI flow inspector shows the same author `keryx flow status` prints, read
+// Flow 365, AC5: the TUI flow inspector shows the same author `keryx flow status` prints, read
 // through the same facade helper, and `unknown` for a flow that never recorded one.
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";

@@ -1,4 +1,4 @@
-// Flow 365, AC5 — `flow status` prints an author line; a flow written before the field existed
+// Flow 365, AC4 — `flow status` prints an author line; a flow written before the field existed
 // reads `unknown`, and reading it never rewrites the file.
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -84,7 +84,7 @@ async function statusOf(id: string): Promise<string> {
   }
 }
 
-test("AC5: status prints the recorded author for agent and human flows", async () => {
+test("AC4: status prints the recorded author for agent and human flows", async () => {
   const service = await fresh();
   const agent = await init(service, { cwd: ROOT, title: "Agent flow", slug: "agent-flow" });
   const human = await init(service, { cwd: ROOT, title: "Human flow", slug: "human-flow", outcomeAuthor: "human" });
@@ -93,7 +93,7 @@ test("AC5: status prints the recorded author for agent and human flows", async (
   expect(await statusOf(human.flow.id)).toContain("outcome author: human");
 });
 
-test("AC5: a flow without the field reads unknown, and reading it rewrites nothing", async () => {
+test("AC4: a flow without the field reads unknown, and reading it rewrites nothing", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "Old flow" });
   const raw = await readRawFlow(dir);
@@ -111,7 +111,7 @@ test("AC5: a flow without the field reads unknown, and reading it rewrites nothi
   expect(await readFile(path.join(dir, "journal.md"), "utf8")).toBe(journalBefore);
 });
 
-test("AC5/AC8: the flag gates nothing — an unknown, agent or human flow freezes and starts the same way", async () => {
+test("AC6: the flag gates nothing — an unknown, agent or human flow freezes and starts the same way", async () => {
   const service = await fresh();
   const statuses: string[] = [];
   for (const [i, outcomeAuthor] of (["human", "agent", undefined, "legacy"] as const).entries()) {

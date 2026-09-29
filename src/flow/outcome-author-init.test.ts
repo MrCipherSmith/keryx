@@ -1,4 +1,4 @@
-// Flow 365, AC1/AC2 — `flow init --outcome-author`: agent by default, human only when the
+// Flow 365, AC1 — `flow init --outcome-author`: agent by default, human only when the
 // flag says so, anything else refused before the flow exists, and the schema lists the field.
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
@@ -65,7 +65,7 @@ async function flowDirs(): Promise<string[]> {
 import { flowCommand } from "../commands/flow";
 import { flowStateSchema } from "./schema";
 
-test("AC2: a flow created without the flag carries outcomeAuthor agent, on disk too", async () => {
+test("AC1: a flow created without the flag carries outcomeAuthor agent, on disk too", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "No flag given" });
 
@@ -73,7 +73,7 @@ test("AC2: a flow created without the flag carries outcomeAuthor agent, on disk 
   expect((await readRawFlow(dir)).outcomeAuthor).toBe("agent");
 });
 
-test("AC2: --outcome-author human is recorded as human", async () => {
+test("AC1: --outcome-author human is recorded as human", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "A person wrote it", outcomeAuthor: "human" });
 
@@ -81,20 +81,20 @@ test("AC2: --outcome-author human is recorded as human", async () => {
   expect((await readRawFlow(dir)).outcomeAuthor).toBe("human");
 });
 
-test("AC2: --outcome-author agent is recorded as agent", async () => {
+test("AC1: --outcome-author agent is recorded as agent", async () => {
   const service = await fresh();
   const { flow } = await init(service, { cwd: ROOT, title: "Stated agent", outcomeAuthor: "agent" });
   expect(flow.outcomeAuthor).toBe("agent");
 });
 
-test("AC2: human is never inferred from a stated owner or a human-looking title", async () => {
+test("AC1: human is never inferred from a stated owner or a human-looking title", async () => {
   const service = await fresh();
   const { flow } = await init(service, { cwd: ROOT, title: "Written by Aleks", owner: "Aleks" });
   expect(flow.owner?.value).toBe("Aleks");
   expect(flow.outcomeAuthor).toBe("agent");
 });
 
-test.each(["robot", "Human", "", "  ", "both"])("AC2: value %j is refused before the flow is created", async (value) => {
+test.each(["robot", "Human", "", "  ", "both"])("AC1: value %j is refused before the flow is created", async (value) => {
   const service = await fresh();
   await expect(service.init({ cwd: ROOT, title: "Bad author", outcomeAuthor: value })).rejects.toThrow(
     /--outcome-author must be one of: agent, human/,
@@ -102,7 +102,7 @@ test.each(["robot", "Human", "", "  ", "both"])("AC2: value %j is refused before
   expect(await flowDirs()).toEqual([]);
 });
 
-test("AC2: the CLI exits non-zero on an unknown value and on a bare flag, and creates nothing", async () => {
+test("AC1: the CLI exits non-zero on an unknown value and on a bare flag, and creates nothing", async () => {
   await fresh();
   const originalCwd = process.cwd();
   const realError = console.error;
@@ -130,7 +130,7 @@ test("AC2: the CLI exits non-zero on an unknown value and on a bare flag, and cr
   }
 });
 
-test("AC2: `keryx flow schema` lists outcomeAuthor with exactly agent and human", () => {
+test("AC1: `keryx flow schema` lists outcomeAuthor with exactly agent and human", () => {
   const schema = flowStateSchema() as { properties?: Record<string, { enum?: string[] }> };
   expect(schema.properties?.["outcomeAuthor"]?.enum).toEqual(["agent", "human"]);
 });

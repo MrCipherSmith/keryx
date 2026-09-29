@@ -1,4 +1,4 @@
-// Flow 365, AC6: the index carries who wrote each flow's outcome criterion. It is read from
+// Flow 365, AC4: the index carries who wrote each flow's outcome criterion. It is read from
 // flow.json through the flow facade, covered by the fingerprint, optional in index.json (an index
 // written before the field existed stays valid), and shown by `product open`.
 

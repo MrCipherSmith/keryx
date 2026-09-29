@@ -1,4 +1,4 @@
-// Flow 365, AC4 — with --outcome-author human the description.md Outcome criteria section is the
+// Flow 365, AC3 — with --outcome-author human the description.md Outcome criteria section is the
 // template's own text, byte for byte, and no example is inserted; agent or no flag creates the
 // flow exactly as before.
 import { afterEach, expect, test } from "bun:test";
@@ -71,14 +71,14 @@ async function description(dir: string): Promise<string> {
   return await readFile(path.join(dir, "description.md"), "utf8");
 }
 
-test("AC4: --outcome-author human leaves description.md byte-identical to the template", async () => {
+test("AC3: --outcome-author human leaves description.md byte-identical to the template", async () => {
   const service = await fresh();
   const { dir } = await init(service, { cwd: ROOT, title: "Human flow", outcomeAuthor: "human" });
   const written = await description(dir);
   expect(written).toBe(renderDescription("Human flow", "user description"));
 });
 
-test("AC4: the Outcome criteria section is the same for human, agent and no flag", async () => {
+test("AC3: the Outcome criteria section is the same for human, agent and no flag", async () => {
   const service = await fresh();
   const human = await init(service, { cwd: ROOT, title: "Same title", slug: "human-one", outcomeAuthor: "human" });
   const agent = await init(service, { cwd: ROOT, title: "Same title", slug: "agent-one", outcomeAuthor: "agent" });
@@ -90,7 +90,7 @@ test("AC4: the Outcome criteria section is the same for human, agent and no flag
   expect(sections[2]).toBe(sections[0]);
 });
 
-test("AC4: agent and no flag write the whole description.md exactly as before", async () => {
+test("AC3: agent and no flag write the whole description.md exactly as before", async () => {
   const service = await fresh();
   const agent = await init(service, { cwd: ROOT, title: "Plain agent", outcomeAuthor: "agent" });
   const bare = await init(service, { cwd: ROOT, title: "Plain bare", slug: "plain-bare" });
@@ -99,7 +99,7 @@ test("AC4: agent and no flag write the whole description.md exactly as before", 
   expect(await description(bare.dir)).toBe(renderDescription("Plain bare", "user description"));
 });
 
-test("AC4: the human section holds only the template hint, no inserted example", async () => {
+test("AC3: the human section holds only the template hint, no inserted example", async () => {
   const service = await fresh();
   const { dir } = await init(service, { cwd: ROOT, title: "Hint only", outcomeAuthor: "human" });
   const section = (await description(dir)).match(SECTION)?.[0] ?? "";

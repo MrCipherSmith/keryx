@@ -1,4 +1,4 @@
-// Flow 365, AC3 — `flow outcome author`: the reason is required, an unknown value is refused,
+// Flow 365, AC2 — `flow outcome author`: the reason is required, an unknown value is refused,
 // one journal line names old, new and the reason, field and line land together, and setting the
 // value already held writes nothing.
 import { afterEach, expect, test } from "bun:test";
@@ -82,7 +82,7 @@ async function legacyFlow(service: FlowService): Promise<{ id: string; dir: stri
   return { id: flow.id, dir };
 }
 
-test("AC3: agent -> human writes the field and exactly one journal line naming old, new and the reason", async () => {
+test("AC2: agent -> human writes the field and exactly one journal line naming old, new and the reason", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "Switch author" });
   const before = await journal(dir);
@@ -104,7 +104,7 @@ test("AC3: agent -> human writes the field and exactly one journal line naming o
   expect(lines[0]).toContain("Aleks rewrote the criterion");
 });
 
-test("AC3: a flow without the field names `unknown` as the old value", async () => {
+test("AC2: a flow without the field names `unknown` as the old value", async () => {
   const service = await fresh();
   const { id, dir } = await legacyFlow(service);
 
@@ -117,7 +117,7 @@ test("AC3: a flow without the field names `unknown` as the old value", async () 
   expect(lines[0]).toContain("confirmed from the PR");
 });
 
-test("AC3: setting the value already held writes no journal line and leaves flow.json untouched", async () => {
+test("AC2: setting the value already held writes no journal line and leaves flow.json untouched", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "Same value", outcomeAuthor: "human" });
   const flowBefore = await readFile(path.join(dir, "flow.json"), "utf8");
@@ -129,7 +129,7 @@ test("AC3: setting the value already held writes no journal line and leaves flow
   expect(await journal(dir)).toBe(journalBefore);
 });
 
-test.each(["", "   "])("AC3: reason %j is refused and nothing is written", async (reason) => {
+test.each(["", "   "])("AC2: reason %j is refused and nothing is written", async (reason) => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "Needs a reason" });
   const flowBefore = await readFile(path.join(dir, "flow.json"), "utf8");
@@ -141,7 +141,7 @@ test.each(["", "   "])("AC3: reason %j is refused and nothing is written", async
   expect(await journal(dir)).toBe(journalBefore);
 });
 
-test("AC3: an unknown value is refused and nothing is written", async () => {
+test("AC2: an unknown value is refused and nothing is written", async () => {
   const service = await fresh();
   const { flow, dir } = await init(service, { cwd: ROOT, title: "Bad value" });
   const flowBefore = await readFile(path.join(dir, "flow.json"), "utf8");
@@ -156,7 +156,7 @@ test("AC3: an unknown value is refused and nothing is written", async () => {
   expect(await readFile(path.join(dir, "flow.json"), "utf8")).toBe(flowBefore);
 });
 
-test("AC3: the change is recorded in history too, so the field and the trail move together", async () => {
+test("AC2: the change is recorded in history too, so the field and the trail move together", async () => {
   const service = await fresh();
   const { flow } = await init(service, { cwd: ROOT, title: "History" });
   const updated = await service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "handwritten" });
@@ -165,7 +165,7 @@ test("AC3: the change is recorded in history too, so the field and the trail mov
   expect(last?.detail).toContain("handwritten");
 });
 
-test("AC3: the CLI refuses a missing --reason and an unknown value with a non-zero exit", async () => {
+test("AC2: the CLI refuses a missing --reason and an unknown value with a non-zero exit", async () => {
   const service = await fresh();
   const { flow } = await init(service, { cwd: ROOT, title: "CLI refusals" });
   const originalCwd = process.cwd();
