@@ -104,6 +104,8 @@ import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand 
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
+import { computeBotMetrics } from "../review/bot/metrics";
+import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -255,6 +257,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/flows",
   "/doctor",
   "/setup",
+  "/reviews",
   "/theme",
   "/mode",
   "/reasoning",
@@ -2650,6 +2653,13 @@ export async function runAgentRepl(
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
       } else if (command === "/setup") {
         agentIo.onSystem?.(renderSetupSlash(rest));
+      } else if (isReviewsCommand(command)) {
+        // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
+        try {
+          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

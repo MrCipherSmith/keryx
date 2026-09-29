@@ -977,6 +977,27 @@ repository checkout, since the evaluation corpus is not shipped in the npm
 package. See
 [run keryx in CI](docs/docs/guides/run-in-ci.md).
 
+### Review bot on pull requests
+
+A GitHub Action reviews each same-repository pull request, has a second model
+turn try to refute every finding, and posts one review with inline comments:
+
+```yaml
+- uses: MrCipherSmith/keryx@main
+  with:
+    model-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Set up the secret and copy [`docs/examples/review-bot.yml`](docs/examples/review-bot.yml)
+(`permissions: contents: read, pull-requests: write`, trigger `pull_request`, never
+`pull_request_target`). Fork pull requests are refused before any model call.
+`keryx review bot post` is a dry run until you pass `--post`; the action's
+`post: "false"` does the same. A run reviews at most `max-diff-bytes` of the diff
+(default 200,000 bytes) with one reviewer turn plus one verifier turn per finding.
+`keryx review metrics` (and `/reviews` in the shell) reports findings acted on,
+dismissed, precision and resolved-before-merge; a ratio with no data prints
+`n/a`. See [review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md).
+
 ## Documentation
 
 Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
@@ -990,6 +1011,7 @@ Full documentation site: **<https://mrciphersmith.github.io/keryx/>**
 - **[Workspace & lifecycle](docs/docs/workspace-and-lifecycle.md)** — the `.metaproject/` contract and `init`/`update` lifecycle.
 - **[Limitations](docs/docs/limitations.md)** — known gaps, platform caveats, and what to do instead.
 - **[Shared Agent Context](docs/docs/guides/shared-agent-context.md)** *(experimental)* — local-first work-context layer: FWK overview, proposals, runtime policy guard.
+- **[Review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md)** — the GitHub Action, secrets, the same-repository rule, dry run, cost, and the precision and resolved-before-merge metrics.
 - **[Permission modes](docs/docs/guides/permission-modes.md)** — `ask`/`trust`/`auto` for the interactive shell: how to set them and exactly where the per-project default is stored.
 - **[Changelog](CHANGELOG.md)** — what has landed since `v0.1.0`.
 

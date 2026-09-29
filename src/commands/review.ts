@@ -37,6 +37,7 @@ import { runImportReviewers } from "../review/import-reviewers";
 // NEW files, so no other flow's concurrent work on this file collides with
 // any of them.
 import { runJevRules } from "./review-jev-rules";
+import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { runJevRisk } from "./review-jev-risk";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -595,6 +596,15 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-rules.ts` for everything past registration.
     if (command === "jev-rules") {
       await runJevRules(args.slice(1));
+      return;
+    }
+    // flow 368: the review bot (headless run, one PR review) and its metrics.
+    if (command === "bot") {
+      await runReviewBotCommand(args.slice(1));
+      return;
+    }
+    if (command === "metrics") {
+      await runReviewMetricsCommand(args.slice(1));
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -3882,6 +3892,15 @@ Usage:
                           and verifier queue order (one noul per finding, lowest
                           plausibility first). Never drops or demotes a finding. Opt-in
                           via review.jev.triage in .metaproject/tasks.config.json.
+  keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                       [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+  keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                        [--post] [--fixtures <dir>] [--json]
+                        The pull request review bot: a headless review that drops what a
+                        verifier refutes, then ONE PR review with inline comments. Post is
+                        a dry run unless --post is given. Same-repository pull requests only.
+  keryx review metrics [--json] [--refresh] [--fixtures <dir>]
+                       Findings acted on, dismissed, still open; precision; resolved-before-merge.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

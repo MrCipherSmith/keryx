@@ -6,7 +6,10 @@
 // deterministic: `runShell` only ever sees a stub `ProviderPort` that is never
 // expected to stream.
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import type {
   NormalizedEvent,
   ProviderCapabilities,
@@ -18,7 +21,10 @@ import {
   AGENT_SLASH_COMMANDS,
   isCommandInMode,
 } from "./agent-commands";
-import { readlineAgentHelpText, runShell, type ShellDeps, type ShellIO } from "./shell";
+import { readlineAgentHelpText, runAgentRepl, runShell, type ShellDeps, type ShellIO } from "./shell";
+import type { AgentDeps } from "./agent";
+import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import { REVIEWS_EMPTY } from "../tui/reviews-inspector";
 
 const NO_CAPS: ProviderCapabilities = {
   streaming: false,
@@ -173,6 +179,74 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     }
     expect(readlineAgentHelpText()).toContain(describeCommand(exit, "agent"));
     expect(await chatOutput("/help")).toContain(describeCommand(exit, "chat"));
+  });
+});
+
+describe("/reviews — the readline equivalent of the TUI modal", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  async function agentOutput(...lines: string[]): Promise<string> {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-reviews-repl-"));
+    dirs.push(root);
+    const out: string[] = [];
+    const deps = {
+      providerId: "scripted",
+      modelId: "m",
+      systemInstruction: "sys",
+      provider: {
+        complete: () => {
+          throw new Error("a slash command must not reach the provider");
+        },
+      },
+    } as unknown as AgentDeps;
+    const port = {
+      searchCode: async ({ pattern }: { pattern: string }) => ({ pattern, output: "", isError: false }),
+    } as unknown as MetaprojectPort;
+    await runAgentRepl(
+      linesFrom(...lines, "/exit"),
+      { printPrompt: () => {}, safeBoundary: undefined, write: (s) => out.push(s) },
+      deps,
+      port,
+      { cwd: root, enabled: false },
+      undefined,
+      undefined,
+      undefined,
+      path.join(root, "config"),
+    );
+    return out.join("");
+  }
+
+  test("the readline agent help advertises it with the registry's wording", () => {
+    const command = AGENT_SLASH_COMMANDS.find((c) => c.name === "/reviews");
+    expect(command).toBeDefined();
+    if (command === undefined) return;
+    expect(command.modes).not.toContain("chat");
+    const help = readlineAgentHelpText();
+    expect(help).toContain("/reviews");
+    expect(help).toContain(describeCommand(command, "agent"));
+  });
+
+  test("typed in the agent REPL it prints the metrics block and says when nothing is on record", async () => {
+    const output = await agentOutput("/reviews");
+    expect(output).toContain("Review metrics: 0 review(s) on 0 pull request(s).");
+    expect(output).toContain("Precision: n/a");
+    expect(output).toContain("Resolved before merge: n/a");
+    expect(output).toContain(REVIEWS_EMPTY);
+    expect(output).not.toContain("Unknown command");
+  });
+
+  test("/review is a different command and is left alone", () => {
+    expect(AGENT_SLASH_COMMANDS.find((c) => c.name === "/review")).toBeDefined();
+    expect(AGENT_SLASH_COMMANDS.filter((c) => c.name === "/reviews")).toHaveLength(1);
+  });
+
+  test("typed in chat it is explained as agent-mode only", async () => {
+    const output = await chatOutput("/reviews");
+    expect(output).toContain("only available in agent mode");
+    expect(output).not.toContain("Unknown command");
   });
 });
 

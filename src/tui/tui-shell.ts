@@ -69,6 +69,7 @@ import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
+import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
 // CLI does — no separate TUI-only Jev path. Never triggered automatically;
 // only on an explicit key press.
@@ -3746,6 +3747,7 @@ export async function launchTuiAgentShell(opts: {
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
+    let liveReviewsPanel: ReviewsPanelHandle | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3840,6 +3842,7 @@ export async function launchTuiAgentShell(opts: {
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
+        liveReviewsPanel?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -4331,6 +4334,14 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveSchedules = schedules;
+    // `/reviews`: the managed pull request reviews, mounted after Schedules with the open-findings
+    // count; a click opens the same modal the slash command does.
+    const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      onOpen: () => showReviews(),
+    });
+    liveReviewsPanel = reviewsPanel;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -6411,6 +6422,13 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
       });
     };
+    const showReviews = (): void => {
+      void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
+        .then(() => liveReviewsPanel?.refresh())
+        .catch(() => {
+          io.onSystem?.("The managed reviews could not be read.\n");
+        });
+    };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
       openGamesModal(otui, chrome, {
@@ -7613,6 +7631,10 @@ export async function launchTuiAgentShell(opts: {
             showProduct();
             return;
           }
+          case "reviews": {
+            showReviews();
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
             return;
@@ -8013,6 +8035,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isProductCommand(command.name)) {
           showProduct();
+          return;
+        }
+        if (isReviewsCommand(command.name)) {
+          showReviews();
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {
@@ -9082,6 +9108,7 @@ export async function launchTuiAgentShell(opts: {
     // where its output goes; the ledger watcher shows its outcome next start.
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
     liveSchedules?.dispose();
+    liveReviewsPanel?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);

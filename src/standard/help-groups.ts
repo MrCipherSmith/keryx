@@ -489,6 +489,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary: "Intents closed in code that nobody looked back at, with their outcome criteria.",
   },
+  {
+    kind: "slash",
+    name: "/reviews",
+    group: "Automation",
+    summary: "Managed pull request reviews: findings by outcome, precision, resolved before merge.",
+  },
 
   // ---- External agents, ACP and MCP ----------------------------------------
   {
