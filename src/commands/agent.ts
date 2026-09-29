@@ -274,6 +274,13 @@ export interface AgentIO {
    */
   onUnattendedDenial?: (tool: string, reason: string) => void;
   /**
+   * `/rewind`: called after a call has passed every approval and immediately
+   * before a `write`/`shell`/`destructive`/`delegate` tool runs, so the host can
+   * snapshot the work tree. Awaited; a throw never blocks the tool. Never wired
+   * for unattended runs. Read-only tools never reach it.
+   */
+  beforeMutation?: () => Promise<void>;
+  /**
    * Approve a mutating (risk `shell`/`destructive`) tool call before it runs.
    * DEFAULT-DENY: when this is absent the driver denies the call and never
    * executes it. `input` is the raw JSON input string the model proposed.
@@ -3367,6 +3374,7 @@ async function runAgentTurnCore(
             io.trustedMcpTools,
             io.mcpToolFingerprint,
             io.mcpToolDestructive,
+            deps.unattended === true ? undefined : io.beforeMutation,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4134,6 +4142,11 @@ async function runConcurrentSpawnBatch(
       undefined,
       deps.hardDeny === undefined ? undefined : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
       deps.hooks,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      deps.unattended === true ? undefined : io.beforeMutation,
     );
 
   const plan = planWaves(tasks, {
@@ -4398,6 +4411,7 @@ async function executeCall(
   trustedMcpTools?: Map<string, string>,
   mcpToolFingerprint?: (fqn: string) => string | undefined,
   mcpToolDestructive?: (fqn: string) => boolean,
+  beforeMutation?: () => Promise<void>,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -4722,6 +4736,14 @@ async function executeCall(
 
   if (!reserveInvocation()) {
     return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
+  }
+  // `/rewind` seam: after every approval, before the tool can touch the work tree.
+  if (beforeMutation !== undefined && (risk === "write" || risk === "shell" || risk === "destructive" || risk === "delegate")) {
+    try {
+      await beforeMutation();
+    } catch {
+      // A failed snapshot never blocks the tool.
+    }
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.

@@ -235,6 +235,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/rewind",
+    group: "Working in keryx shell",
+    summary: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]; snapshots cover the work tree only.",
+  },
+  {
+    kind: "slash",
     name: "/copy",
     group: "Working in keryx shell",
     summary: "Copy the newest transcript block to the clipboard.",

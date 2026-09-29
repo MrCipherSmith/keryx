@@ -98,6 +98,9 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "harness", zone: "client" },
   { segment: "tui", zone: "client" },
   { segment: "session", zone: "client" },
+  // Per-turn file snapshots for `/rewind`: a shadow git repository beside the
+  // session, driven by the turn loop and the shells. Client like `session`.
+  { segment: "rewind", zone: "client" },
   { segment: "mcp-client", zone: "client" },
   // The OUTBOUND consumer of third-party MCP servers. Client for the same
   // reason `mcp-client` is: it exists to put tools in front of the model —

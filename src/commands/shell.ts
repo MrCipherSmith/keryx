@@ -19,7 +19,10 @@
 // the network directly; all provider I/O flows through the injected port.
 
 import { randomUUID } from "node:crypto";
+import { join as joinPath } from "node:path";
 import * as readline from "node:readline";
+import { createRewindReadlineCommand } from "../rewind/readline-command";
+import { createRewindRecorder, rewindDisabledByEnv } from "../rewind/recorder";
 import { buildBusTools } from "../bus/agent-tools";
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
@@ -246,6 +249,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/goal",
   "/clear",
   "/compact",
+  "/rewind",
   "/status",
   "/flows",
   "/doctor",
@@ -2442,6 +2446,29 @@ export async function runAgentRepl(
     syncArchive();
     save();
   };
+  // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
+  const rewindRecorder = createRewindRecorder({
+    workTree: sessionCwd,
+    dir: () => (live === undefined ? undefined : joinPath(live.dir, "rewind")),
+    enabled: () => !rewindDisabledByEnv() && leaseWatch.canPersist(),
+    onError: (message) => agentIo.onSystem?.(`${message}\n`),
+  });
+  agentIo.beforeMutation = () => rewindRecorder.beforeMutation();
+  const rewindCommand = createRewindReadlineCommand({
+    recorder: rewindRecorder,
+    hasSession: () => live !== undefined,
+    history: () => history,
+    archive: () => archive,
+    syncArchive,
+    canPersist: () => live !== undefined && leaseWatch.canPersist(),
+    persist: (nextHistory, nextArchive) => {
+      if (live === undefined) throw new Error("no persistent session");
+      live = persistHistory(live, nextHistory, { archive: nextArchive, provider: deps.providerId, model: deps.modelId });
+    },
+    afterHistoryRewind: () => {
+      nextArchiveIndex = history.length;
+    },
+  });
   agentIo.onHistoryChange = (kind) => {
     syncArchive();
     if (kind === "assistant_delta") {
@@ -2463,6 +2490,8 @@ export async function runAgentRepl(
     turnToolCalls = 0;
     turnText = "";
     turnError = undefined;
+    syncArchive();
+    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: operatorLine });
     events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
@@ -2590,6 +2619,7 @@ export async function runAgentRepl(
       return; // end of input
     }
     rich.safeBoundary?.();
+    if (line.trim() !== "/rewind confirm") rewindCommand.cancelPending();
     if (line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
@@ -2696,6 +2726,8 @@ export async function runAgentRepl(
           agentIo.trustedMcpTools?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
+      } else if (command === "/rewind") {
+        agentIo.onSystem?.(await rewindCommand.run(rest));
       } else if (command === "/compact") {
         if (live === undefined) {
           agentIo.onSystem?.("No persistent session.\n");

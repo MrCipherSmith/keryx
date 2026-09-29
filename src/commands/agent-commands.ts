@@ -370,6 +370,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,
   },
+  {
+    // Per-turn file snapshots (a shadow git repository beside the session) and
+    // conversation rollback. Agent-only: chat mode has no tools, so nothing
+    // changes files there.
+    name: "/rewind",
+    description: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]",
+    modes: AGENT_ONLY,
+  },
   { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   {
     name: "/game",
