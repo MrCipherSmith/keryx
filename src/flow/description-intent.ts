@@ -6,8 +6,8 @@ import path from "node:path";
 // description states none without the flow module ever importing the product
 // module. The product index reads the same text through the same functions.
 
-/** The hint `flow init` writes under `## Outcome criteria`; an untouched hint declares nothing. */
-export const OUTCOME_HINT = "State an outcome criterion";
+/** The exact hint line `flow init` writes under `## Outcome criteria`; an untouched hint declares nothing. */
+export const OUTCOME_HINT = 'State an outcome criterion: what you would look at afterwards to see this helped, as a bullet. Or write "- not measured — <reason>".';
 
 const PLACEHOLDERS = ["Describe the problem precisely", "What must be true when this flow is done"];
 const FLOW_STATEMENT_HEADINGS = [/^problem$/i, /^expected outcome$/i];
@@ -24,25 +24,41 @@ function fenceOf(line: string): { char: string; length: number; rest: string } |
   return match === null ? null : { char: (match[1] ?? "")[0] ?? "", length: (match[1] ?? "").length, rest: match[2] ?? "" };
 }
 
-/** The level of each line's heading, 0 where the line is not a heading — and always 0 inside a fenced code block. */
-function headingLevels(lines: readonly string[]): number[] {
-  const levels: number[] = [];
+/** True for each line that is part of a fenced code block, the fence lines themselves included. */
+export function fencedLines(lines: readonly string[]): boolean[] {
+  const fenced: boolean[] = [];
   let open: { char: string; length: number } | null = null;
   for (const line of lines) {
     const fence = fenceOf(line);
     if (open !== null) {
-      levels.push(0);
+      fenced.push(true);
       if (fence !== null && fence.char === open.char && fence.length >= open.length && fence.rest.trim() === "") open = null;
       continue;
     }
     if (fence !== null && !(fence.char === "`" && fence.rest.includes("`"))) {
       open = { char: fence.char, length: fence.length };
-      levels.push(0);
+      fenced.push(true);
       continue;
     }
-    levels.push(headingLevel(line));
+    fenced.push(false);
   }
-  return levels;
+  return fenced;
+}
+
+/** The text with fenced code blocks and HTML comments removed; what is left is what a reader of the page sees as prose. */
+export function proseOutsideFences(markdown: string): string {
+  const lines = markdown.split(/\r?\n/);
+  const fenced = fencedLines(lines);
+  return lines
+    .filter((_, i) => !fenced[i])
+    .join("\n")
+    .replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+}
+
+/** The level of each line's heading, 0 where the line is not a heading — and always 0 inside a fenced code block. */
+function headingLevels(lines: readonly string[]): number[] {
+  const fenced = fencedLines(lines);
+  return lines.map((line, i) => (fenced[i] === true ? 0 : headingLevel(line)));
 }
 
 /** Body of the first section whose heading matches, up to the next heading of the same or a higher level. */

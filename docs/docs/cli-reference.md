@@ -2573,7 +2573,7 @@ answer:
 intents closed in code, never checked for effect: N of M
   no outcome criterion stated: a
   criterion stated, never observed: b
-  observed: c (helped, no effect, harmed, inconclusive)
+  observed: c (helped h, no effect n, harmed m, inconclusive i)
 ```
 
 A flow's outcome criterion is written in a `## Outcome criteria` section of its

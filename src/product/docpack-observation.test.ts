@@ -91,6 +91,50 @@ describe("docpack observations", () => {
   });
 });
 
+describe("fences and comments in the observations section", () => {
+  const pack = (body: string) => ({ name: "p", primary: `# P\n\n## Outcome observations\n\n${body}\n`, specification: null });
+  const none = { observed: false, verdict: null, observedAt: null, note: null };
+
+  test("a fenced block is stripped: an example inside it is not an observation", () => {
+    const source = pack("```\n- helped — example\n```");
+    expect(docpackObservationFrom(source)).toEqual(none);
+    expect(docpackObservationProblem(source)).toBeNull();
+  });
+
+  test("a fenced example before a real line does not decide; the real line does", () => {
+    const source = pack("```\n- harmed — example\n```\n- helped — the real one");
+    expect(docpackObservationFrom(source).verdict).toBe("helped");
+    expect(docpackObservationProblem(source)).toBeNull();
+  });
+
+  test("an HTML comment is stripped, one line or several", () => {
+    for (const body of ["<!-- - helped — template -->", "<!--\n- helped — template\nsecond line\n-->", "<!-- add a verdict here -->"]) {
+      expect(docpackObservationFrom(pack(body))).toEqual(none);
+      expect(docpackObservationProblem(pack(body))).toBeNull();
+    }
+    expect(docpackObservationFrom(pack("<!-- note -->\n- harmed — real")).verdict).toBe("harmed");
+  });
+
+  test("a section that is empty after stripping is no observation, not a failure", async () => {
+    const root = await project();
+    await writePackage(root, "delta-package", { "README.md": "# Delta\n\n## Outcome observations\n\n<!-- none yet -->\n\n```\n- helped — example\n```\n" });
+    const index = await buildIntentIndex(root);
+    expect(index.failures).toEqual([]);
+    expect(index.intents.find((intent) => intent.id === "delta-package")?.outcome.observed).toBe(false);
+  });
+
+  test("non-empty text without a recognized verdict is still a failure, even beside a comment", () => {
+    expect(docpackObservationProblem(pack("<!-- hint -->\n- worked — yes"))).toContain("no recognized verdict");
+    expect(docpackObservationProblem(pack("```\n- helped — example\n```\nsome prose"))).toContain("no recognized verdict");
+  });
+
+  test("the grammar stays strict: bold verdicts and numbered lists are not accepted", () => {
+    expect(docpackObservationFrom(pack("- **helped** — note")).observed).toBe(false);
+    expect(docpackObservationFrom(pack("1. helped — note")).observed).toBe(false);
+    expect(docpackObservationProblem(pack("- **helped** — note"))).not.toBeNull();
+  });
+});
+
 describe("a malformed docpack observation", () => {
   for (const line of ["- worked — yes", "- helped", "- helped - a hyphen", "- 2026-03-01 it helped"]) {
     test(`\`${line}\` is a failure naming the package`, async () => {

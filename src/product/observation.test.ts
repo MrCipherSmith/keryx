@@ -68,6 +68,33 @@ describe("the observation line", () => {
   });
 });
 
+describe("the observation line is fence-aware", () => {
+  test("a line inside a fenced code block is ignored, and a real line after the fence is found", () => {
+    const journal = "- created\n\n```\noutcome-observed: harmed — quoted example\n```\n\noutcome-observed: helped — the real one\n";
+    expect(observationFrom(journal)).toEqual({ observed: true, verdict: "helped", observedAt: null, note: "the real one" });
+    expect(observationProblem(journal)).toBeNull();
+  });
+
+  test("a fenced line alone is no observation and no failure, with backtick or tilde fences", () => {
+    const none = { observed: false, verdict: null, observedAt: null, note: null };
+    for (const fence of ["```", "~~~", "````"]) {
+      const journal = `${fence}md\noutcome-observed: helped — an example\noutcome-observed: nonsense\n${fence}\n`;
+      expect(observationFrom(journal)).toEqual(none);
+      expect(observationProblem(journal)).toBeNull();
+    }
+  });
+
+  test("a fence that is never closed hides the rest of the journal", () => {
+    expect(observationFrom("```\noutcome-observed: helped — never closed\n").observed).toBe(false);
+  });
+
+  test("a fenced example does not hide a malformed real line", () => {
+    const journal = "```\noutcome-observed: helped — example\n```\noutcome-observed: worked — typo\n";
+    expect(observationFrom(journal).observed).toBe(false);
+    expect(observationProblem(journal)).toContain("no recognized verdict");
+  });
+});
+
 describe("index and open honour the observation", () => {
   test("the index records the observation on the flow that has one", async () => {
     const index = await buildIntentIndex(await project());

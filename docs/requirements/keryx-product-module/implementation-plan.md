@@ -87,6 +87,10 @@ declared an outcome criterion or an honest `not measured — <reason>`.
   flows do not state what they expect to change, and a queue of intents with no
   criterion has nothing to check them against.
 
+The two shares are reported separately: flows that declared an outcome
+criterion, and flows that wrote `not measured — <reason>`. They are never added
+into one number, so G1a cannot be passed by writing `not measured` everywhere.
+
 #### G1b — 2–4 weeks after those ten flows are released
 
 G1b needs calendar time: an outcome cannot be observed before it has had time to

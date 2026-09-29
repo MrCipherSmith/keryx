@@ -21,9 +21,10 @@ Read from `keryx product index` on the corpus as it stood at release 0.3.30:
 
 310 of 310 does NOT mean "nothing worked". It means
 the instrument did not exist: no flow had a slot to say what it expected to
-change, and no journal line to say what was seen afterwards. Nothing could have
-been recorded, so nothing was. The number is the size of the gap, not a verdict
-on the work inside it.
+change, and no observation carried a verdict. Release 0.3.30 had a free-text
+`outcome-observed:` line, but it recorded no verdict, so it could not say whether
+anything helped. Nothing could have been recorded that way, so nothing was. The
+number is the size of the gap, not a verdict on the work inside it.
 
 ## Why the arm stays honest
 

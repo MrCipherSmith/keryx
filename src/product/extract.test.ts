@@ -3,6 +3,7 @@
 // first-hour measure of "do people fill the slot" would measure the template.
 
 import { describe, expect, test } from "bun:test";
+import { OUTCOME_HINT } from "../flow/description-intent";
 import { renderDescription } from "../flow/templates";
 import { extractFlowIntent, hasInstrument, outcomeCriterionFrom } from "./extract";
 
@@ -16,9 +17,15 @@ describe("the outcome criteria slot", () => {
     expect(extractFlowIntent(source(description), ".metaproject/flows/9-x").outcome.criterion).toBeNull();
   });
 
-  test("the hint does not count even when it is written as a bullet or wrapped over two lines", () => {
-    expect(outcomeCriterionFrom("## Outcome criteria\n\n- State an outcome criterion: what you would look at.\n")).toBeNull();
-    expect(outcomeCriterionFrom("## Outcome criteria\n\nState an outcome criterion:\nwhat you would look at.\n")).toBeNull();
+  test("the exact hint does not count, plain or written as a bullet", () => {
+    expect(outcomeCriterionFrom(`## Outcome criteria\n\n${OUTCOME_HINT}\n`)).toBeNull();
+    expect(outcomeCriterionFrom(`## Outcome criteria\n\n- ${OUTCOME_HINT}\n`)).toBeNull();
+  });
+
+  test("only the exact hint is skipped: a real bullet that starts with the same words survives", () => {
+    expect(outcomeCriterionFrom("## Outcome criteria\n\n- State an outcome criterion for checkout: p95 under 2s\n")).toBe("State an outcome criterion for checkout: p95 under 2s");
+    const beside = outcomeCriterionFrom(`## Outcome criteria\n\n${OUTCOME_HINT}\n- State an outcome criterion: p95 under 2s\n`);
+    expect(beside).toBe("State an outcome criterion: p95 under 2s");
   });
 
   test("a bullet written under the untouched hint is the declaration", () => {
@@ -35,5 +42,14 @@ describe("the outcome criteria slot", () => {
     const criterion = outcomeCriterionFrom(filled);
     expect(criterion).toBe("not measured — internal refactor, no user-facing surface");
     expect(hasInstrument(criterion)).toBe(false);
+  });
+
+  test("`not measured` is judged per bullet: beside a real bullet, an instrument exists", () => {
+    const mixed = outcomeCriterionFrom("## Outcome criteria\n\n- not measured — the retry path has no metric\n- p95 checkout time from the payment log\n");
+    expect(mixed).toBe("not measured — the retry path has no metric | p95 checkout time from the payment log");
+    expect(hasInstrument(mixed)).toBe(true);
+    expect(hasInstrument(outcomeCriterionFrom("## Outcome criteria\n\n- p95 checkout time\n- not measured — no metric for retries\n"))).toBe(true);
+    expect(hasInstrument("not measured — a | not measured — b")).toBe(false);
+    expect(hasInstrument(null)).toBe(false);
   });
 });

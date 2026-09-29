@@ -55,6 +55,7 @@ function indexProblem(value: unknown): string | null {
     }
     if (outcome.verdict !== null && !OUTCOME_VERDICTS.includes(outcome.verdict as (typeof OUTCOME_VERDICTS)[number])) return "index.json holds an intent with an unknown verdict";
     if (outcome.note !== null && typeof outcome.note !== "string") return "index.json holds an intent with an unusable note";
+    if (outcome.observed === true && outcome.verdict === null) return "index.json holds an observed intent without a verdict";
   }
   return null;
 }

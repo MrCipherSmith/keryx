@@ -17,7 +17,7 @@ What must be true when this flow is done.
 
 ## Outcome criteria
 
-${OUTCOME_HINT}: what you would look at afterwards to see this helped, as a bullet. Or write "- not measured — <reason>".
+${OUTCOME_HINT}
 
 ## Out of Scope
 

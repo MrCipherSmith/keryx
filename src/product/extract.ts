@@ -5,7 +5,7 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import { OUTCOME_HINT, flowStatementFrom, sectionOf, statementFrom } from "../flow/description-intent";
+import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, sectionOf, statementFrom } from "../flow/description-intent";
 import { OUTCOME_VERDICTS } from "./types";
 import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
 
@@ -13,7 +13,7 @@ export { sectionOf, statementFrom };
 
 export const NO_INSTRUMENT = "not measured — no instrument stated";
 
-const OBSERVATION = /^outcome-observed:[ \t]*(.*)$/m;
+const OBSERVATION = /^outcome-observed:[ \t]*(.*)$/;
 // A verdict needs its note: like `verify: none — <reason>`, a bare verdict is a mistake, not a shorthand.
 const VERDICT_LINE = new RegExp(`^(${OUTCOME_VERDICTS.join("|")})[ \\t]*—[ \\t]*(\\S.*?)[ \\t]*$`);
 const LEADING_DATE = /^(\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z?)?)\b[ \t:,-]*/;
@@ -25,7 +25,8 @@ export function outcomeCriterionFrom(markdown: string): string | null {
   const bullets: string[] = [];
   for (const line of body.split(/\r?\n/)) {
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-    if ((bullet?.[1] ?? line).trim().startsWith(OUTCOME_HINT)) continue;
+    // Only the exact template line is skipped: a real bullet that starts with the same words is a criterion.
+    if ((bullet?.[1] ?? line).trim() === OUTCOME_HINT) continue;
     if (bullet !== null) bullets.push((bullet[1] ?? "").trim());
     else if (line.trim().length > 0 && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
   }
@@ -35,7 +36,9 @@ export function outcomeCriterionFrom(markdown: string): string | null {
 
 /** True when a criterion names something that can be looked at; a `not measured` line admits there is nothing. */
 export function hasInstrument(criterion: string | null): criterion is string {
-  return criterion !== null && !/^`?not measured/i.test(criterion);
+  if (criterion === null) return false;
+  // Judged per bullet: a `not measured` bullet beside a real one still leaves an instrument.
+  return criterion.split(" | ").some((bullet) => !/^`?not measured/i.test(bullet.trim()));
 }
 
 type Observation = Pick<IntentOutcome, "observed" | "verdict" | "observedAt" | "note">;
@@ -54,10 +57,16 @@ function observationOf(text: string | null): Observation {
   return { observed: true, verdict: parsed.verdict, observedAt: LEADING_DATE.exec(parsed.note)?.[1] ?? null, note: parsed.note };
 }
 
-/** The text after the first `outcome-observed:` marker at column 0, or `null` when the journal has none. */
+/** The text after the first `outcome-observed:` marker at column 0 outside a fenced code block, or `null` when the journal has none. */
 function journalObservation(journal: string | null): string | null {
-  const match = journal === null ? null : OBSERVATION.exec(journal.replace(/\r\n/g, "\n"));
-  return match === null ? null : (match[1] ?? "");
+  if (journal === null) return null;
+  const lines = journal.split(/\r?\n/);
+  const fenced = fencedLines(lines);
+  for (const [i, line] of lines.entries()) {
+    const match = fenced[i] === true ? null : OBSERVATION.exec(line);
+    if (match !== null) return match[1] ?? "";
+  }
+  return null;
 }
 
 /** The first `outcome-observed:` line decides; a malformed one is no observation (`observationProblem` names it). */
@@ -81,7 +90,9 @@ export function observationProblem(journal: string | null): string | null {
  */
 function docpackObservationLine(source: DocpackSource): string | null {
   for (const document of [source.readme ?? null, source.primary]) {
-    const body = document === null ? null : sectionOf(document, /^outcome observations$/i);
+    const section = document === null ? null : sectionOf(document, /^outcome observations$/i);
+    // Fences and HTML comments are not observations; a section empty after stripping is no observation, not a failure.
+    const body = section === null ? null : proseOutsideFences(section);
     const line = body?.split(/\r?\n/).find((candidate) => candidate.trim().length > 0);
     if (line !== undefined) return line.trim().replace(/^[-*][ \t]+/, "");
   }
