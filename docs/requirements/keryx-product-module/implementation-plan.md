@@ -91,15 +91,29 @@ The two shares are reported separately: flows that declared an outcome
 criterion, and flows that wrote `not measured — <reason>`. They are never added
 into one number, so G1a cannot be passed by writing `not measured` everywhere.
 
-G1a is also read separately for flows created by a person and flows created by
-an agent. A flow created by an agent has just read the instruction to fill the
-slot, so its declaration shows that the agent complied, not that anyone wants
-the outcome checked: that half is a **compliance check**, not acceptance, and
-only the share of flows created by a person answers the premise. Who created a
-flow is not recorded in flow.json; it is classified by hand when the ten flows
-are read, and the classification is recorded next to the reading. The split of
-a real criterion against `not measured — <reason>` above stays as a second axis
-inside each half.
+G1a is counted in **four cells**: who wrote the outcome criterion, `human` or
+`agent`, crossed with what the flow declared, a real criterion or
+`not measured — <reason>`. A flow created by an agent has just read the
+instruction to fill the slot, so its declaration shows that the agent complied,
+not that anyone wants the outcome checked: that half is a **compliance check**,
+not acceptance. Agent flows measure compliance with
+the instruction; human flows measure acceptance. The author is recorded in
+flow.json as `outcomeAuthor` (`keryx flow init --outcome-author agent|human`,
+default `agent`; `keryx flow outcome author <id> agent|human --reason "<why>"`
+changes it and leaves a journal line), so the cells are counted from the files
+rather than sorted by a reader, and `keryx product open` and `keryx flow status` print
+the author. A flow written before the field existed reads `unknown` and sits in
+neither the human nor the agent column. The flag labels a sample and gates
+nothing.
+
+| G1a cell | real criterion | `not measured — <reason>` |
+| --- | --- | --- |
+| author `human` | read as acceptance | read as acceptance |
+| author `agent` | read as compliance | read as compliance |
+
+Only the `human` row answers the premise. The real-criterion column against the
+`not measured` column stays the second axis inside each row, and the two are
+never added into one number.
 
 #### G1b — 2–4 weeks after those ten flows are released
 
@@ -107,6 +121,11 @@ G1b needs calendar time: an outcome cannot be observed before it has had time to
 happen, so it cannot be brought forward by writing more flows. Two to four weeks
 after the release of those 10 flows, count the share of those that declared a
 criterion which then got an `outcome-observed:` line with a verdict.
+
+G1b is split by author in the same way: the share observed is read for the
+flows whose criterion a human wrote and, separately, for those an agent wrote. A
+conclusion about whether people come back and check is drawn only from the human
+flows; the agent flows show that the loop runs, not that anyone wanted it to.
 
 - **A meaningful share was observed** → the queue is worked; continue.
 - **Near zero** → **STOP.** The queue becomes a warehouse: it lists what was
