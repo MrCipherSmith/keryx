@@ -2603,6 +2603,11 @@ The index is disposable. `.metaproject/data/product/` can be deleted at any time
 and `keryx product index` rebuilds an equivalent one. In the TUI, `/product` shows the same
 header and rows.
 
+Each entry also prints `outcome author:` — `agent`, `human`, or `unknown` for a
+flow that never recorded it (see [the outcome author](#the-outcome-author)). The
+index stores it as an optional field, so an index written before it existed stays
+valid; it labels the sample for G1a and gates nothing.
+
 ---
 
 ## hooks
@@ -3270,7 +3275,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -3282,6 +3287,7 @@ keryx flow task done <id> <taskId> [--disposition <d>] [--reason "<why>"]
 keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what>"]
 keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
 keryx flow owner set <id> --owner "<name>" --reason "<why>"
+keryx flow outcome author <id> agent|human --reason "<why>"
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
@@ -3302,9 +3308,10 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
-| `status <id>` | — | Print one flow: status, source, AC state, PR, owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
@@ -3617,6 +3624,28 @@ Every pre-existing `flow.json` with no `owner` or `signatures` field keeps
 loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
+
+### The outcome author
+
+A flow's `flow.json` can record who wrote its outcome criterion, as `outcomeAuthor`:
+`agent` or `human`. It labels a sample and nothing more, so that the product
+module's G1a can be read in four cells (`human` or `agent`, by a real criterion or
+`not measured — <reason>`) and G1b split by author: agent flows measure compliance
+with the instruction to fill the slot, human flows measure acceptance, and
+conclusions about acceptance are drawn only from human flows.
+
+**It is never inferred.** `flow init` records `agent` when `--outcome-author` is
+absent and `human` only when the flag says `human`, never from a git identity, an
+owner or the environment; any other value is refused before the flow is created.
+`keryx flow outcome author <id> agent|human --reason "<why>"` changes it: the
+reason is required, one `journal.md` line names the old value (or `unknown`), the
+new value and the reason, and the field and the line are written together;
+setting the value the flow already holds writes nothing. A flow created before the
+field existed reads `unknown` in `flow status`, `product open` and the TUI, and
+reading it never rewrites the file. The flag gates nothing: no completion, freeze,
+creation or index result, and no exit code, depends on it. With `--outcome-author
+human` the `## Outcome criteria` section of `description.md` is the template's own
+text, with no example inserted.
 
 ### The confirmation token
 
