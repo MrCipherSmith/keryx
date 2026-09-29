@@ -5,7 +5,7 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, sectionOf, statementFrom } from "../flow/description-intent";
+import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, sectionOf, statementFrom } from "../flow/service";
 import { OUTCOME_VERDICTS } from "./types";
 import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
 

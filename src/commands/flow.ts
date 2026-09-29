@@ -8,6 +8,7 @@ import {
   confirmPreconditionError,
   createFlowService,
   describeAcKind,
+  intentNoteForNewFlow,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
@@ -24,7 +25,6 @@ import {
 import { githubAdapter } from "../flow/tracker/github";
 import { repairMovedFlowReviewRecords } from "../review/flow-move";
 import { runCheckAc, tryAdvisoryCheckAc } from "./flow-check-ac";
-import { intentNoteForNewFlow } from "../flow/description-intent";
 import { createCodeHealthService } from "../health/service";
 import { securityFlowGate } from "../security/guard";
 import {

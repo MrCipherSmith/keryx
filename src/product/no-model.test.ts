@@ -10,7 +10,7 @@ import path from "node:path";
 
 const PRODUCT_DIR = import.meta.dir;
 
-const ALLOWED_IMPORTS = new Set(["node:crypto", "node:fs/promises", "node:path", "../lib/fs", "../flow/ac-kinds", "../flow/description-intent"]);
+const ALLOWED_IMPORTS = new Set(["node:crypto", "node:fs/promises", "node:path", "../lib/fs", "../flow/ac-kinds", "../flow/service"]);
 
 const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
   ["a provider client", /\b(?:createProvider|resolveProvider|providerClient|new\s+(?:Anthropic|OpenAI|GoogleGenerativeAI))\b/],

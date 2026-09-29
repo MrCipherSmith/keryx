@@ -58,6 +58,16 @@ import { buildAcKindReport, type AcKindRecord } from "./ac-kinds";
 // client-zone reader that needed it; every core-zone `review/jev-*-config.ts`
 // reader still imports `./review-gate` directly (core-to-core is allowed).
 export { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
+// Product module: the description reading helpers, reached through this facade.
+export {
+  OUTCOME_HINT,
+  fencedLines,
+  flowStatementFrom,
+  intentNoteForNewFlow,
+  proseOutsideFences,
+  sectionOf,
+  statementFrom,
+} from "./description-intent";
 export {
   AC_CHECK_TOKEN_BUDGET,
   acCheckCacheKey,
