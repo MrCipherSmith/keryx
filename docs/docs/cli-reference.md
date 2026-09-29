@@ -4135,6 +4135,11 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                     [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                      [--post] [--fixtures <dir>] [--json]
+keryx review metrics [--json] [--refresh] [--fixtures <dir>]
 keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
@@ -5584,6 +5589,29 @@ concurrency cap holds across the nesting.
 | `--reviewers a,b` | The reviewer set to plan into waves. |
 | `--parallel <n>` | Override the wave size (default 4). |
 | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
+
+### `review bot` and `review metrics`
+
+Review a pull request with one reviewer turn plus one verifier turn per finding, and
+measure what that came to. See [Review as a pull request bot](guides/review-as-a-pr-bot.md).
+
+```bash
+keryx review bot run --pr 7 --repo acme/app
+keryx review bot post --pr 7 --repo acme/app
+keryx review bot post --pr 7 --repo acme/app --post
+keryx review metrics --refresh
+```
+
+- `review bot run` calls the model and records the surviving findings as a managed
+  review. Nothing is posted. A fork pull request is refused before any model call, and
+  the diff is cut at `--max-diff-bytes` with the cut stated in the output.
+- `review bot post` builds one review (event `COMMENT`, pinned to the pull request head).
+  It is a dry run unless you pass `--post`, and it refuses a closed, merged or fork pull
+  request, a `--sha` that is not the head, and a review made at an older commit.
+- `review metrics` prints findings raised, acted on, dismissed by kind, answered and still
+  open, precision (acted on over acted on plus dismissed as incorrect) and
+  resolved-before-merge. A ratio with no data prints `n/a`. `--refresh` reads merge state
+  from GitHub first.
 
 ### `review tier`
 

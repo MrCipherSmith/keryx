@@ -173,6 +173,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // The managed pull request reviews and what the review bot's findings came to. The modal and
+    // the sidebar row need the OpenTUI surface; the readline agent REPL prints the same numbers as text.
+    name: "/reviews",
+    description: "Managed pull request reviews: findings by outcome, precision, resolved before merge",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

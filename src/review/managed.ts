@@ -1550,7 +1550,7 @@ const EMBEDDED_FINDINGS_FENCE = /^ {0,3}(`{3,}|~{3,})[^\n]*\bkeryx:findings\b[^\
  * is what used to: falling back to the prose parser while the report visibly
  * carries the structured array its author expected to be read.
  */
-function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindingsSource | null {
+export function parseEmbeddedFindings(report: string, reportLabel: string): ReviewFindingsSource | null {
   const fences = [...report.matchAll(EMBEDDED_FINDINGS_FENCE)];
   if (fences.length === 0) {
     return null;

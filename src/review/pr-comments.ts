@@ -33,7 +33,7 @@
  * ## Why nothing here can resolve a thread
  *
  * There is no code path to it. {@link guardGitHubRequest} holds an allow-list of
- * five endpoint shapes — three reads and two writes — and everything else,
+ * seven endpoint shapes — four reads and three writes — and everything else,
  * including the GraphQL endpoint through which `resolveReviewThread` and
  * `minimizeComment` are reached, is refused by the port itself. AC12 is therefore
  * a property of the module's shape rather than a rule someone has to follow:
@@ -122,16 +122,18 @@ export const ALLOWED_GITHUB_READS: readonly RegExp[] = [
 ];
 
 /**
- * The only two things this module may write.
+ * The only three things this module may write.
  *
  * A threaded reply, and — for the two comment kinds GitHub gives no thread to —
- * one PR-level comment. Nothing that resolves, hides, minimises, edits, deletes,
+ * one PR-level comment, and (the review bot, flow 368) one whole review
+ * submitted with event COMMENT. Nothing that resolves, hides, minimises, edits, deletes,
  * dismisses a review, or reaches GraphQL, because those are the operations that
  * would let this module silence the person it is answering.
  */
 export const ALLOWED_GITHUB_WRITES: readonly RegExp[] = [
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments\/\d+\/replies$/,
   /^repos\/[^/]+\/[^/]+\/issues\/\d+\/comments$/,
+  /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews$/,
 ];
 
 /**
@@ -149,13 +151,13 @@ export function guardGitHubRequest(request: GitHubRequest): void {
     return;
   }
   throw new Error(
-    `Refusing a GitHub ${request.method} to \`${request.path}\`: it is not one of the six endpoints this module may touch. ` +
-      `Reads: pulls/{n}, pulls/{n}/comments, pulls/{n}/reviews, issues/{n}/comments. Writes: pulls/{n}/comments/{id}/replies, issues/{n}/comments. ` +
+    `Refusing a GitHub ${request.method} to \`${request.path}\`: it is not one of the seven endpoints this module may touch. ` +
+      `Reads: pulls/{n}, pulls/{n}/comments, pulls/{n}/reviews, issues/{n}/comments. Writes: pulls/{n}/comments/{id}/replies, issues/{n}/comments, pulls/{n}/reviews. ` +
       `Resolving, hiding, minimising, editing and dismissing are deliberately unreachable — replying is ours, resolving is the reviewer's call, and a bot that auto-resolves is a bot that silences a human.`,
   );
 }
 
-async function callGitHub(port: GitHubPort, request: GitHubRequest): Promise<unknown> {
+export async function callGitHub(port: GitHubPort, request: GitHubRequest): Promise<unknown> {
   guardGitHubRequest(request);
   return port.request(request);
 }

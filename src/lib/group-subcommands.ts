@@ -134,6 +134,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "comments",
       "ci-triage",
       "conform",
+      "bot",
+      "metrics",
       "jev-rules",
       "jev-edit-guard",
       "jev-risk",

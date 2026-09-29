@@ -64,6 +64,11 @@ export type BusyDispatchTarget =
    */
   | "product"
   /**
+   * `/reviews`: the managed pull request reviews and what the bot's findings
+   * came to. Read-only over the packages on disk; never touches the main turn.
+   */
+  | "reviews"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
@@ -106,6 +111,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/governance") return "governance";
   if (commandName === "/triggers") return "triggers";
   if (commandName === "/product") return "product";
+  if (commandName === "/reviews") return "reviews";
   if (commandName === "/schedules") return "schedules";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";

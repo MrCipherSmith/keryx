@@ -132,6 +132,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
 | `/governance` | Show the last governance report, or run one in the background. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
+| `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 
 ## External agents, ACP and MCP
 
