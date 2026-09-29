@@ -38,9 +38,9 @@ even under `trust`. In `trust` mode the prompt therefore also offers `T` (the
 TUI dock: "Trust this tool (this session)") next to approve and deny. It skips
 future prompts for that **exact** tool name, for this interactive session only —
 never a wildcard, never a whole server, and never written to disk. The model
-cannot add to it, and `/new` and resuming a session clear it.
+cannot add to it, and `/new`, `/clear` and resuming a session clear it.
 
-Two rules keep the grant from becoming a way around the approval gate:
+Three rules keep the grant from becoming a way around the approval gate:
 
 - **Bound to the tool's definition.** The grant remembers a fingerprint of the
   tool's name, description and input schema as the server reported them when you
@@ -51,6 +51,36 @@ Two rules keep the grant from becoming a way around the approval gate:
   one from the trusted tool itself), the call asks even for a trusted tool, and
   the prompt does not offer `T` — it says why instead. The grant applies again
   from the next turn.
+- **Never offered for a tool its server marks destructive.** If the tool's
+  catalog entry says `destructiveHint: true`, `T` is not offered (dock and
+  prompt alike) and the prompt says why. The check reads the live catalog on
+  every call, so a grant made while the tool looked harmless is dropped, and the
+  call asks again, once the server starts reporting `destructiveHint: true`. A
+  tool with **no** annotation, or `destructiveHint: false`, is treated as it
+  always was and is still offered `T`. The hint is advisory and comes from the
+  server, and the MCP default for a missing hint is "destructive", which would
+  withhold trust from nearly every server; keryx only acts on an explicit `true`.
+
+### Seeing and revoking grants
+
+A tool that holds a grant carries a `[trusted]` marker: on its approval lines
+(when it still has to ask, for example next to untrusted content), on the line
+printed when it runs without asking, in the `/mcp` server view (a per-server
+count), and in the list below.
+
+```text
+/mcp trust list                    # every trusted tool, by full name and server
+/mcp trust revoke <server__tool>   # revoke one; it asks again on its next call
+/mcp trust revoke all              # revoke everything
+```
+
+`list` shows `(will ask again: changed | destructive | gone)` instead of `[trusted]`
+for a grant the next call would not honour: the definition changed, the tool now
+reports `destructiveHint: true`, or it left the catalog.
+
+Revoke takes the full `server__tool` name exactly as `list` prints it. An
+unknown name is reported and changes nothing. These work while the agent is
+busy, and in the readline shell as well as the TUI.
 
 ## Setting the mode
 

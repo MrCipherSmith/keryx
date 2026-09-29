@@ -6236,7 +6236,11 @@ you — including a server awaiting `trust` or a variable you have not set.
 keryx is connected to — status, tool count, why a failed one failed, and
 the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
 session's live state and never dials anything itself, so opening it is
-free.
+free. A server that holds session-trusted tools carries a `[trusted]` marker
+with their count. `/mcp trust list` prints every trusted tool by full name;
+`/mcp trust revoke <server__tool>` (or `all`) removes grants. Both also run
+while the agent is busy and in the readline shell. See
+[Permission modes](./guides/permission-modes.md#trusting-one-mcp-tool-for-the-session).
 
 Do not confuse it with `/integrate`, which is the opposite direction:
 that is where keryx ITSELF is registered into an editor's MCP config. (The

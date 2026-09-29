@@ -147,7 +147,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/delegate` | Hand a task to an external agent CLI — /delegate <agent> <task>. |
 | `/demote` | Move a running foreground task to the background — /demote <task_id>. |
-| `/mcp` | MCP servers keryx is connected to — status, connect/disconnect. |
+| `/mcp` | MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all (session trust). |
 | `/integrate` | Wire this project into an editor over MCP (keryx integrate; see also keryx integrations). |
 | `/bus` | Message or view peers on the project agent bus — /bus @<name> <text>. |
 | `/workspace` | Show this session's SAC workspace and its slates. |

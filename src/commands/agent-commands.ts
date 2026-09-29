@@ -360,7 +360,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // and a slash command carries no flags to say which you invoked.
     // Guarded by agent-commands.confusable.test.ts.
     name: "/mcp",
-    description: "MCP servers keryx is connected to — status, connect/disconnect",
+    description: "MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all",
     // TUI-only, same reasoning as /review: it renders into the transcript
     // of an OpenTUI session.
     modes: AGENT_ONLY,

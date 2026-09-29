@@ -537,7 +537,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/mcp",
     group: "External agents, ACP and MCP",
-    summary: "MCP servers keryx is connected to — status, connect/disconnect.",
+    summary: "MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all (session trust).",
   },
   {
     kind: "slash",

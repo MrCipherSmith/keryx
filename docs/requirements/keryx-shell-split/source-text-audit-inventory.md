@@ -346,6 +346,17 @@ layout has an injectable or queryable composition seam.
 to the asynchronous Main recipient branch. The queue timing and forced/FIFO
 behaviour are tested directly through that helper in the same test file.
 
+### Added by flow 360 (MCP session trust)
+
+`tui/mcp-trust-shell-wiring.test.ts` reads `tui-shell.ts` once to pin that
+`startNewSession` (the one path behind `/new` and `/clear`) clears
+`io.trustedMcpTools` only after the new session opened, that `/mcp trust` is
+routed both idle and busy, and that the dock withholds and marks trust. There
+is no seam that runs `launchTuiAgentShell` headlessly; the behaviour behind
+each call (parse, list, revoke, withheld reason, marker) is tested directly in
+`mcp-servers/approval-render.trust.test.ts` and
+`commands/agent-permission-mode.test.ts`.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -372,6 +383,7 @@ tui/connect-provider-buttons.test.ts | tui/tui-shell.ts | 1
 tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
+tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
