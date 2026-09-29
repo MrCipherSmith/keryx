@@ -407,7 +407,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "tasks",
     command: "flow status",
-    summary: "One flow's full status: lifecycle state, AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
+    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
     intent: ["статус флоу", "flow status", "flow details", "show one flow"],
     args: [{ name: "<id>", type: "string", required: true, desc: "flow id" }],
     json: false,
@@ -419,7 +419,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     summary:
       "Create a new flow (managed work item): allocates an id, scaffolds its directory, and collects initial " +
       "context from the source issue if one is given. `--owner` is NEVER inferred — only an explicit value " +
-      "on this command populates it.",
+      "on this command populates it. `--outcome-author` records who wrote the outcome criterion (default " +
+      "`agent`; `human` only when the flag says so).",
     intent: ["создай флоу", "flow init", "start a new flow", "new managed work item", "заведи флоу"],
     args: [
       { name: "title", type: "string", required: false, desc: "work title; required unless --issue is given" },
@@ -432,6 +433,12 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
         type: "bool",
         required: false,
         desc: "opt this flow into the confirmation gate: `flow complete` then needs a token minted by `flow confirm` (flow 299)",
+      },
+      {
+        name: "outcome-author",
+        type: "string",
+        required: false,
+        desc: "who wrote the outcome criterion: agent (the default when omitted) or human; never inferred, any other value is refused before the flow is created; gates nothing",
       },
     ],
     json: false,
@@ -454,6 +461,22 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: false,
     read: false,
     sideEffects: ["writes flow.json's owner field (basis: stated) and appends a history entry"],
+  },
+  {
+    module: "tasks",
+    command: "flow outcome author",
+    summary:
+      "Change who wrote a flow's outcome criterion (agent or human). Requires a reason; appends one journal line " +
+      "naming the old value (or `unknown`), the new value and the reason, and writes nothing when the value is unchanged. Gates nothing.",
+    intent: ["кто написал критерий исхода", "flow outcome author", "set outcome author", "mark outcome criterion as human", "автор критерия исхода"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "<agent|human>", type: "string", required: true, desc: "who wrote the outcome criterion" },
+      { name: "reason", type: "string", required: true, desc: "why the author is being set or changed; one line" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's outcomeAuthor field and appends one journal.md line and a history entry"],
   },
   {
     module: "tasks",

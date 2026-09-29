@@ -9,6 +9,7 @@ import {
   createFlowService,
   describeAcKind,
   intentNoteForNewFlow,
+  readOutcomeAuthor,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
@@ -348,6 +349,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runCheckAcCommand(args.slice(1));
       case "owner":
         return await runOwner(args.slice(1));
+      case "outcome":
+        return await runOutcome(args.slice(1));
       case "implemented":
         return await runImplemented(args.slice(1));
       case "complete":
@@ -397,6 +400,8 @@ async function runInit(args: string[]): Promise<void> {
     // Flow 299 (AC2): opt this flow into the confirmation gate. The project
     // default (`completion.require_confirmation`) is read by the service.
     requireConfirmation: args.includes("--require-confirmation"),
+    // Never inferred: `agent` unless the flag is given, `human` only when it says so.
+    outcomeAuthor: outcomeAuthorFlag(args),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -406,6 +411,7 @@ async function runInit(args: string[]): Promise<void> {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
   console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
+  console.log(`  outcome author: ${readOutcomeAuthor(result.flow.outcomeAuthor)}`);
   if (result.flow.gates?.confirmation) {
     console.log(`  confirmation: required ${style.dim("(a terminal-minted token: `keryx flow confirm <id>`)")}`);
   }
@@ -422,6 +428,17 @@ async function runInit(args: string[]): Promise<void> {
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,
     `Freeze and start: ${style.cyan(`keryx flow freeze ${result.flow.id}`)} then ${style.cyan(`flow start ${result.flow.id}`)}.`,
   ]);
+}
+
+/**
+ * The raw `--outcome-author` value, or `undefined` when the flag is absent. A flag
+ * given with no value (`--outcome-author` last, or followed by another flag) is
+ * passed on as an empty string so the service refuses it, rather than reading as
+ * an omitted flag and quietly taking the default.
+ */
+function outcomeAuthorFlag(args: string[]): string | undefined {
+  const given = args.some((arg) => arg === "--outcome-author" || arg.startsWith("--outcome-author="));
+  return given ? (optionValue(args, "--outcome-author") ?? "") : undefined;
 }
 
 async function runPlan(args: string[]): Promise<void> {
@@ -559,6 +576,9 @@ async function runStatus(args: string[]): Promise<void> {
   // Flow 289, AC7: owner and the latest signature, in the same line style as
   // the rows above — no reader should have to open flow.json by hand to
   // learn who owns or last signed this flow.
+  // The author of the outcome criterion. A flow without the field reads `unknown`,
+  // and reading it writes nothing.
+  console.log(`  outcome author: ${readOutcomeAuthor(flow.outcomeAuthor)}`);
   console.log(
     `  owner:   ${flow.owner?.value ? `${flow.owner.value} ${style.dim(`[${flow.owner.basis}]`)}` : style.dim("not set")}`,
   );
@@ -947,6 +967,43 @@ async function runOwner(args: string[]): Promise<void> {
     return;
   }
   throw new Error('Usage: keryx flow owner set <id> --owner "<name>" --reason "<why>"');
+}
+
+const OUTCOME_AUTHOR_USAGE = 'Usage: keryx flow outcome author <id> agent|human --reason "<why>"';
+
+async function runOutcome(args: string[]): Promise<void> {
+  if (args[0] !== "author") {
+    throw new Error(OUTCOME_AUTHOR_USAGE);
+  }
+  // `<id> <agent|human>` are the two positionals; `--reason`'s value is not one of them.
+  const rest = args.slice(1);
+  const positionals: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] ?? "";
+    if (arg === "--reason") {
+      i += 1;
+    } else if (!arg.startsWith("--")) {
+      positionals.push(arg);
+    }
+  }
+  const id = positionals[0];
+  const author = positionals[1];
+  if (!id || author === undefined || positionals.length > 2) {
+    throw new Error(OUTCOME_AUTHOR_USAGE);
+  }
+  const before = readOutcomeAuthor((await getService().get({ cwd: process.cwd(), id })).outcomeAuthor);
+  const flow = await getService().outcomeAuthorSet({
+    cwd: process.cwd(),
+    id,
+    author,
+    reason: optionValue(rest, "--reason") ?? "",
+  });
+  const after = readOutcomeAuthor(flow.outcomeAuthor);
+  console.log(
+    before === after
+      ? `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`
+      : `  ${style.green(symbols.ok)} Outcome author ${before} ${style.cyan(symbols.arrow)} ${style.bold(after)}`,
+  );
 }
 
 async function runAc(args: string[]): Promise<void> {
@@ -1446,6 +1503,7 @@ function printHelp(): void {
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
+    'keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
@@ -1470,6 +1528,12 @@ function printHelp(): void {
       "RAN the command, not necessarily who signed), then to `unknown`. None of these is proof " +
       "a human signed: a flag, an environment variable, and a local git identity can all be set " +
       "by an agent. `--owner` is never inferred at all — see docs/decisions/keryx-harness/.",
+  );
+  note(
+    "`flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag " +
+      "is absent) or `human`, and `human` only when the flag says so — never inferred from a git " +
+      "identity, an owner or the environment. A flow without the field reads `unknown`. The flag " +
+      "labels a sample and gates nothing.",
   );
   note(
     "`flow confirm` mints a short-lived, single-use token only for a flow created with " +
