@@ -331,6 +331,27 @@ describe("classifyCodexFailure — the recorded no-credentials run", () => {
   });
 });
 
+describe("classifyCodexFailure — the expired-login wording of codex-cli 0.159.0", () => {
+  // Recorded 2026-09-29 through `keryx agents external run codex-cli`: a login
+  // that had expired ended the turn with this exact message, no 401 in it, and
+  // the codec reported a generic failed turn instead of naming `codex login`.
+  const message = "Your access token could not be refreshed. Please log out and sign in again.";
+  const outcome: ProcessOutcome = {
+    exitCode: 1,
+    stdout: "",
+    stderr: "",
+    timedOut: false,
+    prompt: PROMPT,
+    events: [{ kind: "child_failed", message }],
+  };
+
+  test("classifies an unrefreshable token as an auth failure", () => {
+    expect(classifyCodexFailure(outcome)).toBe(
+      "codex-cli has no usable credentials (authentication rejected); run `codex login` and retry",
+    );
+  });
+});
+
 describe("classifyCodexFailure — argv rejected by this CLI version", () => {
   const outcome = outcomeOf(undefined, { exitCode: 2, stderr: fixture("bad-argv.stderr.txt") });
 

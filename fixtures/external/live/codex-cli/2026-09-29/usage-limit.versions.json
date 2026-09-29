@@ -1,0 +1,12 @@
+{
+  "codex": "0.159.0",
+  "keryx": "0.3.35",
+  "os": "linux",
+  "recordedAt": "2026-09-29",
+  "command": "keryx agents external run codex-cli --task \"reply with the single word ok; change nothing\" --unattended --json",
+  "notes": "Flow 366. The first real codex-cli failure keryx has observed: a subscription usage limit, the case usage-limit.SYNTHETIC.jsonl in fixtures/external/codex-cli/ was hand-authored for. outcome.json is a real dispatch through keryx's own run command; stream.jsonl is the raw stdout of the same argv run directly. No successful codex run was recorded: the subscription was at its limit until 2026-10-03. Schema and worktree paths in the outcome are redacted.",
+  "exit": 1,
+  "outcomeStatus": "Denied",
+  "skippedLines": 0,
+  "sessionRef": "01a0ed9f-fc5c-7e02-97f5-e9e1b536c628"
+}

@@ -1,0 +1,12 @@
+{
+  "claude": "2.1.280",
+  "keryx": "0.3.35",
+  "os": "linux",
+  "recordedAt": "2026-09-29",
+  "command": "keryx agents external run claude-cli --task \"reply with the single word ok; change nothing\" --unattended --json",
+  "notes": "Flow 366. outcome.json is the outcome of a real dispatch through keryx's own agents-external run command. stream.jsonl is the raw stdout of the same argv run directly a second time (the runtime does not keep raw stdout); stderr.txt is its stderr, a vendor warning about union types in the result schema that does not affect the run. Redacted in the stream: cwd, slash_commands and skills (the operator's local skill names), messaging_socket_path, and the account's rate-limit utilisation and reset times. worktreePath in the outcome is redacted to '<worktree>'.",
+  "exit": 0,
+  "outcomeStatus": "Completed",
+  "skippedLines": 0,
+  "sessionRef": "c280f1d2-3c15-42ee-b691-1554d985db20"
+}
