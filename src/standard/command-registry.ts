@@ -1144,6 +1144,29 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: true,
   },
   {
+    module: "product",
+    command: "product index",
+    summary:
+      "Read every flow and requirements package into a disposable intent index. Reports the entries that state no intent. " +
+      "Deterministic: a second run writes the same bytes. Nothing reads product data from anywhere else.",
+    intent: ["product index", "индекс намерений", "what did the product set out to do", "index flow intents"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the index as JSON instead of a summary" }],
+    json: true,
+    read: false,
+    sideEffects: ["writes .metaproject/data/product/index.json"],
+  },
+  {
+    module: "product",
+    command: "product open",
+    summary:
+      "Intents closed in code with no recorded look back, each with its flow and outcome criterion, or " +
+      '"not measured — no instrument stated". Refuses to answer from a missing or stale index.',
+    intent: ["product open", "что закрыто но не проверено", "shipped but never checked", "flows nobody looked back at"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON instead of text" }],
+    json: true,
+    read: true,
+  },
+  {
     module: "hooks",
     command: "hooks list",
     summary:

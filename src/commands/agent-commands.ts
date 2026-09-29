@@ -168,6 +168,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
+    // the OpenTUI surface. Reads the index; never rebuilds it.
+    name: "/product",
+    description: "Intents closed in code that nobody looked back at, with their outcome criteria",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
     // background run and the report modal all need the OpenTUI surface.
     name: "/governance",

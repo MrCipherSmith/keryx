@@ -67,6 +67,7 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+import { isProductCommand, openProduct } from "./product-open-surface";
 // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
 // CLI does — no separate TUI-only Jev path. Never triggered automatically;
 // only on an explicit key press.
@@ -6336,6 +6337,9 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    const showProduct = (): void => {
+      void openProduct(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys });
+    };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
       openGamesModal(otui, chrome, {
@@ -7468,6 +7472,10 @@ export async function launchTuiAgentShell(opts: {
             routeOpsCommand(line, true, ops);
             return;
           }
+          case "product": {
+            showProduct();
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
             return;
@@ -7864,6 +7872,10 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeOpsCommand(line, false, ops)) {
+          return;
+        }
+        if (isProductCommand(command.name)) {
+          showProduct();
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {

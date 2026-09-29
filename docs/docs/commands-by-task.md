@@ -118,6 +118,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+| `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
 
@@ -127,6 +128,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
 | `/governance` | Show the last governance report, or run one in the background. |
+| `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 
 ## External agents, ACP and MCP
 

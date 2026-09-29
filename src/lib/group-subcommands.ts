@@ -218,6 +218,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["schedule", ["add", "list", "show", "pause", "resume", "run", "remove"]],
   // commands/governance.ts:86-90
   ["governance", ["report", "show"]],
+  // commands/product.ts (productCommand dispatch)
+  ["product", ["index", "open"]],
   // commands/hooks.ts:1247-1271 (excludes the unrelated hook-event-name switch earlier in the same file)
   ["hooks", ["list", "validate", "test", "enable", "disable", "trust", "untrust"]],
   // commands/bundle.ts:52-68

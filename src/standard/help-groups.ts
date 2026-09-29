@@ -425,6 +425,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "product",
+    group: "Automation",
+    summary: "The product's intent as a derived index, and the intents closed in code that nobody looked back at.",
+  },
+  {
+    kind: "cli",
     name: "hooks",
     group: "Automation",
     summary: "Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration.",
@@ -458,6 +464,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/governance",
     group: "Automation",
     summary: "Show the last governance report, or run one in the background.",
+  },
+  {
+    kind: "slash",
+    name: "/product",
+    group: "Automation",
+    summary: "Intents closed in code that nobody looked back at, with their outcome criteria.",
   },
 
   // ---- External agents, ACP and MCP ----------------------------------------

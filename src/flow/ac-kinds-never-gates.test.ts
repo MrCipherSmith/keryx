@@ -143,6 +143,8 @@ describe("where a kind is read", () => {
     "src/governance/accountability.ts",
     "src/governance/aggregate.ts",
     "src/governance/types.ts",
+    "src/product/extract.ts",
+    "src/product/types.ts",
     "src/tui/ac-kinds-surface.ts",
     "src/tui/flow-inspector.ts",
     "src/tui/inspector-sources.ts",

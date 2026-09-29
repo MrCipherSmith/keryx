@@ -639,6 +639,17 @@ Grouped by what you are trying to do, not by internal module layout.
   where `r` re-runs it. Sessions written by `keryx agents external run` appear
   in `/sessions` marked `acp:<agent>`. See the
   [CLI reference](docs/docs/cli-reference.md#governance).
+- **product** — two commands, no gate. `keryx product index` reads every flow
+  and every `docs/requirements/*/` package into a disposable intent index under
+  `.metaproject/data/product/` and reports how many entries state no intent.
+  `keryx product open` lists the intents closed in code that nobody looked back
+  at, each with its outcome criterion or `not measured — no instrument stated`,
+  and splits the count three ways: no outcome criterion stated, criterion
+  stated but never observed, observed. An observation is a line starting
+  `outcome-observed:` in the flow's `journal.md`. Nothing calls it
+  automatically and no flow transition waits on it. In the TUI, `/product`
+  shows the same header and rows. See the
+  [CLI reference](docs/docs/cli-reference.md#product).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
