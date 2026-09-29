@@ -1,0 +1,1 @@
+strict mode: use allowUnionTypes to allow union type keyword at "#/properties/questions/items/properties/can_be_resolved_by_agent" (strictTypes)

@@ -320,7 +320,7 @@ directly in a unit-style check (`bun test` already covers this — see
 | DELEG-02 | `/delegate` with an unknown agent id | **TUI required** | `parseDelegateCommand`'s exact refusal text, names `codex-cli, claude-cli` |
 | DELEG-03 | `/delegate` with an agent but no task (or vice versa) | **TUI required** | `needs both an agent and a task` refusal |
 | DELEG-04 | `keryx agents external list [--json] [--no-probe]` — read-only, spends no quota | **Not yet tested** | Reports installed/not-installed/not-probed per agent, only ever runs `--version` |
-| DELEG-05 | A real, capability-enabled dispatch (if this machine has `claude`/`codex` CLI installed and logged in) | **Not yet tested — explicitly flagged in `harness.md` as never run against a real vendor process, project-wide** | Disposable worktree, stripped env, restricted tool roster — see `harness.md`'s own detailed contract |
+| DELEG-05 | A real, capability-enabled dispatch (if this machine has `claude`/`codex` CLI installed and logged in) | **Live-verified 2026-09-29** — claude 2.1.280 and agy 1.2.12 `Completed` end to end; codex-cli 0.159.0 real run hit its usage limit (failure path only, success pending the limit reset); Gemini unverified. Transcripts in `fixtures/external/live/`, replayed offline, re-recorded with `KERYX_LIVE_EXTERNAL=1` | Disposable worktree, stripped env, restricted tool roster — see `harness.md`'s own detailed contract |
 
 ## 14. Compaction
 

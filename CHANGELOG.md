@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.36] — 2026-09-29
+### Added
+- **External agents verified against real vendor processes** — `claude` 2.1.280 and `agy` 1.2.12 ran end to end through `keryx agents external run` and ended `Completed`; the raw transcripts, each with its vendor version, are in `fixtures/external/live/` and replay offline in `live-fixtures.test.ts`. A fixture-scan test fails on any home path, e-mail, token or vendor credential-store reference. Live tests re-record the runs when `KERYX_LIVE_EXTERNAL=1`.
+- **The first real codex-cli failure is recorded** — a subscription usage limit on codex 0.159.0, replacing the hand-authored stand-in as the reference for the limit classifier. No successful codex run exists yet; the subscription was at its limit until 2026-10-03.
+### Fixed
+- **codex-cli 0.159.0's expired-login wording is classified as an authentication failure** — "Your access token could not be refreshed. Please log out and sign in again." now yields the `codex login` hint instead of an unclassified failure.
+### Docs
+- `harness.md` and the shell/TUI test catalog no longer say the external runtime was never run against a real vendor process; they name the verified versions and keep Gemini and a successful codex run marked unverified.
+
 ## [0.3.35] — 2026-09-29
 
 ### Added
