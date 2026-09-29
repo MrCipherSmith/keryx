@@ -55,7 +55,7 @@ function reject(args: readonly string[], valued: readonly string[], boolean: rea
 async function portFor(args: string[]): Promise<GitHubPort> {
   const fixtures = optionValue(args, "--fixtures");
   if (fixtures === undefined) return createGhPort();
-  let pull: unknown = {};
+  let pull: unknown;
   try {
     pull = JSON.parse(await readFile(join(fixtures, "pull.json"), "utf8")) as unknown;
   } catch {
