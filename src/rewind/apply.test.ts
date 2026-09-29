@@ -77,6 +77,24 @@ test("a failed persist keeps the conversation, and the files stay recoverable th
   expect(outcome.lines.join("\n")).toContain("disk full");
 });
 
+test("after a history rewind, snapshots taken later stay file-only so a regrown archive cannot be cut at a stale index", async () => {
+  const s = await setup();
+  s.recorder.beginTurn({ archiveIndex: 4, prompt: "three" });
+  write(s.project.root, "b.txt", "later\n");
+  await s.recorder.beforeMutation();
+  const later = s.recorder.entries().find((entry) => entry.archiveIndex === 4)!;
+
+  await applyRewind({ recorder: s.recorder, seq: s.seq, mode: "history", history: s.history, archive: s.archive, canPersist: () => true, persist: () => {} });
+
+  expect(s.recorder.entries().find((entry) => entry.seq === later.seq)!.archiveIndex).toBeNull();
+  expect(s.recorder.entries().find((entry) => entry.seq === s.seq)!.archiveIndex).toBe(2);
+  const refused = await applyRewind({ recorder: s.recorder, seq: later.seq, mode: "both", history: s.history, archive: s.archive, canPersist: () => true, persist: () => {} });
+  expect(refused.ok).toBe(false);
+  expect(refused.lines.join("\n")).toContain("only files can be rolled back");
+  const filesStillWork = await applyRewind({ recorder: s.recorder, seq: later.seq, mode: "files", history: s.history, archive: s.archive, canPersist: () => true, persist: () => {} });
+  expect(filesStillWork.ok).toBe(true);
+});
+
 test("an unknown snapshot is refused", async () => {
   const s = await setup();
   const outcome = await applyRewind({ recorder: s.recorder, seq: 999, mode: "files", history: s.history, archive: s.archive, canPersist: () => true, persist: () => {} });

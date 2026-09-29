@@ -37,6 +37,8 @@ export interface RewindRecorder {
   entries(): RewindEntry[];
   describe(): Promise<RewindListing[]>;
   restoreFiles(seq: number): Promise<RewindFilesOutcome>;
+  /** After the conversation is cut at `seq`, later snapshots no longer point at a real message: keep them as file-only restore points. */
+  detachHistoryAfter(seq: number): Promise<void>;
   enabled(): boolean;
 }
 
@@ -165,6 +167,19 @@ export function createRewindRecorder(options: RewindRecorderOptions): RewindReco
         }
         return listings.reverse();
       });
+    },
+    async detachHistoryAfter(seq) {
+      const dir = options.dir();
+      if (dir === undefined) return;
+      const manifest = manifestFor(dir);
+      let changed = false;
+      for (const entry of manifest.entries) {
+        if (entry.seq > seq && entry.archiveIndex !== null) {
+          entry.archiveIndex = null;
+          changed = true;
+        }
+      }
+      if (changed) await serial(() => saveManifest(dir, manifest));
     },
     async restoreFiles(seq) {
       const dir = options.dir();

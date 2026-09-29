@@ -69,6 +69,7 @@ export async function applyRewind(input: RewindApplyInput): Promise<RewindApplyO
       return { ok: false, historyRewound: false, filesRestored, lines };
     }
     historyRewound = true;
+    await input.recorder.detachHistoryAfter(input.seq);
     lines.push(`History: removed ${plural(conversation.removed, "message")} from the conversation.`);
   }
   return { ok: true, historyRewound, filesRestored, lines };
