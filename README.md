@@ -740,7 +740,10 @@ advertised surface stays a fixed cost instead of growing with your server
 list. Every call goes through the same approval prompt as `shell_exec`, a
 server is spawned without keryx's own credentials in its environment, and
 `--scope project` writes a `.keryx/mcp-servers.json` you can commit while
-`keryx mcp disable` stays personal to you.
+`keryx mcp disable` stays personal to you. In `--trust` mode you can trust one
+exact tool for the session (never one its server marks `destructiveHint`);
+`/mcp trust list` and `/mcp trust revoke <server__tool>|all` show and remove
+those grants.
 
 Remote servers work the same way — `keryx mcp add linear --transport http
 <url> --header 'Authorization: Bearer ${LINEAR_TOKEN}'` — and if that

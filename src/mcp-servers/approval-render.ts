@@ -31,6 +31,9 @@ import { toolDefinitionFingerprint } from "./catalog";
 import { parseJsonTolerant } from "./config";
 import { sanitiseForDisplay } from "./tools";
 
+/** The marker every surface prints beside a tool that holds a live session grant. */
+export const TRUSTED_MARKER = "[trusted]";
+
 /** How a qualified name splits. `server__tool`, per the catalog. */
 export const FQN_SEPARATOR = "__";
 
@@ -273,6 +276,8 @@ export function renderUseToolApprovalLines(
     readonly destructive?: boolean | undefined;
     readonly untrustedOrigin?: boolean | undefined;
     readonly mcpTrustWithheld?: boolean | undefined;
+    readonly mcpTrustWithheldReason?: "untrusted-origin" | "destructive" | undefined;
+    readonly mcpTrusted?: boolean | undefined;
   },
 ): string[] {
   const lines = [
@@ -281,7 +286,7 @@ export function renderUseToolApprovalLines(
     // the model wrote — so nothing in the payload can push them out of
     // view, because they are not in the payload. F-033.
     `  server: ${description.server}`,
-    `  tool:   ${description.tool}`,
+    `  tool:   ${description.tool}${meta?.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : ""}`,
     ...description.argumentLines.map((line) => `  ${line}`),
   ];
   if (description.argumentsTruncated) {
@@ -291,6 +296,9 @@ export function renderUseToolApprovalLines(
     lines.push("  this tool is treated as destructive — it is a third party's code");
   }
   for (const notice of untrustedOriginNotices(meta)) {
+    lines.push(`  ${notice}`);
+  }
+  for (const notice of destructiveTrustNotices(meta)) {
     lines.push(`  ${notice}`);
   }
   return lines;
@@ -309,13 +317,24 @@ export function renderUseToolApprovalLines(
 export function untrustedOriginNotices(meta?: {
   readonly untrustedOrigin?: boolean | undefined;
   readonly mcpTrustWithheld?: boolean | undefined;
+  readonly mcpTrustWithheldReason?: "untrusted-origin" | "destructive" | undefined;
 }): string[] {
   if (meta?.untrustedOrigin !== true) return [];
   const notices = ["⚠ follows untrusted external content — that content cannot authorize this call"];
-  if (meta.mcpTrustWithheld === true) {
+  if (meta.mcpTrustWithheld === true && meta.mcpTrustWithheldReason !== "destructive") {
     notices.push("trust for this session is not offered: this turn contains external content");
   }
   return notices;
+}
+
+/** Why the trust option is missing for a tool its server marks `destructiveHint: true`. */
+export function destructiveTrustNotices(meta?: {
+  readonly mcpTrustWithheld?: boolean | undefined;
+  readonly mcpTrustWithheldReason?: "untrusted-origin" | "destructive" | undefined;
+}): string[] {
+  return meta?.mcpTrustWithheld === true && meta.mcpTrustWithheldReason === "destructive"
+    ? ["trust for this session is not offered: this tool is marked destructive (destructiveHint) by its server"]
+    : [];
 }
 
 /**
@@ -326,10 +345,25 @@ export function untrustedOriginNotices(meta?: {
  * carries both flags still withholds the option.
  */
 export function mcpTrustOffered(
-  meta: { readonly mcpTrustAvailable?: boolean | undefined; readonly fingerprint?: string | undefined; readonly untrustedOrigin?: boolean | undefined } | undefined,
+  meta:
+    | {
+        readonly mcpTrustAvailable?: boolean | undefined;
+        readonly fingerprint?: string | undefined;
+        readonly untrustedOrigin?: boolean | undefined;
+        readonly mcpTrustWithheldReason?: "untrusted-origin" | "destructive" | undefined;
+      }
+    | undefined,
   resolvable: boolean,
+  destructive = false,
 ): boolean {
-  return meta?.mcpTrustAvailable === true && meta.untrustedOrigin !== true && meta.fingerprint !== undefined && resolvable;
+  return (
+    meta?.mcpTrustAvailable === true &&
+    meta.untrustedOrigin !== true &&
+    meta.mcpTrustWithheldReason !== "destructive" &&
+    !destructive &&
+    meta.fingerprint !== undefined &&
+    resolvable
+  );
 }
 
 /**
@@ -391,15 +425,18 @@ export async function promptUseToolApproval(
         readonly untrustedOrigin?: boolean | undefined;
         readonly mcpTrustAvailable?: boolean | undefined;
         readonly mcpTrustWithheld?: boolean | undefined;
+        readonly mcpTrustWithheldReason?: "untrusted-origin" | "destructive" | undefined;
+        readonly mcpTrusted?: boolean | undefined;
       }
     | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
   style?: { yellow: (t: string) => string; dim: (t: string) => string; green: (t: string) => string; red: (t: string) => string },
   gutter = "",
+  destructive?: (fqn: string) => boolean,
 ): Promise<ApprovalVerdict> {
   const paint = style ?? { yellow: (t) => t, dim: (t) => t, green: (t) => t, red: (t) => t };
   const described = describeUseToolApproval(input, resolve);
-  const canTrust = mcpTrustOffered(meta, resolve?.(described.fqn) !== undefined);
+  const canTrust = mcpTrustOffered(meta, resolve?.(described.fqn) !== undefined, destructive?.(described.fqn) === true);
   const lines = renderUseToolApprovalLines(described, meta);
 
   io.out("\n");
@@ -482,4 +519,86 @@ export function catalogFingerprintResolver(
     const entry = catalog?.entries.find((candidate) => candidate.fqn === fqn);
     return entry === undefined ? undefined : toolDefinitionFingerprint(entry);
   };
+}
+
+/**
+ * Whether the LIVE catalog entry for an FQN carries `destructiveHint: true`.
+ * Absent or `false` annotations are not destructive: they are advisory,
+ * server-supplied, and the MCP default of `true` would withhold trust from
+ * nearly every server.
+ */
+export function catalogDestructiveResolver(
+  catalog: { entries: readonly { fqn: string; annotations?: Record<string, unknown> | undefined }[] } | undefined,
+): (fqn: string) => boolean {
+  return (fqn) => catalog?.entries.find((candidate) => candidate.fqn === fqn)?.annotations?.destructiveHint === true;
+}
+
+export const MCP_TRUST_USAGE = "/mcp trust list | /mcp trust revoke <server__tool> | /mcp trust revoke all";
+
+export type McpTrustCommand =
+  | { readonly kind: "list" }
+  | { readonly kind: "revoke"; readonly target: string }
+  | { readonly kind: "revoke-all" }
+  | { readonly kind: "usage"; readonly reason: string };
+
+/**
+ * Parse `/mcp trust ...`. `undefined` means the line is not a trust command
+ * (plain `/mcp` opens the server view). Exact tokens only: `/mcp trusted` is
+ * not this command.
+ */
+export function parseMcpTrustCommand(line: string): McpTrustCommand | undefined {
+  const parts = line.trim().split(/\s+/);
+  if (parts[0] !== "/mcp" || parts[1] !== "trust") return undefined;
+  const sub = parts[2];
+  const rest = parts.slice(3);
+  if (sub === "list") {
+    return rest.length === 0 ? { kind: "list" } : { kind: "usage", reason: "`/mcp trust list` takes no argument" };
+  }
+  if (sub === "revoke") {
+    if (rest.length === 0) return { kind: "usage", reason: "`/mcp trust revoke` needs a tool name or `all`" };
+    if (rest.length > 1) return { kind: "usage", reason: "`/mcp trust revoke` takes ONE tool name or `all`" };
+    const target = rest[0] ?? "";
+    // A real FQN always contains `__`, so `all` cannot be a tool.
+    return target === "all" ? { kind: "revoke-all" } : { kind: "revoke", target };
+  }
+  return { kind: "usage", reason: sub === undefined ? "`/mcp trust` needs a subcommand" : `unknown subcommand \`${sanitiseIdentifier(sub, 40)}\`` };
+}
+
+/** Lines for `/mcp trust list`: every grant with its full name and server, marked trusted. */
+export function renderTrustedToolLines(
+  trusted: ReadonlyMap<string, string> | undefined,
+  resolve?: (fqn: string) => { server: string; tool: string } | undefined,
+): string[] {
+  if (trusted === undefined || trusted.size === 0) return ["No MCP tools are trusted in this session."];
+  const lines = [`Trusted MCP tools this session (${trusted.size}):`];
+  for (const fqn of [...trusted.keys()].sort()) {
+    const { server } = resolve?.(fqn) ?? splitFqn(fqn);
+    lines.push(`  ${sanitiseIdentifier(fqn)}  server: ${sanitiseIdentifier(server)}  ${TRUSTED_MARKER}`);
+  }
+  return lines;
+}
+
+/** Run a parsed trust command against the session's grant map and return what to print. */
+export function runMcpTrustCommand(
+  command: McpTrustCommand,
+  trusted: Map<string, string> | undefined,
+  resolve?: (fqn: string) => { server: string; tool: string } | undefined,
+): string[] {
+  switch (command.kind) {
+    case "usage":
+      return [`${command.reason}. Usage: ${MCP_TRUST_USAGE}`];
+    case "list":
+      return renderTrustedToolLines(trusted, resolve);
+    case "revoke-all": {
+      const count = trusted?.size ?? 0;
+      trusted?.clear();
+      return [count === 0 ? "No MCP tools were trusted; nothing to revoke." : `Revoked trust for ${count} MCP tool(s); each asks again on its next call.`];
+    }
+    case "revoke": {
+      if (trusted?.delete(command.target) === true) {
+        return [`Revoked trust for ${sanitiseIdentifier(command.target)}; it asks again on its next call.`];
+      }
+      return [`${sanitiseIdentifier(command.target)} is not trusted in this session; nothing changed. Use the full server__tool name (see /mcp trust list).`];
+    }
+  }
 }

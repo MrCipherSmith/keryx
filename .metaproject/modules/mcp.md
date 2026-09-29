@@ -28,6 +28,16 @@ protocol adapter — it defines no new module logic.
 - `keryx integrate --remove <cursor|claude|generic|all>` — remove the
   managed client config again.
 
+## Session trust (consumer side)
+
+Separate from serving: when keryx *calls* another server's tools through
+`use_tool`, `trust` mode can grant one exact tool for the interactive session.
+A tool whose live catalog entry has `destructiveHint: true` is never offered the
+grant, and a grant already held is dropped on the next call once the hint turns
+`true`; an absent or `false` hint changes nothing. `/mcp trust list` and
+`/mcp trust revoke <server__tool>|all` show and remove grants, and `/new`,
+`/clear` and resume clear them. Guide: `docs/docs/guides/permission-modes.md`.
+
 ## Notes
 
 - Requires the optional `@modelcontextprotocol/sdk`. Disabled by default.

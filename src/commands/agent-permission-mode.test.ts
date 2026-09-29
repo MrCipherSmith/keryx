@@ -1324,3 +1324,121 @@ test("MCP trust cannot be recorded from a stale approval fingerprint", async () 
   expect(ran).toBe(0);
   expect(trustedMcpTools.size).toBe(0);
 });
+
+// ---- Flow 360: destructive-tool trust withholding and the trusted marker ----
+
+interface DestructiveRun { metas: (ApprovalMeta | undefined)[]; autos: (ApprovalMeta | undefined)[]; trusted: Map<string, string>; invocations: number }
+
+async function runTwoUseToolCalls(opts: {
+  destructive: () => boolean;
+  answer: (n: number, meta: ApprovalMeta | undefined) => boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
+  untrusted?: boolean;
+  twoTurns?: boolean;
+  between?: () => void;
+}): Promise<DestructiveRun> {
+  const metas: (ApprovalMeta | undefined)[] = [];
+  const autos: (ApprovalMeta | undefined)[] = [];
+  let invocations = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => { invocations++; return { output: "ok", isError: false, ...(opts.untrusted ? { untrusted: true } : {}) }; },
+  };
+  const trusted = new Map<string, string>();
+  let n = 0;
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: trusted,
+    mcpToolFingerprint: mcpCatalogFingerprints(), mcpToolDestructive: () => opts.destructive(),
+    onAutoApproved: (_t, _i, meta) => { autos.push(meta as ApprovalMeta); },
+    requestApproval: async (_tool, _raw, meta) => { metas.push(meta); n++; return opts.answer(n, meta) as never; },
+  };
+  const deps = (script: Partial<NormalizedEvent>[][]) => ({ provider: scriptedProvider(script), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq });
+  const done = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }] as Partial<NormalizedEvent>[];
+  if (opts.twoTurns) {
+    await runAgentTurn(io, deps([useToolCall("c1"), done]), [], "one");
+    opts.between?.();
+    await runAgentTurn(io, deps([useToolCall("c2"), done]), [], "two");
+  } else {
+    await runAgentTurn(io, deps([useToolCall("c1"), useToolCall("c2"), done]), [], "run");
+  }
+  return { metas, autos, trusted, invocations };
+}
+
+const trustAnswer = (_n: number, meta: ApprovalMeta | undefined) => ({ approved: true, fingerprint: meta!.fingerprint, trustMcpTool: true });
+
+test("AC1: a destructiveHint tool is never offered trust and the meta says why", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => true, answer: trustAnswer });
+  expect(run.metas).toHaveLength(2);
+  for (const meta of run.metas) {
+    expect(meta).toMatchObject({ mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" });
+    expect("mcpTrustAvailable" in (meta ?? {})).toBe(false);
+  }
+  expect(run.trusted.size).toBe(0);
+});
+
+test("AC1: a host that answers trust for a destructive tool records no grant", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => true, answer: trustAnswer, twoTurns: true });
+  expect(run.metas).toHaveLength(2);
+  expect(run.trusted.size).toBe(0);
+});
+
+test("AC1: an absent or false annotation is offered trust as before", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer });
+  expect(run.metas[0]?.mcpTrustAvailable).toBe(true);
+  expect(run.metas[0]?.mcpTrustWithheldReason).toBeUndefined();
+  // Granted on the first call, so the second is auto-approved with no prompt.
+  expect(run.metas).toHaveLength(1);
+  expect(run.trusted.has("playwright__snapshot")).toBe(true);
+});
+
+test("AC1: with no destructive resolver at all the trust option is still offered", async () => {
+  let meta: ApprovalMeta | undefined;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "ok", isError: false }),
+  };
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: new Map(), mcpToolFingerprint: mcpCatalogFingerprints(),
+    requestApproval: async (_t, _r, m) => { meta = m; return { approved: true, fingerprint: m!.fingerprint }; },
+  };
+  await runAgentTurn(io, { provider: scriptedProvider([useToolCall("c1"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(meta?.mcpTrustAvailable).toBe(true);
+});
+
+test("AC2: a grant is dropped and the call asks again once the tool turns destructive", async () => {
+  let destructive = false;
+  const run = await runTwoUseToolCalls({
+    destructive: () => destructive,
+    answer: (n, meta) => (n === 1 ? trustAnswer(n, meta) : true),
+    twoTurns: true,
+    between: () => { destructive = true; },
+  });
+  expect(run.metas).toHaveLength(2);
+  expect(run.metas[1]).toMatchObject({ mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" });
+  expect(run.metas[1]?.mcpTrusted).toBeUndefined();
+  expect(run.trusted.size).toBe(0);
+  expect(run.invocations).toBe(2);
+});
+
+test("AC2: a grant still holds while the annotation stays absent", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer, twoTurns: true });
+  expect(run.metas).toHaveLength(1);
+  expect(run.invocations).toBe(2);
+});
+
+test("AC5: an auto-approved trusted call carries the trusted flag", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer, twoTurns: true });
+  expect(run.autos).toHaveLength(1);
+  expect(run.autos[0]?.mcpTrusted).toBe(true);
+});
+
+test("AC5: an approval that still asks under a live grant is marked trusted", async () => {
+  // The untrusted-content floor forces the second ask even though the grant is live.
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: (n, meta) => (n === 1 ? trustAnswer(n, meta) : true), untrusted: true });
+  expect(run.metas).toHaveLength(2);
+  expect(run.metas[0]?.mcpTrusted).toBeUndefined();
+  expect(run.metas[1]).toMatchObject({ untrustedOrigin: true, mcpTrusted: true });
+});
+
+test("AC7: a fingerprint change still drops a grant when the tool is not destructive", async () => {
+  const { approvals, trusted } = await trustThenCallAgain((entry) => { entry.description = "changed again"; });
+  expect(approvals).toBe(2);
+  expect(trusted.has("playwright__snapshot")).toBe(false);
+});
