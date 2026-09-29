@@ -4,12 +4,12 @@
 // never-checked count three ways.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { rm } from "node:fs/promises";
+import { appendFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { productCommand } from "../commands/product";
 import { buildIntentIndex } from "./corpus";
 import { FIXTURE_COUNTS, copyFixtureRepo } from "./fixtures/repo";
-import { NO_INSTRUMENT, buildOpenReport, loadOpenReport, openHeaderLines, renderOpen } from "./service";
+import { NO_INSTRUMENT, buildOpenReport, loadOpenReport, openHeaderLines, renderIndexSummary, renderOpen } from "./service";
 import { writeIntentIndex } from "./store";
 
 const roots: string[] = [];
@@ -64,9 +64,26 @@ describe("the open list", () => {
       "intents closed in code, never checked for effect: 3 of 4",
       "  no outcome criterion stated: 2",
       "  criterion stated, never observed: 1",
-      "  observed: 1",
+      "  observed: 1 (helped 1, no effect 0, harmed 0, inconclusive 0)",
     ]);
     expect(report.noCriterion + report.notObserved + report.observed).toBe(report.closed);
+  });
+
+  test("the header shows the verdict split next to the observed total, and the failure count only when non-zero", async () => {
+    const root = await indexedRoot();
+    await appendFile(path.join(root, ".metaproject", "flows", "001-2026-01-01-stated-outcome", "journal.md"), "outcome-observed: harmed — errors rose\n");
+    const index = await buildIntentIndex(root);
+    const report = buildOpenReport(index);
+    expect(openHeaderLines(report)).toContain("  observed: 2 (helped 1, no effect 0, harmed 1, inconclusive 0)");
+    expect(openHeaderLines(report).join("\n")).not.toContain("failures");
+    expect(renderIndexSummary(index, "x")).toContain("closed in code: 4 (observed 2: helped 1, no effect 0, harmed 1, inconclusive 0;");
+    await appendFile(path.join(root, ".metaproject", "flows", "003-2026-01-03-no-criterion", "journal.md"), "outcome-observed: it went fine\n");
+    const failing = buildOpenReport(await buildIntentIndex(root));
+    expect(failing.failures).toBe(1);
+    expect(openHeaderLines(failing).at(-1)).toBe("  index parse failures: 1 (`keryx product index` lists them)");
+    // 001 and 002 are observed; the malformed line on 003 leaves it in the queue.
+    expect(renderOpen(failing).split("\n")[0]).toBe("intents closed in code, never checked for effect: 2 of 4");
+    expect(renderOpen(failing)).toContain("flow 003  Rename the export button");
   });
 
   test("the rendered list carries the header, each flow and its outcome", async () => {
@@ -113,7 +130,7 @@ describe("the command", () => {
     console.log = (...args: unknown[]) => void logs.push(args.map(String).join(" "));
     await productCommand(["index"]);
     const output = logs.join("\n");
-    expect(output).toContain("Indexed 7 intents (5 flows, 2 requirements packages).");
+    expect(output).toContain("Indexed 8 intents (5 flows, 3 requirements packages).");
     expect(output).toContain("entries with no extractable intent statement: 1");
     expect(output).toContain("parse failures: 0");
     expect(process.exitCode ?? 0).toBe(0);

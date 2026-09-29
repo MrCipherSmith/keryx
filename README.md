@@ -645,8 +645,12 @@ Grouped by what you are trying to do, not by internal module layout.
   `keryx product open` lists the intents closed in code that nobody looked back
   at, each with its outcome criterion or `not measured — no instrument stated`,
   and splits the count three ways: no outcome criterion stated, criterion
-  stated but never observed, observed. An observation is a line starting
-  `outcome-observed:` in the flow's `journal.md`. Nothing calls it
+  stated but never observed, observed (split by verdict). A criterion goes in
+  the `## Outcome criteria` slot `flow init` leaves in `description.md`. An
+  observation is a line starting `outcome-observed: <verdict> — <note>` in the
+  flow's `journal.md`, with the verdict one of `helped`, `no-effect`, `harmed`,
+  `inconclusive`; a requirements package uses an `## Outcome observations`
+  section in its README.md. Nothing calls it
   automatically and no flow transition waits on it. In the TUI, `/product`
   shows the same header and rows. See the
   [CLI reference](docs/docs/cli-reference.md#product).

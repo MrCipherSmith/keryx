@@ -20,8 +20,15 @@ nothing here gates a flow, calls a model or runs by itself.
   `keryx product index`; stale means the index's content fingerprint of the
   flow and requirements files differs from the tree, never a file time)
 
-An observation is a line beginning `outcome-observed:` in the flow's
-`journal.md`. `index` reads it, and that flow leaves the `open` list.
+An outcome criterion is a `## Outcome criteria` section in the flow's
+`description.md` (`flow init` leaves the slot; an untouched hint is not a
+criterion; `not measured — <reason>` is no instrument). An observation is a line
+at column 0 of the flow's `journal.md`: `outcome-observed: <verdict> — <note>`,
+verdict one of `helped`, `no-effect`, `harmed`, `inconclusive`. A requirements
+package records `- <verdict> — <note>` under `## Outcome observations` in its
+README.md (stored only; the package stays open). `index` reads it, and that
+flow leaves the `open` list. A malformed line is a failure naming the flow or
+package: `index` exits non-zero and the flow stays in the `open` list.
 
 ## Data
 

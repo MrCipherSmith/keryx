@@ -1,0 +1,157 @@
+// A requirements package can record what happened after it shipped, as
+// `- <verdict> — <note>` lines under `## Outcome observations` in its README.
+// The index stores the verdict and note; a malformed line is a failure naming the
+// package. A package's status stays `open` whatever it says, so an observation
+// never removes it from the `open` list — it is stored and parsed, nothing more.
+
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { buildIntentIndex, corpusFingerprint } from "./corpus";
+import { docpackObservationFrom, docpackObservationProblem, extractDocpackIntent } from "./extract";
+import { FIXTURE_COUNTS, copyFixtureRepo } from "./fixtures/repo";
+import { buildOpenReport } from "./service";
+
+const roots: string[] = [];
+
+async function project(): Promise<string> {
+  const root = await copyFixtureRepo();
+  roots.push(root);
+  return root;
+}
+
+async function writePackage(root: string, name: string, files: Record<string, string>): Promise<void> {
+  const dir = path.join(root, "docs", "requirements", name);
+  await mkdir(dir, { recursive: true });
+  for (const [file, text] of Object.entries(files)) await writeFile(path.join(dir, file), text);
+}
+
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+describe("docpack observations", () => {
+  test("the fixture package stores its verdict, date and note", async () => {
+    const index = await buildIntentIndex(await project());
+    const pack = index.intents.find((intent) => intent.id === "gamma-package");
+    expect(pack?.outcome).toMatchObject({
+      observed: true,
+      verdict: "no-effect",
+      observedAt: "2026-03-01",
+      note: "2026-03-01 the merge-to-release lag did not change after the feature shipped",
+    });
+    expect(index.failures).toEqual([]);
+    expect(index.counts.docpacks).toBe(FIXTURE_COUNTS.docpacks);
+  });
+
+  test("a package without the section records no observation", async () => {
+    const index = await buildIntentIndex(await project());
+    expect(index.intents.find((intent) => intent.id === "alpha-package")?.outcome).toMatchObject({ observed: false, verdict: null, note: null });
+  });
+
+  test("an observed package stays `open` and stays out of the closed counts", async () => {
+    const index = await buildIntentIndex(await project());
+    const pack = index.intents.find((intent) => intent.id === "gamma-package");
+    expect(pack?.status).toBe("open");
+    expect(index.counts.closed).toBe(FIXTURE_COUNTS.closed);
+    expect(index.counts.observed).toBe(FIXTURE_COUNTS.observed);
+    expect(buildOpenReport(index).entries.map((entry) => entry.id)).not.toContain("gamma-package");
+  });
+
+  test("a bullet or a plain line reads the same, and the first line decides", () => {
+    const pack = (body: string) => ({ name: "p", primary: `# P\n\n## Outcome observations\n\n${body}\n`, specification: null });
+    expect(docpackObservationFrom(pack("- helped — it did")).verdict).toBe("helped");
+    expect(docpackObservationFrom(pack("* harmed — it broke")).verdict).toBe("harmed");
+    expect(docpackObservationFrom(pack("inconclusive — too early")).verdict).toBe("inconclusive");
+    expect(docpackObservationFrom(pack("- helped — first\n- harmed — later")).verdict).toBe("helped");
+  });
+
+  test("the README carries the section even when a PRD is the primary document", async () => {
+    const root = await project();
+    await writePackage(root, "delta-package", {
+      "prd.md": "# Delta\n\n## Problem\n\nSomething is slow. It has been for a while.\n",
+      "README.md": "# Delta\n\n## Outcome observations\n\n- harmed — 2026-04-02 it got slower\n",
+    });
+    const index = await buildIntentIndex(root);
+    expect(index.intents.find((intent) => intent.id === "delta-package")?.outcome).toMatchObject({ observed: true, verdict: "harmed" });
+  });
+
+  test("editing the README moves the corpus fingerprint even when a PRD is primary", async () => {
+    const root = await project();
+    await writePackage(root, "delta-package", { "prd.md": "# Delta\n", "README.md": "# Delta\n" });
+    const before = await corpusFingerprint(root);
+    await writePackage(root, "delta-package", { "README.md": "# Delta\n\n## Outcome observations\n\n- helped — fine\n" });
+    expect(await corpusFingerprint(root)).not.toBe(before);
+  });
+
+  test("a heading inside a code fence is not the section", () => {
+    const source = { name: "p", primary: "# P\n\n```md\n## Outcome observations\n- not a verdict\n```\n", specification: null };
+    expect(docpackObservationFrom(source).observed).toBe(false);
+    expect(docpackObservationProblem(source)).toBeNull();
+  });
+});
+
+describe("fences and comments in the observations section", () => {
+  const pack = (body: string) => ({ name: "p", primary: `# P\n\n## Outcome observations\n\n${body}\n`, specification: null });
+  const none = { observed: false, verdict: null, observedAt: null, note: null };
+
+  test("a fenced block is stripped: an example inside it is not an observation", () => {
+    const source = pack("```\n- helped — example\n```");
+    expect(docpackObservationFrom(source)).toEqual(none);
+    expect(docpackObservationProblem(source)).toBeNull();
+  });
+
+  test("a fenced example before a real line does not decide; the real line does", () => {
+    const source = pack("```\n- harmed — example\n```\n- helped — the real one");
+    expect(docpackObservationFrom(source).verdict).toBe("helped");
+    expect(docpackObservationProblem(source)).toBeNull();
+  });
+
+  test("an HTML comment is stripped, one line or several", () => {
+    for (const body of ["<!-- - helped — template -->", "<!--\n- helped — template\nsecond line\n-->", "<!-- add a verdict here -->"]) {
+      expect(docpackObservationFrom(pack(body))).toEqual(none);
+      expect(docpackObservationProblem(pack(body))).toBeNull();
+    }
+    expect(docpackObservationFrom(pack("<!-- note -->\n- harmed — real")).verdict).toBe("harmed");
+  });
+
+  test("a section that is empty after stripping is no observation, not a failure", async () => {
+    const root = await project();
+    await writePackage(root, "delta-package", { "README.md": "# Delta\n\n## Outcome observations\n\n<!-- none yet -->\n\n```\n- helped — example\n```\n" });
+    const index = await buildIntentIndex(root);
+    expect(index.failures).toEqual([]);
+    expect(index.intents.find((intent) => intent.id === "delta-package")?.outcome.observed).toBe(false);
+  });
+
+  test("non-empty text without a recognized verdict is still a failure, even beside a comment", () => {
+    expect(docpackObservationProblem(pack("<!-- hint -->\n- worked — yes"))).toContain("no recognized verdict");
+    expect(docpackObservationProblem(pack("```\n- helped — example\n```\nsome prose"))).toContain("no recognized verdict");
+  });
+
+  test("the grammar stays strict: bold verdicts and numbered lists are not accepted", () => {
+    expect(docpackObservationFrom(pack("- **helped** — note")).observed).toBe(false);
+    expect(docpackObservationFrom(pack("1. helped — note")).observed).toBe(false);
+    expect(docpackObservationProblem(pack("- **helped** — note"))).not.toBeNull();
+  });
+});
+
+describe("a malformed docpack observation", () => {
+  for (const line of ["- worked — yes", "- helped", "- helped - a hyphen", "- 2026-03-01 it helped"]) {
+    test(`\`${line}\` is a failure naming the package`, async () => {
+      const root = await project();
+      await writePackage(root, "delta-package", { "README.md": `# Delta\n\n## Outcome observations\n\n${line}\n` });
+      const index = await buildIntentIndex(root);
+      expect(index.failures).toHaveLength(1);
+      expect(index.failures[0]).toStartWith("docs/requirements/delta-package: outcome observation has no recognized verdict");
+      const pack = index.intents.find((intent) => intent.id === "delta-package");
+      expect(pack).toBeDefined();
+      expect(pack?.outcome.observed).toBe(false);
+      expect(pack?.status).toBe("open");
+    });
+  }
+
+  test("extraction of a package is a pure function of its text", () => {
+    const source = { name: "p", primary: "# P\n\n## Outcome observations\n\n- helped — fine\n", specification: null };
+    expect(extractDocpackIntent(source, "docs/requirements/p")).toEqual(extractDocpackIntent(source, "docs/requirements/p"));
+  });
+});

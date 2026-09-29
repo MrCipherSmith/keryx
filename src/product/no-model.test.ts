@@ -1,6 +1,6 @@
 // Flow 362, AC6: nothing in `src/product/` calls a model. A static audit of
 // every non-test source file: what it imports is a closed list of the standard
-// library, one file helper, the criteria parser and its own siblings, and no
+// library, one file helper, the criteria parser, the description reader and its own siblings, and no
 // line constructs a provider client, opens a network connection, starts a
 // process or dispatches a subagent.
 
@@ -10,7 +10,7 @@ import path from "node:path";
 
 const PRODUCT_DIR = import.meta.dir;
 
-const ALLOWED_IMPORTS = new Set(["node:crypto", "node:fs/promises", "node:path", "../lib/fs", "../flow/ac-kinds"]);
+const ALLOWED_IMPORTS = new Set(["node:crypto", "node:fs/promises", "node:path", "../lib/fs", "../flow/ac-kinds", "../flow/service"]);
 
 const FORBIDDEN: ReadonlyArray<readonly [string, RegExp]> = [
   ["a provider client", /\b(?:createProvider|resolveProvider|providerClient|new\s+(?:Anthropic|OpenAI|GoogleGenerativeAI))\b/],

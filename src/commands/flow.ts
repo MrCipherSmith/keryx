@@ -8,6 +8,7 @@ import {
   confirmPreconditionError,
   createFlowService,
   describeAcKind,
+  intentNoteForNewFlow,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
@@ -412,6 +413,8 @@ async function runInit(args: string[]): Promise<void> {
       console.log(`  ${style.cyan(symbols.bullet)} ${contextNote}`);
     }
   }
+  const intentNote = await intentNoteForNewFlow(process.cwd(), result.dir);
+  if (intentNote !== null) console.log(`  ${intentNote}`);
   nextSteps([
     "Enrich context.md, formalize description.md, and write plan.md.",
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,

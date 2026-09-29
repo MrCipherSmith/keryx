@@ -14,4 +14,4 @@ export {
   type OpenLoad,
 } from "./open";
 export { checkStaleness, indexPath, productDataRoot, readIntentIndex, serializeIndex, writeIntentIndex } from "./store";
-export type { IndexRead, Intent, IntentCounts, IntentIndex, IntentOutcome, OpenEntry, OpenReport, Staleness } from "./types";
+export type { IndexRead, Intent, IntentCounts, IntentIndex, IntentOutcome, OpenEntry, OpenReport, OutcomeVerdict, Staleness } from "./types";

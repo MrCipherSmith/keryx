@@ -2573,17 +2573,27 @@ answer:
 intents closed in code, never checked for effect: N of M
   no outcome criterion stated: a
   criterion stated, never observed: b
-  observed: c
+  observed: c (helped h, no effect n, harmed m, inconclusive i)
 ```
 
-An observation is a line at the start of a line in the flow's `journal.md`:
+A flow's outcome criterion is written in a `## Outcome criteria` section of its
+`description.md`; `keryx flow init` leaves that slot in the template, and an
+untouched hint is not a declared criterion. `not measured — <reason>` states
+that there is no instrument. An observation is a line at column 0 of the flow's
+`journal.md`:
 
 ```
-outcome-observed: <date> <what was seen>
+outcome-observed: <verdict> — <note>
 ```
 
-`index` reads it, and that flow leaves the `open` list. Nothing writes the line
-for you. The index stores a content fingerprint of the flows and requirements
+`<verdict>` is exactly one of `helped`, `no-effect`, `harmed`, `inconclusive`.
+A requirements package records the same in an `## Outcome observations` section
+of its README.md, as `- <verdict> — <note>`; it is stored and read only, and the
+package stays in the open list. `index` reads a flow's line, and that flow
+leaves the `open` list. A malformed line is a failure that names the flow or
+package: `index` lists it and exits non-zero, and the flow stays in the `open`
+list, which shows the failure count. Nothing writes the line for you and
+nothing gates on it. The index stores a content fingerprint of the flows and requirements
 it was read from. When the index is missing or unreadable, or the fingerprint no
 longer matches the tree, `open` exits non-zero and names `keryx product index`
 instead of answering from stale data. Only content counts, not file times: a

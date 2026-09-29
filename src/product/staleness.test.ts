@@ -200,6 +200,23 @@ describe("a malformed index is refused, never thrown", () => {
     ["an intent with an unknown status", (index) => void ((index.intents as Array<Record<string, unknown>>)[0]!.status = "half")],
     ["an outcome that is not observed-boolean", (index) => void ((index.intents as Array<{ outcome: Record<string, unknown> }>)[0]!.outcome.observed = "yes")],
     ["a null in the intents list", (index) => void (index.intents = [null])],
+    // An index written by 0.3.30 has no verdict counts and no verdicts.
+    ["an old-format index without the four verdict count keys", (index) => {
+      const counts = index.counts as Record<string, unknown>;
+      for (const key of ["helped", "noEffect", "harmed", "inconclusive"]) delete counts[key];
+    }],
+    ["old-format intents without a verdict", (index) => {
+      for (const intent of index.intents as Array<{ outcome: Record<string, unknown> }>) {
+        delete intent.outcome.verdict;
+        delete intent.outcome.note;
+      }
+    }],
+    ["an intent with an unknown verdict", (index) => void ((index.intents as Array<{ outcome: Record<string, unknown> }>)[0]!.outcome.verdict = "worked")],
+    ["an observed intent with a null verdict", (index) => {
+      const outcome = (index.intents as Array<{ outcome: Record<string, unknown> }>)[0]!.outcome;
+      outcome.observed = true;
+      outcome.verdict = null;
+    }],
   ];
 
   for (const [name, mutate] of shapes) {

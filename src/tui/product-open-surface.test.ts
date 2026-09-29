@@ -81,8 +81,19 @@ describe("/product renders the open list", () => {
       "intents closed in code, never checked for effect: 3 of 4",
       "  no outcome criterion stated: 2",
       "  criterion stated, never observed: 1",
-      "  observed: 1",
+      "  observed: 1 (helped 1, no effect 0, harmed 0, inconclusive 0)",
     ]);
+  });
+
+  test("the verdict split and a non-zero failure count are painted, and a zero failure count is not", async () => {
+    const load = await fixtureLoad();
+    if (!load.ok) throw new Error("fixture load failed");
+    const clean = open(load, { visibleRows: 20 }).painted();
+    expect(clean).not.toContain("parse failures");
+    const report = { ...load.report, observed: 4, helped: 1, noEffect: 1, harmed: 1, inconclusive: 1, failures: 2 };
+    const rows = open({ ok: true, report }, { visibleRows: 20 }).painted().split("\n");
+    expect(rows).toContain("  observed: 4 (helped 1, no effect 1, harmed 1, inconclusive 1)");
+    expect(rows).toContain("  index parse failures: 2 (`keryx product index` lists them)");
   });
 
   test("one block per never-checked flow, with its outcome criterion or the not-measured text", async () => {
@@ -121,7 +132,7 @@ describe("/product renders the open list", () => {
   });
 
   test("a project with nothing waiting says so under a zero count", () => {
-    const view = open({ ok: true, report: { closed: 2, neverChecked: 0, noCriterion: 0, notObserved: 0, observed: 2, entries: [] } }, { visibleRows: 20 });
+    const view = open({ ok: true, report: { closed: 2, neverChecked: 0, noCriterion: 0, notObserved: 0, observed: 2, helped: 2, noEffect: 0, harmed: 0, inconclusive: 0, failures: 0, entries: [] } }, { visibleRows: 20 });
     const rows = view.painted().split("\n");
     expect(rows[0]).toBe("intents closed in code, never checked for effect: 0 of 2");
     expect(rows).toContain("Nothing closed in code is waiting for a look back.");

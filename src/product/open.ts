@@ -25,6 +25,11 @@ export function buildOpenReport(index: IntentIndex): OpenReport {
     noCriterion: counts.noCriterion,
     notObserved: counts.notObserved,
     observed: counts.observed,
+    helped: counts.helped,
+    noEffect: counts.noEffect,
+    harmed: counts.harmed,
+    inconclusive: counts.inconclusive,
+    failures: index.failures.length,
     entries,
   };
 }
@@ -35,8 +40,13 @@ export function openHeaderLines(report: OpenReport): string[] {
     `intents closed in code, never checked for effect: ${report.neverChecked} of ${report.closed}`,
     `  no outcome criterion stated: ${report.noCriterion}`,
     `  criterion stated, never observed: ${report.notObserved}`,
-    `  observed: ${report.observed}`,
+    `  observed: ${report.observed} (${verdictSplit(report)})`,
+    ...(report.failures > 0 ? [`  index parse failures: ${report.failures} (\`keryx product index\` lists them)`] : []),
   ];
+}
+
+function verdictSplit(counts: Pick<OpenReport, "helped" | "noEffect" | "harmed" | "inconclusive">): string {
+  return `helped ${counts.helped}, no effect ${counts.noEffect}, harmed ${counts.harmed}, inconclusive ${counts.inconclusive}`;
 }
 
 export function openEntryLines(entry: OpenEntry): string[] {
@@ -82,7 +92,7 @@ export function renderIndexSummary(index: IntentIndex, file: string): string {
     `  entries with no extractable intent statement: ${index.unusable}`,
     `  parse failures: ${index.failures.length}`,
     ...index.failures.map((failure) => `    ${failure}`),
-    `  closed in code: ${counts.closed} (observed ${counts.observed}, criterion stated ${counts.notObserved}, none stated ${counts.noCriterion})`,
+    `  closed in code: ${counts.closed} (observed ${counts.observed}: ${verdictSplit(counts)}; criterion stated ${counts.notObserved}, none stated ${counts.noCriterion})`,
     `Written: ${file}`,
   ].join("\n");
 }
