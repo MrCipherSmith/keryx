@@ -161,6 +161,7 @@ import {
   catalogDestructiveResolver,
   catalogFingerprintResolver,
   catalogResolver,
+  catalogTrustStaleness,
   describeUseToolApproval,
   destructiveTrustNotices,
   mcpDockVerdict,
@@ -6628,7 +6629,8 @@ export async function launchTuiAgentShell(opts: {
     const runMcpTrustLine = (line: string): boolean => {
       const parsed = parseMcpTrustCommand(line);
       if (parsed === undefined) return false;
-      const lines = runMcpTrustCommand(parsed, io.trustedMcpTools, catalogResolver(deps.mcpRuntime?.()?.catalog()));
+      const catalog = deps.mcpRuntime?.()?.catalog();
+      const lines = runMcpTrustCommand(parsed, io.trustedMcpTools, catalogResolver(catalog), catalogTrustStaleness(catalog));
       io.onSystem?.(`${lines.join("\n")}\n`);
       return true;
     };

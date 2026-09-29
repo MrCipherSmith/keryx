@@ -53,6 +53,7 @@ import {
   catalogDestructiveResolver,
   catalogFingerprintResolver,
   catalogResolver,
+  catalogTrustStaleness,
   describeUseToolApproval,
   isMcpToolCall,
   parseMcpTrustCommand,
@@ -2851,6 +2852,7 @@ export async function runAgentRepl(
                 trust,
                 agentIo.trustedMcpTools,
                 catalogResolver(deps.mcpRuntime?.()?.catalog()),
+                catalogTrustStaleness(deps.mcpRuntime?.()?.catalog()),
               ).join("\n")}\n`,
         );
       } else if (command === "/search-provider") {

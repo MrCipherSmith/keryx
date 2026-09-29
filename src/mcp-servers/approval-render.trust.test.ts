@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import {
   catalogDestructiveResolver,
   catalogResolver,
+  catalogTrustStaleness,
   describeUseToolApproval,
   destructiveTrustNotices,
   mcpTrustOffered,
@@ -16,6 +17,7 @@ import {
   TRUSTED_MARKER,
   type ApprovalIo,
 } from "./approval-render";
+import { toolDefinitionFingerprint } from "./catalog";
 
 function fakeIo(answer: string | undefined): ApprovalIo & { written: () => string } {
   const chunks: string[] = [];
@@ -158,6 +160,47 @@ describe("AC3: /mcp trust list and revoke", () => {
     const trusted = grants();
     runMcpTrustCommand({ kind: "revoke", target: "search" }, trusted, resolve);
     expect(trusted.size).toBe(2);
+  });
+
+  test("AC3: hostile revoke targets never touch another grant", () => {
+    const trusted = new Map([
+      ["srv__a__b", "fp"],
+      ["all__x", "fp"],
+      ["srv__all", "fp"],
+    ]);
+    for (const line of ["/mcp trust revoke ALL", "/mcp trust revoke all__", "/mcp trust revoke srv", "/mcp trust revoke srv__a", "/mcp trust revoke  "]) {
+      const parsed = parseMcpTrustCommand(line);
+      expect(parsed?.kind === "revoke-all").toBe(false);
+      runMcpTrustCommand(parsed!, trusted, resolve);
+    }
+    expect(trusted.size).toBe(3);
+    runMcpTrustCommand({ kind: "revoke", target: "all__x" }, trusted, resolve);
+    expect([...trusted.keys()].sort()).toEqual(["srv__a__b", "srv__all"]);
+    runMcpTrustCommand(parseMcpTrustCommand("/mcp trust revoke srv__a__b")!, trusted, resolve);
+    expect([...trusted.keys()]).toEqual(["srv__all"]);
+  });
+
+  test("AC3: list says which grants would ask again — definition changed, now destructive, gone — and marks the rest trusted", () => {
+    const search = { fqn: "linear__search", description: "d", inputSchema: {} };
+    const staleCatalog = {
+      entries: [
+        { ...search },
+        { fqn: "linear__list_issues", description: "changed since the grant", inputSchema: {} },
+        { fqn: "linear__create_issue", description: "d", inputSchema: {}, annotations: { destructiveHint: true } },
+      ],
+    };
+    const trusted = new Map([
+      ["linear__search", toolDefinitionFingerprint(search)],
+      ["linear__list_issues", "fingerprint-from-before"],
+      ["linear__create_issue", "whatever"],
+      ["linear__removed", "whatever"],
+    ]);
+    const out = runMcpTrustCommand({ kind: "list" }, trusted, resolve, catalogTrustStaleness(staleCatalog)).join("\n");
+    expect(out).toMatch(/linear__search .*\[trusted\]/);
+    expect(out).toContain("will ask again: changed");
+    expect(out).toContain("will ask again: destructive");
+    expect(out).toContain("will ask again: gone");
+    expect(out.split(TRUSTED_MARKER).length - 1).toBe(1);
   });
 
   test("AC3: revoke all clears every grant", () => {

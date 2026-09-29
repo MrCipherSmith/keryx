@@ -564,16 +564,42 @@ export function parseMcpTrustCommand(line: string): McpTrustCommand | undefined 
   return { kind: "usage", reason: sub === undefined ? "`/mcp trust` needs a subcommand" : `unknown subcommand \`${sanitiseIdentifier(sub, 40)}\`` };
 }
 
-/** Lines for `/mcp trust list`: every grant with its full name and server, marked trusted. */
+export type TrustStaleness = (fqn: string, grantedFingerprint: string) => "changed" | "destructive" | "gone" | undefined;
+
+/** Why a held grant would not be honoured on the next call, read from the live catalog the way executeCall reads it. */
+export function catalogTrustStaleness(
+  catalog:
+    | {
+        entries: readonly {
+          fqn: string;
+          description?: string | undefined;
+          inputSchema?: Record<string, unknown> | undefined;
+          annotations?: Record<string, unknown> | undefined;
+        }[];
+      }
+    | undefined,
+): TrustStaleness {
+  return (fqn, granted) => {
+    const entry = catalog?.entries.find((candidate) => candidate.fqn === fqn);
+    if (entry === undefined) return "gone";
+    if (entry.annotations?.destructiveHint === true) return "destructive";
+    return toolDefinitionFingerprint(entry) === granted ? undefined : "changed";
+  };
+}
+
+/** Lines for `/mcp trust list`: every grant with its full name and server, marked trusted unless it would ask again. */
 export function renderTrustedToolLines(
   trusted: ReadonlyMap<string, string> | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
+  staleness?: TrustStaleness,
 ): string[] {
   if (trusted === undefined || trusted.size === 0) return ["No MCP tools are trusted in this session."];
   const lines = [`Trusted MCP tools this session (${trusted.size}):`];
-  for (const fqn of [...trusted.keys()].sort()) {
+  for (const [fqn, granted] of [...trusted.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const { server } = resolve?.(fqn) ?? splitFqn(fqn);
-    lines.push(`  ${sanitiseIdentifier(fqn)}  server: ${sanitiseIdentifier(server)}  ${TRUSTED_MARKER}`);
+    const stale = staleness?.(fqn, granted);
+    const tail = stale === undefined ? TRUSTED_MARKER : `(will ask again: ${stale})`;
+    lines.push(`  ${sanitiseIdentifier(fqn)}  server: ${sanitiseIdentifier(server)}  ${tail}`);
   }
   return lines;
 }
@@ -583,12 +609,13 @@ export function runMcpTrustCommand(
   command: McpTrustCommand,
   trusted: Map<string, string> | undefined,
   resolve?: (fqn: string) => { server: string; tool: string } | undefined,
+  staleness?: TrustStaleness,
 ): string[] {
   switch (command.kind) {
     case "usage":
       return [`${command.reason}. Usage: ${MCP_TRUST_USAGE}`];
     case "list":
-      return renderTrustedToolLines(trusted, resolve);
+      return renderTrustedToolLines(trusted, resolve, staleness);
     case "revoke-all": {
       const count = trusted?.size ?? 0;
       trusted?.clear();

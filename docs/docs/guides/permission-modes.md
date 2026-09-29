@@ -74,6 +74,10 @@ count), and in the list below.
 /mcp trust revoke all              # revoke everything
 ```
 
+`list` shows `(will ask again: changed | destructive | gone)` instead of `[trusted]`
+for a grant the next call would not honour: the definition changed, the tool now
+reports `destructiveHint: true`, or it left the catalog.
+
 Revoke takes the full `server__tool` name exactly as `list` prints it. An
 unknown name is reported and changes nothing. These work while the agent is
 busy, and in the readline shell as well as the TUI.

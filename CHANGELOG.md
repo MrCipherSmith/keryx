@@ -6,7 +6,7 @@ All notable changes to `keryx` are documented here. The format follows
 ## [0.3.35] — 2026-09-29
 
 ### Added
-- **MCP session trust is inspectable and revocable** — `/mcp trust list` prints every tool trusted for the session with its full name and server; `/mcp trust revoke <server__tool>` removes one and `/mcp trust revoke all` removes everything. An unknown name is reported and changes nothing, and revoke takes the full name only. Works in the TUI (also while the agent is busy) and in the readline shell, where `/mcp` was previously unhandled (plain `/mcp` there now points at `keryx mcp list`). `/mcp trust` is documented in the `/mcp` entry of the slash registry, dropdown, `/help` and the help modal.
+- **MCP session trust is inspectable and revocable** — `/mcp trust list` prints every tool trusted for the session with its full name and server, and says `(will ask again: changed|destructive|gone)` instead of `[trusted]` for a grant the next call would not honour; `/mcp trust revoke <server__tool>` removes one and `/mcp trust revoke all` removes everything. An unknown name is reported and changes nothing, and revoke takes the full name only. Works in the TUI (also while the agent is busy) and in the readline shell, where `/mcp` was previously unhandled (plain `/mcp` there now points at `keryx mcp list`). `/mcp trust` is documented in the `/mcp` entry of the slash registry, dropdown, `/help` and the help modal.
 - **A `[trusted]` marker** on the approval transcript lines of a trusted tool, in the `/mcp` view (a per-server count), in `/mcp trust list`, and on the auto-approve line, which now also names the tool (`use_tool <server__tool>`).
 
 ### Changed
