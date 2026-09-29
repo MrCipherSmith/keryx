@@ -17,6 +17,7 @@ import {
   statusLabel,
   type AcCheckStatus,
   type AcKindRecord,
+  uncommittedFlowStateNotes,
 } from "../flow/service";
 // Review finding: staleness used to compare only the CRITERIA CHECKSUM half
 // of the cache key, so a criteria-unchanged-but-diff-changed flow still read
@@ -65,6 +66,12 @@ export type FlowInspectorItem = {
    * Absent otherwise.
    */
   interrupted?: string | undefined;
+  /**
+   * Set when the flow is done, its directory is tracked, and the closing state
+   * written after the merge is still uncommitted: the same note, in the same
+   * words, as `keryx flow status`. Informational; absent otherwise.
+   */
+  uncommitted?: string | undefined;
   /** Flow 328, AC7: the flow's last CACHED check-ac markers, or absent when nothing has been cached yet ("not run"). */
   acMarkers?: readonly AcMarker[];
   /** When the cached markers were computed. */
@@ -261,6 +268,7 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
   try {
     const dirs = await listFlowDirs(cwd);
     const items: FlowInspectorItem[] = [];
+    const doneFlows: { id: string; dir: string; item: FlowInspectorItem }[] = [];
     for (const dir of dirs) {
       try {
         const flow = await readFlow(cwd, dir);
@@ -286,9 +294,18 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
           // Cache unreadable — same as "not run"; never blocks the flow list.
         }
         items.push(item);
+        if (flow.status === "done") doneFlows.push({ id: flow.id, dir, item });
       } catch {
         // skip unreadable packages; `keryx flow check` owns that report
       }
+    }
+    // The closing state `flow complete` writes after the merge, still uncommitted
+    // — the same note `keryx flow status` prints. One git pass for every done
+    // flow; informational, and silent on any failure.
+    const notes = await uncommittedFlowStateNotes(cwd, doneFlows);
+    for (const done of doneFlows) {
+      const text = notes.get(done.dir);
+      if (text !== undefined) done.item.uncommitted = text;
     }
     return sortFlowsNewestFirst(items);
   } catch {

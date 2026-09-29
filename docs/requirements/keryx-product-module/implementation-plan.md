@@ -91,6 +91,16 @@ The two shares are reported separately: flows that declared an outcome
 criterion, and flows that wrote `not measured — <reason>`. They are never added
 into one number, so G1a cannot be passed by writing `not measured` everywhere.
 
+G1a is also read separately for flows created by a person and flows created by
+an agent. A flow created by an agent has just read the instruction to fill the
+slot, so its declaration shows that the agent complied, not that anyone wants
+the outcome checked: that half is a **compliance check**, not acceptance, and
+only the share of flows created by a person answers the premise. Who created a
+flow is not recorded in flow.json; it is classified by hand when the ten flows
+are read, and the classification is recorded next to the reading. The split of
+a real criterion against `not measured — <reason>` above stays as a second axis
+inside each half.
+
 #### G1b — 2–4 weeks after those ten flows are released
 
 G1b needs calendar time: an outcome cannot be observed before it has had time to

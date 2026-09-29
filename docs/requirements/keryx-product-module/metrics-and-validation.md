@@ -52,3 +52,14 @@ only come from flows created with the slot present.
 
 Nothing gates on any of this. The measures are read by G1a and G1b, once, by a
 person.
+
+## Validity threat to G1a
+
+An agent that creates a flow has just read the instruction to fill the
+`## Outcome criteria` slot, so a declared criterion in an agent-created flow
+measures instruction-following, not that anyone wants the outcome checked. G1a
+is therefore read separately for flows created by a person and flows created by
+an agent, and the agent half is a **compliance check**, not acceptance. Authorship
+is not in flow.json; it is classified by hand when the ten flows are read and
+recorded next to the reading. The split of a real criterion against
+`not measured — <reason>` stays as a second axis.

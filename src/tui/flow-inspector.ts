@@ -135,6 +135,7 @@ export function formatFlowDetailLines(item: FlowInspectorItem): string[] {
     `${item.id}  ${item.title}`,
     `Status   ${item.status}`,
     ...(item.interrupted ? [`         ${item.interrupted}`] : []),
+    ...(item.uncommitted ? [`         note: ${item.uncommitted}`] : []),
     `Dir      ${item.dir}`,
     `Tasks    ${item.tasksDone}/${item.tasksTotal}`,
     `PR       ${item.prUrl ?? "—"}`,
