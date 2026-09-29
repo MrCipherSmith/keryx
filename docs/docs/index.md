@@ -45,6 +45,7 @@ the one that describes shipped behaviour.
 - [Slate for external agents](guides/slate.md)
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
+- [Undo a turn with /rewind](guides/rewind.md)
 - [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
 - [Write a rubric (judge) eval scenario](guides/write-a-rubric-scenario.md)
 

@@ -6211,11 +6211,11 @@ export async function launchTuiAgentShell(opts: {
       clearTranscriptChildren(sbRewind);
       if (rewindDisabledByEnv()) return;
       const count = rewindRecorder.snapshotCount();
-      sbRewind.add(new otui.TextRenderable(r, { id: "sb-rewind-k", content: otui.t`${dimChunk(otui, "Rewind")}`, marginTop: 1 }));
+      if (count === 0) return;
       sbRewind.add(
         new otui.TextRenderable(r, {
           id: "sb-rewind-v",
-          content: otui.t`${dimChunk(otui, `${count} snapshot${count === 1 ? "" : "s"}`)}`,
+          content: otui.t`${dimChunk(otui, `Rewind ${count}`)}`,
           onMouseDown: () => {
             showRewind();
           },
