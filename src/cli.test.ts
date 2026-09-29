@@ -197,6 +197,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent\n",
     "  keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion\n",
     "  product   The product's intent as a derived index, and the intents closed in code that nobody looked back at\n",
+    // Flow 369 (R4d): `keryx approvals`, a brand-new verb, so both a USAGE_BODY
+    // block and a Commands: summary row.
+    "  keryx approvals list [--all] [--json] | allow <id> | deny <id>\n",
+    "                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)\n",
+    "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

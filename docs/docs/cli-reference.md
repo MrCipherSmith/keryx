@@ -1769,6 +1769,8 @@ keryx serve config init | set | show
 | `GET /v1/projects` | The projects this listener will accept turns for. |
 | `POST /v1/turns` | Submit a turn. Takes an idempotency key **scoped per project**, so two projects cannot collide on one key. |
 | `GET /v1/turns/<id>` | The durable turn record, and its server-sent-event stream. |
+| `GET /v1/approvals` | Pending approvals (`?state=all` adds recently resolved). See [Approvals over serve](guides/answer-remote-approvals.md). |
+| `POST /v1/approvals/<id>` | Answer one approval with `{"decision":"allow"}` or `{"decision":"deny"}`. |
 
 ### Boundaries
 
@@ -1781,12 +1783,39 @@ These are properties of the implementation, not advice:
   listen: a listener that cannot satisfy its configuration does not open a port.
 - **The remote policy profile may never be weaker than the local one.** It is
   compared per turn, and a weaker profile is refused rather than accepted.
-- **Approvals are not implemented.** A turn whose policy decision is `ask`
-  terminates in a **recorded denial**. This is written into the turn module as a
-  stated boundary rather than left to follow from the absence of an approval
-  store, because an accident stops holding the moment the store lands.
+- **Approvals are asynchronous and bound to one call.** A turn whose policy
+  decision is `ask` creates a durable pending approval, emits `approval.pending`,
+  and waits. It denies at expiry, when too many are pending, or at once when
+  nobody could answer. An allow applies to that one fingerprinted call, once, and
+  never lifts the destructive, credentials, publish-lease, untrusted-origin or
+  hook-ask floors. See [Approvals over serve](guides/answer-remote-approvals.md).
 - **Repeated authentication failures are throttled**, per peer.
 - **`GET /health` does not exist.** Liveness is authenticated-only today.
+
+---
+
+## approvals
+
+Answer, from this machine, a call a `keryx serve` turn is waiting on. It reads
+and writes the same durable approval store the HTTP routes use, so it needs no
+running server.
+
+```
+keryx approvals list [--all] [--json]
+keryx approvals allow <id>
+keryx approvals deny <id>
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` _(also the bare default)_ | `--all`, `--json` | Pending approvals with summary, scope, consequence and time to expiry. `--all` adds the recently resolved ones. `--json` prints the public projection (never the call fingerprint). |
+| `allow <id>` | — | Allow the one call the approval was raised for, once. A second answer reports the original outcome and changes nothing. An expired approval is refused. |
+| `deny <id>` | — | Deny it. |
+
+An answer never grants a session-wide trust and never lifts a destructive,
+credential or publish floor: the next identical call asks again. In the TUI the
+same list is `/approvals`. The client contract for a chat bridge is
+[Approvals over serve](guides/answer-remote-approvals.md).
 
 ---
 

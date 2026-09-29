@@ -61,6 +61,7 @@ import { busCommand } from "./commands/bus";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
+import { approvalsCommand } from "./commands/approvals";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -127,6 +128,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   external: externalCommand,
   auth: authCommand,
   serve: serveCommand,
+  approvals: approvalsCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -263,6 +265,8 @@ export const USAGE_BODY = `Usage:
   keryx serve status [--json]
   keryx serve token issue | rotate | revoke
   keryx serve config init|set|show
+  keryx approvals list [--all] [--json] | allow <id> | deny <id>
+                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -434,6 +438,7 @@ Commands:
   modules   View and toggle Metaproject modules (interactive)
   projects  Inspect the user-global registry of initialized projects
   serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
+  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html

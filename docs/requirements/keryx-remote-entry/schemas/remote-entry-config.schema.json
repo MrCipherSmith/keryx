@@ -54,7 +54,12 @@
           "maximum": 86400,
           "description": "Unanswered approvals resolve to deny at expiry."
         },
-        "maxPendingPerSession": { "type": "integer", "minimum": 1 }
+        "maxPendingPerSession": { "type": "integer", "minimum": 1 },
+        "requireConsumer": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, an approval raised while nothing is reading approvals or turn events resolves to undeliverable-deny at once instead of waiting for expiry."
+        }
       }
     },
     "bounds": {

@@ -502,7 +502,7 @@ What is in it today:
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
 - **Four doors.** The CLI (`keryx harness run|exec|extension|wave|replay`), JSONL/RPC
-  and the loopback HTTP entry (`keryx serve`) share one execution loop; the
+  and the loopback HTTP entry (`keryx serve`, whose `ask` decisions become approvals answered once over `/v1/approvals` or `keryx approvals`) share one execution loop; the
   interactive TUI runs its own on the same tool registry and the same policy.
 - **A record you can check.** `keryx harness run --record` writes a run's
   recomputable hash surface and `keryx harness replay` validates a fixture
@@ -920,7 +920,7 @@ untouched.
 
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
-| No remote approval transport | A remote turn whose policy decision is `ask` ends in a recorded denial | Run approval-requiring turns locally |
+| Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns locally |
 | Domain allowlist is macOS-only | Domain-level egress policy, credential masking and TLS termination refuse to run on Linux rather than silently doing less | Filesystem containment and network on/off work on both |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |

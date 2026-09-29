@@ -10,9 +10,12 @@ executed; the output is from those runs.
 
 ## Read this before you point anything at it
 
-- **Approvals are not implemented.** A turn whose policy decision is `ask`
-  terminates in a **recorded denial**. It is never auto-approved. If your
-  product needs a human in the loop today, this is not ready for it.
+- **Approvals are asynchronous and fail closed.** A turn whose policy decision is
+  `ask` raises a durable pending approval and detaches; it runs the call only
+  after a person answers `allow`, once, for that call. Unanswered means denied.
+  See [Answer a remote approval](answer-remote-approvals.md). Today the stock
+  listener registers no tools, so it raises none; approvals apply once a tool
+  registry is injected.
 - **The remote policy profile may never be weaker than the local one.** It is
   compared per turn and a weaker profile is refused.
 - **The prompt is scanned but reaches the provider unredacted.** Only outbound
@@ -93,6 +96,8 @@ Routes, all authenticated:
 | `GET /v1/projects` | the projects this listener accepts turns for |
 | `POST /v1/turns` | submit a turn; takes an idempotency key **scoped per project** |
 | `GET /v1/turns/<id>` | the durable turn record and its SSE stream |
+| `GET /v1/approvals` | pending approvals a person can answer |
+| `POST /v1/approvals/<id>` | answer one: `{"decision":"allow"\|"deny"}` |
 
 ## The properties your integration can rely on
 

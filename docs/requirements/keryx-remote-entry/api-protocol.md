@@ -3,8 +3,15 @@ Version: 1.1.0
 
 ## Status
 
-Future contract. No route in this document is implemented. It defines the
-provider-neutral HTTP surface that transports (Telegram, a browser workspace, an
+Partially implemented. `GET /v1/status`, `GET /v1/projects`, `POST /v1/turns`,
+`GET /v1/turns/{id}` (and its event stream), `GET /v1/approvals` and
+`POST /v1/approvals/{approvalId}` are implemented (R4b–R4d); the client
+contract for the approval routes is the guide
+[Answer a remote approval](../../docs/guides/answer-remote-approvals.md).
+Deviations in R4d: `GET /v1/approvals?state=all` also lists recently resolved
+approvals; an answer body with any field beyond `decision` is refused with
+`400`; the self-grant `403` is keyed on a declared `x-keryx-turn` header. The
+rest is a future contract. It defines the provider-neutral HTTP surface that transports (Telegram, a browser workspace, an
 embedding product) speak to.
 
 ## Principles

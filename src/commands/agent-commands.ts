@@ -223,6 +223,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 369 (R4d): calls a remote `keryx serve` turn is waiting on. Allow or deny
+    // is one call, once; the local answer path of the serve approval broker.
+    name: "/approvals",
+    description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
+    modes: AGENT_ONLY,
+  },
+  {
     // The installer view under the name that says what it does: it wires this
     // project into an editor, the TUI half of `keryx integrate`. R700-09:
     // renamed from `/integrations` — that name sat one letter from the CLI

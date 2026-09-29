@@ -437,6 +437,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "approvals",
+    group: "Automation",
+    summary: "Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve).",
+  },
+  {
+    kind: "cli",
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
@@ -476,6 +482,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/schedules",
     group: "Automation",
     summary: "Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete.",
+  },
+  {
+    kind: "slash",
+    name: "/approvals",
+    group: "Automation",
+    summary: "Pending remote approvals with scope, consequence and expiry — allow or deny one call, once.",
   },
   {
     kind: "slash",

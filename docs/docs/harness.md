@@ -425,8 +425,10 @@ Stated here rather than left to be discovered:
 - **No shipped path registers a tool.** Both production executors are refusals, so
   `keryx harness run` and `keryx serve` are single text turns today. The
   interactive shell is where tools actually run.
-- **No remote approvals.** A `keryx serve` turn whose decision is `ask` ends in a
-  recorded denial. Run approval-requiring work locally through `keryx shell`.
+- **Remote approvals need a tool registry.** A `keryx serve` turn whose decision is
+  `ask` becomes a durable approval a person answers once, for that call, over HTTP or
+  `keryx approvals`; but the stock listener registers no tools, so it raises none. See
+  [Answer a remote approval](guides/answer-remote-approvals.md).
 - **No real replay.** See above — `validate-log` only.
 - **No branch merge.** Reconcile by forking again from a shared ancestor.
 - **No mutating external children, and no supervision of a running one.** The

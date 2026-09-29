@@ -357,7 +357,7 @@ flowchart TB
   B5 --> B6["6 · Remote profile compared to local<br/><i>may never be weaker</i>"]
   B6 -->|"weaker"| F3(["refused"])
   B6 --> B7["7 · Harness classifies each action"]
-  B7 -->|"ask"| F4(["recorded denial —<br/>approvals are R4d"])
+  B7 -->|"ask"| F4(["durable pending approval —<br/>answered once, or denied at expiry"])
   B7 --> B9["9 · Redact every stream event,<br/>result, error body and notification"]
   B9 --> OUT["SSE stream + durable turn record"]
 ```
