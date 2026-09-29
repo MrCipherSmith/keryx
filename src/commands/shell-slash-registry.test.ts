@@ -136,7 +136,7 @@ describe("AC9 — the readline chat surface derives its commands from the regist
 describe("AC9 — the readline agent surface derives its commands from the registry", () => {
   test("its help text uses the registry's AGENT wording for the commands it implements", () => {
     const help = readlineAgentHelpText();
-    for (const name of ["/help", "/expand", "/new", "/clear", "/compact", "/status", "/flows", "/exit"]) {
+    for (const name of ["/help", "/expand", "/new", "/clear", "/compact", "/rewind", "/status", "/flows", "/exit"]) {
       const command = AGENT_SLASH_COMMANDS.find((c) => c.name === name);
       expect(command).toBeDefined();
       if (command === undefined) {
@@ -158,6 +158,13 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     expect(help).not.toContain("/sessions");
   });
 
+  test("/rewind is agent-only, and the readline agent help advertises it with the registry wording", () => {
+    const rewind = AGENT_SLASH_COMMANDS.find((c) => c.name === "/rewind");
+    expect(rewind?.modes).toEqual(["agent"]);
+    expect(commandsForMode("chat").map((c) => c.name)).not.toContain("/rewind");
+    expect(readlineAgentHelpText()).toContain(describeCommand(rewind!, "agent"));
+  });
+
   test("/exit carries the AGENT wording here and the CHAT wording in runShell", async () => {
     const exit = AGENT_SLASH_COMMANDS.find((c) => c.name === "/exit");
     expect(exit).toBeDefined();
@@ -170,7 +177,7 @@ describe("AC9 — the readline agent surface derives its commands from the regis
 });
 
 describe("AC8 — an agent-only command typed in chat fails cleanly", () => {
-  for (const name of ["/expand", "/think", "/copy", "/resume", "/sessions"]) {
+  for (const name of ["/expand", "/think", "/copy", "/resume", "/sessions", "/rewind"]) {
     test(`${name} explains that it is agent-mode only, and starts no turn`, async () => {
       const output = await chatOutput(name);
       expect(output).toContain(name);

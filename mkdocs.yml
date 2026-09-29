@@ -77,6 +77,7 @@ nav:
   - Guides:
       - Give an agent context: guides/give-an-agent-context.md
       - Choose an approval mode (ask, trust, auto): guides/permission-modes.md
+      - "Undo a turn with /rewind": guides/rewind.md
       - Run an agent without giving it your machine: guides/contain-an-agent.md
       - Give a subagent a name instead of a paragraph: guides/agent-catalog.md
       - "ACP client: drive a foreign agent under keryx's policy": guides/acp-client.md

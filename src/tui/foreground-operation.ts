@@ -257,6 +257,13 @@ export function createForegroundAgentIoFacade(
     ...(io.trustedMcpTools === undefined ? {} : { trustedMcpTools: io.trustedMcpTools }),
     ...(io.mcpToolFingerprint === undefined ? {} : { mcpToolFingerprint: io.mcpToolFingerprint }),
     ...(io.mcpToolDestructive === undefined ? {} : { mcpToolDestructive: io.mcpToolDestructive }),
+    ...(io.beforeMutation === undefined
+      ? {}
+      : {
+          beforeMutation: async () => {
+            if (accepts()) await io.beforeMutation?.();
+          },
+        }),
     readOnly: () => !accepts() || (io.readOnly?.() ?? false),
   };
 }

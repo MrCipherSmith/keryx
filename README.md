@@ -367,6 +367,13 @@ What is in it today:
   session that keeps its ancestry, without editing a transcript by hand.
   `/status` is the session inspector (identity, context window and limits when
   the provider reported them); `/session-info` and `/info` are not aliases.
+- **`/rewind`: undo a turn.** Before the first mutating tool call of a turn,
+  keryx snapshots the work tree into a per-session shadow git repository (your
+  own `.git` is never touched). `/rewind` restores files, the conversation, or
+  both to before any of the last 50 turns, with a confirmation and an undo
+  point. It covers the project work tree only; `shell_exec` side effects
+  elsewhere are not undone. `KERYX_REWIND=off` disables it. See [the
+  guide](docs/docs/guides/rewind.md).
 - **Agent Client Protocol server.** `keryx acp` speaks
   [ACP](https://agentclientprotocol.com) v1 — newline-delimited JSON-RPC 2.0
   over stdio — so an ACP client (an editor, typically) can launch keryx as a

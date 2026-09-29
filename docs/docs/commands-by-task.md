@@ -63,6 +63,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/new` | Start a new session (old kept on disk). |
 | `/clear` | New session (alias of /new). |
 | `/compact` | Compact model context — /compact [focus] (archive kept). |
+| `/rewind` | Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files\|history\|both]]; snapshots cover the work tree only. |
 | `/copy` | Copy the newest transcript block to the clipboard. |
 | `/expand` | Expand the last tool output block. |
 | `/status` | Show session identity, context window, limits, workspaces, and flows. |

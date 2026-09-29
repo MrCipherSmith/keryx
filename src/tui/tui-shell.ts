@@ -61,6 +61,7 @@ import {
 import { renderAnchorsBlock } from "../session/slate";
 import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
+import { join as joinPath } from "node:path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
@@ -117,6 +118,9 @@ import { isStaledocsCommand, runStaledocsForShell } from "./jev-docs-command";
 import { isOpencommentsCommand, runOpencommentsForShell } from "./jev-comments-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
+import { isRewindCommand, openRewind } from "./rewind-inspector";
+import { applyRewind, type RewindMode } from "../rewind/apply";
+import { createRewindRecorder, rewindDisabledByEnv } from "../rewind/recorder";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
 import { isJevProfileCommand, openJevProfile } from "./jev-profile-inspector";
 import { applyRecommendedJevProfileForShell, readJevProfileForShell, toggleJevProfileKeyForShell } from "../commands/review-jev-profile";
@@ -286,6 +290,7 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
+import { REWIND_LEASE_REFUSAL } from "../rewind/history";
 import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, whilePersisting } from "../session/lease";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
@@ -4222,6 +4227,9 @@ export async function launchTuiAgentShell(opts: {
     // defined below once `guardEnabled`/`guardHistory` exist.
     const sbGuard = new otui.BoxRenderable(r, { id: "sb-guard", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbGuard);
+    // `/rewind`: snapshot count for this session — zero rows while snapshots are off.
+    const sbRewind = new otui.BoxRenderable(r, { id: "sb-rewind", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbRewind);
     // Flow 338 (AC8): "Route" row — same zero-rows-while-off idiom as `sbGuard`
     // above. Created here (sidebar position); filled by `refreshRoutingSidebar`,
     // defined below once `routingEnabled`/`routingRoutedCount` exist.
@@ -5677,6 +5685,7 @@ export async function launchTuiAgentShell(opts: {
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
     let nextArchiveIndex = 0;
+    let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
     /**
      * SLATE-5 open/close wiring (parity with `runAgentRepl` in
@@ -5750,6 +5759,7 @@ export async function launchTuiAgentShell(opts: {
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
+      refreshRewindSidebar();
       // Flow 273 (specification §6.2, AC8): every path that lands here — the
       // startup picker (fork/view/cancel included) and `/resume` — is a live
       // session switch. Undefined before the bus has joined (every startup
@@ -6206,6 +6216,30 @@ export async function launchTuiAgentShell(opts: {
       }
       flushSessionCheckpoint();
     };
+    // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
+    const rewindRecorder = createRewindRecorder({
+      workTree: sessionCwd,
+      dir: () => joinPath(liveSession.dir, "rewind"),
+      enabled: () => !rewindDisabledByEnv() && sessionLease.canPersist(),
+      onError: (message) => io.onSystem?.(`${message}\n`),
+    });
+    io.beforeMutation = () => rewindRecorder.beforeMutation();
+    refreshRewindSidebar = (): void => {
+      clearTranscriptChildren(sbRewind);
+      if (rewindDisabledByEnv()) return;
+      const count = rewindRecorder.snapshotCount();
+      if (count === 0) return;
+      sbRewind.add(
+        new otui.TextRenderable(r, {
+          id: "sb-rewind-v",
+          content: otui.t`${dimChunk(otui, `Rewind ${count}`)}`,
+          onMouseDown: () => {
+            showRewind();
+          },
+        }),
+      );
+    };
+    refreshRewindSidebar();
     const resetSessionSurface = (): void => {
       nav.exit();
       chrome.stopBusy();
@@ -6244,6 +6278,7 @@ export async function launchTuiAgentShell(opts: {
       history = [];
       archive = [];
       nextArchiveIndex = 0;
+      refreshRewindSidebar();
       // Flow 273 (specification §6.2, AC8): `/new` and `/clear` switch the
       // live session outside `applyOpened` (they reset the whole transcript
       // surface instead), so this is its own hook.
@@ -6474,6 +6509,53 @@ export async function launchTuiAgentShell(opts: {
       openTurnGuard(otui, chrome, {
         history: () => guardHistory,
         enabled: () => guardEnabled,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
+    /** `/rewind`: pick an earlier turn, choose files / history / both, confirm, apply. */
+    const showRewind = (): void => {
+      if (rewindDisabledByEnv()) {
+        io.onSystem?.("Rewind is off (KERYX_REWIND=off), so no snapshots are recorded.\n");
+        return;
+      }
+      if (chrome.isBusy() || foregroundOperation.isActive) {
+        io.onSystem?.("Wait for the current turn to finish before rewinding.\n");
+        return;
+      }
+      if (!sessionLease.canPersist()) {
+        io.onSystem?.(`${REWIND_LEASE_REFUSAL}\n`);
+        return;
+      }
+      openRewind(otui, chrome, {
+        listings: () => rewindRecorder.describe(),
+        apply: async ({ seq, mode }: { seq: number; mode: RewindMode }) => {
+          syncArchive();
+          const outcome = await applyRewind({
+            recorder: rewindRecorder,
+            seq,
+            mode,
+            history,
+            archive,
+            canPersist: () => sessionLease.canPersist(),
+            persist: (nextHistory, nextArchive) => {
+              liveSession = persistHistory(liveSession, nextHistory, {
+                archive: nextArchive,
+                provider: currentSel.provider,
+                model: currentSel.model,
+              });
+            },
+          });
+          if (outcome.historyRewound) {
+            nextArchiveIndex = history.length;
+            io.onSystem?.("Conversation rewound. Earlier messages stay on screen but are no longer part of the context.\n");
+          }
+          if (outcome.filesRestored) io.onSystem?.("Files rewound. A pre-rewind snapshot is listed in /rewind.\n");
+          refreshRewindSidebar();
+          paintSessionHeader();
+          return { ok: outcome.ok, lines: outcome.lines };
+        },
         onKeypress: (handler) => onKeypress(r, handler),
         renderer: r,
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
@@ -8057,6 +8139,10 @@ export async function launchTuiAgentShell(opts: {
           })();
           return;
         }
+        if (isRewindCommand(command.name)) {
+          showRewind();
+          return;
+        }
         if (isTurnGuardCommand(command.name)) {
           // flow 329 (AC5): `/guard` alone opens the modal; `/guard on|off`
           // toggles + persists, mirroring `/think <mode>`'s own arg-vs-bare
@@ -8744,6 +8830,8 @@ export async function launchTuiAgentShell(opts: {
         // flow 329: starts collecting THIS turn's tool calls/final text fresh —
         // must run before `runAgentTurn` so no early tool call is missed.
         guardCollector.reset(line);
+        syncArchive();
+        rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
         const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
@@ -8758,6 +8846,7 @@ export async function launchTuiAgentShell(opts: {
       }).finally(() => {
         foregroundOperation.settle(operation);
         if (foregroundOperation.isDisposed) return;
+        refreshRewindSidebar();
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
         // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
