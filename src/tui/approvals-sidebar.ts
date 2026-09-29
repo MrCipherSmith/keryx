@@ -20,6 +20,9 @@ import { guardedThemeRepaint, isRenderableGone } from "./theme-repaint";
 import { dimChunk, roleChunk } from "./theme-text";
 import { clearTranscriptChildren } from "./transcript-blocks";
 
+// eslint-disable-next-line no-control-regex -- strips terminal control bytes from a summary shown in the transcript
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/g;
+
 type OpenTui = typeof import("@opentui/core");
 
 export { APPROVALS_COMMAND };
@@ -159,7 +162,7 @@ export function mountApprovalsSidebar(options: ApprovalsSidebarOptions): Approva
 
   const refresh = async (): Promise<void> => {
     if (disposed) return;
-    let views: readonly ApprovalView[] = [];
+    let views: readonly ApprovalView[];
     try {
       views = load();
     } catch {
@@ -174,7 +177,7 @@ export function mountApprovalsSidebar(options: ApprovalsSidebarOptions): Approva
       for (const view of pending) {
         if (known.has(view.approvalId)) continue;
         known.add(view.approvalId);
-        notice(`Remote approval pending: ${view.summary.replace(/[\u0000-\u001f\u007f]/g, " ")} - ${APPROVALS_COMMAND} to answer\n`);
+        notice(`Remote approval pending: ${view.summary.replace(CONTROL_CHARACTERS, " ")} - ${APPROVALS_COMMAND} to answer\n`);
       }
     }
     modal?.reload();
