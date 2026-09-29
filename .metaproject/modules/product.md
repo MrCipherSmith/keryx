@@ -30,6 +30,17 @@ README.md (stored only; the package stays open). `index` reads it, and that
 flow leaves the `open` list. A malformed line is a failure naming the flow or
 package: `index` exits non-zero and the flow stays in the `open` list.
 
+Each flow intent also carries who wrote its outcome criterion, `outcomeAuthor`
+in flow.json: `agent`, `human`, or `unknown` for a flow that never recorded it.
+`keryx flow init --outcome-author agent|human` sets it (`agent` when the flag is
+absent, `human` only when the flag says so, never inferred);
+`keryx flow outcome author <id> agent|human --reason "<why>"` changes it. That
+setter is a `flow` command, not a product command: this module keeps its two
+commands. The index stores the author (optional, so an older index stays valid),
+`product open` and `flow status` print it, and the TUI shows it. It labels the
+sample for G1a (four cells: `human`/`agent` by real criterion/`not measured`)
+and gates nothing. The flow field is read through the flow facade.
+
 ## Data
 
 - `data/product/index.json` (disposable: delete `data/product/` and `index`

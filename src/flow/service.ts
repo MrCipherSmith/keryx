@@ -10,6 +10,18 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
+import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
+// The outcome-author vocabulary, re-exported so the CLI, the product module and the
+// TUI read it through this facade (import policy, rule 2).
+export {
+  DEFAULT_OUTCOME_AUTHOR,
+  OUTCOME_AUTHORS,
+  OUTCOME_AUTHOR_READINGS,
+  parseOutcomeAuthor,
+  readOutcomeAuthor,
+  type OutcomeAuthor,
+  type OutcomeAuthorReading,
+} from "./outcome-author";
 import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
@@ -152,6 +164,7 @@ import type {
   GateOutcome,
   AttemptOutcome,
   TaskAttempts,
+  OutcomeAuthorSetResult,
 } from "./types";
 
 /**
@@ -351,6 +364,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         throw new Error(BLANK_OWNER_MESSAGE);
       }
 
+      // `--outcome-author` is validated before anything is created: a value other
+      // than `agent` or `human` is refused here, so no half-made flow is left
+      // behind. Only an OMITTED flag takes the default; `human` is never chosen
+      // for the caller.
+      const outcomeAuthor =
+        input.outcomeAuthor === undefined ? DEFAULT_OUTCOME_AUTHOR : parseOutcomeAuthor(input.outcomeAuthor);
+
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
       const issueRef =
@@ -428,6 +448,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ...(input.owner?.trim()
             ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
             : {}),
+          outcomeAuthor,
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
@@ -525,6 +546,35 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         const detail = `${previous ?? "not set"} -> ${next.value} (${reason.trim()})`;
         return save(cwd, dir, flow, previous === null ? "owner-set" : "owner-changed", detail);
       });
+    },
+
+    /**
+     * Change who wrote the outcome criterion. Both arguments are validated before
+     * the flow is read. The field and its journal line are written together by
+     * `save()`, and setting the value the flow already has writes neither. It
+     * gates nothing, so it does not check the acceptance-criteria seal and works
+     * on a closed flow: relabelling a sample is not a change to the contract.
+     */
+    async outcomeAuthorSet({ cwd, id, author, reason }): Promise<OutcomeAuthorSetResult> {
+      const next = parseOutcomeAuthor(author, "outcome author");
+      if (!reason?.trim()) {
+        throw new Error('flow outcome author requires --reason "<why>"');
+      }
+      validateSingleLineReason(reason);
+      // `previous` and `changed` are decided under the flow lock, so what the caller
+      // prints is what this call did, even when another writer changed the flow first.
+      let previous: OutcomeAuthorReading = "unknown";
+      let changed = false;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        previous = readOutcomeAuthor(current.outcomeAuthor);
+        if (previous === next) {
+          return current;
+        }
+        changed = true;
+        current.outcomeAuthor = next;
+        return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
+      });
+      return { flow, previous, changed };
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {

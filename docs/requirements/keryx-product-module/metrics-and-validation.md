@@ -56,10 +56,20 @@ person.
 ## Validity threat to G1a
 
 An agent that creates a flow has just read the instruction to fill the
-`## Outcome criteria` slot, so a declared criterion in an agent-created flow
-measures instruction-following, not that anyone wants the outcome checked. G1a
-is therefore read separately for flows created by a person and flows created by
-an agent, and the agent half is a **compliance check**, not acceptance. Authorship
-is not in flow.json; it is classified by hand when the ten flows are read and
-recorded next to the reading. The split of a real criterion against
-`not measured — <reason>` stays as a second axis.
+`## Outcome criteria` slot, so a declared criterion in a flow created by an agent
+measures instruction-following, not that anyone wants the outcome checked. The
+author of the outcome criterion is therefore recorded in flow.json as
+`outcomeAuthor`, `agent` or `human`: `keryx flow init --outcome-author
+agent|human` sets it (`agent` when the flag is absent, `human` only when the flag
+says so, never inferred from a git identity, an owner or the environment), and
+`keryx flow outcome author <id> agent|human --reason "<why>"` changes it with a
+journal line. A flow without the field reads `unknown`.
+
+G1a is counted in four cells, `human` or `agent` crossed with a real criterion or
+`not measured — <reason>`. G1b is split by author. **Agent flows measure
+compliance with the instruction; human flows measure acceptance.** Conclusions
+about acceptance are drawn only from human flows. An `unknown` flow, one created
+before the field existed, is counted in neither column. The split of a real
+criterion against `not measured — <reason>` stays as a second axis inside each
+author. The flag labels a sample and gates nothing: no flow is refused, frozen,
+completed or indexed differently because of it.

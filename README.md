@@ -646,7 +646,10 @@ Grouped by what you are trying to do, not by internal module layout.
   at, each with its outcome criterion or `not measured — no instrument stated`,
   and splits the count three ways: no outcome criterion stated, criterion
   stated but never observed, observed (split by verdict). A criterion goes in
-  the `## Outcome criteria` slot `flow init` leaves in `description.md`. An
+  the `## Outcome criteria` slot `flow init` leaves in `description.md`; who
+  wrote it is recorded as `outcomeAuthor` (`flow init --outcome-author
+  agent|human`, `flow outcome author <id> agent|human --reason "<why>"`), shown
+  by `product open`, and gates nothing. An
   observation is a line starting `outcome-observed: <verdict> — <note>` in the
   flow's `journal.md`, with the verdict one of `helped`, `no-effect`, `harmed`,
   `inconclusive`; a requirements package uses an `## Outcome observations`

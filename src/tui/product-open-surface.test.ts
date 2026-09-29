@@ -3,10 +3,11 @@
 // modal paints, not only on the formatter that feeds them.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { rm } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { buildIntentIndex } from "../product/corpus";
 import { copyFixtureRepo } from "../product/fixtures/repo";
-import { buildOpenReport, indexPath, loadOpenReport, writeIntentIndex, type OpenLoad } from "../product/service";
+import { buildOpenReport, indexPath, loadOpenReport, openEntryLines, writeIntentIndex, type OpenLoad } from "../product/service";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { isProductCommand, presentProductOpen, type PresentProductOptions } from "./product-open-surface";
 
@@ -105,6 +106,28 @@ describe("/product renders the open list", () => {
     expect(painted).toContain("outcome: not measured — no instrument stated");
     expect(painted).toContain("outcome: Checkout error rate for expired tokens");
     expect(rows.indexOf("flow 005  Bump the lockfile")).toBeLessThan(rows.indexOf("flow 001  Retry checkout on a stale token"));
+  });
+
+  // Flow 365 (AC5): the author is on each block, from the same lines `keryx product open` prints.
+  test("each block names the outcome author: recorded, or unknown for a flow without the field", async () => {
+    const root = await copyFixtureRepo();
+    roots.push(root);
+    const flowFile = path.join(root, ".metaproject", "flows", "001-2026-01-01-stated-outcome", "flow.json");
+    const raw = JSON.parse(await readFile(flowFile, "utf8")) as Record<string, unknown>;
+    raw["outcomeAuthor"] = "human";
+    await writeFile(flowFile, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+    const index = await buildIntentIndex(root);
+    const load: OpenLoad = { ok: true, report: buildOpenReport(index) };
+
+    const rows = open(load, { visibleRows: 40 }).painted().split("\n");
+    const block = (title: string): string[] => rows.slice(rows.indexOf(title), rows.indexOf(title) + 6);
+    expect(block("flow 001  Retry checkout on a stale token").join("\n")).toContain("outcome author: human");
+    expect(block("flow 003  Rename the export button").join("\n")).toContain("outcome author: unknown");
+    // Same values as the CLI: the painted rows are exactly `openEntryLines`.
+    if (!load.ok) throw new Error("load failed");
+    const entry = load.report.entries.find((candidate) => candidate.id === "001");
+    if (entry === undefined) throw new Error("flow 001 is not on the list");
+    for (const line of openEntryLines(entry)) expect(rows).toContain(line);
   });
 
   test("an observed flow and an open flow are not painted", async () => {

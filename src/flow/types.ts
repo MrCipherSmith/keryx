@@ -5,6 +5,7 @@
 import type { NextTaskDecision } from "./machine";
 import type { Identity } from "./identity";
 import type { AcKindError, AcKindReport, AcKindRecord } from "./ac-kinds";
+import type { OutcomeAuthor, OutcomeAuthorReading } from "./outcome-author";
 export type { Identity, IdentityBasis } from "./identity";
 
 export type FlowStatus =
@@ -262,6 +263,15 @@ export type FlowState = {
    */
   owner?: Identity | undefined;
   /**
+   * Who wrote the outcome criterion: `agent` or `human`. Optional and additive:
+   * ABSENT on every flow created before it existed, and readers treat absence
+   * as `unknown` — neither agent nor human — never as `agent`. Written once by
+   * `flow init` (`--outcome-author`, default `agent`; `human` only when the flag
+   * says so, never inferred) and changed only by `flow outcome author`, which
+   * leaves a journal line. Nothing gates on it. See `./outcome-author`.
+   */
+  outcomeAuthor?: OutcomeAuthor | undefined;
+  /**
    * Append-only signing record (flow 289, AC4). Absent on a flow that has
    * never had an `ac confirm` or a passing `complete` recorded under this
    * field's existence, and on every pre-existing flow.json (additive, like
@@ -432,6 +442,12 @@ export type FlowInitInput = {
   baseBranch?: string | undefined;
   /** The human accountable for this flow. See `FlowState.owner`. Never inferred. */
   owner?: string | undefined;
+  /**
+   * Who wrote the outcome criterion, as the raw flag value: validated by
+   * `flow init` (only `agent` or `human` pass; anything else is refused before
+   * the flow is created). Omitted means `agent`. Never inferred. See `FlowState.outcomeAuthor`.
+   */
+  outcomeAuthor?: string | undefined;
   /** Opt this flow into the confirmation gate (flow 299). See `FlowGates.confirmation`. */
   requireConfirmation?: boolean | undefined;
 };
@@ -514,6 +530,13 @@ export type FlowRenumberResult = {
   toDir: string;
   reviewRecords: FlowRenumberReviewRecords;
 };
+
+/** What `outcomeAuthorSet` did: the reading it replaced and whether it wrote anything. */
+export interface OutcomeAuthorSetResult {
+  flow: FlowState;
+  previous: OutcomeAuthorReading;
+  changed: boolean;
+}
 
 export interface FlowService {
   init(input: FlowInitInput): Promise<FlowInitResult>;
@@ -615,6 +638,14 @@ export interface FlowService {
    * to a silent overwrite.
    */
   ownerSet(input: { cwd: string; id: string; owner: string; reason: string }): Promise<FlowState>;
+  /**
+   * Change who wrote a flow's outcome criterion. Requires a non-empty
+   * single-line `reason` and a value of exactly `agent` or `human`. Writes the
+   * field and ONE `journal.md` line (old value or `unknown`, new value, reason)
+   * together; setting the value the flow already has writes nothing. Gates
+   * nothing, so it also works on a flow that is already closed.
+   */
+  outcomeAuthorSet(input: { cwd: string; id: string; author: string; reason: string }): Promise<OutcomeAuthorSetResult>;
   complete(input: {
     cwd: string;
     id: string;

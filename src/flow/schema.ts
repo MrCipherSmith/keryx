@@ -105,6 +105,12 @@ export function flowStateSchema(): Record<string, unknown> {
         description:
           "The human accountable for this flow, or absent if one was never set. Never inferred: only ever written by an explicit `--owner` on `flow init` or `flow owner set`, so `basis` is always `stated`.",
       },
+      outcomeAuthor: {
+        type: "string",
+        enum: ["agent", "human"],
+        description:
+          "Who wrote the outcome criterion. Written by `flow init --outcome-author` (default `agent`; `human` only when the flag says so, never inferred) and changed only by `flow outcome author`, which journals the change. Absent on flows created before the field existed, and read as `unknown` (neither agent nor human). Gates nothing.",
+      },
       signatures: {
         type: "array",
         description:

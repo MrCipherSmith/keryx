@@ -14,8 +14,10 @@ import {
   acCheckCachePath,
   readAcCheckCache,
   readAcKindRecords,
+  readOutcomeAuthor,
   statusLabel,
   type AcCheckStatus,
+  type OutcomeAuthorReading,
   type AcKindRecord,
   uncommittedFlowStateNotes,
 } from "../flow/service";
@@ -60,6 +62,12 @@ export type FlowInspectorItem = {
   updatedAt: string;
   source: string;
   tasks: readonly { id: string; title: string; status: string }[];
+  /**
+   * Who wrote the outcome criterion, read through the same function `keryx flow
+   * status` uses, so `unknown` (a flow without the field) is one word on both
+   * surfaces. Absent only on an item built by hand, which reads `unknown`.
+   */
+  outcomeAuthor?: OutcomeAuthorReading;
   /**
    * Set when the flow is `completing` and nothing holds its lock (flow 299,
    * AC6): the same condition, and the same words, as `keryx flow status`.
@@ -174,6 +182,7 @@ export function flowItemFromState(flow: FlowState, dir: string): FlowInspectorIt
     updatedAt: flow.updatedAt,
     source: flow.source.ref ?? flow.source.type,
     tasks: flow.tasks.map((task) => ({ id: task.id, title: task.title, status: task.status })),
+    outcomeAuthor: readOutcomeAuthor(flow.outcomeAuthor),
   };
 }
 

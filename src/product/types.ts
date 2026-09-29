@@ -5,6 +5,7 @@
 // pure function of the tree it was read from, so it carries no clock.
 
 import type { AcKindRecord } from "../flow/ac-kinds";
+import type { OutcomeAuthorReading } from "../flow/service";
 
 export type IntentSource = "flow" | "docpack";
 
@@ -40,6 +41,13 @@ export interface Intent {
   readonly flowStatus: string | null;
   readonly closedAt: string | null;
   readonly outcome: IntentOutcome;
+  /**
+   * Who wrote the flow's outcome criterion: `agent`, `human`, or `unknown` when
+   * `flow.json` does not carry the field. Optional: an index written before the
+   * field existed stays valid, and a requirements package has no such author, so
+   * it carries none. It labels; nothing gates on it.
+   */
+  readonly outcomeAuthor?: OutcomeAuthorReading | undefined;
 }
 
 export interface IntentCounts {
@@ -92,6 +100,8 @@ export interface OpenEntry {
   /** The criterion, or the literal text saying none is stated. */
   readonly outcome: string;
   readonly hasCriterion: boolean;
+  /** Who wrote the criterion, read from the intent record; `unknown` for an index that predates the field. */
+  readonly outcomeAuthor: OutcomeAuthorReading;
 }
 
 export interface OpenReport {

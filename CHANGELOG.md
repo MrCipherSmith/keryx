@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.33] — 2026-09-29
+
+### Added
+- **Who wrote the outcome criterion** — a flow's `flow.json` gains an optional `outcomeAuthor`, `agent` or `human`; a flow without it reads `unknown`, and reading never rewrites a file. `keryx flow init --outcome-author agent|human` records it: `agent` when the flag is absent, `human` only when the flag says so (never inferred from a git identity, an owner or the environment), and any other value is refused before the flow is created. With `human`, the `## Outcome criteria` section of `description.md` is the template's own text, byte for byte. `keryx flow schema` lists the field.
+- **`keryx flow outcome author <id> agent|human --reason "<why>"`** — changes it. A missing reason or an unknown value is refused; the field and one `journal.md` line (old value or `unknown`, new value, reason) are written together; setting the value already held writes nothing. It is a `flow` command, so the product module keeps its four commands.
+- **The author is shown** — `keryx flow status` prints an `outcome author:` line; `keryx product index` carries it on each flow intent (optional in `index.json`, so an older index stays valid; covered by the fingerprint); `keryx product open` and the TUI `/product` print it per entry, and the `/flows` detail tab shows it. The flag gates nothing: no completion, freeze, creation or index result depends on it.
+
+### Changed
+- **G1a is counted in four cells and G1b split by author** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): `human` or `agent` crossed with a real criterion or `not measured — <reason>`. Agent flows measure compliance with the instruction; human flows measure acceptance, and conclusions about acceptance come only from human flows. This replaces the 0.3.32 passage that said authorship is classified by hand; the author is now read from flow.json.
+
 ## [0.3.32] — 2026-09-29
 
 ### Added
