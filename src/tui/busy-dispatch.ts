@@ -12,6 +12,7 @@
 export type BusyDispatchTarget =
   | "exit"
   | "help"
+  | "setup"
   | "interrupt"
   | "queue"
   /**
@@ -85,6 +86,7 @@ export function classifyBusyDispatch(params: {
   const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp, isMcpConsumer } = params;
   if (commandName === "/exit") return "exit";
   if (commandName === "/help") return "help";
+  if (commandName === "/setup") return "setup";
   if (commandName === "/interrupt") return "interrupt";
   if (commandName === "/queue") return "queue";
   if (commandName === "/delegate") return "delegate";

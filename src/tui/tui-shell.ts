@@ -174,6 +174,8 @@ import {
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+import { openSetupModal } from "./setup-modal";
+import { renderSetupGuide, renderSetupScenario, setupScenario } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -5553,6 +5555,15 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
+    const openSetup = (scenario?: string): void => {
+      const known = scenario !== undefined && setupScenario(scenario) !== undefined ? scenario : undefined;
+      openSetupModal(otui, chrome, {
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...(known !== undefined ? { initialScenario: known as "init" | "refresh" | "repair" } : {}),
+      });
+    };
+
     // Flow 303 (AC8; HIGH 1 fix, PR #669 review): first-run onboarding —
     // opens `/help` on the "Connect a model provider" tab exactly once, only
     // when no provider is connected yet, and never again. Dispatched in the
@@ -7369,6 +7380,10 @@ export async function launchTuiAgentShell(opts: {
             openHelp();
             return;
           }
+          case "setup": {
+            openSetup(line.trim().split(/\s+/).slice(1)[0]);
+            return;
+          }
           case "interrupt": {
             if (foregroundOperation.isActive) {
               foregroundOperation.cancel("interrupted by user");
@@ -8101,6 +8116,11 @@ export async function launchTuiAgentShell(opts: {
             const report = await buildDoctorReport(sessionCwd);
             io.onSystem?.(`${formatDoctorReport(report)}\n`);
           })();
+          return;
+        }
+        if (command.name === "/setup") {
+          const arg = line.trim().split(/\s+/).slice(1)[0];
+          openSetup(arg);
           return;
         }
         if (command.name === "/game") {

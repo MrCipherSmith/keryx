@@ -88,6 +88,7 @@ import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
+import { renderSetupGuide, renderSetupScenario, setupScenario } from "./setup-guide";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -237,6 +238,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/status",
   "/flows",
   "/doctor",
+  "/setup",
   "/theme",
   "/mode",
   "/reasoning",
@@ -942,6 +944,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         // second implementation of any one check.
         const report = await buildDoctorReport(deps.session?.cwd ?? process.cwd());
         system(`${formatDoctorReport(report)}\n`);
+        continue;
+      }
+      if (command === "/setup") {
+        const scenario = setupScenario(argument.trim());
+        system(`${scenario === undefined ? renderSetupGuide() : renderSetupScenario(scenario)}\n`);
         continue;
       }
       if (isSessionInfoCommand(command)) {
@@ -2588,6 +2595,9 @@ export async function runAgentRepl(
         // second implementation of any one check.
         const report = await buildDoctorReport(sessionCwd);
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
+      } else if (command === "/setup") {
+        const scenario = setupScenario(rest);
+        agentIo.onSystem?.(`${scenario === undefined ? renderSetupGuide() : renderSetupScenario(scenario)}\n`);
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

@@ -147,6 +147,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: BOTH,
   },
   {
+    name: "/setup",
+    description: "Metaproject preparation guide — /setup [init|refresh|repair] (prints steps, runs nothing)",
+    modes: BOTH,
+  },
+  {
     name: "/ac",
     description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
     modes: AGENT_ONLY,
