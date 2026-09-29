@@ -3,8 +3,10 @@
 // worktree are fakes fed with the raw transcripts in `fixtures/external/live/`.
 //
 // The live tests run only with KERYX_LIVE_EXTERNAL=1. They spend subscription
-// quota and need the vendor CLI logged in, `externalAgents.enabled` on, and a
-// working directory whose project manifest does not block the run.
+// quota and need the vendor CLI logged in, `externalAgents.enabled` on, and
+// KERYX_LIVE_EXTERNAL_CWD pointing at a clean scratch git repo whose project
+// manifest allows external agents. They assert against real processes; they
+// record nothing. The antigravity-cli replay lives in antigravity-cli.runtime.test.ts.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -145,7 +147,7 @@ describe("every recorded live fixture carries its vendor version and no private 
 
   for (const file of files) {
     const rel = path.relative(LIVE_ROOT, file);
-    test(`${rel} holds nothing private`, () => {
+    test(`${rel} matches none of the known private-data patterns`, () => {
       const text = readFileSync(file, "utf8");
       for (const [label, pattern] of FORBIDDEN) {
         expect({ label, match: pattern.exec(text)?.[0] }).toEqual({ label, match: undefined });
@@ -174,15 +176,22 @@ describe("live: a real vendor process through `keryx agents external run` (KERYX
   const task = "reply with the single word ok; change nothing";
 
   async function liveRun(agent: string, prompt: string): Promise<Record<string, unknown>> {
-    const cwd = process.env.KERYX_LIVE_EXTERNAL_CWD ?? process.cwd();
+    // The runtime puts uncommitted work into the vendor prompt, so a live run must not
+    // default to the repository: point KERYX_LIVE_EXTERNAL_CWD at a clean scratch repo.
+    const cwd = process.env.KERYX_LIVE_EXTERNAL_CWD;
+    if (!cwd) throw new Error("set KERYX_LIVE_EXTERNAL_CWD to a clean scratch git repo (its manifest must allow external agents)");
     const proc = Bun.spawn(["bun", cli, "agents", "external", "run", agent, "--task", prompt, "--unattended", "--json"], {
       cwd,
       stdout: "pipe",
       stderr: "pipe",
     });
-    const stdout = await new Response(proc.stdout).text();
-    await proc.exited;
-    return JSON.parse(stdout) as Record<string, unknown>;
+    const [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+    const exitCode = await proc.exited;
+    try {
+      return JSON.parse(stdout) as Record<string, unknown>;
+    } catch {
+      throw new Error(`${agent}: exit ${exitCode}, no JSON outcome. stdout: ${stdout.slice(0, 400)} stderr: ${stderr.slice(0, 400)}`);
+    }
   }
 
   test.skipIf(!LIVE)("claude-cli answers", async () => {

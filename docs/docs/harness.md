@@ -376,15 +376,16 @@ terminal is yours to do. The worktree is gone by then, and the tab says so.
   own `spawn_subagent` path passes both.
 - **No resume is ever spawned.** The argv is built and displayed for detaching by
   hand.
-- **Live-verified on 2026-09-29, with limits.** A real `claude` 2.1.280 process
-  ran end to end through `keryx agents external run` and ended `Completed`;
-  `antigravity-cli` (`agy` 1.2.12) did the same (it denies any tool call it cannot
-  ask about, so give it a task that needs no tools). `codex-cli` 0.159.0 was run
-  for real but hit its subscription usage limit, so only the failure path is
-  recorded, not a successful answer. Gemini has never been run. The raw
-  transcripts live in `fixtures/external/live/`, each with its vendor version; the
-  default tests replay them offline, and `KERYX_LIVE_EXTERNAL=1` re-records them
-  against real processes.
+- **Live-verified, with limits.** A real `claude` 2.1.280 process ran end to end
+  through `keryx agents external run` on 2026-09-29 and ended `Completed`;
+  `antigravity-cli` (`agy` 1.2.12) did the same on 2026-09-28 and again on
+  2026-09-29 (it denies any tool call it cannot ask about, so give it a task that
+  needs no tools). `codex-cli` 0.159.0 was run for real on 2026-09-29 but hit its
+  subscription usage limit, so only the failure path is recorded, not a successful
+  answer. Gemini has never been run. The raw transcripts live in
+  `fixtures/external/live/`, each with its vendor version, and the default tests
+  replay them offline. `KERYX_LIVE_EXTERNAL=1` runs live tests that assert against
+  real processes; they record nothing.
 
 ## Record and replay
 

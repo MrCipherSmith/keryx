@@ -238,7 +238,8 @@ const CLI_USAGE_PATTERNS: readonly RegExp[] = [
  * No usable credentials. Fixture: `not-logged-in.stdout.jsonl` (401 on every attempt).
  * The last two are codex-cli 0.159.0's wording for an expired login, seen live on
  * 2026-09-29 with no 401 in it: "Your access token could not be refreshed. Please
- * log out and sign in again."
+ * log out and sign in again." Not recorded as a fixture (the transcript was not
+ * captured); covered by a unit test only.
  */
 const AUTH_PATTERNS: readonly RegExp[] = [
   /\b401\b/,
