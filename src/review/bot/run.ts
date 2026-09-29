@@ -94,12 +94,16 @@ export function parseVerifierVerdict(reply: string): VerifierVerdict {
   return unverifiable;
 }
 
+export type BotDiffFacts = { truncated: boolean; bytes: number; totalBytes: number; capBytes: number };
+
 export type BotRunRecord = {
   reviewId: string;
   headSha: string;
   ranAt: string;
   postedAt: string | null;
   reviewUrl: string | null;
+  /** Absent on records written before the cap was persisted; read back as null. */
+  diff?: BotDiffFacts | null | undefined;
 };
 
 export type BotState = {
@@ -121,7 +125,8 @@ export function emptyBotState(repo: string, number: number): BotState {
 export async function readBotState(cwd: string, repo: string, number: number): Promise<BotState> {
   try {
     const parsed = JSON.parse(await Bun.file(botStatePath(cwd, repo, number)).text()) as Partial<BotState>;
-    return { ...emptyBotState(repo, number), ...parsed, reviews: parsed.reviews ?? [], pull: parsed.pull ?? null };
+    const reviews = (parsed.reviews ?? []).map((entry) => ({ ...entry, diff: entry.diff ?? null }));
+    return { ...emptyBotState(repo, number), ...parsed, reviews, pull: parsed.pull ?? null };
   } catch {
     return emptyBotState(repo, number);
   }
@@ -348,7 +353,14 @@ export async function runReviewBot(input: RunReviewBotInput): Promise<RunReviewB
   }
 
   const state = await readBotState(input.cwd, input.repo, input.number);
-  state.reviews.push({ reviewId: packaged.reviewId, headSha: facts.headSha, ranAt: now.toISOString(), postedAt: null, reviewUrl: null });
+  state.reviews.push({
+    reviewId: packaged.reviewId,
+    headSha: facts.headSha,
+    ranAt: now.toISOString(),
+    postedAt: null,
+    reviewUrl: null,
+    diff: { truncated: diff.truncated, bytes: diff.bytes, totalBytes: diff.totalBytes, capBytes },
+  });
   state.pull = pullRecord(facts, now);
   await writeBotState(input.cwd, state);
 

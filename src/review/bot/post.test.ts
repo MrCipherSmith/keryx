@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createManagedReviewPackage } from "../managed";
-import { createFixturePort } from "../pr-comments";
-import { buildReviewPayload, parseDiffHunks, postBotReview, type PostBotReviewResult } from "./post";
-import { readBotState, writeBotState, emptyBotState } from "./run";
+import { createFixturePort, type GitHubPort } from "../pr-comments";
+import { buildReviewPayload, parseDiffFiles, parseDiffHunks, postBotReview, type PostBotReviewResult } from "./post";
+import { botStatePath, readBotState, writeBotState, emptyBotState, type BotDiffFacts } from "./run";
 
 const roots: string[] = [];
 
@@ -64,7 +64,7 @@ function finding(id: string, overrides: Record<string, unknown> = {}): Record<st
 
 async function seed(
   findings: unknown[],
-  options: { head?: string; state?: boolean } = {},
+  options: { head?: string; state?: boolean; diff?: BotDiffFacts } = {},
 ): Promise<{ root: string; reviewId: string }> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-bot-post-"));
   roots.push(root);
@@ -93,6 +93,7 @@ async function seed(
       ranAt: "2026-09-29T10:00:00.000Z",
       postedAt: null,
       reviewUrl: null,
+      ...(options.diff !== undefined ? { diff: options.diff } : {}),
     });
     await writeBotState(root, state);
   }
@@ -186,6 +187,139 @@ describe("buildReviewPayload", () => {
   test("a withheld count is stated in the body without the withheld text", () => {
     const payload = buildReviewPayload({ headSha: HEAD, hunks: new Map(), items: [], withheld: 2 });
     expect(payload.body).toMatch(/2 finding\(s\) withheld/);
+  });
+});
+
+const TRUNCATED: BotDiffFacts = { truncated: true, bytes: 1200, totalBytes: 9000, capBytes: 1500 };
+const MARKER = `<!-- keryx-review-bot commit_id=${HEAD} -->`;
+
+describe("coverage, marker and screening of the assembled payload", () => {
+  test("a truncated diff is stated in the review body; a complete one is not", () => {
+    const base = { headSha: HEAD, hunks: new Map(), items: [{ id: "F-1", file: null, line: null, body: "b" }], withheld: 0 };
+    const cut = buildReviewPayload({ ...base, diff: TRUNCATED });
+    expect(cut.body).toContain("Only the first 1,200 of 9,000 bytes of the diff were reviewed (cap 1,500); files after the cut were not reviewed.");
+    const whole = buildReviewPayload({ ...base, diff: { ...TRUNCATED, truncated: false } });
+    expect(whole.body).not.toContain("Only the first");
+    expect(buildReviewPayload(base).body).not.toContain("Only the first");
+  });
+
+  test("the review body ends with the hidden marker for the head commit", () => {
+    const payload = buildReviewPayload({ headSha: HEAD, hunks: new Map(), items: [{ id: "F-1", file: null, line: null, body: "b" }], withheld: 1 });
+    expect(payload.body.endsWith(MARKER)).toBe(true);
+  });
+
+  test("parseDiffFiles lists every path the diff names, deleted files included", () => {
+    const diff = ["diff --git a/x.ts b/x.ts", "--- a/x.ts", "+++ b/x.ts", "@@ -1 +1 @@", "-a", "+b", "diff --git a/gone.ts b/gone.ts", "--- a/gone.ts", "+++ /dev/null", "@@ -1 +0,0 @@", "-a", ""].join("\n");
+    expect([...parseDiffFiles(diff)].sort()).toEqual(["gone.ts", "x.ts"]);
+  });
+
+  test("a truncated diff with zero findings still produces a review that says so", async () => {
+    const { root } = await seed([], { diff: TRUNCATED });
+    const { result, port } = await post(root, { send: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.mode).toBe("posted");
+    expect(result.payload?.body).toContain("Only the first 1,200 of 9,000 bytes");
+    expect(result.payload?.comments).toEqual([]);
+    expect(port.posts).toHaveLength(1);
+  });
+
+  test("the truncation facts survive the record, and an old record without them reads back as null", async () => {
+    const { root } = await seed([finding("F-001")], { diff: TRUNCATED });
+    expect((await readBotState(root, "acme/app", 7)).reviews[0]?.diff).toEqual(TRUNCATED);
+    const state = await readBotState(root, "acme/app", 7);
+    const legacy = { ...state, reviews: state.reviews.map(({ diff: _diff, ...rest }) => rest) };
+    await Bun.write(botStatePath(root, "acme/app", 7), JSON.stringify(legacy));
+    expect((await readBotState(root, "acme/app", 7)).reviews[0]?.diff).toBeNull();
+    const { result } = await post(root);
+    expect(result.ok && result.payload?.body).not.toContain("Only the first");
+  });
+
+  test("a secret-shaped string in `file` never reaches the payload, even beside a clean problem text", async () => {
+    const { root } = await seed([finding("F-001", { file: `docs/${AWS_KEY}.md`, quote: undefined })]);
+    const { result } = await post(root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.stringify(result.payload)).not.toContain(AWS_KEY);
+    expect(result.payload?.body).toContain("problem F-001");
+  });
+
+  test("a secret-shaped path that IS in the diff withholds the finding instead of masking its header", async () => {
+    const diff = ["diff --git a/src/AKIAIOSFODNN7EXAMPLE.ts b/src/AKIAIOSFODNN7EXAMPLE.ts", `--- a/src/${AWS_KEY}.ts`, `+++ b/src/${AWS_KEY}.ts`, "@@ -1,1 +1,2 @@", " one", "+two", ""].join("\n");
+    const { root } = await seed([finding("F-001", { file: `src/${AWS_KEY}.ts`, quote: undefined }), finding("F-002", { quote: undefined })]);
+    const { result } = await post(root, { getDiff: async () => `${DIFF}${diff}` });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(JSON.stringify(result.payload)).not.toContain(AWS_KEY);
+    expect(result.withheld.map((entry) => entry.id)).toEqual(["F-001"]);
+    expect(result.payload?.body).toMatch(/1 finding\(s\) withheld/);
+    expect(result.payload?.body).toContain("problem F-002");
+  });
+
+  test("a finding with no quote never becomes an inline comment, whatever line the model gave", async () => {
+    const { root } = await seed([finding("F-001", { quote: undefined, line: 2 })]);
+    const { result } = await post(root);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.inline).toBe(0);
+    expect(result.inBody).toBe(1);
+    expect(result.payload?.comments).toEqual([]);
+    expect(result.payload?.body).not.toContain("src/a.ts:2");
+  });
+
+  test("a review already on the pull request for this commit refuses a second post", async () => {
+    const { root } = await seed([finding("F-001")]);
+    const port = createFixturePort({ pull: pullFixture(), "pull-reviews": [{ id: 1, user: { login: "someone" }, body: `earlier\n\n${MARKER}` }] });
+    const result = await postBotReview({ cwd: root, repo: "acme/app", number: 7, port, send: true, getDiff: async () => DIFF });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.stage).toBe("already-posted");
+    expect(port.posts).toEqual([]);
+  });
+
+  test("a review for another commit does not block the post", async () => {
+    const { root } = await seed([finding("F-001")]);
+    const port = createFixturePort({ pull: pullFixture(), "pull-reviews": [{ id: 1, body: `old\n\n<!-- keryx-review-bot commit_id=${"c".repeat(40)} -->` }] });
+    const result = await postBotReview({ cwd: root, repo: "acme/app", number: 7, port, send: true, getDiff: async () => DIFF });
+    expect(result.ok && result.mode).toBe("posted");
+    expect(port.posts).toHaveLength(1);
+  });
+
+  test("when the existing reviews cannot be read the duplicate check is skipped and said so", async () => {
+    const { root } = await seed([finding("F-001")]);
+    const inner = createFixturePort({ pull: pullFixture() });
+    const port: GitHubPort = {
+      request: async (request) => {
+        if (request.method === "GET" && request.path.endsWith("/reviews")) throw new Error("boom");
+        return inner.request(request);
+      },
+    };
+    const result = await postBotReview({ cwd: root, repo: "acme/app", number: 7, port, send: true, getDiff: async () => DIFF });
+    expect(result.ok && result.mode).toBe("posted");
+    if (!result.ok) return;
+    expect(result.notes?.join(" ")).toContain("duplicate check was skipped");
+    expect(inner.posts).toHaveLength(1);
+  });
+
+  test("a record that cannot be saved after a successful post is reported as posted, not thrown", async () => {
+    const { root } = await seed([finding("F-001")]);
+    const inner = createFixturePort({ pull: pullFixture() });
+    const port: GitHubPort = {
+      request: async (request) => {
+        const answer = await inner.request(request);
+        if (request.method === "POST") {
+          await rm(botStatePath(root, "acme/app", 7), { force: true });
+          await mkdir(botStatePath(root, "acme/app", 7), { recursive: true });
+        }
+        return answer;
+      },
+    };
+    const result = await postBotReview({ cwd: root, repo: "acme/app", number: 7, port, send: true, getDiff: async () => DIFF });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.mode).toBe("posted");
+    expect(result.notes?.join(" ")).toContain("record not saved");
+    expect(inner.posts).toHaveLength(1);
   });
 });
 

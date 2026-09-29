@@ -996,7 +996,9 @@ Set up the secret and copy [`docs/examples/review-bot.yml`](docs/examples/review
 (default 200,000 bytes) with one reviewer turn plus one verifier turn per finding.
 `keryx review metrics` (and `/reviews` in the shell) reports findings acted on,
 dismissed, precision and resolved-before-merge; a ratio with no data prints
-`n/a`. See [review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md).
+`n/a`. Metrics need the managed review packages on the machine where you run
+`keryx review complete`; the Action's runner keeps them only for the job and
+nothing uploads them. See [review as a pull request bot](docs/docs/guides/review-as-a-pr-bot.md).
 
 ## Documentation
 

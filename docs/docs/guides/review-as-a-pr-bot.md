@@ -6,8 +6,9 @@ pull request, and nobody can tell afterwards whether it was worth reading.
 **What you get:** a GitHub Actions job that reviews each same-repository pull
 request, has a second model turn try to refute every finding, and posts **one**
 review with an inline comment per finding. Every finding is stored as a
-[managed review](review-with-a-record.md), so `keryx review metrics` can say how
-many were acted on and how many were wrong.
+[managed review](review-with-a-record.md), and `keryx review metrics` can say how
+many were acted on and how many were wrong, but only on a machine that holds
+those review packages (see [Metrics](#metrics)).
 
 Nothing here has been run against a real GitHub repository or a real model
 provider by the people who wrote it; the tests inject fakes for both. Try it on
@@ -93,17 +94,28 @@ the current head, or when the review was made at an older commit. The one write
 it performs is a single `POST repos/{owner}/{repo}/pulls/{n}/reviews` with event
 `COMMENT`; a comment that quotes a line outside the diff goes in the review body
 instead of inline. A comment that would carry a secret-shaped string is withheld
-and counted, never masked and posted.
+and counted, never masked and posted; the same check covers the review body and
+each finding's file header. A finding whose file is not in the diff is posted
+without a file header, and a finding without a quote is never placed inline.
+The review body ends with a hidden marker naming the head commit, and the post
+step refuses when a review carrying that marker is already on the pull request.
 
 ## What one run costs
 
 One reviewer turn over the diff, then one verifier turn per finding. The diff is
 cut at `--max-diff-bytes` (default 200,000 bytes, roughly 50,000 tokens) at a line
 boundary. When it is cut, the review says so and lists nothing about the files
-after the cut. A smaller cap costs less and sees less. Findings the verifier
+after the cut. When the cut leaves no findings, the review is still posted so the
+reader learns the coverage was partial. A smaller cap costs less and sees less. Findings the verifier
 refutes are dropped and not stored.
 
 ## Metrics
+
+The Action's runner writes the review packages and the bot state under
+`.metaproject/` and keeps them only for the length of the job; nothing uploads
+them, so the Action does not produce `keryx review metrics`. Metrics need the
+managed review packages on the machine where you run `keryx review complete` and
+`keryx review metrics`.
 
 The numbers below are illustrative.
 

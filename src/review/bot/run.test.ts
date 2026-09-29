@@ -12,6 +12,7 @@ import {
   type ModelTurnResult,
   parseReviewerFindings,
   parseVerifierVerdict,
+  readBotState,
   renderRunSummary,
   runReviewBot,
   VERIFIER_SYSTEM_PROMPT,
@@ -122,6 +123,31 @@ async function run(
   });
   return { result, port };
 }
+
+describe("runReviewBot diff coverage record", () => {
+  test("the truncation facts are persisted in the bot run record", async () => {
+    const root = await workspace();
+    const cap = 40;
+    const { result } = await run(root, fakeModel({ reviewer: reviewerReply([]) }), { maxDiffBytes: cap });
+    expect(result.ok).toBe(true);
+    const record = (await readBotState(root, "acme/app", 7)).reviews[0];
+    expect(record?.diff?.truncated).toBe(true);
+    expect(record?.diff?.capBytes).toBe(cap);
+    expect(record?.diff?.totalBytes).toBe(Buffer.byteLength(DIFF));
+    expect(record?.diff?.bytes).toBeLessThanOrEqual(cap);
+  });
+
+  test("a complete diff is recorded as not truncated", async () => {
+    const root = await workspace();
+    await run(root, fakeModel({ reviewer: reviewerReply([]) }));
+    expect((await readBotState(root, "acme/app", 7)).reviews[0]?.diff).toEqual({
+      truncated: false,
+      bytes: Buffer.byteLength(DIFF),
+      totalBytes: Buffer.byteLength(DIFF),
+      capBytes: DEFAULT_MAX_DIFF_BYTES,
+    });
+  });
+});
 
 describe("capDiff", () => {
   test("a diff under the cap is returned whole", () => {
