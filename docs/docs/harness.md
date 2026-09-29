@@ -376,9 +376,16 @@ terminal is yours to do. The worktree is gone by then, and the tab says so.
   own `spawn_subagent` path passes both.
 - **No resume is ever spawned.** The argv is built and displayed for detaching by
   hand.
-- **Nothing has been run against a real vendor process.** Every test drives a
-  fake process port against recorded transcripts, so "works" here means "works
-  offline against what the CLIs actually printed", not "proven end to end".
+- **Live-verified, with limits.** A real `claude` 2.1.280 process ran end to end
+  through `keryx agents external run` on 2026-09-29 and ended `Completed`;
+  `antigravity-cli` (`agy` 1.2.12) did the same on 2026-09-28 and again on
+  2026-09-29 (it denies any tool call it cannot ask about, so give it a task that
+  needs no tools). `codex-cli` 0.159.0 was run for real on 2026-09-29 but hit its
+  subscription usage limit, so only the failure path is recorded, not a successful
+  answer. Gemini has never been run. The raw transcripts live in
+  `fixtures/external/live/`, each with its vendor version, and the default tests
+  replay them offline. `KERYX_LIVE_EXTERNAL=1` runs live tests that assert against
+  real processes; they record nothing.
 
 ## Record and replay
 
@@ -423,6 +430,7 @@ Stated here rather than left to be discovered:
 - **No real replay.** See above — `validate-log` only.
 - **No branch merge.** Reconcile by forking again from a shared ancestor.
 - **No mutating external children, and no supervision of a running one.** The
-  external runtime is read-only, off by default, and has never been run against a
-  real vendor process — see
+  external runtime is read-only, off by default, and live-verified only for
+  `claude` 2.1.280 and `agy` 1.2.12 (codex-cli: failure path only; Gemini: not at
+  all) — see
   [what this deliberately does not do](#what-this-deliberately-does-not-do).

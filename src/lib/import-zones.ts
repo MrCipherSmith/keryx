@@ -169,6 +169,10 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
   // (adapter) is what actually writes the report artifacts and prints.
   { segment: "governance", zone: "core" },
+  // Flow 362: the product intent index — a pure reader over flow packages and
+  // requirements packages, no provider registry, no model call, no network.
+  // `src/commands/product.ts` (adapter) prints and writes the disposable index.
+  { segment: "product", zone: "core" },
   // Flow 309, W1 Lane A: deterministic, offline stack detection
   // (`detectStack`) and its persisted `stack.json`. Same shape as
   // `sync`/`forgetting`/`trigger`/`governance` above — project-state

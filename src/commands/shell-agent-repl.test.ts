@@ -1224,3 +1224,33 @@ describe("security review of PR #661 — no always-allow offer for `flow confirm
     expect(loadShellPermissions(configDir).allow).toEqual([]);
   });
 });
+
+describe("flow 360: /mcp trust in the readline REPL", () => {
+  test("AC4: /mcp is advertised in the readline help, with its trust subcommands", () => {
+    const help = readlineAgentHelpText();
+    expect(help).toContain("/mcp");
+    expect(help).toContain("/mcp trust list");
+    expect(help).not.toContain("/mcps");
+  });
+
+  test("AC3: /mcp trust list on a fresh session says nothing is trusted", async () => {
+    const output = await repl(["/mcp trust list", "/exit"]);
+    expect(output).toContain("No MCP tools are trusted in this session.");
+  });
+
+  test("AC3: revoking an unknown tool reports it and changes nothing", async () => {
+    const output = await repl(["/mcp trust revoke linear__nope", "/exit"]);
+    expect(output).toContain("linear__nope is not trusted in this session; nothing changed");
+  });
+
+  test("AC3: a malformed trust line prints the usage", async () => {
+    const output = await repl(["/mcp trust revoke", "/exit"]);
+    expect(output).toContain("Usage: /mcp trust list");
+  });
+
+  test("AC4: plain /mcp says the server view is TUI-only and points at the trust commands", async () => {
+    const output = await repl(["/mcp", "/exit"]);
+    expect(output).toContain("TUI-only");
+    expect(output).toContain("/mcp trust list");
+  });
+});

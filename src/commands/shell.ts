@@ -49,10 +49,22 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
-import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
+import {
+  catalogDestructiveResolver,
+  catalogFingerprintResolver,
+  catalogResolver,
+  catalogTrustStaleness,
+  describeUseToolApproval,
+  isMcpToolCall,
+  parseMcpTrustCommand,
+  promptUseToolApproval,
+  runMcpTrustCommand,
+  TRUSTED_MARKER,
+} from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createTierRankHost } from "../harness/routing/tier-rank-agent";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -243,6 +255,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/mode",
   "/reasoning",
   "/plan",
+  "/mcp",
   "/exit",
 ];
 
@@ -1980,6 +1993,7 @@ export async function runAgentRepl(
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
           style,
           GUTTER,
+          catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog()),
         );
       }
       if (tool !== "shell_exec") {
@@ -2120,7 +2134,11 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
-  agentIo.trustedMcpTools = new Set<string>();
+  agentIo.trustedMcpTools = new Map<string, string>();
+  // The live catalog's current definition fingerprint, read fresh on every
+  // call: a grant holds only while the tool's definition still matches it.
+  agentIo.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
+  agentIo.mcpToolDestructive = (fqn) => catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(fqn);
   // Flow 268 T16 (AC11): this readline session's own `/reasoning` override —
   // local to THIS function (unlike the TUI, readline agent mode has no
   // `/model`-style deps rebuild, so there is no second `AgentDeps` build that
@@ -2138,13 +2156,19 @@ export async function runAgentRepl(
     // "Always"-remembered grant below, which the user explicitly opted into
     // for that exact command, a mode-driven auto-approval was never okayed
     // action-by-action — only the mode itself was chosen, once.
-    const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+    const preview =
+      tool === "shell_exec"
+        ? parseShellExecCommand(input)
+        : isMcpToolCall(tool)
+          ? `${tool} ${describeUseToolApproval(input, catalogResolver(deps.mcpRuntime?.()?.catalog())).fqn}`
+          : tool;
     // `meta.credentials` never reaches here — resolveApprovalDecision's hard
     // floor means a credentials-touching call is never `auto`, in any mode.
     // Only `destructive` is worth flagging: it means `auto` mode (not `trust`,
     // which always asks for a destructive command) just bypassed it.
     const flag = meta.destructive ? style.yellow(" [destructive]") : "";
-    out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag} ${style.dim(preview)}\n`);
+    const trustedFlag = meta.mcpTrusted === true ? style.yellow(` ${TRUSTED_MARKER}`) : "";
+    out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag}${trustedFlag} ${style.dim(preview)}\n`);
   };
 
   let live: SessionHandle | undefined;
@@ -2677,6 +2701,7 @@ export async function runAgentRepl(
         } else {
           history = [];
           archive = [];
+          agentIo.trustedMcpTools?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
       } else if (command === "/compact") {
@@ -2826,6 +2851,18 @@ export async function runAgentRepl(
         } else {
           agentIo.onSystem?.("Usage: /plan [on|off]\n");
         }
+      } else if (command === "/mcp") {
+        const trust = parseMcpTrustCommand(line);
+        agentIo.onSystem?.(
+          trust === undefined
+            ? "The MCP server view is TUI-only here; `keryx mcp list` shows servers. Session trust: /mcp trust list | revoke <server__tool> | revoke all\n"
+            : `${runMcpTrustCommand(
+                trust,
+                agentIo.trustedMcpTools,
+                catalogResolver(deps.mcpRuntime?.()?.catalog()),
+                catalogTrustStaleness(deps.mcpRuntime?.()?.catalog()),
+              ).join("\n")}\n`,
+        );
       } else if (command === "/search-provider") {
         const args = parseSearchProviderArgs(parts.slice(1));
         const all = searchProviderController.configurable();
@@ -3742,6 +3779,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           }
           return [...byName.values()];
         },
+        // Flow 358: when the size words and version cannot settle a `model_tier`
+        // (ranking refused, or only an older-generation larger class above the
+        // session), a one-shot call on this provider's light tier orders the
+        // discovered models. Its answer is cached on disk by catalogue hash and
+        // recorded as `agent-ranked`; any failure keeps the session model.
+        tierRank: createTierRankHost(),
         // Finding 1 fix: thread the LIVE getter through so a dispatched
         // subagent's Seeds/Anchors actually fold into this TUI session's
         // slate once it opens — `createSpawnSubagentTool` calls this at fold
@@ -4333,6 +4376,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        mcpRuntime: () => mcpRuntime,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         // flow 268: `initialModelParams` is resolved once above (same

@@ -3,6 +3,110 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.36] — 2026-09-29
+### Added
+- **External agents verified against real vendor processes** — `claude` 2.1.280 (2026-09-29) and `agy` 1.2.12 (2026-09-28, run again 2026-09-29) ran end to end through `keryx agents external run` and ended `Completed`; the raw transcripts, each with its vendor version, are in `fixtures/external/live/` and replay offline (claude and codex in `live-fixtures.test.ts`, agy in `antigravity-cli.runtime.test.ts`). A fixture-scan test fails on a known set of private-data patterns (home path, e-mail, token, vendor credential-store reference). With `KERYX_LIVE_EXTERNAL=1` and `KERYX_LIVE_EXTERNAL_CWD` set to a clean scratch repo, live tests assert against real vendor processes; they record nothing.
+- **The first real codex-cli failure is recorded** — a subscription usage limit on codex 0.159.0, replacing the hand-authored stand-in as the reference for the limit classifier. No successful codex run exists yet; the subscription was at its limit until 2026-10-03.
+### Fixed
+- **codex-cli 0.159.0's expired-login wording is classified as an authentication failure** — "Your access token could not be refreshed. Please log out and sign in again." now yields the `codex login` hint instead of an unclassified failure.
+### Docs
+- `harness.md` and the shell/TUI test catalog no longer say the external runtime was never run against a real vendor process; they name the verified versions and keep Gemini and a successful codex run marked unverified.
+
+## [0.3.35] — 2026-09-29
+
+### Added
+- **MCP session trust is inspectable and revocable** — `/mcp trust list` prints every tool trusted for the session with its full name and server, and says `(will ask again: changed|destructive|gone)` instead of `[trusted]` for a grant the next call would not honour; `/mcp trust revoke <server__tool>` removes one and `/mcp trust revoke all` removes everything. An unknown name is reported and changes nothing, and revoke takes the full name only. Works in the TUI (also while the agent is busy) and in the readline shell, where `/mcp` was previously unhandled (plain `/mcp` there now points at `keryx mcp list`). `/mcp trust` is documented in the `/mcp` entry of the slash registry, dropdown, `/help` and the help modal.
+- **A `[trusted]` marker** on the approval transcript lines of a trusted tool, in the `/mcp` view (a per-server count), in `/mcp trust list`, and on the auto-approve line, which now also names the tool (`use_tool <server__tool>`).
+
+### Changed
+- **A tool marked `destructiveHint: true` is never offered session trust** — neither in the TUI dock nor in the readline prompt, and the approval carries a withheld reason saying it is destructive (`mcpTrustWithheldReason`). The annotation is read from the live catalog on every call, so a grant held for a tool that later reports `destructiveHint: true` is dropped and the call asks again. An absent or `false` annotation behaves exactly as in 0.3.27, because the MCP default for a missing hint is "destructive" and would withhold trust from nearly every server.
+
+### Fixed
+- **`/new` and `/clear` in the TUI now clear the session's MCP trust grants.** Only resume did, though the docs said `/new` cleared them.
+
+## [0.3.34] — 2026-09-29
+
+### Fixed
+- **`keryx flow outcome author` was unreachable from the command line in 0.3.33** — the router in `cli.ts` refuses a subcommand that `src/lib/group-subcommands.ts` does not list, and `outcome` was missing from the `flow` list, so the command answered `Unknown command: outcome` before the handler ran. The 0.3.33 tests called `flowCommand` directly and never went through the router. A new test compares every `case` in the `flow` switch with the router's list and runs the command through the real `cli.ts`.
+
+## [0.3.33] — 2026-09-29
+
+### Added
+- **Who wrote the outcome criterion** — a flow's `flow.json` gains an optional `outcomeAuthor`, `agent` or `human`; a flow without it reads `unknown`, and reading never rewrites a file. `keryx flow init --outcome-author agent|human` records it: `agent` when the flag is absent, `human` only when the flag says so (never inferred from a git identity, an owner or the environment), and any other value is refused before the flow is created. With `human`, the `## Outcome criteria` section of `description.md` is the template's own text, byte for byte. `keryx flow schema` lists the field.
+- **`keryx flow outcome author <id> agent|human --reason "<why>"`** — changes it. A missing reason or an unknown value is refused; the field and one `journal.md` line (old value or `unknown`, new value, reason) are written together; setting the value already held writes nothing. It is a `flow` command, so the product module keeps its four commands.
+- **The author is shown** — `keryx flow status` prints an `outcome author:` line; `keryx product index` carries it on each flow intent (optional in `index.json`, so an older index stays valid; covered by the fingerprint); `keryx product open` and the TUI `/product` print it per entry, and the `/flows` detail tab shows it. The flag gates nothing: no completion, freeze, creation or index result depends on it.
+
+### Changed
+- **G1a is counted in four cells and G1b split by author** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): `human` or `agent` crossed with a real criterion or `not measured — <reason>`. Agent flows measure compliance with the instruction; human flows measure acceptance, and conclusions about acceptance come only from human flows. This replaces the 0.3.32 passage that said authorship is classified by hand; the author is now read from flow.json.
+
+## [0.3.32] — 2026-09-29
+
+### Added
+- **Uncommitted closing-state note** — `keryx flow complete` writes flow.json, journal.md and reviews/ into the working copy after the pull request has merged, and nothing commits that afterwards, so a tracked flow directory commonly stayed dirty against HEAD. After a successful completion, and in `keryx flow status` for a `done` flow, keryx now prints one `note:` saying the flow directory has uncommitted changes, naming up to five changed entries (`+N more` beyond that), when git tracks the directory and it has changes; it does not claim to know what wrote them. Each git call is read-only (`--no-optional-locks`) and time-bounded. A directory git tracks nothing in, a clean one, no repository and any git failure print nothing. Read-only git, no model call, informational: it never changes an exit code or a completion result. The TUI `/flows` detail tab shows the same note.
+
+### Changed
+- **G1a is read separately by who created the flow** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): flows created by a person and flows created by an agent are counted apart, and an agent-created flow is a compliance check, not acceptance — the agent has just read the instruction to fill the slot. Authorship is classified by hand when the ten flows are read (flow.json does not record it), and the split between a real criterion and `not measured — <reason>` stays as a second axis.
+
+## [0.3.31] — 2026-09-29
+
+### Added
+- **Outcome verdicts** (product module, G1) — an observation is now `outcome-observed: <verdict> — <note>` at column 0 of a flow's `journal.md`, with the verdict exactly one of `helped`, `no-effect`, `harmed`, `inconclusive`. A line inside a fenced code block is ignored. The index stores the verdict and the note, `IntentCounts` splits the observed count by verdict, and the split appears in the `product index` summary, the `product open` header and the TUI `/product` view.
+- **Malformed observations are failures** — a line that starts `outcome-observed:` without a recognized verdict is listed by `product index`, naming the flow, and `index` exits non-zero. The flow stays in the `open` list (it was never validly observed) and is counted once by the staleness check; the header shows the failure count when it is non-zero.
+- **`## Outcome criteria` slot** in the description template `keryx flow init` writes, after Expected Outcome. An untouched hint is not a declared criterion; `not measured — <reason>` states there is no instrument.
+- **Docpack observations** — a requirements package may hold an `## Outcome observations` section in its README.md, one `- <verdict> — <note>` per line Fenced code blocks and HTML comments in the section are stripped first, and a section empty after that is no observation, not a failure. It is stored and parsed only: the package stays `open`. A malformed line is a failure naming the package.
+- **`flow init` note** — when the new description states no intent statement the product index could extract, `flow init` prints exactly one informational line saying so. It uses the same extraction as the index, never changes the exit code and never blocks.
+
+### Changed
+- **Decision gate G1 split into G1a and G1b** (`docs/requirements/keryx-product-module/implementation-plan.md`): G1a over the next 10 flows created after this release, the share that declared an outcome criterion or `not measured — <reason>`, reported as two separate shares; G1b, 2–4 weeks after the release of those flows, the share of them that got a verdict. `map` is built only if both pass. The historical "310 of 310 never checked" number is recorded as the before arm in `metrics-and-validation.md`, not as evidence for the premise.
+
+### Notes
+- Nothing gates: no flow transition, freeze, confirm or complete reads a verdict, criterion or note. No existing flow or requirements package was edited, and the free-text `outcome-observed:` form of 0.3.30 is no longer a valid observation.
+
+## [0.3.30] — 2026-09-29
+
+### Added
+- **`keryx product index [--json]`** (flow 362, product module P1) — reads every flow directory and every `docs/requirements/*/` package into one intent index at `.metaproject/data/product/index.json`. An intent is the Problem or Expected Outcome sentence, the criteria as `AcKindRecord`, the status, the close date and, for a requirements package, its outcome criteria. Deterministic: stable ordering, byte-identical on a second run, no timestamp in the body. The summary reports how many entries state no intent; a flow whose description holds only scaffold placeholders counts there and is not an error. The directory is disposable: delete it and the next `index` rebuilds an equivalent one, and nothing reads product data from anywhere else.
+- **`keryx product open [--json]`** — lists intents closed in code with no recorded observation. Each row names the flow and its outcome criterion, or the literal text `not measured — no instrument stated`. The header splits the never-checked count three ways: no outcome criterion stated, criterion stated but never observed, observed. The index carries a sha256 fingerprint of the flow and requirements files it was read from, plus the package names; when the index is missing or unreadable, or the fingerprint no longer matches the tree, it exits non-zero and names `keryx product index` instead of answering from stale data. Content, not modification time, decides: a restored or renamed directory is caught and a bare `touch` is not.
+- **Observations** — a line beginning `outcome-observed:` in a flow's `journal.md` is read by `index`, and that flow leaves the `open` list. Nothing writes the line.
+- **TUI** — `/product` opens the same header and rows in a scrollable modal, and opens while a turn is running because it only reads.
+
+### Notes
+- The module is one directory, two commands, no skill, no subagent and no gate. It makes no model call, and no other command calls it: no flow transition, freeze, confirm or complete waits on it.
+
+## [0.3.29] — 2026-09-28
+
+### Added
+- **Verification kinds on acceptance criteria** (flow 361, W0) — a criterion may end with one trailing marker: `[verify: exec `cmd`]`, `[verify: invariant `cmd`]`, `[verify: judged]` or `[verify: none — reason]`. The marker is part of the criterion line, so the freeze checksum covers it. A marker quoted in backticks is prose; two markers outside code, or a marker that is not last or does not close with `]`, is an error. An unmarked criterion is `unclassified`, never `none`. Nothing gates on a kind: freeze, `ac update`, confirm and complete behave exactly as before, and no existing criterion is migrated.
+- **`keryx flow ac kinds <id> [--json]`** — reads the criteria file and reports each criterion's kind, the distribution and the runnable coverage. Read-only, no model call; exits `1` naming the criterion when a marker is malformed (that criterion reads `unclassified`).
+- **`flow freeze` prints the distribution** and records a derived `acKinds` map on `flow.json`; `flow ac update` re-parses it in the same write as the new checksum. The file stays the source of truth; a malformed marker warns but never refuses.
+- **Governance coverage** — `keryx governance report` shows an `acceptance coverage` line per flow. A flow with no `acKinds` reads as fully unclassified, not as zero criteria.
+- **TUI** — the AC tab of `/flows` lists each criterion's kind under the same distribution block (`PgUp`/`PgDn` scroll it); a flow frozen before kinds existed says "not recorded".
+- **Requirements standard** — `requirements-package-standard` requires a `Verification:` field on every specification requirement and splits the PRD's success criteria into release criteria and outcome criteria (an outcome criterion names its observation or declares `not measured — <reason>`). The `docpack-orchestrator` Verify phase fails a package that omits either, and accepts an outcome list whose entries are all `not measured`.
+
+### Changed
+- `flow check-ac` strips a trailing verification marker before it extracts a criterion's tokens or decides it is not checkable, so a marker's command text is never read as the criterion's wording. Unmarked criteria are byte-identical.
+
+## [0.3.28] — 2026-09-28
+
+### Added
+- **Model-tier resolution is generation-aware** (flow 358) — within one family and vendor, a newer version now outranks an older one (`sonnet 5` over `5`, `opus 5.5` over `4.8`). A session on a newer model with an older, pricier model discovered never resolves `deep` to the older model: it keeps the session model, and `tier_resolution` / `tier_reasons` record why (`resolve:kept-older-generation-pricier`). `tier_reasons` now ends with a `resolve:<reason>` entry on every decision.
+- **`light` is the next size step below the session model** — an Opus session with Sonnet and Haiku discovered gets Sonnet; Haiku is taken only when nothing sits between.
+- **An agent fallback ranks candidate models when the deterministic ranking is refused or ambiguous** — one short call on the light tier of the session's own provider, shown discovered model ids and profile prices only (never a task), validated (foreign ids dropped, session model must be placed, standard/deep never below the session), cached by a catalogue hash in `tier-rank-cache.json`, and recorded as the new `tier_resolution: agent-ranked` (added to the dispatch and reviewer-input schemas). A failure, timeout or malformed answer keeps the session model. The rule states that it compares candidate models and never rates a task's own difficulty.
+- **`keryx review tier` and the shell's `spawn_subagent` row show the resolution source** — including `agent-ranked` and, for the agent, its trigger, the model it ran on and whether the answer came from cache.
+- The curated Anthropic lineup and seed profiles gain Opus 5.5 and Sonnet 5.5.
+
+### Changed
+- The Claude Code subagent alias map (`deep` → `opus`, `standard` → `sonnet`, `light` → `haiku`) is unchanged and now has a regression test.
+
+## [0.3.27] — 2026-09-28
+
+### Added
+- **Trust a single MCP tool for the rest of a shell session** (flow 359 hardens it) — in `trust` mode the `use_tool` approval prompt offers `T` (readline) / "Trust this tool (this session)" (TUI dock). The grant is the exact qualified tool name, lives only in memory for that interactive session, is cleared by `/new` and by resuming another session, and only a validated operator answer can add to it: the model cannot. A `PreToolUse` hook that asks still asks.
+
+### Security
+- **A trust grant never lifts the untrusted-content floor.** In a turn that holds external content (a web result, or any MCP tool result, the trusted tool's own included) a trusted tool asks like any other, the prompt does not offer `T`, and it says why. The grant applies again in the next turn.
+- **A trust grant is bound to the tool's definition, not only its name.** The session grant stores a fingerprint of the tool's name, description and input schema; if the server changes any of them, or the tool disappears, the grant is dropped and the call asks again.
+
 ## [0.3.26] — 2026-09-28
 
 ### Added

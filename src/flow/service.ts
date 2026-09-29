@@ -10,6 +10,18 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
+import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
+// The outcome-author vocabulary, re-exported so the CLI, the product module and the
+// TUI read it through this facade (import policy, rule 2).
+export {
+  DEFAULT_OUTCOME_AUTHOR,
+  OUTCOME_AUTHORS,
+  OUTCOME_AUTHOR_READINGS,
+  parseOutcomeAuthor,
+  readOutcomeAuthor,
+  type OutcomeAuthor,
+  type OutcomeAuthorReading,
+} from "./outcome-author";
 import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
@@ -36,17 +48,46 @@ export { CONFIRMATION_CAVEAT } from "./confirm-token";
 // the zone's internals (import policy, rule 2 — `client-imports-core-internal`
 // only excuses a `service.ts` target).
 export { acPath, assertAcIntact, readFlow, resolveFlowDir } from "./store";
+// The closed-flow "uncommitted state" note, reached through this facade by the CLI.
+export { uncommittedFlowStateNote, uncommittedFlowStateNotes } from "./uncommitted-state";
+// Acceptance layer W0: the verification-kind vocabulary, re-exported so the CLI,
+// governance and the TUI reach it through this facade (import policy, rule 2).
+export {
+  AC_KINDS,
+  buildAcKindReport,
+  describeAcKind,
+  readAcKindRecords,
+  renderAcKindDistribution,
+  reportFromRecords,
+  stripVerifyMarker,
+  type AcKind,
+  type AcKindError,
+  type AcKindRecord,
+  type AcKindReport,
+} from "./ac-kinds";
+import { buildAcKindReport, type AcKindRecord } from "./ac-kinds";
 // Flow 344: re-exported so a client reads the review-gate config path
 // through THIS facade rather than `./review-gate`'s internals (import
 // policy, rule 2) — `src/commands/review-jev-profile.ts` is the first
 // client-zone reader that needed it; every core-zone `review/jev-*-config.ts`
 // reader still imports `./review-gate` directly (core-to-core is allowed).
 export { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
+// Product module: the description reading helpers, reached through this facade.
+export {
+  OUTCOME_HINT,
+  fencedLines,
+  flowStatementFrom,
+  intentNoteForNewFlow,
+  proseOutsideFences,
+  sectionOf,
+  statementFrom,
+} from "./description-intent";
 export {
   AC_CHECK_TOKEN_BUDGET,
   acCheckCacheKey,
   acCheckCachePath,
   batchAcCheckItems,
+  classifyAcCriterionNotCheckable,
   classifyNotCheckable,
   computeAcFacts,
   evaluatedVerdict,
@@ -123,7 +164,18 @@ import type {
   GateOutcome,
   AttemptOutcome,
   TaskAttempts,
+  OutcomeAuthorSetResult,
 } from "./types";
+
+/**
+ * The `acKinds` record map derived from a flow's current criteria file.
+ * Pure derivation: a criterion whose marker is malformed reads `unclassified`
+ * (the error itself is what `flow ac kinds` reports). Never throws on content.
+ */
+async function deriveAcKinds(cwd: string, dir: string, flowId: string): Promise<Record<string, AcKindRecord>> {
+  const { report } = buildAcKindReport(flowId, await readFile(acPath(cwd, dir), "utf8"));
+  return { ...report.criteria };
+}
 
 /**
  * Append one attempt to a task, returning the counter it now carries.
@@ -312,6 +364,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         throw new Error(BLANK_OWNER_MESSAGE);
       }
 
+      // `--outcome-author` is validated before anything is created: a value other
+      // than `agent` or `human` is refused here, so no half-made flow is left
+      // behind. Only an OMITTED flag takes the default; `human` is never chosen
+      // for the caller.
+      const outcomeAuthor =
+        input.outcomeAuthor === undefined ? DEFAULT_OUTCOME_AUTHOR : parseOutcomeAuthor(input.outcomeAuthor);
+
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
       const issueRef =
@@ -389,6 +448,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ...(input.owner?.trim()
             ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
             : {}),
+          outcomeAuthor,
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
@@ -488,6 +548,35 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    /**
+     * Change who wrote the outcome criterion. Both arguments are validated before
+     * the flow is read. The field and its journal line are written together by
+     * `save()`, and setting the value the flow already has writes neither. It
+     * gates nothing, so it does not check the acceptance-criteria seal and works
+     * on a closed flow: relabelling a sample is not a change to the contract.
+     */
+    async outcomeAuthorSet({ cwd, id, author, reason }): Promise<OutcomeAuthorSetResult> {
+      const next = parseOutcomeAuthor(author, "outcome author");
+      if (!reason?.trim()) {
+        throw new Error('flow outcome author requires --reason "<why>"');
+      }
+      validateSingleLineReason(reason);
+      // `previous` and `changed` are decided under the flow lock, so what the caller
+      // prints is what this call did, even when another writer changed the flow first.
+      let previous: OutcomeAuthorReading = "unknown";
+      let changed = false;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        previous = readOutcomeAuthor(current.outcomeAuthor);
+        if (previous === next) {
+          return current;
+        }
+        changed = true;
+        current.outcomeAuthor = next;
+        return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
+      });
+      return { flow, previous, changed };
+    },
+
     async freeze({ cwd, id }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       assertTransition(flow.status, "ready");
@@ -499,6 +588,10 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         );
       }
       flow.acChecksum = await acChecksum(cwd, dir);
+      // Acceptance layer W0: record the derived kinds beside the seal. Reports,
+      // never refuses — a malformed marker reads `unclassified` here and is named
+      // by `flow ac kinds`; it does not stop the freeze.
+      flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
       flow.status = "ready";
       return save(cwd, dir, flow, "frozen", `${criteria.length} criteria; checksum recorded`);
       });
@@ -768,9 +861,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           detail = `${normalizedCriterion}: "${previousText ?? "(new)"}" -> "${normalizedText}" (${reason.trim()})`;
         }
         flow.acChecksum = await acChecksum(cwd, dir);
+        // Acceptance layer W0: the derived kinds are re-parsed from the file that was
+        // just re-sealed, in the same write, so the field and the seal never disagree.
+        flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
         flow.acConfirmed = {}; // criteria changed - prior confirmations are void
         return save(cwd, dir, flow, "ac-updated", detail);
       });
+    },
+
+    async acKinds({ cwd, id }) {
+      const { dir, flow } = await load(cwd, id);
+      return buildAcKindReport(flow.id, await readFile(acPath(cwd, dir), "utf8"));
     },
 
     /**
@@ -813,6 +914,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           );
         }
         flow.acChecksum = current;
+        flow.acKinds = await deriveAcKinds(cwd, dir, flow.id);
         // acConfirmed is deliberately preserved: the criteria this flow was
         // confirmed against are the criteria on disk right now.
         return save(cwd, dir, flow, "ac-resealed", reason);

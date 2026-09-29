@@ -826,6 +826,31 @@ report.
 (owner/signature/completion data), `review` (round cost), `trigger`
 (the spend ledger).
 
+## product
+
+**Purpose.** The product's intent as a derived index over what is already on
+disk, and the list of intents that were closed in code and never looked at
+again. It gates nothing, calls no model, and nothing calls it.
+
+**CLI surface.** `productCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `index [--json]` | read every flow and requirements package, write the intent index, print the summary and the count of entries with no stated intent |
+| `open [--json]` | list intents closed in code with no `outcome-observed: <verdict> — <note>` line, with the three-way header and the verdict split; refuses a missing or stale index |
+
+**Key files.** `commands/product.ts` (dispatcher), `product/service.ts`
+(facade), `product/extract.ts` (pure extraction), `product/corpus.ts`,
+`product/store.ts`, `product/open.ts`, `product/types.ts`;
+`tui/product-open-surface.ts` for `/product`.
+
+**Data & artifacts.** `.metaproject/data/product/index.json`, disposable: it is
+rebuilt from `.metaproject/flows/` and `docs/requirements/`, and holds no
+timestamp.
+
+**Dependencies / integrations.** Node builtins only. **Cross-module:** `flow`
+(reads `AcKindRecord` through `flow/ac-kinds`, and the flow directories).
+
 ## review
 
 **Purpose.** The review module turns review output into a durable, validated

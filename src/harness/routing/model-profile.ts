@@ -230,7 +230,9 @@ interface CuratedEntry {
 const CURATED_SEED: Readonly<Record<string, Readonly<Record<string, CuratedEntry>>>> = {
   anthropic: {
     "claude-sonnet-5": { tier: "standard", priceInputPerMillion: 3, priceOutputPerMillion: 15, contextLength: 200_000 },
+    "claude-sonnet-5-5": { tier: "standard", priceInputPerMillion: 3, priceOutputPerMillion: 15, contextLength: 200_000 },
     "claude-opus-4-8": { tier: "deep", priceInputPerMillion: 15, priceOutputPerMillion: 75, contextLength: 200_000 },
+    "claude-opus-5-5": { tier: "deep", priceInputPerMillion: 15, priceOutputPerMillion: 75, contextLength: 200_000 },
     "claude-haiku-4-5": { tier: "light", priceInputPerMillion: 0.8, priceOutputPerMillion: 4, contextLength: 200_000 },
   },
   openai: {

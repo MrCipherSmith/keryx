@@ -55,6 +55,7 @@ export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
   "workspace",
   "review",
   "governance",
+  "product",
   "triggers",
   // Flow 295: scheduling confirms a card in the TUI; an editor never reaches it.
   "schedule",

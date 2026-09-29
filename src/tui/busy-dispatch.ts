@@ -59,6 +59,11 @@ export type BusyDispatchTarget =
   | "governance"
   | "triggers"
   /**
+   * `/product` (flow 362): a read-only list over the derived intent index. It
+   * never rebuilds the index and never touches the main turn.
+   */
+  | "product"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
@@ -100,6 +105,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/bus") return "bus";
   if (commandName === "/governance") return "governance";
   if (commandName === "/triggers") return "triggers";
+  if (commandName === "/product") return "product";
   if (commandName === "/schedules") return "schedules";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";

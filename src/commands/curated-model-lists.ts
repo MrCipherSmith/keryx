@@ -17,7 +17,13 @@
 // so a model added/removed here should get a matching seed entry there.
 
 /** Static `claude-*` model list surfaced when `ANTHROPIC_API_KEY` is present. */
-export const ANTHROPIC_MODELS: readonly string[] = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
+export const ANTHROPIC_MODELS: readonly string[] = [
+  "claude-sonnet-5",
+  "claude-sonnet-5-5",
+  "claude-opus-4-8",
+  "claude-opus-5-5",
+  "claude-haiku-4-5",
+];
 
 /**
  * Static OpenAI model list surfaced when `OPENAI_API_KEY` is present (flow

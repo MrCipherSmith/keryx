@@ -269,6 +269,7 @@ function makeSpyService(
     taskAttempt: notImplemented("taskAttempt", calls),
     next: notImplemented("next", calls),
     ownerSet: notImplemented("ownerSet", calls),
+    outcomeAuthorSet: notImplemented("outcomeAuthorSet", calls),
     acConfirm: notImplemented("acConfirm", calls),
     acUpdate: notImplemented("acUpdate", calls),
     acReseal: notImplemented("acReseal", calls),
@@ -280,6 +281,7 @@ function makeSpyService(
     unblock: notImplemented("unblock", calls),
     check: notImplemented("check", calls),
     renumber: notImplemented("renumber", calls),
+    acKinds: notImplemented("acKinds", calls),
   };
   void taskId; // taskId is threaded through resultFactory, not the spy itself.
   return { service, calls };

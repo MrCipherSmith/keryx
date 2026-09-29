@@ -13,12 +13,27 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { reviewCommand, runReviewers } from "./review";
+import { pinsModel, reviewCommand, runReviewers, setTierRankHostForTests } from "./review";
+import type { DispatchModelDecision, TierRankAgent, TierRankCache } from "../gdskills/model-tier";
 import type { StructuredReviewFinding } from "../review/types";
 import { loadRoutingConfigRaw } from "../harness/routing/config";
 import { approveProjectRouting } from "../harness/routing/trust";
 
 const ORIGINAL_CWD = process.cwd();
+const refusingAgent: TierRankAgent = async () => {
+  throw new Error("no provider in this test");
+};
+function memoryRankCache(): TierRankCache {
+  const store = new Map<string, readonly string[]>();
+  return {
+    async get(key) {
+      return store.get(key);
+    },
+    async set(key, order) {
+      store.set(key, order);
+    },
+  };
+}
 let ROOT = "";
 let errors: string[] = [];
 let logs: string[] = [];
@@ -38,6 +53,10 @@ beforeEach(async () => {
   // what the tier tests below assert.
   delete process.env.KERYX_SESSION_PROVIDER;
   delete process.env.KERYX_SESSION_MODEL;
+  // Flow 358: `review tier` may ask the ranking agent. No test here reaches a provider
+  // or the real cache file: the default agent refuses, and a test that wants an answer
+  // installs its own.
+  setTierRankHostForTests(() => ({ agent: refusingAgent, cache: memoryRankCache(), prices: () => ({}) }));
   errors = [];
   logs = [];
   console.error = (...args: unknown[]) => {
@@ -50,6 +69,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  setTierRankHostForTests(undefined);
   console.error = realError;
   console.log = realLog;
   if (REAL_XDG === undefined) {
@@ -800,7 +820,7 @@ test("`review tier --json` prints the model block a dispatch document carries", 
   expect(process.exitCode).toBe(0);
   const model = modelBlock();
   expect(model.tier).toBe("light");
-  expect(model.tier_reasons).toEqual(["base:standard", "light:small-scope"]);
+  expect(model.tier_reasons).toEqual(["base:standard", "light:small-scope", "resolve:picked-below"]);
   expect(model.provider).toBe("demo");
   expect(model.model).toBe("demo-mini");
   expect(model.tier_resolution).toBe("discovered");
@@ -816,7 +836,12 @@ test("`review tier` never runs a security finding below standard, even when veri
 
   const model = modelBlock();
   expect(model.tier).toBe("standard");
-  expect(model.tier_reasons).toEqual(["base:standard", "light:verifier-execution", "floor:security"]);
+  expect(model.tier_reasons).toEqual([
+    "base:standard",
+    "light:verifier-execution",
+    "floor:security",
+    "resolve:session-is-standard",
+  ]);
   // `standard` IS the session's model, and ranking worked — which is a different
   // fact from having fallen back to it. Neither pins the id: the session's own
   // model is what `inherit` already means, and a literal only goes stale.
@@ -824,6 +849,112 @@ test("`review tier` never runs a security finding below standard, even when veri
   expect(model.model).toBeUndefined();
   expect(model.tier_resolution).toBe("session-ranked");
   expect((model.model_discovery as { session_rank: number | null }).session_rank).not.toBeNull();
+});
+
+// Flow 358 — `review tier` shows the agent fallback and treats only a moved pick as a pin.
+// `acme-sol/terra/luna` carry no size word the resolver knows, so the ranking is refused
+// and the tier is the one situation that reaches the agent.
+const UNRANKABLE = JSON.stringify([{ name: "acme", models: ["acme-sol", "acme-terra", "acme-luna"] }]);
+
+async function tierUnrankable(...extra: string[]): Promise<void> {
+  await writeFile(path.join(ROOT, "catalog.json"), UNRANKABLE, "utf8");
+  await reviewCommand([
+    "tier",
+    "--session-provider",
+    "acme",
+    "--session-model",
+    "acme-terra",
+    "--catalog",
+    "catalog.json",
+    ...extra,
+  ]);
+}
+
+const SOL_FIRST = JSON.stringify({ order: ["acme-sol", "acme-terra", "acme-luna"] });
+
+test("flow 358 AC6: `review tier` prints tier_resolution: agent-ranked and names the model the agent picked", async () => {
+  let asked = 0;
+  setTierRankHostForTests(() => ({
+    agent: async () => {
+      asked += 1;
+      return SOL_FIRST;
+    },
+    cache: memoryRankCache(),
+    prices: () => ({}),
+  }));
+  await tierUnrankable("--scope", "blast-radius");
+
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(asked).toBe(1);
+  expect(out).toContain("tier: deep");
+  expect(out).toContain("tier_resolution: agent-ranked");
+  expect(out).toContain("resolve:agent-picked-above");
+  expect(out).toContain("model: acme-sol");
+});
+
+test("flow 358: the --json block of an agent-ranked answer pins the picked model", async () => {
+  setTierRankHostForTests(() => ({ agent: async () => SOL_FIRST, cache: memoryRankCache(), prices: () => ({}) }));
+  await tierUnrankable("--scope", "blast-radius", "--json");
+
+  const model = modelBlock();
+  expect(model.tier_resolution).toBe("agent-ranked");
+  expect(model.provider).toBe("acme");
+  expect(model.model).toBe("acme-sol");
+  expect(model.inherit).toBeUndefined();
+});
+
+test("flow 358: a failing agent leaves `review tier` on the session model, exit 0, and not agent-ranked", async () => {
+  await tierUnrankable("--scope", "blast-radius", "--json");
+
+  expect(process.exitCode).toBe(0);
+  const model = modelBlock();
+  expect(model.tier_resolution).not.toBe("agent-ranked");
+  expect(model.inherit).toBe(true);
+  expect(model.model).toBeUndefined();
+});
+
+test("flow 358: a host that cannot even be built falls back to the deterministic decision", async () => {
+  setTierRankHostForTests(() => {
+    throw new Error("no config dir");
+  });
+  await tierUnrankable("--scope", "blast-radius", "--json");
+
+  expect(process.exitCode).toBe(0);
+  expect(modelBlock().tier_resolution).toBe("session-fallback");
+});
+
+test("flow 358: a settled tier asks the agent zero times", async () => {
+  let asked = 0;
+  setTierRankHostForTests(() => ({
+    agent: async () => {
+      asked += 1;
+      return "{}";
+    },
+    cache: memoryRankCache(),
+    prices: () => ({}),
+  }));
+  await tier("--scope", "blast-radius", "--json");
+  expect(asked).toBe(0);
+  expect(modelBlock().tier_resolution).toBe("discovered");
+});
+
+test("flow 358: pinsModel counts an agent pick as a pin and an agent that kept the session as none", () => {
+  const discovery = { provider: "acme", candidates: [], ranked: [], session_rank: null, fallback_reason: null };
+  const base: DispatchModelDecision = {
+    tier: "deep",
+    tier_reasons: ["base:standard", "resolve:agent-picked-above"],
+    provider: "acme",
+    model: "acme-sol",
+    tier_resolution: "agent-ranked",
+    model_discovery: discovery,
+  };
+  expect(pinsModel(base)).toBe(true);
+  expect(pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-picked-below"] })).toBe(true);
+  expect(pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-kept-session"] })).toBe(false);
+  expect(
+    pinsModel({ ...base, tier_reasons: ["base:standard", "resolve:agent-failed"], tier_resolution: "session-fallback" }),
+  ).toBe(false);
 });
 
 async function persistShellSelection(provider: string, model: string): Promise<void> {

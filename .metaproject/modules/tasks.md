@@ -15,6 +15,10 @@ tracker reporting.
 - `keryx flow freeze <id>` / `flow start <id>`
 - `keryx flow task add|done ...`
 - `keryx flow owner set <id> --owner "<name>" --reason "<why>"`
+- `keryx flow outcome author <id> agent|human --reason "<why>"` (who wrote the
+  flow's outcome criterion; `flow init --outcome-author agent|human` records it
+  at creation, `agent` when the flag is absent; a flow without the field reads
+  `unknown`; journaled, gates nothing)
 - `keryx flow ac confirm|update ...` (`ac update` also takes `--criterion ACn
   --text "<criterion>"` to rewrite/append one line)
 - `keryx flow implemented <id> --pr <url>`

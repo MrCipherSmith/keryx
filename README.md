@@ -623,9 +623,12 @@ Grouped by what you are trying to do, not by internal module layout.
   rounds-with-cost/rounds-total count for partial coverage), project-wide
   trigger spend (never attributed to a flow — the run record carries no flow
   reference), who confirmed each acceptance criterion and who signed
-  completion (with identity basis), and every `flow complete` attempt's gate
-  outcomes. A figure nobody recorded is reported as "not recorded", never as
-  zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
+  completion (with identity basis), every `flow complete` attempt's gate
+  outcomes, and each flow's acceptance coverage — how many criteria carry a
+  runnable `[verify: exec ...]` or `[verify: invariant ...]` marker (a flow
+  with no recorded kinds counts as fully unclassified; see `keryx flow ac kinds`
+  in the [CLI reference](docs/docs/cli-reference.md#verification-kinds)). A
+  figure nobody recorded is reported as "not recorded", never as zero. Writes `.metaproject/data/governance/artifacts/latest.{md,json}`, the
   same convention `keryx health run` uses; `--all-projects` also covers every
   project in the user-global registry. In the TUI, the sidebar's
   **Governance** row shows `no report — click to run`,
@@ -636,6 +639,24 @@ Grouped by what you are trying to do, not by internal module layout.
   where `r` re-runs it. Sessions written by `keryx agents external run` appear
   in `/sessions` marked `acp:<agent>`. See the
   [CLI reference](docs/docs/cli-reference.md#governance).
+- **product** — two commands, no gate. `keryx product index` reads every flow
+  and every `docs/requirements/*/` package into a disposable intent index under
+  `.metaproject/data/product/` and reports how many entries state no intent.
+  `keryx product open` lists the intents closed in code that nobody looked back
+  at, each with its outcome criterion or `not measured — no instrument stated`,
+  and splits the count three ways: no outcome criterion stated, criterion
+  stated but never observed, observed (split by verdict). A criterion goes in
+  the `## Outcome criteria` slot `flow init` leaves in `description.md`; who
+  wrote it is recorded as `outcomeAuthor` (`flow init --outcome-author
+  agent|human`, `flow outcome author <id> agent|human --reason "<why>"`), shown
+  by `product open`, and gates nothing. An
+  observation is a line starting `outcome-observed: <verdict> — <note>` in the
+  flow's `journal.md`, with the verdict one of `helped`, `no-effect`, `harmed`,
+  `inconclusive`; a requirements package uses an `## Outcome observations`
+  section in its README.md. Nothing calls it
+  automatically and no flow transition waits on it. In the TUI, `/product`
+  shows the same header and rows. See the
+  [CLI reference](docs/docs/cli-reference.md#product).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
@@ -719,7 +740,10 @@ advertised surface stays a fixed cost instead of growing with your server
 list. Every call goes through the same approval prompt as `shell_exec`, a
 server is spawned without keryx's own credentials in its environment, and
 `--scope project` writes a `.keryx/mcp-servers.json` you can commit while
-`keryx mcp disable` stays personal to you.
+`keryx mcp disable` stays personal to you. In `--trust` mode you can trust one
+exact tool for the session (never one its server marks `destructiveHint`);
+`/mcp trust list` and `/mcp trust revoke <server__tool>|all` show and remove
+those grants.
 
 Remote servers work the same way — `keryx mcp add linear --transport http
 <url> --header 'Authorization: Bearer ${LINEAR_TOKEN}'` — and if that
@@ -757,6 +781,24 @@ credential:
 - `keryx memory reflect --narrate` — a narrative summary of project memory
 - `keryx health explain <target> --narrate` — a readable explanation of a health result
 - `keryx wiki enrich` — model-written wiki pages (skips pages without a credential)
+- the model-tier fallback — when discovered model names alone cannot say which model
+  is bigger, one short call on the light tier of your own provider orders the
+  candidate models (see below)
+
+**Model tiers follow the session model and its generation.** `light`, `standard`
+and `deep` are anchored on the model your session runs: `standard` is that model,
+`deep` is the next size step above it, `light` the next size step below it (an Opus
+session with Sonnet and Haiku discovered gets Sonnet for light, Haiku only when
+nothing sits between). Within one family a newer version outranks an older one, and
+an older-generation model that costs more than the session model is never picked as
+`deep`. When the size words and versions cannot settle a tier (the ranking is refused,
+or the only larger candidate is an older generation), keryx asks a small fallback
+agent to order the candidates. It sees only the discovered model ids and the prices
+in your model profiles, never a task, a diff or your text. Its answer is validated
+(ids it was not given are dropped), cached by a hash of the catalogue, and recorded as
+`tier_resolution: agent-ranked`; a failure, timeout or malformed answer keeps the
+session model. `keryx review tier` prints the resolution, and the shell's tier row
+shows tier, source and reason for every dispatch.
 
 Semantic embeddings and ML security classifiers are not bundled in the current
 release. Memory search uses lexical retrieval, and security scanning uses

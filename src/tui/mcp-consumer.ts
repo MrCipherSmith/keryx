@@ -23,7 +23,7 @@
 import { homedir } from "node:os";
 import { displayUrl } from "../mcp-servers/http-headers";
 import { sanitiseForDisplay } from "../mcp-servers/tools";
-import { sanitiseIdentifier } from "../mcp-servers/approval-render";
+import { sanitiseIdentifier, TRUSTED_MARKER } from "../mcp-servers/approval-render";
 import { transportOf } from "../mcp-servers/doctor";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
 import type { ServerState } from "../mcp-servers/manager";
@@ -58,6 +58,8 @@ export type ConsumerRow = {
   readonly detail: string | undefined;
   /** What the operator should DO, when there is something. */
   readonly action: string | undefined;
+  /** How many of this server's tools hold a live session trust grant. */
+  readonly trustedTools?: number | undefined;
 };
 
 export type ConsumerModel = {
@@ -165,6 +167,8 @@ export function buildConsumerModel(input: {
   readonly projectFile: string;
   /** Collapsed to `~` in command lines. Injected by tests; the real one otherwise. */
   readonly home?: string;
+  /** Server name -> number of its tools trusted for this session. */
+  readonly trustedByServer?: ReadonlyMap<string, number>;
 }): ConsumerModel {
   const home = input.home ?? homedir();
   const stateByName = new Map(input.states.map((s) => [s.name, s]));
@@ -191,6 +195,7 @@ export function buildConsumerModel(input: {
       target: targetOf(server, home),
       credentials: credentialNames(server),
       detail,
+      ...(input.trustedByServer?.get(server.name) ? { trustedTools: input.trustedByServer.get(server.name) } : {}),
       action:
         status === "needs-approval"
           ? `keryx mcp trust ${server.name}`
@@ -258,12 +263,16 @@ export function renderConsumerLines(model: ConsumerModel | undefined): string[] 
   ];
 }
 
+function trustedNote(row: ConsumerRow): string {
+  return row.trustedTools !== undefined && row.trustedTools > 0 ? `  ${TRUSTED_MARKER} ${row.trustedTools} tool(s)` : "";
+}
+
 /** One line per row, for a surface that renders text. */
 export function formatConsumerRow(row: ConsumerRow): string {
   const tags = [row.source, row.transport, row.status].join(" ");
   const tools = row.status === "connected" ? ` — ${row.toolCount} tool(s)` : "";
   const creds = row.credentials.length > 0 ? `  [reads ${row.credentials.join(", ")}]` : "";
-  return `${row.name} (${tags})${tools}  ${row.target}${creds}`;
+  return `${row.name} (${tags})${tools}  ${row.target}${creds}${trustedNote(row)}`;
 }
 
 
@@ -341,7 +350,7 @@ export function formatConsumerModalRow(
     action = "";
   }
   const creds = row.credentials.length > 0 ? `  [reads ${row.credentials.join(", ")}]` : "";
-  return wrapHangingRow(`${mark} ${name} ${source} ${transport} ${glyph}`, `${tools}${action}  ${row.target}${creds}`, width).join(
+  return wrapHangingRow(`${mark} ${name} ${source} ${transport} ${glyph}`, `${tools}${action}  ${row.target}${creds}${trustedNote(row)}`, width).join(
     "\n",
   );
 }

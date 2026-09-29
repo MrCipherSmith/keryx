@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "005",
+  "slug": "no-statement",
+  "title": "Bump the lockfile",
+  "status": "done",
+  "createdAt": "2026-01-05T09:00:00.000Z",
+  "updatedAt": "2026-01-16T09:00:00.000Z",
+  "history": [
+    { "at": "2026-01-05T09:00:00.000Z", "event": "created" },
+    { "at": "2026-01-16T09:00:00.000Z", "event": "done" }
+  ]
+}

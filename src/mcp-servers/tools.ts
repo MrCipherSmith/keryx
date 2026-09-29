@@ -262,7 +262,10 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
       // branch, which is fail-closed when there is no approver and still
       // asks under `trust` unless the operator explicitly granted this exact
       // tool for this session — AC7, satisfied by the gate keryx
-      // already hardened rather than by a second one here (D-05).
+      // already hardened rather than by a second one here (D-05). That grant is
+      // bound to the tool's definition (a changed description or schema asks
+      // again) and never lifts the untrusted-content floor: in a turn that
+      // holds external content the call asks regardless of the grant.
       //
       // It is ALSO what keeps `use_tool` out of a read-only side worker:
       // `tui-shell.ts` filters that tool list by `risk === "read"`, so

@@ -192,6 +192,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // flow 353's `doctor` above.
     "  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)\n",
     "  setup     Print the Metaproject preparation guide: init, refresh, or repair\n",
+    // Flow 362 (product module P1): `keryx product index|open`, a brand-new
+    // verb, so both USAGE_BODY lines and a Commands: summary row.
+    "  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent\n",
+    "  keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion\n",
+    "  product   The product's intent as a derived index, and the intents closed in code that nobody looked back at\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -235,8 +240,16 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  keryx serve-mcp --harness <id> [--cwd <project-root>]  # bind a cross-harness memory identity\n",
       "  --harness    Bind this server process's cross-harness memory identity once at launch (or set KERYX_HARNESS; --harness wins). Used by memory.search filtering, memory.handoff, and the Source-Harness stamped on memory.propose writes. Unknown id refuses to start.\n",
     ],
+    governance: [
+      "\nEach flow also shows its acceptance coverage: how many criteria are runnable\n(exec or invariant) of all of them. A flow frozen before verification kinds\nexisted reads as fully unclassified, not as zero criteria.\n",
+    ],
     flow: [
+      "  keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)\n",
       "  keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)\n",
+      // Flow 365: who wrote the outcome criterion — the setter's usage line and the note that
+      // also documents `flow init --outcome-author`.
+      '  keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)\n',
+      "  `flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag is absent) or `human`, and `human` only when the flag says so — never inferred from a git identity, an owner or the environment. A flow without the field reads `unknown`. The flag labels a sample and gates nothing.\n",
     ],
   };
 

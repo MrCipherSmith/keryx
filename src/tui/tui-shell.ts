@@ -67,6 +67,7 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+import { isProductCommand, openProduct } from "./product-open-surface";
 // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
 // CLI does — no separate TUI-only Jev path. Never triggered automatically;
 // only on an explicit key press.
@@ -157,12 +158,21 @@ import {
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
   APPROVAL_ALLOW_ID,
+  catalogDestructiveResolver,
+  catalogFingerprintResolver,
   catalogResolver,
+  catalogTrustStaleness,
   describeUseToolApproval,
+  destructiveTrustNotices,
   mcpDockVerdict,
+  mcpTrustOffered,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
+  parseMcpTrustCommand,
+  runMcpTrustCommand,
   summariseUseToolApproval,
+  TRUSTED_MARKER,
+  untrustedOriginNotices,
 } from "../mcp-servers/approval-render";
 import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -5215,12 +5225,16 @@ export async function launchTuiAgentShell(opts: {
           inputJson,
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
         );
-        const canTrustMcp = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined &&
-          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined;
+        const canTrustMcp = mcpTrustOffered(
+          meta,
+          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined,
+          catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(described.fqn),
+        );
+        const trustedTag = meta?.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "";
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${roleChunk(otui, "attention", `⚙ ${described.server} wants to run ${described.tool}`)}`,
+            content: otui.t`${roleChunk(otui, "attention", `⚙ ${described.server} wants to run ${described.tool}${trustedTag}`)}`,
           }),
         );
         for (const line of described.argumentLines) {
@@ -5233,6 +5247,11 @@ export async function launchTuiAgentShell(opts: {
               content: otui.t`${dimChunk(otui, `  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
             }),
           );
+        }
+        // The same untrusted-content notices the readline prompt prints, so the
+        // dock says why the trust option is missing while the floor is on.
+        for (const notice of [...untrustedOriginNotices(meta), ...destructiveTrustNotices(meta)]) {
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${notice}`)}` }));
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
@@ -5263,8 +5282,8 @@ export async function launchTuiAgentShell(opts: {
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content: allowed
-              ? otui.t`${roleChunk(otui, "ok", `◇ ${described.fqn} approved`)}`
-              : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn} denied`)}`,
+              ? otui.t`${roleChunk(otui, "ok", `◇ ${described.fqn}${trustedTag} approved`)}`
+              : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn}${trustedTag} denied`)}`,
           }),
         );
         return verdict;
@@ -5608,7 +5627,11 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
-    io.trustedMcpTools = new Set<string>();
+    io.trustedMcpTools = new Map<string, string>();
+    // Read fresh on every call: a grant holds only while the tool's definition
+    // in the live catalog still matches the fingerprint stored with it.
+    io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
+    io.mcpToolDestructive = (fqn) => catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(fqn);
     // Read-only ("plan") posture — orthogonal to `permissionMode` (see
     // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
@@ -5627,12 +5650,18 @@ export async function launchTuiAgentShell(opts: {
       // above: a mode-driven auto-approval was never okayed action-by-action,
       // only the mode itself was chosen, once, so the transcript line is the
       // only record of it.
-      const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+      const preview =
+        tool === "shell_exec"
+          ? parseShellExecCommand(input)
+          : isMcpToolCall(tool)
+            ? `${tool} ${describeUseToolApproval(input, catalogResolver(deps.mcpRuntime?.()?.catalog())).fqn}`
+            : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
-      const label = meta.destructive
-        ? `◇ auto-approved (${permissionMode}) [destructive]`
-        : `◇ auto-approved (${permissionMode})`;
+      const label =
+        `◇ auto-approved (${permissionMode})` +
+        (meta.destructive ? " [destructive]" : "") +
+        (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
@@ -6209,6 +6238,8 @@ export async function launchTuiAgentShell(opts: {
         return false;
       }
       resetSessionSurface();
+      // A fresh session is a new trust boundary, like `applyOpened`'s.
+      io.trustedMcpTools?.clear();
       liveSession = opened.handle;
       history = [];
       archive = [];
@@ -6339,6 +6370,11 @@ export async function launchTuiAgentShell(opts: {
           ...inspectorKeys,
         });
       })();
+    };
+    const showProduct = (): void => {
+      void openProduct(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys }).catch(() => {
+        io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
+      });
     };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
@@ -6607,12 +6643,27 @@ export async function launchTuiAgentShell(opts: {
      * alone, and says which it did. A read-only view must not spawn
      * anything, so it never creates the runtime.
      */
+    const runMcpTrustLine = (line: string): boolean => {
+      const parsed = parseMcpTrustCommand(line);
+      if (parsed === undefined) return false;
+      const catalog = deps.mcpRuntime?.()?.catalog();
+      const lines = runMcpTrustCommand(parsed, io.trustedMcpTools, catalogResolver(catalog), catalogTrustStaleness(catalog));
+      io.onSystem?.(`${lines.join("\n")}\n`);
+      return true;
+    };
     const showMcpConsumer = (): void => {
       const cwd = inspectorCwd();
       const snapshot = () => {
         const live = deps.mcpRuntime?.();
         if (live === undefined) return undefined;
+        const resolve = catalogResolver(live.catalog());
+        const trustedByServer = new Map<string, number>();
+        for (const fqn of io.trustedMcpTools?.keys() ?? []) {
+          const server = resolve(fqn)?.server;
+          if (server !== undefined) trustedByServer.set(server, (trustedByServer.get(server) ?? 0) + 1);
+        }
         return buildConsumerModel({
+          trustedByServer,
           configured: live.configured(),
           states: live.servers(),
           problems: live.problems(),
@@ -7476,6 +7527,10 @@ export async function launchTuiAgentShell(opts: {
             routeOpsCommand(line, true, ops);
             return;
           }
+          case "product": {
+            showProduct();
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
             return;
@@ -7485,7 +7540,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "mcp-consumer": {
-            showMcpConsumer();
+            if (!runMcpTrustLine(line)) showMcpConsumer();
             return;
           }
           case "game": {
@@ -7874,11 +7929,15 @@ export async function launchTuiAgentShell(opts: {
         if (routeOpsCommand(line, false, ops)) {
           return;
         }
+        if (isProductCommand(command.name)) {
+          showProduct();
+          return;
+        }
         if (routeSchedulesCommand(line, false, schedules)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
-          showMcpConsumer();
+          if (!runMcpTrustLine(line)) showMcpConsumer();
           return;
         }
         if (isMcpToolsCommand(command.name)) {

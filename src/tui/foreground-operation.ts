@@ -255,6 +255,8 @@ export function createForegroundAgentIoFacade(
     // Share the session grant set with the shell, but never let a stale turn
     // use it: readOnly denies every mutating tool when ownership is lost.
     ...(io.trustedMcpTools === undefined ? {} : { trustedMcpTools: io.trustedMcpTools }),
+    ...(io.mcpToolFingerprint === undefined ? {} : { mcpToolFingerprint: io.mcpToolFingerprint }),
+    ...(io.mcpToolDestructive === undefined ? {} : { mcpToolDestructive: io.mcpToolDestructive }),
     readOnly: () => !accepts() || (io.readOnly?.() ?? false),
   };
 }

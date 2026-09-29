@@ -9,7 +9,18 @@ import type { FlowState } from "../flow/types";
 // flow check-ac`/the advisory notices already cached. Through the flow
 // facade (`../flow/service`), not `../flow/check-ac` directly — import
 // policy rule 2 only excuses an edge whose target is a `service.ts`.
-import { acCheckCacheKey, acCheckCachePath, readAcCheckCache, statusLabel, type AcCheckStatus } from "../flow/service";
+import {
+  acCheckCacheKey,
+  acCheckCachePath,
+  readAcCheckCache,
+  readAcKindRecords,
+  readOutcomeAuthor,
+  statusLabel,
+  type AcCheckStatus,
+  type OutcomeAuthorReading,
+  type AcKindRecord,
+  uncommittedFlowStateNotes,
+} from "../flow/service";
 // Review finding: staleness used to compare only the CRITERIA CHECKSUM half
 // of the cache key, so a criteria-unchanged-but-diff-changed flow still read
 // as fresh. The full key needs the diff too, and computing a diff is a git
@@ -52,11 +63,23 @@ export type FlowInspectorItem = {
   source: string;
   tasks: readonly { id: string; title: string; status: string }[];
   /**
+   * Who wrote the outcome criterion, read through the same function `keryx flow
+   * status` uses, so `unknown` (a flow without the field) is one word on both
+   * surfaces. Absent only on an item built by hand, which reads `unknown`.
+   */
+  outcomeAuthor?: OutcomeAuthorReading;
+  /**
    * Set when the flow is `completing` and nothing holds its lock (flow 299,
    * AC6): the same condition, and the same words, as `keryx flow status`.
    * Absent otherwise.
    */
   interrupted?: string | undefined;
+  /**
+   * Set when the flow is done, its directory is tracked, and the closing state
+   * written after the merge is still uncommitted: the same note, in the same
+   * words, as `keryx flow status`. Informational; absent otherwise.
+   */
+  uncommitted?: string | undefined;
   /** Flow 328, AC7: the flow's last CACHED check-ac markers, or absent when nothing has been cached yet ("not run"). */
   acMarkers?: readonly AcMarker[];
   /** When the cached markers were computed. */
@@ -72,6 +95,14 @@ export type FlowInspectorItem = {
    * two wrong answers).
    */
   acCheckStale?: boolean | "unknown";
+  /**
+   * Acceptance layer W0: the flow's DERIVED verification kinds, keyed by `ACn`.
+   * Absent for a flow frozen before kinds existed — the AC tab then says "not
+   * recorded", never an empty list.
+   */
+  acKinds?: Readonly<Record<string, AcKindRecord>>;
+  /** `false` when the criteria are not frozen yet, so absent `acKinds` is not a legacy flow. */
+  acFrozen?: boolean;
 };
 
 /** Flow 328, AC7: one criterion's cached status, for the /flows sidebar and detail tab. */
@@ -151,6 +182,7 @@ export function flowItemFromState(flow: FlowState, dir: string): FlowInspectorIt
     updatedAt: flow.updatedAt,
     source: flow.source.ref ?? flow.source.type,
     tasks: flow.tasks.map((task) => ({ id: task.id, title: task.title, status: task.status })),
+    outcomeAuthor: readOutcomeAuthor(flow.outcomeAuthor),
   };
 }
 
@@ -245,12 +277,18 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
   try {
     const dirs = await listFlowDirs(cwd);
     const items: FlowInspectorItem[] = [];
+    const doneFlows: { id: string; dir: string; item: FlowInspectorItem }[] = [];
     for (const dir of dirs) {
       try {
         const flow = await readFlow(cwd, dir);
         const item = flowItemFromState(flow, dir);
         if (await isCompletionInterrupted(cwd, flow, dir)) {
           item.interrupted = interruptedCompletionLine(flow.id);
+        }
+        const kinds = readAcKindRecords(flow.acKinds);
+        item.acFrozen = flow.acChecksum !== null;
+        if (kinds !== undefined) {
+          item.acKinds = kinds;
         }
         // Flow 328, AC7: never triggers a Jev call — shows the last cached
         // check-ac result, or nothing ("not run" is the marker-less default).
@@ -265,8 +303,19 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
           // Cache unreadable — same as "not run"; never blocks the flow list.
         }
         items.push(item);
+        if (flow.status === "done") doneFlows.push({ id: flow.id, dir, item });
       } catch {
         // skip unreadable packages; `keryx flow check` owns that report
+      }
+    }
+    // The closing state `flow complete` writes after the merge, still uncommitted
+    // — the same note `keryx flow status` prints. One git pass for every done
+    // flow; informational, and silent on any failure.
+    if (doneFlows.length > 0) {
+      const notes = await uncommittedFlowStateNotes(cwd, doneFlows);
+      for (const done of doneFlows) {
+        const text = notes.get(done.dir);
+        if (text !== undefined) done.item.uncommitted = text;
       }
     }
     return sortFlowsNewestFirst(items);
