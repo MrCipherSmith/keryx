@@ -2,6 +2,7 @@
 // Reads the index only. A count and a list — nothing here refuses, blocks or
 // actions anything, and an entry leaves the list only by being observed.
 
+import { readOutcomeAuthor } from "../flow/service";
 import { NO_INSTRUMENT, hasInstrument } from "./extract";
 import { checkStaleness, readIntentIndex } from "./store";
 import type { IntentIndex, OpenEntry, OpenReport } from "./types";
@@ -16,6 +17,7 @@ export function buildOpenReport(index: IntentIndex): OpenReport {
       closedAt: intent.closedAt,
       outcome: hasInstrument(intent.outcome.criterion) ? intent.outcome.criterion : (intent.outcome.criterion ?? NO_INSTRUMENT),
       hasCriterion: hasInstrument(intent.outcome.criterion),
+      outcomeAuthor: readOutcomeAuthor(intent.outcomeAuthor),
     }))
     .sort((a, b) => (b.closedAt ?? "").localeCompare(a.closedAt ?? "") || Number.parseInt(b.id, 10) - Number.parseInt(a.id, 10) || (a.path < b.path ? -1 : 1));
   const { counts } = index;
@@ -55,6 +57,7 @@ export function openEntryLines(entry: OpenEntry): string[] {
   return [
     `${label}  ${entry.title}`,
     `${pad}outcome: ${entry.outcome}`,
+    `${pad}outcome author: ${entry.outcomeAuthor}`,
     `${pad}closed ${entry.closedAt === null ? "at an unrecorded time" : entry.closedAt.slice(0, 10)}`,
   ];
 }

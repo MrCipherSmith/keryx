@@ -5,7 +5,7 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, sectionOf, statementFrom } from "../flow/service";
+import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, readOutcomeAuthor, sectionOf, statementFrom } from "../flow/service";
 import { OUTCOME_VERDICTS } from "./types";
 import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
 
@@ -127,6 +127,7 @@ interface FlowJsonShape {
   updatedAt?: unknown;
   merged?: { at?: unknown } | null;
   history?: unknown;
+  outcomeAuthor?: unknown;
 }
 
 function text(value: unknown): string | null {
@@ -166,6 +167,8 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
     flowStatus: status,
     closedAt: closed ? closedAtOf(flow) : null,
     outcome: { criterion, ...observationFrom(source.journal) },
+    // The flow module's own reading, so `unknown` means one thing on every surface.
+    outcomeAuthor: readOutcomeAuthor(flow.outcomeAuthor),
   };
 }
 

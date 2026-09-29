@@ -31,6 +31,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const AUTHOR_READINGS: readonly string[] = ["agent", "human", "unknown"];
+
 const COUNT_KEYS = ["intents", "flows", "docpacks", "closed", "noCriterion", "notObserved", "observed", "helped", "noEffect", "harmed", "inconclusive"] as const;
 
 /** Why a parsed value is not an index the readers can use, or `null` when it is one. Checks every field they touch. */
@@ -56,6 +58,8 @@ function indexProblem(value: unknown): string | null {
     if (outcome.verdict !== null && !OUTCOME_VERDICTS.includes(outcome.verdict as (typeof OUTCOME_VERDICTS)[number])) return "index.json holds an intent with an unknown verdict";
     if (outcome.note !== null && typeof outcome.note !== "string") return "index.json holds an intent with an unusable note";
     if (outcome.observed === true && outcome.verdict === null) return "index.json holds an observed intent without a verdict";
+    // Optional, so an index written before the field existed stays valid; present, it must be one of the three readings.
+    if (intent.outcomeAuthor !== undefined && !AUTHOR_READINGS.includes(intent.outcomeAuthor as string)) return "index.json holds an intent with an unknown outcome author";
   }
   return null;
 }
