@@ -30,6 +30,8 @@ async function runIndex(args: string[]): Promise<void> {
   const index = await buildIntentIndex(cwd);
   const file = await writeIntentIndex(cwd, index);
   console.log(args.includes("--json") ? serializeIndex(index).trimEnd() : renderIndexSummary(index, file));
+  // Only `index` reports a failure this way, and only about its own reading: the index is still written, and no other command is affected.
+  if (index.failures.length > 0) process.exitCode = 1;
 }
 
 async function runOpen(args: string[]): Promise<void> {
@@ -78,11 +80,21 @@ the limit of everything built on it.
 \`open\` lists the intents closed in code (flow status done) with no recorded
 look back, each with the flow and its outcome criterion, or
 "not measured — no instrument stated". The header splits them into no
-criterion stated, criterion stated but never observed, and observed. It
-refuses to answer from a missing or stale index and names \`keryx product index\`.
+criterion stated, criterion stated but never observed, and observed (split
+again by verdict). It refuses to answer from a missing or stale index and
+names \`keryx product index\`.
 
 An observation is a line in the flow's journal.md that begins
-\`outcome-observed:\`. \`index\` reads it, and that flow leaves the list.
+\`outcome-observed: <verdict> — <note>\`, where the verdict is one of helped,
+no-effect, harmed, inconclusive. \`index\` reads it, and that flow leaves the
+list. A line with no recognized verdict is a parse failure: \`index\` names the
+flow and exits non-zero, and the flow stays on the list.
+
+A flow declares how it will be judged under \`## Outcome criteria\` in
+description.md (the \`flow init\` template has the slot), or writes
+"not measured — <reason>". A requirements package records observations as
+\`- <verdict> — <note>\` lines under \`## Outcome observations\` in its
+README.md; the package stays listed as open either way.
 
 Nothing here gates a flow, calls a model or runs by itself.
 `);

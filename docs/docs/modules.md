@@ -837,7 +837,7 @@ again. It gates nothing, calls no model, and nothing calls it.
 | Subcommand | Behavior |
 |---|---|
 | `index [--json]` | read every flow and requirements package, write the intent index, print the summary and the count of entries with no stated intent |
-| `open [--json]` | list intents closed in code with no `outcome-observed:` line, with the three-way header; refuses a missing or stale index |
+| `open [--json]` | list intents closed in code with no `outcome-observed: <verdict> — <note>` line, with the three-way header and the verdict split; refuses a missing or stale index |
 
 **Key files.** `commands/product.ts` (dispatcher), `product/service.ts`
 (facade), `product/extract.ts` (pure extraction), `product/corpus.ts`,

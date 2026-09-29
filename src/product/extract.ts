@@ -5,80 +5,18 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import type { Intent, IntentOutcome } from "./types";
+import { OUTCOME_HINT, flowStatementFrom, sectionOf, statementFrom } from "../flow/description-intent";
+import { OUTCOME_VERDICTS } from "./types";
+import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
+
+export { sectionOf, statementFrom };
 
 export const NO_INSTRUMENT = "not measured — no instrument stated";
 
 const OBSERVATION = /^outcome-observed:[ \t]*(.*)$/m;
+// A verdict needs its note: like `verify: none — <reason>`, a bare verdict is a mistake, not a shorthand.
+const VERDICT_LINE = new RegExp(`^(${OUTCOME_VERDICTS.join("|")})[ \\t]*—[ \\t]*(\\S.*?)[ \\t]*$`);
 const LEADING_DATE = /^(\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z?)?)\b[ \t:,-]*/;
-const PLACEHOLDERS = ["Describe the problem precisely", "What must be true when this flow is done"];
-const STATEMENT_LIMIT = 300;
-
-function headingLevel(line: string): number {
-  const match = /^(#{1,6})\s+\S/.exec(line);
-  return match?.[1]?.length ?? 0;
-}
-
-/** The fence marker a line opens or closes (` ``` ` or `~~~`, up to three spaces of indent), or null. */
-function fenceOf(line: string): { char: string; length: number; rest: string } | null {
-  const match = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-  return match === null ? null : { char: (match[1] ?? "")[0] ?? "", length: (match[1] ?? "").length, rest: match[2] ?? "" };
-}
-
-/** The level of each line's heading, 0 where the line is not a heading — and always 0 inside a fenced code block. */
-function headingLevels(lines: readonly string[]): number[] {
-  const levels: number[] = [];
-  let open: { char: string; length: number } | null = null;
-  for (const line of lines) {
-    const fence = fenceOf(line);
-    if (open !== null) {
-      levels.push(0);
-      if (fence !== null && fence.char === open.char && fence.length >= open.length && fence.rest.trim() === "") open = null;
-      continue;
-    }
-    if (fence !== null && !(fence.char === "`" && fence.rest.includes("`"))) {
-      open = { char: fence.char, length: fence.length };
-      levels.push(0);
-      continue;
-    }
-    levels.push(headingLevel(line));
-  }
-  return levels;
-}
-
-/** Body of the first section whose heading matches, up to the next heading of the same or a higher level. */
-export function sectionOf(markdown: string, heading: RegExp): string | null {
-  const lines = markdown.split(/\r?\n/);
-  const levels = headingLevels(lines);
-  const start = lines.findIndex((line, i) => (levels[i] ?? 0) > 0 && heading.test(line.replace(/^#{1,6}\s+/, "").trim()));
-  if (start === -1) return null;
-  const level = levels[start] ?? 0;
-  const body: string[] = [];
-  for (let i = start + 1; i < lines.length; i++) {
-    const next = levels[i] ?? 0;
-    if (next > 0 && next <= level) break;
-    body.push(lines[i] ?? "");
-  }
-  return body.join("\n");
-}
-
-function firstSentence(text: string): string | null {
-  const flat = text.replace(/\s+/g, " ").trim();
-  if (flat.length === 0) return null;
-  if (PLACEHOLDERS.some((placeholder) => flat.startsWith(placeholder))) return null;
-  const sentence = /^(.*?[.!?])(?=\s|$)/.exec(flat)?.[1] ?? flat;
-  return sentence.length > STATEMENT_LIMIT ? `${sentence.slice(0, STATEMENT_LIMIT - 1).trimEnd()}…` : sentence;
-}
-
-/** The first usable sentence among the named sections, in the order given. */
-export function statementFrom(markdown: string, headings: readonly RegExp[]): string | null {
-  for (const heading of headings) {
-    const body = sectionOf(markdown, heading);
-    const sentence = body === null ? null : firstSentence(body);
-    if (sentence !== null) return sentence;
-  }
-  return null;
-}
 
 /** Bullets of an `Outcome criteria` section, each continuation line folded into its bullet. */
 export function outcomeCriterionFrom(markdown: string): string | null {
@@ -87,6 +25,7 @@ export function outcomeCriterionFrom(markdown: string): string | null {
   const bullets: string[] = [];
   for (const line of body.split(/\r?\n/)) {
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+    if ((bullet?.[1] ?? line).trim().startsWith(OUTCOME_HINT)) continue;
     if (bullet !== null) bullets.push((bullet[1] ?? "").trim());
     else if (line.trim().length > 0 && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
   }
@@ -99,12 +38,64 @@ export function hasInstrument(criterion: string | null): criterion is string {
   return criterion !== null && !/^`?not measured/i.test(criterion);
 }
 
-export function observationFrom(journal: string | null): Pick<IntentOutcome, "observed" | "observedAt" | "note"> {
+type Observation = Pick<IntentOutcome, "observed" | "verdict" | "observedAt" | "note">;
+
+const NOT_OBSERVED: Observation = { observed: false, verdict: null, observedAt: null, note: null };
+
+/** `<verdict> — <note>`, or `null` unless the text is exactly one of the four verdicts, an em dash and a note. */
+export function parseVerdict(text: string): { verdict: OutcomeVerdict; note: string } | null {
+  const match = VERDICT_LINE.exec(text.trim());
+  return match === null ? null : { verdict: match[1] as OutcomeVerdict, note: match[2] ?? "" };
+}
+
+function observationOf(text: string | null): Observation {
+  const parsed = text === null ? null : parseVerdict(text);
+  if (parsed === null) return NOT_OBSERVED;
+  return { observed: true, verdict: parsed.verdict, observedAt: LEADING_DATE.exec(parsed.note)?.[1] ?? null, note: parsed.note };
+}
+
+/** The text after the first `outcome-observed:` marker at column 0, or `null` when the journal has none. */
+function journalObservation(journal: string | null): string | null {
   const match = journal === null ? null : OBSERVATION.exec(journal.replace(/\r\n/g, "\n"));
-  if (match === null) return { observed: false, observedAt: null, note: null };
-  const text = (match[1] ?? "").trim();
-  const date = LEADING_DATE.exec(text)?.[1] ?? null;
-  return { observed: true, observedAt: date, note: text.length === 0 ? null : text };
+  return match === null ? null : (match[1] ?? "");
+}
+
+/** The first `outcome-observed:` line decides; a malformed one is no observation (`observationProblem` names it). */
+export function observationFrom(journal: string | null): Observation {
+  return observationOf(journalObservation(journal));
+}
+
+const VERDICT_CHOICE = OUTCOME_VERDICTS.join("|");
+
+/** Why the journal's first observation line cannot be read, or `null` when it is fine or absent. */
+export function observationProblem(journal: string | null): string | null {
+  const text = journalObservation(journal);
+  if (text === null || parseVerdict(text) !== null) return null;
+  return `outcome-observed line has no recognized verdict (expected \`outcome-observed: <${VERDICT_CHOICE}> — <note>\`)`;
+}
+
+/**
+ * A requirements package's `## Outcome observations`, read from its README or,
+ * without one, its primary document. Each line is `- <verdict> — <note>`; the
+ * first non-blank line decides, as the first `outcome-observed:` line does.
+ */
+function docpackObservationLine(source: DocpackSource): string | null {
+  for (const document of [source.readme ?? null, source.primary]) {
+    const body = document === null ? null : sectionOf(document, /^outcome observations$/i);
+    const line = body?.split(/\r?\n/).find((candidate) => candidate.trim().length > 0);
+    if (line !== undefined) return line.trim().replace(/^[-*][ \t]+/, "");
+  }
+  return null;
+}
+
+export function docpackObservationFrom(source: DocpackSource): Observation {
+  return observationOf(docpackObservationLine(source));
+}
+
+export function docpackObservationProblem(source: DocpackSource): string | null {
+  const line = docpackObservationLine(source);
+  if (line === null || parseVerdict(line) !== null) return null;
+  return `outcome observation has no recognized verdict (expected \`- <${VERDICT_CHOICE}> — <note>\`)`;
 }
 
 function criteriaFrom(markdown: string | null): AcKindRecord[] {
@@ -158,7 +149,7 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
     source: "flow",
     path: repoPath,
     title,
-    statement: statementFrom(description, [/^problem$/i, /^expected outcome$/i]),
+    statement: flowStatementFrom(description),
     criteria: criteriaFrom(source.criteria),
     status: closed ? "closed" : "open",
     flowStatus: status,
@@ -172,6 +163,8 @@ export interface DocpackSource {
   /** The package's primary document (PRD, TRD or README), when it has one. */
   readonly primary: string | null;
   readonly specification: string | null;
+  /** The package's README.md, when it has one apart from the primary document. */
+  readonly readme?: string | null;
 }
 
 export function extractDocpackIntent(source: DocpackSource, repoPath: string): Intent {
@@ -188,6 +181,6 @@ export function extractDocpackIntent(source: DocpackSource, repoPath: string): I
     status: "open",
     flowStatus: null,
     closedAt: null,
-    outcome: { criterion: outcomeCriterionFrom(primary), observed: false, observedAt: null, note: null },
+    outcome: { criterion: outcomeCriterionFrom(primary), ...docpackObservationFrom(source) },
   };
 }

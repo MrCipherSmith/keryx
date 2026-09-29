@@ -62,15 +62,43 @@ has been read by a human at least once.
 
 ## Decision gates
 
-### G1 — after P1, before P2
+### G1 — split into G1a and G1b
 
-Read `product open` on the current corpus.
+The old G1 read `product open` on the historical corpus and called a large
+never-checked share a confirmed premise. It was not: 310 of 310 closed intents
+were never checked because the instrument did not exist, and that number says
+nothing about whether checking would have found anything. See
+[metrics-and-validation.md](metrics-and-validation.md). The premise is only
+tested on flows created after the instrument ships, and in two steps, because
+"people declare an outcome" and "people come back and record it" are different
+behaviours that fail for different reasons.
 
-- **A large majority of closed intents were never checked** → the premise holds;
-  continue.
-- **Most were checked** → the premise is wrong for this corpus. Say so, publish
-  the number anyway, and stop. A module that solves a problem this repository
-  does not have should not be built into it.
+Both gates count flows created after release 0.3.31, which ships the
+`## Outcome criteria` slot and the `outcome-observed:` verdict line.
+Historical flows are never edited and never counted.
+
+#### G1a — after ten new flows
+
+Over the next 10 new flows created after release 0.3.31, count the share that
+declared an outcome criterion or an honest `not measured — <reason>`.
+
+- **A meaningful share declared one** → the slot is used; continue to G1b.
+- **Near zero** → **STOP.** The premise was not confirmed: the people writing
+  flows do not state what they expect to change, and a queue of intents with no
+  criterion has nothing to check them against.
+
+#### G1b — 2–4 weeks after those ten flows are released
+
+G1b needs calendar time: an outcome cannot be observed before it has had time to
+happen, so it cannot be brought forward by writing more flows. Two to four weeks
+after the release of those 10 flows, count the share of those that declared a
+criterion which then got an `outcome-observed:` line with a verdict.
+
+- **A meaningful share was observed** → the queue is worked; continue.
+- **Near zero** → **STOP.** The queue becomes a warehouse: it lists what was
+  never checked and nobody checks it.
+
+`map` (P2) is built only if both G1a and G1b pass.
 
 ### G2 — after P2, before P3
 

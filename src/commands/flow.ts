@@ -24,6 +24,7 @@ import {
 import { githubAdapter } from "../flow/tracker/github";
 import { repairMovedFlowReviewRecords } from "../review/flow-move";
 import { runCheckAc, tryAdvisoryCheckAc } from "./flow-check-ac";
+import { intentNoteForNewFlow } from "../flow/description-intent";
 import { createCodeHealthService } from "../health/service";
 import { securityFlowGate } from "../security/guard";
 import {
@@ -412,6 +413,8 @@ async function runInit(args: string[]): Promise<void> {
       console.log(`  ${style.cyan(symbols.bullet)} ${contextNote}`);
     }
   }
+  const intentNote = await intentNoteForNewFlow(process.cwd(), result.dir);
+  if (intentNote !== null) console.log(`  ${intentNote}`);
   nextSteps([
     "Enrich context.md, formalize description.md, and write plan.md.",
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,

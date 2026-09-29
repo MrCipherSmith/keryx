@@ -1,4 +1,5 @@
 import { DEFAULT_TASKS } from "./default-tasks";
+import { OUTCOME_HINT } from "./description-intent";
 
 export function renderDescription(title: string, source: string): string {
   return `# ${title}
@@ -13,6 +14,10 @@ Describe the problem precisely: what is broken/missing, for whom, and why now.
 ## Expected Outcome
 
 What must be true when this flow is done.
+
+## Outcome criteria
+
+${OUTCOME_HINT}: what you would look at afterwards to see this helped, as a bullet. Or write "- not measured — <reason>".
 
 ## Out of Scope
 

@@ -7,7 +7,7 @@ import path from "node:path";
 
 const CORPUS = path.join(import.meta.dir, "corpus");
 
-/** Five flows (four closed) and two requirements packages, as `.metaproject/flows` and `docs/requirements`. */
+/** Five flows (four closed) and three requirements packages, as `.metaproject/flows` and `docs/requirements`. */
 export async function copyFixtureRepo(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-product-"));
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
@@ -18,9 +18,9 @@ export async function copyFixtureRepo(): Promise<string> {
 }
 
 export const FIXTURE_COUNTS = {
-  intents: 7,
+  intents: 8,
   flows: 5,
-  docpacks: 2,
+  docpacks: 3,
   closed: 4,
   noCriterion: 2,
   notObserved: 1,

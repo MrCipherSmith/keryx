@@ -6,7 +6,8 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { extractDocpackIntent, extractFlowIntent, hasInstrument } from "./extract";
+import { docpackObservationProblem, extractDocpackIntent, extractFlowIntent, hasInstrument, observationProblem } from "./extract";
+import type { DocpackSource } from "./extract";
 import type { Intent, IntentCounts, IntentIndex } from "./types";
 
 const PRIMARY_DOCS = ["prd.md", "PRD.md", "trd.md", "TRD.md", "README.md"];
@@ -109,6 +110,9 @@ export async function corpusFingerprint(cwd: string): Promise<string> {
       lines.push(`file\0docs/requirements/${name}/${candidate}\0${digestOf(content)}`);
       break;
     }
+    // The README carries `## Outcome observations` even when a PRD is the primary document.
+    const readme = await readBytes(path.join(dir, "README.md"));
+    lines.push(`file\0docs/requirements/${name}/README.md\0${digestOf(readme)}`);
     const specification = await readBytes(path.join(dir, "specification.md"));
     lines.push(`file\0docs/requirements/${name}/specification.md\0${digestOf(specification)}`);
   }
@@ -131,6 +135,7 @@ export function countsOf(intents: readonly Intent[]): IntentCounts {
   const closed = intents.filter((intent) => intent.status === "closed");
   const observed = closed.filter((intent) => intent.outcome.observed).length;
   const noCriterion = closed.filter((intent) => !intent.outcome.observed && !hasInstrument(intent.outcome.criterion)).length;
+  const verdicts = (verdict: string): number => closed.filter((intent) => intent.outcome.observed && intent.outcome.verdict === verdict).length;
   return {
     intents: intents.length,
     flows: intents.filter((intent) => intent.source === "flow").length,
@@ -139,6 +144,10 @@ export function countsOf(intents: readonly Intent[]): IntentCounts {
     noCriterion,
     notObserved: closed.length - observed - noCriterion,
     observed,
+    helped: verdicts("helped"),
+    noEffect: verdicts("no-effect"),
+    harmed: verdicts("harmed"),
+    inconclusive: verdicts("inconclusive"),
   };
 }
 
@@ -158,17 +167,21 @@ export async function buildIntentIndex(cwd: string): Promise<IntentIndex> {
         failures.push(`${repoPath}: no flow.json`);
         continue;
       }
+      const journal = await readSource(path.join(dir, "journal.md"), `${repoPath}/journal.md`);
       intents.push(
         extractFlowIntent(
           {
             flowJson,
             description: await readSource(path.join(dir, "description.md"), `${repoPath}/description.md`),
             criteria: await readSource(path.join(dir, "acceptance-criteria.md"), `${repoPath}/acceptance-criteria.md`),
-            journal: await readSource(path.join(dir, "journal.md"), `${repoPath}/journal.md`),
+            journal,
           },
           repoPath,
         ),
       );
+      // The flow stays an intent (not observed, so it stays in `open`): a typo never hides it, and is named here.
+      const problem = observationProblem(journal);
+      if (problem !== null) failures.push(`${repoPath}/journal.md: ${problem}`);
     } catch (error) {
       failures.push(error instanceof UnreadableSource ? error.message : `${repoPath}: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -184,7 +197,11 @@ export async function buildIntentIndex(cwd: string): Promise<IntentIndex> {
         if (primary !== null) break;
       }
       const specification = await readSource(path.join(dir, "specification.md"), `${repoPath}/specification.md`);
-      intents.push(extractDocpackIntent({ name, primary, specification }, repoPath));
+      const readme = await readSource(path.join(dir, "README.md"), `${repoPath}/README.md`);
+      const source: DocpackSource = { name, primary, specification, readme };
+      intents.push(extractDocpackIntent(source, repoPath));
+      const problem = docpackObservationProblem(source);
+      if (problem !== null) failures.push(`${repoPath}: ${problem}`);
     } catch (error) {
       failures.push(error instanceof UnreadableSource ? error.message : `${repoPath}: ${error instanceof Error ? error.message : String(error)}`);
     }

@@ -6,6 +6,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { writeFileAtomic } from "../lib/fs";
 import { corpusFingerprint, listFlowPackages } from "./corpus";
+import { OUTCOME_VERDICTS } from "./types";
 import type { IndexRead, IntentIndex, Staleness } from "./types";
 
 export function productDataRoot(cwd: string): string {
@@ -30,7 +31,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const COUNT_KEYS = ["intents", "flows", "docpacks", "closed", "noCriterion", "notObserved", "observed"] as const;
+const COUNT_KEYS = ["intents", "flows", "docpacks", "closed", "noCriterion", "notObserved", "observed", "helped", "noEffect", "harmed", "inconclusive"] as const;
 
 /** Why a parsed value is not an index the readers can use, or `null` when it is one. Checks every field they touch. */
 function indexProblem(value: unknown): string | null {
@@ -52,6 +53,8 @@ function indexProblem(value: unknown): string | null {
     if (!isRecord(outcome) || typeof outcome.observed !== "boolean" || (outcome.criterion !== null && typeof outcome.criterion !== "string")) {
       return "index.json holds an intent without a usable outcome";
     }
+    if (outcome.verdict !== null && !OUTCOME_VERDICTS.includes(outcome.verdict as (typeof OUTCOME_VERDICTS)[number])) return "index.json holds an intent with an unknown verdict";
+    if (outcome.note !== null && typeof outcome.note !== "string") return "index.json holds an intent with an unusable note";
   }
   return null;
 }
@@ -83,7 +86,15 @@ export async function readIntentIndex(cwd: string): Promise<IndexRead> {
 export async function checkStaleness(cwd: string, index: IntentIndex): Promise<Staleness> {
   if ((await corpusFingerprint(cwd)) === index.fingerprint) return { stale: false };
   const packages = await listFlowPackages(cwd);
-  const indexed = index.counts.flows + index.failures.filter((failure) => failure.startsWith(".metaproject/flows/")).length;
+  // A failure that names a flow the index also holds as an intent (a malformed observation line) is one flow, not two.
+  const held = new Set(index.intents.map((intent) => intent.path));
+  const failedFlows = new Set(
+    index.failures.flatMap((failure) => {
+      const flow = /^(\.metaproject\/flows\/[^/:]+)/.exec(failure)?.[1];
+      return flow === undefined || held.has(flow) ? [] : [flow];
+    }),
+  );
+  const indexed = index.counts.flows + failedFlows.size;
   if (packages.length !== indexed) return { stale: true, reason: `the index holds ${indexed} flows, the tree ${packages.length}` };
   return { stale: true, reason: "the flows or requirements changed after the index was built" };
 }

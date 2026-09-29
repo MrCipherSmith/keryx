@@ -189,7 +189,7 @@ describe("section reading is code-fence aware", () => {
 describe("determinism", () => {
   test("flows come first in numeric id order, then requirements packages by name", async () => {
     const index = await buildIntentIndex(await fixtureRoot());
-    expect(index.intents.map((intent) => intent.id)).toEqual(["001", "002", "003", "004", "005", "alpha-package", "beta-package"]);
+    expect(index.intents.map((intent) => intent.id)).toEqual(["001", "002", "003", "004", "005", "alpha-package", "beta-package", "gamma-package"]);
   });
 
   test("a second run writes byte-identical output", async () => {

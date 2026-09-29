@@ -8,14 +8,19 @@ import type { AcKindRecord } from "../flow/ac-kinds";
 
 export type IntentSource = "flow" | "docpack";
 
+export const OUTCOME_VERDICTS = ["helped", "no-effect", "harmed", "inconclusive"] as const;
+export type OutcomeVerdict = (typeof OUTCOME_VERDICTS)[number];
+
 export interface IntentOutcome {
   /** The outcome criterion the package states, or `null` when it states none. */
   readonly criterion: string | null;
-  /** A line beginning `outcome-observed:` exists in the flow's journal. */
+  /** A well-formed `outcome-observed: <verdict> — <note>` line exists in the flow's journal. */
   readonly observed: boolean;
-  /** A leading ISO date on that line, when it carries one. */
+  /** The verdict on that line; `null` when nothing was observed, or the line is malformed. */
+  readonly verdict: OutcomeVerdict | null;
+  /** A leading ISO date in the note, when it carries one. */
   readonly observedAt: string | null;
-  /** The text of that line after the marker. */
+  /** The note after the em dash. */
   readonly note: string | null;
 }
 
@@ -47,6 +52,11 @@ export interface IntentCounts {
   /** Closed and unobserved, with a criterion stated. */
   readonly notObserved: number;
   readonly observed: number;
+  /** The four verdicts partition `observed`. */
+  readonly helped: number;
+  readonly noEffect: number;
+  readonly harmed: number;
+  readonly inconclusive: number;
 }
 
 export interface IntentIndex {
@@ -60,7 +70,11 @@ export interface IntentIndex {
   readonly intents: readonly Intent[];
   /** Entries with no extractable intent statement. */
   readonly unusable: number;
-  /** Sources that could not be parsed at all. */
+  /**
+   * Sources that could not be parsed at all, and observation lines with no
+   * recognized verdict. The second kind names an entry that is still in
+   * `intents` (treated as not observed), so a typo never hides an intent.
+   */
   readonly failures: readonly string[];
   readonly counts: IntentCounts;
 }
@@ -86,6 +100,12 @@ export interface OpenReport {
   readonly noCriterion: number;
   readonly notObserved: number;
   readonly observed: number;
+  readonly helped: number;
+  readonly noEffect: number;
+  readonly harmed: number;
+  readonly inconclusive: number;
+  /** Sources the index could not read, or observation lines it could not parse. */
+  readonly failures: number;
   readonly entries: readonly OpenEntry[];
 }
 
