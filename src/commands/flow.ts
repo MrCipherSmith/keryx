@@ -12,6 +12,8 @@ import {
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
+  resolveFlowDir,
+  uncommittedFlowStateNote,
   validateCriterionName,
 } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
@@ -506,6 +508,36 @@ async function runList(args: string[] = []): Promise<void> {
   }
 }
 
+/**
+ * The uncommitted-closing-state note for a flow, or null. Only a `done` flow has
+ * a final state to be left uncommitted; anything else gets nothing. Informational
+ * — it never changes an exit code, and a failure to work it out is silence.
+ */
+export async function closedFlowStateNote(
+  cwd: string,
+  flow: { id: string; status: FlowStatus },
+): Promise<string | null> {
+  if (flow.status !== "done") return null;
+  try {
+    return await uncommittedFlowStateNote(cwd, flow.id, await resolveFlowDir(cwd, flow.id));
+  } catch {
+    return null;
+  }
+}
+
+/** The note `flow complete` prints: only after a PASSED completion, where the state is final. */
+export async function completionStateNote(
+  cwd: string,
+  result: { passed: boolean; flow: { id: string; status: FlowStatus } },
+): Promise<string | null> {
+  return result.passed ? closedFlowStateNote(cwd, result.flow) : null;
+}
+
+async function printClosedFlowStateNote(cwd: string, flow: { id: string; status: FlowStatus }): Promise<void> {
+  const text = await closedFlowStateNote(cwd, flow);
+  if (text !== null) note(text);
+}
+
 async function runStatus(args: string[]): Promise<void> {
   const id = requireId(args);
   const flow = await getService().get({ cwd: process.cwd(), id });
@@ -586,6 +618,7 @@ async function runStatus(args: string[]): Promise<void> {
       `  ${style.dim(event.at)} ${event.event}${event.detail ? style.dim(`: ${event.detail}`) : ""}`,
     );
   }
+  await printClosedFlowStateNote(process.cwd(), flow);
 }
 
 /**
@@ -1168,6 +1201,8 @@ async function runComplete(args: string[]): Promise<void> {
     }
   }
   await printAcCheckAdvisory(cwd, id);
+  const closing = await completionStateNote(cwd, result);
+  if (closing !== null) note(closing);
   process.exitCode = result.passed ? 0 : 1;
 }
 

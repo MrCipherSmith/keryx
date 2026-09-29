@@ -8,15 +8,40 @@
   "id": "359",
   "slug": "mcp-trust-hardening",
   "title": "MCP tool trust: keep the untrusted-content floor and bind trust to the tool definition",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-28T21:25:03.298Z",
-  "updatedAt": "2026-09-28T21:25:29.198Z",
+  "updatedAt": "2026-09-28T22:16:43.564Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T22:13:56.387Z",
+      "note": "executeCall requires !untrustedOrigin for the trusted-MCP bypass; test rewritten to assert an ask with untrustedOrigin, plus next-turn test; PR #789 merged e4b19829"
+    },
+    "AC2": {
+      "at": "2026-09-28T22:13:56.704Z",
+      "note": "mcpTrustAvailable withheld while the floor is on (mcpTrustWithheld meta); readline prompt and TUI dock omit the option and print the reason; meta asserted in tests"
+    },
+    "AC3": {
+      "at": "2026-09-28T22:13:57.026Z",
+      "note": "session grant is Map<fqn, definition fingerprint>; unchanged definition no prompt, changed description and changed input schema prompt and drop the grant; tests in agent-permission-mode.test.ts"
+    },
+    "AC4": {
+      "at": "2026-09-28T22:13:57.329Z",
+      "note": "in-memory only, model cannot add, /new and resume clear it (readline sessions-off path fixed in cad1b4fe after review F-002), foreground facade shares the map"
+    },
+    "AC5": {
+      "at": "2026-09-28T22:13:57.638Z",
+      "note": "CHANGELOG 0.3.27 Security entries, docs/docs/guides/permission-modes.md, prompt and dock text say why the option is missing"
+    },
+    "AC6": {
+      "at": "2026-09-28T22:13:57.958Z",
+      "note": "follow-ups recorded as flow 360: destructiveHint never offers trust; /mcp trust list and revoke plus trusted marker"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -31,7 +56,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -39,14 +64,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -54,14 +80,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -69,14 +96,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,13 +112,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "context",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -98,13 +127,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "floor bypass and offer",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -112,13 +142,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "definition fingerprint and Map",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -126,13 +157,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "prompt text, docs, CHANGELOG",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -140,13 +172,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "verify and review",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -154,7 +187,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -195,6 +229,502 @@
     {
       "at": "2026-09-28T21:25:29.198Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-28T22:13:38.716Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-28T22:13:39.010Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-28T22:13:39.321Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-28T22:13:39.612Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-28T22:13:39.919Z",
+      "event": "task-done",
+      "detail": "T5: context"
+    },
+    {
+      "at": "2026-09-28T22:13:40.220Z",
+      "event": "task-done",
+      "detail": "T6: floor bypass and offer"
+    },
+    {
+      "at": "2026-09-28T22:13:40.519Z",
+      "event": "task-done",
+      "detail": "T7: definition fingerprint and Map"
+    },
+    {
+      "at": "2026-09-28T22:13:40.850Z",
+      "event": "task-done",
+      "detail": "T8: prompt text, docs, CHANGELOG"
+    },
+    {
+      "at": "2026-09-28T22:13:41.178Z",
+      "event": "task-done",
+      "detail": "T9: verify and review"
+    },
+    {
+      "at": "2026-09-28T22:13:56.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: executeCall requires !untrustedOrigin for the trusted-MCP bypass; test rewritten to assert an ask with untrustedOrigin, plus next-turn test; PR #789 merged e4b19829 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:13:56.704Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: mcpTrustAvailable withheld while the floor is on (mcpTrustWithheld meta); readline prompt and TUI dock omit the option and print the reason; meta asserted in tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:13:57.027Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: session grant is Map<fqn, definition fingerprint>; unchanged definition no prompt, changed description and changed input schema prompt and drop the grant; tests in agent-permission-mode.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:13:57.329Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: in-memory only, model cannot add, /new and resume clear it (readline sessions-off path fixed in cad1b4fe after review F-002), foreground facade shares the map (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:13:57.638Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: CHANGELOG 0.3.27 Security entries, docs/docs/guides/permission-modes.md, prompt and dock text say why the option is missing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:13:57.958Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: follow-ups recorded as flow 360: destructiveHint never offers trust; /mcp trust list and revoke plus trusted marker (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:14:06.260Z",
+      "event": "completing",
+      "detail": "merged commit: e4b19829847fd641f71324535e85bd367e232439"
+    },
+    {
+      "at": "2026-09-28T22:14:06.279Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-28T22:14:06.280Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/359-2026-09-28-mcp-trust-hardening/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-28T22:14:18.275Z",
+      "event": "completing",
+      "detail": "merged commit: e4b19829847fd641f71324535e85bd367e232439"
+    },
+    {
+      "at": "2026-09-28T22:14:18.334Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-28T22:14:18.336Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): no disposition recorded | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): no disposition recorded | verifier-stats (violated): round `2026-09-28-ingest-789` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-28-ingest-789#F-001, 2026-09-28-ingest-789#F-002). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-28T22:15:21.492Z",
+      "event": "completing",
+      "detail": "merged commit: e4b19829847fd641f71324535e85bd367e232439"
+    },
+    {
+      "at": "2026-09-28T22:15:21.551Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-28T22:15:21.552Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-09-28T22:15:42.094Z",
+      "event": "completing",
+      "detail": "merged commit: e4b19829847fd641f71324535e85bd367e232439"
+    },
+    {
+      "at": "2026-09-28T22:15:42.142Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: failed"
+    },
+    {
+      "at": "2026-09-28T22:15:42.143Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-09-28T22:16:43.530Z",
+      "event": "completing",
+      "detail": "merged commit: e4b19829847fd641f71324535e85bd367e232439"
+    },
+    {
+      "at": "2026-09-28T22:16:43.563Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 5: passed"
+    },
+    {
+      "at": "2026-09-28T22:16:43.564Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T22:13:56.387Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:13:56.704Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:13:57.026Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:13:57.329Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:13:57.638Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:13:57.958Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:16:43.564Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6",
+      "headCommit": "e4b19829847fd641f71324535e85bd367e232439"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T22:14:06.279Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e4b19829847fd641f71324535e85bd367e232439 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/359-2026-09-28-mcp-trust-hardening/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:14:18.334Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e4b19829847fd641f71324535e85bd367e232439 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): no disposition recorded | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): no disposition recorded | verifier-stats (violated): round `2026-09-28-ingest-789` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-28-ingest-789#F-001, 2026-09-28-ingest-789#F-002). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:15:21.551Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e4b19829847fd641f71324535e85bd367e232439 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:15:42.142Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e4b19829847fd641f71324535e85bd367e232439 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    },
+    {
+      "at": "2026-09-28T22:16:43.563Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "6 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e4b19829847fd641f71324535e85bd367e232439 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:d3aec938d176e20f12f6ae0a7ca1f97c29f4dc9bf9841b67bad05924904203d6"
+    }
+  ],
+  "merged": {
+    "commit": "e4b19829847fd641f71324535e85bd367e232439",
+    "ref": "origin/main",
+    "at": "2026-09-28T22:16:43.564Z"
+  }
 }
