@@ -187,6 +187,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // `routing`/flow 346's `external` above.
     "  keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness\n",
     "  doctor    One-page health check with a fix hint per line; --json for {checks:[...]}\n",
+    // `keryx setup`: the read-only Metaproject preparation guide — a brand-new
+    // verb, so a USAGE_BODY line and a Commands: summary row, same shape as
+    // flow 353's `doctor` above.
+    "  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)\n",
+    "  setup     Print the Metaproject preparation guide: init, refresh, or repair\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
