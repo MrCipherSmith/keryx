@@ -76,6 +76,7 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
+import { productCommand } from "./commands/product";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -165,6 +166,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
   learn: learnCommand,
@@ -381,6 +383,8 @@ export const USAGE_BODY = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
+  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
+  keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
   keryx hooks validate [--json] [--ci]          Validate .metaproject/hooks.json and ~/.keryx/hooks.json
   keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
@@ -462,6 +466,7 @@ Commands:
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+  product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune

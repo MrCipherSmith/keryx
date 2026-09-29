@@ -93,6 +93,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `test` | Analyze testing context and normalize test reports. |
 | `memory` | Store and search long-term project memory. |
 | `flow` | Agent-first work lifecycle (Task Manager). |
+| `product` | The product's intent as a derived index (`index`), and intents closed in code that nobody looked back at (`open`). |
 | `review` | Create and complete durable managed review packages. |
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
@@ -2536,6 +2537,61 @@ only files a run writes are its own two artifacts, below.
   (`schemaVersion: 1`), machine-readable. `show`'s reader is shape-guarded: a
   missing or malformed stored file is treated as "no report yet", never a
   crash and never silently read as an empty-but-valid report.
+
+---
+
+## product
+
+The product's intent as a derived index, and the list of intents that were
+closed in code and never looked at again. Two commands and nothing else.
+Read-only over the project: it reads `.metaproject/flows/*/` and
+`docs/requirements/*/`, writes one file of its own, calls no model and no
+network service, and gates nothing. No other keryx command calls it and no flow
+transition waits on it.
+
+```
+keryx product index [--json]
+keryx product open [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `index` | Read every flow directory and every requirements package into one intent index at `.metaproject/data/product/index.json`, and print a summary with the count of entries that state no intent. Deterministic: the same corpus gives byte-identical output, and the body carries no timestamp. |
+| `open` | List the intents that are closed in code and have no recorded observation. Each row names the flow and its outcome criterion, or the literal text `not measured — no instrument stated`. |
+| `--json` | Print the index summary, or the open report, as JSON. |
+
+An intent is the Problem or Expected Outcome sentence of a flow (or the
+outcome criteria of a requirements package), with its acceptance criteria read
+through the same `[verify: ...]` kinds `keryx flow` uses, its status and its
+close date. A flow whose description states no intent, only scaffold
+placeholders, is counted as having none; it is not an error.
+
+The `open` header separates three cases, so a number is never mistaken for an
+answer:
+
+```
+intents closed in code, never checked for effect: N of M
+  no outcome criterion stated: a
+  criterion stated, never observed: b
+  observed: c
+```
+
+An observation is a line at the start of a line in the flow's `journal.md`:
+
+```
+outcome-observed: <date> <what was seen>
+```
+
+`index` reads it, and that flow leaves the `open` list. Nothing writes the line
+for you. The index stores a content fingerprint of the flows and requirements
+it was read from. When the index is missing or unreadable, or the fingerprint no
+longer matches the tree, `open` exits non-zero and names `keryx product index`
+instead of answering from stale data. Only content counts, not file times: a
+restored or replaced directory is caught, and a bare `touch` is not.
+
+The index is disposable. `.metaproject/data/product/` can be deleted at any time
+and `keryx product index` rebuilds an equivalent one. In the TUI, `/product` shows the same
+header and rows.
 
 ---
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "id": "002",
+  "slug": "observed",
+  "title": "Cache the price list",
+  "status": "done",
+  "createdAt": "2026-01-02T09:00:00.000Z",
+  "updatedAt": "2026-01-12T09:00:00.000Z",
+  "history": [
+    { "at": "2026-01-02T09:00:00.000Z", "event": "created" },
+    { "at": "2026-01-11T08:00:00.000Z", "event": "done" }
+  ]
+}

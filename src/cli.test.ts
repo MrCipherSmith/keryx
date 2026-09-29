@@ -187,6 +187,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     // `routing`/flow 346's `external` above.
     "  keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness\n",
     "  doctor    One-page health check with a fix hint per line; --json for {checks:[...]}\n",
+    // Flow 362 (product module P1): `keryx product index|open`, a brand-new
+    // verb, so both USAGE_BODY lines and a Commands: summary row.
+    "  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent\n",
+    "  keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion\n",
+    "  product   The product's intent as a derived index, and the intents closed in code that nobody looked back at\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
