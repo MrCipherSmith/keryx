@@ -1023,14 +1023,6 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
   // local baseline, so the listener cannot run turns under a profile that was
   // never checked.
   //
-  // Approvals (R4d): a pending record whose turn is not running in THIS process is
-  // resolved as an expired deny now, before the first request, and its call is
-  // never re-executed. Nothing is live yet, so every pending record qualifies.
-  try {
-    reconcileApprovals(input.dir, { isTurnLive: () => false });
-  } catch (error) {
-    console.error(`keryx serve: approval reconciliation failed: ${error instanceof Error ? error.message : String(error)}`);
-  }
   const consumers = createConsumerRegistry();
   const approvals = createApprovalBroker({
     dir: input.dir,
@@ -1090,6 +1082,17 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
     return refuse("bind-failed", "the listener reported no bound port");
   }
   boundPort = server.port;
+
+  // Approvals (R4d): a pending record whose turn is not running in THIS process is
+  // resolved as an expired deny, and its call is never re-executed. Only after a
+  // successful bind: a second `keryx serve` that fails to bind must not settle the
+  // records of the listener that is running. Nothing is awaited between the bind and
+  // here, so no request has been handled yet and every pending record qualifies.
+  try {
+    reconcileApprovals(input.dir, { isTurnLive: () => false });
+  } catch (error) {
+    console.error(`keryx serve: approval reconciliation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
   state = "listening";
 
   return {

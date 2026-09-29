@@ -33,6 +33,7 @@ import {
   readConfigFile,
   writeOwnerOnlyFileAtomic,
 } from "./config-dir";
+import { finishTurn, readTurnRecord } from "./serve-turn-store";
 
 export const APPROVAL_SCHEMA_VERSION = "1.0.0";
 
@@ -417,6 +418,33 @@ export interface ReconcileReport {
   abandoned: string[];
 }
 
+/** A turn stranded on an approval would otherwise report `running`, and answer 409 to later submissions, forever. */
+function finishOrphanedTurn(turnId: string, approvalId: string, dir: string | undefined, now: Date): void {
+  try {
+    const turn = readTurnRecord(turnId, dir);
+    if (!turn.ok || turn.value.result !== undefined) {
+      return;
+    }
+    finishTurn(
+      turnId,
+      {
+        schemaVersion: "1.0.0",
+        turnId,
+        sessionId: turn.value.sessionId,
+        origin: turn.value.origin,
+        outcome: "expired",
+        reasonCode: "turn-not-running-at-startup",
+        startedAt: turn.value.startedAt,
+        finishedAt: now.toISOString(),
+        approvals: [{ approvalId, resolution: "expired" }],
+      },
+      dir,
+    );
+  } catch {
+    // The approval is already settled; a turn record that cannot be written is left as it was.
+  }
+}
+
 /**
  * Startup: settle what a previous process left behind.
  *
@@ -437,6 +465,7 @@ export function reconcileApprovals(dir: string | undefined, options: { isTurnLiv
       const result = resolveApproval(id, { state: "expired", reason: "turn-not-running-at-startup" }, dir, now);
       if (result.applied) {
         report.expired.push(id);
+        finishOrphanedTurn(read.value.turnId, id, dir, now);
       }
     } else if (read.value.state === "allowed" && !read.value.consumed) {
       if (createOwnerOnlyFileExclusive(consumedFile(id, dir), `${JSON.stringify({ at: now.toISOString(), reason: "abandoned-at-startup" })}\n`)) {

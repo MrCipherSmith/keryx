@@ -12,8 +12,10 @@ approval as a Telegram card or a web page; that is the client's job.
 
 - **An answer is one call, once.** `allow` lets exactly the pending call run, one
   time. It is never a session grant and never trusts the tool for later calls.
-- **An answer cannot lift a floor.** Hook-ask floors and denials are computed
-  before the approver runs; an `allow` does not override them.
+- **A floor means "ask again every time".** A call that is destructive, uses a
+  credential, or was put to a hook's `ask` carries that floor on its record.
+  An `allow` covers this one call only; the next identical call asks again.
+  A policy denial is decided before the approver runs and no answer overrides it.
 - **Silence is a denial.** An approval nobody answers resolves to `expired` (a
   denial) at its expiry, and the turn continues with that denial.
 - **A delivery failure denies at once.** With no consumer attached (see below)
@@ -36,8 +38,11 @@ approval as a Telegram card or a web page; that is the client's job.
 The state is derived from files under `<config>/approvals/`: a request file, a
 resolution file created exclusively (so exactly one writer wins across
 concurrent answers and across processes), and a consumed marker created
-exclusively (so a call runs at most once, restarts included). Pending
-approvals survive a listener restart.
+exclusively (so a call runs at most once, restarts included). The records are
+durable, but a turn does not survive a listener restart: on startup every
+`pending` record is resolved as `expired` (reason `turn-not-running-at-startup`),
+an `allowed` record that was never consumed is closed as abandoned, and the
+stranded turn is finished as `expired`. Nothing is re-executed.
 
 ## List
 
@@ -129,7 +134,10 @@ Configured in `serve.json` under `approval` (see
 
 The token is one credential. The `403` fires when the caller **declares** the
 turn's id in `x-keryx-turn`; it cannot stop a caller that lies about who it is.
-What keeps the rule true is that a turn's own tools hold no serve token.
+What keeps the rule true is that a turn's own tools hold no serve token. The
+local path is separate: a process that can run `keryx approvals allow` or write
+the approvals store on this machine answers without a token and without this
+check, so the store's directory is as sensitive as the token.
 
 ## Answering locally
 

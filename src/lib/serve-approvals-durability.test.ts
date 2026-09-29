@@ -19,7 +19,7 @@ import {
 } from "./serve-approvals-store";
 import { CountingExecutor, makeDirs, registryOf, ScriptedProvider, tool, waitFor, type Dirs } from "./serve-approvals.test-helpers";
 import { runRemoteTurn } from "./serve-turn";
-import { readTurnEvents } from "./serve-turn-store";
+import { createTurnRecord, readTurnEvents, readTurnRecord } from "./serve-turn-store";
 
 let dirs: Dirs;
 let executor: CountingExecutor;
@@ -96,6 +96,18 @@ describe("a restart resolves what nothing can answer, and never re-executes it",
     expect(view.ok && view.value.state).toBe("expired");
     expect(view.ok && view.value.reason).toBe("turn-not-running-at-startup");
     expect(readApprovalEvidence(dirs.configDir).some((event) => event.approvalId === id && event.kind === "resolved" && event.state === "expired")).toBe(true);
+  });
+
+  test("the turn stranded on that approval is finished, so it stops reporting running", () => {
+    const turnId = randomUUID();
+    const startedAt = new Date(Date.now() - 1000).toISOString();
+    createTurnRecord({ turnId, sessionId: randomUUID(), project: dirs.project, origin: "remote:test", startedAt }, dirs.configDir);
+    const id = seedPending(turnId);
+    reconcileApprovals(dirs.configDir, { isTurnLive: () => false });
+    const record = readTurnRecord(turnId, dirs.configDir);
+    expect(record.ok && record.value.result?.outcome).toBe("expired");
+    expect(record.ok && record.value.result?.reasonCode).toBe("turn-not-running-at-startup");
+    expect(record.ok && record.value.result?.approvals).toEqual([{ approvalId: id, resolution: "expired" }]);
   });
 
   test("an answer after that restart is refused, and the call was never executed", () => {

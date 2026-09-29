@@ -22,8 +22,8 @@ function printApprovalsHelp(): void {
       "  keryx approvals allow <id>  Allow the one call this approval was raised for, once.",
       "  keryx approvals deny <id>   Deny it.",
       "",
-      "An answer never grants a session-wide trust and never lifts a destructive,",
-      "credential or publish floor: the next identical call asks again.",
+      "An answer never grants a session-wide trust: it covers this one call, and for a",
+      "destructive, credential or hook-ask call the next identical call asks again.",
     ].join("\n"),
   );
 }

@@ -138,6 +138,11 @@ export function createApprovalBroker(options: ApprovalBrokerOptions): ApprovalBr
           createdAt,
         );
       } catch {
+        try {
+          resolveApproval(approvalId, { state: "undeliverable", reason: "record-unwritable" }, options.dir, now());
+        } catch {
+          // The request file may not exist, or the ledger may be what failed; the turn is denied either way.
+        }
         return finish(ask, { approvalId, resolution: "undeliverable", approved: false, reason: "record-unwritable" });
       }
 
