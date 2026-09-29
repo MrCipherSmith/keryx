@@ -79,7 +79,45 @@ export function computeGate(input: {
     s.parse === "failed" ||
     s.parse === "not-run";
 
-  const brokenRequired = sources.filter((s) => s.required && didNotProduceResult(s));
+  // Flow 352 AC3: lint is a CAPABILITY, and the project chooses which tool
+  // provides it. `sources.eslint.required: true` encodes "this project is
+  // linted", not "it is linted by ESLint specifically" -- so a project that
+  // adopted oxlint and switched ESLint off was blocked with
+  // `INCOMPLETE: required source unavailable: eslint` while its lint check was
+  // in fact running and parsing. When one linter produced a result, the other
+  // members of the family that are `skipped` are excused below, for the same
+  // reason `mode: "disabled"` already is: an unused tool is a configuration
+  // fact, not an unmeasured check. Deliberately narrow:
+  //   * only `status: "skipped"` is excused. `missing` (a config for that tool
+  //     exists but its binary does not) and `configured-but-failed` stay
+  //     blocking -- a half-installed tool is a broken check, not an unused one.
+  //   * `required` itself is unchanged, so a project with NEITHER linter keeps
+  //     the existing required-eslint INCOMPLETE behavior (AC2).
+  const LINT_FAMILY = new Set(["eslint", "oxlint"]);
+  const lintSatisfied = sources.some(
+    (s) => LINT_FAMILY.has(s.source) && !didNotProduceResult(s),
+  );
+  const excusedByLintFamily = (s: SourceRunInfo): boolean =>
+    lintSatisfied && LINT_FAMILY.has(s.source) && s.status === "skipped";
+
+  const brokenRequired = sources.filter(
+    (s) => s.required && didNotProduceResult(s) && !excusedByLintFamily(s),
+  );
+  // Say the excuse out loud. Silently dropping a REQUIRED source from the
+  // blocking list would leave a reader of `latest.md` wondering why `eslint:
+  // skipped` produced no complaint, which is the same invisibility defect
+  // F-240-03 closed for optional sources -- and it would hide the fact that
+  // the lint check is running under a different tool. Informational only:
+  // like `OPTIONAL:`/`COVERAGE:`, this line never calls `escalate`.
+  const lintProvider = sources.find(
+    (s) => LINT_FAMILY.has(s.source) && !didNotProduceResult(s),
+  );
+  const excusedLinter = sources.find((s) => s.required && excusedByLintFamily(s));
+  if (excusedLinter && lintProvider) {
+    reasons.push(
+      `NOTE: ${excusedLinter.source} skipped; lint capability provided by ${lintProvider.source}`,
+    );
+  }
   if (brokenRequired.length > 0) {
     for (const source of brokenRequired) {
       const detail = source.error ? `: ${source.error}` : "";
@@ -138,7 +176,11 @@ export function computeGate(input: {
   // completeness. A `mode: "disabled"` source is excluded -- switched off by an
   // operator is a configuration fact, not an unmeasured check.
   const unmeasuredOptional = sources.filter(
-    (s) => !s.required && s.mode !== "disabled" && didNotProduceResult(s),
+    (s) =>
+      !s.required &&
+      s.mode !== "disabled" &&
+      didNotProduceResult(s) &&
+      !excusedByLintFamily(s),
   );
 
   if (status === "pass") {

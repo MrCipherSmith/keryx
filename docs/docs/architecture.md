@@ -631,6 +631,7 @@ keryx shells out to external tools but hard-depends on none — all are optional
 | **git** | cli-core, health, testing, flow | Hook install; runtime fetch/checkout; churn/changed-file detection; AC/commit refs. Absent → hooks no-op, changed-set empty. |
 | **gh (GitHub CLI)** | flow, testing | flow: fetch issue body, verify PR draft/checks, post completion comment. testing: (via git) changed files. Absent → gates `skipped`. |
 | **eslint** | health | Lint findings (error→P1, warning→P2). |
+| **oxlint** | health | Lint findings in the same shape, from `.oxlintrc.*`/`package.json` (flow 352). Optional: a project needs one linter, not both. |
 | **tsc** | health | `tsc --noEmit` type diagnostics (error→P0). |
 | **bun test / project runner** | testing, health | Run the project's *existing* runner; health reuses the normalized report. |
 | **coverage (Istanbul)** | health | Import `coverage-summary.json` → coverage penalty + soft-floor gate. |

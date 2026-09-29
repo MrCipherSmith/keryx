@@ -3,6 +3,7 @@ export type Priority = "P0" | "P1" | "P2" | "P3";
 
 export type SourceId =
   | "eslint"
+  | "oxlint"
   | "typescript"
   | "tests"
   | "coverage"

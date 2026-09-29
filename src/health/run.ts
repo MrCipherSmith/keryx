@@ -276,6 +276,15 @@ function missingSourceReason(sourceId: string): string | undefined {
   if (sourceId === "tests") {
     return "no `bun` binary found (checked node_modules/.bin and PATH)";
   }
+  if (sourceId === "eslint") {
+    return "eslint config found, binary not found (node_modules/.bin/eslint and PATH)";
+  }
+  if (sourceId === "oxlint") {
+    return "oxlint config found, binary not found (node_modules/.bin/oxlint and PATH)";
+  }
+  if (sourceId === "typescript") {
+    return "tsconfig.json found, binary not found (node_modules/.bin/tsc and PATH)";
+  }
   return undefined;
 }
 
@@ -297,6 +306,7 @@ function missingSourceReason(sourceId: string): string | undefined {
 const KNOWN_VALIDATION_ERRORS = new Set<string>([
   "ESLint JSON format was not recognized",
   "ESLint JSON parse failed",
+  "oxlint JSON format was not recognized",
   "dependency audit JSON contains an invalid or unsupported entry",
   "dependency audit JSON parse failed",
   "dependency audit JSON format was not recognized",
@@ -363,7 +373,13 @@ export async function runAdapter(
     // which is for a `detect()` that THREW, a different failure) is read
     // by `gate.ts` the same way it already reads it for a required source
     // (line ~85 there).
-    const reason = missingSourceReason(adapter.id);
+    // The reason describes a FAILED LOOKUP (config present, binary absent), so
+    // it is attached to `missing` ONLY. Attaching it to `skipped` too -- which
+    // an earlier draft of this did, because both statuses return from the same
+    // line -- put the sentence "eslint config found" into the artifact of a
+    // project that has no eslint config at all, i.e. replaced a silent absence
+    // with a false claim about the tree.
+    const reason = status === "missing" ? missingSourceReason(adapter.id) : undefined;
     return { info: { ...base, status, ...(reason !== undefined ? { error: reason } : {}) }, findings: [] };
   }
 

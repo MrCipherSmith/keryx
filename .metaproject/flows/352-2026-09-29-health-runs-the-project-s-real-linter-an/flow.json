@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "352",
+  "slug": "health-runs-the-project-s-real-linter-an",
+  "title": "Health runs the project's real linter and tsc",
+  "status": "in-progress",
+  "createdAt": "2026-09-29T16:28:10.925Z",
+  "updatedAt": "2026-09-29T17:13:08.684Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a84c111082059bd2359f5c2372edeeb11975285c8d71e16922c74479b2352fb7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Reproduce the vantage tsc missing report",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Add the oxlint source adapter and parser fixture",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Satisfy required lint as a family when one linter ran",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Name missing eslint and typescript binaries",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify oxlint, eslint, and local tsc fixtures",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-29T16:28:10.925Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T16:28:45.594Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T16:28:45.752Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T16:28:45.892Z",
+      "event": "task-added",
+      "detail": "T5: Reproduce the vantage tsc missing report"
+    },
+    {
+      "at": "2026-09-29T16:28:46.025Z",
+      "event": "task-added",
+      "detail": "T6: Add the oxlint source adapter and parser fixture"
+    },
+    {
+      "at": "2026-09-29T16:28:46.154Z",
+      "event": "task-added",
+      "detail": "T7: Satisfy required lint as a family when one linter ran"
+    },
+    {
+      "at": "2026-09-29T16:28:46.286Z",
+      "event": "task-added",
+      "detail": "T8: Name missing eslint and typescript binaries"
+    },
+    {
+      "at": "2026-09-29T16:28:46.413Z",
+      "event": "task-added",
+      "detail": "T9: Verify oxlint, eslint, and local tsc fixtures"
+    },
+    {
+      "at": "2026-09-29T16:49:58.635Z",
+      "event": "task-done",
+      "detail": "T5: Reproduce the vantage tsc missing report"
+    },
+    {
+      "at": "2026-09-29T16:49:58.795Z",
+      "event": "task-done",
+      "detail": "T6: Add the oxlint source adapter and parser fixture"
+    },
+    {
+      "at": "2026-09-29T16:49:58.942Z",
+      "event": "task-done",
+      "detail": "T7: Satisfy required lint as a family when one linter ran"
+    },
+    {
+      "at": "2026-09-29T16:49:59.116Z",
+      "event": "task-done",
+      "detail": "T8: Name missing eslint and typescript binaries"
+    },
+    {
+      "at": "2026-09-29T17:13:08.521Z",
+      "event": "task-done",
+      "detail": "T9: Verify oxlint, eslint, and local tsc fixtures"
+    },
+    {
+      "at": "2026-09-29T17:13:08.684Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    }
+  }
+}
