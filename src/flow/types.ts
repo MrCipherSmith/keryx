@@ -5,7 +5,7 @@
 import type { NextTaskDecision } from "./machine";
 import type { Identity } from "./identity";
 import type { AcKindError, AcKindReport, AcKindRecord } from "./ac-kinds";
-import type { OutcomeAuthor } from "./outcome-author";
+import type { OutcomeAuthor, OutcomeAuthorReading } from "./outcome-author";
 export type { Identity, IdentityBasis } from "./identity";
 
 export type FlowStatus =
@@ -531,6 +531,13 @@ export type FlowRenumberResult = {
   reviewRecords: FlowRenumberReviewRecords;
 };
 
+/** What `outcomeAuthorSet` did: the reading it replaced and whether it wrote anything. */
+export interface OutcomeAuthorSetResult {
+  flow: FlowState;
+  previous: OutcomeAuthorReading;
+  changed: boolean;
+}
+
 export interface FlowService {
   init(input: FlowInitInput): Promise<FlowInitResult>;
   list(input: { cwd: string }): Promise<FlowSummary[]>;
@@ -638,7 +645,7 @@ export interface FlowService {
    * together; setting the value the flow already has writes nothing. Gates
    * nothing, so it also works on a flow that is already closed.
    */
-  outcomeAuthorSet(input: { cwd: string; id: string; author: string; reason: string }): Promise<FlowState>;
+  outcomeAuthorSet(input: { cwd: string; id: string; author: string; reason: string }): Promise<OutcomeAuthorSetResult>;
   complete(input: {
     cwd: string;
     id: string;

@@ -2,7 +2,7 @@
 // template's own text, byte for byte, and no example is inserted; agent or no flag creates the
 // flow exactly as before.
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
@@ -49,18 +49,6 @@ type InitInput = Parameters<FlowService["init"]>[0];
 async function init(service: FlowService, input: InitInput): Promise<{ flow: FlowState; dir: string }> {
   const result = await service.init(input);
   return { flow: result.flow, dir: path.join(ROOT, result.dir) };
-}
-
-async function readRawFlow(dir: string): Promise<FlowState> {
-  return JSON.parse(await readFile(path.join(dir, "flow.json"), "utf8")) as FlowState;
-}
-
-async function flowDirs(): Promise<string[]> {
-  try {
-    return await readdir(path.join(ROOT, ".metaproject", "flows"));
-  } catch {
-    return [];
-  }
 }
 
 import { renderDescription } from "./templates";

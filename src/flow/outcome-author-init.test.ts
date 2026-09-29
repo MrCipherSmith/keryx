@@ -130,6 +130,58 @@ test("AC1: the CLI exits non-zero on an unknown value and on a bare flag, and cr
   }
 });
 
+test.each([
+  ["the same value twice", ["--outcome-author", "agent", "--outcome-author", "agent"]],
+  ["two different values", ["--outcome-author", "agent", "--outcome-author", "human"]],
+  ["the human value twice", ["--outcome-author", "human", "--outcome-author", "human"]],
+  ["the equals form twice", ["--outcome-author=agent", "--outcome-author=human"]],
+  ["equals form first, spaced form second", ["--outcome-author=agent", "--outcome-author", "human"]],
+  ["spaced form first, equals form second", ["--outcome-author", "human", "--outcome-author=agent"]],
+])("AC1: the flag repeated (%s) is refused, and no flow is created", async (_label, flagArgs) => {
+  await fresh();
+  const originalCwd = process.cwd();
+  const realError = console.error;
+  const errors: string[] = [];
+  console.error = (...args: unknown[]) => {
+    errors.push(args.map(String).join(" "));
+  };
+  try {
+    process.chdir(ROOT);
+    process.exitCode = 0;
+    await flowCommand(["init", "--title", "Repeated flag", ...flagArgs]);
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("--outcome-author was given more than once");
+    expect(await flowDirs()).toEqual([]);
+  } finally {
+    console.error = realError;
+    process.chdir(originalCwd);
+    process.exitCode = 0;
+  }
+});
+
+test("AC1: the flag given once, in either spelling, still creates the flow", async () => {
+  await fresh();
+  const originalCwd = process.cwd();
+  const realLog = console.log;
+  console.log = () => undefined;
+  try {
+    process.chdir(ROOT);
+    process.exitCode = 0;
+    await flowCommand(["init", "--title", "Spaced form", "--outcome-author", "human"]);
+    await flowCommand(["init", "--title", "Equals form", "--outcome-author=human"]);
+    expect(process.exitCode).toBe(0);
+    const dirs = await flowDirs();
+    expect(dirs).toHaveLength(2);
+    for (const dir of dirs) {
+      expect((await readRawFlow(path.join(ROOT, ".metaproject", "flows", dir))).outcomeAuthor).toBe("human");
+    }
+  } finally {
+    console.log = realLog;
+    process.chdir(originalCwd);
+    process.exitCode = 0;
+  }
+});
+
 test("AC1: `keryx flow schema` lists outcomeAuthor with exactly agent and human", () => {
   const schema = flowStateSchema() as { properties?: Record<string, { enum?: string[] }> };
   expect(schema.properties?.["outcomeAuthor"]?.enum).toEqual(["agent", "human"]);

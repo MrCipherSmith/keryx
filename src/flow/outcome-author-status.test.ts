@@ -1,7 +1,7 @@
 // Flow 365, AC4 — `flow status` prints an author line; a flow written before the field existed
 // reads `unknown`, and reading it never rewrites the file.
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
@@ -52,14 +52,6 @@ async function init(service: FlowService, input: InitInput): Promise<{ flow: Flo
 
 async function readRawFlow(dir: string): Promise<FlowState> {
   return JSON.parse(await readFile(path.join(dir, "flow.json"), "utf8")) as FlowState;
-}
-
-async function flowDirs(): Promise<string[]> {
-  try {
-    return await readdir(path.join(ROOT, ".metaproject", "flows"));
-  } catch {
-    return [];
-  }
 }
 
 import { flowCommand } from "../commands/flow";

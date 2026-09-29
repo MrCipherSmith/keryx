@@ -14,6 +14,9 @@ export type OutcomeAuthor = (typeof OUTCOME_AUTHORS)[number];
 /** What a reader prints for a flow: a recorded author, or `unknown` when the field is absent. */
 export type OutcomeAuthorReading = OutcomeAuthor | "unknown";
 
+/** Every reading a reader can print, in the order they are listed: the two recorded authors, then `unknown`. */
+export const OUTCOME_AUTHOR_READINGS: readonly OutcomeAuthorReading[] = [...OUTCOME_AUTHORS, "unknown"];
+
 /** The author a new flow carries when `--outcome-author` is not given. */
 export const DEFAULT_OUTCOME_AUTHOR: OutcomeAuthor = "agent";
 

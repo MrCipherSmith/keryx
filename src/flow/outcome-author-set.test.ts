@@ -2,7 +2,7 @@
 // one journal line names old, new and the reason, field and line land together, and setting the
 // value already held writes nothing.
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
@@ -55,14 +55,6 @@ async function readRawFlow(dir: string): Promise<FlowState> {
   return JSON.parse(await readFile(path.join(dir, "flow.json"), "utf8")) as FlowState;
 }
 
-async function flowDirs(): Promise<string[]> {
-  try {
-    return await readdir(path.join(ROOT, ".metaproject", "flows"));
-  } catch {
-    return [];
-  }
-}
-
 import { flowCommand } from "../commands/flow";
 
 async function journal(dir: string): Promise<string> {
@@ -94,7 +86,9 @@ test("AC2: agent -> human writes the field and exactly one journal line naming o
     reason: "Aleks rewrote the criterion",
   });
 
-  expect(updated.outcomeAuthor).toBe("human");
+  expect(updated.flow.outcomeAuthor).toBe("human");
+  expect(updated.previous).toBe("agent");
+  expect(updated.changed).toBe(true);
   expect((await readRawFlow(dir)).outcomeAuthor).toBe("human");
   const added = (await journal(dir)).slice(before.length);
   const lines = outcomeLines(added);
@@ -108,7 +102,9 @@ test("AC2: a flow without the field names `unknown` as the old value", async () 
   const service = await fresh();
   const { id, dir } = await legacyFlow(service);
 
-  await service.outcomeAuthorSet({ cwd: ROOT, id, author: "agent", reason: "confirmed from the PR" });
+  const result = await service.outcomeAuthorSet({ cwd: ROOT, id, author: "agent", reason: "confirmed from the PR" });
+  expect(result.previous).toBe("unknown");
+  expect(result.changed).toBe(true);
 
   expect((await readRawFlow(dir)).outcomeAuthor).toBe("agent");
   const lines = outcomeLines(await journal(dir));
@@ -123,8 +119,11 @@ test("AC2: setting the value already held writes no journal line and leaves flow
   const flowBefore = await readFile(path.join(dir, "flow.json"), "utf8");
   const journalBefore = await journal(dir);
 
-  await service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "no change" });
+  const result = await service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "no change" });
 
+  expect(result.changed).toBe(false);
+  expect(result.previous).toBe("human");
+  expect(result.flow.outcomeAuthor).toBe("human");
   expect(await readFile(path.join(dir, "flow.json"), "utf8")).toBe(flowBefore);
   expect(await journal(dir)).toBe(journalBefore);
 });
@@ -160,9 +159,29 @@ test("AC2: the change is recorded in history too, so the field and the trail mov
   const service = await fresh();
   const { flow } = await init(service, { cwd: ROOT, title: "History" });
   const updated = await service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "handwritten" });
-  const last = updated.history[updated.history.length - 1];
+  const last = updated.flow.history[updated.flow.history.length - 1];
   expect(last?.event).toBe("outcome-author-set");
   expect(last?.detail).toContain("handwritten");
+});
+
+test("AC2: two setters racing each report the old value they actually replaced", async () => {
+  const service = await fresh();
+  const { flow, dir } = await init(service, { cwd: ROOT, title: "Race" });
+
+  const [first, second] = await Promise.all([
+    service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "first writer" }),
+    service.outcomeAuthorSet({ cwd: ROOT, id: flow.id, author: "human", reason: "second writer" }),
+  ]);
+
+  // Serialized by the flow lock: exactly one of them changed the flow, and the other saw
+  // the value already in place. Neither reports a stale "agent -> human".
+  const changed = [first, second].filter((result) => result.changed);
+  const unchanged = [first, second].filter((result) => !result.changed);
+  expect(changed).toHaveLength(1);
+  expect(unchanged).toHaveLength(1);
+  expect(changed[0]?.previous).toBe("agent");
+  expect(unchanged[0]?.previous).toBe("human");
+  expect(outcomeLines(await journal(dir))).toHaveLength(1);
 });
 
 test("AC2: the CLI refuses a missing --reason and an unknown value with a non-zero exit", async () => {

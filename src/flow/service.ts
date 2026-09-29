@@ -10,12 +10,13 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
-import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor } from "./outcome-author";
+import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
 // The outcome-author vocabulary, re-exported so the CLI, the product module and the
 // TUI read it through this facade (import policy, rule 2).
 export {
   DEFAULT_OUTCOME_AUTHOR,
   OUTCOME_AUTHORS,
+  OUTCOME_AUTHOR_READINGS,
   parseOutcomeAuthor,
   readOutcomeAuthor,
   type OutcomeAuthor,
@@ -163,6 +164,7 @@ import type {
   GateOutcome,
   AttemptOutcome,
   TaskAttempts,
+  OutcomeAuthorSetResult,
 } from "./types";
 
 /**
@@ -553,20 +555,26 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
      * gates nothing, so it does not check the acceptance-criteria seal and works
      * on a closed flow: relabelling a sample is not a change to the contract.
      */
-    async outcomeAuthorSet({ cwd, id, author, reason }): Promise<FlowState> {
+    async outcomeAuthorSet({ cwd, id, author, reason }): Promise<OutcomeAuthorSetResult> {
       const next = parseOutcomeAuthor(author, "outcome author");
       if (!reason?.trim()) {
         throw new Error('flow outcome author requires --reason "<why>"');
       }
       validateSingleLineReason(reason);
-      return mutate(cwd, id, async ({ dir, flow }) => {
-        const previous = readOutcomeAuthor(flow.outcomeAuthor);
+      // `previous` and `changed` are decided under the flow lock, so what the caller
+      // prints is what this call did, even when another writer changed the flow first.
+      let previous: OutcomeAuthorReading = "unknown";
+      let changed = false;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        previous = readOutcomeAuthor(current.outcomeAuthor);
         if (previous === next) {
-          return flow;
+          return current;
         }
-        flow.outcomeAuthor = next;
-        return save(cwd, dir, flow, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
+        changed = true;
+        current.outcomeAuthor = next;
+        return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
       });
+      return { flow, previous, changed };
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {

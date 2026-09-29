@@ -437,8 +437,14 @@ async function runInit(args: string[]): Promise<void> {
  * an omitted flag and quietly taking the default.
  */
 function outcomeAuthorFlag(args: string[]): string | undefined {
-  const given = args.some((arg) => arg === "--outcome-author" || arg.startsWith("--outcome-author="));
-  return given ? (optionValue(args, "--outcome-author") ?? "") : undefined;
+  const given = args.filter((arg) => arg === "--outcome-author" || arg.startsWith("--outcome-author=")).length;
+  // `human` decides which row of the G1a table a flow lands in, so a repeated flag is
+  // refused outright: `optionValue` would answer with one of the spellings and the
+  // choice would depend on which one it happens to look at first.
+  if (given > 1) {
+    throw new Error("--outcome-author was given more than once; pass it once, as agent or human.");
+  }
+  return given === 1 ? (optionValue(args, "--outcome-author") ?? "") : undefined;
 }
 
 async function runPlan(args: string[]): Promise<void> {
@@ -991,18 +997,19 @@ async function runOutcome(args: string[]): Promise<void> {
   if (!id || author === undefined || positionals.length > 2) {
     throw new Error(OUTCOME_AUTHOR_USAGE);
   }
-  const before = readOutcomeAuthor((await getService().get({ cwd: process.cwd(), id })).outcomeAuthor);
-  const flow = await getService().outcomeAuthorSet({
+  // The previous value and whether anything was written come back from inside the
+  // service's lock, so the message describes this call and not a racing read.
+  const result = await getService().outcomeAuthorSet({
     cwd: process.cwd(),
     id,
     author,
     reason: optionValue(rest, "--reason") ?? "",
   });
-  const after = readOutcomeAuthor(flow.outcomeAuthor);
+  const after = readOutcomeAuthor(result.flow.outcomeAuthor);
   console.log(
-    before === after
-      ? `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`
-      : `  ${style.green(symbols.ok)} Outcome author ${before} ${style.cyan(symbols.arrow)} ${style.bold(after)}`,
+    result.changed
+      ? `  ${style.green(symbols.ok)} Outcome author ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(after)}`
+      : `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`,
   );
 }
 

@@ -3636,7 +3636,8 @@ conclusions about acceptance are drawn only from human flows.
 
 **It is never inferred.** `flow init` records `agent` when `--outcome-author` is
 absent and `human` only when the flag says `human`, never from a git identity, an
-owner or the environment; any other value is refused before the flow is created.
+owner or the environment; any other value, and a flag given more than once (in
+either spelling), is refused before the flow is created.
 `keryx flow outcome author <id> agent|human --reason "<why>"` changes it: the
 reason is required, one `journal.md` line names the old value (or `unknown`), the
 new value and the reason, and the field and the line are written together;
