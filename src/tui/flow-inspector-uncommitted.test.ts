@@ -60,7 +60,7 @@ test("no note for a flow that is not done, or whose directory is untracked", asy
   await doneFlow("in-progress", true);
   const [open] = await loadInspectorFlows(ROOT);
   expect(open?.uncommitted).toBeUndefined();
-  expect(formatFlowDetailLines(open ?? ({ tasks: [] } as never)).join("\n")).not.toContain("uncommitted state");
+  expect(formatFlowDetailLines(open ?? ({ tasks: [] } as never)).join("\n")).not.toContain("uncommitted changes");
   await rm(ROOT, { recursive: true, force: true });
 
   await doneFlow("done", false);

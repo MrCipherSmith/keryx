@@ -69,7 +69,7 @@ test("closedFlowStateNote: nothing for a flow that is not done, even when its di
 test("closedFlowStateNote: a done flow with a tracked, dirty directory gets the note", async () => {
   const id = await seedFlow("done", { commit: true, dirty: true });
   const text = await closedFlowStateNote(root, { id, status: "done" });
-  expect(text).toContain(`flow ${id} has uncommitted state`);
+  expect(text).toContain(`flow ${id} has uncommitted changes`);
   expect(text).toContain("journal.md");
 });
 
@@ -83,7 +83,7 @@ test("flow status on a done flow with a dirty tracked directory prints the note,
   process.chdir(root);
   await flowCommand(["status", id]);
   const printed = logs.join("\n");
-  expect(printed).toContain("uncommitted state in .metaproject/flows/");
+  expect(printed).toContain("uncommitted changes in .metaproject/flows/");
   expect(printed).toContain("nothing gates on this");
   expect(process.exitCode ?? 0).toBe(0);
 });
@@ -92,5 +92,5 @@ test("flow status on a done flow whose directory is clean prints no note", async
   const id = await seedFlow("done", { commit: true, dirty: false });
   process.chdir(root);
   await flowCommand(["status", id]);
-  expect(logs.join("\n")).not.toContain("uncommitted state");
+  expect(logs.join("\n")).not.toContain("uncommitted changes");
 });

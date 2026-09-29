@@ -302,10 +302,12 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
     // The closing state `flow complete` writes after the merge, still uncommitted
     // — the same note `keryx flow status` prints. One git pass for every done
     // flow; informational, and silent on any failure.
-    const notes = await uncommittedFlowStateNotes(cwd, doneFlows);
-    for (const done of doneFlows) {
-      const text = notes.get(done.dir);
-      if (text !== undefined) done.item.uncommitted = text;
+    if (doneFlows.length > 0) {
+      const notes = await uncommittedFlowStateNotes(cwd, doneFlows);
+      for (const done of doneFlows) {
+        const text = notes.get(done.dir);
+        if (text !== undefined) done.item.uncommitted = text;
+      }
     }
     return sortFlowsNewestFirst(items);
   } catch {

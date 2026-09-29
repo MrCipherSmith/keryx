@@ -4,8 +4,9 @@ import { flowsRoot } from "./store";
 /**
  * `keryx flow complete` writes the closing state (flow.json, journal.md,
  * reviews/) into the working copy AFTER the pull request merged, and nothing
- * commits it afterwards. A tracked flow directory therefore stays dirty against
- * HEAD. This is the one-block note that says so.
+ * commits it afterwards, so a tracked flow directory commonly stays dirty against
+ * HEAD. This is the one-block note that says the directory has uncommitted
+ * changes; it does not claim to know what wrote them.
  *
  * Informational only: read-only git, no model, and it never changes an exit code
  * or a completion result. Every failure — no git, no repository, a git error —
@@ -24,35 +25,61 @@ export interface GitRun {
 /** Runs `git <args>` in `cwd`. Injectable so a test can simulate a git failure. */
 export type GitRunner = (cwd: string, args: string[]) => Promise<GitRun>;
 
+/**
+ * Every git call here is read-only against the index: `--no-optional-locks`
+ * stops `git status` from opportunistically refreshing (and locking) the index,
+ * so a note printed while another git process runs cannot collide with it.
+ */
+export const READ_ONLY_GIT_FLAGS = ["--no-optional-locks"] as const;
+
+/** Bound on each git call; a hung git must not hang a command that already succeeded. */
+export const GIT_TIMEOUT_MS = 5000;
+
 const spawnGit: GitRunner = async (cwd, args) => {
-  const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  const proc = Bun.spawn(["git", ...args], {
+    cwd,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: GIT_TIMEOUT_MS,
+  });
   const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  return { code, out };
+  // A killed process (timeout) is a failure, whatever exit code it reports.
+  return { code: proc.signalCode === null ? code : -1, out };
 };
 
-/** The paths in a git listing that sit inside the flow directory, relative to it. */
-function insideDir(listing: string, dir: string, porcelain: boolean): string[] {
-  const marker = `/${dir}/`;
-  const found: string[] = [];
+/** Matches a path inside a flow directory: the `.metaproject/flows/<dir>/` prefix, at the start or under the repo-root prefix of a subdirectory cwd. */
+const FLOW_PATH = /(?:^|\/)\.metaproject\/flows\/([^/]+)\/(.+)$/;
+
+/** Group a git listing by flow directory, once: dir -> paths relative to that directory. */
+function groupByFlowDir(listing: string, porcelain: boolean): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
   for (const line of listing.split("\n")) {
     let file = porcelain ? (line.length < 4 ? "" : line.slice(3)) : line;
     const renamed = porcelain ? file.indexOf(" -> ") : -1;
     if (renamed !== -1) file = file.slice(renamed + 4);
     file = file.replace(/^"|"$/g, "");
-    const at = file.indexOf(marker);
-    if (at === -1) continue;
-    const inside = file.slice(at + marker.length);
-    if (inside.length > 0) found.push(inside);
+    const match = FLOW_PATH.exec(file);
+    if (match === null) continue;
+    const [, dir, inside] = match;
+    if (dir === undefined || inside === undefined) continue;
+    const list = groups.get(dir);
+    if (list === undefined) groups.set(dir, [inside]);
+    else list.push(inside);
   }
-  return found;
+  return groups;
 }
 
-function noteFor(flowId: string, dir: string, tracked: string, status: string): string | null {
+interface Listings {
+  tracked: Map<string, string[]>;
+  status: Map<string, string[]>;
+}
+
+function noteFor(flowId: string, dir: string, listings: Listings): string | null {
   // Untracked-only: git tracks nothing in the directory, so there is no
   // committed state for the closing write to be uncommitted against.
-  if (insideDir(tracked, dir, false).length === 0) return null;
+  if ((listings.tracked.get(dir) ?? []).length === 0) return null;
   const seen = new Set<string>();
-  for (const inside of insideDir(status, dir, true)) {
+  for (const inside of listings.status.get(dir) ?? []) {
     const slash = inside.indexOf("/");
     seen.add(slash === -1 ? inside : `${inside.slice(0, slash)}/`);
   }
@@ -62,17 +89,19 @@ function noteFor(flowId: string, dir: string, tracked: string, status: string): 
   const more = entries.length - shown.length;
   const list = `${shown.join(", ")}${more > 0 ? `, +${more} more` : ""}`;
   return (
-    `flow ${flowId} has uncommitted state in .metaproject/flows/${dir}: ${list} — ` +
-    "the closing state is written after the merge; commit it (nothing gates on this)"
+    `flow ${flowId} has uncommitted changes in .metaproject/flows/${dir}: ${list} — ` +
+    "a common cause is the closing state `flow complete` writes after the merge; commit it (nothing gates on this)"
   );
 }
 
 /** One `ls-files` and one `status`, both scoped to `scope`; null on any git failure. */
-async function readGit(cwd: string, scope: string, git: GitRunner): Promise<{ tracked: string; status: string } | null> {
-  const tracked = await git(cwd, ["ls-files", "--", scope]);
+async function readGit(cwd: string, scope: string, git: GitRunner): Promise<Listings | null> {
+  const tracked = await git(cwd, [...READ_ONLY_GIT_FLAGS, "ls-files", "--", scope]);
   if (tracked.code !== 0) return null;
-  if (tracked.out.trim().length === 0) return { tracked: "", status: "" };
+  const empty: Listings = { tracked: new Map(), status: new Map() };
+  if (tracked.out.trim().length === 0) return empty;
   const status = await git(cwd, [
+    ...READ_ONLY_GIT_FLAGS,
     "-c",
     "core.quotepath=off",
     "status",
@@ -82,7 +111,7 @@ async function readGit(cwd: string, scope: string, git: GitRunner): Promise<{ tr
     scope,
   ]);
   if (status.code !== 0) return null;
-  return { tracked: tracked.out, status: status.out };
+  return { tracked: groupByFlowDir(tracked.out, false), status: groupByFlowDir(status.out, true) };
 }
 
 /**
@@ -100,7 +129,7 @@ export async function uncommittedFlowStateNote(
 ): Promise<string | null> {
   try {
     const read = await readGit(cwd, path.join(flowsRoot(cwd), dir), git);
-    return read === null ? null : noteFor(flowId, dir, read.tracked, read.status);
+    return read === null ? null : noteFor(flowId, dir, read);
   } catch {
     return null;
   }
@@ -117,11 +146,12 @@ export async function uncommittedFlowStateNotes(
   git: GitRunner = spawnGit,
 ): Promise<Map<string, string>> {
   const notes = new Map<string, string>();
+  if (flows.length === 0) return notes;
   try {
     const read = await readGit(cwd, flowsRoot(cwd), git);
     if (read === null) return notes;
     for (const flow of flows) {
-      const text = noteFor(flow.id, flow.dir, read.tracked, read.status);
+      const text = noteFor(flow.id, flow.dir, read);
       if (text !== null) notes.set(flow.dir, text);
     }
   } catch {

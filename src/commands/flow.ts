@@ -525,6 +525,14 @@ export async function closedFlowStateNote(
   }
 }
 
+/** The note `flow complete` prints: only after a PASSED completion, where the state is final. */
+export async function completionStateNote(
+  cwd: string,
+  result: { passed: boolean; flow: { id: string; status: FlowStatus } },
+): Promise<string | null> {
+  return result.passed ? closedFlowStateNote(cwd, result.flow) : null;
+}
+
 async function printClosedFlowStateNote(cwd: string, flow: { id: string; status: FlowStatus }): Promise<void> {
   const text = await closedFlowStateNote(cwd, flow);
   if (text !== null) note(text);
@@ -1193,7 +1201,8 @@ async function runComplete(args: string[]): Promise<void> {
     }
   }
   await printAcCheckAdvisory(cwd, id);
-  if (result.passed) await printClosedFlowStateNote(cwd, result.flow);
+  const closing = await completionStateNote(cwd, result);
+  if (closing !== null) note(closing);
   process.exitCode = result.passed ? 0 : 1;
 }
 
