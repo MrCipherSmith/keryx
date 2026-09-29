@@ -38,6 +38,10 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   { verb: "session", reason: "alias of sessions" },
   { verb: "init", reason: "project lifecycle; scaffolds and rewrites the workspace" },
   { verb: "update", reason: "toolkit lifecycle; replaces the installed runtime" },
+  {
+    verb: "setup",
+    reason: "prints a preparation guide and runs nothing; not an agent-callable operation",
+  },
   { verb: "harness", reason: "executes arbitrary subprocesses and spends provider tokens; gated by policy, never by a descriptor" },
   {
     verb: "serve",

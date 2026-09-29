@@ -125,6 +125,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Start here",
     summary: "Same one-page health check, inside the session.",
   },
+  {
+    kind: "cli",
+    name: "setup",
+    group: "Start here",
+    summary: "Print the Metaproject preparation guide: init, refresh, or repair.",
+  },
+  {
+    kind: "slash",
+    name: "/setup",
+    group: "Start here",
+    summary: "Same preparation guide, inside the session — prints steps, runs nothing.",
+  },
 
   // ---- Connect a model provider -------------------------------------------
   {

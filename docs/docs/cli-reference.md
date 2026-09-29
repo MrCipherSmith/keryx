@@ -203,6 +203,33 @@ implementation of any one check.
 
 ---
 
+## setup
+
+Print the Metaproject preparation guide. Read-only: it does not run `init`,
+`update`, `sync`, or wiki enrichment.
+
+```
+keryx setup [init|refresh|repair]
+```
+
+| Argument | What it prints |
+|---|---|
+| _(none)_ | All three scenarios. |
+| `init` | From scratch: scaffold, graph, health, wiki drafts, memory index, gates. |
+| `refresh` | After a pull: refresh service files and rebuild only stale layers. |
+| `repair` | Partial or stale: read `standard doctor` first, then idempotent rebuild. |
+
+Each scenario shows the CLI lines and a prompt to paste to a coding agent.
+An unknown argument, or more than one, exits non-zero and names the three
+choices.
+
+In `keryx shell`, `/setup` opens the same guide. The TUI shows one tab per
+scenario; readline prints the text. `/setup init` opens that scenario, and an
+unknown or extra argument prints the same error instead of the guide.
+Neither form runs the commands.
+
+---
+
 ## shell
 
 Start the interactive agent shell. This is the TUI agent harness; bare `keryx`

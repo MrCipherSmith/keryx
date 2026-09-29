@@ -184,6 +184,8 @@ import {
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+import { openSetupModal } from "./setup-modal";
+import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -5572,6 +5574,21 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
+    // `line` is the whole `/setup [id]` input. An unknown or extra argument
+    // prints the same error `keryx setup` gives instead of opening a tab.
+    const openSetup = (line: string): void => {
+      const request = parseSetupArgs(line.trim().split(/\s+/).slice(1));
+      if (request.kind === "error") {
+        io.onSystem?.(`${request.message}\n`);
+        return;
+      }
+      openSetupModal(otui, chrome, {
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...(request.kind === "scenario" ? { initialScenario: request.scenario.id } : {}),
+      });
+    };
+
     // Flow 303 (AC8; HIGH 1 fix, PR #669 review): first-run onboarding —
     // opens `/help` on the "Connect a model provider" tab exactly once, only
     // when no provider is connected yet, and never again. Dispatched in the
@@ -7420,6 +7437,10 @@ export async function launchTuiAgentShell(opts: {
             openHelp();
             return;
           }
+          case "setup": {
+            openSetup(line);
+            return;
+          }
           case "interrupt": {
             if (foregroundOperation.isActive) {
               foregroundOperation.cancel("interrupted by user");
@@ -8160,6 +8181,10 @@ export async function launchTuiAgentShell(opts: {
             const report = await buildDoctorReport(sessionCwd);
             io.onSystem?.(`${formatDoctorReport(report)}\n`);
           })();
+          return;
+        }
+        if (command.name === "/setup") {
+          openSetup(line);
           return;
         }
         if (command.name === "/game") {

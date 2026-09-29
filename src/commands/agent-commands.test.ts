@@ -38,6 +38,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
@@ -150,6 +151,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
@@ -203,6 +205,7 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/compact",
     "/theme",
     "/clear",
@@ -293,6 +296,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
@@ -342,6 +346,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/compact",
     "/theme",
     "/clear",
@@ -385,6 +390,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/search-connect",
     "/sessions",
     "/status",
+    "/setup",
     "/schedule",
     "/schedules",
     "/scenarios",
@@ -409,7 +415,7 @@ test("filterCommands: prefix narrows the set (chat)", () => {
     "/compact",
     "/clear",
   ]);
-  expect(filterCommands("/s", "chat").map((c) => c.name)).toEqual(["/status"]);
+  expect(filterCommands("/s", "chat").map((c) => c.name)).toEqual(["/status", "/setup"]);
   expect(filterCommands("/f", "chat").map((c) => c.name)).toEqual(["/flows"]);
   expect(filterCommands("/re", "chat")).toEqual([]);
 });
