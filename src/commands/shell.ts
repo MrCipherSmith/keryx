@@ -102,6 +102,7 @@ import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
+import { approvalsSlashText } from "./approvals";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
@@ -255,6 +256,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/rewind",
   "/status",
   "/flows",
+  "/approvals",
   "/doctor",
   "/setup",
   "/reviews",
@@ -2684,6 +2686,8 @@ export async function runAgentRepl(
             }),
           ),
         );
+      } else if (command === "/approvals") {
+        agentIo.onSystem?.(approvalsSlashText(rest));
       } else if (isFlowsCommand(command)) {
         const items = await loadInspectorFlows(sessionCwd);
         if (rest.length > 0) {

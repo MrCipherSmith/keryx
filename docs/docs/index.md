@@ -39,6 +39,7 @@ the one that describes shipped behaviour.
 - [Agent web search](guides/web-search.md)
 - [Use local SearXNG for agent web search](guides/use-local-searxng.md)
 - [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
+- [Answer a remote approval from a bot or another product](guides/answer-remote-approvals.md)
 - [Review a branch and keep a durable record](guides/review-with-a-record.md)
 - [Review every pull request with a bot, and measure it](guides/review-as-a-pr-bot.md)
 - [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)

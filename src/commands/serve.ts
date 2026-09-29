@@ -55,6 +55,7 @@ import {
   serveCredentialPath,
 } from "../lib/serve-credential";
 import { describeServeStatus, startServeListener } from "../lib/serve-server";
+import { countPending } from "../lib/serve-approvals-store";
 import { assembleSubmitTurn } from "../lib/serve-runner";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
@@ -368,7 +369,11 @@ function runStatus(args: string[]): void {
   const warnings: string[] = [];
   const config = loadServeConfig(undefined, (message) => warnings.push(message));
   const credential = readServeCredential();
-  const report = describeServeStatus({ config, credential, configState: serveConfigState() });
+  const report = {
+    ...describeServeStatus({ config, credential, configState: serveConfigState() }),
+    // Read from the store, so a CLI process reports what a running listener would.
+    pendingApprovals: countPending(undefined, undefined, new Date()),
+  };
 
   const credentialState = credential.status === "ok" ? "present" : credential.status;
   const fingerprint = credential.status === "ok" ? credentialFingerprint(credential.record) : undefined;
@@ -765,6 +770,7 @@ function printConfig(config: ServeConfig): void {
   console.log(`  profile:    ${sanitizeForDisplay(config.profile)}`);
   console.log(`  credential: ${sanitizeForDisplay(config.credentialRef.store)} ref ${sanitizeForDisplay(config.credentialRef.id)}`);
   console.log(`  approvals:  expire after ${config.approval.expirySeconds}s, max ${config.approval.maxPendingPerSession} pending per session`);
+  console.log(`  approvals require a consumer: ${config.approval.requireConsumer ?? true}`);
   console.log(`  non-loopback acknowledged: ${config.bind.acknowledgeNonLoopback === true}`);
 }
 

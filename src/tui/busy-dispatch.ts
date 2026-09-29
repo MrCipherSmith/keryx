@@ -74,6 +74,11 @@ export type BusyDispatchTarget =
    * never touch the main turn.
    */
   | "schedules"
+  /**
+   * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
+   * answer is one call, once, in the store; neither touches the main turn.
+   */
+  | "approvals"
   | "deferred"
   | "not-a-command";
 
@@ -113,6 +118,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/product") return "product";
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/schedules") return "schedules";
+  if (commandName === "/approvals") return "approvals";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

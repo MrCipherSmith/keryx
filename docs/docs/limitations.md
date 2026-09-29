@@ -9,7 +9,7 @@ each gap actually costs you, and what to use instead.
 
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
-| No remote approval transport | A remote turn whose policy decision is `ask` ends in a recorded denial | Run approval-requiring turns locally |
+| Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns locally |
 | `harness exec --allowed-domains` is macOS-only | The interactive/general sandbox's domain-level egress policy, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both; a *scheduled agent-task*'s own `network: "allowlist"` (flow 301) is a separate mechanism, Linux-only |
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | No bundled ML security classifiers | Detection is rules plus entropy, not a model | Deterministic detectors run on the full corpus and are evaluated in CI |
@@ -176,14 +176,18 @@ for what has been verified on a real host.
 
 See [schedule](cli-reference.md#schedule).
 
-## Remote approvals are not implemented
+## Remote approvals apply only where tools are registered
 
-`keryx serve` accepts turns over a loopback-bound authenticated HTTP listener,
-but there is no approval transport yet. A turn whose policy decision is `ask`
-terminates in a *recorded denial* — it is never auto-approved. Run
-approval-requiring work through `keryx shell` locally until the transport lands.
+`keryx serve` accepts turns over a loopback-bound authenticated HTTP listener. A
+turn whose policy decision is `ask` becomes a durable pending approval that a
+person answers over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or locally
+with `keryx approvals` (see [Answer a remote approval](guides/answer-remote-approvals.md)).
+Unanswered approvals deny at expiry. But the stock listener registers no tools, so
+it raises no approvals today; they become reachable when a tool registry is
+injected into the turn. The Telegram or web card, session-wide grants from a
+remote answer, and approvals for unattended trigger runs are not built.
 
-Two boundaries that do hold today:
+Boundaries that hold:
 
 - The remote policy profile is compared against the local one on every turn, and
   a weaker remote profile is refused rather than accepted.

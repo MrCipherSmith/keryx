@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.39] — 2026-09-29
+### Added
+- **Asynchronous remote approvals (R4d)** — an `ask` in a `keryx serve` turn becomes a durable pending approval and the turn detaches (`202`) instead of ending in a denial. `GET /v1/approvals` lists (`?state=all` adds recently resolved); `POST /v1/approvals/{id}` with `{"decision":"allow"|"deny"}` applies the first valid answer once and returns the original outcome on a replay. An expired approval answers `410`, an answer from the raising turn (declared in `x-keryx-turn`) `403`, an unknown or unseen id an indistinguishable `404`, and a malformed or extended body `400` before any state changes. `/v1/status` `pendingApprovals` is real.
+- **An answer is one call** — bound to a fingerprint of that call, consumed once (restart included), never a session grant, and it never lifts a floor. Unanswered means denied at expiry; with no consumer attached the approval is `undeliverable` at once (`approval.requireConsumer`, default on).
+- **`keryx approvals list|allow|deny <id>`, `/approvals`** — a modal in the TUI (summary, scope, consequence, expires in, state; `a`/`d` then `y`), a one-row sidebar count shown only while something is pending, and a text form in the readline shell.
+- **Client contract page** — [Answer a remote approval](docs/docs/guides/answer-remote-approvals.md).
+### Notes
+- The production `keryx serve` registers no tools, so a stock listener raises no approvals; they are reachable through an injected tool registry. The self-grant rule rests on a declared header, so it stops an honest turn, not a lying caller. The chat card, remote session-wide grants and approvals for unattended trigger runs are not built.
+
 ## [0.3.38] — 2026-09-29
 ### Added
 - **Review as a pull request bot** — `keryx review bot run --pr <n> --repo <owner/repo>` reviews the pull request diff (one reviewer turn, one verifier turn per finding), drops findings the verifier refutes, and records the rest as a managed review; `keryx review bot post` builds ONE pull request review (event `COMMENT`, `commit_id` = the head) with an inline comment per finding inside the diff and the rest in the body. A dry run unless `--post` is given; refused when the pull request is closed, merged or from a fork, when `--sha` is not the head, or when the review was made at an older commit. The GitHub allow-list gains exactly this one write (`POST repos/{owner}/{repo}/pulls/{n}/reviews`). A comment body that would carry a secret-shaped string is withheld and counted, never masked and posted. The diff is cut at `--max-diff-bytes` (default 200,000) and the cut is stated in the run output, in `report.md` and in the posted review. The review body ends with a hidden `keryx-review-bot` marker for the head commit and the post step refuses when a review with that marker is already on the pull request.
@@ -18,6 +27,7 @@ All notable changes to `keryx` are documented here. The format follows
 ### Added
 - **`/rewind` — per-turn file snapshots with rollback of files and conversation.** Immediately before the first write, shell, destructive or delegate tool call of a turn (after approval), keryx snapshots the project work tree into a per-session shadow git repository under the session directory; a read-only turn snapshots nothing, and the project's own `.git` is never read or written. `/rewind` restores files, history or both to before a chosen turn: modified files come back, created files are removed, deleted files are recreated; `.git`, `node_modules`, `.metaproject/data` and gitignored paths are never touched, and files over 5 MB are skipped and named. A `pre-rewind` snapshot is taken first, so the restore can be undone (files only). History is cut by archive index, so it survives compaction, and persists through the session store; `/rewind` refuses when the session lease is held elsewhere. In the TUI it is a modal picker (time, prompt excerpt, files changed; files / history / both; confirmation) plus a sidebar section with the snapshot count; the readline shell has `/rewind`, `/rewind N [files|history|both]` and `/rewind confirm`.
 - **Limits and retention** — 50 snapshots per session, oldest pruned; the shadow repository is removed with its session; `KERYX_REWIND=off` disables it. Unattended runs (triggers, `keryx serve`, external agents) create no shadow repository and refuse `/rewind`. Side effects of `shell_exec` outside the work tree are not undone. Documented in `docs/docs/guides/rewind.md`.
+
 
 ## [0.3.36] — 2026-09-29
 ### Added

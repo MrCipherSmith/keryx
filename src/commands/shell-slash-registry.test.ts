@@ -153,6 +153,16 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     }
   });
 
+  test("flow 369: /approvals is advertised with the registry's agent wording", () => {
+    const command = AGENT_SLASH_COMMANDS.find((c) => c.name === "/approvals");
+    expect(command).toBeDefined();
+    if (command === undefined) {
+      return;
+    }
+    expect(readlineAgentHelpText()).toContain(describeCommand(command, "agent"));
+    expect(commandsForMode("chat").map((c) => c.name)).not.toContain("/approvals");
+  });
+
   test("it does not advertise picker-only or agent commands it cannot run", () => {
     const help = readlineAgentHelpText();
     expect(help).not.toContain("/models");

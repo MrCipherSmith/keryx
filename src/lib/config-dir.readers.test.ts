@@ -564,6 +564,12 @@ const READ_EXEMPTIONS: ReadonlyArray<Exemption> = [
       "listTurnIds' readdirSync enumerates turn directories and reads no file contents, so no bound applies to it; every file read in this module is NOT excused and goes through the bounded helpers",
     calls: ["readdirSync("],
   },
+  {
+    file: "lib/serve-approvals-store.ts",
+    reason:
+      "approvalIds' readdirSync enumerates approval record names and reads no file contents, so no bound applies to it; every file read in this module is NOT excused and goes through the bounded helpers",
+    calls: ["readdirSync("],
+  },
 ];
 
 /** The seam the mutation test drives. Kept named for the reason in the writers guard. */

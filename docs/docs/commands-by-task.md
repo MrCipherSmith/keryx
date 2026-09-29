@@ -120,6 +120,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
+| `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
@@ -130,6 +131,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/triggers` | Declared triggers: last outcome, spend, reservations — run one now. |
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
+| `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
 | `/governance` | Show the last governance report, or run one in the background. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |

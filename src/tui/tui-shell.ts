@@ -76,6 +76,7 @@ import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHand
 import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
+import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
@@ -3747,7 +3748,8 @@ export async function launchTuiAgentShell(opts: {
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
-    let liveReviewsPanel: ReviewsPanelHandle | undefined;
+  let liveReviewsPanel: ReviewsPanelHandle | undefined;
+  let liveApprovals: ApprovalsSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3843,6 +3845,7 @@ export async function launchTuiAgentShell(opts: {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
         liveReviewsPanel?.dispose();
+        liveApprovals?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -4342,6 +4345,17 @@ export async function launchTuiAgentShell(opts: {
       onOpen: () => showReviews(),
     });
     liveReviewsPanel = reviewsPanel;
+    // Flow 369 (R4d): one row, only while a remote approval is pending; it polls the
+    // approval store itself (that lives in the config dir, not the project).
+    const approvals = mountApprovalsSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveApprovals = approvals;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -7639,6 +7653,10 @@ export async function launchTuiAgentShell(opts: {
             routeSchedulesCommand(line, true, schedules);
             return;
           }
+          case "approvals": {
+            routeApprovalsCommand(line, true, approvals);
+            return;
+          }
           case "mcp": {
             showTools();
             return;
@@ -8042,6 +8060,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {
+          return;
+        }
+        if (routeApprovalsCommand(line, false, approvals)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
@@ -9109,6 +9130,7 @@ export async function launchTuiAgentShell(opts: {
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
     liveSchedules?.dispose();
     liveReviewsPanel?.dispose();
+    liveApprovals?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);

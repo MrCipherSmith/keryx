@@ -23,8 +23,8 @@
 //     against a raw string turned out not to be a boundary at all.
 //
 // What this slice deliberately cannot do: run a turn, execute a tool, write
-// anything, or accept a secret. Both routes are reads. `pendingApprovals` is a
-// constant 0 because nothing in this slice can create one.
+// anything, or accept a secret. Both routes are reads. (R4d, flow 369, later added
+// the approval routes and made `pendingApprovals` real.)
 
 import type { Server } from "bun";
 import {
@@ -35,6 +35,17 @@ import {
 } from "../harness/policy/profiles";
 import type { PolicyProfile } from "../harness/policy/types";
 import { emitProjectsJson, listProjects } from "./project-registry";
+import { createApprovalBroker, createConsumerRegistry, type ApprovalBroker, type ApprovalConsumers } from "./serve-approvals-broker";
+import {
+  answerApproval,
+  countPending,
+  isApprovalId,
+  listApprovals,
+  readApproval,
+  reconcileApprovals,
+  toPublicApproval,
+  type ApprovalView,
+} from "./serve-approvals-store";
 import { AuthFailureThrottle } from "./serve-throttle";
 import { isServerFault, readTurnEvents, readTurnRecord } from "./serve-turn-store";
 import {
@@ -277,8 +288,8 @@ export interface ServeStatusReport {
   bind?: { address: string; port: number };
   profile?: string;
   nonLoopback: boolean;
-  /** Always 0 in this slice: nothing here can create an approval. */
-  pendingApprovals: 0;
+  /** Read from the approval store by the running listener; a CLI process reports 0. */
+  pendingApprovals: number;
 }
 
 /**
@@ -300,7 +311,7 @@ export function describeServeStatus(input: ServeStartupInput): ServeStatusReport
     bind: { address: config.bind.address, port: config.bind.port },
     profile: config.profile,
     nonLoopback,
-    pendingApprovals: 0 as const,
+    pendingApprovals: 0,
   };
   if (!startup.ok) {
     return { state: "refused", reason: startup.reason, message: startup.message, ...shared };
@@ -363,6 +374,20 @@ export interface ServeContext {
    * network fixture.
    */
   submitTurn?: (request: TurnRequest, project: string) => Promise<SubmitOutcome>;
+  /**
+   * The approval side (R4d). Absent, the approval routes still answer from the
+   * store; only the consumer bookkeeping and the visibility filter are missing.
+   */
+  approvals?: ServeApprovalsRuntime;
+}
+
+export interface ServeApprovalsRuntime {
+  /** Touched when a caller lists approvals, reads an event stream, or submits a streaming turn. */
+  consumers: ApprovalConsumers;
+  /** Wakes a waiting turn after an in-process answer. */
+  wake: () => void;
+  /** Whether this token may see the approval. Absent means every approval. */
+  canSee?: (view: ApprovalView) => boolean;
 }
 
 /**
@@ -390,10 +415,11 @@ export type { SubmitOutcome as SubmitTurnOutcome } from "./serve-turn";
  * The id itself is validated by `isTurnId` before it can become a path; matching
  * only decides WHICH route, never whether the id is acceptable.
  */
-const FIXED_ROUTES = new Set(["/v1/status", "/v1/projects", "/v1/turns"]);
+const FIXED_ROUTES = new Set(["/v1/status", "/v1/projects", "/v1/turns", "/v1/approvals"]);
 
 type RouteMatch =
   | { route: "fixed"; pathname: string }
+  | { route: "approval"; approvalId: string }
   | { route: "turn"; turnId: string }
   | { route: "turn-events"; turnId: string }
   | { route: "none" };
@@ -406,6 +432,9 @@ function matchRoute(pathname: string): RouteMatch {
   // ["", "v1", "turns", "<id>"] and ["", "v1", "turns", "<id>", "events"].
   if (segments.length === 4 && segments[1] === "v1" && segments[2] === "turns") {
     return { route: "turn", turnId: segments[3] ?? "" };
+  }
+  if (segments.length === 4 && segments[1] === "v1" && segments[2] === "approvals") {
+    return { route: "approval", approvalId: segments[3] ?? "" };
   }
   if (segments.length === 5 && segments[1] === "v1" && segments[2] === "turns" && segments[4] === "events") {
     return { route: "turn-events", turnId: segments[3] ?? "" };
@@ -532,6 +561,9 @@ async function submitTurn(request: Request, ctx: ServeContext): Promise<Response
     return errorResponse(503, "unavailable", "Turn execution is not available on this listener.");
   }
 
+  if (validated.request.stream === true) {
+    ctx.approvals?.consumers.touch();
+  }
   const outcome = await submit(validated.request, project.project);
   if (outcome.kind === "duplicate") {
     // (AC7) A repeated idempotency key returns the ORIGINAL turnId and starts
@@ -567,6 +599,111 @@ async function submitTurn(request: Request, ctx: ServeContext): Promise<Response
   );
 }
 
+
+const MAX_APPROVAL_LIST = 50;
+const MAX_ANSWER_BODY_BYTES = 1024;
+
+/** The one 404 for an id that does not exist, is not an id, or is not the caller's to see. */
+function approvalNotFound(): Response {
+  return errorResponse(404, "not-found", "Not found.");
+}
+
+function visibleTo(ctx: ServeContext, view: ApprovalView): boolean {
+  return ctx.approvals?.canSee === undefined || ctx.approvals.canSee(view);
+}
+
+/**
+ * `GET /v1/approvals` — pending approvals the token may see.
+ *
+ * Reading this is what counts as a consumer being attached. `?state=all` adds the
+ * most recent resolved ones, bounded.
+ */
+function listApprovalsRoute(request: Request, ctx: ServeContext): Response {
+  ctx.approvals?.consumers.touch();
+  const includeResolved = new URL(request.url).searchParams.get("state") === "all";
+  const visible = listApprovals(ctx.dir, { now: new Date() }).filter(
+    (view) => visibleTo(ctx, view) && (includeResolved || view.state === "pending"),
+  );
+  const bounded = visible.slice(-MAX_APPROVAL_LIST).map(toPublicApproval);
+  return new Response(`${JSON.stringify({ schemaVersion: "1.0.0", approvals: bounded }, null, 2)}\n`, {
+    headers: JSON_HEADERS,
+  });
+}
+
+/**
+ * `POST /v1/approvals/{id}` — answer exactly one approval.
+ *
+ * Order is the control. Id shape and body are checked before anything is read from
+ * the store, so a malformed request changes no state; visibility comes before the
+ * self-grant check so a caller cannot use the 403 to learn that an id exists.
+ */
+async function answerApprovalRoute(request: Request, approvalId: string, ctx: ServeContext): Promise<Response> {
+  if (!isApprovalId(approvalId)) {
+    return approvalNotFound();
+  }
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (Number.isFinite(declared) && declared > MAX_ANSWER_BODY_BYTES) {
+    return errorResponse(413, "too-large", "The request body exceeds the configured bound.");
+  }
+  const contentType = (request.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  if (contentType !== "application/json") {
+    return errorResponse(400, "invalid-request", "Content-Type must be application/json.");
+  }
+  const raw = await request.text();
+  if (Buffer.byteLength(raw, "utf8") > MAX_ANSWER_BODY_BYTES) {
+    return errorResponse(413, "too-large", "The request body exceeds the configured bound.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return errorResponse(400, "invalid-request", "The request body is not valid JSON.");
+  }
+  // Exactly {decision}. An extra field is refused rather than ignored: it is how a
+  // caller would ask for a session grant or different arguments, and an answer is
+  // never either.
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    Object.keys(parsed).length !== 1 ||
+    ((parsed as Record<string, unknown>).decision !== "allow" && (parsed as Record<string, unknown>).decision !== "deny")
+  ) {
+    return errorResponse(400, "invalid-request", 'The body must be exactly {"decision":"allow"|"deny"}.');
+  }
+  const decision = (parsed as { decision: "allow" | "deny" }).decision;
+
+  const found = readApproval(approvalId, ctx.dir);
+  if (!found.ok || !visibleTo(ctx, found.value)) {
+    return approvalNotFound();
+  }
+  // A turn that raised the approval declares itself; it may not answer it. The
+  // token is one credential, so this cannot stop a caller that lies about who it
+  // is: the turn's own tools hold no token, and that is what keeps the rule true.
+  if (request.headers.get("x-keryx-turn") === found.value.turnId) {
+    return errorResponse(403, "forbidden", "A turn cannot answer an approval it raised.");
+  }
+
+  const outcome = answerApproval(approvalId, decision, "remote-token", ctx.dir);
+  if (outcome.kind === "not-found") {
+    return approvalNotFound();
+  }
+  if (outcome.kind === "expired") {
+    return errorResponse(410, "expired", "The approval expired and was denied.");
+  }
+  if (outcome.kind === "applied") {
+    ctx.approvals?.wake();
+  }
+  return new Response(
+    `${JSON.stringify(
+      { schemaVersion: "1.0.0", approvalId, state: outcome.view.state, replay: outcome.kind === "replay" },
+      null,
+      2,
+    )}\n`,
+    { headers: JSON_HEADERS },
+  );
+}
+
 /**
  * `GET /v1/turns/{turnId}/events` — server-sent events, replayed from the record.
  *
@@ -587,6 +724,7 @@ function streamTurnEvents(request: Request, turnId: string, ctx: ServeContext): 
   // event is harmless here, because events carry no side effect.
   const after = Number.isInteger(parsed) && parsed >= 0 ? parsed : -1;
 
+  ctx.approvals?.consumers.touch();
   const events = readTurnEvents(turnId, after, ctx.dir);
   if (!events.ok) {
     // 500, and the line below says so. This comment opened with "200 with an
@@ -722,8 +860,18 @@ async function routeServeRequest(request: Request, ctx: ServeContext): Promise<R
     }
     return submitTurn(request, ctx);
   }
+  if (matched.route === "approval") {
+    if (request.method !== "POST") {
+      return errorResponse(405, "method-not-allowed", "Method not allowed.", { allow: "POST" });
+    }
+    return answerApprovalRoute(request, matched.approvalId, ctx);
+  }
   if (request.method !== "GET") {
     return errorResponse(405, "method-not-allowed", "Method not allowed.", { allow: "GET" });
+  }
+
+  if (pathname === "/v1/approvals") {
+    return listApprovalsRoute(request, ctx);
   }
 
   if (matched.route === "turn" || matched.route === "turn-events") {
@@ -769,9 +917,7 @@ async function routeServeRequest(request: Request, ctx: ServeContext): Promise<R
           bind: { address: ctx.config.bind.address, port: ctx.boundPort },
           profile: ctx.config.profile,
           nonLoopback: ctx.nonLoopback,
-          // Constant by construction: this slice has no approval machinery. It
-          // is reported so a transport can render the field from day one.
-          pendingApprovals: 0,
+          pendingApprovals: countPending(ctx.dir, undefined, new Date()),
         },
         null,
         2,
@@ -834,7 +980,16 @@ export interface StartServeInput extends ServeStartupInput {
   makeSubmitTurn: (
     profile: PolicyProfile,
     dir: string | undefined,
+    runtime?: ServeRuntime,
   ) => (request: TurnRequest, project: string) => Promise<SubmitOutcome>;
+}
+
+/** What the listener hands to the runner, plus the runner's own test seam. */
+export interface ServeRuntime {
+  /** The approval broker of this process. Absent, an `ask` stays the release-boundary deny. */
+  approvals?: ApprovalBroker;
+  /** TESTS ONLY. See `assembleSubmitTurn`. */
+  containmentAvailable?: () => boolean;
 }
 
 /**
@@ -867,7 +1022,24 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
   // is the profile the startup path already resolved and compared against the
   // local baseline, so the listener cannot run turns under a profile that was
   // never checked.
-  const submitTurn = input.makeSubmitTurn(startup.profile, input.dir);
+  //
+  // Approvals (R4d): a pending record whose turn is not running in THIS process is
+  // resolved as an expired deny now, before the first request, and its call is
+  // never re-executed. Nothing is live yet, so every pending record qualifies.
+  try {
+    reconcileApprovals(input.dir, { isTurnLive: () => false });
+  } catch (error) {
+    console.error(`keryx serve: approval reconciliation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const consumers = createConsumerRegistry();
+  const approvals = createApprovalBroker({
+    dir: input.dir,
+    expirySeconds: startup.config.approval.expirySeconds,
+    maxPending: startup.config.approval.maxPendingPerSession,
+    requireConsumer: startup.config.approval.requireConsumer ?? true,
+    hasConsumer: () => consumers.attached(),
+  });
+  const submitTurn = input.makeSubmitTurn(startup.profile, input.dir, { approvals });
 
   let server: Server<undefined>;
   try {
@@ -890,6 +1062,7 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           peer: self.requestIP(request)?.address ?? "unknown",
           throttle,
           submitTurn,
+          approvals: { consumers, wake: () => approvals.wake() },
         }),
       // The second half of the boundary, and the SAME function as the first.
       // Without it, Bun's default error page answers, carrying the message and

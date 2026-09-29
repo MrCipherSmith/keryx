@@ -22,6 +22,7 @@ import { makeProvider } from "../harness/provider/make-provider";
 import type { PolicyProfile } from "../harness/policy/types";
 import { keryxConfigDir } from "./config-dir";
 import { applySavedApiKeys, loadShellConfig } from "./shell-config";
+import type { ApprovalBroker } from "./serve-approvals-broker";
 import { createSubmitTurn, type SubmitOutcome, type TurnRequest } from "./serve-turn";
 
 /**
@@ -42,6 +43,8 @@ export function assembleSubmitTurn(
   profile: PolicyProfile,
   dir: string | undefined,
   seams: {
+    /** The listener's approval broker. Production supplies it; a test may omit it. */
+    approvals?: ApprovalBroker;
     /**
      * Overrides the sandbox-launcher probe. TESTS ONLY.
      *
@@ -95,5 +98,6 @@ export function assembleSubmitTurn(
     // with no spawn. It is also the honest direction to fail in — a launcher
     // REMOVED while the listener is up must start refusing immediately.
     containmentAvailable: seams.containmentAvailable ?? (() => detectSandboxLauncher().available),
+    ...(seams.approvals !== undefined ? { approvals: seams.approvals } : {}),
   });
 }

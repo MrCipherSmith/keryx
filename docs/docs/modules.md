@@ -1547,8 +1547,11 @@ product can drive turns. Opt-in and off until started; not a manifest module.
 **How it works.** Authentication happens *before* routing, so an unauthenticated
 caller cannot distinguish a known path from an unknown one. The remote policy
 profile is compared against the local one on every turn and a weaker remote
-profile is refused. There is no approval transport yet: a turn whose decision is
-`ask` ends in a recorded denial rather than being auto-approved.
+profile is refused. A turn whose decision is
+`ask` becomes a durable pending approval answered once over
+`GET /v1/approvals` / `POST /v1/approvals/{id}` or by `keryx approvals`, and is
+denied at expiry rather than auto-approved; the stock listener registers no tools,
+so it raises none.
 
 **Key files.** `src/commands/serve.ts`, `src/lib/serve-*.ts`.
 
