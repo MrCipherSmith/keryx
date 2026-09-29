@@ -33,7 +33,7 @@ export const SETUP_SCENARIOS: readonly SetupScenario[] = [
     id: "init",
     tab: "Init",
     title: "From scratch",
-    when: "No .metaproject yet, or you want the recommended scaffold before the first graph build.",
+    when: "No .metaproject yet. If one already exists, use refresh or repair instead: init rewrites the scaffold.",
     steps: [
       {
         title: "Scaffold the workspace",
@@ -146,6 +146,37 @@ export const SETUP_SCENARIOS: readonly SetupScenario[] = [
 
 export function setupScenario(id: string): SetupScenario | undefined {
   return SETUP_SCENARIOS.find((scenario) => scenario.id === id);
+}
+
+export type SetupRequest =
+  | { readonly kind: "all" }
+  | { readonly kind: "scenario"; readonly scenario: SetupScenario }
+  | { readonly kind: "error"; readonly message: string };
+
+/**
+ * One reading of `setup [init|refresh|repair]` for the CLI and every shell
+ * surface, so an unknown or extra argument is an error everywhere rather than
+ * a silent fallback to the full guide in the shell.
+ */
+export function parseSetupArgs(args: readonly string[]): SetupRequest {
+  const words = args.flatMap((arg) => arg.split(/\s+/)).filter(Boolean);
+  if (words.length === 0) return { kind: "all" };
+  const choices = `Choose one of: ${SETUP_SCENARIO_IDS.join(", ")}`;
+  if (words.length > 1) {
+    return { kind: "error", message: `setup takes one scenario, got: ${words.join(" ")}\n${choices}` };
+  }
+  const scenario = setupScenario(words[0]!);
+  if (scenario === undefined) {
+    return { kind: "error", message: `Unknown setup scenario: ${words[0]}\n${choices}` };
+  }
+  return { kind: "scenario", scenario };
+}
+
+/** Readline and agent-REPL text for `/setup [id]`. */
+export function renderSetupSlash(argument: string): string {
+  const request = parseSetupArgs([argument]);
+  if (request.kind === "error") return `${request.message}\n`;
+  return `${request.kind === "all" ? renderSetupGuide() : renderSetupScenario(request.scenario)}\n`;
 }
 
 function rule(width: number): string {

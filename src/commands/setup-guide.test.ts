@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 import {
+  parseSetupArgs,
   renderSetupGuide,
   renderSetupScenario,
+  renderSetupSlash,
   renderSetupUsage,
   SETUP_SCENARIOS,
   setupScenario,
@@ -42,7 +44,7 @@ test("refresh and repair preserve accepted content and start from a read", () =>
 
 test("a scenario render names the CLI line and the agent prompt", () => {
   const text = renderSetupScenario(setupScenario("init")!, 72);
-  expect(text).toContain("\$ keryx init --yes");
+  expect(text).toContain("$ keryx init --yes");
   expect(text).toContain("Ask the agent:");
   expect(text).toContain("This guide only prints the steps.");
 });
@@ -68,8 +70,8 @@ async function capture(rest: string[]): Promise<{ out: string; err: string; code
   const err: string[] = [];
   const log = console.log;
   const error = console.error;
-  const previous = process.exitCode;
-  process.exitCode = undefined;
+  const previous = process.exitCode ?? 0;
+  process.exitCode = 0;
   console.log = (...args: unknown[]) => {
     out.push(args.map((arg) => String(arg)).join(" "));
   };
@@ -78,7 +80,8 @@ async function capture(rest: string[]): Promise<{ out: string; err: string; code
   };
   try {
     await setupCommand(rest);
-    return { out: out.join("\n"), err: err.join("\n"), code: process.exitCode ?? undefined };
+    const code = process.exitCode === 0 ? undefined : Number(process.exitCode);
+    return { out: out.join("\n"), err: err.join("\n"), code };
   } finally {
     console.log = log;
     console.error = error;
@@ -98,7 +101,7 @@ test("keryx setup refresh prints only that scenario", async () => {
   const captured = await capture(["refresh"]);
   expect(captured.out).toContain("After a pull");
   expect(captured.out).not.toContain("From scratch");
-  expect(captured.out).toContain("\$ keryx sync --apply");
+  expect(captured.out).toContain("$ keryx sync --apply");
 });
 
 test("an unknown scenario exits non-zero and names the choices", async () => {
@@ -106,4 +109,39 @@ test("an unknown scenario exits non-zero and names the choices", async () => {
   expect(captured.code).toBe(1);
   expect(captured.err).toContain("Unknown setup scenario: swarm");
   expect(captured.err).toContain("init, refresh, repair");
+});
+
+test("an extra argument is an error, not a silently ignored word", async () => {
+  const captured = await capture(["init", "extra"]);
+  expect(captured.code).toBe(1);
+  expect(captured.err).toContain("setup takes one scenario, got: init extra");
+  expect(captured.out).toBe("");
+});
+
+test("the exit code a failing run sets does not outlive the capture", async () => {
+  await capture(["swarm"]);
+  expect(process.exitCode ?? 0).toBe(0);
+});
+
+test("parseSetupArgs reads the CLI argv and a shell argument string the same way", () => {
+  expect(parseSetupArgs([])).toEqual({ kind: "all" });
+  expect(parseSetupArgs(["  "])).toEqual({ kind: "all" });
+  const fromArgv = parseSetupArgs(["repair"]);
+  const fromLine = parseSetupArgs([" repair "]);
+  expect(fromArgv.kind).toBe("scenario");
+  expect(fromLine).toEqual(fromArgv);
+  expect(parseSetupArgs(["init refresh"]).kind).toBe("error");
+});
+
+test("the shell form prints an error for an unknown scenario instead of the whole guide", () => {
+  const text = renderSetupSlash("swarm");
+  expect(text).toContain("Unknown setup scenario: swarm");
+  expect(text).toContain("init, refresh, repair");
+  expect(text).not.toContain("From scratch");
+  expect(renderSetupSlash("")).toContain("Partial or stale");
+  expect(renderSetupSlash("init")).toContain("$ keryx init --yes");
+});
+
+test("init does not invite running over an existing workspace", () => {
+  expect(setupScenario("init")!.when).toContain("use refresh or repair instead");
 });

@@ -219,10 +219,12 @@ keryx setup [init|refresh|repair]
 | `repair` | Partial or stale: read `standard doctor` first, then idempotent rebuild. |
 
 Each scenario shows the CLI lines and a prompt to paste to a coding agent.
-An unknown argument exits non-zero and names the three choices.
+An unknown argument, or more than one, exits non-zero and names the three
+choices.
 
 In `keryx shell`, `/setup` opens the same guide. The TUI shows one tab per
-scenario; readline prints the text. `/setup init` opens that scenario.
+scenario; readline prints the text. `/setup init` opens that scenario, and an
+unknown or extra argument prints the same error instead of the guide.
 Neither form runs the commands.
 
 ---

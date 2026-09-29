@@ -175,7 +175,7 @@ import {
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
-import { renderSetupGuide, renderSetupScenario, setupScenario } from "../commands/setup-guide";
+import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -5555,12 +5555,18 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
-    const openSetup = (scenario?: string): void => {
-      const known = scenario !== undefined && setupScenario(scenario) !== undefined ? scenario : undefined;
+    // `line` is the whole `/setup [id]` input. An unknown or extra argument
+    // prints the same error `keryx setup` gives instead of opening a tab.
+    const openSetup = (line: string): void => {
+      const request = parseSetupArgs(line.trim().split(/\s+/).slice(1));
+      if (request.kind === "error") {
+        io.onSystem?.(`${request.message}\n`);
+        return;
+      }
       openSetupModal(otui, chrome, {
         onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
-        ...(known !== undefined ? { initialScenario: known as "init" | "refresh" | "repair" } : {}),
+        ...(request.kind === "scenario" ? { initialScenario: request.scenario.id } : {}),
       });
     };
 
@@ -7381,7 +7387,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "setup": {
-            openSetup(line.trim().split(/\s+/).slice(1)[0]);
+            openSetup(line);
             return;
           }
           case "interrupt": {
@@ -8119,8 +8125,7 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/setup") {
-          const arg = line.trim().split(/\s+/).slice(1)[0];
-          openSetup(arg);
+          openSetup(line);
           return;
         }
         if (command.name === "/game") {
