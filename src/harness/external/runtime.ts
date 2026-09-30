@@ -28,6 +28,7 @@ import path from "node:path";
 import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
 import { codecWriteVersionRefusal, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
+import { dropOptionalNulls, toStrictOutputSchema } from "./strict-schema";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
 import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
@@ -222,6 +223,9 @@ interface ResultSchemaPrep {
   readonly schemaDir: string;
 }
 
+/** The staged file name of the strict copy handed to codex. */
+const STRICT_SCHEMA_FILE = "subagent-result.strict.schema.json";
+
 /**
  * Load `subagent-result` and stage it to a fresh temp dir (mirrors
  * `tls-ca.ts`'s `createRunCa` idiom: `mkdtemp` then `writeFile`, caller disposes
@@ -412,6 +416,25 @@ export async function runExternalChild(
   // `prepareInlineSchema` above. `codex exec --output-schema` still gets the
   // staged FILE, where a relative ref resolves against that file's directory.
   const resultSchemaInline = await prepareInlineSchema(resultSchema);
+  const bundledResultSchema: unknown = JSON.parse(resultSchemaInline);
+
+  // `codex exec --output-schema` forwards the document to the OpenAI structured-output validator,
+  // which refuses the contract as written. Codex gets a strict copy (its own staged file, refs
+  // bundled); results are still validated against the full contract, after the nulls the strict
+  // copy forces on optional properties are dropped.
+  const codexStrict = entry.id === "codex-cli";
+  let resultSchemaPathForCodec = resultSchemaPath;
+  if (codexStrict) {
+    resultSchemaPathForCodec = path.join(schemaDir, STRICT_SCHEMA_FILE);
+    try {
+      await writeFile(resultSchemaPathForCodec, JSON.stringify(toStrictOutputSchema(bundledResultSchema)), "utf8");
+    } catch (error) {
+      await rm(schemaDir, { recursive: true, force: true }).catch(() => undefined);
+      const message = error instanceof Error ? error.message : String(error);
+      return refuse("Error", `failed to prepare the required result schema for validation: ${message}`);
+    }
+  }
+  const normalize = codexStrict ? (value: unknown): unknown => dropOptionalNulls(value, bundledResultSchema) : undefined;
 
   try {
     const assembled = buildExternalPrompt({
@@ -444,7 +467,7 @@ export async function runExternalChild(
           write: sandbox === "worktree-write",
           worktreePath: created.path,
           prompt: assembled.prompt,
-          validate: (built) => validateStructuredResult(built, resultSchema),
+          validate: (built) => validateStructuredResult(built, resultSchema, normalize),
         });
       }
       const runInput = {
@@ -456,7 +479,7 @@ export async function runExternalChild(
         ...(input.runtime.maxCostUnits === undefined || input.runtime.maxCostUnits === null
           ? {}
           : { maxCostUnits: input.runtime.maxCostUnits }),
-        resultSchemaPath,
+        resultSchemaPath: resultSchemaPathForCodec,
         // The inline form for claude, the staged file for codex — see
         // `resultSchemaInline` above.
         resultSchema: resultSchemaInline,
@@ -538,8 +561,14 @@ export async function runExternalChild(
       // A run stopped for size carries its own named reason; the codec would
       // only see a killed child (flow 292 T14).
       const cause = outcome.overflow ?? codec.classifyFailure(outcome);
-      const built = buildOutcome({ cause, outcome, argv, worktreePath: created.path });
-      return await validateStructuredResult(built, resultSchema);
+      const built = buildOutcome({
+        cause,
+        outcome,
+        argv,
+        worktreePath: created.path,
+        finalMessageOnly: entry.id === "codex-cli",
+      });
+      return await validateStructuredResult(built, resultSchema, normalize);
     } finally {
       // Unconditional. Containment rests on this directory being disposable, so a
       // leaked worktree is a leaked escape hatch — and the `remove` itself must not
@@ -564,6 +593,7 @@ export async function runExternalChild(
 async function validateStructuredResult(
   built: ExternalChildOutcome,
   resultSchema: Awaited<ReturnType<typeof loadSchema>>,
+  normalize?: (value: unknown) => unknown,
 ): Promise<ExternalChildOutcome> {
   if (built.status !== "Completed") return built;
   let parsed: unknown;
@@ -573,7 +603,8 @@ async function validateStructuredResult(
     const message = error instanceof Error ? error.message : String(error);
     return structuredResultError(`structured result is not valid JSON: ${message}`, built);
   }
-  const validationErrors = await validateJson(parsed, resultSchema);
+  const normalized = normalize === undefined ? parsed : normalize(parsed);
+  const validationErrors = await validateJson(normalized, resultSchema);
   if (validationErrors.length > 0) {
     const detail = validationErrors
       .slice(0, 3)
@@ -581,7 +612,7 @@ async function validateStructuredResult(
       .join("; ");
     return structuredResultError(`structured result failed subagent-result schema validation: ${detail}`, built);
   }
-  return built;
+  return normalized === parsed ? built : { ...built, output: JSON.stringify(normalized) };
 }
 
 /**
@@ -673,11 +704,12 @@ function buildOutcome(args: {
   outcome: Awaited<ReturnType<typeof superviseExternalRun>>;
   argv: readonly string[];
   worktreePath: string;
+  finalMessageOnly: boolean;
 }): ExternalChildOutcome {
-  const { cause, outcome, argv, worktreePath } = args;
+  const { cause, outcome, argv, worktreePath, finalMessageOnly } = args;
   const sessionRef = findSessionRef(outcome.events);
   const costUnits = findCostUnits(outcome.events);
-  const text = collectAssistantText(outcome.events);
+  const text = collectAssistantText(outcome.events, finalMessageOnly);
 
   const base = {
     argv,
@@ -735,7 +767,7 @@ function findCostUnits(events: readonly ExternalEvent[]): number | undefined {
  * not quarantine it itself — doing so here would let a caller believe the value
  * is already safe wherever it is read.
  */
-function collectAssistantText(events: readonly ExternalEvent[]): string {
+function collectAssistantText(events: readonly ExternalEvent[], finalMessageOnly: boolean): string {
   // A terminal event's text WINS OUTRIGHT rather than being appended.
   //
   // Measured in the live smoke (flow 176 T19): claude's `result.result` is the
@@ -750,6 +782,16 @@ function collectAssistantText(events: readonly ExternalEvent[]): string {
     if (event?.kind === "child_finished" && event.text !== undefined && event.text.trim().length > 0) {
       return event.text.trim();
     }
+  }
+  // codex narrates before it answers ("I'll edit a.txt"), each narration its own
+  // agent_message, and the answer is the LAST one. Joining them would put prose in
+  // front of the JSON document and fail the structured-result validation.
+  if (finalMessageOnly) {
+    for (let i = events.length - 1; i >= 0; i -= 1) {
+      const event = events[i];
+      if (event?.kind === "assistant_text" && event.text.trim().length > 0) return event.text.trim();
+    }
+    return "";
   }
   const parts: string[] = [];
   for (const event of events) {

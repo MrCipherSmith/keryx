@@ -331,6 +331,27 @@ describe("timeout and kill are RACED, not chained", () => {
   });
 });
 
+describe("the exit code of a run ended by our own kill after its terminal event", () => {
+  test("is read from the transcript, not from the signal our kill produced", async () => {
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl"),
+      holdStdout: true,
+      exitCode: 143,
+    });
+
+    const outcome = await superviseExternalRun(
+      input({ timeoutMs: 5_000, terminalSettleMs: 15, killGraceMs: 10 }),
+      { spawn: fake.port, codec: codexCliCodec },
+    );
+
+    expect(outcome.killed).toBe(true);
+    expect(outcome.exitCode).toBe(0);
+    expect(classifyCodexFailure(outcome)).toBeNull();
+
+    fake.release();
+  });
+});
+
 describe("a failed process is an outcome, never a throw (§7.7)", () => {
   test("codex: a non-zero exit with no credentials returns and classifies", async () => {
     const fake = fakePort({ stdout: transcript("codex-cli/not-logged-in.stdout.jsonl"), exitCode: 1 });

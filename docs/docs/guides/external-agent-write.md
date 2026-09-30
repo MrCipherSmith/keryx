@@ -55,6 +55,13 @@ just as mandatory: without it, the exec-policy rules in your own `codex`
 configuration can let shell commands run outside the sandbox (writes to `/tmp` and
 `$HOME` succeeded in the test); with it they were refused.
 
+`codex` validates its final answer against a schema through OpenAI structured
+output, which accepts a narrower JSON Schema than the subagent-result contract. keryx
+therefore hands `codex` a strict copy of the contract (every property required,
+optional ones nullable, closed objects, unsupported keywords removed), then drops the
+nulls from the answer and validates it against the full contract. Only the final
+message of the run is taken as the result; earlier narration is ignored.
+
 !!! warning "codex keeps a sandboxed shell, so it can read what you can read"
     Unlike `claude`, `codex` still has a shell. Inside the sandbox it can **read**
     any file your user account can read, for example keys under `$HOME`. The
