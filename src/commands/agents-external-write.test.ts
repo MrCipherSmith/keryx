@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { EXTERNAL_WRITE_PATCH_FILE, EXTERNAL_WRITE_RUN_FILE, type ExternalWriteRunRecord } from "../harness/external/write-run";
 import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { createSession, EXTERNAL_RUN_PROVIDER_PREFIX } from "../session/store";
-import { agentsExternalCommand, type AgentsExternalDeps, type AgentsExternalRunSeams } from "./agents-external";
+import { agentsExternalCommand, renderRunOutcome, type AgentsExternalDeps, type AgentsExternalRunSeams } from "./agents-external";
 
 const GIT_ENV = withoutGitDiscoveryOverrides(process.env);
 
@@ -160,6 +160,14 @@ describe("agents external review", () => {
     const stored = JSON.parse(readFileSync(path.join(path.dirname(record.patchPath as string), EXTERNAL_WRITE_RUN_FILE), "utf8")) as ExternalWriteRunRecord;
     expect(readFileSync(record.patchPath as string, "utf8")).toBe(patch);
     expect(stored.patchHash).toBe(sha256(patch));
+  });
+
+  test("the run report escapes the agent's output and partial output but keeps its line breaks", () => {
+    const outcome = { status: "completed", output: "line one\n\x1b[2Jline two", partial: "half\x1b[31m" } as unknown as Parameters<typeof renderRunOutcome>[0];
+    const text = renderRunOutcome(outcome).join("\n");
+    expect(text).not.toContain("\x1b");
+    expect(text).toContain("partial output: half\\x1b[31m");
+    expect(text).toContain("line one\n\\x1b[2Jline two");
   });
 
   test("a clean run carries no escape note", async () => {

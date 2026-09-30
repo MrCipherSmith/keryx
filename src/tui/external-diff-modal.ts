@@ -245,7 +245,7 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
       lines.push("This run cannot be reviewed: no verified patch is stored for it. Only discard (d) is offered.");
       return lines;
     }
-    const patchLines = clean(patch).split("\n");
+    const patchLines = patch.split("\n").map(clean);
     if (patchLines[patchLines.length - 1] === "") patchLines.pop();
     lines.push(`Patch (redacted, ${patchLines.length} line(s)):`, ...patchLines);
     return lines;

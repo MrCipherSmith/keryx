@@ -126,6 +126,15 @@ describe("list and detail", () => {
     expect(out).toContain("+added line");
   });
 
+  test("a multi-line patch renders as separate lines, not one escaped line", () => {
+    const patch = "diff --git a/x b/x\n--- a/x\n+++ b/x\n+one\n+\x1b[2Jtwo\n";
+    const rows = createExternalDiffController({ deps: fake([record("run-1")], { "run-1": patch }).deps }).render(400, 200);
+    expect(rows).toContain("Patch (redacted, 5 line(s)):");
+    expect(rows).toContain("+one");
+    expect(rows).toContain("+\\x1b[2Jtwo");
+    expect(rows.join("\n")).not.toContain("\\x0a");
+  });
+
   test("flagged paths come first and carry a marker; binary files are marked", () => {
     const run = record("run-1", {
       files: [

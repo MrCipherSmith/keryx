@@ -230,6 +230,16 @@ describe("flaggedPathsOf, case and agent-config files", () => {
     expect(flaggedPathsOf(paths)).toEqual(paths);
   });
 
+  test("flags a bare directory-named entry such as a symlink", () => {
+    const paths = [".claude", ".github", ".git", ".metaproject", ".husky", ".githooks", ".circleci", "pkg/.claude", ".Cursor", ".codex", ".gemini"];
+    expect(flaggedPathsOf(paths)).toEqual(paths);
+  });
+
+  test("flags agent instruction files and other agents' config directories", () => {
+    const paths = ["CLAUDE.md", "AGENTS.md", "pkg/CLAUDE.md", ".cursor/rules/x.mdc", ".codex/config.toml", ".gemini/settings.json"];
+    expect(flaggedPathsOf(paths)).toEqual(paths);
+  });
+
   test("leaves ordinary files and harmless editor files alone", () => {
     expect(flaggedPathsOf([".vscode/extensions.json", "Makefile", "docs/gitattributes.md", "src/envrc.ts", ".gitignore"])).toEqual([]);
   });

@@ -100,6 +100,9 @@ const FLAGGED_PREFIXES: readonly string[] = [
   ".husky/",
   ".githooks/",
   ".circleci/",
+  ".cursor/",
+  ".codex/",
+  ".gemini/",
 ];
 
 const FLAGGED_BASENAMES: ReadonlySet<string> = new Set([
@@ -116,6 +119,21 @@ const FLAGGED_BASENAMES: ReadonlySet<string> = new Set([
   ".envrc",
   ".gitattributes",
   ".gitmodules",
+  "claude.md",
+  "agents.md",
+]);
+
+/** A bare directory name (a symlink or file entry named like the directory) is flagged like its contents. */
+const FLAGGED_DIRECTORY_NAMES: ReadonlySet<string> = new Set([
+  ".github",
+  ".claude",
+  ".metaproject",
+  ".husky",
+  ".githooks",
+  ".circleci",
+  ".cursor",
+  ".codex",
+  ".gemini",
 ]);
 
 /** Editor config that runs tasks or changes tool behaviour; the rest of `.vscode/` is not flagged. */
@@ -129,7 +147,8 @@ export function flaggedPathsOf(paths: readonly string[]): string[] {
     // Nested copies count too: packages/x/.github/workflows/ci.yml is still CI.
     if (FLAGGED_PREFIXES.some((prefix) => normalized.includes(`/${prefix}`))) return true;
     if (FLAGGED_SUFFIXES.some((suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`))) return true;
-    return FLAGGED_BASENAMES.has(path.posix.basename(normalized));
+    const base = path.posix.basename(normalized);
+    return FLAGGED_BASENAMES.has(base) || FLAGGED_DIRECTORY_NAMES.has(base);
   });
 }
 

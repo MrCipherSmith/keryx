@@ -52,7 +52,10 @@ Flagged paths are changes under `.git`, `.github`, `.claude`, `.metaproject`,
 hook directories (`.husky`, `.githooks`), CI configuration (for example
 `.circleci`, `.gitlab-ci.yml`, `Jenkinsfile`, `lefthook.yml`), or files that change
 what tools run or how they behave (`.mcp.json`, `.envrc`, `.gitattributes`,
-`.gitmodules`, and `.vscode/tasks.json`, `settings.json` and `launch.json`). They
+`.gitmodules`, and `.vscode/tasks.json`, `settings.json` and `launch.json`), or
+instructions and configuration for other agents (`CLAUDE.md`, `AGENTS.md`, `.cursor`,
+`.codex`, `.gemini`). A bare entry named like one of these directories, such as a
+symlink called `.claude`, is flagged too. They
 are matched without regard to case, so `.Claude/settings.json` is flagged too. They
 are the files that can run code later, so read them first.
 

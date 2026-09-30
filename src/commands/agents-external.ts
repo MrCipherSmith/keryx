@@ -78,7 +78,7 @@ import type { AgentIO } from "./agent";
 import { VERSION } from "../cli-registry";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
 import { optionValue } from "../lib/args";
-import { TerminalSafeTracker, terminalSafe } from "../lib/terminal-safe";
+import { TerminalSafeTracker, terminalSafe, terminalSafeBlock } from "../lib/terminal-safe";
 import { helpOptions, helpTitle, helpUsage, style } from "../lib/ui";
 
 /** Injectable seams so the whole surface is testable with no CLI on the machine. */
@@ -833,8 +833,8 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
       lines.push(`unrecognised lines: ${outcome.skippedLines} (possible version drift)`);
     }
   }
-  if (outcome.partial !== undefined) lines.push(`partial output: ${outcome.partial}`);
-  lines.push("", outcome.output);
+  if (outcome.partial !== undefined) lines.push(`partial output: ${plain(outcome.partial)}`);
+  lines.push("", terminalSafeBlock(outcome.output).text);
   return lines;
 }
 
