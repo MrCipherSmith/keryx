@@ -24,6 +24,14 @@ import {
   staleRuntimeBuildMessage,
   staleRuntimeBuildSeverity,
 } from "./guarded-fs-ops";
+import {
+  metaprojectRelative,
+  PROJECT_SKILL_REPORTS_DIR,
+  PROJECT_SKILLS_CATALOG_END,
+  PROJECT_SKILLS_CATALOG_PATH,
+  PROJECT_SKILLS_CATALOG_START,
+  PROJECT_SKILLS_DIR,
+} from "./project-skills";
 import type { RetiredRuleOutcome } from "./retired-rules";
 
 /**
@@ -91,7 +99,7 @@ export async function installGdskills(
   const dataRoot = path.join(metaprojectRoot, "data", "gdskills");
   const coreRoot = path.join(metaprojectRoot, "core", "gdskills");
   const contractsRoot = path.join(coreRoot, "contracts");
-  const projectSkillsRoot = path.join(metaprojectRoot, "project-skills");
+  const projectSkillsRoot = path.join(metaprojectRoot, metaprojectRelative(PROJECT_SKILLS_DIR));
 
   const skippedDestinationWarnings: string[] = [];
 
@@ -115,7 +123,7 @@ export async function installGdskills(
     projectSkillsRoot,
     ...(options.createDataDirs === false ? [] : [
       path.join(dataRoot, "artifacts"),
-      path.join(dataRoot, "reports"),
+      path.join(metaprojectRoot, metaprojectRelative(PROJECT_SKILL_REPORTS_DIR)),
       path.join(dataRoot, "proposals"),
     ]),
   ]) {
@@ -178,7 +186,7 @@ export async function installGdskills(
   }
   const retiredRuleOutcomes = rulesInstall.outcomes;
 
-  const catalogPath = path.join(metaprojectRoot, "skills", "catalog.md");
+  const catalogPath = path.join(metaprojectRoot, metaprojectRelative(PROJECT_SKILLS_CATALOG_PATH));
   await writeContained(
     metaprojectRoot,
     path.relative(metaprojectRoot, catalogPath),
@@ -358,8 +366,8 @@ async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: st
   }
 
   const current = await readFile(catalogPath, "utf8");
-  const start = "<!-- gdskills:project-skills:start -->";
-  const end = "<!-- gdskills:project-skills:end -->";
+  const start = PROJECT_SKILLS_CATALOG_START;
+  const end = PROJECT_SKILLS_CATALOG_END;
   const startIndex = current.indexOf(start);
   const endIndex = current.indexOf(end);
   if (startIndex === -1 || endIndex <= startIndex) {

@@ -38,7 +38,7 @@
 // it fails when the number goes DOWN too — a cap that silently absorbs progress
 // stops being evidence of anything.
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -322,6 +322,98 @@ test("the wiki group is the only core->client debt outside the session-state exc
   const other = pairsOf(r, "owner-imports-client").filter((p) => !p.startsWith("sac/"));
   expect(other.every((p) => p.startsWith("wiki/"))).toBe(true);
   expect(other.length).toBe(9);
+});
+
+// ── Direction between two core owners ────────────────────────────────────────
+
+/**
+ * Directions the zone table cannot express, because both ends are `core`.
+ *
+ * `gdskills -> review` (flow 360, F-018): `src/review` is built on
+ * `src/gdskills` — it reads skills, the catalog, rule references. When
+ * `gdskills/import-skills.ts` imported `reviewerPathGate` from
+ * `review/reviewers.ts` the two directories depended on each other. The pure
+ * text helpers now live in `gdskills/reviewer-triggers.ts` and `review`
+ * re-exports them.
+ */
+const FORBIDDEN_CORE_DIRECTIONS = [{ from: "gdskills", to: "review" }] as const;
+
+/**
+ * The relative specifiers `code` imports or re-exports for types only.
+ *
+ * `checkImportPolicy`'s edges come from `Bun.Transpiler`, which erases these
+ * before it reports anything (import-policy.ts, THE HONEST LIMITS, 1). That is
+ * a limit of the scan, not an exemption in the policy: nothing in this
+ * repository declares type-level coupling across a forbidden direction
+ * acceptable. A forbidden direction is a statement about which owner is built
+ * on which, and `gdskills` naming a `review` type makes the two depend on each
+ * other at compile time exactly as F-018's value import did at runtime — so
+ * the direction guard below reads these edges from the text as well
+ * (flow 360, G-017).
+ */
+function typeOnlySpecifiers(code: string): string[] {
+  const found: string[] = [];
+  const collect = (re: RegExp, pick: (m: RegExpExecArray) => string | undefined): void => {
+    for (let m = re.exec(code); m !== null; m = re.exec(code)) {
+      const specifier = pick(m);
+      if (specifier !== undefined && specifier.startsWith(".")) found.push(specifier);
+    }
+  };
+  // `import type { A } from "…"`, `import type A from "…"`, `import type * as A from "…"`, `export type { A } from "…"`.
+  collect(/\b(?:import|export)\s+type\s+(?:\{[^}]*\}|\*\s*(?:as\s+\w+)?|\w+)\s*from\s*["']([^"']+)["']/g, (m) => m[1]);
+  // `import { type A, type B } from "…"` / `export { type A } from "…"`: every binding type-qualified, so erased too.
+  collect(/\b(?:import|export)\s*\{([^}]*)\}\s*from\s*["']([^"']+)["']/g, (m) => {
+    const bindings = (m[1] ?? "").split(",").map((b) => b.trim()).filter((b) => b.length > 0);
+    return bindings.length > 0 && bindings.every((b) => /^type\s/.test(b)) ? m[2] : undefined;
+  });
+  // `import("…").Name` in a type position.
+  collect(/\bimport\(\s*["']([^"']+)["']\s*\)/g, (m) => m[1]);
+  return found;
+}
+
+test("typeOnlySpecifiers reads every type-only shape and no value import", () => {
+  const code = [
+    'import type { A } from "../review/a";',
+    'import type B from "../review/b";',
+    'import type * as C from "../review/c";',
+    'export type { D } from "../review/d";',
+    'import { type E, type F } from "../review/e";',
+    'export { type G } from "../review/g";',
+    'let h: import("../review/h").H;',
+    // Value imports: the transpiler already reports these.
+    'import { type I, J } from "../review/ij";',
+    'import { K } from "../review/k";',
+    // Not relative: outside the policy's scope.
+    'import type { L } from "bun:test";',
+  ].join("\n");
+  expect(typeOnlySpecifiers(code).sort()).toEqual(
+    ["../review/a", "../review/b", "../review/c", "../review/d", "../review/e", "../review/g", "../review/h"].sort(),
+  );
+});
+
+test("no production module imports against a forbidden core-to-core direction", async () => {
+  const r = await report();
+  const segment = (file: string): string => path.relative(SRC, file).split(path.sep)[0] as string;
+  const typeEdges = listSourceFiles(SRC).flatMap((file) =>
+    typeOnlySpecifiers(readFileSync(file, "utf8")).map((specifier) => ({
+      from: file,
+      to: path.resolve(path.dirname(file), specifier),
+    })),
+  );
+  for (const { from, to } of FORBIDDEN_CORE_DIRECTIONS) {
+    const between = (a: string, b: string): string[] =>
+      [
+        ...new Set(
+          [...r.edges, ...typeEdges]
+            .filter((e) => segment(e.from) === a && segment(e.to) === b)
+            .map((e) => `${path.relative(SRC, e.from)} -> ${path.relative(SRC, e.to)}`),
+        ),
+      ].sort();
+    // Anti-vacuous: the permitted direction is really there, so an empty list
+    // below is a finding about direction and not about a scan that saw neither.
+    expect(between(to, from).length).toBeGreaterThan(0);
+    expect({ from, to, edges: between(from, to) }).toEqual({ from, to, edges: [] });
+  }
 });
 
 // ── RULE 2: measured and pinned, not enforced at zero ────────────────────────

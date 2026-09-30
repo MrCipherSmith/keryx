@@ -3,6 +3,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { discoverRuleSources, stripKeryxManagedBlock } from "./review-jev-rules";
+import { reviewerPathGate } from "../gdskills/reviewer-triggers";
+import { clauseApplicability } from "../review/jev-rules";
+import type { DetectedStack } from "../review/stack";
 
 let root: string;
 
@@ -53,6 +56,37 @@ describe("rule discovery covers where Claude Code projects keep their rules", ()
     writeFileSync(path.join(root, "CLAUDE.md"), "<!-- keryx:index -->\nRouting only.\n<!-- /keryx:index -->\n");
     const { sources } = await discoverRuleSources(root, []);
     expect(sources.map((s) => s.path)).not.toContain("CLAUDE.md");
+  });
+});
+
+describe("a convention skill's metadata.paths", () => {
+  const STACK: DetectedStack = {
+    tags: { nestjs: false, react: false, mobx: false, prisma: false, playwright: false, sql: false, "http-server": false },
+    uncertain: false,
+    reason: "test",
+    matched: [],
+  };
+
+  // G-004: `review jev-rules` had its own reader that took only a scalar, so a
+  // block list read as "not restricted" there while the inventory gated on it.
+  test.each([
+    ["scalar", "\n", ['  paths: "src/core/**, src/ui/**"']],
+    ["flow list", "\n", ["  paths: [src/core/**, 'src/ui/**']"]],
+    ["block list", "\n", ["  paths:", "    - src/core/**   # the core tree", "    -", "    - src/ui/**"]],
+    ["block list, BOM and CRLF", "\r\n", ["  paths:", "    - src/core/**", "    - src/ui/**"]],
+  ])("%s: the same globs as the inventory, and they gate clause applicability", async (shape, eol, paths) => {
+    const bom = shape.includes("BOM") ? "\uFEFF" : "";
+    // `applies_to: code` — the path holds "skill", which the process heuristic would otherwise drop.
+    const text = bom + ["---", "name: house-conventions", "applies_to: code", "metadata:", ...paths, "---", "", CODE_RULE].join(eol);
+    const dir = path.join(root, ".metaproject", "project-skills", "house-conventions");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "SKILL.md"), text);
+    const { sources } = await discoverRuleSources(root, []);
+    const source = sources.find((s) => s.path.endsWith(path.join("house-conventions", "SKILL.md")));
+    expect(source?.declaredPaths).toEqual(["src/core/**", "src/ui/**"]);
+    expect(source?.declaredPaths).toEqual(reviewerPathGate(text).paths);
+    expect(clauseApplicability(source!, "docs/tools/readme.ts", STACK).applicable).toBe(false);
+    expect(clauseApplicability(source!, "src/ui/button.ts", STACK).applicable).toBe(true);
   });
 });
 

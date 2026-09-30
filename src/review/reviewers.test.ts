@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createProjectSkill } from "../gdskills/project-skills";
+import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import {
   collectReviewers,
   descriptionFlags,
@@ -267,6 +268,178 @@ describe("project reviewer triggers", () => {
     expect(reviewer?.stackRequires).toEqual(["react"]);
   });
 
+  test("metadata.flags wins over flags named in the description", async () => {
+    await writeProjectReviewer(
+      "review-house-ui",
+      'description: Dispatched for --house-ui, --house, --all, or src/ui/** changes.\nmetadata:\n  flags: "--ui, --all, --house"\n',
+    );
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    // Declared, so the description is not consulted: `--house-ui` is gone.
+    // `--all` stays excluded whichever source the list came from.
+    expect(reviewer?.flags).toEqual(["--ui", "--house"]);
+    // The path gate is a separate field and still falls back to the description.
+    expect(reviewer).toMatchObject({ paths: ["src/ui/**"], pathsSource: "description" });
+  });
+
+  test("a literal file beside a glob gates the reviewer; alone it does not, and neither does a cited document", async () => {
+    await writeProjectReviewer(
+      "review-house-zone",
+      "description: Rules from docs/zones.md, for src/utils/date-*.ts and src/utils/column-zone.ts changes.\n",
+    );
+    await writeProjectReviewer("review-house-lone", "description: For src/utils/column-zone.ts changes.\n");
+    await writeProjectReviewer("review-house-docs", "description: Rules from src/core/flow/CLAUDE.md and core/reviewing.mdc.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.paths, reviewer.pathsSource])).toEqual([
+      ["review-house-docs", [], "none"],
+      ["review-house-lone", [], "none"],
+      ["review-house-zone", ["src/utils/date-*.ts", "src/utils/column-zone.ts"], "description"],
+    ]);
+  });
+
+  // F-005: prose that names a technology pair reads as `<dir>/<file>.<ext>`.
+  // Taken as a trigger it matched no file in any diff, so the reviewer was
+  // gated off every round — and lost its `paths: none` warning on the way.
+  test("technology-pair prose with no glob leaves the reviewer ungated, and says so", async () => {
+    await writeProjectReviewer("review-house-next", "description: React/Next.js conventions reviewer.\n");
+    await writeProjectReviewer("review-house-node", "description: Express/Node.js services, and/or.ts leftovers.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.paths, reviewer.pathsSource])).toEqual([
+      ["review-house-next", [], "none"],
+      ["review-house-node", [], "none"],
+    ]);
+    expect(renderReviewerInventoryMarkdown(inventory).match(/paths: none — dispatched on every round \[none\]/g)).toHaveLength(2);
+  });
+
+  describe("metadata.flags", () => {
+    // F-006: three spellings of one flag were three flags, so none was shared,
+    // `familyFlags` stayed empty, and the one reviewer spelled correctly was
+    // dispatched under `--vantage` without its path gate.
+    test("three spellings of one flag are one flag, and it is a family flag for all three", async () => {
+      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: vantage\n");
+      await writeProjectReviewer("review-b", 'description: Reviews b.\nmetadata:\n  flags: ["--Vantage "]\n');
+      await writeProjectReviewer("review-c", 'description: Reviews c.\nmetadata:\n  flags: "--vantage"\n');
+      const inventory = await collectReviewers(cwd);
+      expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.flags, reviewer.familyFlags, reviewer.flagWarnings])).toEqual([
+        ["review-a", ["--vantage"], ["--vantage"], []],
+        ["review-b", ["--vantage"], ["--vantage"], []],
+        ["review-c", ["--vantage"], ["--vantage"], []],
+      ]);
+    });
+
+    test("an entry is split on commas and whitespace", async () => {
+      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: --vantage --house,ui\n");
+      const [reviewer] = (await collectReviewers(cwd)).project;
+      expect(reviewer?.flags).toEqual(["--vantage", "--house", "--ui"]);
+    });
+
+    test("a YAML block list is read for flags and for paths", async () => {
+      await writeProjectReviewer(
+        "review-a",
+        [
+          "description: Dispatched for --described or src/described/** changes.",
+          "metadata:",
+          "  flags:",
+          "    - --acme",
+          '    - "Acme-UI"',
+          "  paths:",
+          "    - src/acme/**",
+          "    - 'src/ui/**/*.tsx'",
+          '  stack_requires: "react"',
+          "",
+        ].join("\n"),
+      );
+      const [reviewer] = (await collectReviewers(cwd)).project;
+      expect(reviewer).toMatchObject({
+        flags: ["--acme", "--acme-ui"],
+        flagWarnings: [],
+        paths: ["src/acme/**", "src/ui/**/*.tsx"],
+        pathsSource: "metadata",
+        // The list ends where the next key starts.
+        stackRequires: ["react"],
+      });
+    });
+
+    test("an entry that is still not a flag is dropped, with a warning in the JSON and in the text", async () => {
+      await writeProjectReviewer("review-a", 'description: Reviews a.\nmetadata:\n  flags: "--ok, -v, house_ui, --9x"\n');
+      const inventory = await collectReviewers(cwd);
+      const [reviewer] = inventory.project;
+      expect(reviewer?.flags).toEqual(["--ok"]);
+      expect(reviewer?.flagWarnings).toEqual([
+        'metadata.flags: "-v" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter',
+        'metadata.flags: "house_ui" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter',
+        'metadata.flags: "--9x" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter',
+      ]);
+      const rendered = renderReviewerInventoryMarkdown(inventory);
+      expect(rendered).toContain(
+        '  - flags: --ok\n  - warning: metadata.flags: "-v" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter\n',
+      );
+      expect(rendered.match(/ {2}- warning: /g)).toHaveLength(3);
+    });
+
+    // The decision: a declared list replaces the description's flags even when
+    // nothing in it survives. Falling back would make the reviewer selectable —
+    // explicitly, so without its path gate — by flags its author replaced.
+    test("a declared list with no valid entry leaves the reviewer with no flags; the description's are not used", async () => {
+      await writeProjectReviewer(
+        "review-a",
+        'description: Dispatched for --house or src/a/** changes.\nmetadata:\n  flags: "-v"\n',
+      );
+      const inventory = await collectReviewers(cwd);
+      const [reviewer] = inventory.project;
+      expect(reviewer).toMatchObject({ flags: [], familyFlags: [], paths: ["src/a/**"], pathsSource: "description" });
+      expect(reviewer?.flagWarnings).toEqual([
+        'metadata.flags: "-v" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter',
+        "metadata.flags: no entry is a flag — this reviewer has no selection flags; the flags its description names are not used once metadata.flags is declared",
+      ]);
+      expect(renderReviewerInventoryMarkdown(inventory)).toContain("  - warning: metadata.flags: no entry is a flag");
+    });
+
+    test("with no metadata.flags the description's flags are used, and there is nothing to warn about", async () => {
+      await writeProjectReviewer("review-a", "description: Dispatched for --house or src/a/** changes.\nmetadata:\n  flags:\n  category: review\n");
+      const inventory = await collectReviewers(cwd);
+      // Always present, so a reader of the JSON never has to tell absent from empty.
+      expect(inventory.project[0]).toMatchObject({ flags: ["--house"], flagWarnings: [] });
+      expect(renderReviewerInventoryMarkdown(inventory)).not.toContain("warning:");
+    });
+
+    test("a flag repeated in metadata.flags, or in the description, is listed once", async () => {
+      await writeProjectReviewer("review-a", 'description: Reviews a.\nmetadata:\n  flags: "--a, --A, a, --b"\n');
+      await writeProjectReviewer("review-b", "description: Dispatched for --x, (--x) and --y.\n");
+      const inventory = await collectReviewers(cwd);
+      expect(inventory.project.map((reviewer) => reviewer.flags)).toEqual([
+        ["--a", "--b"],
+        ["--x", "--y"],
+      ]);
+    });
+  });
+
+  test("a flag more than one project reviewer carries is a family flag; a unique one is not", async () => {
+    await writeProjectReviewer(
+      "review-house-core",
+      "description: Dispatched for --house, --house-core, --all, or src/core/** changes.\n",
+    );
+    await writeProjectReviewer(
+      "review-house-styling",
+      'description: Dispatched for src/**/*.css changes.\nmetadata:\n  flags: "--house-styling, --house"\n',
+    );
+    await writeProjectReviewer("review-solo", "description: Dispatched for --solo or src/solo/** changes.\n");
+    await writeProjectReviewer("review-plain", "description: Reviews things.\n");
+
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.flags, reviewer.familyFlags])).toEqual([
+      ["review-house-core", ["--house", "--house-core"], ["--house"]],
+      // Always present, and empty rather than absent when nothing is shared.
+      ["review-plain", [], []],
+      ["review-solo", ["--solo"], []],
+      ["review-house-styling", ["--house-styling", "--house"], ["--house"]],
+    ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("  - flags: --house, --house-core\n  - family flags: --house — shared with another project reviewer: selects it, stays path-gated");
+    // A reviewer with no shared flag gets no family line.
+    expect(rendered.match(/family flags:/g)).toHaveLength(2);
+  });
+
   test("a description with no glob gates on nothing, and says so", async () => {
     await writeProjectReviewer("review-house-dates", "description: Reviews date utils and formatters.\n");
     const inventory = await collectReviewers(cwd);
@@ -286,6 +459,96 @@ describe("project reviewer triggers", () => {
     expect(inventory.project[0]?.unresolvedRules).toEqual(["core/absent.mdc"]);
     expect(renderReviewerInventoryMarkdown(inventory)).toContain("- review-house-rules: core/absent.mdc");
   });
+
+  test("the unresolved-rules hint names a command a tree import accepts", async () => {
+    await writeProjectReviewer("review-house-rules", "description: Reviews things.\n", "Standard: `core/absent.mdc`.\n");
+    const rendered = renderReviewerInventoryMarkdown(await collectReviewers(cwd));
+    expect(rendered).toContain("keryx review import --from <overlay> --only");
+  });
+
+  test("a rule in rules/project shadows the same name in rules/core, and is reported as such", async () => {
+    await mkdir(path.join(cwd, ".metaproject", "rules", "core"), { recursive: true });
+    // The project slot is keyed on the whole reference: rules/project/core/<name>.
+    await mkdir(path.join(cwd, ".metaproject", "rules", "project", "core"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "store.mdc"), "generic", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "core", "store.mdc"), "overlay", "utf8");
+    // Only in rules/project: keryx ships the name but the project's install lacks it.
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "core", "only-project.mdc"), "overlay", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "plain.mdc"), "x", "utf8");
+    await writeProjectReviewer(
+      "review-house-rules",
+      "description: Reviews things.\n",
+      "Standards: `core/store.mdc`, `core/only-project.mdc`, `core/plain.mdc`, `core/absent.mdc`.\n",
+    );
+
+    const inventory = await collectReviewers(cwd);
+    const [reviewer] = inventory.project;
+    expect(reviewer?.shadowedRules).toEqual([
+      { ref: "core/only-project.mdc", resolved: ".metaproject/rules/project/core/only-project.mdc" },
+      { ref: "core/store.mdc", resolved: ".metaproject/rules/project/core/store.mdc" },
+    ]);
+    expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("## rules read from .metaproject/rules/project");
+    expect(rendered).toContain("- review-house-rules: `core/store.mdc` → .metaproject/rules/project/core/store.mdc");
+    expect(rendered).toContain("`.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`");
+    // The commands that really overwrite rules/core; there is no `keryx install`.
+    expect(rendered).toContain("`keryx init`, `keryx update` and `keryx skills install` overwrite");
+    expect(rendered).not.toContain("`keryx install`");
+  });
+
+  test("a backticked skills/ or rules/ path with a `..` segment is not a reference into .metaproject", async () => {
+    await writeProjectReviewer(
+      "review-house-refs",
+      "description: Reviews things.\n",
+      "See `skills/../outside.md` and `rules/core/../../outside.json`; `skills/shared/absent.md` is one.\n",
+    );
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    expect(reviewer?.unresolvedReferences).toEqual([{ ref: "skills/shared/absent.md", reason: "missing" }]);
+  });
+
+  test("a reviewer with nothing shadowed or dangling carries empty lists and no extra sections", async () => {
+    await writeProjectReviewer("review-house-plain", "description: Reviews things.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project[0]).toMatchObject({ shadowedRules: [], unresolvedReferences: [] });
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).not.toContain("## rules read from");
+    expect(rendered).not.toContain("## references that do not resolve");
+  });
+
+  test("missing skills/ and rules/ files and non-portable rule paths are unresolved references", async () => {
+    await mkdir(path.join(cwd, ".metaproject", "skills", "shared"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "skills", "shared", "here.md"), "x", "utf8");
+    await writeProjectReviewer(
+      "review-house-refs",
+      "description: Reviews things.\n",
+      [
+        "Graph: `skills/shared/graphify-lookup.md`. Present: `skills/shared/here.md`.",
+        "Schema: `skills/vantage-review/reviewer-finding.schema.json`. Index: `.metaproject/rules/README.md`.",
+        "Rule: `~/.vantage-frontend/rules/core/x.mdc` and `/opt/overlay/rules/core/y.mdc`.",
+        "Prose path `src/core/flow/CLAUDE.md` and a rule `core/absent.mdc` are not this list's business.",
+        "",
+      ].join("\n"),
+    );
+
+    const inventory = await collectReviewers(cwd);
+    const [reviewer] = inventory.project;
+    expect(reviewer?.unresolvedReferences).toEqual([
+      { ref: "/opt/overlay/rules/core/y.mdc", reason: "non-portable" },
+      { ref: "rules/README.md", reason: "missing" },
+      { ref: "skills/shared/graphify-lookup.md", reason: "missing" },
+      { ref: "skills/vantage-review/reviewer-finding.schema.json", reason: "missing" },
+      { ref: "~/.vantage-frontend/rules/core/x.mdc", reason: "non-portable" },
+    ]);
+    // An absolute rule path is not a `dir/name.mdc` reference, so it never was in here.
+    expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("## references that do not resolve");
+    expect(rendered).toContain("- review-house-refs: `skills/shared/graphify-lookup.md` — missing (.metaproject/skills/shared/graphify-lookup.md)");
+    expect(rendered).toContain("- review-house-refs: `~/.vantage-frontend/rules/core/x.mdc` — non-portable");
+  });
 });
 
 describe("descriptionPathTriggers", () => {
@@ -302,7 +565,110 @@ describe("descriptionPathTriggers", () => {
     expect(descriptionPathTriggers("rules from src/core/flow/CLAUDE.md and test/e2e changes")).toEqual([]);
   });
 
+  test("a literal file path listed beside globs is a trigger", () => {
+    // The real description that lost `column-zone.ts`: a reviewer gated on a
+    // list where one entry happens to be a single file.
+    expect(
+      descriptionPathTriggers(
+        "Dispatched by vantage-review for --vantage, --vantage-temporal, --all, or changes under " +
+          "src/utils/date-*.ts, src/utils/temporal-*.ts, src/utils/column-zone.ts, src/core/formatters/**, " +
+          "src/core/view-zone/**, or src/wrappers/ag-grid/**.",
+      ),
+    ).toEqual([
+      "src/utils/date-*.ts",
+      "src/utils/temporal-*.ts",
+      "src/utils/column-zone.ts",
+      "src/core/formatters/**",
+      "src/core/view-zone/**",
+      "src/wrappers/ag-grid/**",
+    ]);
+  });
+
+  test("a cited document is not a trigger", () => {
+    expect(
+      descriptionPathTriggers(
+        "performance rules from src/core/flow/CLAUDE.md. Dispatched by vantage-review for --vantage-flow, --all, or src/core/flow/** changes.",
+      ),
+    ).toEqual(["src/core/flow/**"]);
+    expect(descriptionPathTriggers("Reviews stores. Standards: core/reviewing.mdc, `core/mobx-store-template.mdc`.")).toEqual([]);
+  });
+
+  test("a literal path takes the same optional suffix and wrapping punctuation as a glob", () => {
+    expect(descriptionPathTriggers("changes to (`src/app/routes.ts(x)`), src/app/**, or `.github/workflows/ci.yml`.")).toEqual([
+      "src/app/routes.ts",
+      "src/app/routes.tsx",
+      "src/app/**",
+      ".github/workflows/ci.yml",
+    ]);
+  });
+
+  // F-005. `React/Next.js` has the shape of `<dir>/<file>.<ext>`, and no rule
+  // about a single token tells it from `src/routes.js`. What does: a trigger
+  // list names globs, and prose about a stack does not.
+  test("without a glob, nothing in a description is a trigger — whatever slash-bearing words it holds", () => {
+    for (const prose of [
+      "React/Next.js conventions reviewer.",
+      "Express/Node.js services.",
+      "Leftover and/or.ts files.",
+      "Reviews src/utils/column-zone.ts and `.github/workflows/ci.yml`.",
+      "changes to src/app/routes.ts(x)",
+    ]) {
+      expect({ prose, triggers: descriptionPathTriggers(prose) }).toEqual({ prose, triggers: [] });
+    }
+  });
+
+  test("a bare `*` or a `*` with no path around it does not make a description a trigger list", () => {
+    expect(descriptionPathTriggers("Any * change to src/utils/column-zone.ts, or 2*3.")).toEqual([]);
+  });
+
+  test("a document is not a trigger whatever the case of its extension, and a `..` segment is not a path", () => {
+    expect(
+      descriptionPathTriggers("src/x/** changes. See docs/GUIDE.MD, docs/Rules.Mdc, src/../x.ts, src/x/../y.ts and src/x/a.ts."),
+    ).toEqual(["src/x/**", "src/x/a.ts"]);
+  });
+
+  test("prose that merely contains a slash and a dot is not a trigger, even beside a glob", () => {
+    // Each line is read with a glob beside it: without one nothing at all is a
+    // trigger, and these would pass whatever the literal-path rules were.
+    const beside = " Dispatched for src/x/** changes.";
+    for (const prose of [
+      "See https://example.com/docs/page.html and http://example.com/a/b.json for details.",
+      "Mirrors github.com/acme/overlay.git and www.example.com/guide.html.",
+      "Uses acme/overlay and MrCipherSmith/keryx as sources.",
+      "Since 0.3.40/0.3.41, v1.2/v1.3 and 2026/09.30.",
+      "Names (e.g./i.e. aliases), e.g/i.e, and/or. read/write. client/server.",
+      "An absolute /opt/overlay/rules/x.json or ~/.vantage/config.json is not repo-relative.",
+      "a=b/c.ts, src//x.ts, ./src/x.ts, ../x.ts",
+      // The bundled review-jev-* descriptions: keryx's own config, cited as a precondition.
+      "Runs when `review.jev.docs: true` in .metaproject/tasks.config.json and a credential is resolvable.",
+      "React/MobX, NestJS/TypeORM, TS/JS, input/output",
+    ]) {
+      expect({ prose, triggers: descriptionPathTriggers(prose + beside) }).toEqual({ prose, triggers: ["src/x/**"] });
+    }
+  });
+
+  test("the descriptions of the bundled review skills yield no literal-path trigger", async () => {
+    const reviewRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "skills", "review");
+    const literal: Record<string, string[]> = {};
+    let read = 0;
+    for (const entry of await readdir(reviewRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const content = await readFile(path.join(reviewRoot, entry.name, "SKILL.md"), "utf8").catch(() => undefined);
+      if (content === undefined) continue;
+      read += 1;
+      const description = parseSkillFrontmatter(content).description ?? "";
+      const found = descriptionPathTriggers(description).filter((trigger) => !trigger.includes("*"));
+      if (found.length > 0) literal[entry.name] = found;
+    }
+    expect(read).toBeGreaterThan(10);
+    expect(literal).toEqual({});
+  });
+
   test("descriptionFlags ignores --all", () => {
     expect(descriptionFlags("for --x, --all, or (--y)")).toEqual(["--x", "--y"]);
+  });
+
+  test("descriptionFlags lists a repeated flag once", () => {
+    expect(descriptionFlags("for --x, (--x) or --y, --x")).toEqual(["--x", "--y"]);
   });
 });

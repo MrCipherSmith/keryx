@@ -4,11 +4,12 @@
 // depends on.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
   appendContained,
+  assertWritableContained,
   ContainedWriteError,
   mkdirContained,
   removeContained,
@@ -41,6 +42,54 @@ async function reasonOf(fn: () => Promise<unknown>): Promise<string> {
   }
   throw new Error("expected ContainedWriteError");
 }
+
+describe("assertWritableContained", () => {
+  // Flow 360 G-001: a dry run must refuse what the real write would refuse,
+  // with the same words, and without creating anything on the way.
+  async function messageOf(fn: () => Promise<unknown>): Promise<string> {
+    try {
+      await fn();
+    } catch (error) {
+      if (error instanceof ContainedWriteError) return `${error.reason}: ${error.message}`;
+      throw error;
+    }
+    throw new Error("expected ContainedWriteError");
+  }
+
+  test("refuses an escaping directory symlink with writeContained's own reason and message, creating nothing", async () => {
+    await mkdir(path.join(root, "rules"), { recursive: true });
+    await symlink(outsideDir, path.join(root, "rules", "house"));
+    const check = await messageOf(() => assertWritableContained(root, "rules/house/deep/x.mdc"));
+    expect(check).toStartWith("escaping-symlink: ");
+    expect(await readdir(outsideDir)).toEqual([]);
+    expect(check).toBe(await messageOf(() => writeContained(root, "rules/house/deep/x.mdc", "x")));
+    expect(await readdir(outsideDir)).toEqual([]);
+  });
+
+  test("accepts a path that does not exist yet, and creates none of it", async () => {
+    await assertWritableContained(root, "a/b/c.txt");
+    await expect(readdir(path.join(root, "a"))).rejects.toThrow();
+  });
+
+  test("accepts a symlink that resolves inside the root", async () => {
+    await mkdir(path.join(root, "real"), { recursive: true });
+    await symlink(path.join(root, "real"), path.join(root, "linked"));
+    await assertWritableContained(root, "linked/x.txt");
+  });
+
+  test("a file target refuses a directory there; a directory target refuses a file there", async () => {
+    await mkdir(path.join(root, "dir"), { recursive: true });
+    await writeFile(path.join(root, "file"), "x");
+    expect(await reasonOf(() => assertWritableContained(root, "dir"))).toBe("not-a-regular-file");
+    expect(await reasonOf(() => assertWritableContained(root, "file", "directory"))).toBe("not-a-directory");
+    await assertWritableContained(root, "dir", "directory");
+  });
+
+  test("refuses lexical traversal and .git like the writers do", async () => {
+    expect(await reasonOf(() => assertWritableContained(root, "../x"))).toBe("lexical-traversal");
+    expect(await reasonOf(() => assertWritableContained(root, ".git/config"))).toBe("git-directory");
+  });
+});
 
 describe("writeContained", () => {
   test("creates parent directories and writes the file", async () => {

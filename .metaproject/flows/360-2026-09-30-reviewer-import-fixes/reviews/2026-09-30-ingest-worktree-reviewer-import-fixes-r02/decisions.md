@@ -1,0 +1,28 @@
+# Decisions
+
+- G-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-004: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-005: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-006: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-007: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-008: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-009: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-010: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-011: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-012: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-013: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-014: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-015: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-016: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-017: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-018: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-019: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-020: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-021: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-022: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-023: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-024: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-025: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- G-030: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

@@ -76,7 +76,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Write the reviewer against the orchestrated review contract; point at the canonical severity rubric instead of inventing one.",
     "Drop the persona, keep the method, and state the reason beside every rule kept.",
     "Confirm with `keryx review reviewers` — creating files is not registration, and registration is not discovery.",
-    "For existing SKILL.md packages, run `keryx skills import --from <dir|file|https-url> --module <module>`; `keryx review import` is the review-shaped alias with the review-vantage-* prefix.",
+    "For existing SKILL.md packages, run `keryx skills import --from <dir|file|https-url> --module <module>`; `keryx review import` is the review-shaped spelling (module implied). A tree of several packages needs `--only <glob>` to say which ones.",
   ]),
   renderedSkill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.", [
     "Resolve the target project-skill through gdgraph affected context or `keryx skills route <target>`.",

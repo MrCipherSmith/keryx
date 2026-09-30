@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { collectReviewers } from "./reviewers";
 import { importOverlayReviewers } from "./import-reviewers";
-import { renderImportProjectSkillsMarkdown } from "../gdskills/import-skills";
+import { importProjectSkills, renderImportProjectSkillsMarkdown } from "../gdskills/import-skills";
 
 let cwd: string;
 let source: string;
@@ -42,13 +42,48 @@ async function writeGeneric(home: string, name: string): Promise<void> {
 }
 
 describe("importOverlayReviewers", () => {
-  test("imports only review-vantage-* overlays and skips generic copies", async () => {
+  test("a tree of several packages is refused without --only, in this command's own spelling", async () => {
+    await writeOverlay(source, "review-vantage-frontend");
+    await writeOverlay(source, "review-house-api");
+    await writeGeneric(source, "review-logic");
+    await writeGeneric(source, "vantage-review");
+
+    let message = "";
+    try {
+      await importOverlayReviewers({ projectRoot: cwd, from: source });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toStartWith(`keryx review import: ${source} holds 4 packages`);
+    for (const name of ["review-house-api", "review-logic", "review-vantage-frontend", "vantage-review"]) {
+      expect(message).toContain(`  - ${name}`);
+    }
+    // The module is implied by this spelling, so the example does not pass it.
+    expect(message).toContain(`  keryx review import --from ${source} --only 'review-house-api'`);
+    expect((await collectReviewers(cwd)).project).toEqual([]);
+  });
+
+  test("no package name is special: a tree that uses another naming imports what --only selects", async () => {
+    await writeOverlay(source, "review-house-api");
+    await writeOverlay(source, "review-vantage-frontend");
+    const result = await importOverlayReviewers({ projectRoot: cwd, from: source, only: ["review-house-*"] });
+    expect(result.imported.map((row) => `${row.name}:${row.status}`)).toEqual(["review-house-api:imported"]);
+  });
+
+  test("the importer source no longer names one overlay's prefix", async () => {
+    for (const file of ["import-reviewers.ts", "../gdskills/import-skills.ts", "../gdskills/catalog.ts"]) {
+      const text = await readFile(path.join(import.meta.dir, file), "utf8");
+      expect(text).not.toContain("review-vantage-");
+    }
+  });
+
+  test("--only imports the selected overlays and leaves generic copies alone", async () => {
     await writeOverlay(source, "review-vantage-frontend", "frontend overlay");
     await writeOverlay(source, "review-vantage-styling", "styling overlay");
     await writeGeneric(source, "review-logic");
     await writeGeneric(source, "vantage-review");
 
-    const result = await importOverlayReviewers({ projectRoot: cwd, from: source });
+    const result = await importOverlayReviewers({ projectRoot: cwd, from: source, only: ["review-vantage-*"] });
     expect(result.imported.map((row) => row.name)).toEqual([
       "review-vantage-frontend",
       "review-vantage-styling",
@@ -117,11 +152,39 @@ describe("importOverlayReviewers", () => {
     expect(result.imported.map((row) => row.name)).toEqual(["review-vantage-frontend"]);
   });
 
-  test("a tree with no overlays is refused rather than reported as imported 0", async () => {
-    await writeGeneric(source, "review-logic");
+  test("a package directory with no letter or digit is refused with advice this command's operator can follow", async () => {
+    // `keryx review import` rejects --name as an unknown option, so the advice
+    // names the `keryx skills import` form that takes one.
+    await writeOverlay(source, "___");
+    const from = path.join(source, "skills", "___");
+    for (const dryRun of [true, false]) {
+      await expect(importOverlayReviewers({ projectRoot: cwd, from, dryRun })).rejects.toThrow(
+        `keryx review import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md under a name you choose: keryx skills import --from ${from}/SKILL.md --module review --name <name>`,
+      );
+    }
+    // Under `keryx skills import` itself, --name is the advice.
+    await expect(importProjectSkills({ projectRoot: cwd, from, module: "review" })).rejects.toThrow(
+      "keryx skills import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md with --name <name>.",
+    );
+    expect((await collectReviewers(cwd)).project).toEqual([]);
+
+    // The advised command works.
+    const named = await importProjectSkills({ projectRoot: cwd, from: `${from}/SKILL.md`, module: "review", name: "review-odd" });
+    expect(named.imported.map((row) => `${row.module}/${row.name}:${row.status}`)).toEqual(["review/review-odd:imported"]);
+  });
+
+  test("a tree with no packages is refused rather than reported as imported 0", async () => {
+    await mkdir(path.join(source, "skills", "not-a-package"), { recursive: true });
     await expect(importOverlayReviewers({ projectRoot: cwd, from: source })).rejects.toThrow(
       /nothing to import/,
     );
+  });
+
+  test("a lone generic copy of a bundled reviewer is skipped, not imported", async () => {
+    await writeGeneric(source, "review-logic");
+    const result = await importOverlayReviewers({ projectRoot: cwd, from: source });
+    expect(result.imported.map((row) => `${row.name}:${row.status}`)).toEqual(["review-logic:skipped"]);
+    expect(result.imported[0]?.reason).toMatch(/bundled keryx skill/);
   });
 
   test("the markdown report names every status", async () => {

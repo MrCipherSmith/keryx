@@ -181,13 +181,13 @@ Flags:
 #### A3. useEffect Misuse
 
 - [ ] `useEffect` must not contain business logic
-- [ ] `useEffect` must not call `store.init()`, `store.load()`, or `store.onMount()` — lifecycle initialization is the parent store's responsibility
+- [ ] `useEffect` must not fetch data or run business logic through the store: no `store.load()` / `store.loadX()`, and no `init()` of a child store that the parent store owns. The lifecycle bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])` is correct and is not flagged (D6) — it hands the mount event to the store, which decides what to load
 - [ ] `useEffect` must not contain API calls or IO
 - [ ] `useEffect` used to synchronize component state with store state is a sign the component should be an `observer` instead
 - [ ] Every `useEffect` that creates a subscription, timer, or listener MUST return a cleanup function
 
 Flags:
-- `useEffect` calls `store.init()` or `store.loadX()` — **major**
+- `useEffect` calls `store.loadX()`, or a child store's `init()` that the parent store owns — **major** (`store.onMount()` / `store.onUnmount()` in the bridge form is not this)
 - `useEffect` contains `fetch()` or IO — **major** (API in component)
 - `useEffect` contains business logic / state derivation — **major**
 - `useEffect` creates a subscription/timer/listener with no cleanup return — **major** (memory leak)
@@ -350,13 +350,13 @@ Flags:
 
 #### B10. Lifecycle Initialization and Disposal
 
-- [ ] `init()` / `onMount()` of a child store is called from the **parent store's** `init()` / `onMount()`, NOT from a component `useEffect`
+- [ ] `init()` / `onMount()` of a **child** store is called from the **parent store's** `init()` / `onMount()`, not from a component `useEffect`. The component's own store is different: its `onMount()` / `onUnmount()` are called from the component through the lifecycle bridge (D6), and that is correct
 - [ ] Components must NOT trigger store data loading via `useEffect` (e.g., `useEffect(() => { store.load() }, [])`)
 - [ ] Parent store's `onUnmount()` / `dispose()` MUST call `childStore.dispose()` to prevent stale-state updates
 - [ ] Store `dispose()` MUST set `this.disposed = true` before canceling async work
 
 Flags:
-- Component `useEffect` calls `store.loadX()`, `store.init()`, or `store.onMount()` — **major**
+- Component `useEffect` calls `store.loadX()`, or a child store's `init()` / `onMount()` that the parent store owns — **major**. Do not flag the bridge `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])`
 - Parent store does not call `child.dispose()` in `onUnmount()` / `dispose()` — **major**
 - Missing `disposed` flag in store with async operations — **major**
 
@@ -468,7 +468,7 @@ const store = useLocalObservable(() => props.store ?? new ComponentStore(props.s
 
 #### D6. Store Lifecycle Bridge via useEffect
 
-When a project routes store lifecycle through `useEffect` as a documented pattern:
+The component tells its store that it mounted and unmounted; the store decides what that means:
 
 ```typescript
 useEffect(() => {
@@ -477,11 +477,11 @@ useEffect(() => {
 }, [store]);
 ```
 
-This IS the correct lifecycle bridge in projects that use this pattern — do NOT flag as an A3 violation. The A3 rule ("useEffect must not call store.init()") targets implicit data-loading, not explicit lifecycle hooks.
+This is the correct lifecycle bridge — do not flag it under A3 or B10. Those rules target a data fetch or business logic placed in the effect, and a component reaching into a child store the parent store owns; they do not target the lifecycle hooks themselves. What `onMount()` does (load, subscribe, initialise child stores) is store code and is reviewed as store code.
 
 Distinction:
 - `useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store])` — correct lifecycle bridge — **do not flag**
-- `useEffect(() => { store.loadData(); }, [])` — data trigger in component — **major** (A3 violation regardless of project conventions)
+- `useEffect(() => { store.loadData(); }, [])` or `useEffect(() => { store.childStore.init(); }, [])` — data trigger, or a child store's lifecycle the parent store owns, run from the component — **major** (A3 / B10, regardless of project conventions)
 
 #### D7. JSX and Naming Conventions
 

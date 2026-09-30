@@ -35,13 +35,13 @@ import { gdgraphCommand } from "./commands/gdgraph";
 import { wikiCommand } from "./commands/wiki";
 import { orientCommand } from "./commands/orient";
 import { syncCommand } from "./commands/sync";
-import { skillVerifySkillCommand, skillsCommand } from "./commands/skills";
+import { printSkillsHelpFor, skillVerifySkillCommand, skillsCommand } from "./commands/skills";
 import { healthCommand } from "./commands/health";
 import { testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { flowCommand, printFlowHelp } from "./commands/flow";
 import { jobCommand } from "./commands/job";
-import { reviewCommand } from "./commands/review";
+import { printReviewHelpFor, reviewCommand } from "./commands/review";
 import { rulesCommand } from "./commands/rules";
 import { standardCommand } from "./commands/standard";
 import { commandsCommand } from "./commands/commands";
@@ -537,6 +537,9 @@ const SAFE_SUBCOMMAND_HELP: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["skills", new Set(["doctor", "uninstall", "scout", "eval", "judge-check", "stocktake"])],
   // Not the whole `review` group: ingest/complete/comments reply write.
   // scope, tier, bot and metrics answer --help with usage before doing anything else.
+  // A subcommand does NOT need to be listed here to get its own help: every
+  // other one is intercepted and answered by `printReviewHelpFor` /
+  // `printSkillsHelpFor` (see RICH_GROUP_HELP), which never calls the route.
   ["review", new Set(["scope", "tier", "bot", "metrics"])],
   ["memory", new Set(["handoff"])],
   ["security", new Set(["audit-harness", "impact-evidence"])],
@@ -575,15 +578,31 @@ function isKnownSafeHelp(command: string, rest: readonly string[]): boolean {
  * exists to prevent. Calling the group's own top-level help FUNCTION directly
  * (its `!command`/`--help`/`-h` branch) gets the same single-source-of-truth
  * text without ever handing a subcommand its own `--help` token.
+ *
+ * Each entry receives the arguments AFTER the verb (flow 360, AC11), so a
+ * group can answer `keryx <group> <subcommand> --help` with that subcommand's
+ * own usage. It is still a PRINTER, never the route: `review` and `skills`
+ * look the subcommand up in a table of help functions their own module owns
+ * (`printReviewHelpFor`, `printSkillsHelpFor`) and fall back to the group help
+ * when it has none. That is what makes it safe for `review import`,
+ * `review comments reply` or `skills install` — the subcommand is named, not
+ * called — and why a new subcommand's help needs one entry in its own module's
+ * table and no edit here. The entries that ignore the arguments print the
+ * group help for every subcommand, as before.
  */
-const RICH_GROUP_HELP: ReadonlyMap<string, () => void> = new Map([
-  ["flow", printFlowHelp],
-  ["trigger", printTriggerHelp],
-  ["serve-mcp", printServeMcpHelp],
-  ["governance", printGovernanceHelp],
-  ["hooks", printHooksHelp],
-  ["bundle", printBundleHelp],
-  ["learn", printLearnHelp],
+const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = new Map<
+  string,
+  (rest: readonly string[]) => void
+>([
+  ["flow", () => printFlowHelp()],
+  ["trigger", () => printTriggerHelp()],
+  ["serve-mcp", () => printServeMcpHelp()],
+  ["governance", () => printGovernanceHelp()],
+  ["hooks", () => printHooksHelp()],
+  ["bundle", () => printBundleHelp()],
+  ["learn", () => printLearnHelp()],
+  ["review", printReviewHelpFor],
+  ["skills", printSkillsHelpFor],
 ]);
 
 /**
@@ -637,11 +656,15 @@ export function groupUsage(command: string, usage: string = USAGE_BODY): string 
  * when an operator types `keryx <command> --help`; every other verb falls
  * back to its `groupUsage` slice of `USAGE_BODY`, same as before this
  * extraction.
+ *
+ * `rest` is what followed the verb on the command line. It is passed to the
+ * rich help only, to choose WHICH help text is printed; no route is ever
+ * called with it. `keryx help <command>` passes none and gets the group help.
  */
-export async function printCommandHelp(command: string): Promise<void> {
+export async function printCommandHelp(command: string, rest: readonly string[] = []): Promise<void> {
   const richHelp = RICH_GROUP_HELP.get(command);
   if (richHelp) {
-    richHelp();
+    richHelp(rest);
     return;
   }
   if (DEEP_HELP_GROUPS.has(command)) {

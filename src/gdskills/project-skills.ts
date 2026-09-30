@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { pathExists, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
+import { assertWritableContained, writeContained } from "../lib/contained-write";
+import { pathExists, toPosix, withFileLock } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -85,6 +86,107 @@ type Evidence = {
 
 const VERSION = "0.1.0";
 
+// The on-disk format a project skill is written in — project-relative, posix.
+// Exported so `keryx skills remove` (remove-skill.ts) undoes exactly what is
+// written here instead of keeping its own copy of each literal.
+export const PROJECT_SKILLS_DIR = ".metaproject/project-skills";
+export const PROJECT_SKILLS_MANIFEST_PATH = ".metaproject/metaproject.json";
+export const PROJECT_SKILLS_CATALOG_PATH = ".metaproject/skills/catalog.md";
+/** Held by every writer of the three paths above. */
+export const PROJECT_SKILLS_LOCK_PATH = ".metaproject/data/gdskills/project-skills.lock";
+export const PROJECT_SKILLS_CATALOG_START = "<!-- gdskills:project-skills:start -->";
+export const PROJECT_SKILLS_CATALOG_END = "<!-- gdskills:project-skills:end -->";
+/** The one row the catalog section carries when the registry is empty. */
+export const PROJECT_SKILLS_CATALOG_EMPTY_ROW = "| _none_ | _none_ | _none_ | - |";
+export const PROJECT_SKILL_REPORTS_DIR = ".metaproject/data/gdskills/reports";
+export const PROJECT_SKILL_REPORT_SUFFIX = "-verification.json";
+
+/** The file name `keryx skills verify` gives a skill's report (verify.ts writes it under {@link PROJECT_SKILL_REPORTS_DIR}). */
+export function projectSkillReportFileName(moduleName: string, skillName: string): string {
+  return `${moduleName}-${skillName}${PROJECT_SKILL_REPORT_SUFFIX}`;
+}
+
+const METAPROJECT_PREFIX = ".metaproject/";
+
+/**
+ * One of the project-relative paths above, relative to `.metaproject/`
+ * instead — for a caller that holds the metaproject root rather than the
+ * project root (install.ts, `keryx skills status`).
+ */
+export function metaprojectRelative(projectRelative: string): string {
+  if (!projectRelative.startsWith(METAPROJECT_PREFIX)) {
+    throw new Error(`${projectRelative} is not under ${METAPROJECT_PREFIX}`);
+  }
+  return projectRelative.slice(METAPROJECT_PREFIX.length);
+}
+
+/** Project-relative, posix: the directory a project skill's package is written to. */
+export function projectSkillPackagePath(moduleName: string, skillName: string): string {
+  return `${PROJECT_SKILLS_DIR}/${moduleName}/${skillName}`;
+}
+
+/** How the registry, the catalog and `keryx skills` name one project skill: `<module>/<name>`. */
+export function projectSkillKey(entry: { module: string; name: string }): string {
+  return `${entry.module}/${entry.name}`;
+}
+
+/** One row of the catalog's Project Skills table, in its column order: Module, Skill, Target, Entry. */
+export function projectSkillCatalogRow(entry: Pick<ProjectSkillRegistryEntry, "module" | "name" | "target" | "path">): string {
+  return `| ${entry.module} | ${entry.name} | \`${entry.target}\` | ${entry.path}/SKILL.md |`;
+}
+
+const CATALOG_ROW_ENTRY_SUFFIX = "/SKILL.md";
+
+/**
+ * The inverse of {@link projectSkillCatalogRow}: the skill a catalog line is
+ * the row of, or undefined for any other line — the header, the separator, the
+ * empty-registry row, prose. A hand-edited target without its backticks is
+ * still read; a row whose Entry cell does not end in `/SKILL.md` is not a row.
+ */
+export function parseProjectSkillCatalogRow(
+  line: string,
+): Pick<ProjectSkillRegistryEntry, "module" | "name" | "target" | "path"> | undefined {
+  const trimmed = line.trim();
+  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) return undefined;
+  const cells = trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+  if (cells.length !== 4) return undefined;
+  const [moduleName = "", skillName = "", target = "", entry = ""] = cells;
+  if (moduleName === "" || skillName === "" || !entry.endsWith(CATALOG_ROW_ENTRY_SUFFIX)) return undefined;
+  return {
+    module: moduleName,
+    name: skillName,
+    target: /^`(.*)`$/.exec(target)?.[1] ?? target,
+    path: entry.slice(0, -CATALOG_ROW_ENTRY_SUFFIX.length),
+  };
+}
+
+/**
+ * Every project-relative file `createProjectSkill` writes for `moduleName/skillName`
+ * in `format`: the package's files, then the registry manifest and the catalog.
+ */
+export function projectSkillWritePaths(moduleName: string, skillName: string, format: ProjectSkillFormat): string[] {
+  const packagePath = projectSkillPackagePath(moduleName, skillName);
+  const files = format === "single"
+    ? ["SKILL.md", "skill-changelog.md"]
+    : ["SKILL.md", "skill-changelog.md", "references/context.md", "templates/README.md", "verification.md"];
+  return [...files.map((file) => `${packagePath}/${file}`), PROJECT_SKILLS_MANIFEST_PATH, PROJECT_SKILLS_CATALOG_PATH];
+}
+
+/**
+ * Refuse, before anything is written, a planned write that would leave the
+ * project through a symlink: each of `paths` (project-relative files), and
+ * the lock every writer of the registry takes.
+ *
+ * Throws the `ContainedWriteError` the write itself would throw, so a dry run
+ * and a real run refuse in the same words.
+ */
+export async function assertProjectWritesContained(projectRoot: string, paths: readonly string[]): Promise<void> {
+  await assertWritableContained(projectRoot, PROJECT_SKILLS_LOCK_PATH, "directory");
+  for (const rel of [...new Set(paths)]) {
+    await assertWritableContained(projectRoot, rel);
+  }
+}
+
 export async function createProjectSkill(
   projectRoot: string,
   options: CreateProjectSkillOptions,
@@ -112,11 +214,15 @@ export async function createProjectSkill(
     );
   }
 
-  const moduleName = slugify(options.module ?? inferModule(options.target));
-  const skillName = slugify(options.name ?? inferSkillName(options.target));
+  const moduleName = projectSkillSlug(options.module ?? inferModule(options.target));
+  const skillName = projectSkillSlug(options.name ?? inferSkillName(options.target));
   const format = options.format ?? "auto";
-  const packageRoot = path.join(metaprojectRoot, "project-skills", moduleName, skillName);
-  const relativeSkillPath = toPosix(path.relative(projectRoot, packageRoot));
+  const relativeSkillPath = projectSkillPackagePath(moduleName, skillName);
+  const packageRoot = path.join(projectRoot, relativeSkillPath);
+  // Every file below is written through writeContained; checked here first as
+  // well, so a symlink out of the project on the way to any one of them is
+  // refused before the first is written — and by a dry run too.
+  await assertProjectWritesContained(projectRoot, projectSkillWritePaths(moduleName, skillName, format));
   const origin = options.origin
     ? options.originContent !== undefined
       ? {
@@ -131,7 +237,7 @@ export async function createProjectSkill(
   const files = filesForPackage(packageRoot, format);
 
   if (!options.dryRun) {
-    await withFileLock(path.join(metaprojectRoot, "data", "gdskills", "project-skills.lock"), async () => {
+    await withFileLock(path.join(projectRoot, PROJECT_SKILLS_LOCK_PATH), async () => {
       await writeProjectSkillPackage({
         projectRoot,
         packageRoot,
@@ -291,34 +397,23 @@ async function writeProjectSkillPackage({
     throw new Error(`Project skill blocked by the security gate: ${output.reason}`);
   }
 
-  await mkdir(packageRoot, { recursive: true });
+  // Every write is contained to the project: writeContained creates the
+  // package's directories and refuses a symlink on the way that resolves out
+  // of the project (flow 360, G-001).
+  const packageRel = toPosix(path.relative(projectRoot, packageRoot));
+  const write = (file: string, content: string): Promise<void> =>
+    writeContained(projectRoot, `${packageRel}/${file}`, content);
 
-  const skillPath = path.join(packageRoot, "SKILL.md");
-  await writeFileAtomic(skillPath, output.content);
+  await write("SKILL.md", output.content);
 
-  const changelogPath = path.join(packageRoot, "skill-changelog.md");
-  if (!(await pathExists(changelogPath))) {
-    await writeFileAtomic(
-      changelogPath,
-      renderSkillChangelog({ moduleName, skillName, target }),
-    );
+  if (!(await pathExists(path.join(packageRoot, "skill-changelog.md")))) {
+    await write("skill-changelog.md", renderSkillChangelog({ moduleName, skillName, target }));
   }
 
   if (packageFormat === "package") {
-    await mkdir(path.join(packageRoot, "references"), { recursive: true });
-    await mkdir(path.join(packageRoot, "templates"), { recursive: true });
-    await writeFileAtomic(
-      path.join(packageRoot, "references", "context.md"),
-      renderReferenceContext({ moduleName, skillName, target, evidence }),
-    );
-    await writeFileAtomic(
-      path.join(packageRoot, "templates", "README.md"),
-      renderTemplatesReadme({ moduleName, skillName }),
-    );
-    await writeFileAtomic(
-      path.join(packageRoot, "verification.md"),
-      renderVerification({ moduleName, skillName, evidence }),
-    );
+    await write("references/context.md", renderReferenceContext({ moduleName, skillName, target, evidence }));
+    await write("templates/README.md", renderTemplatesReadme({ moduleName, skillName }));
+    await write("verification.md", renderVerification({ moduleName, skillName, evidence }));
   }
 }
 
@@ -680,7 +775,7 @@ async function updateManifest(
   projectRoot: string,
   entry: ProjectSkillRegistryEntry,
 ): Promise<void> {
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
   const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   manifest.modules ??= {};
   manifest.modules.gdskills ??= {};
@@ -689,43 +784,41 @@ async function updateManifest(
   const nextRegistry = [
     ...registry.filter((existing) => existing.path !== entry.path),
     entry,
-  ].sort((a, b) => `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`));
+  ].sort((a, b) => projectSkillKey(a).localeCompare(projectSkillKey(b)));
 
   manifest.modules.gdskills.projectSkillRegistry = nextRegistry;
-  await writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeContained(projectRoot, PROJECT_SKILLS_MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 async function updateSkillsCatalog(projectRoot: string): Promise<void> {
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
-  const catalogPath = path.join(projectRoot, ".metaproject", "skills", "catalog.md");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
+  const catalogPath = path.join(projectRoot, PROJECT_SKILLS_CATALOG_PATH);
   const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   const rows = registry.length > 0
-    ? registry
-        .map((entry) => `| ${entry.module} | ${entry.name} | \`${entry.target}\` | ${entry.path}/SKILL.md |`)
-        .join("\n")
-    : "| _none_ | _none_ | _none_ | - |";
-  const section = `<!-- gdskills:project-skills:start -->
+    ? registry.map(projectSkillCatalogRow).join("\n")
+    : PROJECT_SKILLS_CATALOG_EMPTY_ROW;
+  const section = `${PROJECT_SKILLS_CATALOG_START}
 ## Project Skills
 
 | Module | Skill | Target | Entry |
 |---|---|---|---|
 ${rows}
-<!-- gdskills:project-skills:end -->`;
+${PROJECT_SKILLS_CATALOG_END}`;
 
   const current = (await pathExists(catalogPath))
     ? await readFile(catalogPath, "utf8")
     : "# Metaproject Skills Catalog\n";
 
-  const start = "<!-- gdskills:project-skills:start -->";
-  const end = "<!-- gdskills:project-skills:end -->";
+  const start = PROJECT_SKILLS_CATALOG_START;
+  const end = PROJECT_SKILLS_CATALOG_END;
   const startIndex = current.indexOf(start);
   const endIndex = current.indexOf(end);
   const next = startIndex >= 0 && endIndex > startIndex
     ? `${current.slice(0, startIndex).trimEnd()}\n\n${section}\n${current.slice(endIndex + end.length).trimStart()}`
     : `${current.trimEnd()}\n\n${section}\n`;
 
-  await writeFileAtomic(catalogPath, next);
+  await writeContained(projectRoot, PROJECT_SKILLS_CATALOG_PATH, next);
 }
 
 function inferModule(target: string): string {
@@ -748,14 +841,30 @@ function inferSkillName(target: string): string {
   return base || "entity";
 }
 
-function slugify(value: string): string {
-  const slug = value
+/**
+ * The directory name a module or a package is written under. Exported so a
+ * caller that decides on a name before the write — `keryx skills import`'s
+ * bundled-name and already-exists guards — tests the name that gets written.
+ */
+export function projectSkillSlug(value: string): string {
+  return slugOf(value) || "entity";
+}
+
+/**
+ * Whether `value` has a slug of its own — at least one ASCII letter or digit.
+ * A name without one (`___`, `ревью`) gets {@link projectSkillSlug}'s fallback,
+ * a name nobody chose; `keryx skills import` refuses it instead (flow 360, G-012).
+ */
+export function hasProjectSkillSlug(value: string): boolean {
+  return slugOf(value) !== "";
+}
+
+function slugOf(value: string): string {
+  return value
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-
-  return slug || "entity";
 }
 
 function titleize(value: string): string {

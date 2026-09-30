@@ -1464,9 +1464,16 @@ const INSTALLED_PREFIXES: readonly [string, string][] = [
  * distill`, so its absence from the shipped tree is correct rather than broken.
  * Each entry names the command that produces it, because an allowance without a
  * producer is indistinguishable from a reference nobody checked.
+ *
+ * `rules/project/` is where `keryx skills import` puts a rule an overlay
+ * provides under a name keryx also ships (`PROJECT_RULES_DIR` in
+ * `rule-references.ts`). `reviewer-skill-creator` and `review-orchestrator`
+ * name it, mostly by quoting the command's own output; it exists only in a
+ * project that has imported such an overlay, never in the shipped tree.
  */
 export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string }[] = [
   { prefix: "rules/entrypoints/", producedBy: "keryx rules distill" },
+  { prefix: "rules/project/", producedBy: "keryx skills import" },
 ];
 
 /**
@@ -1661,7 +1668,7 @@ const SKILL_DOCUMENT_NAMES: ReadonlySet<string> = new Set(
 export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new Map([
   [
     "SKILL.detail.md",
-    "overflow reference linked from its skill's SKILL.md (`orchestration/feature-analyzer`, `review/review-orchestrator`); carries no frontmatter and is not addressed by any runtime",
+    "overflow reference linked from its skill's SKILL.md (`core/reviewer-skill-creator`, `orchestration/feature-analyzer`, `review/review-orchestrator`); carries no frontmatter and is not addressed by any runtime",
   ],
   [
     "orchestrator-prompt.md",

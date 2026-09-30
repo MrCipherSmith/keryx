@@ -1,5 +1,29 @@
 import { describe, expect, test } from "bun:test";
-import { parseBooleanFlags, optionValue } from "./args";
+import { parseBooleanFlags, optionValue, optionValues } from "./args";
+
+describe("optionValues collects a repeatable flag", () => {
+  test("every occurrence, in both spellings, in order", () => {
+    expect(optionValues(["--from", "x", "--only", "review-*", "--only=code-*", "--json"], "--only")).toEqual([
+      "review-*",
+      "code-*",
+    ]);
+    expect(optionValues(["--from", "x"], "--only")).toEqual([]);
+  });
+
+  test("an occurrence with no value is skipped, and does not swallow the next flag", () => {
+    expect(optionValues(["--only", "--json", "--only"], "--only")).toEqual([]);
+  });
+
+  test("an explicit empty value is kept, so a caller can refuse it instead of reading it as absence", () => {
+    // Filtered out, `--only ""` read as "no --only at all" and the selection it
+    // was meant to narrow was silently dropped.
+    expect(optionValues(["--only", "", "--only=", "--only", "a"], "--only")).toEqual(["", "", "a"]);
+  });
+
+  test("a longer flag sharing the prefix is not mistaken for this one", () => {
+    expect(optionValues(["--only-if=x", "--only-if", "y"], "--only")).toEqual([]);
+  });
+});
 
 test("parseBooleanFlags keeps positionals and maps help short flag", () => {
   const parsed = parseBooleanFlags(["build", "-h"], ["help"] as const);

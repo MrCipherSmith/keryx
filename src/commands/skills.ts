@@ -50,10 +50,22 @@ import {
 } from "../gdskills/sync";
 import {
   createProjectSkill,
+  metaprojectRelative,
   normalizeProjectSkillFormat,
+  PROJECT_SKILL_REPORTS_DIR,
+  PROJECT_SKILLS_CATALOG_PATH,
+  PROJECT_SKILLS_MANIFEST_PATH,
+  projectSkillKey,
+  projectSkillReportFileName,
   type ProjectSkillRegistryEntry,
 } from "../gdskills/project-skills";
-import { runSkillsImportCommand, runSkillsUpdateCommand } from "../gdskills/import-skills";
+import {
+  printSkillsImportHelp,
+  printSkillsUpdateHelp,
+  runSkillsImportCommand,
+  runSkillsUpdateCommand,
+} from "../gdskills/import-skills";
+import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
 import { verifyProjectSkill } from "../gdskills/verify";
 import {
   defaultBundledRoot,
@@ -166,6 +178,16 @@ export async function skillsCommand(args: string[]): Promise<void> {
   if (command === "update") {
     try {
       await runSkillsUpdateCommand(args);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (command === "remove") {
+    try {
+      await runSkillsRemoveCommand(args);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -702,14 +724,7 @@ async function inspectProjectSkill(args: string[]): Promise<void> {
   const skillMdPath = path.join(skillRoot, "SKILL.md");
   const verificationPath = path.join(skillRoot, "verification.md");
   const changelogPath = path.join(skillRoot, "skill-changelog.md");
-  const reportPath = path.join(
-    process.cwd(),
-    ".metaproject",
-    "data",
-    "gdskills",
-    "reports",
-    `${entry.module}-${entry.name}-verification.json`,
-  );
+  const reportPath = path.join(process.cwd(), PROJECT_SKILL_REPORTS_DIR, projectSkillReportFileName(entry.module, entry.name));
   const metadata = (await pathExists(skillMdPath))
     ? parseProjectSkillMetadata(await readFile(skillMdPath, "utf8"))
     : {};
@@ -748,7 +763,7 @@ async function inspectProjectSkill(args: string[]): Promise<void> {
 }
 
 async function readProjectSkillRegistryFromManifest(): Promise<ProjectSkillRegistryEntry[]> {
-  const manifestPath = path.join(process.cwd(), ".metaproject", "metaproject.json");
+  const manifestPath = path.join(process.cwd(), PROJECT_SKILLS_MANIFEST_PATH);
   if (!(await pathExists(manifestPath))) {
     return [];
   }
@@ -1397,7 +1412,7 @@ function verifyBundledSkills(args: string[]): void {
 }
 
 async function verifyAllProjectSkills(args: string[]): Promise<void> {
-  const manifestPath = path.join(process.cwd(), ".metaproject", "metaproject.json");
+  const manifestPath = path.join(process.cwd(), PROJECT_SKILLS_MANIFEST_PATH);
   if (!(await pathExists(manifestPath))) {
     console.error("Metaproject is not initialized. Run: keryx init");
     process.exitCode = 1;
@@ -1574,8 +1589,8 @@ async function printGdskillsStatus(args: string[]): Promise<void> {
 
 async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
   const root = path.join(process.cwd(), ".metaproject");
-  const manifestPath = path.join(root, "metaproject.json");
-  const catalogPath = path.join(root, "skills", "catalog.md");
+  const manifestPath = path.join(root, metaprojectRelative(PROJECT_SKILLS_MANIFEST_PATH));
+  const catalogPath = path.join(root, metaprojectRelative(PROJECT_SKILLS_CATALOG_PATH));
   const skillsRoot = path.join(root, "skills", "gdskills");
 
   if (!(await pathExists(root))) {
@@ -1616,8 +1631,8 @@ async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
     projectSkillRegistry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   }
 
-  const reports = await readVerificationReports(path.join(root, "data", "gdskills", "reports"));
-  const reportKeys = new Set(reports.map((report) => `${report.module}/${report.name}`));
+  const reports = await readVerificationReports(path.join(root, metaprojectRelative(PROJECT_SKILL_REPORTS_DIR)));
+  const reportKeys = new Set(reports.map(projectSkillKey));
   const proposals = await readProposalFiles(path.join(root, "data", "gdskills", "proposals"));
   const statusCounts = countVerificationStatuses(reports);
 
@@ -1630,7 +1645,7 @@ async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
     catalog: (await pathExists(catalogPath)) ? relativeToCwd(catalogPath) : "missing",
     projectSkills: {
       registered: projectSkillRegistry.length,
-      withoutVerificationReport: projectSkillRegistry.filter((entry) => !reportKeys.has(`${entry.module}/${entry.name}`)).length,
+      withoutVerificationReport: projectSkillRegistry.filter((entry) => !reportKeys.has(projectSkillKey(entry))).length,
     },
     verificationReports: {
       total: reports.length,
@@ -1728,6 +1743,41 @@ function relativeToCwd(filePath: string): string {
   return path.relative(process.cwd(), filePath) || ".";
 }
 
+/**
+ * The help a `keryx skills <subcommand> --help` question is answered with.
+ *
+ * A TABLE OF PRINTERS, not a route. `cli-registry.ts` intercepts `--help` in
+ * front of every skills subcommand it has not been told is safe (`install`
+ * writes files and does not look for `--help`), and asks
+ * {@link printSkillsHelpFor} for the text instead of running anything. So a
+ * subcommand's own help is reached by adding ONE entry here, next to its
+ * printer — no registry edit, and no way for the entry to execute the
+ * subcommand. A subcommand with no entry gets the group help.
+ */
+const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["doctor", printDoctorHelp],
+  ["uninstall", printUninstallHelp],
+  ["route", printRouteHelp],
+  ["inspect", printInspectHelp],
+  ["create", () => printCreateHelp("create")],
+  ["generate", () => printCreateHelp("generate")],
+  ["import", printSkillsImportHelp],
+  ["update", printSkillsUpdateHelp],
+  ["remove", printSkillsRemoveHelp],
+  ["verify", printVerifyHelp],
+  ["learn", printLearnHelp],
+  ["export", printExportHelp],
+  ["sync", printSyncHelp],
+  ["contracts", printContractsHelp],
+]);
+
+/** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
+export function printSkillsHelpFor(rest: readonly string[] = []): void {
+  const subcommand = rest[0];
+  const own = subcommand === undefined ? undefined : SKILLS_SUBCOMMAND_HELP.get(subcommand);
+  (own ?? printSkillsHelp)();
+}
+
 function printSkillsHelp(): void {
   console.log(`keryx skills
 
@@ -1746,7 +1796,9 @@ Usage:
   keryx skills create <target> --module <module> --name <skill-name>
   keryx skills generate <target> --module <module> --name <skill-name>
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
-  keryx skills update [<module>/<name>|--all] [--from <origin>]
+      [--only <glob>]... [--dry-run] [--force] [--json]
+  keryx skills update [<module>/<name>|--all] [--from <origin>] [--dry-run] [--json]
+  keryx skills remove <module>/<name> [--dry-run] [--json]
   keryx skills verify <skill-or-target>
   keryx skills verify --all
   keryx skills verify --bundled [--root <dir>] [--json]
@@ -1794,7 +1846,9 @@ Commands:
   generate  Alias for create
   import    Copy a SKILL.md or overlay tree into project-skills
   update    Re-read a project-skill Origin and overwrite SKILL.md
-  verify    Verify a project skill, or --bundled for the shipped skill tree
+  remove    Remove a project skill: package directory, registry entry, catalog row and
+            verification report. Bundled skills are refused (see uninstall).
+  verify   Verify a project skill, or --bundled for the shipped skill tree
   learn     Create or apply auditable learning proposals
   export    Export a canonical project skill to a runtime artifact
   sync      Sync exported runtime skills to an explicit target directory

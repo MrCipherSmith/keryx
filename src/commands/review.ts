@@ -30,7 +30,7 @@ import {
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown, type CollectReviewersDeps } from "../review/reviewers";
-import { runImportReviewers } from "../review/import-reviewers";
+import { printImportHelp, runImportReviewers } from "../review/import-reviewers";
 // flow 330/332/333: registration only. The command itself, and every helper
 // it needs, lives in `review-jev-rules.ts`/`review-jev-risk.ts`/
 // `review-jev-scenarios.ts`/`review-jev-docs.ts`/`review-jev-comments.ts` —
@@ -495,7 +495,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const IMPORT_FLAGS = ["--from", "--dry-run", "--force", "--json", "--help"] as const;
+const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--json", "--help"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.
@@ -1423,6 +1423,11 @@ export function dispatchModelBlock(decision: DispatchModelDecision): Record<stri
  * supported way to see what a reply pass would say before it says it.
  */
 async function runComments(args: string[]): Promise<void> {
+  // Before the dispatch: `reply` posts, and must never be reached by a question.
+  if (asksForHelp(args)) {
+    printCommentsHelp();
+    return;
+  }
   const sub = args[0];
   if (sub === "collect") {
     await runCommentsCollect(args.slice(1));
@@ -2632,6 +2637,10 @@ function requiredInteger(args: string[], name: string): number {
  *     Nothing was learned and the reason is visible.
  */
 async function runLearn(args: string[]): Promise<void> {
+  if (asksForHelp(args)) {
+    printLearnHelp();
+    return;
+  }
   rejectUnknownFlags(args, LEARN_FLAGS, "learn --pr <n> | --reviewer <id>");
   // R2-F7: parse the verb's own args ONCE with `parseLearnArgs` — the same
   // parser `--reviewer` mode already used below it — instead of re-deriving
@@ -3792,8 +3801,92 @@ the session model.
 `);
 }
 
+/** Is `--help`/`-h` among this subcommand's own arguments? */
+function asksForHelp(args: readonly string[]): boolean {
+  return args.includes("--help") || args.includes("-h");
+}
+
+/**
+ * One named paragraph of {@link reviewHelpText} — the `comments:` or `learn:`
+ * block — so a subcommand's own help and the group help cannot say different
+ * things about it. A section runs from its `name:` line to the next line that
+ * starts in column 0.
+ */
+function reviewHelpSection(name: string): string {
+  const lines = reviewHelpText().split("\n");
+  const start = lines.indexOf(`${name}:`);
+  if (start < 0) {
+    return "";
+  }
+  const body: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line)) {
+      break;
+    }
+    body.push(line);
+  }
+  return body.join("\n").trimEnd();
+}
+
+function printCommentsHelp(): void {
+  console.log(`keryx review comments
+
+Usage:
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --sha <head-sha> --final
+                              [--outcomes <file|->] [--result <file>] [--review <review-id>]
+                              [--round <n>] [--dry-run] [--self <login>]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                              [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]
+
+${reviewHelpSection("comments")}
+`);
+}
+
+function printLearnHelp(): void {
+  console.log(`keryx review learn
+
+Usage:
+  keryx review learn --pr <n> [--dry-run] [--json]
+  keryx review learn --reviewer <id> [--dry-run] [--json]
+
+${reviewHelpSection("learn")}
+`);
+}
+
+/**
+ * The help a `keryx review <subcommand> --help` question is answered with.
+ *
+ * A TABLE OF PRINTERS, not a route: `cli-registry.ts` keeps intercepting
+ * `--help` in front of every review subcommand (most of them — `ingest`,
+ * `complete`, `comments reply`, `lightweight` — do not look for `--help` and
+ * would simply run), and asks {@link printReviewHelpFor} for the text instead.
+ * Nothing in here can execute a subcommand, so an entry is safe to add for any
+ * subcommand, mutating or not; a subcommand with no entry gets the group help.
+ */
+const REVIEW_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["scope", printScopeHelp],
+  ["tier", printTierHelp],
+  ["comments", printCommentsHelp],
+  ["learn", printLearnHelp],
+  ["import", printImportHelp],
+]);
+
+/** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
+export function printReviewHelpFor(rest: readonly string[] = []): void {
+  const subcommand = rest[0];
+  const own = subcommand === undefined ? undefined : REVIEW_SUBCOMMAND_HELP.get(subcommand);
+  (own ?? printHelp)();
+}
+
 function printHelp(): void {
-  console.log(`keryx review
+  console.log(reviewHelpText());
+}
+
+function reviewHelpText(): string {
+  return `keryx review
 
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
@@ -3892,6 +3985,19 @@ Usage:
                           and verifier queue order (one noul per finding, lowest
                           plausibility first). Never drops or demotes a finding. Opt-in
                           via review.jev.triage in .metaproject/tasks.config.json.
+  keryx review jev-select (--diff <file|-> | --ref <base>) [--reviewers <file|->]
+                          [--skip-below <0..1>] [--max-calls <n>]
+                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>]
+                          [--json] [--out <path>]
+                          Advisory reviewer SELECTION: which reviewers a diff is
+                          worth dispatching. Opt-in, fail-open.
+  keryx review jev-profile [show] [--apply recommended|show] [--json]
+                           The recommended profile for every review.jev.* key.
+  keryx review jev-edit-guard --hook claude [--fixtures <dir>]
+  keryx review jev-edit-guard install | uninstall | status [--json]
+                              The Jev edit guard, a Claude Code PostToolUse hook:
+                              install/uninstall it merge-safely, or show today's
+                              calls, flags and cost.
   keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
                        [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
   keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
@@ -3906,7 +4012,7 @@ Usage:
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review reviewers [--json]
-  keryx review import --from <dir> [--dry-run] [--force] [--json]
+  keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
@@ -4178,5 +4284,5 @@ stack:
   none of its declared tags. \`review-orchestrator\` calls this before dispatch
   and records the exclusions with their reasons; a reviewer silently absent from
   a report would read as having had nothing to say.
-`);
+`;
 }

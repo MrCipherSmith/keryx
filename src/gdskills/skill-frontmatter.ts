@@ -1,39 +1,308 @@
 /**
- * The one parse of a `SKILL.md`'s routing frontmatter.
+ * The one reader of a `SKILL.md`'s frontmatter.
  *
- * Two callers read these fields for two different reasons, and they must not
- * drift: `metaproject-adapter` SERVES them to an agent through `skills_catalog`,
- * and `bundled-eval` VALIDATES them before the tree ships. When each owned its
- * own parse they did drift — the validator checked that a `description:` line
- * existed, the runtime read only that line's text, and 15 bundled skills whose
- * description was a YAML block scalar shipped with the catalog serving the bare
- * indicator "|". The sweep reported `frontmatter:description: pass` the whole
- * time. A validator that cannot see what the runtime sees is not a validator,
- * so both now call this.
+ * The catalog, the bundled-tree validator, the importer, the review inventory,
+ * `review jev-rules` and the stack gate read their frontmatter fields through
+ * this module. Two readers still parse for themselves and are not covered by
+ * what follows: `parseSkillModelTier` (`model-tier.ts`) and `frontmatterKeys`
+ * (`bundled-eval.ts`). When each consumer owned its own parse they drifted, and
+ * every fix to one parse left the others on the old behaviour:
  *
- * Lives in `gdskills` because that is the lower layer: `harness` imports from
- * here, not the other way round.
+ * - the validator checked that a `description:` line existed while the runtime
+ *   read only that line's text, and 15 bundled skills whose description was a
+ *   YAML block scalar shipped with the catalog serving the bare indicator "|";
+ * - a CRLF or BOM file had "no frontmatter" in some readers and not others, so
+ *   `metadata.category: quality` was lost and the package landed in `review`;
+ * - a trailing `# comment` became flags and path triggers in one reader;
+ * - `metadata.paths` as a block list gated a reviewer in the inventory and was
+ *   ignored by `review jev-rules`.
+ *
+ * It is deliberately a reader for the YAML subset these files use, not a YAML
+ * implementation (the package has no runtime dependencies by policy):
+ *
+ * - the block opens with a `---` line at the very start of the file (a leading
+ *   BOM is ignored) and closes at the next `---` line, either fence allowing
+ *   trailing whitespace; `\r\n` reads as `\n`;
+ * - top-level `key: value` pairs, and one level of nested mapping under a key
+ *   with no value — `metadata:` is the one consumers ask about. A key may be
+ *   quoted (`"name": x` is `name`); it ends at a `:` followed by whitespace or
+ *   the line end, so `a:b` is not a key, and a `- ` line is never one. Only
+ *   keys at the mapping's own indentation are its fields; deeper keys belong to
+ *   a nested mapping and are never read as the parent's, and a line left of it
+ *   is not a field either. A tab counts as one column of indentation (YAML
+ *   forbids tabs there; this reader is lenient);
+ * - a value is a plain or quoted scalar (one layer of matching quotes removed —
+ *   a lone or mismatched quote stays — and no escape processing: `\"` and `''`
+ *   keep the quote open but are kept as written), a flow list `[a, "b"]`, a
+ *   block list of `- item` lines, or a block scalar `|` / `>` folded to one
+ *   line. A block list ends at the first line under its key that is not an
+ *   item; an empty `-` item is skipped, and a flow list or mapping as an item
+ *   makes the whole list unsupported. Empty items of a flow list are dropped;
+ * - a list-valued read also splits a scalar on commas outside quotes
+ *   (`paths: 'a,b', c` is two entries); a quote opens only at the start of an
+ *   entry;
+ * - a `#` that starts the value or follows whitespace, outside quotes, starts a
+ *   comment and is dropped (`paths: # none` is an empty scalar) — except inside
+ *   a block scalar, where it is text; a `#` line at or left of the block
+ *   scalar's key is still a comment. A quote opens a quoted scalar only at the
+ *   start of a token, so `it's # c` reads `it's`;
+ * - the first occurrence of a duplicated key wins.
+ *
+ * Anything else — flow mappings, nested flow lists, anchors, aliases, tags,
+ * multi-line quoted scalars — reads as "unsupported" and yields nothing rather
+ * than a guess.
+ *
+ * Lives in `gdskills` because that is the lower layer: `review`, `harness` and
+ * `commands` import from here, never the other way round.
  */
 
-/** Strip a single layer of matching `"`/`'` quotes, if present. */
-function stripSkillFieldQuotes(value: string): string {
-  if (value.length >= 2) {
-    const first = value[0];
-    const last = value[value.length - 1];
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-      return value.slice(1, -1);
-    }
-  }
-  return value;
+/** A frontmatter value in the supported subset. */
+export type FrontmatterValue =
+  /** A scalar on the key's own line: comment dropped, quotes removed. `""` when the key has no value. */
+  | { readonly kind: "scalar"; readonly text: string }
+  /** A flow list or a block list, items unquoted and empty items dropped. */
+  | { readonly kind: "list"; readonly items: readonly string[] }
+  /** A `|` / `>` block scalar, its lines trimmed and folded to one line. */
+  | { readonly kind: "block"; readonly text: string }
+  /** A nested block mapping: only the keys at its own indentation. */
+  | { readonly kind: "mapping"; readonly fields: FrontmatterFields }
+  /** A shape outside the subset. Consumers read it as "not declared". */
+  | { readonly kind: "unsupported" };
+
+export type FrontmatterFields = ReadonlyMap<string, FrontmatterValue>;
+
+/** Where a field sits: at the frontmatter's top level, or directly under `metadata:`. */
+export type FrontmatterScope = "top" | "metadata";
+
+/**
+ * The lines between the opening and closing `---` fences, without their line
+ * endings — or `undefined` when the file does not open with a fence, or the
+ * fence is never closed.
+ */
+export function frontmatterLines(content: string): string[] | undefined {
+  const text = content.startsWith("\uFEFF") ? content.slice(1) : content;
+  const lines = text.split(/\r?\n/);
+  if (lines[0]?.trimEnd() !== "---") return undefined;
+  const close = lines.findIndex((line, index) => index > 0 && line.trimEnd() === "---");
+  return close === -1 ? undefined : lines.slice(1, close);
 }
 
-/** What a `SKILL.md`'s frontmatter declares for routing. Both fields optional. */
+/** The top-level fields of the frontmatter, or `undefined` when there is none. */
+export function readFrontmatter(content: string): FrontmatterFields | undefined {
+  const lines = frontmatterLines(content);
+  return lines === undefined ? undefined : readMapping(lines, 0);
+}
+
+/** One field, top-level or directly under `metadata:`. */
+export function frontmatterField(content: string, key: string, scope: FrontmatterScope = "top"): FrontmatterValue | undefined {
+  const top = readFrontmatter(content);
+  if (top === undefined) return undefined;
+  if (scope === "top") return top.get(key);
+  const metadata = top.get("metadata");
+  return metadata?.kind === "mapping" ? metadata.fields.get(key) : undefined;
+}
+
+/**
+ * A field's text when it is a scalar or a block scalar; `undefined` when it is
+ * absent, a list, a mapping or unsupported. A key with no value reads as `""`.
+ */
+export function frontmatterScalar(content: string, key: string, scope: FrontmatterScope = "top"): string | undefined {
+  return scalarText(frontmatterField(content, key, scope));
+}
+
+/**
+ * The entries of a list-valued field: a flow list, a block list, or a
+ * comma-separated scalar (`paths: "a, b"`), each entry trimmed and unquoted.
+ * Every other shape — and an absent field — is `[]`.
+ */
+export function frontmatterList(content: string, key: string, scope: FrontmatterScope = "top"): string[] {
+  return listItems(frontmatterField(content, key, scope));
+}
+
+/** {@link frontmatterList} under `metadata:`. */
+export function metadataList(content: string, key: string): string[] {
+  return frontmatterList(content, key, "metadata");
+}
+
+function scalarText(value: FrontmatterValue | undefined): string | undefined {
+  return value?.kind === "scalar" || value?.kind === "block" ? value.text : undefined;
+}
+
+function listItems(value: FrontmatterValue | undefined): string[] {
+  if (value?.kind === "list") return [...value.items];
+  if (value?.kind === "scalar") return splitOutsideQuotes(value.text).map(unquote).filter(Boolean);
+  return [];
+}
+
+// ---------------------------------------------------------------------------
+// The reader.
+// ---------------------------------------------------------------------------
+
+const KEY_LINE = /^("[^"]*"|'[^']*'|[^\s#"'\-[\]{},:][^:]*?):(?:[ \t]+(.*))?$/;
+const LIST_ITEM = /^-(?:[ \t]+(.*))?$/;
+const BLOCK_SCALAR = /^[|>][-+]?[0-9]?$/;
+
+function indentOf(line: string): number {
+  return /^[ \t]*/.exec(line)?.[0].length ?? 0;
+}
+
+/** Blank, or nothing but a comment. */
+function isFiller(line: string): boolean {
+  const trimmed = line.trim();
+  return trimmed === "" || trimmed.startsWith("#");
+}
+
+/**
+ * The block mapping whose keys sit at `indent`. A line at any other
+ * indentation that is not inside a key's value is outside the subset and
+ * skipped, never read as a key of this mapping.
+ */
+function readMapping(lines: readonly string[], indent: number): Map<string, FrontmatterValue> {
+  const fields = new Map<string, FrontmatterValue>();
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] as string;
+    index += 1;
+    if (isFiller(line) || indentOf(line) !== indent) continue;
+    const match = KEY_LINE.exec(line.slice(indent));
+    if (match === null) continue;
+    // The key's value runs over the lines indented under it, and over `- item`
+    // lines at its own indentation (YAML allows a list there).
+    const start = index;
+    while (index < lines.length) {
+      const next = lines[index] as string;
+      const nextIndent = indentOf(next);
+      if (isFiller(next) || nextIndent > indent || (nextIndent === indent && LIST_ITEM.test(next.slice(nextIndent)))) {
+        index += 1;
+      } else {
+        break;
+      }
+    }
+    const key = unquote(match[1] as string);
+    if (!fields.has(key)) fields.set(key, readValue(match[2] ?? "", lines.slice(start, index), indent));
+  }
+  return fields;
+}
+
+function readValue(rest: string, children: readonly string[], keyIndent: number): FrontmatterValue {
+  const text = stripTrailingComment(rest);
+  if (BLOCK_SCALAR.test(text)) {
+    // A line at or left of the key's indentation inside the run is a comment line.
+    const body = children.filter((line) => line.trim() === "" || indentOf(line) > keyIndent);
+    return { kind: "block", text: body.map((line) => line.trim()).join(" ").replace(/\s+/g, " ").trim() };
+  }
+  if (text.startsWith("[")) return readFlowList(text);
+  if (text.startsWith("{") || text.startsWith("&") || text.startsWith("*") || text.startsWith("!")) {
+    return { kind: "unsupported" };
+  }
+  if (text !== "") return { kind: "scalar", text: unquote(text) };
+  const first = children.find((line) => !isFiller(line));
+  if (first === undefined) return { kind: "scalar", text: "" };
+  const firstIndent = indentOf(first);
+  if (LIST_ITEM.test(first.slice(firstIndent))) return readBlockList(children, keyIndent);
+  // A multi-line plain scalar starting on the next line is outside the subset.
+  if (!KEY_LINE.test(first.slice(firstIndent))) return { kind: "unsupported" };
+  return { kind: "mapping", fields: readMapping(children, firstIndent) };
+}
+
+/**
+ * `- item` lines at or right of the key's indentation. The list ends at the
+ * first line that is not one; an empty `-` item is skipped, not an end.
+ */
+function readBlockList(children: readonly string[], keyIndent: number): FrontmatterValue {
+  const items: string[] = [];
+  for (const line of children) {
+    if (isFiller(line)) continue;
+    const lineIndent = indentOf(line);
+    const item = lineIndent >= keyIndent ? LIST_ITEM.exec(line.slice(lineIndent)) : null;
+    if (item === null) break;
+    const text = stripTrailingComment(item[1] ?? "");
+    if (text.startsWith("[") || text.startsWith("{")) return { kind: "unsupported" };
+    const entry = unquote(text);
+    if (entry !== "") items.push(entry);
+  }
+  return { kind: "list", items };
+}
+
+function readFlowList(text: string): FrontmatterValue {
+  if (!text.endsWith("]")) return { kind: "unsupported" };
+  const inner = text.slice(1, -1);
+  const entries = splitOutsideQuotes(inner);
+  if (entries.some((entry) => /^[[{]/.test(entry.trim()))) return { kind: "unsupported" };
+  return { kind: "list", items: entries.map(unquote).filter(Boolean) };
+}
+
+/** Is `index` the start of a token — the value's start, or right after whitespace or flow punctuation? */
+function atTokenStart(text: string, index: number): boolean {
+  return index === 0 || /[\s[{,]/.test(text[index - 1] as string);
+}
+
+/**
+ * The value without a trailing YAML comment. A `#` starts a comment when it
+ * opens the value or follows whitespace, outside a quoted scalar; a quote only
+ * opens a quoted scalar at the start of a token (`it's` is plain text).
+ */
+export function stripTrailingComment(value: string): string {
+  let quote: string | undefined;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index] as string;
+    if (quote !== undefined) {
+      if (quote === '"' && char === "\\") index += 1;
+      else if (char === quote) {
+        if (quote === "'" && value[index + 1] === "'") index += 1;
+        else quote = undefined;
+      }
+      continue;
+    }
+    if ((char === '"' || char === "'") && atTokenStart(value, index)) quote = char;
+    else if (char === "#" && (index === 0 || /\s/.test(value[index - 1] as string))) return value.slice(0, index).trim();
+  }
+  return value.trim();
+}
+
+/** Split on commas that are outside quoted scalars. */
+function splitOutsideQuotes(text: string): string[] {
+  const parts: string[] = [];
+  let quote: string | undefined;
+  let current = "";
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index] as string;
+    if (quote !== undefined) {
+      if (char === quote) quote = undefined;
+    } else if ((char === '"' || char === "'") && current.trim() === "") {
+      quote = char;
+    } else if (char === ",") {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  parts.push(current);
+  return parts;
+}
+
+/** Trimmed, with one layer of matching `"` / `'` quotes removed. */
+function unquote(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    if ((first === '"' || first === "'") && trimmed.endsWith(first)) return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// The routing projection the catalog and the bundled-tree validator share.
+// ---------------------------------------------------------------------------
+
+/** What a `SKILL.md`'s frontmatter declares for routing. Every field optional. */
 export interface SkillFrontmatter {
   /** The top-level `name:` scalar, when declared. */
   readonly name?: string;
   /** The routing text, block scalars folded to one line. */
   readonly description?: string;
-  /** The `triggers:` list, in declaration order. */
+  /** The `triggers:` list, in declaration order. Only a flow or block list; a scalar is not split. */
   readonly triggers?: string[];
   /** `metadata.category`, whatever shape it was declared in. */
   readonly metadataCategory?: string;
@@ -57,164 +326,34 @@ export interface SkillFrontmatter {
   readonly compatibleHarnesses?: string[];
 }
 
-/** Split a comma-separated scalar (already unquoted) into trimmed, non-empty names. */
-function splitHarnessScalar(value: string): string[] {
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+/** A metadata scalar that is declared with a value; `""` reads as not declared. */
+function nonEmpty(value: string | undefined): string | undefined {
+  return value === undefined || value === "" ? undefined : value;
 }
 
 /**
- * `compatible_harnesses`'s value on the SAME line as its key, in either of
- * the two single-line shapes it may take: a flow list (`[a, b]`) or a
- * (usually quoted) comma-separated scalar. `undefined` when `value` is empty
- * — the caller is left to decide that means "look for a block list next".
- */
-function parseInlineHarnesses(value: string): string[] | undefined {
-  if (value.length === 0) return undefined;
-  const flowList = /^\[(.*)\]$/.exec(value);
-  if (flowList !== null) {
-    return splitHarnessScalar((flowList[1] ?? "").replace(/["']/g, ""));
-  }
-  return splitHarnessScalar(stripSkillFieldQuotes(value));
-}
-
-/**
- * Forgiving frontmatter parse for a SKILL.md's routing and metadata fields.
- * Never throws: a malformed or absent frontmatter block yields `{}`, degrading
- * that one catalog entry rather than failing the whole `skillsCatalog` call.
- *
- * `description` takes either a plain scalar or a YAML block scalar (`|`/`>`,
- * with an optional `-`/`+` chomping indicator) whose text sits on the following
- * indented lines. `metadata.category` and `metadata.compatible_harnesses` are
- * read from inside the `metadata:` mapping, wherever it opens.
+ * Forgiving projection of a SKILL.md's routing and metadata fields. Never
+ * throws: a malformed or absent frontmatter block yields `{}`, degrading that
+ * one catalog entry rather than failing the whole `skillsCatalog` call.
  */
 export function parseSkillFrontmatter(content: string): SkillFrontmatter {
-  if (!content.startsWith("---")) {
-    return {};
-  }
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) {
-    return {};
-  }
-  const lines = content.slice(3, end).split("\n");
-  let name: string | undefined;
-  let description: string | undefined;
-  const triggers: string[] = [];
-  let inTriggers = false;
-  let inMetadata = false;
-  let metadataCategory: string | undefined;
-  let metadataVersion: string | undefined;
-  let metadataOrigin: string | undefined;
-  let compatibleHarnesses: string[] | undefined;
-  /** True on the line right after an empty `compatible_harnesses:`, looking for a block list next. */
-  let awaitingHarnessesList = false;
-  /** Collected lines of an open block scalar, or `null` when none is open. */
-  let descriptionBlock: string[] | null = null;
+  const top = readFrontmatter(content);
+  if (top === undefined) return {};
+  const metadataValue = top.get("metadata");
+  const metadata: FrontmatterFields = metadataValue?.kind === "mapping" ? metadataValue.fields : new Map();
 
-  /** Join a block scalar's lines into one line, the shape a catalog row wants. */
-  const foldBlock = (block: string[]): string => block.join(" ").replace(/\s+/g, " ").trim();
-
-  for (const line of lines) {
-    if (descriptionBlock !== null) {
-      // The block runs until the first line that is neither blank nor indented.
-      if (line.trim() === "" || /^\s/.test(line)) {
-        descriptionBlock.push(line.trim());
-        continue;
-      }
-      description = foldBlock(descriptionBlock);
-      descriptionBlock = null;
-    }
-    const nameMatch = /^name:\s*(.*)$/.exec(line);
-    if (nameMatch !== null && nameMatch[1] !== undefined) {
-      name = stripSkillFieldQuotes(nameMatch[1].trim());
-      inTriggers = false;
-      inMetadata = false;
-      awaitingHarnessesList = false;
-      continue;
-    }
-    const descMatch = /^description:\s*(.*)$/.exec(line);
-    if (descMatch !== null && descMatch[1] !== undefined) {
-      const value = descMatch[1].trim();
-      if (/^[|>][-+]?$/.test(value)) {
-        descriptionBlock = [];
-      } else {
-        description = stripSkillFieldQuotes(value);
-      }
-      inTriggers = false;
-      inMetadata = false;
-      awaitingHarnessesList = false;
-      continue;
-    }
-    if (/^triggers:\s*$/.test(line)) {
-      inTriggers = true;
-      inMetadata = false;
-      awaitingHarnessesList = false;
-      continue;
-    }
-    if (inTriggers) {
-      const itemMatch = /^\s+-\s*(.+)$/.exec(line);
-      if (itemMatch !== null && itemMatch[1] !== undefined) {
-        triggers.push(stripSkillFieldQuotes(itemMatch[1].trim()));
-        continue;
-      }
-      inTriggers = false;
-    }
-    // A block list continuing from an empty `compatible_harnesses:` line,
-    // checked ahead of the top-level-key test below so a `- name` item (no
-    // colon of its own) is not mistaken for the mapping having ended.
-    if (awaitingHarnessesList) {
-      const itemMatch = /^\s+-\s*(.+)$/.exec(line);
-      if (itemMatch !== null && itemMatch[1] !== undefined) {
-        (compatibleHarnesses ??= []).push(stripSkillFieldQuotes(itemMatch[1].trim()));
-        continue;
-      }
-      awaitingHarnessesList = false;
-    }
-    if (/^metadata:\s*$/.test(line)) {
-      inMetadata = true;
-      continue;
-    }
-    if (inMetadata) {
-      // The mapping ends at the first line that is not indented under it —
-      // a blank line does not end it (YAML permits blank lines inside a
-      // block mapping), but a new top-level key or the body starting does.
-      if (line.trim() !== "" && !/^\s/.test(line)) {
-        inMetadata = false;
-      } else {
-        const categoryMatch = /^\s+category:\s*(.+)$/.exec(line);
-        if (categoryMatch !== null && categoryMatch[1] !== undefined) {
-          metadataCategory = stripSkillFieldQuotes(categoryMatch[1].trim());
-          continue;
-        }
-        const versionMatch = /^\s+version:\s*(.+)$/.exec(line);
-        if (versionMatch !== null && versionMatch[1] !== undefined) {
-          metadataVersion = stripSkillFieldQuotes(versionMatch[1].trim());
-          continue;
-        }
-        const originMatch = /^\s+origin:\s*(.+)$/.exec(line);
-        if (originMatch !== null && originMatch[1] !== undefined) {
-          metadataOrigin = stripSkillFieldQuotes(originMatch[1].trim());
-          continue;
-        }
-        const harnessesMatch = /^\s+compatible_harnesses:\s*(.*)$/.exec(line);
-        if (harnessesMatch !== null) {
-          const inline = parseInlineHarnesses((harnessesMatch[1] ?? "").trim());
-          if (inline !== undefined) {
-            compatibleHarnesses = inline;
-          } else {
-            // Empty value on this line: a block list may follow, one `- name` per line.
-            awaitingHarnessesList = true;
-          }
-          continue;
-        }
-      }
-    }
-  }
-  if (descriptionBlock !== null) {
-    description = foldBlock(descriptionBlock);
-  }
+  const name = scalarText(top.get("name"));
+  const description = scalarText(top.get("description"));
+  const triggersValue = top.get("triggers");
+  const triggers = triggersValue?.kind === "list" ? [...triggersValue.items] : [];
+  const metadataCategory = nonEmpty(scalarText(metadata.get("category")));
+  const metadataVersion = nonEmpty(scalarText(metadata.get("version")));
+  const metadataOrigin = nonEmpty(scalarText(metadata.get("origin")));
+  const harnessesValue = metadata.get("compatible_harnesses");
+  const compatibleHarnesses =
+    harnessesValue?.kind === "list" || (harnessesValue?.kind === "scalar" && harnessesValue.text !== "")
+      ? listItems(harnessesValue)
+      : undefined;
   return {
     ...(name !== undefined ? { name } : {}),
     ...(description !== undefined ? { description } : {}),

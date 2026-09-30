@@ -211,11 +211,21 @@ if (executor?.id !== this.executorId) {
 
 ## Lifecycle Initialization
 
-- `init()` / `onMount()` is called by the **parent store**, not from component `useEffect`.
-- Components should **not** trigger store data loading via `useEffect`. Parent store orchestrates child store lifecycle.
+- A component tells its own store that it mounted and unmounted through the lifecycle bridge below. Calling `store.onMount()` / `store.onUnmount()` from that `useEffect` is correct: the component reports an event, the store decides what it means.
+- A **child** store's `init()` / `onMount()` is called by the **parent store**, not from a component `useEffect`. Parent store orchestrates child store lifecycle.
+- Components should **not** trigger data loading or run business logic in a `useEffect` (`store.loadX()`, a child store's `init()`). That work belongs inside the store's `onMount()`.
 - `dispose()` is called by the parent store in its `onUnmount()` to prevent stale-state updates.
 
 ```typescript
+// Component — the lifecycle bridge
+useEffect(() => {
+  store.onMount();
+  return () => store.onUnmount();
+}, [store]);
+```
+
+```typescript
+// Store — what mounting means
 @action.bound
 onMount() {
   void this.variablesStore.init();

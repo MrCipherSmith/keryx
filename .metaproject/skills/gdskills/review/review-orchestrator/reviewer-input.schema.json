@@ -17,6 +17,13 @@
     "reviewer": {
       "type": "string"
     },
+    "skill_path": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Absolute path of the reviewer's registered `<path>/SKILL.md`, set for every reviewer from the `project` half of `keryx review reviewers --json` and omitted for a bundled one. The file is the reviewer's definition: it overrides the built-in definition of a same-named agent type, whichever runtime branch dispatches it. A path that does not exist makes the reviewer BLOCKED, never substituted. Optional, and like the rest of this schema it is read by the dispatching agent — no keryx command validates a dispatch against it."
+    },
     "scope_mode": {
       "type": "string",
       "enum": [

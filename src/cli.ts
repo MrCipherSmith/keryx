@@ -153,7 +153,9 @@ export async function main(): Promise<void> {
       // dropped `flow owner`/`flow ac`/half of `flow`'s subcommands and every
       // `trigger` subcommand but `run` — this is the fix for that class of
       // drift, applied without touching the "ask, don't do" guard above.
-      await printCommandHelp(command);
+      // The arguments go along so a group can print the NAMED subcommand's
+      // own usage (flow 360, AC11) — to a help printer, never to `route`.
+      await printCommandHelp(command, args.slice(1));
       return;
     }
     // Flow 353 review round 1 (blocker L1): the SAME one-line "unknown

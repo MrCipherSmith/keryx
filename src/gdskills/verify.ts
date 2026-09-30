@@ -4,7 +4,13 @@ import { pathExists, toPosix } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { relevantAcceptedMemory } from "../memory/relevant";
 import { wikiValidate } from "../wiki/service";
-import type { ProjectSkillRegistryEntry } from "./project-skills";
+import {
+  PROJECT_SKILL_REPORTS_DIR,
+  PROJECT_SKILLS_DIR,
+  PROJECT_SKILLS_MANIFEST_PATH,
+  projectSkillReportFileName,
+  type ProjectSkillRegistryEntry,
+} from "./project-skills";
 import { resolveProjectSkill } from "./resolve";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 
@@ -85,13 +91,7 @@ export async function verifyProjectSkill(
   });
   const status = classifyStatus(signals, metadata);
   const recommendations = recommendationsFor(signals, status);
-  const reportPath = path.join(
-    metaprojectRoot,
-    "data",
-    "gdskills",
-    "reports",
-    `${moduleName}-${skillName}-verification.json`,
-  );
+  const reportPath = path.join(projectRoot, PROJECT_SKILL_REPORTS_DIR, projectSkillReportFileName(moduleName, skillName));
   const relativeReportPath = toPosix(path.relative(projectRoot, reportPath));
   const report: ProjectSkillVerificationReport = {
     schemaVersion: 1,
@@ -118,7 +118,7 @@ export async function verifyProjectSkill(
 }
 
 async function readManifest(projectRoot: string): Promise<MetaprojectManifest> {
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
   if (!(await pathExists(manifestPath))) {
     return {};
   }
@@ -181,7 +181,7 @@ async function collectVerificationSignals({
     name: "registry",
     status: registryEntry ? "pass" : "warn",
     message: registryEntry ? "Skill is registered in metaproject manifest." : "Skill package is not registered in metaproject manifest.",
-    path: ".metaproject/metaproject.json",
+    path: PROJECT_SKILLS_MANIFEST_PATH,
   });
 
   const targetPath = path.resolve(projectRoot, target);
@@ -427,7 +427,7 @@ function updateLastVerified(skillMd: string, verifiedAt: string): string {
 
 function inferModuleFromPath(packageRoot: string): string {
   const parts = toPosix(packageRoot).split("/");
-  const index = parts.indexOf("project-skills");
+  const index = parts.indexOf(path.posix.basename(PROJECT_SKILLS_DIR));
   const next = parts[index + 1];
   return index >= 0 && next ? next : "general";
 }

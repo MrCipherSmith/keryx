@@ -1,10 +1,43 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath, packageRelativePath } from "../gdskills/catalog";
-import { hashOriginContent, resolveOriginPath } from "../gdskills/project-skills";
-import { unresolvedRuleReferences } from "../gdskills/rule-references";
+import { hashOriginContent, PROJECT_SKILLS_DIR, resolveOriginPath } from "../gdskills/project-skills";
+import {
+  familyFlagsByReviewer,
+  PROJECT_REVIEWER_MODULE,
+  projectReviewersRoot,
+  skillPackageNames,
+} from "../gdskills/project-reviewers";
+import {
+  shadowedRuleReferences,
+  unresolvedReferences,
+  unresolvedRuleReferences,
+  type ShadowedRule,
+  type UnresolvedReference,
+} from "../gdskills/rule-references";
+import {
+  escapeRegexLiteral,
+  metadataList,
+  reviewerFlagReport,
+  reviewerPathGate,
+  type PathTriggerSource,
+} from "../gdskills/reviewer-triggers";
 import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import { extractStackRequiresField, parseStackRequires, type StackTag } from "./stack";
+
+// The pure text helpers behind the path gate and the flags live in gdskills,
+// the lower layer, where the importer reads them too. Re-exported so this
+// module stays the place its callers and tests import them from.
+export {
+  descriptionFlags,
+  descriptionPathTriggers,
+  escapeRegexLiteral,
+  reviewerFlagReport,
+  reviewerFlags,
+  reviewerPathGate,
+  type PathTriggerSource,
+  type ReviewerFlagReport,
+} from "../gdskills/reviewer-triggers";
 
 /**
  * The reviewer set a review round can actually dispatch.
@@ -21,8 +54,11 @@ import { extractStackRequiresField, parseStackRequires, type StackTag } from "./
  * `.metaproject/project-skills/review/<name>/` beside
  * `.metaproject/skills/gdskills/review/<name>/`. Nothing else marks it. A team
  * that already knows where bundled reviewers live knows where theirs go.
+ *
+ * The constant, the enumerator and the family-flag rule are owned by
+ * `gdskills/project-reviewers.ts`, which `keryx skills import` reads too.
  */
-export const PROJECT_REVIEWER_MODULE = "review";
+export { PROJECT_REVIEWER_MODULE };
 
 /** Whether the skill's origin file still matches what was imported. */
 export type OriginDrift =
@@ -57,15 +93,6 @@ export type BundledReviewer = {
   description?: string;
 };
 
-/**
- * Where a project reviewer's path triggers came from.
- *
- * - `metadata` — `metadata.paths` in its frontmatter, a comma-separated glob list.
- * - `description` — globs found in its description (`src/core/**`).
- * - `none` — neither; the path gate has nothing to match, so it dispatches.
- */
-export type PathTriggerSource = "metadata" | "description" | "none";
-
 export type ProjectReviewer = {
   name: string;
   source: "project-skill";
@@ -79,12 +106,45 @@ export type ProjectReviewer = {
    */
   paths: string[];
   pathsSource: PathTriggerSource;
-  /** Selection flags its description names (`--vantage-core`), `--all` excluded. */
+  /**
+   * Selection flags (`--vantage-core`), `--all` excluded: `metadata.flags`
+   * when declared, otherwise the flags its description names. Normalised —
+   * lower-case, `--` prefixed — so one flag has one spelling across reviewers.
+   */
   flags: string[];
+  /**
+   * What was dropped from `metadata.flags`: one line per entry that is not a
+   * flag, and one more when that left the reviewer with none. Always present;
+   * empty when there is nothing to say.
+   */
+  flagWarnings: string[];
+  /**
+   * The subset of `flags` at least one other project reviewer also carries.
+   * A passed flag listed here is a family selector: it selects this reviewer
+   * and leaves it path-gated. A passed flag in `flags` and not here is unique
+   * to this reviewer: explicit, never path-gated. Always present; empty when
+   * nothing is shared.
+   */
+  familyFlags: string[];
   /** `metadata.stack_requires`, for `keryx review stack`-style scoping. */
   stackRequires: StackTag[];
-  /** Rules it cites that `.metaproject/rules/` does not have. */
+  /**
+   * Rules it cites that resolve to no file — neither
+   * `.metaproject/rules/project/<ref>` nor `.metaproject/rules/<ref>`.
+   */
   unresolvedRules: string[];
+  /**
+   * Rules it cites by one path and reads from another: a
+   * `.metaproject/rules/project/<ref>` copy answers the reference before the
+   * file the text names (`<dir>/<name>.mdc`). `resolved` is project-relative.
+   */
+  shadowedRules: ShadowedRule[];
+  /**
+   * Other references that will not hold: a backticked `skills/...` or
+   * `rules/...` `.md` / `.json` path absent under `.metaproject/` (`missing`),
+   * and a rule cited by an absolute or `~` path (`non-portable`).
+   */
+  unresolvedReferences: UnresolvedReference[];
   /** Verbatim origin reference, when the skill was imported from a file. */
   origin?: string;
   originHash?: string;
@@ -125,113 +185,9 @@ export type ReviewerInventory = {
  * shared: that one parses a different set of labels for a different purpose,
  * and coupling them would make either one's field list the other's problem.
  */
-/**
- * Escape a literal so it can be embedded in a regex source.
- *
- * Extracted and exported for one reason: the version inlined here was broken and
- * nothing could tell. The class was written `[.*+?^${}()|[\\]\\\\]`, which closes
- * at the FIRST `]` — so the pattern became "one metacharacter, then two
- * backslashes, then a bracket", matching essentially nothing. The escape was a
- * complete no-op rather than a partial one.
- *
- * It never misbehaved because all three call-site labels ("Origin", "Origin
- * Hash", "Imported At") contain no metacharacters, so escaping them is identity
- * either way. That is exactly why it needed lifting out: through the public
- * surface, fixed and broken are indistinguishable, and a fix nothing can observe
- * is a fix that silently rots. Here it is directly testable.
- */
-export function escapeRegexLiteral(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function metadataLine(content: string, label: string): string | undefined {
   const match = content.match(new RegExp(`^${escapeRegexLiteral(label)}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim();
-}
-
-/**
- * Directories under `root` that hold a `SKILL.md`.
- *
- * Never throws. A missing root is an empty list, not a failure: a project with
- * no project-skills is the common case, and a review round must not die because
- * the optional half of its reviewer set is absent.
- */
-async function skillDirs(root: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const names: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    try {
-      await readFile(path.join(root, entry.name, "SKILL.md"), "utf8");
-      names.push(entry.name);
-    } catch {
-      // A directory without a SKILL.md is not a skill. Skipped silently: this is
-      // the shape a half-written package has, and listing it as a reviewer would
-      // dispatch an agent at a file that does not exist.
-    }
-  }
-  return names.sort();
-}
-
-/** Split a comma-separated frontmatter scalar into trimmed, unquoted entries. */
-function metadataList(content: string, key: string): string[] {
-  if (!content.startsWith("---")) return [];
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return [];
-  let inMetadata = false;
-  for (const line of content.slice(3, end).split("\n")) {
-    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (top) {
-      inMetadata = top[1] === "metadata";
-      continue;
-    }
-    if (!inMetadata) continue;
-    const field = new RegExp(`^\\s+${escapeRegexLiteral(key)}:\\s*(.+)$`).exec(line);
-    if (field?.[1]) {
-      return field[1]
-        .trim()
-        .replace(/^["'[]|["'\]]$/g, "")
-        .split(",")
-        .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
-    }
-  }
-  return [];
-}
-
-/**
- * Globs a description names as its trigger — any token with a `*` that looks
- * like a path. `*.ts(x)` expands to both spellings. Prose without a glob
- * (`date/temporal utils`) yields nothing, deliberately: a guessed trigger that
- * matches nothing would gate a reviewer off a diff it was written for.
- */
-export function descriptionPathTriggers(description: string): string[] {
-  const globs = new Set<string>();
-  for (const raw of description.split(/\s+/)) {
-    const token = raw.replace(/^[("'`]+/, "").replace(/[,.;:"'`]+$/, "");
-    if (!token.includes("*") || !(token.includes("/") || token.startsWith("*."))) continue;
-    const optional = /^(.*)\(([a-z0-9]+)\)$/i.exec(token);
-    if (optional?.[1] && optional[2]) {
-      globs.add(optional[1]);
-      globs.add(`${optional[1]}${optional[2]}`);
-    } else {
-      globs.add(token.replace(/\)+$/, ""));
-    }
-  }
-  return [...globs];
-}
-
-export function descriptionFlags(description: string): string[] {
-  const flags = new Set<string>();
-  for (const match of description.matchAll(/(?:^|[\s(,])(--[a-z][a-z0-9-]*)/g)) {
-    if (match[1] && match[1] !== "--all") flags.add(match[1]);
-  }
-  return [...flags];
 }
 
 async function driftFor(
@@ -294,7 +250,7 @@ async function bundledReviewerFromFile(
  */
 async function projectInstalledReviewers(bundledRoot: string): Promise<BundledReviewer[]> {
   return Promise.all(
-    (await skillDirs(bundledRoot)).map((name) =>
+    (await skillPackageNames(bundledRoot)).map((name) =>
       bundledReviewerFromFile(
         name,
         path.join(bundledRoot, name, "SKILL.md"),
@@ -361,34 +317,40 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
     bundledSource = bundled.length > 0 ? "package" : "not-found";
   }
 
-  const projectRoot_ = path.join(projectRoot, ".metaproject", "project-skills", PROJECT_REVIEWER_MODULE);
+  const projectRoot_ = projectReviewersRoot(projectRoot);
   const project: ProjectReviewer[] = [];
-  for (const name of await skillDirs(projectRoot_)) {
-    const relative = path.posix.join(".metaproject", "project-skills", PROJECT_REVIEWER_MODULE, name);
+  for (const name of await skillPackageNames(projectRoot_)) {
+    const relative = path.posix.join(PROJECT_SKILLS_DIR, PROJECT_REVIEWER_MODULE, name);
     const content = await readFile(path.join(projectRoot_, name, "SKILL.md"), "utf8");
     const origin = metadataLine(content, "Origin");
     const originHash = metadataLine(content, "Origin Hash");
     const importedAt = metadataLine(content, "Imported At");
     const description = parseSkillFrontmatter(content).description;
-    const declaredPaths = metadataList(content, "paths");
-    const describedPaths = description ? descriptionPathTriggers(description) : [];
-    const pathsSource: PathTriggerSource =
-      declaredPaths.length > 0 ? "metadata" : describedPaths.length > 0 ? "description" : "none";
+    const flagReport = reviewerFlagReport(content);
     project.push({
       name,
       source: "project-skill",
       path: relative,
       ...(description ? { description } : {}),
-      paths: pathsSource === "metadata" ? declaredPaths : describedPaths,
-      pathsSource,
-      flags: description ? descriptionFlags(description) : [],
+      ...reviewerPathGate(content),
+      flags: flagReport.flags,
+      flagWarnings: flagReport.warnings,
+      // Filled in below, once every project reviewer's flags are known.
+      familyFlags: [],
       stackRequires: parseStackRequires(extractStackRequiresField(content)),
       unresolvedRules: await unresolvedRuleReferences(projectRoot, content),
+      shadowedRules: await shadowedRuleReferences(projectRoot, content),
+      unresolvedReferences: await unresolvedReferences(projectRoot, content),
       ...(origin ? { origin } : {}),
       ...(originHash ? { originHash } : {}),
       ...(importedAt ? { importedAt } : {}),
       drift: await driftFor(projectRoot, origin, originHash),
     });
+  }
+
+  const family = familyFlagsByReviewer(new Map(project.map((reviewer) => [reviewer.name, reviewer.flags])));
+  for (const reviewer of project) {
+    reviewer.familyFlags = family.get(reviewer.name) ?? [];
   }
 
   return { bundled, bundledSource, project };
@@ -449,6 +411,14 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
     if (reviewer.flags.length > 0) {
       lines.push(`  - flags: ${reviewer.flags.join(", ")}`);
     }
+    if (reviewer.familyFlags.length > 0) {
+      lines.push(
+        `  - family flags: ${reviewer.familyFlags.join(", ")} — shared with another project reviewer: selects it, stays path-gated`,
+      );
+    }
+    for (const warning of reviewer.flagWarnings) {
+      lines.push(`  - warning: ${warning}`);
+    }
   }
 
   const unresolved = inventory.project.filter((reviewer) => reviewer.unresolvedRules.length > 0);
@@ -460,7 +430,47 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
     lines.push(
       "",
       "The reviewer names these as its standard and the project does not have them. Re-run",
-      "`keryx review import --from <overlay>` to copy them from the overlay, or add them by hand.",
+      "`keryx review import --from <overlay> --only '<glob>'` (a tree import needs --only) to copy",
+      "them from the overlay, or add them by hand.",
+    );
+  }
+
+  const shadowed = inventory.project.filter((reviewer) => reviewer.shadowedRules.length > 0);
+  if (shadowed.length > 0) {
+    lines.push("", "## rules read from .metaproject/rules/project", "");
+    for (const reviewer of shadowed) {
+      for (const rule of reviewer.shadowedRules) {
+        lines.push(`- ${reviewer.name}: \`${rule.ref}\` → ${rule.resolved}`);
+      }
+    }
+    lines.push(
+      "",
+      "The reviewer's text names the path on the left; the file it must read is the one on the",
+      "right. `.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`:",
+      "`keryx init`, `keryx update` and `keryx skills install` overwrite rules/core with keryx's own rules",
+      "and leave rules/project alone, so a rule an overlay provides under a name keryx also ships is kept",
+      "in rules/project.",
+    );
+  }
+
+  const dangling = inventory.project.filter((reviewer) => reviewer.unresolvedReferences.length > 0);
+  if (dangling.length > 0) {
+    lines.push("", "## references that do not resolve", "");
+    for (const reviewer of dangling) {
+      for (const reference of reviewer.unresolvedReferences) {
+        lines.push(
+          reference.reason === "missing"
+            ? `- ${reviewer.name}: \`${reference.ref}\` — missing (.metaproject/${reference.ref})`
+            : `- ${reviewer.name}: \`${reference.ref}\` — non-portable`,
+        );
+      }
+    }
+    lines.push(
+      "",
+      "missing: the reviewer points at a file the import did not bring — it copies SKILL.md and the",
+      "rules it cites, nothing else. Copy the file to the path shown, or edit the reference out.",
+      "non-portable: a rule cited by an absolute or ~ path exists on one machine at most. Cite it as",
+      "`core/<name>.mdc` and keep the file under .metaproject/rules/.",
     );
   }
 

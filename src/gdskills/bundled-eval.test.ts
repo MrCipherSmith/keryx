@@ -1016,6 +1016,31 @@ description: Referenced by the fixture rule above; carries no violation of its o
 # Sibling Rule
 `;
 
+/**
+ * A rule citing `rules/project/` — the directory `keryx skills import` creates
+ * in a project for a rule an overlay provides under a name keryx also ships.
+ * Nothing under it is in the shipped tree, and nothing should be: the file
+ * form, the `.metaproject`-prefixed directory and the bare directory must all
+ * draw nothing. The last line is the control — a dead path elsewhere under
+ * `rules/` must still be reported, or the allowance has widened to the whole
+ * namespace.
+ */
+const GENERATED_PROJECT_RULES_RULE = `---
+description: Fixture rule proving rules/project/ is a generated root and nothing wider.
+---
+
+# Generated Project Rules
+
+An overlay's colliding rule lands in \`.metaproject/rules/project/error-handling.mdc\`.
+
+The slot is keyed on the whole reference, so it nests: \`.metaproject/rules/project/core/error-handling.mdc\`,
+or bare, \`rules/project/house/naming.mdc\`.
+
+The directory itself, \`.metaproject/rules/project\`, and its bare spelling \`rules/project\` are fine too.
+
+VIOLATION xref:path — \`rules/projects-archive/error-handling.mdc\` is not under the generated root.
+`;
+
 let fixtureRoot = "";
 
 function writeSkill(root: string, category: string, name: string, body: string): void {
@@ -1136,6 +1161,7 @@ beforeAll(() => {
   writeFileSync(path.join(fixtureRoot, "skills", "shared", "example-script.md"), "# Example\n", "utf8");
   writeRule(fixtureRoot, "sibling-rule.mdc", SIBLING_RULE);
   writeRule(fixtureRoot, "broken-rule.mdc", BROKEN_RULE);
+  writeRule(fixtureRoot, "generated-project-rules.mdc", GENERATED_PROJECT_RULES_RULE);
 });
 
 afterAll(() => {
@@ -1259,6 +1285,21 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // proving the sweep is selective, not a blanket failure on any mention.
     const sibling = evaluation.findings.filter((finding) => finding.file === "rules/core/sibling-rule.mdc");
     expect(sibling).toEqual([]);
+  });
+
+  test("a reference into rules/project/ is a generated path; a dead path beside it is still reported", () => {
+    // `keryx skills import` creates `.metaproject/rules/project/` in a project,
+    // so the shipped tree never holds it — the file form, the prefixed
+    // directory and the bare directory all resolve to a generated root.
+    const found = fixtureTree().findings.filter(
+      (finding) => finding.check === "xref:path" && finding.file === "rules/core/generated-project-rules.mdc",
+    );
+    // Exactly one, and it is the control: a sibling directory whose name only
+    // STARTS like the generated root is not covered by the allowance.
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("rules/projects-archive/error-handling.mdc");
+    expect(found[0]?.message).toContain("resolves to nothing under the shipped tree");
+    expect(GENERATED_PATH_ROOTS).toContainEqual({ prefix: "rules/project/", producedBy: "keryx skills import" });
   });
 
   test("a description that resolves to nothing is rejected, not just an absent one", () => {

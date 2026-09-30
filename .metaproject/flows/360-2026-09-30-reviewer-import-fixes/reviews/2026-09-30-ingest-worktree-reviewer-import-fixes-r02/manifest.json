@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-30-ingest-worktree-reviewer-import-fixes-r02",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "worktree-reviewer-import-fixes",
+    "head": "016f06bea639e287900489f86c7784f45ae4c1af"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/scope.md",
+    "coverage": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/coverage.md",
+    "report": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/report.md",
+    "findings": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/findings.json",
+    "learning": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/learning.md",
+    "decisions": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/reviews/2026-09-30-ingest-worktree-reviewer-import-fixes-r02/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 30,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 4,
+    "retained": 26,
+    "dismissed_by_round": null,
+    "by_reason": {
+      "findings_cap:review-logic": 4
+    },
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-09-30T17:15:16.437Z",
+  "updatedAt": "2026-09-30T17:15:16.437Z",
+  "flow": {
+    "id": "360",
+    "path": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes"
+  }
+}

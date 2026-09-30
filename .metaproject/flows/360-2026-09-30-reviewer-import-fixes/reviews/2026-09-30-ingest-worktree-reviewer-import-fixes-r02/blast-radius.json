@@ -1,0 +1,2552 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    "docs/docs/cli-reference.md",
+    "src/cli.test.ts",
+    "src/commands/import-only.test.ts",
+    "src/gdskills/bundled-eval.test.ts",
+    "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/import-skills.test.ts",
+    "src/gdskills/import-skills.ts",
+    "src/gdskills/manifest/manifest.test.ts",
+    "src/gdskills/project-skills.ts",
+    "src/gdskills/remove-skill.test.ts",
+    "src/gdskills/remove-skill.ts",
+    "src/gdskills/reviewer-triggers.test.ts",
+    "src/gdskills/reviewer-triggers.ts",
+    "src/gdskills/rule-references.test.ts",
+    "src/gdskills/rule-references.ts",
+    "src/gdskills/verify.ts",
+    "src/lib/args.test.ts",
+    "src/lib/args.ts",
+    "src/lib/contained-write.ratchet.test.ts",
+    "src/lib/import-policy.live.test.ts",
+    "src/review/import-reviewers.ts",
+    "src/review/reviewers.test.ts",
+    "src/review/reviewers.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/providers.ts",
+      "hop": 1,
+      "fanIn": 41,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/providers.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review.ts",
+      "hop": 1,
+      "fanIn": 28,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/flow.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/flow.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 1,
+      "fanIn": 18,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/init.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/skills.ts",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "src/gdskills/import-skills.ts",
+      "path": [
+        "src/commands/skills.ts",
+        "src/gdskills/import-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/export.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/export.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/gdgraph.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/gdgraph.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp-servers.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/mcp-servers.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/memory.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/memory.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/learn.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/gdskills/learn.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/agents-external.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/ctx.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/ctx.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-rules.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-rules.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/security.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/security.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/health.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/health.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-contract.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-contract.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-docs.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-docs.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-triage.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-triage.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/wiki.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/wiki.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/narrate.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/lib/narrate.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/conform-tag-cache.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/review/conform-tag-cache.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/mcp.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-comments.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-comments.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-risk.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-risk.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-scenarios.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/review-jev-scenarios.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/serve-mcp.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/serve-mcp.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/standard.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/standard.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/test.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/test.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/skill-owner-writer.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/project-skills.ts",
+      "path": [
+        "src/sac/skill-owner-writer.ts",
+        "src/gdskills/project-skills.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents-catalog.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/agents-catalog.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/agents.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/bundle.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/bundle.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/dashboard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/dashboard.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/forgetting.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/forgetting.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/governance.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/governance.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/hooks.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/hooks.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/integrations.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/integrations.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/job.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/job.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/metrics.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/metrics.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/orient.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "path": [
+        "src/commands/orient.ts",
+        "src/lib/args.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/retention.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-profile.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-audit-harness.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-impact-evidence.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-governance.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/stack.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 257 at hop 1, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/resolve.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 257 at hop 1, fan-in 2, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/commands.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 257 at hop 1, fan-in 1, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-bot.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 257 at hop 1, fan-in 1, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-select.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 257 at hop 1, fan-in 1, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sandbox-net-forward.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 257 at hop 1, fan-in 1, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 257 at hop 1, fan-in 1, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/project-skills.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 257 at hop 1, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/verify.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/verify.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 257 at hop 1, fan-in 0, reached via src/gdskills/verify.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/conform-tag-cache.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 257 at hop 1, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/import-reviewers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 257 at hop 1, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/single-turn.ts",
+      "hop": 2,
+      "fanIn": 27,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 257 at hop 2, fan-in 27, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 2,
+      "fanIn": 19,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 257 at hop 2, fan-in 19, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.ts",
+      "hop": 2,
+      "fanIn": 17,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 257 at hop 2, fan-in 17, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 2,
+      "fanIn": 16,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 257 at hop 2, fan-in 16, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider.ts",
+      "hop": 2,
+      "fanIn": 15,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 257 at hop 2, fan-in 15, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 257 at hop 2, fan-in 14, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 257 at hop 2, fan-in 9, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 257 at hop 2, fan-in 9, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/proposal-lifecycle.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 257 at hop 2, fan-in 9, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 257 at hop 2, fan-in 8, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/model.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 257 at hop 2, fan-in 7, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sync.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 257 at hop 2, fan-in 6, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider-catalog.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 257 at hop 2, fan-in 6, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 257 at hop 2, fan-in 5, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-limits.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 257 at hop 2, fan-in 5, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/process/shell-spawn.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 257 at hop 2, fan-in 5, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider-catalog-cache.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 257 at hop 2, fan-in 5, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-judge.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-runner.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/modules.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/subscription-models.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/learning/apply.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 257 at hop 2, fan-in 4, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 257 at hop 2, fan-in 4, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/guarded-fs-ops.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 257 at hop 2, fan-in 3, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/routing/provider-default.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 257 at hop 2, fan-in 3, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/sync.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 257 at hop 2, fan-in 2, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/learning/signals/health-regression.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 257 at hop 2, fan-in 2, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-comments-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-contract-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-docs-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-risk-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-rules-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-scenarios-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-triage-command.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 257 at hop 2, fan-in 2, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/conform-source.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 257 at hop 2, fan-in 1, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/capability/golden-rule.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/bundle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/ctx.rg-argv.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/ctx.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/dashboard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/flow-complete-uncommitted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/flow-status-uncommitted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/forgetting.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/gdgraph-display-truth.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/gdgraph-freshness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/gdgraph.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/governance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-namespace-pin.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/health-gate-exit.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/health-incomplete.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/health-status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-runtimes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.no-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/integrations.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-auth-decisions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-auth-flow.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-auth-secrecy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-servers.argv.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/memory-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/memory-report.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/memory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/metrics.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/module-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/orient.dry-run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.balance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 141 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 142 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.custom.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 143 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.disconnect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 144 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.model-profiles.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 145 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.models-failure.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 146 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.reasoning-preset.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 147 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 148 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 149 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 150 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/retention.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 151 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 152 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 153 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 154 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 155 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 156 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 157 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 158 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 159 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 160 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 161 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 162 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 163 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-rules-discovery.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 164 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 165 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 166 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 167 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 168 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 169 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 170 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/route-synonyms.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 171 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 172 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 173 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 174 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-audit-harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 175 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-gate-exit.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 176 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 177 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-impact-evidence.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 178 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-recursive-scan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 179 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-scan-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 180 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/serve-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 181 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 182 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 183 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 184 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 185 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 186 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/stack.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 187 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/standard-verdict-markers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 188 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/test-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 189 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 190 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 191 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/update.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 192 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/wiki.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 193 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/ac-kinds-errors.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 194 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/ac-kinds-never-gates.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 195 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/ac-kinds.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 196 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/ac-strict-args.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 197 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/completion-never-stuck.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 198 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/confirm-token.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 199 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/confirmation-backward-compat.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 200 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/depends-and-attempts.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 201 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/outcome-author-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 202 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/outcome-author-set.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 203 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/outcome-author-status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 204 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/owner-status-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 205 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 206 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 207 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdgraph/affected-report.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 208 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/build-parity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 209 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 210 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/export-plugin.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 211 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/export-runtime-builds.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 212 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/learn.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 213 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/stack-packs.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 214 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/status-contract.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 215 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 216 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider-disconnect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 217 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider-label.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 218 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 219 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/health/skill-loop.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 220 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/impact-evidence/evidence.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 221 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/import-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 222 of 257 at hop 2, fan-in 0, reached via src/gdskills/import-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/learning/apply.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 223 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/oauth/openai-subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 224 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/project-sandbox-policy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 225 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/provider-config.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 226 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/memory/lifecycle-write-p4.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 227 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/metrics/gdctx-goldens.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 228 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 229 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 230 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 231 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/jev-risk.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 232 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 233 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 234 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 235 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-learning.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 236 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 237 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/owner-writer-base-version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 238 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/skill-owner-writer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/project-skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 239 of 257 at hop 2, fan-in 0, reached via src/gdskills/project-skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 240 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/validate-fresh-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 241 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/testing/related-report.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 242 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 243 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 244 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-comments-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 245 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-contract-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 246 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-docs-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 247 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-risk-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 248 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-rules-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 249 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-scenarios-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 250 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/jev-triage-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 251 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/section-forgetting.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/lib/args.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 252 of 257 at hop 2, fan-in 0, reached via src/lib/args.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/serve.cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 253 of 257 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/base-branch-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 254 of 257 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/antigravity-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 255 of 257 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/claude-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 256 of 257 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/codex-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 257 of 257 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 32,
+    "changedFilesResolved": 21,
+    "changedFilesUnresolved": 11,
+    "candidates": 257,
+    "retained": 40,
+    "droppedByCap": 217,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 5,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 2476,
+    "edges": 8176
+  }
+}

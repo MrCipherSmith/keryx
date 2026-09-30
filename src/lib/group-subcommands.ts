@@ -256,6 +256,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "generate",
       "import",
       "update",
+      "remove",
       "verify",
       "learn",
       "export",

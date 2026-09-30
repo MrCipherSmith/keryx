@@ -1,0 +1,22 @@
+# Decisions
+
+- H-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-004: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-005: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-006: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-007: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-008: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-009: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-010: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-011: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-012: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-013: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-014: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-015: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-016: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-017: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-018: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-019: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- H-020: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

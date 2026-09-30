@@ -1,0 +1,1583 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/rules/core/mobx-store-template.mdc",
+    ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+    ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json",
+    "docs/docs/cli-reference.md",
+    "src/cli-registry.ts",
+    "src/cli.test.ts",
+    "src/cli.ts",
+    "src/commands/review.ts",
+    "src/commands/skills-remove.test.ts",
+    "src/commands/skills.ts",
+    "src/gdskills/bundled-eval.test.ts",
+    "src/gdskills/bundled-eval.ts",
+    "src/gdskills/bundled/rules/core/mobx-store-template.mdc",
+    "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-frontend/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "src/gdskills/catalog.ts",
+    "src/gdskills/import-skills.test.ts",
+    "src/gdskills/import-skills.ts",
+    "src/gdskills/manifest/manifest.test.ts",
+    "src/gdskills/manifest/manifest.ts",
+    "src/gdskills/remove-skill.test.ts",
+    "src/gdskills/remove-skill.ts",
+    "src/gdskills/rule-references.ts",
+    "src/lib/group-subcommands.ts",
+    "src/review/import-reviewers.test.ts",
+    "src/review/import-reviewers.ts",
+    "src/review/reviewers.test.ts",
+    "src/review/reviewers.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/init.ts",
+      "hop": 1,
+      "fanIn": 18,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/init.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/governance/catalog-index.ts",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "src/gdskills/bundled-eval.ts",
+      "path": [
+        "src/gdskills/governance/catalog-index.ts",
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/agents/catalog.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/gdskills/bundled-eval.ts",
+      "path": [
+        "src/agents/catalog.ts",
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/cli-registry.ts",
+      "path": [
+        "src/commands/agents-external.ts",
+        "src/cli-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/manifest/plan.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "path": [
+        "src/gdskills/manifest/plan.ts",
+        "src/gdskills/manifest/manifest.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/update.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/install.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/install.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/governance/authoring-lint.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/gdskills/bundled-eval.ts",
+      "path": [
+        "src/gdskills/governance/authoring-lint.ts",
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/agents/verify.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/gdskills/bundled-eval.ts",
+      "path": [
+        "src/agents/verify.ts",
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents-catalog.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/bundled-eval.ts",
+      "path": [
+        "src/commands/agents-catalog.ts",
+        "src/gdskills/bundled-eval.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/cli-registry.ts",
+      "path": [
+        "src/commands/help.ts",
+        "src/cli-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/guarded-fs-ops.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/gdskills/guarded-fs-ops.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-jev-select.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/review/reviewers.ts",
+      "path": [
+        "src/commands/review-jev-select.ts",
+        "src/review/reviewers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/gdskills/manifest/index.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "path": [
+        "src/gdskills/manifest/index.ts",
+        "src/gdskills/manifest/manifest.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-docs-structure.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "path": [
+        "src/cli-docs-structure.test.ts",
+        "src/cli.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "path": [
+        "src/cli-reference-coverage.test.ts",
+        "src/cli.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "path": [
+        "src/commands/approvals.test.ts",
+        "src/cli-registry.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "path": [
+        "src/commands/mcp-naming.test.ts",
+        "src/cli.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "path": [
+        "src/commands/providers.cross-family.test.ts",
+        "src/cli.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ac-check-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-ac-check-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-ci-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-ci-triage-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-conform-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-comments-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-contract-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-contract-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-docs-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-docs-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-profile-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-profile-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-risk-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-risk-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-rules-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-rules-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-scenarios-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-scenarios-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-select-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-select-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-jev-triage-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-jev-triage-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-reviewer-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-learn-reviewer-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/route-synonyms.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/route-synonyms.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/routing-baseline.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/routing-baseline.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/routing-corpus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "path": [
+        "src/commands/routing-corpus.test.ts",
+        "src/commands/skills.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "path": [
+        "src/commands/routing-entrypoint-lifecycle.test.ts",
+        "src/gdskills/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/skills-install-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-install-warnings.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.installed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/stack-pack-judge-calibration.live.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-reachability.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 144 at hop 1, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/agent-catalogue-xref.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/bundled-no-persona.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/catalog-frontmatter.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 144 at hop 1, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/catalog-single-source.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/destructive-git.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/manifest/apply-doctor-uninstall.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 144 at hop 1, fan-in 0, reached via src/gdskills/manifest/manifest.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/manifest/plan.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 144 at hop 1, fan-in 0, reached via src/gdskills/manifest/manifest.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/package-relative-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 144 at hop 1, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/skill-name-matches-directory.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/stack-packs.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 144 at hop 1, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/integrations/registry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 144 at hop 1, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/job/job.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 144 at hop 1, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/group-subcommands-flow.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/lib/group-subcommands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 144 at hop 1, fan-in 0, reached via src/lib/group-subcommands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/product/bulk-budget.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 144 at hop 1, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 144 at hop 1, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 144 at hop 1, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 144 at hop 1, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/eval.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 144 at hop 2, fan-in 12, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/scout.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 144 at hop 2, fan-in 8, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/__fixtures__/gate-ready-report.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 144 at hop 2, fan-in 6, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/service.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 144 at hop 2, fan-in 4, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bundle/external.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 144 at hop 2, fan-in 4, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-runner.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 144 at hop 2, fan-in 4, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/modules.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 144 at hop 2, fan-in 4, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 144 at hop 2, fan-in 2, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/dashboard.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 144 at hop 2, fan-in 2, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-governance.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 144 at hop 2, fan-in 2, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/stocktake.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 144 at hop 2, fan-in 2, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/manifest/apply.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 144 at hop 2, fan-in 2, reached via src/gdskills/manifest/manifest.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/manifest/doctor.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 144 at hop 2, fan-in 2, reached via src/gdskills/manifest/manifest.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/manifest/uninstall.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/gdskills/manifest/manifest.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 144 at hop 2, fan-in 2, reached via src/gdskills/manifest/manifest.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/integrations/surfaces-agents.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 144 at hop 2, fan-in 1, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/catalog.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/compile.format-safety.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/export.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/generate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/verify.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bundle/external.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/capability/golden-rule.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-runtimes.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.escape.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.no-git.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-runner.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/module-commands.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-hooks-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-governance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/update.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/authoring-lint-guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/authoring-lint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/catalog-index.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/eval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/governance/scout.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/project-sandbox-policy.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/audit-harness/audit-harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/bundled-eval.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 144 at hop 2, fan-in 0, reached via src/gdskills/bundled-eval.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/standard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/validate-fresh-init.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/gdskills/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 144 at hop 2, fan-in 0, reached via src/gdskills/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/cli-registry.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 144 at hop 2, fan-in 0, reached via src/cli-registry.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/client-requests.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/client-ack.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/client.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-shebang.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-edit-guard.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 144 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-jev-rules-discovery.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 144 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-result-contract.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 144 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-review.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 144 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/serve.cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills.bundled-verify.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/skills.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 144 at hop 3, fan-in 0, reached via src/commands/skills.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/base-branch-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/owner-status-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/decision/jev-client.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-client.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/antigravity-cli.runtime.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/antigravity-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/claude-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 141 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/codec/codex-cli.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.test.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 142 of 144 at hop 3, fan-in 0, reached via src/cli.test.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-client/client.smoke.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 143 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/client-config.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/cli.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 144 of 144 at hop 3, fan-in 0, reached via src/cli.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/rules/core/mobx-store-template.mdc",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/core/reviewer-skill-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-frontend/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/rules/core/mobx-store-template.mdc",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-frontend/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 40,
+    "changedFilesResolved": 21,
+    "changedFilesUnresolved": 19,
+    "candidates": 144,
+    "retained": 40,
+    "droppedByCap": 104,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 21,
+    "testsRetained": 26,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 2472,
+    "edges": 8166
+  }
+}

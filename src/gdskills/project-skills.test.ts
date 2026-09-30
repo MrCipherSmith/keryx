@@ -1,10 +1,54 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { createProjectSkill } from "./project-skills";
+import {
+  createProjectSkill,
+  parseProjectSkillCatalogRow,
+  PROJECT_SKILLS_CATALOG_EMPTY_ROW,
+  projectSkillCatalogRow,
+  projectSkillPackagePath,
+} from "./project-skills";
 
 const AWS_KEY = "AKIAIOSFODNN7EXAMPLE";
+
+describe("parseProjectSkillCatalogRow (flow 360 review H-011)", () => {
+  test("reads back exactly what projectSkillCatalogRow writes", () => {
+    const entry = { module: "review", name: "house-api", target: "src/api/*.ts | legacy", path: projectSkillPackagePath("review", "house-api") };
+    // A `|` inside the target breaks the table for every reader; the round trip is for the targets that do not.
+    const plain = { ...entry, target: "auth flow `IResult`" };
+
+    expect(parseProjectSkillCatalogRow(projectSkillCatalogRow(plain))).toEqual(plain);
+    expect(parseProjectSkillCatalogRow(`   ${projectSkillCatalogRow(plain)}  `)).toEqual(plain);
+    expect(parseProjectSkillCatalogRow(projectSkillCatalogRow(entry))).toBeUndefined();
+  });
+
+  test("a hand-edited row without backticks around the target is still a row", () => {
+    expect(parseProjectSkillCatalogRow("| review | x | auth flow | .metaproject/project-skills/review/x/SKILL.md |")).toEqual({
+      module: "review",
+      name: "x",
+      target: "auth flow",
+      path: ".metaproject/project-skills/review/x",
+    });
+  });
+
+  test("the header, the separator, the empty-registry row and prose are not rows", () => {
+    for (const line of [
+      "| Module | Skill | Target | Entry |",
+      "|---|---|---|---|",
+      PROJECT_SKILLS_CATALOG_EMPTY_ROW,
+      "## Project Skills",
+      "",
+      "|",
+      "| review | x | `t` |",
+      "| review | x | `t` | .metaproject/project-skills/review/x/SKILL.md | extra |",
+      "|  | x | `t` | .metaproject/project-skills/review/x/SKILL.md |",
+      "| review | x | `t` | .metaproject/project-skills/review/x |",
+    ]) {
+      expect({ line, row: parseProjectSkillCatalogRow(line) }).toEqual({ line, row: undefined });
+    }
+  });
+});
 
 async function makeProjectRoot(opts: { security?: boolean; mode?: "advisory" | "enforced" | "ci" } = {}): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-project-skills-"));
@@ -80,6 +124,44 @@ describe("createProjectSkill security guard", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+});
+
+describe("createProjectSkill refuses a destination symlinked out of the project before anything is written", () => {
+  // `keryx skills create` checks every destination, and the registry lock,
+  // before the first write — so a dry run refuses what the real run would, in
+  // the same words, and nothing appears outside the project. Without that
+  // preflight the real run created <outside>/gdskills (the lock's parent) and
+  // the dry run was not refused at all.
+  const cases: { label: string; link: string; setup?: string }[] = [
+    { label: ".metaproject/data (the registry lock)", link: ".metaproject/data" },
+    { label: ".metaproject/project-skills (the package)", link: ".metaproject/project-skills", setup: ".metaproject/data" },
+  ];
+
+  for (const { label, link, setup } of cases) {
+    test(`a symlinked ${label}`, async () => {
+      const root = await makeProjectRoot();
+      const outside = await mkdtemp(path.join(tmpdir(), "keryx-project-skills-outside-"));
+      try {
+        if (setup) await mkdir(path.join(root, setup), { recursive: true });
+        await symlink(outside, path.join(root, link));
+        const messages: string[] = [];
+        for (const dryRun of [true, false]) {
+          try {
+            await createProjectSkill(root, { target: "alpha", module: "quality", name: "alpha", format: "single", dryRun });
+            messages.push("(no refusal)");
+          } catch (error) {
+            messages.push(error instanceof Error ? error.message : String(error));
+          }
+        }
+        expect(messages[0]).toBe(messages[1] as string);
+        expect(messages[0]).toContain(`refuses to write through a symlink at ${link} that resolves outside the project root`);
+        expect(await readdir(outside)).toEqual([]);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+        await rm(outside, { recursive: true, force: true });
+      }
+    });
+  }
 });
 
 test("createProjectSkill refuses a prose target on the CLI path, not only the wrap-up path", () => {

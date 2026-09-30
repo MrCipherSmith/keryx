@@ -1,0 +1,288 @@
+[
+  {
+    "id": "H-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "skills remove finds the package only by its exact readdir spelling. When registered review/alpha lives on disk as review/Alpha or Review/alpha (case-insensitive FS), it reports package:absent and still removes the catalog row and the registry entry.",
+    "impact": "The package stays on disk and in `keryx review reviewers`, so it is still dispatched, while remove reported success. Reachable through keryx itself once a case-variant module dir exists: `skills create beta --module quality` writes into an existing Quality/ dir.",
+    "suggested_fix": "When a registered entry's exact path is missing, look for a case-insensitive match in readdir; if found, refuse and name the on-disk spelling (as spelledOtherwise does for input) instead of reporting absent.",
+    "evidence": "verified — r360-3/review-security-code/n-remove.ts N1 and review-verifier/v1.sh cases A and B at HEAD: parts report:absent,catalog:removed,package:absent,registry:removed; review/Alpha/SKILL.md left on disk; inventory still lists it. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 256,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/remove-skill.ts:255",
+        "src/gdskills/remove-skill.ts:256"
+      ],
+      "enumeration_method": "keryx ctx rg 'exactEntry\\(' over src: 1 definition, 3 callers (256, 449 lstatExact, 477 isRealDirectoryChain); only 255/256 decide the package part."
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-001"
+  },
+  {
+    "id": "H-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "ruleReferences matches refs case-insensitively, but the ships-with-keryx guard tests `startsWith(\"core/\")`. A ref Core/<shipped>.mdc is written to .metaproject/rules/Core/…, which on a case-insensitive FS is rules/core/….",
+    "impact": "The overlay's rule lands in the slot keryx init/update/skills install overwrite; after `skills install` the overlay content is gone and the reviewer reads keryx's rule. Main misplaces it the same way; this is a gap in the branch's new guard, not a regression.",
+    "suggested_fix": "Compare the first segment case-insensitively, or lower-case refs in ruleReferences before planning.",
+    "evidence": "verified — n-import.ts I2 and review-verifier/v2.sh: Core/security-baseline.mdc imported to rules/Core (= rules/core), marker gone after `skills install`; the lower-case control goes to rules/project/core and survives. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1242,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/import-skills.ts:1242"
+      ],
+      "enumeration_method": "keryx ctx rg 'startsWith\\(\"core/\"\\)' over src: 1 hit."
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-002"
+  },
+  {
+    "id": "H-003",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "resolveRuleReference accepts any existing path (pathExists), so a directory at a cited rule's path reaches readFile and the whole import, dry and real, aborts with a bare EISDIR naming no path.",
+    "impact": "The import is refused with an unlabelled error; main imported the skill (reporting the rule present). A regression from main.",
+    "suggested_fix": "stat the resolved candidate; if it is not a regular file, return an unresolved row or a labelled refusal naming the path.",
+    "evidence": "verified — n-partial.ts (d) and review-verifier/v3.sh: HEAD dry and real print only 'EISDIR: illegal operation on a directory, read'; main reports 'house/x.mdc: present' and imports. Verifier: confirmed.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1265,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/import-skills.ts:1265"
+      ],
+      "enumeration_method": "keryx ctx rg 'readFile\\(path.join\\(options.projectRoot, existing\\)' over src: 1 hit; resolveRuleReference (rule-references.ts:79) is its only feeder."
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-003"
+  },
+  {
+    "id": "H-004",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The lock-path containment preflight (:159) and createProjectSkill's preflight call (:200) can each be deleted with every focused suite green (mutants W04, W06 survive).",
+    "impact": "With .metaproject/data symlinked outside the project, under W04 `keryx skills import --from <SKILL.md> --module quality` exits 0 and creates <outside>/gdskills; under W06 `skills create` leaks outside and its dry run is not refused. HEAD itself refuses correctly; the guard is unpinned.",
+    "suggested_fix": "Add the probe (review-testing-practices/probe-w04.test.ts.txt, review-verifier/probe.test.ts VP1-VP3) as tests for import and skills create.",
+    "evidence": "verified — m-r3.ts W04/W06 survived; review-verifier mutated fresh copies: focused suites 284 pass / 0 fail under both, probes fail, CLI under W04 exits 0 and creates <outside>/gdskills. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/gdskills/project-skills.ts",
+    "line": 159,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/project-skills.ts:159",
+        "src/gdskills/project-skills.ts:200"
+      ],
+      "enumeration_method": "mutated every assertWritableContained/assertProjectWritesContained/refuseUncontainedWrites call site: contained-write.ts:229, project-skills.ts:159/:161/:200, import-skills.ts:205-207/:250/:286; only :159 and :200 survived."
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-004"
+  },
+  {
+    "id": "H-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The refusal for a package directory with no letter or digit advises `--name`, but under `keryx review import` that option is rejected as unknown; reviewer-skill-creator SKILL.detail.md:91 quotes the same advice.",
+    "impact": "An operator following the advice gets exit 1 'Unknown option'. Only `skills import --module review --name` works.",
+    "suggested_fix": "Under commandLabel `keryx review import`, advise `keryx skills import --from <dir>/SKILL.md --module review --name <name>`; update SKILL.detail.md:91 and its projection.",
+    "evidence": "verified — review-logic/doc/probe5.sh (out5.log).",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 812,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-005"
+  },
+  {
+    "id": "H-006",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "25 of 61 mutants of the consolidated reader survive; real gaps F03, F06, F12, F13, F14, F22, F23, F26, F35, F37, F42, F44, F45, F46, F49, F51, F52, F54, F55, F58, F59, F60, F63 (I25r, F34 equivalent).",
+    "impact": "The subset promised in the module header (fence whitespace, quoted keys, anchors unsupported, quote escapes, it's, comma inside quotes, tabs, `paths: # none`) can regress unnoticed.",
+    "suggested_fix": "One table-driven case per surviving mutant in skill-frontmatter.test.ts.",
+    "evidence": "verified — r360-3/review-testing-practices/mutation-table.md.",
+    "confidence": "high",
+    "file": "src/gdskills/skill-frontmatter.ts",
+    "line": 68,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-006"
+  },
+  {
+    "id": "H-007",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "remove-skill survivors: N21-N24 (documented input spellings in normalizeSkillKey), N12/N13 (failure message 'Still in place'), N28 (catalog with no end marker), N33 (conventional-report symlink refusal), N25; N15, N16, N19 only observable under concurrency.",
+    "impact": "`skills remove .metaproject/project-skills/review/x/` or `review/x/SKILL.md` could stop resolving and the recovery message could list the wrong parts with the suite green.",
+    "suggested_fix": "Add input-spelling cases, an exact failure-message assertion and a catalog-without-end-marker fixture.",
+    "evidence": "verified — m-r3.ts N01-N34.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 411,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-007"
+  },
+  {
+    "id": "H-008",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Surviving mutants T05 (literal without /), T15 (*.ext glob), T18 (flag inside a word), V01 (symlinked reviewer dir in skillPackageNames), W16 (dry-run --force reason).",
+    "impact": "A description like 'Reviews *.ts files' could stop gating the reviewer unnoticed.",
+    "suggested_fix": "Add those cases.",
+    "evidence": "verified — m-r3.ts T/V/K/W series.",
+    "confidence": "high",
+    "file": "src/gdskills/reviewer-triggers.ts",
+    "line": 124,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-008"
+  },
+  {
+    "id": "H-009",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The ratchet now catches C7/C8 but misses `const fsp = fs.promises` (C8c), `const { rm } = fs.promises` (C8d) and `require(\"node:fs\").promises.rm` (C8e).",
+    "impact": "A raw recursive rm can return to an owned module in these spellings with the ratchet green.",
+    "suggested_fix": "Flag any `.promises` binding/destructuring and require(\"node:fs\") in owned modules.",
+    "evidence": "verified — m-guards-r3.ts.",
+    "confidence": "high",
+    "file": "src/lib/contained-write.ratchet.test.ts",
+    "line": 199,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-009"
+  },
+  {
+    "id": "H-010",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The dry-run test's lock-absence assertion cannot fail (withFileLock removes the lock in finally); expectRefusedUntouched (:312-313) is vacuous in report fixtures; skill-frontmatter.test.ts:150-153 never reaches readBlockList's break.",
+    "impact": "Tests read as guarding the lock and block-list end but pass for other reasons (F34/F35 survive); only remove-skill.test.ts:890 really guards the lock.",
+    "suggested_fix": "Assert on the lock's parent; give the block-list test a deeper non-item line.",
+    "evidence": "verified — reading plus F34/F35 survival.",
+    "confidence": "medium",
+    "file": "src/gdskills/remove-skill.test.ts",
+    "line": 189,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-010"
+  },
+  {
+    "id": "H-011",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "G-008 residue: withoutCatalogRow reads the catalog row by cell index while projectSkillCatalogRow (project-skills.ts:134) writes it; the <module>/<name> key (:165, :220, :314) and package path (:254, :338) are rebuilt by hand.",
+    "impact": "A change to the row or key format in project-skills.ts leaves skills remove reporting the catalog absent and the row in place, with no failing test at the writer.",
+    "suggested_fix": "Export a row parser beside projectSkillCatalogRow; use projectSkillKey / projectSkillPackagePath.",
+    "evidence": "verified — keryx ctx rg for projectSkillKey|projectSkillCatalogRow|projectSkillPackagePath and hand-built templates.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 544,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-011"
+  },
+  {
+    "id": "H-012",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "G-009 residue: literal \"review\" at :367, :370, :776, :788, :1357 in the file that imports and uses PROJECT_REVIEWER_MODULE at :497 and :552.",
+    "impact": "Renaming the reviewer module leaves the import summary, inference and wiring note on the old name.",
+    "suggested_fix": "Use PROJECT_REVIEWER_MODULE at all five sites.",
+    "evidence": "verified — keryx ctx rg.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 367,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-012"
+  },
+  {
+    "id": "H-013",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "When the package step fails after rm -r has already emptied the package, the error still lists the package directory under 'Still in place'.",
+    "impact": "Wording only; a re-run completes.",
+    "suggested_fix": "Say the package may be partly removed.",
+    "evidence": "verified — review-security-code/g-verdicts.ts G-007 variant.",
+    "confidence": "medium",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 139,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-013"
+  },
+  {
+    "id": "H-014",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "A failure after createProjectSkill registers the package (e.g. read-only .metaproject/skills) leaves a registered review package whose SKILL.md is the scaffold; a re-run skips it as already exists. Pre-existing on main.",
+    "impact": "The scaffold stays an active reviewer until --force.",
+    "suggested_fix": "Write the imported content before registering, or treat a registered scaffold as incomplete.",
+    "evidence": "verified — n-partial.ts (b) at HEAD and main.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 925,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-014"
+  },
+  {
+    "id": "H-015",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "skills update reads any local path or https URL named in a committed SKILL.md's Origin line (no GitHub host check). Pre-existing on main.",
+    "impact": "A tampered SKILL.md can pull a local file into the tree on `update --all`; secrets are redacted, other content not.",
+    "suggested_fix": "Confine update Origins to recorded overlay roots; apply import's host allowlist.",
+    "evidence": "verified — n-import.ts I3 at HEAD and main.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 956,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-015"
+  },
+  {
+    "id": "H-016",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A deprecated alias and its target that slug to one destination print two rows with the same name, one skipped and one would-import.",
+    "impact": "The reader cannot tell which directory was skipped.",
+    "suggested_fix": "Show the source directory when it differs from its slug.",
+    "evidence": "verified — review-logic imports.ts S1b.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 453,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-016"
+  },
+  {
+    "id": "H-017",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Block-scalar descriptions are now folded; on this repo .metaproject/rules/core/gproject-contracts.mdc flips from code to process and `review jev-rules` stops checking it.",
+    "impact": "Arguably correct; the only routing/classification change across 549 real files. Mention in the PR.",
+    "suggested_fix": "None required.",
+    "evidence": "verified — review-logic/diff-real.ts.",
+    "confidence": "high",
+    "file": "src/review/jev-rules.ts",
+    "line": 205,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-017"
+  },
+  {
+    "id": "H-018",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "HEAD reads nothing where main read leniently on non-YAML inputs ('----' fences, a non key:value first metadata child, '[TAG] text' description, '...' terminator, no closing fence, leading blank line).",
+    "impact": "No real file of 549 has these shapes.",
+    "suggested_fix": "Optional: skip a non-key first child instead of discarding the mapping.",
+    "evidence": "verified — review-logic/diff-consumers.ts, diff-reviewers.ts.",
+    "confidence": "high",
+    "file": "src/gdskills/skill-frontmatter.ts",
+    "line": 187,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-018"
+  },
+  {
+    "id": "H-019",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "`skills update --all` aborts with a raw ENOENT when one registered package lost its SKILL.md. Pre-existing (main :404).",
+    "impact": "One broken entry blocks refreshing all others.",
+    "suggested_fix": "Return a skipped row for that entry.",
+    "evidence": "verified — review-logic/doc/probe6.sh.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 955,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-019"
+  },
+  {
+    "id": "H-020",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "skill-frontmatter.ts's header claims every SKILL.md frontmatter consumer reads through it, but parseSkillModelTier (model-tier.ts:1499-1517) and bundled-eval.ts frontmatterKeys (:338) still parse themselves. Pre-existing, untouched.",
+    "impact": "None demonstrated in this diff.",
+    "suggested_fix": "Route both through the shared reader, or qualify the header claim.",
+    "evidence": "verified — keryx ctx rg fence readers over src, 32 files classified.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 1500,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes-r03#H-020"
+  }
+]
