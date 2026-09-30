@@ -4,7 +4,7 @@ import { pathExists, toPosix } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { relevantAcceptedMemory } from "../memory/relevant";
 import { wikiValidate } from "../wiki/service";
-import type { ProjectSkillRegistryEntry } from "./project-skills";
+import { projectSkillReportFileName, type ProjectSkillRegistryEntry } from "./project-skills";
 import { resolveProjectSkill } from "./resolve";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 
@@ -90,7 +90,7 @@ export async function verifyProjectSkill(
     "data",
     "gdskills",
     "reports",
-    `${moduleName}-${skillName}-verification.json`,
+    projectSkillReportFileName(moduleName, skillName),
   );
   const relativeReportPath = toPosix(path.relative(projectRoot, reportPath));
   const report: ProjectSkillVerificationReport = {

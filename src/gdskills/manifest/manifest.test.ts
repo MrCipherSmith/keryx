@@ -80,6 +80,31 @@ test("defaultBundledSourceRoot is the package root from the flat published dist/
   }
 });
 
+// The packaged candidate is tried FIRST. From `<pkg>/dist` the source-layout
+// candidate is three directories up — outside the package, in whatever the
+// package is installed under. When that directory also holds a
+// `src/gdskills/bundled` (keryx installed into a checkout of keryx, which is
+// how it is developed), source-first would read the host's tree and not the
+// installed package's.
+test("defaultBundledSourceRoot prefers the package's own bundled tree over one three levels up", () => {
+  const host = mkdtempSync(path.join(tmpdir(), "keryx-host-"));
+  try {
+    const pkg = path.join(host, "node_modules", "keryx");
+    const dist = path.join(pkg, "dist");
+    mkdirSync(dist, { recursive: true });
+    mkdirSync(path.join(pkg, "src", "gdskills", "bundled"), { recursive: true });
+    mkdirSync(path.join(host, "src", "gdskills", "bundled"), { recursive: true });
+    // Both candidates exist; only the order decides.
+    expect(path.resolve(dist, "..", "..", "..")).toBe(host);
+    expect(path.resolve(defaultBundledSourceRoot(dist))).toBe(pkg);
+    expect(path.resolve(bundledManifestPath(dist))).toBe(
+      path.join(pkg, "src", "gdskills", "bundled", "install-manifest.json"),
+    );
+  } finally {
+    rmSync(host, { recursive: true, force: true });
+  }
+});
+
 test("both resolvers still resolve from the source layout, and agree with each other", () => {
   const manifest = bundledManifestPath();
   expect(existsSync(manifest)).toBe(true);

@@ -9,8 +9,29 @@ import {
   type ShadowedRule,
   type UnresolvedReference,
 } from "../gdskills/rule-references";
+import {
+  escapeRegexLiteral,
+  metadataList,
+  reviewerFlagReport,
+  reviewerPathGate,
+  type PathTriggerSource,
+} from "../gdskills/reviewer-triggers";
 import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import { extractStackRequiresField, parseStackRequires, type StackTag } from "./stack";
+
+// The pure text helpers behind the path gate and the flags live in gdskills,
+// the lower layer, where the importer reads them too. Re-exported so this
+// module stays the place its callers and tests import them from.
+export {
+  descriptionFlags,
+  descriptionPathTriggers,
+  escapeRegexLiteral,
+  reviewerFlagReport,
+  reviewerFlags,
+  reviewerPathGate,
+  type PathTriggerSource,
+  type ReviewerFlagReport,
+} from "../gdskills/reviewer-triggers";
 
 /**
  * The reviewer set a review round can actually dispatch.
@@ -63,16 +84,6 @@ export type BundledReviewer = {
   description?: string;
 };
 
-/**
- * Where a project reviewer's path triggers came from.
- *
- * - `metadata` — `metadata.paths` in its frontmatter, a comma-separated glob list.
- * - `description` — globs (`src/core/**`) and literal file paths
- *   (`src/utils/column-zone.ts`) found in its description.
- * - `none` — neither; the path gate has nothing to match, so it dispatches.
- */
-export type PathTriggerSource = "metadata" | "description" | "none";
-
 export type ProjectReviewer = {
   name: string;
   source: "project-skill";
@@ -88,9 +99,16 @@ export type ProjectReviewer = {
   pathsSource: PathTriggerSource;
   /**
    * Selection flags (`--vantage-core`), `--all` excluded: `metadata.flags`
-   * when declared, otherwise the flags its description names.
+   * when declared, otherwise the flags its description names. Normalised —
+   * lower-case, `--` prefixed — so one flag has one spelling across reviewers.
    */
   flags: string[];
+  /**
+   * What was dropped from `metadata.flags`: one line per entry that is not a
+   * flag, and one more when that left the reviewer with none. Always present;
+   * empty when there is nothing to say.
+   */
+  flagWarnings: string[];
   /**
    * The subset of `flags` at least one other project reviewer also carries.
    * A passed flag listed here is a family selector: it selects this reviewer
@@ -158,25 +176,6 @@ export type ReviewerInventory = {
  * shared: that one parses a different set of labels for a different purpose,
  * and coupling them would make either one's field list the other's problem.
  */
-/**
- * Escape a literal so it can be embedded in a regex source.
- *
- * Extracted and exported for one reason: the version inlined here was broken and
- * nothing could tell. The class was written `[.*+?^${}()|[\\]\\\\]`, which closes
- * at the FIRST `]` — so the pattern became "one metacharacter, then two
- * backslashes, then a bracket", matching essentially nothing. The escape was a
- * complete no-op rather than a partial one.
- *
- * It never misbehaved because all three call-site labels ("Origin", "Origin
- * Hash", "Imported At") contain no metacharacters, so escaping them is identity
- * either way. That is exactly why it needed lifting out: through the public
- * surface, fixed and broken are indistinguishable, and a fix nothing can observe
- * is a fix that silently rots. Here it is directly testable.
- */
-export function escapeRegexLiteral(literal: string): string {
-  return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function metadataLine(content: string, label: string): string | undefined {
   const match = content.match(new RegExp(`^${escapeRegexLiteral(label)}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim();
@@ -209,137 +208,6 @@ async function skillDirs(root: string): Promise<string[]> {
     }
   }
   return names.sort();
-}
-
-/** Split a comma-separated frontmatter scalar into trimmed, unquoted entries. */
-function metadataList(content: string, key: string): string[] {
-  if (!content.startsWith("---")) return [];
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return [];
-  let inMetadata = false;
-  for (const line of content.slice(3, end).split("\n")) {
-    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (top) {
-      inMetadata = top[1] === "metadata";
-      continue;
-    }
-    if (!inMetadata) continue;
-    const field = new RegExp(`^\\s+${escapeRegexLiteral(key)}:\\s*(.+)$`).exec(line);
-    if (field?.[1]) {
-      return field[1]
-        .trim()
-        .replace(/^["'[]|["'\]]$/g, "")
-        .split(",")
-        .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
-        .filter(Boolean);
-    }
-  }
-  return [];
-}
-
-/** Extensions of documents a description cites as its standard — never a trigger. */
-const CITED_DOCUMENT_EXTENSIONS = new Set(["md", "mdc"]);
-
-/** Strip what prose wraps a path in: quotes, list punctuation, an unbalanced `)`. */
-function unwrapToken(raw: string): string {
-  let token = raw.replace(/^[("'`]+/, "");
-  for (;;) {
-    let next = token.replace(/[,.;:"'`]+$/, "");
-    if (next.endsWith(")") && next.split(")").length > next.split("(").length) next = next.slice(0, -1);
-    if (next === token) return token;
-    token = next;
-  }
-}
-
-/**
- * Whether a glob-less token is a repo-relative file path a diff can match.
- *
- * The stated rule is "contains `/` and has a file extension other than
- * `.md` / `.mdc`". Read literally it also takes prose, so each clause below is
- * one kind of prose it must not take:
- *
- * - path characters only — a URL (`https://…`) or `a=b/c.ts` has others;
- * - no leading `/` or `~`, no empty / `.` / `..` segment — an absolute or
- *   relative spelling never equals a path in a diff;
- * - no segment ending in `.` — `e.g./i.e`;
- * - a first segment with a dot must be a dot-directory (`.github/…`) —
- *   `github.com/acme/overlay.git`, `e.g/i.e`, `0.3.40/0.3.41`;
- * - the extension starts with a letter — `v1.2/v1.3`, `2026/09.30`;
- * - not under `.metaproject/` — keryx's own tree is what a description names
- *   as its configuration ("enabled in .metaproject/tasks.config.json", the
- *   bundled `review-jev-*` descriptions), not code under review.
- */
-function isLiteralFilePath(token: string): boolean {
-  if (!/^[A-Za-z0-9._@/-]+$/.test(token) || !token.includes("/")) return false;
-  const segments = token.split("/");
-  if (segments.some((segment) => segment === "" || segment.endsWith("."))) return false;
-  const first = segments[0] as string;
-  if (first === ".metaproject" || (first.includes(".") && !first.startsWith("."))) return false;
-  const extension = /\.([A-Za-z][A-Za-z0-9]*)$/.exec(segments[segments.length - 1] as string)?.[1];
-  return extension !== undefined && !CITED_DOCUMENT_EXTENSIONS.has(extension.toLowerCase());
-}
-
-/**
- * Path triggers a description names: any token with a `*` that looks like a
- * path, and any literal file path (`src/utils/column-zone.ts`) — a trigger list
- * often has one entry that is a single file, and dropping it gated the
- * reviewer off the very file it was written for. `*.ts(x)` expands to both
- * spellings.
- *
- * Two kinds of token yield nothing, deliberately. Prose without a glob or an
- * extension (`date/temporal utils`, `test/e2e`): a guessed trigger that matches
- * nothing would gate a reviewer off a diff it was written for. And a cited
- * document (`src/core/flow/CLAUDE.md`, `core/reviewing.mdc`): that is where the
- * reviewer's rules come from, not what it reviews.
- */
-export function descriptionPathTriggers(description: string): string[] {
-  const triggers = new Set<string>();
-  for (const raw of description.split(/\s+/)) {
-    const token = unwrapToken(raw);
-    const optional = /^(.*)\(([a-z0-9]+)\)$/i.exec(token);
-    const spellings = optional?.[1] && optional[2] ? [optional[1], `${optional[1]}${optional[2]}`] : [token];
-    const isGlob = token.includes("*") && (token.includes("/") || token.startsWith("*."));
-    if (!isGlob && !spellings.every(isLiteralFilePath)) continue;
-    for (const spelling of spellings) triggers.add(spelling);
-  }
-  return [...triggers];
-}
-
-export function descriptionFlags(description: string): string[] {
-  const flags = new Set<string>();
-  for (const match of description.matchAll(/(?:^|[\s(,])(--[a-z][a-z0-9-]*)/g)) {
-    if (match[1] && match[1] !== "--all") flags.add(match[1]);
-  }
-  return [...flags];
-}
-
-/**
- * What gates a review package on the diff: `metadata.paths`, then the triggers
- * its description names, then nothing.
- *
- * The one reader of that precedence. `keryx review reviewers` reports it and
- * `keryx skills import` warns from it (a dry run too, hence from the text
- * rather than the inventory) — two copies of the parse would let the warning
- * say `none` about a package the inventory gates.
- */
-export function reviewerPathGate(content: string): { paths: string[]; pathsSource: PathTriggerSource } {
-  const declared = metadataList(content, "paths");
-  if (declared.length > 0) return { paths: declared, pathsSource: "metadata" };
-  const description = parseSkillFrontmatter(content).description;
-  const described = description ? descriptionPathTriggers(description) : [];
-  return { paths: described, pathsSource: described.length > 0 ? "description" : "none" };
-}
-
-/**
- * Selection flags of a review package: `metadata.flags` when declared (the
- * same list syntax as `metadata.paths`), otherwise the flags its description
- * names. `--all` is excluded either way — it selects every reviewer already.
- */
-export function reviewerFlags(content: string): string[] {
-  const declared = [...new Set(metadataList(content, "flags"))].filter((flag) => flag !== "--all");
-  if (declared.length > 0) return declared;
-  const description = parseSkillFrontmatter(content).description;
-  return description ? descriptionFlags(description) : [];
 }
 
 async function driftFor(
@@ -478,13 +346,15 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
     const originHash = metadataLine(content, "Origin Hash");
     const importedAt = metadataLine(content, "Imported At");
     const description = parseSkillFrontmatter(content).description;
+    const flagReport = reviewerFlagReport(content);
     project.push({
       name,
       source: "project-skill",
       path: relative,
       ...(description ? { description } : {}),
       ...reviewerPathGate(content),
-      flags: reviewerFlags(content),
+      flags: flagReport.flags,
+      flagWarnings: flagReport.warnings,
       // Filled in below, once every project reviewer's flags are known.
       familyFlags: [],
       stackRequires: parseStackRequires(extractStackRequiresField(content)),
@@ -569,6 +439,9 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
         `  - family flags: ${reviewer.familyFlags.join(", ")} — shared with another project reviewer: selects it, stays path-gated`,
       );
     }
+    for (const warning of reviewer.flagWarnings) {
+      lines.push(`  - warning: ${warning}`);
+    }
   }
 
   const unresolved = inventory.project.filter((reviewer) => reviewer.unresolvedRules.length > 0);
@@ -597,8 +470,9 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
       "",
       "The reviewer's text names the path on the left; the file it must read is the one on the",
       "right. `.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`:",
-      "`keryx install` and `keryx update` overwrite rules/core with keryx's own rules, so a rule an",
-      "overlay provides under a name keryx also ships is kept in rules/project.",
+      "`keryx init`, `keryx update` and `keryx skills install` overwrite rules/core with keryx's own rules",
+      "and leave rules/project alone, so a rule an overlay provides under a name keryx also ships is kept",
+      "in rules/project.",
     );
   }
 

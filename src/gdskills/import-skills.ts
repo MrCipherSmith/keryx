@@ -9,11 +9,12 @@ import { literalRulePath, projectRulePath, resolveRuleReference, ruleReferences 
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   createProjectSkill,
+  projectSkillSlug,
   resolveOriginPath,
   type CreateProjectSkillResult,
 } from "./project-skills";
+import { reviewerFlagReport, reviewerFlags, reviewerPathGate, type PathTriggerSource } from "./reviewer-triggers";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
-import { reviewerPathGate, type PathTriggerSource } from "../review/reviewers";
 
 const BUNDLED_NAMES = new Set(BUNDLED_GDSKILLS.map((entry) => entry.name));
 
@@ -170,10 +171,14 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
     );
   }
 
+  // Read before anything is written, so a dry run and a real run compare the
+  // incoming packages with the same set of reviewers.
+  const existingFlags = await projectReviewerFlags(options.projectRoot);
   const imported: ImportedProjectSkill[] = [];
   for (const source of sources) {
     imported.push(await importOne(options, source));
   }
+  addFlagCollisionWarnings(imported, sources, existingFlags);
   // Rules are resolved for skipped skills too: re-running an import over a
   // project that already has the skills is how a project imported before this
   // step existed gets the rules its reviewers cite.
@@ -346,24 +351,11 @@ export function isHttpsSkillUrl(from: string): boolean {
   return /^https:\/\//i.test(from.trim());
 }
 
-/**
- * The directory name `createProjectSkill` writes a module or a package under.
- *
- * The same transform as the writer's own, applied when a source is built, so
- * the name a guard tests is the name that gets written. The guards used to test
- * the raw name: `review_logic` passed the bundled-name guard and was registered
- * as `review-logic`, and `review_house_api` passed the exists guard and
- * overwrote `review-house-api`. "the reported row names the directory the
- * package was written to" in the tests holds the two transforms together.
- */
-function projectSkillSlug(value: string): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "entity";
-}
+// A source's name and module are slugged with the writer's own
+// `projectSkillSlug` when the source is built, so the name a guard tests is the
+// name that gets written. The guards used to test the raw name: `review_logic`
+// passed the bundled-name guard and was registered as `review-logic`, and
+// `review_house_api` passed the exists guard and overwrote `review-house-api`.
 
 /** `--module`, as the directory it names; nothing when the option was not given. */
 function requestedModule(options: ImportProjectSkillsOptions): string | undefined {
@@ -459,12 +451,76 @@ function importNotes(source: ImportSource): Pick<ImportedProjectSkill, "pathsSou
   if (isDeprecated(source.content)) {
     warnings.push("deprecated: true in its frontmatter — imported because it was named by its own path; a tree import skips it.");
   }
-  if (source.module !== "review") {
+  if (source.module !== REVIEW_MODULE) {
     return warnings.length > 0 ? { warnings } : {};
   }
   const pathsSource = pathTriggerSource(source.content);
   if (pathsSource === "none") warnings.push(PATHS_NONE_WARNING);
+  // The `metadata.flags` entries `keryx review reviewers` will drop, in its words.
+  warnings.push(...reviewerFlagReport(source.content).warnings);
   return { pathsSource, ...(warnings.length > 0 ? { warnings } : {}) };
+}
+
+/** The module review-orchestrator dispatches wholesale; `PROJECT_REVIEWER_MODULE` in `src/review`. */
+const REVIEW_MODULE = "review";
+
+/** The selection flags of every project reviewer on disk, by reviewer name. */
+async function projectReviewerFlags(projectRoot: string): Promise<Map<string, string[]>> {
+  const root = path.join(projectRoot, ".metaproject", "project-skills", REVIEW_MODULE);
+  const flags = new Map<string, string[]>();
+  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const content = await readFile(path.join(root, entry.name, "SKILL.md"), "utf8").catch(() => undefined);
+    if (content !== undefined) flags.set(entry.name, reviewerFlags(content));
+  }
+  return flags;
+}
+
+/**
+ * The warning an imported review package gets for a flag that exactly one
+ * other project reviewer carries.
+ *
+ * A flag one reviewer carries is its own: passing it dispatches that reviewer
+ * outright, without the path gate. The moment a second reviewer carries it, it
+ * is a family flag for both — it selects them and leaves each path-gated. So
+ * this import changes how an existing reviewer is dispatched, and nothing else
+ * would say so.
+ */
+function flagCollisionWarning(flag: string, existing: string): string {
+  return `flag ${flag} is carried by one existing project reviewer, ${existing}: it becomes a family flag for both, so ${flag} now selects ${existing} path-gated instead of dispatching it outright.`;
+}
+
+/**
+ * Add {@link flagCollisionWarning} to each written (or would-be-written) review
+ * row. `rows[i]` is the outcome of `sources[i]`.
+ *
+ * "Existing" is a reviewer that was on disk before this import and is not
+ * replaced by it: a package being overwritten does not collide with its own
+ * earlier copy, and two packages arriving together that share a flag are an
+ * overlay's family, not a change to anything the project had. A flag two or
+ * more existing reviewers share is a family flag already.
+ */
+function addFlagCollisionWarnings(
+  rows: ImportedProjectSkill[],
+  sources: ImportSource[],
+  existingFlags: Map<string, string[]>,
+): void {
+  const isWritten = (row: ImportedProjectSkill): boolean => row.module === REVIEW_MODULE && row.status !== "skipped";
+  const replaced = new Set(rows.filter(isWritten).map((row) => row.name));
+  for (const [index, row] of rows.entries()) {
+    const source = sources[index];
+    if (source === undefined || !isWritten(row)) continue;
+    for (const flag of reviewerFlags(source.content)) {
+      const carriers = [...existingFlags]
+        .filter(([name, flags]) => !replaced.has(name) && flags.includes(flag))
+        .map(([name]) => name);
+      const [only] = carriers;
+      if (carriers.length === 1 && only !== undefined) {
+        row.warnings = [...(row.warnings ?? []), flagCollisionWarning(flag, only)];
+      }
+    }
+  }
 }
 
 /** `*` any run of characters, `?` one; everything else literal. Package names hold no `/`. */

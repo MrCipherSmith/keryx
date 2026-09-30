@@ -277,8 +277,11 @@ describe("tree import selection", () => {
   test("the import warning and the reviewer inventory agree on what gates a package", async () => {
     const skills = path.join(source, "skills");
     const packages: Record<string, string> = {
-      // A single literal file is a gate; a cited document is not.
+      // A literal file is a gate beside a glob and not on its own; a cited document never is.
+      "review-listed": 'description: "Dispatched for src/utils/date-*.ts or src/utils/column-zone.ts changes."\nmetadata:\n  category: review\n',
       "review-literal": 'description: "Dispatched for src/utils/column-zone.ts changes."\nmetadata:\n  category: review\n',
+      // Technology-pair prose has the shape of a file path and is not one.
+      "review-next": 'description: "React/Next.js conventions reviewer."\nmetadata:\n  category: review\n',
       "review-cites-doc": 'description: "Rules from src/core/flow/CLAUDE.md and core/reviewing.mdc."\nmetadata:\n  category: review\n',
       "review-bracketed": 'description: "House styles."\nmetadata:\n  category: review\n  paths: ["src/**/*.css", "src/theme/**"]\n',
     };
@@ -288,8 +291,15 @@ describe("tree import selection", () => {
     }
     const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-*"] });
     const imported = Object.fromEntries(result.imported.map((row) => [row.name, row]));
-    expect(imported["review-literal"]?.pathsSource).toBe("description");
-    expect(imported["review-literal"]?.warnings).toBeUndefined();
+    expect(imported["review-listed"]?.pathsSource).toBe("description");
+    expect(imported["review-listed"]?.warnings).toBeUndefined();
+    expect(imported["review-literal"]?.pathsSource).toBe("none");
+    expect(imported["review-literal"]?.warnings).toEqual([PATHS_NONE_WARNING]);
+    expect(imported["review-next"]?.pathsSource).toBe("none");
+    expect(imported["review-next"]?.warnings).toEqual([PATHS_NONE_WARNING]);
+    expect(renderImportProjectSkillsMarkdown(result)).toContain(
+      `- review/review-next: imported — review-orchestrator will dispatch this after \`keryx review reviewers\` lists it\n  - warning: ${PATHS_NONE_WARNING}`,
+    );
     expect(imported["review-cites-doc"]?.pathsSource).toBe("none");
     expect(imported["review-cites-doc"]?.warnings).toEqual([PATHS_NONE_WARNING]);
     expect(imported["review-bracketed"]?.pathsSource).toBe("metadata");
@@ -301,6 +311,125 @@ describe("tree import selection", () => {
         .sort()
         .map((name) => [name, imported[name]?.pathsSource ?? "absent"]),
     );
+  });
+
+  describe("flag warnings", () => {
+    async function writeReviewPackage(name: string, frontmatter: string): Promise<string> {
+      const dir = path.join(source, "skills", name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "SKILL.md"),
+        `---\nname: ${name}\ndescription: "Dispatched for src/${name}/** changes."\nmetadata:\n  category: review\n${frontmatter}---\n\nbody\n`,
+        "utf8",
+      );
+      return dir;
+    }
+
+    /** A project reviewer already on disk, as an earlier import or a hand-written skill leaves it. */
+    async function writeExistingReviewer(name: string, flags: string): Promise<void> {
+      const dir = path.join(cwd, ".metaproject", "project-skills", "review", name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        path.join(dir, "SKILL.md"),
+        `---\nname: ${name}\ndescription: "Dispatched for src/${name}/** changes."\nmetadata:\n  flags: "${flags}"\n---\n\nbody\n`,
+        "utf8",
+      );
+    }
+
+    const droppedWarning = (entry: string): string =>
+      `metadata.flags: "${entry}" dropped — a flag is \`--\` and a name of lower-case letters, digits and dashes that starts with a letter`;
+
+    const collisionWarning = (flag: string, existing: string): string =>
+      `flag ${flag} is carried by one existing project reviewer, ${existing}: it becomes a family flag for both, so ${flag} now selects ${existing} path-gated instead of dispatching it outright.`;
+
+    // F-006: the entry the inventory drops is said at import, where the operator is looking.
+    test("a metadata.flags entry that is not a flag is a warning on the imported row", async () => {
+      const dir = await writeReviewPackage("review-acme", '  flags: "--acme, house_ui"\n');
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: dir, dryRun });
+        expect(result.imported[0]?.warnings).toEqual([droppedWarning("house_ui")]);
+        expect(renderImportProjectSkillsMarkdown(result)).toContain(`  - warning: ${droppedWarning("house_ui")}`);
+      }
+      // The same words `keryx review reviewers` reports for it.
+      expect((await collectReviewers(cwd)).project[0]?.flagWarnings).toEqual([droppedWarning("house_ui")]);
+    });
+
+    test("a flag warning belongs to a review package: another module's metadata.flags is not read", async () => {
+      const dir = path.join(source, "skills", "house-job");
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "SKILL.md"), '---\nname: house-job\nmetadata:\n  category: orchestration\n  flags: "house_ui"\n---\n\nbody\n', "utf8");
+      const result = await importProjectSkills({ projectRoot: cwd, from: dir });
+      expect(result.imported[0]).toMatchObject({ module: "orchestration", status: "imported" });
+      expect(result.imported[0]?.warnings).toBeUndefined();
+    });
+
+    // F-008: `--house` was review-house-core's own flag — passing it dispatched
+    // that reviewer outright. Once a second reviewer carries it, it is a family
+    // flag and review-house-core is path-gated under it. The import is where
+    // that changes, so the import is where it is said.
+    test("a flag exactly one existing reviewer carries is a warning naming the flag and that reviewer", async () => {
+      await writeExistingReviewer("review-house-core", "--house, --house-core");
+      const dir = await writeReviewPackage("review-house-ui", '  flags: "House, --house-ui"\n');
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: dir, dryRun });
+        expect(result.imported[0]?.warnings).toEqual([collisionWarning("--house", "review-house-core")]);
+        expect(renderImportProjectSkillsMarkdown(result)).toContain(
+          `  - warning: ${collisionWarning("--house", "review-house-core")}`,
+        );
+      }
+      // What the warning predicts is what the inventory now reports.
+      const inventory = await collectReviewers(cwd);
+      expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.familyFlags])).toEqual([
+        ["review-house-core", ["--house"]],
+        ["review-house-ui", ["--house"]],
+      ]);
+    });
+
+    test("no collision warning for a flag two existing reviewers already share, or for a new flag", async () => {
+      await writeExistingReviewer("review-house-core", "--house");
+      await writeExistingReviewer("review-house-api", "--house");
+      const dir = await writeReviewPackage("review-house-ui", '  flags: "--house, --house-ui"\n');
+      const result = await importProjectSkills({ projectRoot: cwd, from: dir });
+      expect(result.imported[0]).toMatchObject({ status: "imported" });
+      expect(result.imported[0]?.warnings).toBeUndefined();
+    });
+
+    test("re-importing a reviewer over itself is not a collision with itself", async () => {
+      const dir = await writeReviewPackage("review-house-ui", '  flags: "--house"\n');
+      await importProjectSkills({ projectRoot: cwd, from: dir });
+      const again = await importProjectSkills({ projectRoot: cwd, from: dir, force: true });
+      expect(again.imported[0]).toMatchObject({ status: "overwritten" });
+      expect(again.imported[0]?.warnings).toBeUndefined();
+    });
+
+    test("two packages imported together that share a new flag do not collide with each other; a skipped one gets no warning", async () => {
+      await writeExistingReviewer("review-house-core", "--core");
+      await writeReviewPackage("review-house-a", '  flags: "--house, --core"\n');
+      await writeReviewPackage("review-house-b", '  flags: "--house"\n');
+      // Already there and not forced: skipped, and it stays a carrier of --core.
+      await writeReviewPackage("review-house-core", '  flags: "--core"\n');
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: source, only: ["review-house-*"], dryRun });
+        const byName = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+        expect(byName["review-house-a"]?.warnings).toEqual([collisionWarning("--core", "review-house-core")]);
+        expect(byName["review-house-b"]?.warnings).toBeUndefined();
+        expect(byName["review-house-core"]).toMatchObject({ status: "skipped" });
+        expect(byName["review-house-core"]?.warnings).toBeUndefined();
+      }
+    });
+  });
+
+  test("a package whose `deprecated: true` sits under metadata is skipped in a tree import like a top-level one", async () => {
+    const skills = path.join(source, "skills");
+    await mkdir(path.join(skills, "review-old"), { recursive: true });
+    await writeFile(
+      path.join(skills, "review-old", "SKILL.md"),
+      "---\nname: review-old\nmetadata:\n  category: review\n  deprecated: true\n---\n\nbody\n",
+      "utf8",
+    );
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.imported[0]).toMatchObject({ name: "review-old", status: "skipped", reason: "deprecated" });
+    await expect(readFile(installed("review-old"), "utf8")).rejects.toThrow();
   });
 
   test("the path warning is a review concern: another module gets none, and a skipped package gets none", async () => {

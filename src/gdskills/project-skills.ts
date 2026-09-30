@@ -132,8 +132,8 @@ export async function createProjectSkill(
     );
   }
 
-  const moduleName = slugify(options.module ?? inferModule(options.target));
-  const skillName = slugify(options.name ?? inferSkillName(options.target));
+  const moduleName = projectSkillSlug(options.module ?? inferModule(options.target));
+  const skillName = projectSkillSlug(options.name ?? inferSkillName(options.target));
   const format = options.format ?? "auto";
   const packageRoot = path.join(metaprojectRoot, "project-skills", moduleName, skillName);
   const relativeSkillPath = toPosix(path.relative(projectRoot, packageRoot));
@@ -768,7 +768,12 @@ function inferSkillName(target: string): string {
   return base || "entity";
 }
 
-function slugify(value: string): string {
+/**
+ * The directory name a module or a package is written under. Exported so a
+ * caller that decides on a name before the write — `keryx skills import`'s
+ * bundled-name and already-exists guards — tests the name that gets written.
+ */
+export function projectSkillSlug(value: string): string {
   const slug = value
     .trim()
     .toLowerCase()

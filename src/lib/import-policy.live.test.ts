@@ -324,6 +324,39 @@ test("the wiki group is the only core->client debt outside the session-state exc
   expect(other.length).toBe(9);
 });
 
+// ── Direction between two core owners ────────────────────────────────────────
+
+/**
+ * Directions the zone table cannot express, because both ends are `core`.
+ *
+ * `gdskills -> review` (flow 360, F-018): `src/review` is built on
+ * `src/gdskills` — it reads skills, the catalog, rule references. When
+ * `gdskills/import-skills.ts` imported `reviewerPathGate` from
+ * `review/reviewers.ts` the two directories depended on each other. The pure
+ * text helpers now live in `gdskills/reviewer-triggers.ts` and `review`
+ * re-exports them.
+ */
+const FORBIDDEN_CORE_DIRECTIONS = [{ from: "gdskills", to: "review" }] as const;
+
+test("no production module imports against a forbidden core-to-core direction", async () => {
+  const r = await report();
+  const segment = (file: string): string => path.relative(SRC, file).split(path.sep)[0] as string;
+  for (const { from, to } of FORBIDDEN_CORE_DIRECTIONS) {
+    const between = (a: string, b: string): string[] =>
+      [
+        ...new Set(
+          r.edges
+            .filter((e) => segment(e.from) === a && segment(e.to) === b)
+            .map((e) => `${path.relative(SRC, e.from)} -> ${path.relative(SRC, e.to)}`),
+        ),
+      ].sort();
+    // Anti-vacuous: the permitted direction is really there, so an empty list
+    // below is a finding about direction and not about a scan that saw neither.
+    expect(between(to, from).length).toBeGreaterThan(0);
+    expect({ from, to, edges: between(from, to) }).toEqual({ from, to, edges: [] });
+  }
+});
+
 // ── RULE 2: measured and pinned, not enforced at zero ────────────────────────
 
 /** Does this core owner publish a `service.ts` facade? Read from the tree. */
