@@ -89,25 +89,31 @@ export async function computeMetrics(input: {
     const health = healthScore({ risk, ...penalties }, config);
     // Findings from a source the baseline never measured are new measurement,
     // not new defects: leave them out of the side compared with the baseline.
-    const comparableHealth = newSources && newSources.size > 0
-      ? healthScore(
-          {
-            risk: riskScore(
-              countBy(
-                scopeFindings.filter((f) => !newSources.has(f.source)),
-                (f) => f.priority,
-                PRIORITIES,
-              ),
-              config.scoring.priorityWeights,
-            ),
-            ...penalties,
-            // Coverage contributes a penalty, not findings: a coverage report
-            // seen for the first time is new measurement too.
-            ...(newSources.has("coverage") ? { coverage: 0 } : {}),
-          },
-          config,
+    // Coverage contributes a penalty, not findings, so a first-seen coverage
+    // report's penalty is left out the same way.
+    const hasNewSources = newSources !== undefined && newSources.size > 0;
+    const newRisk = hasNewSources
+      ? riskScore(
+          countBy(
+            scopeFindings.filter((f) => newSources.has(f.source)),
+            (f) => f.priority,
+            PRIORITIES,
+          ),
+          config.scoring.priorityWeights,
         )
+      : 0;
+    const newCoveragePenalty = hasNewSources && newSources.has("coverage") ? penalties.coverage : 0;
+    const comparableHealth = hasNewSources
+      ? healthScore({ ...penalties, risk: risk - newRisk, coverage: penalties.coverage - newCoveragePenalty }, config)
       : health;
+    // The same effect in health points, from the raw penalties -- not the
+    // difference of two rounded, clamped scores, which reads 0 for a scope
+    // already clamped at 0 and would leave the new source's findings to be
+    // reported later as a regression of unchanged code.
+    const newSourceEffect = hasNewSources
+      ? ((newRisk + newCoveragePenalty) * config.scoring.normalizePerLoc) /
+        Math.max(loc, config.scoring.normalizePerLoc)
+      : undefined;
     const baseHealth = baseline.get(key)?.health_score ?? null;
 
     return {
@@ -127,6 +133,7 @@ export async function computeMetrics(input: {
       risk_score: risk,
       trend: trendOf(comparableHealth, baseHealth),
       regression_score: regressionScore(comparableHealth, baseHealth),
+      ...(newSourceEffect !== undefined ? { new_source_effect: newSourceEffect } : {}),
     };
   };
 

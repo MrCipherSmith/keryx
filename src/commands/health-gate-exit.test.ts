@@ -18,7 +18,30 @@
 // technique `security-gate-exit.test.ts` uses for `SecurityGate`.
 
 import { describe, expect, test } from "bun:test";
-import { runExitCode } from "./health";
+import { reportBaselineUpdate, runExitCode } from "./health";
+
+describe("reportBaselineUpdate — a refusal is never reported as success", () => {
+  function capture() {
+    const out: string[] = [];
+    const err: string[] = [];
+    return { io: { log: (line: string) => out.push(line), error: (line: string) => err.push(line) }, out, err };
+  }
+
+  test("a refused update exits 1, says why on stderr, and prints no success line", () => {
+    const { io, out, err } = capture();
+    const exit = reportBaselineUpdate({ updated: [], path: ".metaproject/health/baselines/scores.json", refused: "came from a --sources run" }, io);
+    expect(exit).toBe(1);
+    expect(err.join("\n")).toContain("Baseline not updated: came from a --sources run");
+    expect(out.join("\n")).not.toContain("Updated baseline");
+  });
+
+  test("a written update exits 0 and names the scopes", () => {
+    const { io, out, err } = capture();
+    expect(reportBaselineUpdate({ updated: ["project", "module:src"], path: "scores.json" }, io)).toBe(0);
+    expect(out).toEqual(["Updated baseline (2 scope(s)): scores.json"]);
+    expect(err).toEqual([]);
+  });
+});
 import type { GateStatus } from "../health/types";
 
 describe("runExitCode — exhaustive over GateStatus, default arm blocks", () => {

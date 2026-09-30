@@ -3,7 +3,7 @@ import { isPathInside, pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadHealthConfig } from "./config";
 import { runHealth } from "./run";
-import { measuredSources, writeBaseline } from "./baseline";
+import { loadBaselineSources, measuredSources, writeBaseline } from "./baseline";
 import { getCoverage } from "./metrics/coverage";
 import { FINDING_ADAPTERS } from "./sources";
 import { dataRoot, listSourceFiles, moduleOfFile } from "./util";
@@ -342,6 +342,23 @@ export function createCodeHealthService(): CodeHealthService {
       // A project or `changed` re-baseline rewrites every scope, so it records
       // what the report measured; a module or file one keeps the file's set.
       const rewritesAll = input.scope === undefined || input.scope.kind === "project" || input.scope.kind === "changed";
+      if (!rewritesAll) {
+        // The file's source set applies to every scope. A module/file score
+        // measured with a source the set does not hold yet would bake that
+        // source in while the set says it is unmeasured, and the next
+        // whole-project run would subtract its effect a second time.
+        const recorded = await loadBaselineSources(cwd);
+        const unrecorded = recorded === null
+          ? []
+          : measuredSources(latest.sources).filter((source) => !recorded.sources.has(source));
+        if (unrecorded.length > 0) {
+          return {
+            updated: [],
+            path: baselinePathLabel,
+            refused: `the latest report measured sources the baseline has not recorded yet (${unrecorded.join(", ")}); run \`keryx health run\` on the whole project first so they are folded in`,
+          };
+        }
+      }
       const updated = await writeBaseline(
         cwd,
         latest.metrics,

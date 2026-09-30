@@ -1,7 +1,7 @@
 import { createCodeHealthService } from "../health/service";
 import { computeTrend, loadHistory } from "../health/history";
 import { optionValue } from "../lib/args";
-import type { GateStatus, ScopeSelector } from "../health/types";
+import type { GateStatus, HealthBaselineResult, ScopeSelector } from "../health/types";
 
 let service: ReturnType<typeof createCodeHealthService> | null = null;
 
@@ -246,12 +246,25 @@ async function runBaseline(args: string[]): Promise<void> {
     cwd: process.cwd(),
     ...(scope ? { scope } : {}),
   });
+  const exit = reportBaselineUpdate(result, console);
+  if (exit !== 0) process.exitCode = exit;
+}
+
+/**
+ * Print a baseline update's outcome and return its exit code. A refusal wrote
+ * nothing, so it must never print the success line or exit 0 -- a script
+ * checking the exit status would otherwise believe a baseline was taken.
+ */
+export function reportBaselineUpdate(
+  result: HealthBaselineResult,
+  io: { log: (line: string) => void; error: (line: string) => void },
+): number {
   if (result.refused !== undefined) {
-    console.error(`Baseline not updated: ${result.refused}`);
-    process.exitCode = 1;
-    return;
+    io.error(`Baseline not updated: ${result.refused}`);
+    return 1;
   }
-  console.log(`Updated baseline (${result.updated.length} scope(s)): ${result.path}`);
+  io.log(`Updated baseline (${result.updated.length} scope(s)): ${result.path}`);
+  return 0;
 }
 
 async function runTrend(args: string[]): Promise<void> {

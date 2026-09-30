@@ -106,7 +106,10 @@ export async function foldNewSources(
   for (const metric of metrics) {
     const entry = scopes[metric.key];
     if (entry === undefined) continue;
-    const folded = Math.min(100, Math.max(0, metric.health_score + metric.regression_score));
+    // The previous value minus the new sources' own effect, from raw penalties
+    // (a scope clamped at 0 still records the full effect).
+    const effect = metric.new_source_effect ?? 0;
+    const folded = Math.min(100, Math.max(0, Math.round(entry.health_score - effect)));
     scopes[metric.key] = { ...entry, health_score: folded };
   }
   await writeBaselineFile(cwd, { ...data, scopes, sources: [...new Set([...recorded, ...newSources])].sort() });
@@ -121,16 +124,8 @@ async function writeBaselineFile(cwd: string, data: BaselineFile): Promise<void>
 export async function loadBaseline(
   cwd: string,
 ): Promise<Map<string, BaselineEntry>> {
-  const file = baselinePath(cwd);
-  if (!(await pathExists(file))) {
-    return new Map();
-  }
-  try {
-    const data = JSON.parse(await readFile(file, "utf8")) as BaselineFile;
-    return new Map(Object.entries(data.scopes ?? {}));
-  } catch {
-    return new Map();
-  }
+  const data = await readBaselineFile(cwd);
+  return new Map(Object.entries(data?.scopes ?? {}));
 }
 
 export async function hasBaseline(cwd: string): Promise<boolean> {

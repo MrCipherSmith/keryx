@@ -177,7 +177,13 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // in this release, on a project that already named it) contributes new
   // MEASUREMENT, not new defects: its findings are kept out of the regression
   // comparison instead of reading as a drop in unchanged code.
-  const measured = measuredSources(sourceInfos);
+  // Coverage data is applied to the scores whenever a report is on disk,
+  // whatever the source's mode or a --sources filter says. The recorded set
+  // must name what shaped the scores, or a baseline would carry a coverage
+  // penalty while claiming coverage unmeasured, and enabling coverage later
+  // would subtract that penalty a second time.
+  const coverageApplied = coverage.total !== null || coverage.byFile.size > 0;
+  const measured = [...new Set([...measuredSources(sourceInfos), ...(coverageApplied ? ["coverage"] : [])])].sort();
   const baselineSources = await loadBaselineSources(cwd);
   const newSources = new Set(
     baselineSources === null ? [] : measured.filter((s) => !baselineSources.sources.has(s)),

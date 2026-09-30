@@ -168,7 +168,8 @@ test("end to end: an oxlint-only project is linted by oxlint and required eslint
 test("oxlint with no files to lint names that cause, not a format error", async () => {
   // Real oxlint 1.81.0 in a tree with nothing to lint: this line on STDOUT,
   // then an empty JSON run, exit 1.
-  const stdout = `No files found to lint. Please check your paths and ignore patterns.\n${realOutput([]).replace('"number_of_files":1', '"number_of_files":0')}`;
+  // Leading whitespace included: the preamble is matched after trimming it.
+  const stdout = `\n  No files found to lint. Please check your paths and ignore patterns.\n${realOutput([]).replace('"number_of_files":1', '"number_of_files":0')}`;
   const { cwd } = await oxlintProject("oxlint-no-files", stdout, 1);
   try {
     const outcome = await runAdapter(oxlintAdapter, ctx(cwd), runCfg("oxlint"), `test-${Date.now()}`);

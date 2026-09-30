@@ -140,6 +140,12 @@ export type ScopeMetrics = {
   risk_score: number;
   trend: "improved" | "stable" | "regressed" | "unknown";
   regression_score: number;
+  /**
+   * Health points this scope loses to sources the baseline has not measured
+   * yet, computed from the raw penalties (unrounded, unclamped). Present only
+   * when there are such sources; the baseline folds it in once.
+   */
+  new_source_effect?: number;
 };
 
 export type GateStatus = "pass" | "warn" | "incomplete" | "fail";
