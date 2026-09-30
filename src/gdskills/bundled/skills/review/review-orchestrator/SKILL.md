@@ -383,7 +383,7 @@ human or a bot has already reviewed pull request `#A`, and someone wants those
 comments interpreted, checked against the code, fixed and answered. Under its
 `--fix` mode it dispatches `flow-orchestrator`, which opens a **second** pull
 request `#B` carrying the fix, based on `#A`'s own head branch, and dispatches
-**this** orchestrator on every round against `#B`.
+**this** orchestrator on every round against `#B`. `review-pr-feedback` is present only when installed — it is in the `full` profile only. When it is absent no caller of this kind exists, so the default below holds and this orchestrator owns the reply; do not hand a request to it, say it is not installed and name the install command (`SKILL.detail.md`, "Skills present only when installed").
 
 `#B` is its own conversation. Collect and reply on it exactly as always: someone
 reviewing the fix deserves an answer from the run that made the fix, and its
@@ -1000,7 +1000,7 @@ Three bounds keep it from deleting coverage:
 
 - **Only path-triggered reviewers.** A reviewer selected by an explicit flag, or
   one whose scope is the whole change rather than a path set — `review-logic`,
-  `review-regression`, `review-verifier` — is never path-gated.
+  `review-regression`, `review-verifier` — is never path-gated. One exception, for project reviewers only: a flag that more than one project reviewer carries is a **family flag** (the inventory lists it in that reviewer's `familyFlags`). It selects the whole family, and each member stays path-gated — `--<family>` over a diff touching one member's paths dispatches that member, not all of them.
 - **Scope A only.** Scope B is the blast radius; it is *supposed* to name files the
   diff never touched.
 - **Ambiguity includes.** If you cannot decide whether a path matches, dispatch.
@@ -1044,7 +1044,7 @@ Two things it does NOT get:
   the origin.
 
 **Select them with the fields the inventory returns, not by reading prose.**
-Each `project` entry carries `flags` (a passed flag selects it explicitly),
+Each `project` entry carries `flags` (a passed flag selects it) and `familyFlags` (the subset of `flags` another project reviewer also carries: a passed flag listed there selects it but leaves it path-gated; a passed flag in `flags` and not in `familyFlags` is unique to it, so it is explicit and ungated),
 `paths` + `pathsSource` (the path gate; `none` → dispatch), `stackRequires`
 (stack scoping), `unresolvedRules` (dispatch, name the missing rules once in the
 report) and `drift` (dispatch, name it once in the report). What each means and
@@ -1085,7 +1085,7 @@ When `review.jev.select` is on, before Wave A/B dispatch: run `keryx review jev-
 
 ## Legacy/Profile Reviewer Auto-Detection
 
-Legacy/profile reviewers are specialized review profiles that predate the review-domain `review-*` naming. They are still valid and must be shown separately from generic and convention reviewers so the user can opt in deliberately.
+Legacy/profile reviewers are specialized review profiles that predate the review-domain `review-*` naming. They are still valid and must be shown separately from generic and convention reviewers so the user can opt in deliberately. **They are present only when installed:** `code-ai-review`, `code-learned-review`, `code-style-review` and `code-mobx-store-review` are in the `full` profile only, so in any other profile the flags below (`--code-ai`, `--learned`, `--code-style`, `--mobx-store`, `--legacy-profiles`) name reviewers that may not exist. A legacy reviewer missing from the `bundled` half of `keryx review reviewers --json` is absent: leave it out of the `Optional legacy/profile reviewers` preview, and when a flag asked for it, do not dispatch a substitute — record it in `Skipped reviewers` with reason `not-installed` and the command that adds it (`keryx skills install --profile full`, or the narrower manifest form in `SKILL.detail.md`, "Skills present only when installed"). `--legacy-profiles` and `--all` dispatch the legacy reviewers that are installed and skip the rest the same way.
 
 | Trigger | Reviewers appended |
 |---|---|
@@ -1291,16 +1291,16 @@ Runtime rules:
 - If the exact reviewer agent type exists, dispatch that reviewer directly.
 - If the exact reviewer agent type does not exist but `skills/<reviewer>/SKILL.md` exists, dispatch `general-purpose` and include the reviewer name, skill path, bounded review context, and required `REVIEW_RESULT` schema in the prompt.
 - If neither the agent type nor the skill file exists, do not silently substitute another reviewer. Mark that reviewer as `BLOCKED`, include the missing agent/skill name, and continue only with independent reviewers.
+- **A project reviewer is dispatched by its package, on every branch above.** For each entry in the `project` half of `keryx review reviewers --json`, put the absolute path of its registered `<path>/SKILL.md` in the dispatch (`skill_path`) and say in the prompt that this file is the reviewer's definition and overrides the built-in definition of any agent type with the same name. A runtime may ship an agent type called exactly what the project called its reviewer, carrying an older or unrelated prompt; without the path the round runs that prompt and reports it under the project reviewer's name. If the file is missing, mark the reviewer `BLOCKED` and name the missing path — do not fall back to the same-named agent type or to any other reviewer.
 - Record the chosen runtime per reviewer in `review_context.review_plan.dispatch_plan`.
-- The user-facing progress line must be explicit: "Running `<reviewer>` via `general-purpose` fallback because native agent type is unavailable."
-
-Do not use vague fallback messages such as "running through available agent types" without naming which reviewers used fallback and why.
+- The user-facing progress line must be explicit: "Running `<reviewer>` via `general-purpose` fallback because native agent type is unavailable." Do not use vague fallback messages such as "running through available agent types" without naming which reviewers used fallback and why.
 
 Pass each sub-reviewer a payload matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json`:
 
 ```yaml
 review_context: <bounded context pack>
 reviewer: <skill-name>
+skill_path: <absolute path of <path>/SKILL.md — project reviewers only; omit for a bundled reviewer>
 scope_mode: diff | path
 context_doc: <path or empty>
 issue_url: <url or empty>
