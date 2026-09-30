@@ -748,6 +748,7 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
   const OWN_HELP: ReadonlyArray<{ argv: string[]; has: string[]; lacks: string }> = [
     { argv: ["skills", "import", "--help"], has: ["keryx skills import --from"], lacks: "keryx skills catalog" },
     { argv: ["skills", "update", "-h"], has: ["keryx skills update --all"], lacks: "keryx skills catalog" },
+    { argv: ["skills", "remove", "--help"], has: ["keryx skills remove <module>/<name>"], lacks: "keryx skills catalog" },
     { argv: ["review", "import", "--help"], has: ["keryx review import --from"], lacks: "keryx review attach" },
     {
       argv: ["review", "comments", "--help"],

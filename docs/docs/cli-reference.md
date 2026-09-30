@@ -3041,6 +3041,7 @@ keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--js
 keryx skills create <target> --module <module> --name <skill-name>
 keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
 keryx skills update [<module>/<name>|--all] [--from <origin>]
+keryx skills remove <module>/<name> [--dry-run] [--json]
 keryx skills verify <skill-or-target>
 keryx skills verify --bundled [--root <dir>] [--json]
 keryx skills learn --from-review <path> --skill <module>/<skill>
@@ -3070,6 +3071,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
 | `import --from <src>` | `--module <m>`, `--name <n>`, `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. |
 | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. |
+| `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`: the package directory (and its `<module>/` directory when it was the last skill there), the `projectSkillRegistry` entry, the catalog row, and the verification report. Each part is listed as `removed` or `absent`; an already-missing part is not an error, so a skill half-removed by hand can be finished. `--dry-run` lists what would be removed and changes nothing. A bundled skill is refused (use `install`/`uninstall`); an unknown name exits `1`. Imported rules, runtime exports and learning proposals are left in place. |
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
 | `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (the 65 `SKILL.md` files copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
 | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |

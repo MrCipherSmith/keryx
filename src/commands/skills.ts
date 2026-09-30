@@ -59,6 +59,7 @@ import {
   runSkillsImportCommand,
   runSkillsUpdateCommand,
 } from "../gdskills/import-skills";
+import { printSkillsRemoveHelp, runSkillsRemoveCommand } from "../gdskills/remove-skill";
 import { verifyProjectSkill } from "../gdskills/verify";
 import {
   defaultBundledRoot,
@@ -171,6 +172,16 @@ export async function skillsCommand(args: string[]): Promise<void> {
   if (command === "update") {
     try {
       await runSkillsUpdateCommand(args);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (command === "remove") {
+    try {
+      await runSkillsRemoveCommand(args);
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
@@ -1753,6 +1764,7 @@ const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
   ["generate", () => printCreateHelp("generate")],
   ["import", printSkillsImportHelp],
   ["update", printSkillsUpdateHelp],
+  ["remove", printSkillsRemoveHelp],
   ["verify", printVerifyHelp],
   ["learn", printLearnHelp],
   ["export", printExportHelp],
@@ -1786,6 +1798,7 @@ Usage:
   keryx skills generate <target> --module <module> --name <skill-name>
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
   keryx skills update [<module>/<name>|--all] [--from <origin>]
+  keryx skills remove <module>/<name> [--dry-run] [--json]
   keryx skills verify <skill-or-target>
   keryx skills verify --all
   keryx skills verify --bundled [--root <dir>] [--json]
@@ -1833,7 +1846,9 @@ Commands:
   generate  Alias for create
   import    Copy a SKILL.md or overlay tree into project-skills
   update    Re-read a project-skill Origin and overwrite SKILL.md
-  verify    Verify a project skill, or --bundled for the shipped skill tree
+  remove    Remove a project skill: package directory, registry entry, catalog row and
+            verification report. Bundled skills are refused (see uninstall).
+  verify   Verify a project skill, or --bundled for the shipped skill tree
   learn     Create or apply auditable learning proposals
   export    Export a canonical project skill to a runtime artifact
   sync      Sync exported runtime skills to an explicit target directory
