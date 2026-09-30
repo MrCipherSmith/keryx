@@ -1,0 +1,294 @@
+[
+  {
+    "id": "G-01",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "parseOxlintJson reads real oxlint diagnostics as ESLint per-file records with messages[]; real oxlint 1.x diagnostics are flat, so every diagnostic is dropped while validate() stays valid.",
+    "impact": "Warnings-only oxlint project reports pass/complete with 0 findings; any error-severity diagnostic yields configured-but-failed and gate INCOMPLETE: required source unavailable: eslint — the defect the PR fixes.",
+    "suggested_fix": "Map the diagnostics shape per diagnostic (filename, labels[0].span.line, code, severity string); add a captured real oxlint 1.81.0 payload with an error and a warning as a regression fixture through runAdapter and computeGate.",
+    "evidence": "Real oxlint 1.81.0 output through runAdapter(oxlintAdapter)+computeGate at 68616a75: warnings-only -> findings 0, gate pass complete; error case -> exit 1, configured-but-failed, gate incomplete. Mutation removing the diagnostics branch keeps all 52 tests green. Also raised independently by review-testing-practices.",
+    "confidence": "high",
+    "file": "src/health/sources/oxlint.ts",
+    "line": 39,
+    "quote": "  if (data !== null && typeof data === \"object\" && Array.isArray((data as { diagnostics?: unknown }).diagnostics)) {\n    return (data as { diagnostics: OxlintFile[] }).diagnostics;\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/health/sources/oxlint.ts parseOxlintJson (diagnostics branch)",
+        "src/health/sources/oxlint.ts oxlintAdapter.parse (messages loop)",
+        "src/health/sources/oxlint.ts oxlintAdapter.validate (accepts the shape parse cannot read)",
+        "src/health/sources/oxlint.test.ts ONE_ERROR fixture (ESLint shape only)"
+      ],
+      "enumeration_method": "oxlint output is consumed only by oxlintAdapter (FINDING_ADAPTERS in src/health/sources/index.ts; keryx ctx rg parseOxlintJson hits only oxlint.ts). The eslint adapter parses real per-file ESLint output and is not in this class."
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-01",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Regenerated real oxlint 1.81.0 JSON (warnings-only exit 0; no-debugger=error exit 1) and ran runAdapter(oxlintAdapter)+computeGate via verify/g01.ts: warnings-only findings 0, parse parsed, gate pass complete with the NOTE line; error case findings 0, configured-but-failed 'source command exited 1 without recognized findings', gate incomplete ['INCOMPLETE: required source unavailable: eslint','WARN: optional source failed: oxlint'].",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: real diagnostics parser + captured oxlint 1.81.0 fixture; closed in round 2"
+    }
+  },
+  {
+    "id": "G-02",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "String severity, filename key, absolute-path relativization and .oxlintrc.jsonc detection are untested.",
+    "impact": "Regressions in severity mapping or file attribution for real oxlint output ship unnoticed.",
+    "suggested_fix": "Cover them in the real-format fixture plus a .oxlintrc.jsonc-only detect case.",
+    "evidence": "Four single-line mutations each left 52/52 green.",
+    "confidence": "high",
+    "file": "src/health/sources/oxlint.ts",
+    "line": 72,
+    "quote": "        const isError = message.severity === 2 || message.severity === \"error\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-02",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Baseline 52/0 on the 5 changed test files; four single-line mutations of oxlint.ts (string severity, filename key, abs-path relativization, .oxlintrc.jsonc) each 52 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: oxlint.test.ts severity/abs-path/jsonc cases; round 2 mutations M15-M18 red"
+    }
+  },
+  {
+    "id": "G-03",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "No end-to-end runHealth test over an oxlint-only tree.",
+    "impact": "Unregistering the adapter or id drift reintroduces INCOMPLETE while CI stays green.",
+    "suggested_fix": "Add a runHealth test on a temp tree with .oxlintrc.json and a fake node_modules/.bin/oxlint printing real-shaped JSON; assert gate not incomplete and the NOTE line.",
+    "evidence": "Removing oxlintAdapter from FINDING_ADAPTERS: 52 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/health/sources/index.ts",
+    "line": 12,
+    "quote": "  eslintAdapter,\n  oxlintAdapter,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-03",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Deleted oxlintAdapter from FINDING_ADAPTERS (numstat 0/1); 5 changed test files 52 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: oxlint.test.ts end-to-end runHealth; round 2 M19 red"
+    }
+  },
+  {
+    "id": "G-04",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The test never controls PATH, so local-before-PATH precedence is unenforced.",
+    "impact": "A PATH-first regression passes CI on any runner without a global tsc.",
+    "suggested_fix": "Prepend a decoy tsc dir to PATH in the test and assert the node_modules/.bin binary is chosen.",
+    "evidence": "resolveBin mutated to PATH-first: test 1 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/health/sources/typescript-local-bin.test.ts",
+    "line": 14,
+    "quote": "test(\"a local tsc is available even when PATH has no tsc\", async () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-04",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "`which tsc` -> not found; resolveBin mutated to PATH-first; typescript-local-bin.test.ts 1 pass / 0 fail under normal and restricted PATH.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: typescript-local-bin.test.ts decoy tsc on PATH; round 2 M21 red"
+    }
+  },
+  {
+    "id": "G-05",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Lint family is a hardcoded id list in the gate rather than derived from adapter capability.",
+    "impact": "A new linter adapter added without editing this Set reintroduces INCOMPLETE; no test catches it.",
+    "suggested_fix": "Add a capability field to SourceAdapter, carry it into SourceRunInfo, group by it in the gate.",
+    "evidence": "No derivation from FINDING_ADAPTERS; probe with a stand-in linter id reproduces INCOMPLETE.",
+    "confidence": "high",
+    "file": "src/health/gate.ts",
+    "line": 96,
+    "quote": "  const LINT_FAMILY = new Set([\"eslint\", \"oxlint\"]);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-05",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "LINT_FAMILY is a literal Set; no derivation from FINDING_ADAPTERS (ctx rg). verify/g09.ts with stand-in linter 'biome' (required, skipped) next to a running eslint -> incomplete ['INCOMPLETE: required source unavailable: biome'].",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: SourceCapability; gate groups by capability"
+    }
+  },
+  {
+    "id": "G-06",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Adapter facts duplicated as string tables in run.ts and already drifted from oxlint detect().",
+    "impact": "package.json-only oxlint with no binary reports 'oxlint config found' — a false claim about the tree.",
+    "suggested_fix": "Let the adapter supply its missing reason and error vocabulary; import OXLINT_PARSE_ERROR instead of retyping it.",
+    "evidence": "Probe with only devDependencies.oxlint: runAdapter returned missing 'oxlint config found, ...'.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 282,
+    "quote": "  if (sourceId === \"oxlint\") {\n    return \"oxlint config found, binary not found (node_modules/.bin/oxlint and PATH)\";\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-06",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "verify/g06.ts: dir with only devDependencies.oxlint, no .oxlintrc, no binary -> runAdapter missing 'oxlint config found, binary not found (node_modules/.bin/oxlint and PATH)'.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: oxlintMissingReason + imported OXLINT_PARSE_ERROR"
+    }
+  },
+  {
+    "id": "G-07",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "PR body presents local tsc resolution as a change; typescript.ts and helpers.ts are unchanged in the diff.",
+    "impact": "Readers and the AC4 confirmation believe a fix shipped; the reported typescript: missing root cause is unrecorded.",
+    "suggested_fix": "Reword the bullet as a regression test for existing behaviour and record the T5 finding.",
+    "evidence": "git diff --quiet d5b9fb11 68616a75 -- typescript.ts helpers.ts exits 0. Also raised by review-architecture.",
+    "confidence": "high",
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-07",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "git diff --quiet d5b9fb11 68616a75 -- src/health/sources/typescript.ts src/health/sources/helpers.ts exits 0; PR body line 30 claims the resolution as a change.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25 docs/docs/cli-reference.md + PR #803 body edit 2026-09-30"
+    }
+  },
+  {
+    "id": "G-08",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Test name and comment misstate history: a disabled required eslint used to block, and alone still does.",
+    "impact": "Future readers infer wrong semantics for disabled-required sources.",
+    "suggested_fix": "Rename to describe the new family excuse and add the lone-disabled-eslint-stays-incomplete contrast case.",
+    "evidence": "Base brokenRequired had no mode check; probe with lone disabled required eslint gives incomplete.",
+    "confidence": "high",
+    "file": "src/health/gate.test.ts",
+    "line": 232,
+    "quote": "test(\"AC3: a DISABLED required eslint keeps its pre-existing behavior (skipped, unblocked)\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-08",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Base gate.ts brokenRequired has no mode check; verify/g09.ts lone {eslint, required, mode: disabled, skipped} on the PR head -> incomplete ['INCOMPLETE: required source unavailable: eslint'].",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: gate.test.ts renamed + contrast test"
+    }
+  },
+  {
+    "id": "G-09",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "New default optional source changes existing reports: disabled-eslint configs move to coverage partial; ESLint projects gain an OPTIONAL oxlint line.",
+    "impact": "Report text/coverage change on upgrade; gate status unchanged.",
+    "suggested_fix": "Decide deliberately and note it; optionally suppress the OPTIONAL line for an excused family member.",
+    "evidence": "Probes before/after the default.",
+    "confidence": "medium",
+    "file": "src/health/config.ts",
+    "line": 32,
+    "quote": "    oxlint: { mode: \"auto\", required: false },",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-09",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "verify/g09.ts/g09b.ts/g09c.ts: eslint disabled, no oxlint entry -> pass complete; with default oxlint skipped -> pass partial 'COVERAGE: partial ... oxlint'; eslint project gains 'OPTIONAL: oxlint source skipped'.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: gate.ts skippedOptional excludes excused linters; docs"
+    }
+  },
+  {
+    "id": "G-10",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "required on a lint-family source now means 'project is linted'; config cannot require a specific linter.",
+    "impact": "Config-contract change not visible in the schema.",
+    "suggested_fix": "Document the capability semantics; add a separate field if per-tool requirement is ever needed.",
+    "evidence": "Probe: required eslint skipped + oxlint ran -> pass complete.",
+    "confidence": "medium",
+    "file": "src/health/gate.ts",
+    "line": 100,
+    "quote": "  const excusedByLintFamily = (s: SourceRunInfo): boolean =>\n    lintSatisfied && LINT_FAMILY.has(s.source) && s.status === \"skipped\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-ingest-github-com-mrciphersmith-keryx-pull-803#G-10",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "verify/g09.ts: required eslint skipped + oxlint (required:false) ran -> pass complete with the NOTE line; no per-linter requirement path in the gate.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a407ce25: docs/docs/cli-reference.md health section"
+    }
+  }
+]

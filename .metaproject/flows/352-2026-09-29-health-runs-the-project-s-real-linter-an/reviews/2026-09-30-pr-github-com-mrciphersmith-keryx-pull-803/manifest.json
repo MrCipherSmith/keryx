@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "https://github.com/MrCipherSmith/keryx/pull/803",
+    "head": "a407ce25a6272b157f9be273ee7ccc4c784465c4"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/scope.md",
+    "coverage": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/coverage.md",
+    "report": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/report.md",
+    "findings": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/findings.json",
+    "learning": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/learning.md",
+    "decisions": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an/reviews/2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 5,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "retained": 5,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-09-30T07:27:09.629Z",
+  "updatedAt": "2026-09-30T07:27:09.629Z",
+  "flow": {
+    "id": "352",
+    "path": ".metaproject/flows/352-2026-09-29-health-runs-the-project-s-real-linter-an"
+  }
+}
