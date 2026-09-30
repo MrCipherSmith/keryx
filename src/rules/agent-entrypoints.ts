@@ -11,6 +11,8 @@ import {
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
 import { computeFencedRanges, hasMarkerLine, indexOfMarkerLine } from "./marker-matching";
+import { ruleImportSources, sharedEntrypointTargets, type EntrypointTargets } from "./entrypoint-targets";
+import { writeEntrypointBlocks } from "./entrypoint-writers";
 
 // Review round 2 fix (R1-F20 remainder): re-exported so callers that only
 // import from `./agent-entrypoints` (this module's own public surface) can
@@ -44,8 +46,17 @@ export type SyncedAgentRule = {
 
 export type SyncAgentRulesOptions = {
   enableTasks?: boolean;
+  /**
+   * Flow 361: where the managed block goes. Commands pass what
+   * `resolveProjectEntrypoints` settled; omitted, it is the shared team files
+   * — what every caller got before targets existed.
+   */
+  targets?: EntrypointTargets;
+  /** Extra project-root files to import as rules besides the team files. Never a block target. */
   manifestSources?: string[];
   createDefault?: boolean;
+  /** Receives what the block writers want the user to read: a skipped Codex, a migrated team file. */
+  onNotice?: (line: string) => void;
 };
 
 export async function syncAgentRules(
@@ -53,11 +64,18 @@ export async function syncAgentRules(
   metaprojectRoot: string,
   options: SyncAgentRulesOptions = {},
 ): Promise<SyncedAgentRule[]> {
-  const entrypoints = await findAgentEntrypoints(projectRoot, options.manifestSources ?? []);
+  const targets = options.targets ?? sharedEntrypointTargets();
+  // The import list is the team files, never a local target (flow 361, H5):
+  // mirroring `CLAUDE.local.md` would put per-developer content into tracked
+  // rules, and `AGENTS.override.md` is a copy of a file already imported.
+  const entrypoints = await findAgentEntrypoints(projectRoot, [
+    ...ruleImportSources(targets),
+    ...(options.manifestSources ?? []),
+  ]);
   const sources =
     options.createDefault === false
       ? entrypoints
-      : await ensureDefaultAgentEntrypoints(projectRoot, entrypoints);
+      : await ensureDefaultAgentEntrypoints(projectRoot, entrypoints, targets);
 
   // Review round 2 fix (R2-F15): validate EVERY existing entrypoint BEFORE
   // scaffolding `.metaproject/rules` and `.metaproject/skills/project-rules`
@@ -74,6 +92,11 @@ export async function syncAgentRules(
     if (!(await pathExists(sourcePath))) continue;
     await assertMetaprojectReferenceSafe(projectRoot, source, sourcePath);
     existingSources.push({ source, sourcePath });
+  }
+  for (const entry of targets.root) {
+    if (entry.scope !== "local" || entry.runtime !== "claude") continue;
+    const localPath = path.join(projectRoot, entry.path);
+    if (await pathExists(localPath)) await assertMetaprojectReferenceSafe(projectRoot, entry.path, localPath);
   }
 
   // R1-F20: EVERY write below is contained against `projectRoot`, never
@@ -93,12 +116,14 @@ export async function syncAgentRules(
   await mkdirContained(projectRoot, `${metaprojectRel}/rules`);
   await mkdirContained(projectRoot, `${metaprojectRel}/skills/project-rules`);
 
+  await writeEntrypointBlocks(projectRoot, targets, {
+    ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }),
+    sources: existingSources.map(({ source }) => source),
+    ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
+  });
+
   const synced: SyncedAgentRule[] = [];
   for (const { source, sourcePath } of existingSources) {
-    await ensureMetaprojectReference(sourcePath, {
-      ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }),
-      root: projectRoot,
-    });
     const ruleFile = ruleFileNameFor(source);
     const sourceContent = await readFile(sourcePath, "utf8");
     await writeTextIfChanged(
@@ -160,6 +185,20 @@ function assertMarkerPairingSafe(content: string, filePath: string, marker: stri
   }
 }
 
+/** The managed block as this project renders it — the same text for every target it is written to. */
+export async function renderManagedIndexBlock(options: { enableTasks?: boolean; root?: string } = {}): Promise<string> {
+  // Flow 336: resolved only when a project root is known — the same gate the
+  // symlink check in `ensureMetaprojectReference` applies. A caller with no
+  // notion of a project boundary (a direct unit test on a bare temp file)
+  // gets the tier-words-only default rather than a guess at a root to read
+  // `routing.config.json`/`tasks.config.json` from.
+  const modelChoice = options.root !== undefined ? await buildModelChoiceBlockInput(options.root) : undefined;
+  return renderProjectMetaprojectReferenceBlock({
+    enableTasks: options.enableTasks !== false,
+    ...(modelChoice === undefined ? {} : { modelChoice }),
+  });
+}
+
 export async function ensureMetaprojectReference(
   filePath: string,
   options: { enableTasks?: boolean; root?: string } = {},
@@ -179,16 +218,7 @@ export async function ensureMetaprojectReference(
   const content = await readFile(filePath, "utf8");
   const marker = METAPROJECT_REFERENCE_MARKER;
   const endMarker = METAPROJECT_REFERENCE_END_MARKER;
-  // Flow 336: resolved only when a project root is known — the same gate the
-  // symlink check just above already applies. A caller with no notion of a
-  // project boundary (a direct unit test on a bare temp file) gets the
-  // tier-words-only default rather than a guess at a root to read
-  // `routing.config.json`/`tasks.config.json` from.
-  const modelChoice = options.root !== undefined ? await buildModelChoiceBlockInput(options.root) : undefined;
-  const block = renderProjectMetaprojectReferenceBlock({
-    enableTasks: options.enableTasks !== false,
-    ...(modelChoice === undefined ? {} : { modelChoice }),
-  });
+  const block = await renderManagedIndexBlock(options);
   if (hasMarkerLine(content, marker)) {
     const next = replaceManagedBlock(content, filePath, marker, endMarker, block);
     if (next !== content) {
@@ -265,13 +295,22 @@ async function findAgentEntrypoints(projectRoot: string, manifestSources: string
   return existing;
 }
 
-async function ensureDefaultAgentEntrypoints(projectRoot: string, entrypoints: string[]): Promise<string[]> {
+/**
+ * Creates a missing team file only for a runtime whose scope is shared.
+ * Under local scope (flow 361, H6) keryx never creates a tracked `AGENTS.md`
+ * or `CLAUDE.md`: the local target is created by its own writer instead.
+ */
+async function ensureDefaultAgentEntrypoints(
+  projectRoot: string,
+  entrypoints: string[],
+  targets: EntrypointTargets,
+): Promise<string[]> {
   const sources = [...entrypoints];
-  for (const source of ["AGENTS.md", "CLAUDE.md"]) {
-    if (!sources.includes(source)) {
-      await writeTextIfMissing(projectRoot, source, renderAgentEntrypoint({ source }));
-      sources.push(source);
-    }
+  for (const runtime of ["codex", "claude"] as const) {
+    const entry = targets.root.find((candidate) => candidate.runtime === runtime);
+    if (entry === undefined || entry.scope !== "shared" || sources.includes(entry.path)) continue;
+    await writeTextIfMissing(projectRoot, entry.path, renderAgentEntrypoint({ source: entry.path }));
+    sources.push(entry.path);
   }
   return sources;
 }
@@ -307,7 +346,10 @@ function replaceManagedBlock(content: string, filePath: string, marker: string, 
     );
   }
   const end = searchFrom + endOffset;
-  return `${content.slice(0, start)}${block}${content.slice(end + endMarker.length)}`.replace(/\n{3,}/g, "\n\n");
+  // The rendered block ends with a newline and so does the line it replaces;
+  // keeping both grew a block at the end of the file by one blank line on the
+  // run after it was inserted (flow 361 idempotency).
+  return `${content.slice(0, start)}${block.replace(/\n+$/, "")}${content.slice(end + endMarker.length)}`.replace(/\n{3,}/g, "\n\n");
 }
 
 function insertMetaprojectBlockNearTop(content: string, block: string): string {
@@ -335,7 +377,11 @@ function insertMetaprojectBlockNearTop(content: string, block: string): string {
 
   const before = lines.slice(0, insertAt).join("\n");
   const after = lines.slice(insertAt).join("\n");
-  const prefix = before.length > 0 ? `${before}\n\n` : "";
+  // Exactly one blank line before the block, however many the file had there:
+  // three newlines in a row would be collapsed by `replaceManagedBlock` on the
+  // next run, so the file would change again with nothing to change (flow 361
+  // idempotency — a second `keryx update` must leave every file alone).
+  const prefix = before.length > 0 ? `${before.replace(/\n+$/, "")}\n\n` : "";
   const suffix = after.length > 0 ? `\n${after}` : "";
   return `${prefix}${normalizedBlock}${suffix}`;
 }

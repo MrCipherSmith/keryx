@@ -55,6 +55,12 @@ import {
   type GdskillsProfile,
 } from "../gdskills/catalog";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import {
+  declaredImportSources,
+  manifestAgentEntrypoints,
+  resolveProjectEntrypoints,
+  type ProjectEntrypoints,
+} from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
@@ -182,9 +188,9 @@ type MetaprojectManifest = {
   profiles?: string[];
   updatedAt?: string;
   modules?: Record<string, ManifestModule>;
-  agentEntrypoints?: {
-    root?: string[];
-  };
+  // Read as whatever is on disk (the legacy string array included) and only
+  // ever through `resolveProjectEntrypoints` / `declaredImportSources`.
+  agentEntrypoints?: unknown;
 };
 
 type ManifestReadResult = {
@@ -284,6 +290,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   statusLine("security", summary.modules.security);
   if (summary.modules.sac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
+  if (summary.entrypointNotices.length > 0) {
+    heading("Agent entrypoints");
+    for (const notice of summary.entrypointNotices) {
+      note(notice);
+    }
   }
   if (summary.gdskillsNotices.length > 0) {
     heading("Notices");
@@ -410,6 +422,8 @@ type RefreshSummary = {
    * "Warnings" heading as gdskillsWarnings instead of aborting the update.
    */
   hookWarnings: string[];
+  /** Flow 361: what the entrypoint writers did or skipped — a migrated team file, a skipped Codex, an entry kept shared. */
+  entrypointNotices: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -425,7 +439,7 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
   const enableTasks = moduleEnabled(manifest, "tasks") || !options.noTasks;
-  const ruleSources = await listRootEntrypoints(projectRoot, manifest.agentEntrypoints?.root ?? []);
+  const ruleSources = await listRootEntrypoints(projectRoot, declaredImportSources(manifest.agentEntrypoints));
   const plan = await planRoutingEntrypointPair(
     metaprojectRoot,
     {
@@ -492,10 +506,19 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   const gdskillsProfile = normalizeGdskillsProfile(manifest.modules?.gdskills?.profile);
+  // Flow 361: a legacy string-array `root`, a missing field and a recovered
+  // manifest are all settled against HEAD here, before anything is written —
+  // the normalizer alone would leave a legacy entry provisionally shared.
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, manifest.agentEntrypoints);
+  const entrypointNotices = [...entrypoints.notices];
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
-    manifestSources: manifest.agentEntrypoints?.root ?? [],
+    targets: entrypoints.targets,
+    manifestSources: entrypoints.importSources,
     createDefault: true,
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
   });
   const ruleSources = syncedRules.map((rule) => rule.source);
   const dashboardData = await collectDashboardData(metaprojectRoot);
@@ -738,12 +761,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTasks,
       enableSecurity,
       enableSac,
-    });
+    }, entrypoints);
   } else if (backfillTasks) {
     await enableTasksInManifest(metaprojectRoot);
   }
 
-  await updateManifestAgentEntrypoints(metaprojectRoot, ruleSources);
+  await updateManifestAgentEntrypoints(metaprojectRoot, entrypoints);
 
   // Reconcile registered opt-in capabilities into the manifest without changing
   // their enabled state or disabling any module. No-op with the empty Block 0
@@ -767,6 +790,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsWarnings,
     gdskillsNotices,
     hookWarnings,
+    entrypointNotices,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };
@@ -1298,6 +1322,7 @@ async function writeRecoveredManifest(
     enableSecurity: boolean;
     enableSac: boolean;
   },
+  entrypoints: ProjectEntrypoints,
 ): Promise<void> {
   const enabledModuleKeys = Object.entries(modules)
     .filter(([, enabled]) => enabled === true)
@@ -1412,10 +1437,7 @@ async function writeRecoveredManifest(
           }
         : { enabled: false },
     },
-    agentEntrypoints: {
-      root: ["AGENTS.md", "CLAUDE.md"],
-      metaproject: ".metaproject/index.md",
-    },
+    agentEntrypoints: manifestAgentEntrypoints(undefined, entrypoints, { metaproject: ".metaproject/index.md" }),
   };
 
   {
@@ -1451,7 +1473,7 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
   }
 }
 
-async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSources: string[]): Promise<void> {
+async function updateManifestAgentEntrypoints(metaprojectRoot: string, entrypoints: ProjectEntrypoints): Promise<void> {
   const manifestPath = path.join(metaprojectRoot, "metaproject.json");
   if (!(await pathExists(manifestPath))) {
     return;
@@ -1465,10 +1487,11 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   } catch {
     return;
   }
-  const agentEntrypoints = (raw.agentEntrypoints ?? {}) as Record<string, unknown>;
-  agentEntrypoints.root = ruleSources;
-  agentEntrypoints.metaproject = ".metaproject/index.md";
-  raw.agentEntrypoints = agentEntrypoints;
+  // Rewrites a legacy string-array `root` to the entry form; on a manifest
+  // already in that form this reproduces what is on disk, key order included.
+  raw.agentEntrypoints = manifestAgentEntrypoints(raw.agentEntrypoints, entrypoints, {
+    metaproject: ".metaproject/index.md",
+  });
   applyStandardManifestFields(raw);
   // R700-06: `applyStandardManifestFields` always stamps a fresh `updatedAt`,
   // but on a repo where nothing else changed that turns `keryx update` into

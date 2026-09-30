@@ -8,7 +8,9 @@ import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
 import { ContainedWriteError } from "../lib/contained-write";
 import { memoryCommand } from "./memory";
+import { defaultEntrypointTargets } from "../rules/entrypoint-targets";
 import { initCommand } from "./init";
+import { updateCommand } from "./update";
 
 // Round-1 finding T-001: the retired-rule warning print was tested only at
 // the `keryx skills install` call site (skills-install-warnings.test.ts).
@@ -171,7 +173,10 @@ test("writes gdwiki as the canonical wiki manifest key", async () => {
 
     expect(manifest.modules.gdwiki?.enabled).toBe(true);
     expect(manifest.modules.wiki).toBeUndefined();
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).not.toContain("Metaproject flow skill");
+    // Flow 361: a fresh init writes the block to CLAUDE.local.md and creates no tracked AGENTS.md.
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("<!-- keryx:index -->");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).not.toContain("Metaproject flow skill");
+    expect(existsSync(path.join(root, "AGENTS.md"))).toBe(false);
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -516,3 +521,115 @@ test("keryx init warns and completes when .git/hooks/post-commit is a dangling s
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Flow 361: a fresh init records every entrypoint target as local and writes
+// the managed block there — never into a tracked AGENTS.md / CLAUDE.md.
+const ENTRYPOINT_INIT_ARGS = [...MINIMAL_INIT_ARGS_KEEPING_GDSKILLS, "--no-gdskills"];
+
+function gitInEntrypointRepo(cwd: string, args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+  if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`);
+  return result.stdout.toString();
+}
+
+test("flow 361: init then update keep the block in CLAUDE.local.md and out of tracked AGENTS.md and CLAUDE.md", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-entrypoints-"));
+  const agents = "# Team\n\nUse local conventions.\n";
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  try {
+    gitInEntrypointRepo(root, ["init", "-q"]);
+    gitInEntrypointRepo(root, ["config", "user.email", "test@test.com"]);
+    gitInEntrypointRepo(root, ["config", "user.name", "test"]);
+    await writeFile(path.join(root, "AGENTS.md"), agents, "utf8");
+    await writeFile(path.join(root, "CLAUDE.md"), claude, "utf8");
+    gitInEntrypointRepo(root, ["add", "--", "AGENTS.md", "CLAUDE.md"]);
+    gitInEntrypointRepo(root, ["commit", "-q", "-m", "fixture"]);
+
+    const assertLocalOnly = async () => {
+      expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("<!-- keryx:index -->");
+      expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+      expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+      const status = gitInEntrypointRepo(root, ["status", "--porcelain"]);
+      expect(status).not.toMatch(/ AGENTS\.md$/m);
+      expect(status).not.toMatch(/ CLAUDE\.md$/m);
+      const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+      expect(override).toContain("<!-- keryx:index -->");
+      expect(override.endsWith(agents)).toBe(true);
+    };
+
+    await withCwd(root, async () => {
+      await initCommand(ENTRYPOINT_INIT_ARGS);
+    });
+    await assertLocalOnly();
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      agentEntrypoints: Record<string, unknown>;
+    };
+    expect(manifest.agentEntrypoints).toEqual({
+      index: ".metaproject/index.md",
+      readme: ".metaproject/README.md",
+      ...defaultEntrypointTargets(),
+    });
+    // The team files are still what gets imported as tracked rules; a local target never is.
+    const ruleFiles = await readdir(path.join(root, ".metaproject", "rules"));
+    expect(ruleFiles).toContain("agents-md.md");
+    expect(ruleFiles).toContain("claude-md.md");
+    expect(ruleFiles).not.toContain("claude-local-md.md");
+    expect(ruleFiles).not.toContain("agents-override-md.md");
+
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+    await assertLocalOnly();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: init in a repository with no entrypoints creates no tracked AGENTS.md or CLAUDE.md and says Codex was skipped", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-entrypoints-empty-"));
+  try {
+    gitInEntrypointRepo(root, ["init", "-q"]);
+    const { logs, restore } = captureInitConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(ENTRYPOINT_INIT_ARGS);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(root, "AGENTS.md"))).toBe(false);
+    expect(existsSync(path.join(root, "CLAUDE.md"))).toBe(false);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("<!-- keryx:index -->");
+    expect(logs.some((line) => line.includes("Codex: skipped"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: a second init reads the legacy string-array manifest instead of choking on it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-entrypoints-legacy-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "# Team\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({ modules: {}, agentEntrypoints: { index: ".metaproject/index.md", readme: ".metaproject/README.md", root: ["AGENTS.md"] } }),
+      "utf8",
+    );
+    await withCwd(root, async () => {
+      await initCommand(ENTRYPOINT_INIT_ARGS);
+    });
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      agentEntrypoints: { root: unknown[] };
+    };
+    expect(manifest.agentEntrypoints.root).toEqual([
+      { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" },
+      { runtime: "claude", path: "CLAUDE.local.md", scope: "local" },
+    ]);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe("# Team\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);

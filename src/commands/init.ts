@@ -119,6 +119,13 @@ import {
   parseDivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import {
+  declaredImportSources,
+  manifestAgentEntrypoints,
+  resolveProjectEntrypoints,
+  type AgentEntrypointsManifest,
+  type ProjectEntrypoints,
+} from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import {
   findLegacyMemoryArtifacts,
@@ -233,11 +240,7 @@ type MetaprojectManifest = {
   };
   modules: Record<string, ModuleConfig>;
   updatedAt: string;
-  agentEntrypoints: {
-    index: string;
-    readme: string;
-    root: string[];
-  };
+  agentEntrypoints: AgentEntrypointsManifest;
 };
 
 export async function initCommand(args: string[]): Promise<void> {
@@ -550,7 +553,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (options.preview) {
     const previewRuleSources = await listRootEntrypoints(
       projectRoot,
-      existingManifest?.agentEntrypoints?.root ?? [],
+      declaredImportSources(existingManifest?.agentEntrypoints),
     );
     const plan = await planRoutingEntrypointPair(
       metaprojectRoot,
@@ -589,9 +592,20 @@ export async function initCommand(args: string[]): Promise<void> {
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
   }
+  // Flow 361: a fresh project gets every target local (`defaultEntrypointTargets`).
+  // It is reached through the same HEAD decision a legacy manifest takes, so
+  // a block the team already committed to AGENTS.md/CLAUDE.md stays shared
+  // instead of being stripped out of a tracked file by a re-init.
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints);
+  const entrypointNotices = [...entrypoints.notices];
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
+    targets: entrypoints.targets,
+    manifestSources: entrypoints.importSources,
     createDefault: true,
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
   });
   const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
 
@@ -720,7 +734,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableSecurityPrePushHook,
     enableSecurityAgentHook,
     enableSac,
-    agentRuleSources,
+    entrypoints,
     existingManifest,
   });
 
@@ -1136,6 +1150,12 @@ export async function initCommand(args: string[]): Promise<void> {
   }
   if (enableSac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
+  if (entrypointNotices.length > 0) {
+    heading("Agent entrypoints");
+    for (const notice of entrypointNotices) {
+      note(notice);
+    }
   }
   // Successful cleanups (see `InstallGdskillsResult.notices`) get their own
   // heading; "Warnings" stays the list of things that still need a human.
@@ -1720,7 +1740,7 @@ function buildManifest({
   enableSecurityPrePushHook,
   enableSecurityAgentHook,
   enableSac,
-  agentRuleSources,
+  entrypoints,
   existingManifest,
 }: {
   projectName: string;
@@ -1742,7 +1762,7 @@ function buildManifest({
   enableSecurityPrePushHook: boolean;
   enableSecurityAgentHook: boolean;
   enableSac: boolean;
-  agentRuleSources: string[];
+  entrypoints: ProjectEntrypoints;
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
   const existingProjectSkillRegistry =
@@ -1943,11 +1963,10 @@ function buildManifest({
           },
     },
     updatedAt: new Date().toISOString(),
-    agentEntrypoints: {
+    agentEntrypoints: manifestAgentEntrypoints(existingManifest?.agentEntrypoints, entrypoints, {
       index: ".metaproject/index.md",
       readme: ".metaproject/README.md",
-      root: agentRuleSources,
-    },
+    }),
   };
 }
 

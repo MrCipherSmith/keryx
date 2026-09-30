@@ -7,6 +7,9 @@ import {
   ruleFileNameFor,
   syncAgentRules,
 } from "./agent-entrypoints";
+import { sharedEntrypointTargets, type EntrypointTargets } from "./entrypoint-targets";
+import { writeCodexLocalTargets } from "./entrypoint-writers";
+import { stripManagedIndexBlock } from "./managed-index-block";
 import { computeFencedRanges, indexOfMarkerLine } from "./marker-matching";
 
 export type DistilledEntry = {
@@ -29,9 +32,6 @@ type Section = {
   body: string;
   level: number;
 };
-
-const marker = "<!-- keryx:index -->";
-const endMarker = "<!-- /keryx:index -->";
 
 /**
  * R2-F7: every OTHER managed-block pair `keryx rules distill` must never
@@ -56,12 +56,21 @@ const OTHER_MANAGED_BLOCK_MARKERS: ReadonlyArray<{ readonly start: string; reado
 export async function distillAgentEntrypoints(
   projectRoot: string,
   metaprojectRoot: string,
-  options: { enableTasks: boolean; manifestSources?: string[] } = { enableTasks: false },
+  options: {
+    enableTasks: boolean;
+    manifestSources?: string[];
+    /** Flow 361: where the managed block goes; omitted, the shared team files (see `syncAgentRules`). */
+    targets?: EntrypointTargets;
+    onNotice?: (line: string) => void;
+  } = { enableTasks: false },
 ): Promise<DistillEntrypointsResult> {
+  const targets = options.targets ?? sharedEntrypointTargets();
   const synced = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks: options.enableTasks,
+    targets,
     manifestSources: options.manifestSources ?? [],
     createDefault: true,
+    ...(options.onNotice === undefined ? {} : { onNotice: options.onNotice }),
   });
   const sources = synced.map((rule) => rule.source);
   const rules: DistilledEntry[] = [];
@@ -82,7 +91,7 @@ export async function distillAgentEntrypoints(
     }
 
     const original = await readFile(sourcePath, "utf8");
-    const withoutIndexBlock = stripManagedBlock(original);
+    const withoutIndexBlock = stripManagedIndexBlock(original, sourcePath).trim();
     const { body: sourceBody, blocks: preservedBlocks } = extractOtherManagedBlocks(withoutIndexBlock);
     const sections = splitMarkdownSections(sourceBody);
     const kept: Section[] = [];
@@ -102,8 +111,18 @@ export async function distillAgentEntrypoints(
       }
     }
 
-    await rewriteEntrypoint(projectRoot, source, kept, options.enableTasks, preservedBlocks);
+    // The block goes back into the rewritten file only when that file is a
+    // shared target; under local scope the team file is rewritten without it.
+    const carriesBlock = targets.root.some(
+      (entry) => entry.scope === "shared" && entry.path.toLowerCase() === source.toLowerCase(),
+    );
+    await rewriteEntrypoint(projectRoot, source, kept, options.enableTasks, preservedBlocks, carriesBlock);
   }
+
+  // The sync above generated the Codex override from the team file as it was
+  // BEFORE this rewrite; regenerate it so it does not shadow the distilled
+  // file with the old text. Its notices were already given by the sync.
+  await writeCodexLocalTargets(projectRoot, targets, { enableTasks: options.enableTasks });
 
   await writeDistilledIndex(projectRoot, metaprojectRel, rules, skills, keptRootSections);
   return { sources, rules, skills, keptRootSections };
@@ -130,22 +149,8 @@ export async function listRootEntrypoints(projectRoot: string, manifestSources: 
 // inline prose MENTION of the marker (e.g. a sentence documenting
 // `<!-- keryx:index -->`) exactly like a real block boundary, silently
 // deleting every human section between that mention and the next real marker
-// it happened to pair with.
-
-function stripManagedBlock(content: string): string {
-  const fenced = computeFencedRanges(content);
-  const index = indexOfMarkerLine(content, marker, fenced);
-  if (index < 0) {
-    return content.trim();
-  }
-  const searchFrom = index + marker.length;
-  const endOffset = indexOfMarkerLine(content.slice(searchFrom), endMarker, computeFencedRanges(content.slice(searchFrom)));
-  if (endOffset >= 0) {
-    const endIndex = searchFrom + endOffset;
-    return `${content.slice(0, index)}\n${content.slice(endIndex + endMarker.length)}`.trim();
-  }
-  return content.slice(0, index).trim();
-}
+// it happened to pair with. The `keryx:index` block itself is removed by the
+// one public stripper, `stripManagedIndexBlock` (`./managed-index-block`).
 
 /**
  * Removes every COMPLETE `keryx:rules`/`keryx:instructions` block from
@@ -275,6 +280,7 @@ async function rewriteEntrypoint(
   kept: Section[],
   enableTasks: boolean,
   preservedBlocks: readonly string[],
+  carriesBlock: boolean,
 ): Promise<void> {
   const sourcePath = path.join(projectRoot, source);
   const title = `# ${source.replace(/\.md$/i, "")} Instructions`;
@@ -288,7 +294,9 @@ async function rewriteEntrypoint(
   // insertion case these preserved blocks never need.
   const preserved = preservedBlocks.length > 0 ? `\n\n${preservedBlocks.join("\n\n")}` : "";
   await writeContained(projectRoot, source, `${title}\n\n${body}${preserved}\n`);
-  await ensureMetaprojectReference(sourcePath, { enableTasks, root: projectRoot });
+  if (carriesBlock) {
+    await ensureMetaprojectReference(sourcePath, { enableTasks, root: projectRoot });
+  }
 }
 
 async function writeDistilledIndex(

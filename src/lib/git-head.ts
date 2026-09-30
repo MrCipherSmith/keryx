@@ -48,3 +48,21 @@ export async function classifyAgainstHead(projectRoot: string, relativePath: str
   const diff = await runGit(projectRoot, ["diff", "--quiet", "HEAD", "--", relativePath]);
   return diff !== undefined && diff.code === 0 ? "equal" : "differs";
 }
+
+/**
+ * Puts `HEAD`'s version of `relativePath` back into the working tree and
+ * leaves the index alone. Done by git (`git restore --source=HEAD
+ * --worktree`) rather than by writing the blob, so smudge and line-ending
+ * filters produce the same bytes a checkout would. False when git refused or
+ * is too old to know `restore`.
+ */
+export async function restoreWorktreeFileFromHead(projectRoot: string, relativePath: string): Promise<boolean> {
+  const result = await runGit(projectRoot, ["restore", "--source=HEAD", "--worktree", "--", relativePath]);
+  return result !== undefined && result.code === 0;
+}
+
+/** `git diff --quiet -- <file>`: true when the working tree copy shows no unstaged change. */
+export async function worktreeFileIsClean(projectRoot: string, relativePath: string): Promise<boolean> {
+  const result = await runGit(projectRoot, ["diff", "--quiet", "--", relativePath]);
+  return result !== undefined && result.code === 0;
+}

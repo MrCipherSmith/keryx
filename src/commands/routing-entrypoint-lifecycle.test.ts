@@ -57,7 +57,11 @@ test("init and repeated rules sync preserve the short gate, full router, flags, 
 
     const agents = await readFile(path.join(root, "AGENTS.md"), "utf8");
     expect(countOccurrences(agents, "<!-- user-owned:begin -->")).toBe(1);
-    expect(countOccurrences(agents, "<!-- keryx:index -->")).toBe(1);
+    // Flow 361: exactly one block still, in the local target — init and two
+    // syncs never put one into the team file.
+    expect(countOccurrences(agents, "<!-- keryx:index -->")).toBe(0);
+    const localClaude = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    expect(countOccurrences(localClaude, "<!-- keryx:index -->")).toBe(1);
     expect(agents).toContain("Keep this project instruction.");
   } finally {
     await rm(root, { recursive: true, force: true });

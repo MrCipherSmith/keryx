@@ -1,6 +1,7 @@
-import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, appendFile, mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +9,9 @@ import { expect, test } from "bun:test";
 import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
+import { ensureMetaprojectReference } from "../rules/agent-entrypoints";
+import { defaultEntrypointTargets } from "../rules/entrypoint-targets";
+import { isCodexOverrideStale } from "../rules/entrypoint-writers";
 import { containFromMetaprojectPath, updateCommand } from "./update";
 import { initCommand } from "./init";
 
@@ -248,7 +252,10 @@ test("refreshes service files without touching data artifacts", async () => {
     expect(await readFile(path.join(root, ".metaproject", "core", "gdgraph", "build.ts"), "utf8")).toContain("buildGraph");
     expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
     expect(await readFile(path.join(root, ".metaproject", "skills", "catalog.md"), "utf8")).toContain("flow-orchestrator");
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
+    // Flow 361: the block (and its flow-orchestrator line) lives in the local targets; AGENTS.md is not written to.
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("flow-orchestrator");
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toContain("flow-orchestrator");
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe("Use metaproject rules.\n");
     expect(await fileExists(path.join(root, ".metaproject", "data", "gdskills"))).toBe(false);
     expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
     expect(await readFile(graphSummaryPath, "utf8")).toBe(graphSummary);
@@ -574,9 +581,10 @@ test("backfills the Task Manager for projects initialized before it existed", as
     expect(await fileExists(path.join(root, ".metaproject", "skills", "flow", "SKILL.md"))).toBe(true);
     expect(await fileExists(path.join(root, ".metaproject", "modules", "tasks.md"))).toBe(true);
     expect(await readFile(path.join(root, ".metaproject", "flows", "README.md"), "utf8")).toContain("Flow");
-    // The flow discovery policy is migrated into the entrypoint.
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("Metaproject flow skill");
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain("flow-orchestrator");
+    // The flow discovery policy is migrated into the entrypoint — since flow
+    // 361 the local one, not the tracked AGENTS.md.
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("Metaproject flow skill");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("flow-orchestrator");
     // Backfill does not create runtime data dirs.
     expect(await fileExists(path.join(root, ".metaproject", "data", "tasks"))).toBe(false);
     });
@@ -607,7 +615,8 @@ test("respects --no-tasks and does not backfill", async () => {
     };
     expect(manifest.modules.tasks?.enabled).toBe(false);
     expect(await fileExists(path.join(root, ".metaproject", "skills", "flow", "SKILL.md"))).toBe(false);
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).not.toContain("Metaproject flow skill");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("<!-- keryx:index -->");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).not.toContain("Metaproject flow skill");
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -886,6 +895,351 @@ test("keryx update --yes prunes a stale, merged, clean worktree under .claude/wo
       await updateCommand(["--skip-runtime", "--yes"]);
     });
     expect(existsSync(stalePath)).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// ---------------------------------------------------------------------------
+// Flow 361: the managed block goes where `agentEntrypoints.root` says, and an
+// existing repository is migrated off its tracked team files. Every fixture
+// below is a real temp git repository (or, for the fallback, deliberately not
+// one); `keryx update` is run as the command, not as its parts.
+// ---------------------------------------------------------------------------
+
+const ENTRY_FORM_DEFAULT = { root: defaultEntrypointTargets().root, claudeSettings: defaultEntrypointTargets().claudeSettings };
+const LOCAL_CODEX = { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" };
+const LOCAL_CLAUDE = { runtime: "claude", path: "CLAUDE.local.md", scope: "local" };
+const BLOCK_START = "<!-- keryx:index -->";
+
+/** A committed repository: `files` plus a manifest holding `agentEntrypoints` (omitted when `undefined`). */
+async function entrypointFixture(
+  prefix: string,
+  files: Record<string, string>,
+  agentEntrypoints: unknown,
+  options: { git?: boolean } = {},
+): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), prefix));
+  await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  for (const [rel, content] of Object.entries(files)) {
+    await writeFile(path.join(root, rel), content, "utf8");
+  }
+  await writeFile(
+    path.join(root, ".metaproject", "metaproject.json"),
+    `${JSON.stringify({ modules: {}, ...(agentEntrypoints === undefined ? {} : { agentEntrypoints }) }, null, 2)}\n`,
+    "utf8",
+  );
+  if (options.git !== false) {
+    gitForUpdateIdempotency(root, ["init", "-q"]);
+    gitForUpdateIdempotency(root, ["config", "user.email", "test@test.com"]);
+    gitForUpdateIdempotency(root, ["config", "user.name", "test"]);
+    gitForUpdateIdempotency(root, ["add", "-A"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "fixture"]);
+  }
+  return root;
+}
+
+/** Runs `keryx update` in `root` and returns everything it printed. */
+async function runEntrypointUpdate(root: string): Promise<string> {
+  const { logs, restore } = captureUpdateConsoleLog();
+  try {
+    await withCwd(root, async () => {
+      await updateCommand(["--skip-runtime", "--no-tasks"]);
+    });
+  } finally {
+    restore();
+  }
+  return logs.join("\n");
+}
+
+/** The managed block as an older keryx left it in a tracked file: inserted, then refreshed (padding, then blank-line collapsing). */
+async function writeLegacyBlockInto(root: string, rel: string): Promise<void> {
+  await ensureMetaprojectReference(path.join(root, rel), { enableTasks: true, root });
+  await ensureMetaprojectReference(path.join(root, rel), { enableTasks: false, root });
+}
+
+/**
+ * Brings the fixture to what a repository an older keryx maintained looks
+ * like: service files already generated, the manifest still holding the
+ * legacy string array, no local target yet. The first `update` over a
+ * hand-rolled manifest always takes a second round to settle the dashboard
+ * (it embeds docs that the same run is about to write — see the R700-06 test
+ * above), which has nothing to do with entrypoints; settling first keeps the
+ * "second update changes no file" assertions about the migration alone.
+ */
+async function settleAsLegacyRepository(root: string, legacyRoot: string[]): Promise<void> {
+  await runEntrypointUpdate(root);
+  const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+  manifest.agentEntrypoints = { root: legacyRoot, metaproject: ".metaproject/index.md" };
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  await rm(path.join(root, "CLAUDE.local.md"), { force: true });
+  await rm(path.join(root, "AGENTS.override.md"), { force: true });
+}
+
+function diffIsQuiet(root: string, rel: string): boolean {
+  return Bun.spawnSync(["git", "diff", "--quiet", "--", rel], { cwd: root }).exitCode === 0;
+}
+
+async function readEntrypointsManifest(root: string): Promise<Record<string, unknown>> {
+  const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+    agentEntrypoints: Record<string, unknown>;
+  };
+  return manifest.agentEntrypoints;
+}
+
+/**
+ * Every file under `root`, as path → sha256 of its bytes. Left out: `.git`,
+ * and `.metaproject/runtime/` — the install journal there is a gitignored
+ * run record that carries each run's timestamps by design.
+ */
+async function snapshotTree(root: string): Promise<Record<string, string>> {
+  const snapshot: Record<string, string> = {};
+  const entries = await readdir(root, { recursive: true, withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const absolute = path.join(entry.parentPath, entry.name);
+    const rel = path.relative(root, absolute).split(path.sep).join("/");
+    if (rel.startsWith(".git/") || rel.startsWith(".metaproject/runtime/")) continue;
+    snapshot[rel] = createHash("sha256").update(await readFile(absolute)).digest("hex");
+  }
+  return snapshot;
+}
+
+test("flow 361: one update migrates a legacy repository off its tracked entrypoints, and a second changes no file", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const claude = "# Claude\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-update-entry-migrate-", { "AGENTS.md": agents, "CLAUDE.md": claude }, { root: ["AGENTS.md", "CLAUDE.md"] });
+  try {
+    await settleAsLegacyRepository(root, ["AGENTS.md", "CLAUDE.md"]);
+    await writeLegacyBlockInto(root, "AGENTS.md");
+    await writeLegacyBlockInto(root, "CLAUDE.md");
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(false);
+    // A plain strip does not get back to HEAD: that is why the file is restored.
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).not.toBe(claude);
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(true);
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+    const status = gitForUpdateIdempotency(root, ["status", "--porcelain"]);
+    expect(status).not.toMatch(/ AGENTS\.md$/m);
+    expect(status).not.toMatch(/ CLAUDE\.md$/m);
+    expect(output).toContain("AGENTS.md: moved the managed keryx block");
+
+    // The block exists only in the local targets.
+    const localClaude = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    expect(countOccurrences(localClaude, BLOCK_START)).toBe(1);
+    expect(localClaude.split("\n")).not.toContain("@AGENTS.md");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(countOccurrences(override, BLOCK_START)).toBe(1);
+    expect(override).toContain(agents);
+
+    // AC1: the legacy string array was rewritten to the entry form.
+    const entrypoints = await readEntrypointsManifest(root);
+    expect(entrypoints.root).toEqual([LOCAL_CODEX, LOCAL_CLAUDE]);
+    expect(entrypoints.claudeSettings).toEqual({ path: ".claude/settings.local.json", scope: "local" });
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: a tracked file with the block plus unrelated edits loses only the block and is named", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n\n## Build\n\nRun the suite.\n";
+  const root = await entrypointFixture("keryx-update-entry-edits-", { "AGENTS.md": agents }, { root: ["AGENTS.md"] });
+  try {
+    await writeLegacyBlockInto(root, "AGENTS.md");
+    const withBlock = await readFile(path.join(root, "AGENTS.md"), "utf8");
+    await writeFile(path.join(root, "AGENTS.md"), withBlock.replace("Run the suite.", "Run the suite twice.\t \n\n\nMy uncommitted note."), "utf8");
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(
+      "# Team\n\nUse metaproject rules.\n\n## Build\n\nRun the suite twice.\t \n\n\nMy uncommitted note.\n",
+    );
+    expect(output).toContain("AGENTS.md: removed the managed keryx block; your other uncommitted edits in AGENTS.md are kept");
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toContain("My uncommitted note.");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: a block committed in HEAD keeps its entry shared, the file untouched, and says how to switch", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-entry-head-"));
+  try {
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), "# Team\n\nUse metaproject rules.\n", "utf8");
+    await ensureMetaprojectReference(path.join(root, "AGENTS.md"), { enableTasks: false, root });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({ modules: {}, agentEntrypoints: { root: ["AGENTS.md"] } }),
+      "utf8",
+    );
+    gitForUpdateIdempotency(root, ["init", "-q"]);
+    gitForUpdateIdempotency(root, ["config", "user.email", "test@test.com"]);
+    gitForUpdateIdempotency(root, ["config", "user.name", "test"]);
+    gitForUpdateIdempotency(root, ["add", "-A"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "fixture"]);
+    const committed = await readFile(path.join(root, "AGENTS.md"));
+    await settleAsLegacyRepository(root, ["AGENTS.md"]);
+
+    const output = await runEntrypointUpdate(root);
+
+    expect((await readFile(path.join(root, "AGENTS.md"))).equals(committed)).toBe(true);
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(true);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(existsSync(path.join(root, "CLAUDE.md"))).toBe(false);
+    expect((await readEntrypointsManifest(root)).root).toEqual([{ runtime: "codex", path: "AGENTS.md", scope: "shared" }, LOCAL_CLAUDE]);
+    expect(output).toContain("AGENTS.md: the managed keryx block is committed in HEAD");
+    expect(output).toContain('scope to "local"');
+    expect(output).toContain("keryx update");
+    // H1: CLAUDE.local.md would stop Claude Code's AGENTS.md fallback, so it imports the team file.
+    expect((await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).split("\n")).toContain("@AGENTS.md");
+
+    const afterFirst = await snapshotTree(root);
+    const second = await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+    expect(second).not.toContain("committed in HEAD");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: Codex override carries the full AGENTS.md plus the block and is regenerated after AGENTS.md changes", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const root = await entrypointFixture("keryx-update-entry-override-", { "AGENTS.md": agents, "CLAUDE.md": "# Claude\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    const first = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(first).toMatch(/^<!-- keryx:override source="AGENTS\.md" sha256=[0-9a-f]{64} /);
+    expect(countOccurrences(first, BLOCK_START)).toBe(1);
+    expect(first.endsWith(agents)).toBe(true);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+
+    const revised = `${agents}\n## New section\n\nAdded upstream.\n`;
+    await writeFile(path.join(root, "AGENTS.md"), revised, "utf8");
+    expect(await isCodexOverrideStale(root, LOCAL_CODEX)).toBe(true);
+
+    await runEntrypointUpdate(root);
+    const second = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(second.endsWith(revised)).toBe(true);
+    expect(countOccurrences(second, BLOCK_START)).toBe(1);
+    expect(await isCodexOverrideStale(root, LOCAL_CODEX)).toBe(false);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(revised);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: with no AGENTS.md Codex is skipped with a message and no tracked entrypoint is created", async () => {
+  const root = await entrypointFixture("keryx-update-entry-absent-", { "README.md": "readme\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    const output = await runEntrypointUpdate(root);
+
+    expect(existsSync(path.join(root, "AGENTS.md"))).toBe(false);
+    expect(existsSync(path.join(root, "CLAUDE.md"))).toBe(false);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
+    expect(output).toContain("Codex: skipped");
+    expect(output).toContain("AGENTS.md does not exist");
+    expect(output).toContain('scope to "shared"');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: Codex mode skip writes and modifies no Codex file and says so", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const skip = { ...LOCAL_CODEX, mode: "skip" };
+  const root = await entrypointFixture(
+    "keryx-update-entry-skip-",
+    { "AGENTS.md": agents },
+    { root: [LOCAL_CLAUDE, skip], claudeSettings: ENTRY_FORM_DEFAULT.claudeSettings },
+  );
+  try {
+    const output = await runEntrypointUpdate(root);
+
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(true);
+    expect(output).toContain("Codex: skipped");
+    expect(output).toContain('mode "skip"');
+    expect((await readEntrypointsManifest(root)).root).toEqual([LOCAL_CLAUDE, skip]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: a custom root file named by a legacy manifest is still imported as a rule source", async () => {
+  const team = "# Team conventions\n\nPrefer small modules.\n";
+  const root = await entrypointFixture(
+    "keryx-update-entry-custom-",
+    { "AGENTS.md": "# Team\n\nUse metaproject rules.\n", "TEAM.md": team },
+    { root: ["AGENTS.md", "TEAM.md"] },
+  );
+  try {
+    await runEntrypointUpdate(root);
+
+    const imported = await readFile(path.join(root, ".metaproject", "rules", "team-md.md"), "utf8");
+    expect(imported).toContain('source: "TEAM.md"');
+    expect(imported).toContain("Prefer small modules.");
+    expect(await readFile(path.join(root, ".metaproject", "routing.md"), "utf8")).toContain("| TEAM.md | high |");
+    expect(await readFile(path.join(root, "TEAM.md"), "utf8")).toBe(team);
+    const entrypoints = await readEntrypointsManifest(root);
+    expect(entrypoints.importSources).toEqual(["TEAM.md"]);
+    expect(entrypoints.root).toEqual([LOCAL_CODEX, LOCAL_CLAUDE]);
+
+    // It stays an import source once the manifest is in entry form.
+    await appendFile(path.join(root, "TEAM.md"), "\nAnd short functions.\n", "utf8");
+    await runEntrypointUpdate(root);
+    expect(await readFile(path.join(root, ".metaproject", "rules", "team-md.md"), "utf8")).toContain("And short functions.");
+    expect((await readEntrypointsManifest(root)).importSources).toEqual(["TEAM.md"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: outside a git repository the local targets are written and the team file is strip-only, with a note", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const root = await entrypointFixture("keryx-update-entry-nogit-", { "AGENTS.md": agents }, { root: ["AGENTS.md"] }, { git: false });
+  try {
+    await settleAsLegacyRepository(root, ["AGENTS.md"]);
+    await writeLegacyBlockInto(root, "AGENTS.md");
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toContain(agents);
+    expect(output).toContain("AGENTS.md: removed the managed keryx block. Not a git repository");
+    expect((await readEntrypointsManifest(root)).root).toEqual([LOCAL_CODEX, LOCAL_CLAUDE]);
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361: an entry-form local manifest whose tracked file still carries a block is migrated by the same path", async () => {
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-update-entry-entryform-", { "AGENTS.md": "# Team\n", "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await writeLegacyBlockInto(root, "CLAUDE.md");
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(false);
+
+    await runEntrypointUpdate(root);
+
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
