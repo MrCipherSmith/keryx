@@ -291,6 +291,12 @@ export const DEFAULT_KILL_GRACE_MS = 2_000;
 /** How long the streams are given to close after a terminal event before the child is killed. */
 export const DEFAULT_TERMINAL_SETTLE_MS = 2_000;
 
+/**
+ * codex in write mode needs about 2.1 s after `turn.completed` to shut down (measured on 0.159.2),
+ * so the default window killed a finished run half way through its teardown.
+ */
+export const CODEX_TERMINAL_SETTLE_MS = 10_000;
+
 // ---------------------------------------------------------------------------
 // The supervisor
 // ---------------------------------------------------------------------------
@@ -559,6 +565,7 @@ export async function superviseExternalRun(
   // Timed out, or terminated with the streams still open. Kill, then RACE the
   // exit signal against its own grace window — awaiting it unraced is the same
   // trap this whole function exists to avoid.
+  const exitedBeforeKill = reportedExitCode;
   handle.kill();
   const grace = afterMs<undefined>(input.killGraceMs ?? DEFAULT_KILL_GRACE_MS, undefined);
   const code = await Promise.race([exited, grace.promise]);
@@ -570,8 +577,11 @@ export async function superviseExternalRun(
 
   // `terminal`: the transcript ended on its own terms and only the pipes hung,
   // so this is not a timeout and `timedOut` stays false — `classifyClaudeFailure`
-  // and `classifyCodexFailure` both branch on that field first.
-  return build(code ?? exitCodeFromEvents(events), false);
+  // and `classifyCodexFailure` both branch on that field first. The code that
+  // came back is the one OUR kill produced (143 for SIGTERM), which says nothing
+  // about the run, so the transcript decides. A code the child had already
+  // delivered BEFORE the kill is its own and wins.
+  return build(exitedBeforeKill ?? exitCodeFromEvents(events), false);
 }
 
 // ---------------------------------------------------------------------------

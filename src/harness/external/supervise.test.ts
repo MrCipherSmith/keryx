@@ -54,6 +54,8 @@ interface FakeOptions {
   readonly holdStdout?: boolean;
   /** Never resolve `exited` until `release()`. */
   readonly holdExit?: boolean;
+  /** Resolve `exited` with `exitCode` only once `kill()` is called: the code is produced by the kill. */
+  readonly exitOnKill?: boolean;
   /** Make the stdout iterator throw after its lines — a broken port mid-run. */
   readonly stdoutError?: string;
 }
@@ -96,10 +98,16 @@ function fakePort(options: FakeOptions = {}): FakeHarness {
     for (const line of stderrLines) yield line;
   }
 
+  let killed = (): void => undefined;
+  const killSignal = new Promise<void>((resolve) => {
+    killed = resolve;
+  });
   const exited =
-    options.holdExit === true
-      ? gate.then(() => options.exitCode ?? 0)
-      : Promise.resolve(options.exitCode ?? 0);
+    options.exitOnKill === true
+      ? killSignal.then(() => options.exitCode ?? 0)
+      : options.holdExit === true
+        ? gate.then(() => options.exitCode ?? 0)
+        : Promise.resolve(options.exitCode ?? 0);
 
   const port: ExternalSpawnPort = {
     spawn(argv, opts) {
@@ -112,6 +120,7 @@ function fakePort(options: FakeOptions = {}): FakeHarness {
         },
         kill(): void {
           kills += 1;
+          killed();
         },
         exited,
       };
@@ -326,6 +335,47 @@ describe("timeout and kill are RACED, not chained", () => {
     // short-circuits to success only on exit 0 plus `child_finished`.
     expect(outcome.exitCode).toBe(0);
     expect(classifyCodexFailure(outcome)).toBeNull();
+
+    fake.release();
+  });
+});
+
+describe("the exit code of a run ended by our own kill after its terminal event", () => {
+  test("is read from the transcript, not from the signal our kill produced", async () => {
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl"),
+      holdStdout: true,
+      exitOnKill: true,
+      exitCode: 143,
+    });
+
+    const outcome = await superviseExternalRun(
+      input({ timeoutMs: 5_000, terminalSettleMs: 15, killGraceMs: 10 }),
+      { spawn: fake.port, codec: codexCliCodec },
+    );
+
+    expect(outcome.killed).toBe(true);
+    expect(outcome.exitCode).toBe(0);
+    expect(classifyCodexFailure(outcome)).toBeNull();
+
+    fake.release();
+  });
+
+  test("a non-zero code the child delivered BEFORE the kill is kept, so a failed teardown is not reported as success", async () => {
+    const fake = fakePort({
+      stdout: transcript("codex-cli/success.stdout.jsonl"),
+      holdStdout: true,
+      exitCode: 2,
+    });
+
+    const outcome = await superviseExternalRun(
+      input({ timeoutMs: 5_000, terminalSettleMs: 15, killGraceMs: 10 }),
+      { spawn: fake.port, codec: codexCliCodec },
+    );
+
+    expect(outcome.killed).toBe(true);
+    expect(outcome.exitCode).toBe(2);
+    expect(classifyCodexFailure(outcome)).not.toBeNull();
 
     fake.release();
   });

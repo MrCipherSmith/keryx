@@ -703,38 +703,66 @@ describe("structured result validation (AC13)", () => {
     expect(result.partial).toBe("Here is my report: everything looks fine.");
   });
 
-  test("resultSchemaPath is wired to a real file containing the loaded subagent-result schema", async () => {
+  test("resultSchemaPath is wired to a real file holding the strict copy of the subagent-result schema", async () => {
+    // The file must exist AT SPAWN TIME (the runtime removes it afterwards), so it is read inside the spawn call.
     const sp = fakeSpawn(codexTranscript(JSON.stringify(VALID_RESULT)));
-    await runExternalChild(baseInput(), baseDeps({ spawn: sp.port }));
-
-    const argv = sp.calls[0]?.argv ?? [];
-    const flagIndex = argv.indexOf("--output-schema");
-    expect(flagIndex).toBeGreaterThanOrEqual(0);
-    const schemaPathArg = argv[flagIndex + 1];
-    expect(schemaPathArg).toBeDefined();
-
-    // The file must have existed AT ARGV-BUILD TIME (this reads it after the run,
-    // by which point the runtime's cleanup may already have removed it — so this
-    // assertion only holds if the wiring is real: the codec receives a genuine
-    // path, not an empty placeholder. Re-run with a spy that reads the file
-    // synchronously inside the spawn call, before cleanup can run.
-    let observedSchema: unknown;
+    let observedText = "";
     const readingSpawn: ExternalSpawnPort = {
       spawn(spawnArgv, opts) {
-        const idx = spawnArgv.indexOf("--output-schema");
-        const schemaPath = spawnArgv[idx + 1];
-        if (schemaPath !== undefined) {
-          observedSchema = JSON.parse(readFileSync(schemaPath, "utf8"));
-        }
+        const schemaPath = spawnArgv[spawnArgv.indexOf("--output-schema") + 1];
+        if (schemaPath !== undefined) observedText = readFileSync(schemaPath, "utf8");
         return sp.port.spawn(spawnArgv, opts);
       },
     };
     await runExternalChild(baseInput(), baseDeps({ spawn: readingSpawn }));
 
-    const realSchema = JSON.parse(
-      readFileSync(fileURLToPath(new URL("../../gdskills/contracts/subagent-result.schema.json", import.meta.url)), "utf8"),
+    const observed = JSON.parse(observedText) as Record<string, unknown>;
+    // What the OpenAI validator needs: closed objects listing every property, no sibling ref, no dialect.
+    expect(observed.additionalProperties).toBe(false);
+    expect([...(observed.required as string[])].sort()).toEqual(Object.keys(observed.properties as object).sort());
+    expect(observed.required).toContain("summary_markdown");
+    expect(observedText).not.toContain("review-finding.schema.json");
+    expect(observedText).not.toContain('"allOf"');
+    expect(observed.$schema).toBeUndefined();
+    const metrics = (observed.properties as Record<string, Record<string, unknown>>).metrics;
+    expect(metrics?.additionalProperties).toBe(false);
+  });
+
+  test("a codex result carrying nulls for the optional fields is Completed, and the nulls are gone from the output", async () => {
+    const withNulls = {
+      ...VALID_RESULT,
+      summary_markdown: null,
+      metrics: { duration_ms: null, prompt_tokens: null, output_tokens: null, retries: null },
+    };
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(codexTranscript(JSON.stringify(withNulls))).port }),
     );
-    expect(observedSchema).toEqual(realSchema);
+    expect(result.status).toBe("Completed");
+    const out = JSON.parse(result.output) as Record<string, unknown>;
+    expect("summary_markdown" in out).toBe(false);
+  });
+
+  test("a codex run that narrates before answering yields only the final message as its result", async () => {
+    const lines = [
+      JSON.stringify({ type: "thread.started", thread_id: "test-thread-id" }),
+      JSON.stringify({ type: "turn.started" }),
+      JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text: "I'll append a line to a.txt." } }),
+      JSON.stringify({ type: "item.completed", item: { id: "item_1", type: "agent_message", text: JSON.stringify(VALID_RESULT) } }),
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }),
+    ];
+    const result = await runExternalChild(baseInput(), baseDeps({ spawn: fakeSpawn(lines).port }));
+    expect(result.status).toBe("Completed");
+    expect(JSON.parse(result.output)).toEqual(VALID_RESULT);
+  });
+
+  test("a null on a REQUIRED field is still an Error for codex", async () => {
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: fakeSpawn(codexTranscript(JSON.stringify({ ...VALID_RESULT, run_id: null }))).port }),
+    );
+    expect(result.status).toBe("Error");
+    expect(result.output).toContain("subagent-result schema validation");
   });
 
   test("claude's --json-schema is a self-contained inline document, not a path", async () => {

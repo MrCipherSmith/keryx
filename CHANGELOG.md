@@ -3,6 +3,14 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.43] — 2026-09-30
+### Fixed
+- **Every `codex-cli` run failed with `invalid_json_schema`** (0.3.42, read-only and `--write`). `codex exec --output-schema` forwards to OpenAI structured output, which refuses the subagent-result schema as written (objects must list every property in `required`, and `allOf`, `if`/`then`, `pattern`, bounds and `default` are rejected). `codex` now receives a strict copy of that schema; keryx removes the nulls the copy forces on optional fields and validates the answer against the full, unchanged contract, so a null on a required field still fails.
+- **A `codex` write run was reported as `exited with code 143`.** `codex` needs about 2 s to exit after its final event in write mode, longer than the 2 s settle window, so keryx killed it mid-teardown and trusted the signal exit code. For `codex` the window is now 10 s (other agents keep 2 s), and a run ended by keryx's own kill after its terminal event takes its exit code from the child if it had already reported one, otherwise from its events, never from the signal the kill produced.
+- **The `codex` result is now its final message only.** Narration in earlier messages ("I'll edit a.txt") was joined in front of the JSON answer and failed the structured validation.
+### Notes
+- A `codex` result that reports a `blocker` or `major` finding must carry `class_scope` (the full contract requires it); the strict copy cannot express that conditional, so a result that leaves it null fails validation as an Error instead of being accepted. Validation stays fail-closed.
+
 ## [0.3.42] — 2026-09-30
 ### Added
 - **Write mode for the external agent `codex-cli`** — `keryx agents external run codex-cli --task "..." --write` works the same way as for `claude-cli`: a throwaway git worktree at the base commit, a secret-redacted, hashed patch that is never applied automatically, human review, and landing only as a NEW local branch `external/<run-id>` after you type the first 12 hex digits of the patch hash. The same flagged-path gate applies, there is no auto-approve, and nothing is pushed and no pull request is opened from the landed branch.
