@@ -8,6 +8,8 @@ import {
   groupUsage,
   groupsWithKnownSubcommands,
   helpRequestedFor,
+  knownSubcommandsFor,
+  printCommandHelp,
   shouldInterceptHelp,
 } from "./cli";
 import { ShellFlagError, shellCommand } from "./commands/shell";
@@ -670,5 +672,140 @@ describe("AC5: a group's top-level --help lists every subcommand its handler dis
     const output = await runBun([cliPath, "trigger", "install", "--help"]);
     expect(output).not.toContain("installed");
     expect(output).toContain("keryx trigger");
+  });
+});
+
+// Flow 360 (AC11): `--help` on a `review`/`skills` subcommand used to print a
+// slice of the static `USAGE_BODY` — `keryx review --help` named 5 of the ~30
+// subcommands the router handles, and `keryx skills import --help` printed the
+// generic skills list, so the import/update help printers were dead code.
+//
+// The mechanism under test: `--help` STAYS intercepted (no route ever runs),
+// and `printCommandHelp(command, rest)` hands `rest` to the group's own help
+// function, which picks the named subcommand's printer from a table the
+// command module owns.
+describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, without running it", () => {
+  /** Everything `run` prints through `console.log`, joined. */
+  async function captureLog(run: () => Promise<void> | void): Promise<string> {
+    const original = console.log;
+    const lines: string[] = [];
+    console.log = (...parts: unknown[]) => {
+      lines.push(parts.map(String).join(" "));
+    };
+    try {
+      await run();
+    } finally {
+      console.log = original;
+    }
+    return lines.join("\n");
+  }
+
+  /** Every `command === "x"` the `reviewCommand` router compares against — read from SOURCE, not a second list. */
+  function reviewRouterSubcommands(): string[] {
+    const source = readFileSync(path.join(import.meta.dir, "commands/review.ts"), "utf8");
+    const headerAt = source.indexOf("export async function reviewCommand(");
+    expect(headerAt).toBeGreaterThan(-1);
+    let depth = 0;
+    let i = source.indexOf("{", headerAt);
+    const bodyStart = i;
+    for (; i < source.length; i += 1) {
+      if (source[i] === "{") depth += 1;
+      else if (source[i] === "}") {
+        depth -= 1;
+        if (depth === 0) break;
+      }
+    }
+    const names = new Set<string>();
+    for (const match of source.slice(bodyStart, i + 1).matchAll(/\bcommand === "([a-z][a-z0-9-]*)"/g)) {
+      names.add(match[1] as string);
+    }
+    return [...names].sort();
+  }
+
+  test("`keryx review --help` has a usage line for every subcommand the router handles", async () => {
+    const names = reviewRouterSubcommands();
+    expect(names.length).toBeGreaterThan(20);
+
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const output = await runBun([cliPath, "review", "--help"]);
+    const missing = names.filter((name) => !new RegExp(`^\\s+keryx review ${name}(?:\\s|$)`, "m").test(output));
+    expect(missing).toEqual([]);
+  });
+
+  test("`keryx help review` prints the same complete list", async () => {
+    const output = await captureLog(() => printCommandHelp("review"));
+    const missing = reviewRouterSubcommands().filter((name) => !output.includes(`keryx review ${name}`));
+    expect(missing).toEqual([]);
+  });
+
+  test("the review router and the known-subcommand table name the same subcommands", () => {
+    // The third copy of this list (`lib/group-subcommands.ts`) decides which
+    // first tokens are refused as typos BEFORE the router runs — a subcommand
+    // added to the router but not there is unreachable, however well documented.
+    expect([...(knownSubcommandsFor("review") ?? [])].sort()).toEqual(reviewRouterSubcommands());
+  });
+
+  const OWN_HELP: ReadonlyArray<{ argv: string[]; has: string[]; lacks: string }> = [
+    { argv: ["skills", "import", "--help"], has: ["keryx skills import --from"], lacks: "keryx skills catalog" },
+    { argv: ["skills", "update", "-h"], has: ["keryx skills update --all"], lacks: "keryx skills catalog" },
+    { argv: ["review", "import", "--help"], has: ["keryx review import --from"], lacks: "keryx review attach" },
+    {
+      argv: ["review", "comments", "--help"],
+      // The last one is the `comments:` paragraph of the group help, reused.
+      has: ["keryx review comments collect", "keryx review comments reply", "collected EVERY round"],
+      lacks: "keryx review attach",
+    },
+    { argv: ["review", "comments", "reply", "--help"], has: ["keryx review comments reply"], lacks: "keryx review attach" },
+    {
+      argv: ["review", "learn", "--help"],
+      has: ["keryx review learn --pr", "keryx review learn --reviewer", "NEVER fetches from GitHub"],
+      lacks: "keryx review attach",
+    },
+  ];
+
+  for (const { argv, has, lacks } of OWN_HELP) {
+    test(`\`keryx ${argv.join(" ")}\` prints that subcommand's own usage`, async () => {
+      const [command, ...rest] = argv as [string, ...string[]];
+      // Intercepted: the route never sees the token, so nothing can execute.
+      expect(shouldInterceptHelp(command, rest)).toBe(true);
+      const output = await captureLog(() => printCommandHelp(command, rest));
+      for (const expected of has) {
+        expect(output).toContain(expected);
+      }
+      // …and it is the subcommand's help, not the whole group's.
+      expect(output).not.toContain(lacks);
+    });
+  }
+
+  test("end to end: `keryx skills import --help` prints the import usage and exits 0", async () => {
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const result = await runBunCapture([cliPath, "skills", "import", "--help"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain("keryx skills import --from");
+    expect(result.stdout).not.toContain("keryx skills catalog");
+  });
+
+  test("a subcommand with no help of its own falls back to the group's help instead of running", async () => {
+    // `review lightweight` ignores every argument and prints a status line;
+    // `skills install` writes files. Neither may run on a question.
+    expect(shouldInterceptHelp("review", ["lightweight", "--help"])).toBe(true);
+    const cliPath = path.join(import.meta.dir, "cli.ts");
+    const lightweight = await runBunCapture([cliPath, "review", "lightweight", "--help"]);
+    expect(lightweight.code).toBe(0);
+    expect(lightweight.stdout).not.toContain("lightweight review mode:");
+    expect(lightweight.stdout).toContain("keryx review attach");
+
+    expect(shouldInterceptHelp("skills", ["install", "--help"])).toBe(true);
+    const install = await captureLog(() => printCommandHelp("skills", ["install", "--help"]));
+    expect(install).toContain("keryx skills install");
+    expect(install).toContain("keryx skills catalog");
+  });
+
+  test("only the pinned review subcommands are handed their own `--help`; every other one stays intercepted", () => {
+    // `SAFE_SUBCOMMAND_HELP` lets a route see `--help`, which is only safe when
+    // that subcommand's handler checks it before doing anything. A subcommand
+    // added to that list has to be added here, next to the reason.
+    const reachesHandler = reviewRouterSubcommands().filter((name) => !shouldInterceptHelp("review", [name, "--help"]));
+    expect(reachesHandler).toEqual(["bot", "metrics", "scope", "tier"]);
   });
 });

@@ -53,7 +53,12 @@ import {
   normalizeProjectSkillFormat,
   type ProjectSkillRegistryEntry,
 } from "../gdskills/project-skills";
-import { runSkillsImportCommand, runSkillsUpdateCommand } from "../gdskills/import-skills";
+import {
+  printSkillsImportHelp,
+  printSkillsUpdateHelp,
+  runSkillsImportCommand,
+  runSkillsUpdateCommand,
+} from "../gdskills/import-skills";
 import { verifyProjectSkill } from "../gdskills/verify";
 import {
   defaultBundledRoot,
@@ -1726,6 +1731,40 @@ function latest(values: string[]): string | "never" {
 
 function relativeToCwd(filePath: string): string {
   return path.relative(process.cwd(), filePath) || ".";
+}
+
+/**
+ * The help a `keryx skills <subcommand> --help` question is answered with.
+ *
+ * A TABLE OF PRINTERS, not a route. `cli-registry.ts` intercepts `--help` in
+ * front of every skills subcommand it has not been told is safe (`install`
+ * writes files and does not look for `--help`), and asks
+ * {@link printSkillsHelpFor} for the text instead of running anything. So a
+ * subcommand's own help is reached by adding ONE entry here, next to its
+ * printer — no registry edit, and no way for the entry to execute the
+ * subcommand. A subcommand with no entry gets the group help.
+ */
+const SKILLS_SUBCOMMAND_HELP: ReadonlyMap<string, () => void> = new Map([
+  ["doctor", printDoctorHelp],
+  ["uninstall", printUninstallHelp],
+  ["route", printRouteHelp],
+  ["inspect", printInspectHelp],
+  ["create", () => printCreateHelp("create")],
+  ["generate", () => printCreateHelp("generate")],
+  ["import", printSkillsImportHelp],
+  ["update", printSkillsUpdateHelp],
+  ["verify", printVerifyHelp],
+  ["learn", printLearnHelp],
+  ["export", printExportHelp],
+  ["sync", printSyncHelp],
+  ["contracts", printContractsHelp],
+]);
+
+/** Print the named subcommand's own help, or the whole group's when `rest` names none that has one. Never runs anything. */
+export function printSkillsHelpFor(rest: readonly string[] = []): void {
+  const subcommand = rest[0];
+  const own = subcommand === undefined ? undefined : SKILLS_SUBCOMMAND_HELP.get(subcommand);
+  (own ?? printSkillsHelp)();
 }
 
 function printSkillsHelp(): void {

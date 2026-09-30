@@ -93,49 +93,59 @@ export interface InstallManifest {
   components: Record<string, ManifestComponent>;
 }
 
-/**
- * The bundled manifest's on-disk path, the same source/packaged two-candidate
- * lookup `install.ts` uses for the bundled skills/rules trees (works both
- * from source and from the packaged `dist/` tree — see `bundledRulesSourcePath`).
- */
-export function bundledManifestPath(): string {
-  const directPath = fileURLToPath(new URL("../bundled/install-manifest.json", import.meta.url));
-  if (existsSync(directPath)) {
-    return directPath;
-  }
-
-  const packagedSourcePath = path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "..",
-    "src",
-    "gdskills",
-    "bundled",
-    "install-manifest.json",
-  );
-  if (existsSync(packagedSourcePath)) {
-    return packagedSourcePath;
-  }
-
-  return directPath;
+/** The directory this module is loaded from: `<repo>/src/gdskills/manifest` from source, `<pkg>/dist` once bundled. */
+function thisModuleDir(): string {
+  return path.dirname(fileURLToPath(import.meta.url));
 }
+
+const BUNDLED_TREE = ["src", "gdskills", "bundled"] as const;
 
 /**
  * The keryx package root — the directory `module.paths` entries (e.g.
  * `src/gdskills/bundled/rules/core/git-rules.mdc`) resolve against. This is
  * NEVER the target project (`process.cwd()` for `keryx skills install`);
  * bundled source content ships inside the keryx package itself (`package.json`
- * `files`: `src/gdskills/bundled`), the same two-candidate dev/packaged
- * resolution every other `bundledXSourcePath` helper in this directory uses.
+ * `files`: `src/gdskills/bundled`).
+ *
+ * Two layouts, told apart by where the bundled tree actually is:
+ *   - packaged: the published entry is ONE flat bundle, `<pkg>/dist/cli.js`,
+ *     so every module's directory is `<pkg>/dist` and the root is one up;
+ *   - source: this file is `<repo>/src/gdskills/manifest/manifest.ts`, three up.
+ * The packaged candidate is tried first because it cannot match by accident
+ * from source (`src/gdskills/` holds no `src/gdskills/bundled`), whereas the
+ * three-up candidate from `dist/` lands outside the package, in whatever
+ * directory the package happens to be installed under.
+ *
+ * `moduleDir` is a parameter so the packaged layout can be exercised by a test
+ * without building the package (flow 360, AC10).
  */
-export function defaultBundledSourceRoot(): string {
-  const devCandidate = fileURLToPath(new URL("../../../", import.meta.url));
-  if (existsSync(path.join(devCandidate, "src", "gdskills", "bundled"))) {
-    return devCandidate;
+export function defaultBundledSourceRoot(moduleDir: string = thisModuleDir()): string {
+  const packagedRoot = path.join(moduleDir, "..");
+  if (existsSync(path.join(packagedRoot, ...BUNDLED_TREE))) {
+    return packagedRoot;
   }
-  // Packaged: this module's compiled location is <pkg>/dist/*.js, so the
-  // package root is one directory up.
-  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const sourceRoot = path.join(moduleDir, "..", "..", "..");
+  if (existsSync(path.join(sourceRoot, ...BUNDLED_TREE))) {
+    return sourceRoot;
+  }
+  return packagedRoot;
+}
+
+/**
+ * The bundled manifest's on-disk path: `src/gdskills/bundled/install-manifest.json`
+ * under {@link defaultBundledSourceRoot}, in both layouts.
+ *
+ * It used to derive the path on its own, as `../bundled/…` and then
+ * `../../src/gdskills/bundled/…` relative to this module. Both assume the
+ * module sits two levels below the package's `src/`; from the flat published
+ * `<pkg>/dist/cli.js` they resolve to `<pkg>/bundled/…` and to a path one level
+ * ABOVE the package, so `keryx skills install --profile full --dry-run` failed
+ * with ENOENT on a manifest that was shipped all along. (`bundledRulesSourcePath`
+ * in `../install.ts` has the same shape but sits one directory higher, where
+ * its `../src/…` fallback does reach the package root.)
+ */
+export function bundledManifestPath(moduleDir: string = thisModuleDir()): string {
+  return path.join(defaultBundledSourceRoot(moduleDir), ...BUNDLED_TREE, "install-manifest.json");
 }
 
 /** Validate an arbitrary parsed document against `install-manifest.schema.json`. */
