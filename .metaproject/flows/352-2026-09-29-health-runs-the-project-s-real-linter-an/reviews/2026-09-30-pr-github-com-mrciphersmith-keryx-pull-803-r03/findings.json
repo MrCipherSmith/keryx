@@ -30,6 +30,10 @@
       "method": "execution",
       "evidence": "probe3.test.ts -t N2 retargeted at the copy: coverage 50% with coverage disabled, r1 health 85 sources [eslint]; enable coverage -> r2 reg -15 improved, baseline folded to 70; +1 eslint error -> r3 reg -5 'improved'. Control N2c (coverage enabled from start, +1 eslint error): reg 10 regressed, gate fail.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 coverage applied rule; its re-baseline gap (R5-01) fixed in 65f6e175"
     }
   },
   {
@@ -62,6 +66,10 @@
       "method": "execution",
       "evidence": "Mutant baseline.ts `if (entry === undefined || metric.key !== \"project\") continue;` in the copy: bun test --timeout 30000 src/health 180 pass, 0 fail. Restored.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 steady-state module fold test; round 5 Q02/Q02b red"
     }
   },
   {
@@ -81,7 +89,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-03"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 raw-penalty effect; round 5 N1b stable"
+    }
   },
   {
     "id": "R4-04",
@@ -100,7 +112,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-04"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 module refusal; applied-coverage gap fixed in 65f6e175"
+    }
   },
   {
     "id": "R4-05",
@@ -119,7 +135,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-05"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 differing-set module test; round 5 Q14 red"
+    }
   },
   {
     "id": "R4-06",
@@ -138,7 +158,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-06"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 non-object tests; round 5 Q15/Q15b red"
+    }
   },
   {
     "id": "R4-07",
@@ -157,7 +181,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-07"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 other-source coverage test; round 5 Q11b red"
+    }
   },
   {
     "id": "R4-08",
@@ -176,7 +204,11 @@
       "reason": "the quote matches at least 2 places in the file (lines 52, 188, and the scan stopped there); an anchor chosen among them would be a guess",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-08"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 reportBaselineUpdate test; wiring pinned in 65f6e175"
+    }
   },
   {
     "id": "R4-09",
@@ -195,7 +227,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-09"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 single parser"
+    }
   },
   {
     "id": "R4-10",
@@ -214,7 +250,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-10"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 literal legacy pin; round 5 Q07a/b/d red"
+    }
   },
   {
     "id": "R4-11",
@@ -233,7 +273,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-11"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 clamp test; round 5 Q01c red"
+    }
   },
   {
     "id": "R4-12",
@@ -252,7 +296,11 @@
       "reason": "the quote does not appear in the file",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-12"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-12",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 whitespace preamble; round 5 P25 red"
+    }
   },
   {
     "id": "R4-13",
@@ -271,6 +319,10 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-13"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-13",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "round 5 review-architecture: neither field is read for comparison; kept as acceptance time"
+    }
   }
 ]

@@ -1,0 +1,200 @@
+[
+  {
+    "id": "R5-01",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "health run records coverage whenever its data was applied; health baseline update (and its module/file refusal) still uses measuredSources(latest.sources), which omits coverage applied while disabled. Also raised by review-regression (R5-B01), review-logic (F-001) and review-testing-practices (R5-T01).",
+    "impact": "A re-baseline drops coverage while its penalty stays in the scores; the next run folds it out again, and a real 30-point eslint regression reads reg 5 / WARN instead of reg 30 / FAIL.",
+    "suggested_fix": "One scored-sources rule, persisted in the report and read by both writers and the refusal.",
+    "evidence": "probe-coverage-rebaseline.ts `disabled` vs `import` on 13e06b52. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/service.ts",
+    "line": 367,
+    "quote": "        rewritesAll ? measuredSources(latest.sources) : undefined,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/service.ts re-baseline recorded set",
+        "src/health/service.ts module/file refusal",
+        "src/health/run.ts measured set (the correct definition)"
+      ],
+      "enumeration_method": "Every reader and writer of the recorded source set (writeBaseline, foldNewSources, recordBaselineSources, loadBaselineSources, measuredSources callers) via keryx ctx rg over src/health."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-01",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe-coverage-rebaseline retargeted, `disabled`: after updateBaseline sources drop coverage; unchanged run2 reg -25 improved, baseline 75 -> 50; run4 with 3 eslint errors warn health 45 reg 5. Control `import`: sources keep coverage, run2 reg 0, run4 fail reg 30.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "R5-02",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "No test folds coverage as the new source; dropping newCoveragePenalty from the effect leaves the suite green.",
+    "impact": "A coverage report appearing on a baselined project could fold nothing, and its penalty would later read as a regression of unchanged code.",
+    "suggested_fix": "Integration test: baseline without coverage, report appears, first and second runs regression 0.",
+    "evidence": "Mutant E06 green (188 pass). Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/scopes.ts",
+    "line": 114,
+    "quote": "      ? ((newRisk + newCoveragePenalty) * config.scoring.normalizePerLoc) /",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/scopes.ts new-source effect",
+        "src/health/baseline-sources.test.ts coverage tests"
+      ],
+      "enumeration_method": "Every coverage test read: none starts with a baseline and then adds a report."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-02",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "scopes.ts effect with newRisk only: bun test --timeout 30000 src/health 188 pass, 0 fail. Restored.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "R5-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Coverage is recorded when its source is `available` even if no data was applied (e.g. coverage-final.json only).",
+    "impact": "A later coverage-summary.json fails unchanged code with regression 15.",
+    "suggested_fix": "Decide coverage membership by applied data alone.",
+    "evidence": "probe4 P4.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 186,
+    "quote": "  const measured = [...new Set([...measuredSources(sourceInfos), ...(coverageApplied ? [\"coverage\"] : [])])].sort();",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-03"
+  },
+  {
+    "id": "R5-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "A coverage report the baseline measured can disappear; the lost penalty reads as an improvement and hides drift of the same size. Pre-existing, applies to any vanished source.",
+    "impact": "Drift up to the coverage penalty hidden while the report is absent.",
+    "suggested_fix": "Keep the penalty on the comparison side, or WARN when a baseline-measured source produced no data. Deferral acceptable if tracked.",
+    "evidence": "probe4 P3.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 185,
+    "quote": "  const coverageApplied = coverage.total !== null || coverage.byFile.size > 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-04"
+  },
+  {
+    "id": "R5-05",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The line turning the refusal into the process exit status is untested.",
+    "impact": "Deleting it makes a refusal exit 0 with CI green.",
+    "suggested_fix": "Test runBaseline's exit code.",
+    "evidence": "Mutant C02 green.",
+    "confidence": "high",
+    "file": "src/commands/health.ts",
+    "line": 250,
+    "quote": "  if (exit !== 0) process.exitCode = exit;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-05"
+  },
+  {
+    "id": "R5-06",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The byFile arm is untested.",
+    "impact": "Per-file coverage could shape scores while unrecorded.",
+    "suggested_fix": "Test a summary with per-file entries and no total.",
+    "evidence": "Mutant R04 green.",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 185,
+    "quote": "const coverageApplied = coverage.total !== null || coverage.byFile.size > 0;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-06"
+  },
+  {
+    "id": "R5-07",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The damaged-JSON branch of the single baseline parser is untested.",
+    "impact": "A change to throw would crash every health run on a truncated scores.json.",
+    "suggested_fix": "Test a damaged scores.json.",
+    "evidence": "Mutant L02 green.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 63,
+    "quote": "  } catch {\n    return null;\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-07"
+  },
+  {
+    "id": "R5-08",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "Internal fold accounting on the persisted ScopeMetrics; relative to the baseline at run time. Also: the per-LOC formula is duplicated from healthScore (R5-A03).",
+    "impact": "Report contract grew an undocumented, stale-able field; two copies of the scoring formula.",
+    "suggested_fix": "Side channel from computeMetrics; export normalizedPenalty from scoring.ts.",
+    "evidence": "types.ts, scopes.ts vs scoring.ts.",
+    "confidence": "high",
+    "file": "src/health/types.ts",
+    "line": 148,
+    "quote": "  new_source_effect?: number;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-08"
+  },
+  {
+    "id": "R5-09",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A `file:` baseline entry with no findings in the fold run is not folded even if a new coverage source penalises it.",
+    "impact": "File-scope trend/regression only, once per file.",
+    "suggested_fix": "Accept and document, or fold every baseline file key.",
+    "evidence": "Fold visits reported scopes only.",
+    "confidence": "medium",
+    "file": "src/health/baseline.ts",
+    "line": 107,
+    "quote": "    const entry = scopes[metric.key];\n    if (entry === undefined) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r04#R5-09"
+  }
+]
