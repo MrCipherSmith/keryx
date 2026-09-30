@@ -121,15 +121,30 @@ describe("buildSettingsRows", () => {
   test("reasoning: one button per level, and the source explains the value", () => {
     const reasoning = rowOf(buildSettingsRows({ ...BASE, reasoning: { effort: "high", source: "session" } }), "reasoning");
     expect(reasoning.value).toBe("high");
-    expect(reasoning.detail).toBe("set this session");
+    expect(reasoning.detail).toBe("set this session and saved");
+    expect(reasoning.scope).toBe("saved");
     expect(reasoning.actions.map((a) => [a.label, a.command, a.active])).toEqual(
       REASONING_EFFORT_LEVELS.map((level) => [level, `/reasoning ${level}`, level === "high"]),
     );
-    expect(rowOf(buildSettingsRows({ ...BASE, reasoning: { effort: "low", source: "env" } }), "reasoning").detail).toBe(
-      "from KERYX_REASONING_EFFORT; a choice here overrides it",
-    );
     expect(rowOf(buildSettingsRows({ ...BASE, reasoning: { effort: "off", source: "default" } }), "reasoning").detail).toBe("default");
     expect(rowOf(rows, "reasoning").detail).toBeUndefined();
+  });
+
+  test("reasoning: scope and detail follow the real precedence (session > env > saved), one case per source", () => {
+    const of = (reasoning: SettingsSnapshot["reasoning"]) => rowOf(buildSettingsRows({ ...BASE, reasoning }), "reasoning");
+    // A press sets the session AND the saved value; with no variable set, it is saved for real.
+    expect(of({ effort: "high", source: "session" })).toMatchObject({ scope: "saved", detail: "set this session and saved" });
+    // With the variable set it wins again after a restart: not `saved`.
+    const pinned = of({ effort: "high", source: "session", envWinsOnRestart: true });
+    expect(pinned.scope).toBe("session");
+    expect(pinned.detail).toBe("set this session; KERYX_REASONING_EFFORT wins again after a restart");
+    const env = of({ effort: "low", source: "env" });
+    expect(env.scope).toBe("session");
+    expect(env.detail).toContain("KERYX_REASONING_EFFORT");
+    expect(env.detail).toContain("after a restart");
+    expect(of({ effort: "medium", source: "global" })).toMatchObject({ scope: "saved" });
+    expect(of({ effort: "medium", source: "global" }).detail).toBeUndefined();
+    expect(of({ effort: "off", source: "default" })).toMatchObject({ scope: "saved", detail: "default" });
   });
 
   test("reasoning display: one button per mode", () => {

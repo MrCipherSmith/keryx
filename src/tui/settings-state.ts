@@ -29,6 +29,13 @@ export interface LiveSettings {
   reasoningOverride?: string | undefined;
 }
 
+function readReasoning(sessionOverride: string | undefined, globalEffort: string | undefined): SettingsSnapshot["reasoning"] {
+  const resolved = describeReasoningEffortSource({ sessionOverride, globalEffort });
+  // Without the session override, who wins next start: the variable, or the saved value?
+  const afterRestart = describeReasoningEffortSource({ globalEffort });
+  return resolved.source === "session" && afterRestart.source === "env" ? { ...resolved, envWinsOnRestart: true } : resolved;
+}
+
 async function orElse<T>(read: () => Promise<T>, fallback: T): Promise<T> {
   try {
     return await read();
@@ -54,7 +61,7 @@ export async function loadSettingsSnapshot(cwd: string, live: LiveSettings, conf
     editGuard,
     routing: live.routing ?? saved.routingClassifier?.enabled === true,
     externalPrivacy,
-    reasoning: describeReasoningEffortSource({ sessionOverride: live.reasoningOverride, globalEffort: saved.reasoningEffort }),
+    reasoning: readReasoning(live.reasoningOverride, saved.reasoningEffort),
     thinkDisplay: live.thinkDisplay ?? resolveThinkDisplayMode(saved.thinkDisplay),
     theme: getThemeId(),
     jevProfile: {

@@ -90,3 +90,13 @@ test("a project's external-provider override is reported with its source", async
   const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
   expect(snapshot.externalPrivacy).toEqual({ value: "off", source: "project" });
 });
+
+test("a session choice with the variable set is flagged: the variable wins again after a restart", async () => {
+  saveShellConfig({ reasoningEffort: "high" }, configDir);
+  process.env.KERYX_REASONING_EFFORT = "medium";
+  const pinned = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false, reasoningOverride: "low" }, configDir);
+  expect(pinned.reasoning).toEqual({ effort: "low", source: "session", envWinsOnRestart: true });
+  delete process.env.KERYX_REASONING_EFFORT;
+  const saved = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false, reasoningOverride: "low" }, configDir);
+  expect(saved.reasoning).toEqual({ effort: "low", source: "session" });
+});

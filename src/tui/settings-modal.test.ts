@@ -6,7 +6,7 @@
 
 import { expect, test } from "bun:test";
 import { buildSettingsRows, type SettingRow, type SettingsSnapshot } from "./settings-model";
-import { isSettingsCommand, openSettings, SETTINGS_COMMAND, SETTINGS_FOOTER, settingsSidebarHint, settingsWindow } from "./settings-modal";
+import { CONFIRM_MIN_GAP_MS, isSettingsCommand, openSettings, SETTINGS_COMMAND, SETTINGS_FOOTER, settingsSidebarHint, settingsWindow } from "./settings-modal";
 import { formatModalFooter } from "./modal-host";
 import { clickNode, findById, keypressSource, loadOpenTui, mountChrome, settle } from "./ops-sidebar.test-helpers";
 
@@ -160,12 +160,14 @@ otuiTest("/settings: a single Enter never reaches auto — it arms, and the seco
   const otui = OTUI!;
   const h = await mountChrome(otui, { height: 50 });
   const fake = harness();
+  let clock = 1000;
   const modal = openSettings(otui.core, h.chrome, {
     rows: fake.rows(),
     load: async () => fake.rows(),
     run: fake.run,
     renderer: h.renderer,
     onKeypress: keypressSource(h.renderer),
+    now: () => clock,
   });
   try {
     await settle(h);
@@ -177,6 +179,7 @@ otuiTest("/settings: a single Enter never reaches auto — it arms, and the seco
     expect(h.captureCharFrame()).toContain("Enter again to confirm auto");
     expect(h.captureCharFrame()).toContain("[✓ ask]");
 
+    clock += CONFIRM_MIN_GAP_MS;
     await h.mockInput.pressEnter();
     await settle(h);
     expect(fake.ran).toEqual(["/mode auto"]);
@@ -310,6 +313,128 @@ otuiTest("/settings: a short terminal shows a window of rows and scrolls to keep
     const last = h.captureCharFrame();
     expect(last).toContain("Jev review profile");
     expect(last).not.toContain("Permission mode");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("/settings: a held Enter cannot arm and commit auto in one press — a second Enter inside the gap is ignored", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui, { height: 50 });
+  const fake = harness();
+  let clock = 1000;
+  const modal = openSettings(otui.core, h.chrome, {
+    rows: fake.rows(),
+    load: async () => fake.rows(),
+    run: fake.run,
+    renderer: h.renderer,
+    onKeypress: keypressSource(h.renderer),
+    now: () => clock,
+  });
+  try {
+    await settle(h);
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    await h.mockInput.pressEnter(); // arms
+    await settle(h);
+    // Auto-repeat: a burst of Enters a few milliseconds apart.
+    for (const step of [5, 30, 120, CONFIRM_MIN_GAP_MS - 1 - 155]) {
+      clock += step;
+      await h.mockInput.pressEnter();
+      await settle(h);
+    }
+    expect(fake.ran).toEqual([]);
+    expect(h.captureCharFrame()).toContain("Enter again to confirm auto");
+
+    // A deliberate second Enter after the gap commits.
+    clock += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter();
+    await settle(h);
+    expect(fake.ran).toEqual(["/mode auto"]);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("/settings: while inputBlocked, keys and clicks change nothing and auto is never reached", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui, { height: 50 });
+  const fake = harness();
+  let blocked = true;
+  let clock = 1000;
+  const modal = openSettings(otui.core, h.chrome, {
+    rows: fake.rows(),
+    load: async () => fake.rows(),
+    run: fake.run,
+    renderer: h.renderer,
+    onKeypress: keypressSource(h.renderer),
+    inputBlocked: () => blocked,
+    now: () => clock,
+  });
+  try {
+    await settle(h);
+    const click = async (id: string): Promise<void> => {
+      await clickNode(h, findById(h.renderer.root, id));
+      await settle(h);
+    };
+    // Two clicks on [auto] (arm + commit), a click on another button, and Enters.
+    await click("st-mode-2");
+    clock += 10_000;
+    await click("st-mode-2");
+    await click("st-guard-0");
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    await h.mockInput.pressEnter();
+    clock += 10_000;
+    await h.mockInput.pressEnter();
+    await settle(h);
+    expect(fake.ran).toEqual([]);
+    const blockedFrame = h.captureCharFrame();
+    expect(blockedFrame).not.toContain("Enter again to confirm");
+    expect(blockedFrame).toContain("[✓ ask]");
+
+    // Unblocked again, the very same click arms (one click never commits auto).
+    blocked = false;
+    await click("st-mode-2");
+    expect(fake.ran).toEqual([]);
+    expect(h.captureCharFrame()).toContain("Enter again to confirm auto");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("/settings: a failing run is reported through onError and the rows are still rebuilt", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui, { height: 50 });
+  const fake = harness();
+  const errors: string[] = [];
+  let loads = 0;
+  const modal = openSettings(otui.core, h.chrome, {
+    rows: fake.rows(),
+    load: async () => {
+      loads += 1;
+      return fake.rows();
+    },
+    run: async () => {
+      throw new Error("disk full");
+    },
+    onError: (message) => errors.push(message),
+    renderer: h.renderer,
+    onKeypress: keypressSource(h.renderer),
+  });
+  try {
+    await settle(h);
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    await h.mockInput.pressEnter();
+    await settle(h);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("/mode trust");
+    expect(errors[0]).toContain("disk full");
+    expect(loads).toBe(1);
+    expect(h.captureCharFrame()).toContain("Permission mode");
   } finally {
     modal?.close();
     h.destroy();

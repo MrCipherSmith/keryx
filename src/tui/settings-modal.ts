@@ -9,7 +9,9 @@
 // `*-inspector.ts` here holds, which keeps this file free of disk I/O.
 //
 // Selecting `auto` permission mode needs a second Enter (or click), the way
-// `/connect`'s Disconnect does: one keypress never reaches it.
+// `/connect`'s Disconnect does: one keypress never reaches it. A held Enter
+// auto-repeats, so the confirming Enter is ignored when it lands within
+// `CONFIRM_MIN_GAP_MS` of the arming one.
 
 import { smallActionButton } from "./action-button";
 import { openModal, type ModalHandle } from "./modal-host";
@@ -23,6 +25,9 @@ type OpenTui = typeof import("@opentui/core");
 type Box = InstanceType<OpenTui["BoxRenderable"]>;
 
 export const SETTINGS_COMMAND = "/settings";
+
+/** A confirming Enter sooner than this after the arming one is key auto-repeat, not a decision. */
+export const CONFIRM_MIN_GAP_MS = 400;
 
 export function isSettingsCommand(line: string): boolean {
   const token = line.trim().split(/\s+/)[0] ?? "";
@@ -55,7 +60,12 @@ export interface SettingsModalOptions {
   onKeypress: (
     handler: (key: { name: string; sequence: string; preventDefault?: () => void; stopPropagation?: () => void }) => void,
   ) => () => void;
+  /** True while something else owns the keyboard (an approval dock, say): keys AND mouse are then ignored. */
   inputBlocked?: () => boolean;
+  /** Where a failed `run` or `load` is reported; the rows are rebuilt regardless. */
+  onError?: (message: string) => void;
+  /** Milliseconds clock for the confirm gap; injectable so a test is deterministic. */
+  now?: () => number;
 }
 
 interface Window {
@@ -84,12 +94,13 @@ export function settingsWindow(rows: readonly SettingRow[], selected: number, to
 export function openSettings(otui: unknown, chrome: unknown, options: SettingsModalOptions): ModalHandle | undefined {
   const core = otui as OpenTui;
   const r = options.renderer;
+  const now = options.now ?? Date.now;
 
   let rows: readonly SettingRow[] = options.rows;
   let selectedRow = 0;
   let selectedAction = 0;
   let top = 0;
-  let armed: { id: string; action: number } | undefined;
+  let armed: { id: string; action: number; at: number } | undefined;
   let busy = false;
   let closed = false;
   let body: Box | undefined;
@@ -100,6 +111,7 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
   const disarm = (): void => {
     armed = undefined;
   };
+  const blocked = (): boolean => closed || options.inputBlocked?.() === true;
 
   function paint(): void {
     if (closed || body === undefined) return;
@@ -131,6 +143,7 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
         ...(selected ? { backgroundColor: getTheme().highlight } : {}),
         onMouseDown: (event: { stopPropagation: () => void }) => {
           event.stopPropagation();
+          if (blocked()) return;
           select(i, activeIndex(row));
         },
       });
@@ -155,6 +168,7 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
       row.actions.forEach((action, index) => {
         const color = action.active ? getTheme().ok : action.confirm ? getTheme().error : getTheme().tool;
         const button = smallActionButton(core, r, action.active ? `✓ ${action.label}` : action.label, `st-${row.id}-${index}`, color, () => {
+          if (blocked()) return;
           select(i, index);
           void press();
         });
@@ -174,22 +188,37 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
     paint();
   }
 
-  async function press(): Promise<void> {
+  const report = (what: string, error: unknown): void => {
+    options.onError?.(`/settings: ${what}: ${error instanceof Error ? error.message : String(error)}\n`);
+  };
+
+  async function press(viaKey = false): Promise<void> {
+    if (blocked()) return;
     const row = rows[selectedRow];
     const action = row?.actions[selectedAction];
     if (row === undefined || action === undefined || busy) return;
-    if (action.confirm && (armed?.id !== row.id || armed.action !== selectedAction)) {
-      armed = { id: row.id, action: selectedAction };
-      paint();
-      return;
+    if (action.confirm) {
+      if (armed?.id !== row.id || armed.action !== selectedAction) {
+        armed = { id: row.id, action: selectedAction, at: now() };
+        paint();
+        return;
+      }
+      // Still armed, but the Enter came too fast to be a second, deliberate one.
+      if (viaKey && now() - armed.at < CONFIRM_MIN_GAP_MS) return;
     }
     disarm();
     busy = true;
     try {
-      await options.run(action.command);
-      rows = await options.load();
-    } catch {
-      // The command reports its own failure; the rows below stay as they were.
+      try {
+        await options.run(action.command);
+      } catch (error) {
+        report(action.command, error);
+      }
+      try {
+        rows = await options.load();
+      } catch (error) {
+        report("could not reload the rows", error);
+      }
     } finally {
       busy = false;
     }
@@ -207,7 +236,7 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
   // Registered BEFORE the modal host so an armed confirmation swallows Esc first
   // (the way `/connect`'s Disconnect does); otherwise Esc falls through and closes.
   const unsubscribeKeys = options.onKeypress((key) => {
-    if (closed || options.inputBlocked?.() === true) return;
+    if (blocked()) return;
     if (key.name === "escape") {
       if (armed === undefined) return;
       disarm();
@@ -224,7 +253,7 @@ export function openSettings(otui: unknown, chrome: unknown, options: SettingsMo
       const count = row?.actions.length ?? 0;
       if (count > 0) select(selectedRow, stepQueueNavIndex(selectedAction, count, key.name === "left" ? "up" : "down"));
     } else if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
-      void press();
+      void press(true);
     } else {
       return;
     }

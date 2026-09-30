@@ -228,6 +228,7 @@ import {
   themeLabel,
   type ThemeId,
 } from "./theme";
+import { runSettingsCommand, settingsOpenDecision } from "./settings-actions";
 import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings-modal";
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
@@ -4061,6 +4062,13 @@ export async function launchTuiAgentShell(opts: {
       id: "sb-mode-v",
       content: "",
       onMouseDown: () => {
+        // The same guards the typed `/settings` has: an approval dock owns the
+        // pointer, and a turn in flight defers the command.
+        const decision = settingsOpenDecision({ overlayActive: chrome.overlayActive(), busy: chrome.isBusy() });
+        if (!decision.open) {
+          if (decision.message !== undefined) io.onSystem?.(decision.message);
+          return;
+        }
         showSettings();
       },
     });
@@ -7018,44 +7026,22 @@ export async function launchTuiAgentShell(opts: {
           reasoningOverride,
         }),
       );
-    const runSettingsAction = async (command: string): Promise<void> => {
-      const [name = "", ...rest] = command.trim().split(/\s+/);
-      const arg = rest.join(" ");
-      switch (name) {
-        case "/mode":
-          // `auto`'s confirmation already happened in the modal (second Enter).
-          if (arg === "auto") commitPermissionMode("auto");
-          else runModeCommand(command);
-          return;
-        case "/plan":
-          runPlanCommand(command);
-          return;
-        case "/guard":
-          setGuardEnabled(arg === "on");
-          return;
-        case "/editguard":
-          await setEditGuardEnabled(arg === "on");
-          return;
-        case "/route":
-          setRoutingEnabled(arg === "on");
-          return;
-        case "/external":
-          await setExternalEnabled(arg === "on" ? "on" : "off");
-          return;
-        case "/external-agents":
-          io.onSystem?.(await runExternalAgentsCommand(arg, sessionCwd));
-          return;
-        case "/reasoning":
-          runReasoningCommand(arg);
-          return;
-        case "/think":
-          runThinkCommand(arg);
-          return;
-        case "/theme":
-          runThemeCommand(arg);
-          return;
-      }
-    };
+    const runSettingsAction = (command: string): Promise<void> =>
+      runSettingsCommand(command, {
+        mode: runModeCommand,
+        // `auto`'s confirmation already happened in the modal (second Enter).
+        commitMode: commitPermissionMode,
+        plan: runPlanCommand,
+        guard: setGuardEnabled,
+        editGuard: setEditGuardEnabled,
+        route: setRoutingEnabled,
+        external: setExternalEnabled,
+        externalAgents: (arg) => runExternalAgentsCommand(arg, sessionCwd),
+        reasoning: runReasoningCommand,
+        think: runThinkCommand,
+        theme: runThemeCommand,
+        onSystem: (text) => io.onSystem?.(text),
+      });
     const showSettings = (): void => {
       void loadSettingsRows()
         .then((rows) => {
@@ -7063,6 +7049,7 @@ export async function launchTuiAgentShell(opts: {
             rows,
             load: loadSettingsRows,
             run: runSettingsAction,
+            onError: (message) => io.onSystem?.(message),
             renderer: r,
             ...inspectorKeys,
             inputBlocked: () => chrome.keyboardOwnedElsewhere(),

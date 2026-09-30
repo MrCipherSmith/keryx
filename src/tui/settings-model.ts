@@ -56,7 +56,11 @@ export interface SettingsSnapshot {
   editGuard: boolean;
   routing: boolean;
   externalPrivacy: { value: "on" | "off"; source: "project" | "user" | "default" };
-  reasoning: { effort: ReasoningEffortLevel; source: ReasoningEffortSource };
+  /**
+   * `envWinsOnRestart`: the session's own choice is in effect, but KERYX_REASONING_EFFORT
+   * is set too and, below a session override only, wins again on the next start.
+   */
+  reasoning: { effort: ReasoningEffortLevel; source: ReasoningEffortSource; envWinsOnRestart?: boolean };
   thinkDisplay: ThinkDisplayMode;
   theme: ThemeId;
   jevProfile: { on: number; total: number };
@@ -79,12 +83,26 @@ function neighbour(current: ThemeId, step: 1 | -1): ThemeId {
   return THEME_IDS[(index + step + THEME_IDS.length) % THEME_IDS.length]!;
 }
 
-const REASONING_DETAIL: Record<ReasoningEffortSource, string | undefined> = {
-  session: "set this session",
-  env: "from KERYX_REASONING_EFFORT; a choice here overrides it",
-  global: undefined,
-  default: "default",
-};
+/**
+ * `/reasoning <level>` sets the session override AND writes the saved default, but
+ * `resolveReasoningEffort` ranks session > KERYX_REASONING_EFFORT > saved. So a
+ * press is lasting only while the variable is unset; with it set, the variable
+ * wins again after a restart and the row says so instead of claiming `saved`.
+ */
+function reasoningScope(reasoning: SettingsSnapshot["reasoning"]): { scope: SettingScope; detail?: string } {
+  switch (reasoning.source) {
+    case "session":
+      return reasoning.envWinsOnRestart === true
+        ? { scope: "session", detail: "set this session; KERYX_REASONING_EFFORT wins again after a restart" }
+        : { scope: "saved", detail: "set this session and saved" };
+    case "env":
+      return { scope: "session", detail: "from KERYX_REASONING_EFFORT; a choice here lasts this session, the variable wins again after a restart" };
+    case "default":
+      return { scope: "saved", detail: "default" };
+    case "global":
+      return { scope: "saved" };
+  }
+}
 
 const EXTERNAL_PRIVACY_DETAIL: Record<SettingsSnapshot["externalPrivacy"]["source"], string | undefined> = {
   project: "this project overrides the per-user setting",
@@ -93,6 +111,7 @@ const EXTERNAL_PRIVACY_DETAIL: Record<SettingsSnapshot["externalPrivacy"]["sourc
 };
 
 export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
+  const reasoning = reasoningScope(state.reasoning);
   return [
     {
       id: "mode",
@@ -151,8 +170,8 @@ export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
       group: "Routing",
       label: "Reasoning effort",
       value: state.reasoning.effort,
-      scope: "saved",
-      ...(REASONING_DETAIL[state.reasoning.source] !== undefined ? { detail: REASONING_DETAIL[state.reasoning.source]! } : {}),
+      scope: reasoning.scope,
+      ...(reasoning.detail !== undefined ? { detail: reasoning.detail } : {}),
       command: "/reasoning",
       usage: `/reasoning [${REASONING_EFFORT_LEVELS.join("|")}]`,
       actions: REASONING_EFFORT_LEVELS.map((level) => action(level, `/reasoning ${level}`, level === state.reasoning.effort)),

@@ -1126,6 +1126,30 @@ describe("/settings prints the settings table (flow 374)", () => {
     expect(output).toMatch(/Reasoning effort\s+high\s+\[saved\]/);
   });
 
+  test("the available set: only the commands this REPL implements are not marked TUI only", async () => {
+    const output = await repl(["/settings", "/exit"]);
+    const line = (label: string): string => output.split("\n").find((l) => l.includes(label))!;
+    // In this REPL's list (shell.ts READLINE_AGENT_COMMANDS):
+    expect(line("Theme")).not.toContain("(TUI only)");
+    // Not in it: a modal-only or TUI-only command.
+    for (const label of ["Edit guard", "Classifier routing", "Reasoning display", "External providers", "Jev review profile"]) {
+      expect(line(label)).toContain("(TUI only)");
+    }
+  });
+
+  test("a /reasoning choice with KERYX_REASONING_EFFORT set is not claimed to be saved: the variable wins again after a restart", async () => {
+    const before = process.env.KERYX_REASONING_EFFORT;
+    process.env.KERYX_REASONING_EFFORT = "medium";
+    try {
+      const output = await repl(["/reasoning high", "/settings", "/exit"]);
+      expect(output).toMatch(/Reasoning effort\s+high\s+\[session\]/);
+      expect(output).toContain("KERYX_REASONING_EFFORT wins again after a restart");
+    } finally {
+      if (before === undefined) delete process.env.KERYX_REASONING_EFFORT;
+      else process.env.KERYX_REASONING_EFFORT = before;
+    }
+  });
+
   test("it only reads: nothing is written to the config dir", async () => {
     const configDir = path.join(root, "cfg-settings-readonly");
     await repl(["/settings", "/exit"], { configDir });

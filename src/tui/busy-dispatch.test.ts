@@ -86,6 +86,15 @@ test("classifyBusyDispatch: /plan routes to plan", () => {
   ).toBe("plan");
 });
 
+// Flow 374: `/settings` and the buttons it runs are deferred while a turn is in flight
+// (only /mode, /plan and /think are allowed through); the sidebar click that opens the
+// modal is refused with the same rule (`settingsOpenDecision`), so the two entries agree.
+test("classifyBusyDispatch: /settings and the commands its buttons run, other than /mode /plan /think, are deferred", () => {
+  for (const name of ["/settings", "/guard", "/editguard", "/route", "/reasoning", "/external", "/external-agents", "/theme"]) {
+    expect(classifyBusyDispatch({ line: `${name} on`, commandName: name, ...base })).toBe("deferred");
+  }
+});
+
 test("classifyBusyDispatch: /model (similar name, out of scope) still routes to deferred", () => {
   expect(
     classifyBusyDispatch({ line: "/model", commandName: "/model", ...base }),
