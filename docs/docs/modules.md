@@ -1481,6 +1481,7 @@ where tools actually run: the non-interactive harness paths register none.
 | `shell /status` | session inspector (TUI modal; readline text dump). `/session-info` / `/info` are not aliases |
 | `shell /flows [id]` | browse project flows, newest first; List selects with `↑/↓`, Detail scrolls with `↑/↓` and switches flows with `[`/`]`; optional one-package detail |
 | `shell /theme [name]` | no arg: TUI picker (live preview, applies on Enter/Apply); `[name]`: applies immediately on any surface |
+| `shell /settings` | TUI modal of every setting with its value, scope (`session`/`saved`) and On/Off or value buttons, each running the owning command's own handler; `auto` permission mode needs a second Enter. Readline: the same rows as a text table |
 | `shell /interrupt` | hard-stop main turn in TUI |
 | `shell /delegate <agent> <task>` | hand a bounded read-only task to an external agent CLI; refused with a named reason when the capability is off (the default) |
 

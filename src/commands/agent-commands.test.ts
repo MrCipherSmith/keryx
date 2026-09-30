@@ -72,6 +72,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/compact",
     "/rewind",
     "/theme",
+    "/settings",
     "/game",
     "/mode",
     "/reasoning",
@@ -127,6 +128,15 @@ test("flow 167: findAgentCommand resolves /queue (with args) in agent mode, neve
 
 test("flow 167: filterCommands('/q', 'agent') resolves to /queue", () => {
   expect(filterCommands("/q", "agent").map((c) => c.name)).toEqual(["/queue"]);
+});
+
+test("flow 374: /settings is agent-only, resolves with args in agent mode and never in chat mode", () => {
+  const settings = AGENT_SLASH_COMMANDS.find((c) => c.name === "/settings");
+  expect(settings?.modes).toEqual(["agent"]);
+  expect(findAgentCommand("/settings", "agent")?.name).toBe("/settings");
+  expect(findAgentCommand("/settings", "chat")).toBeUndefined();
+  expect(filterCommands("/sett", "agent").map((c) => c.name)).toEqual(["/settings"]);
+  expect(filterCommands("/sett", "chat")).toEqual([]);
 });
 
 test("every command declares at least one mode, and every mode resolves a description", () => {
@@ -190,6 +200,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/compact",
     "/rewind",
     "/theme",
+    "/settings",
     "/game",
     "/mode",
     "/reasoning",
@@ -340,6 +351,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/compact",
     "/rewind",
     "/theme",
+    "/settings",
     "/game",
     "/mode",
     "/reasoning",
@@ -411,6 +423,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/schedules",
     "/scenarios",
     "/staledocs",
+    "/settings",
   ]);
   expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
     "/integrate",

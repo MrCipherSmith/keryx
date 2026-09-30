@@ -2808,7 +2808,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd);
     expect(fnBlock).toContain("readOnly = true;\n        paintModeRow();");
     expect(fnBlock).toContain("readOnly = false;\n        paintModeRow();");
-    expect(fnBodyPlan).toContain("permissionMode = next;\n        paintModeRow();");
+    expect(fnBodyPlan).toContain("permissionMode = next;\n      paintModeRow();");
     // Painted once at startup too, so the row is never blank.
     expect(fnBodyPlan).toMatch(/const paintModeRow = [\s\S]*?\n {4}paintModeRow\(\);/);
   });
@@ -3932,10 +3932,15 @@ describe("flow 268 T16 — tui-shell.ts /reasoning wiring (source-text audit)", 
   const fnStartReasoning = reasoningSource.indexOf("export async function launchTuiAgentShell(opts: {");
   const fnBodyReasoning = reasoningSource.slice(fnStartReasoning);
   const branchIndex = fnBodyReasoning.indexOf('command.name === "/reasoning"');
-  const branchBlock = fnBodyReasoning.slice(branchIndex, branchIndex + 2_400);
+  // Flow 374: the logic lives in `runReasoningCommand`, shared with the
+  // `/settings` buttons; the slash branch only calls it.
+  const handlerIndex = fnBodyReasoning.indexOf("const runReasoningCommand = (wanted: string): void => {");
+  const branchBlock = fnBodyReasoning.slice(handlerIndex, handlerIndex + 2_400);
 
-  test("the command switch has a /reasoning branch", () => {
+  test("the command switch has a /reasoning branch that runs the shared handler", () => {
     expect(branchIndex).toBeGreaterThanOrEqual(0);
+    expect(handlerIndex).toBeGreaterThanOrEqual(0);
+    expect(fnBodyReasoning.slice(branchIndex, branchIndex + 1_600)).toContain("runReasoningCommand(");
   });
 
   test("no arg shows the resolved effort and its source via describeReasoningEffortSource", () => {
@@ -3987,10 +3992,15 @@ describe("flow 268 T17 — tui-shell.ts /think display-mode wiring (source-text 
   const fnStartThink = thinkSource.indexOf("export async function launchTuiAgentShell(opts: {");
   const fnBodyThink = thinkSource.slice(fnStartThink);
   const branchIndex = fnBodyThink.indexOf('command.name === "/think"');
-  const branchBlock = fnBodyThink.slice(branchIndex, branchIndex + 1_600);
+  // Flow 374: the logic lives in `runThinkCommand`, shared with the `/settings`
+  // buttons; the slash branch only calls it.
+  const handlerIndex = fnBodyThink.indexOf("const runThinkCommand = (arg: string): void => {");
+  const branchBlock = fnBodyThink.slice(handlerIndex, handlerIndex + 1_600);
 
-  test("the command switch has a /think branch", () => {
+  test("the command switch has a /think branch that runs the shared handler", () => {
     expect(branchIndex).toBeGreaterThanOrEqual(0);
+    expect(handlerIndex).toBeGreaterThanOrEqual(0);
+    expect(fnBodyThink.slice(branchIndex, branchIndex + 300)).toContain("runThinkCommand(");
   });
 
   test("a recognized mode arg is parsed via parseThinkDisplayMode before anything is mutated", () => {

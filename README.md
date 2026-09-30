@@ -129,6 +129,9 @@ described [below](#the-agent-harness). A few commands worth knowing from the
 first session:
 
 - `/theme [name]` opens the theme picker; a choice applies immediately.
+- `/settings` opens one modal with the permission mode, plan, guards, routing,
+  reasoning, theme and external switches, each with its On/Off or value
+  buttons; `/mode` and `/plan` are marked `session`, the rest `saved`.
 - `/mode [ask|trust|auto]` shows or switches the permission mode for the rest
   of the session — see [permission modes](docs/docs/guides/permission-modes.md).
 - `/help` lists every slash command available in the current mode.

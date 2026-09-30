@@ -197,6 +197,7 @@ describe("AC4: group view, command detail, and closest-match", () => {
     expect(text).toContain("Look and feel:");
     expect(text).toContain("in keryx shell:");
     expect(text).toContain("/theme");
+    expect(text).toContain("/settings");
     expect(text).toContain("/model");
   });
 
@@ -220,6 +221,7 @@ describe("AC4: group view, command detail, and closest-match", () => {
     expect(findCliEntry("shell")?.group).toBe("Start here");
     expect(findSlashEntry("/theme")?.group).toBe("Look and feel");
     expect(findCliEntry("/theme")).toBeUndefined();
+    expect(findSlashEntry("/settings")?.group).toBe("Look and feel");
   });
 
   test("renderEntryDetail names the entry and its summary", () => {

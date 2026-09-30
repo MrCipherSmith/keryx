@@ -3,6 +3,14 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.46] — 2026-10-01
+### Added
+- **`/settings` in the shell** — one screen for the settings that used to live in separate slash commands, grouped Safety, Routing, Display and External: permission mode, plan, turn guard, edit guard, classifier routing, reasoning effort, reasoning display, theme, external providers, external agents, and a read-only line for the Jev review profile. Each row shows its effective value and where it lives: `session` (gone when the shell exits: permission mode and plan), `saved` (kept on disk). In the TUI it is a modal styled like `/connect`: `↑/↓` between settings, `←/→` between the On/Off or value buttons, `Enter` or a click to apply, `Esc` to close. Every button runs the existing command's own handler, so `/settings` and the slash command cannot disagree. Switching permission mode to `auto` asks for a second `Enter`, as Disconnect does in `/connect`. In the readline shell `/settings` prints the same rows as a table, with the settings that need the TUI marked. The sidebar's mode line points at it and opens it on a click.
+### Changed
+- `/reasoning`, `/think` and `/theme <name>` share their handler with the `/settings` buttons; behaviour is unchanged.
+
+[Changes since 0.3.45](https://github.com/MrCipherSmith/keryx/compare/v0.3.45...v0.3.46)
+
 ## [0.3.45] — 2026-10-01
 ### Changed
 - **keryx no longer edits the files your team tracks.** `keryx init` and `keryx update` used to write the `<!-- keryx:index -->` block into `AGENTS.md` and `CLAUDE.md`, the `# keryx:begin` block into `.gitignore`, and `_keryxManaged` hooks into `.claude/settings.json`. Those edits sat uncommitted in every clone and made `git pull` refuse upstream changes to the same files. By default the block now goes to `CLAUDE.local.md`, Claude hooks to `.claude/settings.local.json`, and the ignore rules to `.git/info/exclude`; after `init` or `update`, `git status` lists none of `AGENTS.md`, `CLAUDE.md`, `.gitignore`, `.claude/settings.json`.

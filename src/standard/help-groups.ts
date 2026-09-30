@@ -202,6 +202,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Look and feel",
     summary: "Open the theme picker — /theme [name] applies immediately.",
   },
+  {
+    kind: "slash",
+    name: "/settings",
+    group: "Look and feel",
+    summary: "Every setting in one place, each with its On/Off or value buttons.",
+  },
   { kind: "slash", name: "/model", group: "Look and feel", summary: "Switch the model." },
   {
     kind: "slash",

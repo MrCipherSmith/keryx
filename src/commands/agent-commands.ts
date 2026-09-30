@@ -415,6 +415,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   },
   { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   {
+    name: "/settings",
+    description: "Every setting in one place, each with its On/Off or value buttons",
+    // Agent-only: the settings it gathers (permission mode, guards, routing,
+    // reasoning, external) all act on the agent loop, which chat mode lacks.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/game",
     description: "Games against the model — /game [seconds] raises the model-turn deadline; add games via src/tui/games/",
     // Agent-only, same reasoning as /workspace and /review: the game needs the

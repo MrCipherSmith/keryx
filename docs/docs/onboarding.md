@@ -471,6 +471,20 @@ opens the theme picker in the running session; `/theme <name>` applies one
 directly. The choice applies immediately — prose, headings, diffs and code
 fences repaint in the new palette without restarting the session.
 
+#### See and change your settings in one place
+
+```
+/settings
+```
+
+opens a modal grouped Safety, Routing, Display and External. Each setting shows
+its effective value and its scope: `session` for the permission mode and plan
+(they end with the session and write nothing to disk), `saved` for the rest.
+`↑/↓` move between settings, `←/→` between the buttons, `Enter` or a click
+applies, `Esc` closes. A button runs the same handler as the slash command it
+stands for. Switching to `auto` asks for a second `Enter`. In the readline
+shell `/settings` prints the same rows as a table.
+
 #### Choose a permission mode
 
 Every session starts in `ask` mode: a mutating tool call (shell, write,
