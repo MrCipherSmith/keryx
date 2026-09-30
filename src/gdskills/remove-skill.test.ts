@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm, rmdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
@@ -200,8 +200,8 @@ describe("flow 360 AC3: removeProjectSkill", () => {
   });
 
   test("a package directory whose registry entry is already gone is still removable", async () => {
-    // The other half-cleaned state: the manifest was edited by hand, or a
-    // removal was interrupted after it dropped the registry entry.
+    // The other half-cleaned state: the manifest was edited by hand. (A
+    // removal drops the entry last, so an interrupted one never leaves this.)
     const root = await makeProject([{ module: "review", name: "house-api" }]);
     const manifestPath = path.join(root, MANIFEST);
     const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Manifest;
@@ -300,19 +300,27 @@ async function outsideDir(): Promise<string> {
   return dir;
 }
 
-const LOCK = path.join(".metaproject", "data", "gdskills", "project-skills.lock");
+/** The directory the lock is created in. `withFileLock` deletes the lock itself in `finally`, so only its parent can show that a lock was taken. */
+const LOCK_PARENT = path.join(".metaproject", "data", "gdskills");
 
-/** Both modes are refused with `reason`, and neither wrote, removed or locked anything. */
+/**
+ * Both modes are refused with `reason`, and neither wrote, removed or locked
+ * anything. The lock's parent directory is pruned first when it is empty, so a
+ * run that took the lock — and so created it — is caught (review G-014).
+ */
 async function expectRefusedUntouched(root: string, skill: string, reason: RegExp): Promise<void> {
+  await rmdir(path.join(root, LOCK_PARENT)).catch(() => undefined);
+  await rmdir(path.join(root, ".metaproject", "data")).catch(() => undefined);
   const before = {
     manifest: await readFile(path.join(root, MANIFEST), "utf8"),
     catalog: await readFile(path.join(root, CATALOG), "utf8"),
+    lockParent: await pathExists(path.join(root, LOCK_PARENT)),
   };
   await expect(removeProjectSkill(root, { skill, dryRun: true })).rejects.toThrow(reason);
   await expect(removeProjectSkill(root, { skill })).rejects.toThrow(reason);
   expect(await readFile(path.join(root, MANIFEST), "utf8")).toBe(before.manifest);
   expect(await readFile(path.join(root, CATALOG), "utf8")).toBe(before.catalog);
-  expect(await pathExists(path.join(root, LOCK))).toBe(false);
+  expect(await pathExists(path.join(root, LOCK_PARENT))).toBe(before.lockParent);
 }
 
 describe("flow 360 review F-001: nothing is deleted through a symlink", () => {
@@ -394,7 +402,7 @@ describe("flow 360 review F-001: nothing is deleted through a symlink", () => {
     await symlink(path.join("..", "config", "metaproject.json"), path.join(root, MANIFEST));
 
     const preview = await removeProjectSkill(root, { skill: "review/house-api", dryRun: true });
-    expect(preview.parts[0]).toEqual({
+    expect(preview.parts.find((part) => part.part === "registry")).toEqual({
       part: "registry",
       path: ".metaproject/metaproject.json",
       resolvedPath: "config/metaproject.json",
@@ -580,6 +588,317 @@ describe("flow 360 review F-014 / F-016: what counts as this skill's entry, row 
   });
 });
 
+// Review round 2 (flow 360).
+
+const PACKAGE = (moduleName: string, skillName: string): string => path.join(".metaproject", "project-skills", moduleName, skillName);
+
+/** Where each of the five parts of `review/alpha` stands. */
+async function alphaState(root: string): Promise<Record<string, unknown>> {
+  const catalog = await readFile(path.join(root, CATALOG), "utf8");
+  return {
+    registry: await registryKeys(root),
+    catalogRow: catalog.includes("| review | alpha |"),
+    package: await pathExists(path.join(root, PACKAGE("review", "alpha"))),
+    moduleDirectory: await pathExists(path.join(root, ".metaproject", "project-skills", "review")),
+    report: await pathExists(path.join(root, reportPath("review", "alpha"))),
+  };
+}
+
+const ALL_GONE = { registry: [], catalogRow: false, package: false, moduleDirectory: false, report: false };
+
+describe("flow 360 review G-006: a skill is identified by its exact spelling", () => {
+  test("Review/Alpha with review/alpha registered is refused, naming the registered spelling, and deletes nothing", async () => {
+    // On a case-insensitive filesystem (macOS, Windows) `Review/Alpha` and
+    // `review/alpha` are one directory: before the fix the package went while
+    // the entry, row and report — all matched exactly — were reported absent.
+    const root = await makeProject([{ module: "review", name: "alpha", report: true }]);
+    const before = await alphaState(root);
+
+    for (const dryRun of [true, false]) {
+      await expect(removeProjectSkill(root, { skill: "Review/Alpha", dryRun })).rejects.toThrow(
+        /Review\/Alpha is not registered under that spelling; the registered spelling is review\/alpha/,
+      );
+    }
+
+    expect(await alphaState(root)).toEqual(before);
+    expect(await pathExists(path.join(root, PACKAGE("review", "alpha"), "SKILL.md"))).toBe(true);
+  });
+
+  test("an unregistered package is found only under its exact on-disk spelling", async () => {
+    const root = await makeProject([{ module: "review", name: "alpha" }]);
+    await editRegistry(root, () => []);
+
+    await expect(removeProjectSkill(root, { skill: "Review/Alpha" })).rejects.toThrow(/project skill not found: Review\/Alpha/);
+
+    expect(await pathExists(path.join(root, PACKAGE("review", "alpha"), "SKILL.md"))).toBe(true);
+  });
+
+  test("an installed bundled skill is recognised only under its exact spelling", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await mkdir(path.join(root, ".metaproject", "skills", "gdskills", "custom", "not-in-this-catalog"), { recursive: true });
+
+    await expect(removeProjectSkill(root, { skill: "Custom/Not-In-This-Catalog" })).rejects.toThrow(
+      /project skill not found: Custom\/Not-In-This-Catalog/,
+    );
+  });
+
+  test("entries review/alpha and Review/Alpha: removing Review/Alpha does not delete review/alpha's package", async () => {
+    const root = await makeProject([{ module: "review", name: "alpha" }]);
+    await editRegistry(root, (registry) => [
+      ...registry,
+      { module: "Review", name: "Alpha", path: ".metaproject/project-skills/Review/Alpha" },
+    ]);
+
+    const result = await removeProjectSkill(root, { skill: "Review/Alpha" });
+
+    expect(statuses(result)).toMatchObject({ registry: "removed", package: "absent" });
+    expect(result.parts.map((part) => part.part)).not.toContain("module-directory");
+    expect(await registryKeys(root)).toEqual(["review/alpha"]);
+    expect(await pathExists(path.join(root, PACKAGE("review", "alpha"), "SKILL.md"))).toBe(true);
+  });
+
+  test("a spelling that differs only in the module, or only in the name, does not reach review/alpha either", async () => {
+    // Each segment is matched on its own: `Review/alpha` must not pass the
+    // module directory by a case-insensitive lookup, nor `review/Alpha` the package.
+    for (const [moduleName, skillName] of [
+      ["Review", "alpha"],
+      ["review", "Alpha"],
+    ] as const) {
+      const root = await makeProject([{ module: "review", name: "alpha" }]);
+      await editRegistry(root, (registry) => [
+        ...registry,
+        { module: moduleName, name: skillName, path: `.metaproject/project-skills/${moduleName}/${skillName}` },
+      ]);
+
+      const result = await removeProjectSkill(root, { skill: `${moduleName}/${skillName}` });
+
+      expect(statuses(result)).toMatchObject({ registry: "removed", package: "absent" });
+      expect(result.parts.map((part) => part.part)).not.toContain("module-directory");
+      expect(await registryKeys(root)).toEqual(["review/alpha"]);
+      expect(await pathExists(path.join(root, PACKAGE("review", "alpha"), "SKILL.md"))).toBe(true);
+    }
+  });
+});
+
+// A permission change is how a step is made to fail; root ignores permissions.
+const canForceFailures = process.getuid?.() !== 0;
+
+async function withMode(dir: string, mode: number, run: () => Promise<void>): Promise<void> {
+  await chmod(dir, mode);
+  try {
+    await run();
+  } finally {
+    await chmod(dir, 0o755);
+  }
+}
+
+describe("flow 360 review G-007: a failure at any one step leaves a state the same command finishes", () => {
+  // Each case makes exactly one of the five parts fail. What must hold: the
+  // registry entry — the part that identifies the skill — is still there, the
+  // error says how to finish, and once the cause is gone a re-run finishes.
+  const cases: Array<{ part: string; dir: string[]; label: RegExp; left: Record<string, unknown> }> = [
+    {
+      part: "report",
+      dir: [".metaproject", "data", "gdskills", "reports"],
+      label: /could not remove the verification report/,
+      left: { registry: ["review/alpha"], catalogRow: true, package: true, moduleDirectory: true, report: true },
+    },
+    {
+      part: "catalog",
+      dir: [".metaproject", "skills"],
+      label: /could not remove the catalog row/,
+      left: { registry: ["review/alpha"], catalogRow: true, package: true, moduleDirectory: true, report: false },
+    },
+    {
+      part: "package",
+      dir: [".metaproject", "project-skills", "review"],
+      label: /could not remove the package directory/,
+      // `rm -r` empties the package before it fails to unlink it from the read-only module directory.
+      left: { registry: ["review/alpha"], catalogRow: false, package: true, moduleDirectory: true, report: false },
+    },
+    {
+      part: "module-directory",
+      dir: [".metaproject", "project-skills"],
+      label: /could not remove the module directory/,
+      left: { registry: ["review/alpha"], catalogRow: false, package: false, moduleDirectory: true, report: false },
+    },
+    {
+      part: "registry",
+      dir: [".metaproject"],
+      label: /could not remove the registry entry/,
+      left: { registry: ["review/alpha"], catalogRow: false, package: false, moduleDirectory: false, report: false },
+    },
+  ];
+
+  for (const { part, dir, label, left } of cases) {
+    test.skipIf(!canForceFailures)(`a failure removing the ${part} is finished by running the command again`, async () => {
+      const root = await makeProject([{ module: "review", name: "alpha", report: true }]);
+
+      await withMode(path.join(root, ...dir), 0o555, async () => {
+        const failure = removeProjectSkill(root, { skill: "review/alpha" });
+        await expect(failure).rejects.toThrow(label);
+        await expect(failure).rejects.toThrow(/run `keryx skills remove review\/alpha` again/);
+        expect(await alphaState(root)).toEqual(left);
+
+        // While the cause is still there, a re-run still knows the skill and says the same.
+        await expect(removeProjectSkill(root, { skill: "review/alpha" })).rejects.toThrow(label);
+      });
+
+      const result = await removeProjectSkill(root, { skill: "review/alpha" });
+      expect(statuses(result).registry).toBe("removed");
+      expect(await alphaState(root)).toEqual(ALL_GONE);
+    });
+  }
+
+  test("the parts are applied report, catalog, package, module directory, registry — the entry that identifies the skill goes last", async () => {
+    const root = await makeProject([{ module: "review", name: "alpha", report: true }]);
+
+    const result = await removeProjectSkill(root, { skill: "review/alpha" });
+
+    expect(result.parts.map((part) => part.part)).toEqual(["report", "catalog", "package", "module-directory", "registry"]);
+  });
+
+  test("a skill whose entry and package were deleted by hand is finished from its catalog row and report", async () => {
+    const root = await makeProject([{ module: "review", name: "alpha", report: true }]);
+    await editRegistry(root, () => []);
+    await rm(path.join(root, ".metaproject", "project-skills", "review"), { recursive: true });
+
+    const result = await removeProjectSkill(root, { skill: "review/alpha" });
+
+    expect(statuses(result)).toEqual({ report: "removed", catalog: "removed", package: "absent", registry: "absent" });
+    expect(await alphaState(root)).toEqual(ALL_GONE);
+  });
+
+  test("a report left alone is enough to finish, and a catalog row alone is too", async () => {
+    const root = await makeProject([{ module: "review", name: "alpha", report: true }]);
+    await editRegistry(root, () => []);
+    await rm(path.join(root, ".metaproject", "project-skills", "review"), { recursive: true });
+    const catalog = await readFile(path.join(root, CATALOG), "utf8");
+    await writeFile(path.join(root, CATALOG), catalog.replace(/^\| review \| alpha \|.*\n/m, ""), "utf8");
+
+    expect(statuses(await removeProjectSkill(root, { skill: "review/alpha" })).report).toBe("removed");
+    expect(await alphaState(root)).toEqual(ALL_GONE);
+
+    const root2 = await makeProject([{ module: "review", name: "alpha" }]);
+    await editRegistry(root2, () => []);
+    await rm(path.join(root2, ".metaproject", "project-skills", "review"), { recursive: true });
+
+    expect(statuses(await removeProjectSkill(root2, { skill: "review/alpha" })).catalog).toBe("removed");
+    expect(await alphaState(root2)).toEqual(ALL_GONE);
+  });
+});
+
+describe("flow 360 review G-013 / G-014: refusals and clauses a test must notice losing", () => {
+  test("R01: a registered module `..` is refused, and nothing above project-skills is touched", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    const victim = path.join(root, ".metaproject", "victim", "keep.txt");
+    await mkdir(path.dirname(victim), { recursive: true });
+    await writeFile(victim, "keep", "utf8");
+    await editRegistry(root, (registry) => [...registry, { module: "..", name: "victim", path: ".metaproject/project-skills/../victim" }]);
+
+    await expectRefusedUntouched(root, "../victim", /not a <module>\/<name> pair/);
+
+    expect(await pathExists(victim)).toBe(true);
+  });
+
+  test("R05: a registry entry with no path is refused", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await editRegistry(root, (registry) => registry.map(({ path: _path, ...rest }) => rest as RawEntry));
+
+    await expectRefusedUntouched(root, "review/house-api", /has "path": undefined, not its own package directory/);
+
+    expect(await pathExists(path.join(root, PACKAGE("review", "house-api"), "SKILL.md"))).toBe(true);
+  });
+
+  test("R12: a module path that is a file is refused as not a directory", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await rm(path.join(root, ".metaproject", "project-skills", "review"), { recursive: true });
+    await writeFile(path.join(root, ".metaproject", "project-skills", "review"), "not a dir", "utf8");
+
+    await expectRefusedUntouched(root, "review/house-api", /\.metaproject\/project-skills\/review is not a directory/);
+
+    expect(await readFile(path.join(root, ".metaproject", "project-skills", "review"), "utf8")).toBe("not a dir");
+  });
+
+  test("R14: a broken manifest symlink is refused, not read as no manifest", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await rm(path.join(root, MANIFEST));
+    await symlink(path.join(root, "nowhere.json"), path.join(root, MANIFEST));
+
+    await expect(removeProjectSkill(root, { skill: "review/house-api" })).rejects.toThrow(/metaproject\.json is a broken symlink/);
+
+    expect(await pathExists(path.join(root, PACKAGE("review", "house-api"), "SKILL.md"))).toBe(true);
+  });
+
+  test("R17: a manifest symlinked to a directory inside the project is refused as not a regular file", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await mkdir(path.join(root, "cfgdir"), { recursive: true });
+    await rename(path.join(root, MANIFEST), path.join(root, "cfgdir", "keep.json"));
+    await symlink(path.join("..", "cfgdir"), path.join(root, MANIFEST));
+
+    await expect(removeProjectSkill(root, { skill: "review/house-api" })).rejects.toThrow(/metaproject\.json is not a regular file/);
+
+    expect(await pathExists(path.join(root, PACKAGE("review", "house-api"), "SKILL.md"))).toBe(true);
+    expect(await pathExists(path.join(root, "cfgdir", "keep.json"))).toBe(true);
+  });
+
+  test("R33: a manifest that does not parse stops the removal and is not rewritten", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await writeFile(path.join(root, MANIFEST), "{ not json", "utf8");
+
+    await expect(removeProjectSkill(root, { skill: "review/house-api" })).rejects.toThrow();
+
+    expect(await readFile(path.join(root, MANIFEST), "utf8")).toBe("{ not json");
+    expect(await pathExists(path.join(root, PACKAGE("review", "house-api"), "SKILL.md"))).toBe(true);
+  });
+
+  const REPORTS = path.join(".metaproject", "data", "gdskills", "reports");
+
+  test("R25: a report with no skillPath under another file name is matched by the module and name in its body", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    const report = path.join(root, REPORTS, "legacy-verification.json");
+    await mkdir(path.dirname(report), { recursive: true });
+    await writeFile(report, JSON.stringify({ module: "review", name: "house-api" }), "utf8");
+
+    await removeProjectSkill(root, { skill: "review/house-api" });
+
+    expect(await pathExists(report)).toBe(false);
+  });
+
+  test("R26: a report with no skillPath naming the same name in another module is left alone", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    const report = path.join(root, REPORTS, "legacy-verification.json");
+    await mkdir(path.dirname(report), { recursive: true });
+    await writeFile(report, JSON.stringify({ module: "quality", name: "house-api" }), "utf8");
+
+    await removeProjectSkill(root, { skill: "review/house-api" });
+
+    expect(await pathExists(report)).toBe(true);
+  });
+
+  test("R29: a json in the reports directory that is not a verification report is left alone, even when it names this package", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    const notes = path.join(root, REPORTS, "house-api-notes.json");
+    await mkdir(path.dirname(notes), { recursive: true });
+    await writeFile(notes, JSON.stringify({ skillPath: ".metaproject/project-skills/review/house-api" }), "utf8");
+
+    await removeProjectSkill(root, { skill: "review/house-api" });
+
+    expect(await pathExists(notes)).toBe(true);
+  });
+
+  test("R32 / G-014: a refused real run creates no lock, not even the directory the lock would go in", async () => {
+    const root = await makeProject([{ module: "review", name: "house-api" }]);
+    await rm(path.join(root, ".metaproject", "data"), { recursive: true, force: true });
+    await editRegistry(root, (registry) => registry.map((entry) => ({ ...entry, path: "src" })));
+
+    await expect(removeProjectSkill(root, { skill: "review/house-api" })).rejects.toThrow(/not its own package directory/);
+
+    expect(await pathExists(path.join(root, ".metaproject", "data"))).toBe(false);
+    expect(await readdir(path.join(root, ".metaproject"))).not.toContain("data");
+  });
+});
+
 describe("flow 360 AC3: keryx skills remove (command)", () => {
   test("prints exactly what it removed", async () => {
     const root = await makeProject([{ module: "review", name: "house-api", report: true }]);
@@ -589,11 +908,11 @@ describe("flow 360 AC3: keryx skills remove (command)", () => {
     expect(out).toBe(
       [
         "Removed project skill: review/house-api",
-        "- removed: registry entry — .metaproject/metaproject.json",
+        "- removed: verification report — .metaproject/data/gdskills/reports/review-house-api-verification.json",
         "- removed: catalog row — .metaproject/skills/catalog.md",
         "- removed: package directory — .metaproject/project-skills/review/house-api",
         "- removed: module directory — .metaproject/project-skills/review",
-        "- removed: verification report — .metaproject/data/gdskills/reports/review-house-api-verification.json",
+        "- removed: registry entry — .metaproject/metaproject.json",
       ].join("\n"),
     );
   });
@@ -609,10 +928,10 @@ describe("flow 360 AC3: keryx skills remove (command)", () => {
     expect(out).toBe(
       [
         "Would remove project skill: review/house-api",
-        "- would remove: registry entry — .metaproject/metaproject.json",
+        "- absent: verification report — .metaproject/data/gdskills/reports/review-house-api-verification.json",
         "- would remove: catalog row — .metaproject/skills/catalog.md",
         "- would remove: package directory — .metaproject/project-skills/review/house-api",
-        "- absent: verification report — .metaproject/data/gdskills/reports/review-house-api-verification.json",
+        "- would remove: registry entry — .metaproject/metaproject.json",
         "Dry run: nothing was changed.",
       ].join("\n"),
     );
@@ -628,7 +947,7 @@ describe("flow 360 AC3: keryx skills remove (command)", () => {
     expect(parsed.module).toBe("review");
     expect(parsed.name).toBe("house-api");
     expect(parsed.dryRun).toBe(true);
-    expect(parsed.parts.map((part) => part.part)).toEqual(["registry", "catalog", "package", "module-directory", "report"]);
+    expect(parsed.parts.map((part) => part.part)).toEqual(["report", "catalog", "package", "module-directory", "registry"]);
     expect(renderRemoveProjectSkill(parsed as Parameters<typeof renderRemoveProjectSkill>[0])).toContain("Would remove project skill");
   });
 

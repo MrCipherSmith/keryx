@@ -53,6 +53,12 @@ import {
  *   - all of that is decided by `planRemoval`, which only reads. A refusal is
  *     raised there, before the first write, so a refused run changes nothing —
  *     and a dry run returns that same plan, so it lists what the real run does.
+ *
+ * Review round 2 (G-006, G-007): a skill is identified only by exact names —
+ * the registry's, or those `readdir` returns — never by asking a possibly
+ * case-insensitive filesystem whether a composed path exists; and the registry
+ * entry is applied last, so a step that fails leaves the entry that lets the
+ * same command find the skill again and finish.
  */
 
 export type RemovedPartKind = "registry" | "catalog" | "package" | "module-directory" | "report";
@@ -136,8 +142,13 @@ export async function removeProjectSkill(
   return withFileLock(path.join(projectRoot, PROJECT_SKILLS_LOCK_PATH), async () => {
     const plan = await planRemoval(projectRoot, options.skill);
     const parts: RemovedPart[] = [];
-    for (const planned of plan.parts) {
-      const removed = planned.apply !== undefined && (await planned.apply());
+    for (const [index, planned] of plan.parts.entries()) {
+      let removed: boolean;
+      try {
+        removed = planned.apply !== undefined && (await planned.apply());
+      } catch (error) {
+        throw applyFailure(plan, parts, index, error);
+      }
       parts.push({ ...planned.part, status: removed ? "removed" : "absent" });
     }
     return { module: plan.target.module, name: plan.target.name, dryRun, parts };
@@ -145,11 +156,40 @@ export async function removeProjectSkill(
 }
 
 /**
+ * The error a failed step becomes: what failed, what is already gone, what is
+ * still there, and how to finish. The registry entry is applied last, so at
+ * any failure it is still in place and the same command still knows the skill.
+ */
+function applyFailure(plan: Plan, done: readonly RemovedPart[], failedIndex: number, error: unknown): Error {
+  const failed = plan.parts[failedIndex]?.part;
+  const key = `${plan.target.module}/${plan.target.name}`;
+  const cause = error instanceof Error ? error.message : String(error);
+  const describe = (part: RemovedPart): string => `${PART_LABEL[part.part]} ${part.path}`;
+  const removed = done.filter((part) => part.status === "removed").map(describe);
+  const remaining = plan.parts
+    .slice(failedIndex)
+    .map((planned) => planned.part)
+    .filter((part) => part.status === "would-remove")
+    .map(describe);
+  return new Error(
+    `${LABEL}: could not remove the ${failed === undefined ? "next part" : describe(failed)}: ${cause}. ` +
+      `Removed so far: ${removed.length > 0 ? removed.join(", ") : "nothing"}. ` +
+      `Still in place: ${remaining.join(", ")}. ` +
+      `Fix the cause and run \`keryx skills remove ${key}\` again to finish — the registry entry is removed last, so it still names the skill — ` +
+      `or remove what is still in place by hand.`,
+    { cause: error },
+  );
+}
+
+/**
  * Everything the removal will do, decided without writing anything.
  *
- * The registry entry goes first. It is the ownership record, and a run
- * interrupted after it leaves a package directory with no entry — a state
- * `resolveTarget` still accepts, so the command can simply be run again.
+ * The parts are applied in the order they are listed: the verification
+ * report(s), the catalog row, the package directory, its module directory,
+ * and the registry entry LAST. The entry is what identifies the skill, so a
+ * run that fails at any step leaves it in place and the same command, run
+ * again, finds the skill and finishes. `resolveTarget` also accepts a leftover
+ * catalog row or report, so a skill half-removed by hand can be finished too.
  */
 async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
   // Every containment check below is made against where the project really is.
@@ -161,41 +201,46 @@ async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
     status: "would-remove",
   });
   const absent = (kind: RemovedPartKind, relativePath: string): PlannedPart => ({ part: { part: kind, path: relativePath, status: "absent" } });
-  const write = (relativePath: string, content: string) => async (): Promise<boolean> => {
-    await writeContained(root, relativePath, content);
-    return true;
-  };
 
   const manifestFile = await locateRewritable(root, PROJECT_SKILLS_MANIFEST_PATH);
-  // Not `readJsonFileOr`: a manifest that does not parse must stop a removal,
-  // not read as "nothing registered" and then be overwritten.
-  const manifest = manifestFile === undefined ? undefined : await readJsonFile<MetaprojectManifest | null>(manifestFile.absolute);
+  const manifest = manifestFile === undefined ? undefined : await readManifest(manifestFile);
   const gdskills = manifest?.modules?.gdskills;
   const registry: unknown[] = Array.isArray(gdskills?.projectSkillRegistry) ? gdskills.projectSkillRegistry : [];
+  const catalogFile = await locateRewritable(root, PROJECT_SKILLS_CATALOG_PATH);
+  const catalogText = catalogFile === undefined ? undefined : await readFile(catalogFile.absolute, "utf8");
 
-  const target = await resolveTarget(root, input, registry);
+  const target = await resolveTarget(
+    root,
+    input,
+    registry,
+    async (candidate) =>
+      (catalogText !== undefined && withoutCatalogRow(catalogText, candidate) !== undefined) ||
+      (await findReports(root, candidate)).existing.length > 0,
+  );
   const key = `${target.module}/${target.name}`;
   const parts: PlannedPart[] = [];
 
-  // 1. Registry entry: the entries with this module AND this name, and no other.
-  const keptEntries = registry.filter((entry) => registryKey(entry) !== key);
-  if (gdskills !== undefined && manifestFile !== undefined && keptEntries.length < registry.length) {
-    gdskills.projectSkillRegistry = keptEntries;
-    parts.push({
-      part: present("registry", PROJECT_SKILLS_MANIFEST_PATH, manifestFile.resolvedPath),
-      apply: write(PROJECT_SKILLS_MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`),
-    });
-  } else {
-    parts.push(absent("registry", PROJECT_SKILLS_MANIFEST_PATH));
+  // 1. Verification report(s).
+  const reports = await findReports(root, target);
+  for (const report of reports.existing) {
+    parts.push({ part: present("report", report), apply: () => removeContained(root, report) });
+  }
+  if (reports.existing.length === 0) {
+    parts.push(absent("report", reports.conventional));
   }
 
-  // 2. Catalog row.
-  const catalogFile = await locateRewritable(root, PROJECT_SKILLS_CATALOG_PATH);
-  const catalog = catalogFile === undefined ? undefined : withoutCatalogRow(await readFile(catalogFile.absolute, "utf8"), target);
-  if (catalogFile !== undefined && catalog !== undefined) {
+  // 2. Catalog row. Rewritten from the file as it is when the step runs, not
+  // as it was when the plan was made.
+  if (catalogFile !== undefined && catalogText !== undefined && withoutCatalogRow(catalogText, target) !== undefined) {
     parts.push({
       part: present("catalog", PROJECT_SKILLS_CATALOG_PATH, catalogFile.resolvedPath),
-      apply: write(PROJECT_SKILLS_CATALOG_PATH, catalog),
+      apply: async () => {
+        const current = await locateRewritable(root, PROJECT_SKILLS_CATALOG_PATH);
+        const next = current === undefined ? undefined : withoutCatalogRow(await readFile(current.absolute, "utf8"), target);
+        if (next === undefined) return false;
+        await writeContained(root, PROJECT_SKILLS_CATALOG_PATH, next);
+        return true;
+      },
     });
   } else {
     parts.push(absent("catalog", PROJECT_SKILLS_CATALOG_PATH));
@@ -203,10 +248,12 @@ async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
 
   // 3. Package directory, and 4. the module directory `createProjectSkill`
   // made for it — removed only when this skill was the last thing in it, and
-  // listed only when that is the case.
+  // listed only when that is the case. Both are found by their exact names
+  // (G-006): on a case-insensitive filesystem `Review/Alpha` would otherwise
+  // reach `review/alpha`.
   const modulePath = `${PROJECT_SKILLS_DIR}/${target.module}`;
   const moduleExists = await isRealDirectoryChain(root, modulePath);
-  const packageStats = moduleExists ? await lstatOrMissing(path.join(root, target.packagePath)) : undefined;
+  const packageStats = moduleExists ? await exactEntry(path.join(root, modulePath), target.name) : undefined;
   if (packageStats?.isSymbolicLink()) {
     throw symlinkRefusal(target.packagePath, await linkTarget(path.join(root, target.packagePath)));
   }
@@ -219,16 +266,45 @@ async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
     parts.push({ part: present("module-directory", modulePath), apply: () => rmdirIfEmptyContained(root, modulePath) });
   }
 
-  // 5. Verification report(s).
-  const reports = await findReports(root, target);
-  for (const report of reports.existing) {
-    parts.push({ part: present("report", report), apply: () => removeContained(root, report) });
-  }
-  if (reports.existing.length === 0) {
-    parts.push(absent("report", reports.conventional));
+  // 5. Registry entry: the entries with this module AND this name, and no
+  // other. Last, and re-read when the step runs, like the catalog.
+  if (manifestFile !== undefined && manifestWithoutEntry(manifest, key) !== undefined) {
+    parts.push({
+      part: present("registry", PROJECT_SKILLS_MANIFEST_PATH, manifestFile.resolvedPath),
+      apply: async () => {
+        const current = await locateRewritable(root, PROJECT_SKILLS_MANIFEST_PATH);
+        const next = current === undefined ? undefined : manifestWithoutEntry(await readManifest(current), key);
+        if (next === undefined) return false;
+        await writeContained(root, PROJECT_SKILLS_MANIFEST_PATH, next);
+        return true;
+      },
+    });
+  } else {
+    parts.push(absent("registry", PROJECT_SKILLS_MANIFEST_PATH));
   }
 
   return { target, parts };
+}
+
+/** Not `readJsonFileOr`: a manifest that does not parse must stop a removal, not read as "nothing registered" and then be overwritten. */
+async function readManifest(file: RewritableFile): Promise<MetaprojectManifest | null> {
+  return readJsonFile<MetaprojectManifest | null>(file.absolute);
+}
+
+/** The manifest, serialised, without the registry entries for `key` — or undefined when it has none. Everything else is kept as it was. */
+function manifestWithoutEntry(manifest: MetaprojectManifest | null | undefined, key: string): string | undefined {
+  const modules = manifest?.modules;
+  const gdskills = modules?.gdskills;
+  if (manifest == null || modules === undefined || gdskills == null || !Array.isArray(gdskills.projectSkillRegistry)) {
+    return undefined;
+  }
+  const registry: unknown[] = gdskills.projectSkillRegistry;
+  const kept = registry.filter((entry) => registryKey(entry) !== key);
+  if (kept.length === registry.length) {
+    return undefined;
+  }
+  const next: MetaprojectManifest = { ...manifest, modules: { ...modules, gdskills: { ...gdskills, projectSkillRegistry: kept } } };
+  return `${JSON.stringify(next, null, 2)}\n`;
 }
 
 /** `<module>/<name>` of a registry entry, or undefined for anything that is not an entry. */
@@ -238,7 +314,22 @@ function registryKey(entry: unknown): string | undefined {
   return typeof moduleName === "string" && typeof name === "string" ? `${moduleName}/${name}` : undefined;
 }
 
-async function resolveTarget(root: string, input: string, registry: readonly unknown[]): Promise<Target> {
+/**
+ * Which skill the input names. Every test here is an exact, case-sensitive
+ * match — against the registry, or against names read from a directory with
+ * `readdir` — never a question to the filesystem about a composed path, which
+ * on macOS and Windows answers for any spelling (G-006).
+ *
+ * `hasLeftovers` says whether a catalog row or a verification report of the
+ * candidate is still there: enough to finish a skill whose entry and package
+ * are already gone.
+ */
+async function resolveTarget(
+  root: string,
+  input: string,
+  registry: readonly unknown[],
+  hasLeftovers: (candidate: Target) => Promise<boolean>,
+): Promise<Target> {
   const key = normalizeSkillKey(input);
   const segments = key.split("/");
   const [moduleName, skillName] = segments;
@@ -272,15 +363,31 @@ async function resolveTarget(root: string, input: string, registry: readonly unk
     return { module: moduleName, name: skillName, packagePath };
   }
 
-  // A package directory with no registry entry is what an interrupted removal
-  // (the entry goes first) or a hand-edited manifest leaves behind. Everything
-  // under project-skills is a project skill, so it is still this command's to remove.
-  if (addressable && (await pathExists(path.join(root, packagePath)))) {
-    return { module: moduleName, name: skillName, packagePath };
+  // A package directory with no registry entry is what a hand-edited manifest
+  // leaves behind; a catalog row or a report with neither is what a removal
+  // finished partly by hand leaves. Everything under project-skills is a
+  // project skill, so each is still this command's to remove.
+  if (addressable) {
+    const candidate: Target = { module: moduleName, name: skillName, packagePath };
+    if ((await lstatExact(root, packagePath)) !== undefined || (await hasLeftovers(candidate))) {
+      return candidate;
+    }
+  }
+
+  // Registered under another spelling. On a case-insensitive filesystem the
+  // two name one directory, so nothing may be removed under the one typed.
+  const spelledOtherwise = registry
+    .map(registryKey)
+    .filter((entry): entry is string => entry !== undefined && entry !== key && entry.toLowerCase() === key.toLowerCase());
+  if (spelledOtherwise.length > 0) {
+    throw new Error(
+      `${LABEL}: ${input} is not registered under that spelling; the registered spelling is ${spelledOtherwise.join(" or ")}. ` +
+        `Skill names are case-sensitive: run \`keryx skills remove ${spelledOtherwise[0]}\`. ${UNCHANGED}`,
+    );
   }
 
   const bundled = BUNDLED_GDSKILLS.find((skill) => skill.name === key || `${skill.category}/${skill.name}` === key);
-  const installedBundled = addressable && (await pathExists(path.join(root, ".metaproject", "skills", "gdskills", moduleName, skillName)));
+  const installedBundled = addressable && (await lstatExact(root, `.metaproject/skills/gdskills/${moduleName}/${skillName}`)) !== undefined;
   if (bundled || installedBundled) {
     throw new Error(
       `${LABEL}: ${input} is a bundled skill, not a project skill. ` +
@@ -317,6 +424,35 @@ async function lstatOrMissing(target: string): Promise<Stats | undefined> {
   }
 }
 
+/**
+ * `lstat` of `name` inside the directory `parent`, but only when `parent`
+ * lists an entry spelled exactly `name`. Undefined when it does not, or when
+ * `parent` is not there. A case-insensitive filesystem answers `lstat` for
+ * any spelling of a name; `readdir` returns the one on disk.
+ */
+async function exactEntry(parent: string, name: string): Promise<Stats | undefined> {
+  let names: string[];
+  try {
+    names = await readdir(parent);
+  } catch (error) {
+    if (isMissingPathError(error)) return undefined;
+    throw error;
+  }
+  return names.includes(name) ? lstatOrMissing(path.join(parent, name)) : undefined;
+}
+
+/** `lstat` of `relativePath` when every one of its segments is on disk under exactly that spelling; undefined otherwise. Refuses nothing. */
+async function lstatExact(root: string, relativePath: string): Promise<Stats | undefined> {
+  let current = root;
+  let stats: Stats | undefined;
+  for (const segment of relativePath.split("/")) {
+    stats = await exactEntry(current, segment);
+    if (stats === undefined) return undefined;
+    current = path.join(current, segment);
+  }
+  return stats;
+}
+
 async function linkTarget(link: string): Promise<string> {
   return realpath(link).catch(() => "a missing target");
 }
@@ -331,14 +467,15 @@ function symlinkRefusal(relativePath: string, resolved: string): Error {
 /**
  * True when every component of `relativePath` is a real directory — so what is
  * at that path is inside the project, not somewhere a link points. False when
- * the walk runs out of disk first (nothing there to remove). A symlink or a
+ * the walk runs out of disk first (nothing there to remove), including when a
+ * component is there only under another spelling. A symlink or a
  * non-directory on the way is a refusal, not a "missing".
  */
 async function isRealDirectoryChain(root: string, relativePath: string): Promise<boolean> {
   let current = root;
   for (const segment of relativePath.split("/")) {
+    const stats = await exactEntry(current, segment);
     current = path.join(current, segment);
-    const stats = await lstatOrMissing(current);
     if (stats === undefined) return false;
     const shown = toPosix(path.relative(root, current));
     if (stats.isSymbolicLink()) {
@@ -533,16 +670,19 @@ Remove a project skill: the inverse of \`keryx skills create\` and
 Usage:
   keryx skills remove <module>/<name> [--dry-run] [--json]
 
-Removes, and lists each as removed or absent:
+Removes, in this order, and lists each as removed or absent:
+  - the verification report under .metaproject/data/gdskills/reports/
+    (a report whose body names another package is left alone)
+  - the row in the Project Skills section of .metaproject/skills/catalog.md
   - the package directory .metaproject/project-skills/<module>/<name>/
     (and the <module>/ directory when this was the last skill in it)
   - the projectSkillRegistry entry in .metaproject/metaproject.json
-  - the row in the Project Skills section of .metaproject/skills/catalog.md
-  - the verification report under .metaproject/data/gdskills/reports/
-    (a report whose body names another package is left alone)
 
 A part that is already gone is reported as absent, not as an error, so a skill
-half-removed by hand can be finished with this command.
+half-removed by hand can be finished with this command. The registry entry goes
+last: if a step fails (a read-only directory, say), the error lists what is
+already gone, and running the same command again once the cause is fixed
+finishes the removal.
 
 --dry-run:
   print what would be removed and change nothing.
@@ -556,7 +696,9 @@ Refused, always before anything is changed:
   - a bundled skill. Those are managed by \`keryx skills install\` and
     \`keryx skills uninstall\`. A project skill imported over a bundled name
     (\`import --force\`) is a project skill and is removable.
-  - a name that is not a project skill. Names are listed by \`keryx skills list\`.
+  - a name that is not a project skill. Names are listed by \`keryx skills list\`
+    and are case-sensitive: Review/Alpha does not name review/alpha, even on a
+    filesystem that does not tell the two apart.
   - a registry entry whose "path" is not its own
     .metaproject/project-skills/<module>/<name>, or whose module or name is not
     a plain path segment. Fix the entry in .metaproject/metaproject.json.
