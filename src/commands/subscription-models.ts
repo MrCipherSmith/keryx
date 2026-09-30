@@ -1,4 +1,5 @@
 import { ensureOpenAiCodexGrant } from "../lib/oauth/openai-subscription";
+import { resolveCodexCatalogVersion } from "../lib/oauth/codex-catalog-version";
 import type { ModelsResolveResult, OpenAiCompatProvider } from "./providers";
 
 /** Connection/picker metadata only: this provider uses native Responses, never Chat Completions. */
@@ -9,12 +10,9 @@ export const OPENAI_CODEX_PICKER: OpenAiCompatProvider = {
   models: ["gpt-5.3-codex"],
 };
 
-// Catalog compatibility version verified against OpenAI Codex rust-v0.157.0.
-const CODEX_CATALOG_CLIENT_VERSION = "0.157.0";
-
 export async function fetchOpenAiCodexModels(
   fetchFn: typeof fetch,
-  opts: { configDir?: string; timeoutMs?: number } = {},
+  opts: { configDir?: string; timeoutMs?: number; refreshCatalogVersion?: boolean } = {},
 ): Promise<ModelsResolveResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 8_000);
@@ -22,7 +20,13 @@ export async function fetchOpenAiCodexModels(
   try {
     const grant = await ensureOpenAiCodexGrant({ fetch: fetchFn, signal: controller.signal, ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}) });
     authenticated = true;
-    const response = await fetchFn(`${OPENAI_CODEX_PICKER.baseUrl}/models?client_version=${CODEX_CATALOG_CLIENT_VERSION}`, {
+    const clientVersion = await resolveCodexCatalogVersion(fetchFn, { signal: controller.signal,
+      ...(opts.refreshCatalogVersion !== undefined ? { forceRefresh: opts.refreshCatalogVersion } : {}),
+      ...(opts.configDir !== undefined ? { configDir: opts.configDir } : {}) });
+    if (clientVersion === undefined) return { models: [], source: "fallback", failure: {
+      kind: "unreachable", detail: "could not discover the Codex catalog version from npm; no cached version is available",
+    } };
+    const response = await fetchFn(`${OPENAI_CODEX_PICKER.baseUrl}/models?client_version=${clientVersion}`, {
       headers: { Authorization: `Bearer ${grant.access}`, "ChatGPT-Account-ID": grant.accountId, originator: "keryx", Accept: "application/json" },
       signal: controller.signal,
       redirect: "error",

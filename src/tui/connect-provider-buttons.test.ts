@@ -12,6 +12,8 @@ import { describe, expect, test } from "bun:test";
 import type { DetectedProvider } from "../commands/select";
 import { loadShellConfig, saveApiKey } from "../lib/shell-config";
 import { saveProviderCatalogCache, type ProviderCatalogEntry } from "../harness/provider-catalog-cache";
+import { saveOAuthGrant } from "../lib/oauth/grants";
+import { CODEX_VERSION_REGISTRY_URL } from "../lib/oauth/codex-catalog-version";
 import { themeColorToHex } from "./shell-chrome";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
 import { selectProviderModelInTui } from "./tui-shell";
@@ -188,6 +190,55 @@ describe("flow 309 AC6 — the /connect row note shows the CACHED catalog's stat
 });
 
 describe("AC2 — [Test] runs the live probe and shows ok/failure inline, without leaving /connect", () => {
+  otuiTest("subscription Test discovers a newer version despite a fresh connection cache", async () => {
+    const otui = requireOtui();
+    const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+    const configDir = tempConfigDir();
+    saveOAuthGrant("openai-codex", {
+      method: "device-code", access: "test-access", accountId: "test-account",
+      expires: Date.now() + 3_600_000, obtainedAt: new Date().toISOString(),
+    }, configDir);
+    let latestVersion = "0.159.2";
+    let registryCalls = 0;
+    const catalogVersions: string[] = [];
+    const fetchFn = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === CODEX_VERSION_REGISTRY_URL) {
+        registryCalls++;
+        expect(new Headers(init?.headers).has("Authorization")).toBe(false);
+        return Response.json({ name: "@openai/codex", version: latestVersion });
+      }
+      const version = new URL(url).searchParams.get("client_version")!;
+      catalogVersions.push(version);
+      return Response.json({ models: [
+        { slug: "gpt-6-sol", visibility: "list" },
+        ...(version === "0.200.0" ? [{ slug: "gpt-6.1-sol", visibility: "list" }] : []),
+      ] });
+    }) as typeof fetch;
+    try {
+      const pending = selectProviderModelInTui(otui.core, h.renderer, [
+        { name: "openai-codex", label: "ChatGPT / Codex", models: [] },
+      ], { onlyConnected: true, fetch: fetchFn, env: {}, configDir });
+      const frame = await waitForFrameDeadline(h, (f) => f.includes("[Test]"));
+      expect(registryCalls).toBe(1);
+      latestVersion = "0.200.0";
+      const button = columnOnRow(frame, "ChatGPT / Codex", "[Test]");
+      expect(button.col).toBeGreaterThan(0);
+      const mouse = otui.testing.createMockMouse(h.renderer);
+      await mouse.click(button.col, button.row);
+      const resultFrame = await waitForFrameDeadline(h, (f) => f.includes("ok — 2 model"));
+      expect(resultFrame).toContain("ok — 2 model");
+      expect(registryCalls).toBe(2);
+      expect(catalogVersions).toEqual(["0.159.2", "0.200.0"]);
+      expect(JSON.parse(readFileSync(join(configDir, "codex-catalog-version.json"), "utf8")).version).toBe("0.200.0");
+      await pressEscapeAndSettle(h);
+      expect(await pending).toBeUndefined();
+    } finally {
+      h.renderer.destroy();
+      rmSync(configDir, { recursive: true, force: true });
+    }
+  });
+
   otuiTest("mouse click on [Test]: success shows ok + model count", async () => {
     const otui = requireOtui();
     const h = await otui.testing.createTestRenderer({ width: 100, height: 30 });
