@@ -5,7 +5,8 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { renderMetaprojectGitignoreBlock } from "../lib/metaproject-gitignore";
 import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
@@ -1244,3 +1245,192 @@ test("flow 361: an entry-form local manifest whose tracked file still carries a 
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+// Flow 361 T7: `keryx update` never writes the tracked `.gitignore`. The
+// managed ignore block goes to `<git-common-dir>/info/exclude`, and a block
+// an older keryx left in `.gitignore` is moved out by the same three cases as
+// the index block.
+describe("flow 361: ignore rules go to info/exclude", () => {
+  const LOCAL_TARGETS = ["CLAUDE.local.md", "AGENTS.override.md", ".claude/settings.local.json"];
+  /** The block exactly as the pre-361 writer appended it to `.gitignore`. */
+  const LEGACY_IGNORE_BLOCK = `# keryx:begin\n${renderMetaprojectGitignoreBlock().trim()}\n# keryx:end`;
+  const AGENTS = "# Team\n\nUse metaproject rules.\n";
+
+  /**
+   * An `entrypointFixture` whose `core.excludesFile` points at a file that
+   * does not exist, so the developer's own global excludes (Claude Code adds
+   * `.claude/settings.local.json` there) cannot answer for the fixture.
+   */
+  async function ignoreFixture(prefix: string, files: Record<string, string>): Promise<string> {
+    const root = await entrypointFixture(prefix, files, ENTRY_FORM_DEFAULT);
+    gitForUpdateIdempotency(root, ["config", "core.excludesFile", path.join(root, ".git", "no-global-excludes")]);
+    return root;
+  }
+
+  function checkIgnore(root: string, target: string): number | null {
+    return Bun.spawnSync(["git", "check-ignore", "-q", "--", target], { cwd: root, stdout: "ignore", stderr: "ignore" }).exitCode;
+  }
+
+  async function readExclude(root: string): Promise<string> {
+    return readFile(path.join(root, ".git", "info", "exclude"), "utf8").catch(() => "");
+  }
+
+  function managedLines(exclude: string): string[] {
+    const match = /^# keryx:begin\n([\s\S]*?)^# keryx:end$/m.exec(exclude);
+    return match === null ? [] : (match[1] ?? "").split("\n").filter((line) => line.length > 0);
+  }
+
+  /**
+   * A repository an older keryx maintained: service files generated, and the
+   * ignore block sitting in `.gitignore` as an uncommitted edit instead of in
+   * `info/exclude` (which the settling run wrote, so it is emptied again).
+   */
+  async function legacyIgnoreFixture(prefix: string, committedGitignore: string, workingGitignore: string): Promise<string> {
+    const root = await ignoreFixture(prefix, { "AGENTS.md": AGENTS, ".gitignore": committedGitignore });
+    await runEntrypointUpdate(root);
+    await writeFile(path.join(root, ".git", "info", "exclude"), "", "utf8");
+    await writeFile(path.join(root, ".gitignore"), workingGitignore, "utf8");
+    return root;
+  }
+
+  test("one update moves an uncommitted legacy block out of .gitignore, and a second changes no file (AC8)", async () => {
+    const root = await legacyIgnoreFixture("keryx-update-ignore-migrate-", "node_modules/\n", `node_modules/\n\n${LEGACY_IGNORE_BLOCK}\n`);
+    try {
+      expect(diffIsQuiet(root, ".gitignore")).toBe(false);
+
+      const output = await runEntrypointUpdate(root);
+
+      expect(diffIsQuiet(root, ".gitignore")).toBe(true);
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe("node_modules/\n");
+      expect(output).toContain(".gitignore: moved the managed keryx ignore block");
+      const status = gitForUpdateIdempotency(root, ["status", "--porcelain"]);
+      expect(status).not.toContain(".gitignore");
+      const exclude = await readExclude(root);
+      expect(managedLines(exclude)).toContain(".metaproject/runtime/");
+      for (const target of LOCAL_TARGETS) {
+        expect(managedLines(exclude)).toContain(target);
+        expect(checkIgnore(root, target)).toBe(0);
+      }
+
+      const afterFirst = await snapshotTree(root);
+      const second = await runEntrypointUpdate(root);
+      expect(await snapshotTree(root)).toEqual(afterFirst);
+      expect(await readExclude(root)).toBe(exclude);
+      expect(gitForUpdateIdempotency(root, ["status", "--porcelain"])).toBe(status);
+      expect(second).not.toContain(".gitignore");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("unrelated uncommitted edits in .gitignore survive byte-for-byte and the file is named (AC9)", async () => {
+    const root = await legacyIgnoreFixture(
+      "keryx-update-ignore-edits-",
+      "node_modules/\n",
+      `node_modules/\ndist/\n\n${LEGACY_IGNORE_BLOCK}\n`,
+    );
+    try {
+      const output = await runEntrypointUpdate(root);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe("node_modules/\ndist/\n");
+      expect(output).toContain(".gitignore: removed the managed keryx ignore block");
+      expect(output).toContain("your other uncommitted edits in .gitignore are kept");
+      expect(managedLines(await readExclude(root))).toContain(".metaproject/runtime/");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("a block committed in HEAD stays in .gitignore and is not duplicated into info/exclude", async () => {
+    const gitignore = `node_modules/\n\n${LEGACY_IGNORE_BLOCK}\n`;
+    const root = await ignoreFixture("keryx-update-ignore-head-", { "AGENTS.md": AGENTS, ".gitignore": gitignore });
+    try {
+      const output = await runEntrypointUpdate(root);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
+      expect(diffIsQuiet(root, ".gitignore")).toBe(true);
+      expect(output).toContain(".gitignore: the managed keryx ignore block is committed in HEAD");
+      const lines = managedLines(await readExclude(root));
+      expect(lines.filter((line) => !line.startsWith("#"))).toEqual(LOCAL_TARGETS);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("update writes no ignore block anywhere when .metaproject/ is ignored as a whole (AC6)", async () => {
+    const gitignore = `.metaproject/\n${LOCAL_TARGETS.join("\n")}\n`;
+    const root = await ignoreFixture("keryx-update-ignore-whole-", { "AGENTS.md": AGENTS, ".gitignore": gitignore });
+    try {
+      const excludeBefore = await readExclude(root);
+      await runEntrypointUpdate(root);
+
+      expect(await readExclude(root)).toBe(excludeBefore);
+      expect(excludeBefore).not.toContain("# keryx:begin");
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
+      expect(gitForUpdateIdempotency(root, ["status", "--porcelain"])).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("from a linked worktree update writes the common dir's info/exclude and no .gitignore (AC6)", async () => {
+    const main = await ignoreFixture("keryx-update-ignore-worktree-", { "AGENTS.md": AGENTS });
+    const linked = `${main}-linked`;
+    try {
+      gitForUpdateIdempotency(main, ["worktree", "add", "-q", linked, "-b", "linked-branch"]);
+
+      await runEntrypointUpdate(linked);
+
+      const exclude = await readExclude(main);
+      expect(managedLines(exclude)).toContain(".metaproject/runtime/");
+      expect(existsSync(path.join(main, ".git", "worktrees", path.basename(linked), "info", "exclude"))).toBe(false);
+      expect(existsSync(path.join(linked, ".gitignore"))).toBe(false);
+      expect(existsSync(path.join(main, ".gitignore"))).toBe(false);
+      expect(gitForUpdateIdempotency(linked, ["status", "--porcelain"])).not.toContain(".gitignore");
+      for (const checkout of [main, linked]) {
+        for (const target of LOCAL_TARGETS) {
+          expect(checkIgnore(checkout, target)).toBe(0);
+        }
+      }
+
+      await runEntrypointUpdate(linked);
+      expect(await readExclude(main)).toBe(exclude);
+    } finally {
+      await rm(linked, { recursive: true, force: true });
+      await rm(main, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("update --preview neither migrates .gitignore nor writes info/exclude", async () => {
+    const working = `node_modules/\n\n${LEGACY_IGNORE_BLOCK}\n`;
+    const root = await legacyIgnoreFixture("keryx-update-ignore-preview-", "node_modules/\n", working);
+    try {
+      const { restore } = captureUpdateConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
+        });
+      } finally {
+        restore();
+      }
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(working);
+      expect(await readExclude(root)).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("outside a git repository update writes no .gitignore and prints one note", async () => {
+    const root = await entrypointFixture("keryx-update-ignore-nogit-", { "AGENTS.md": AGENTS }, ENTRY_FORM_DEFAULT, { git: false });
+    try {
+      const output = await runEntrypointUpdate(root);
+
+      expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
+      expect(output.split("Ignore rules: skipped").length - 1).toBe(1);
+      expect(output).toContain("not a git repository");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+});

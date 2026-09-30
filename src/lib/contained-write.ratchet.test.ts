@@ -138,7 +138,7 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
   },
   {
     file: "src/lib/git-local-ignore.ts",
-    reason: "ensureLocalIgnorePatterns writes the managed ignore block into <git-common-dir>/info/exclude by design — contained-write.ts refuses any .git path segment, and from a linked worktree the common dir lies outside the project root altogether, so this module keeps one raw mkdir (info/) and one raw writeFile (info/exclude). It verifies containment itself first, the managed-git-hook.ts way: info/ and info/exclude are lstat'ed and, where either is a symlink, must resolve inside the realpath'd git common dir, otherwise the write is refused with a status instead of followed (flow 361 T5 allowlist).",
+    reason: "ensureLocalIgnorePatterns and replaceLocalIgnoreBlock write the managed ignore block into <git-common-dir>/info/exclude by design — contained-write.ts refuses any .git path segment, and from a linked worktree the common dir lies outside the project root altogether, so this module keeps one raw mkdir (info/) and one raw writeFile (info/exclude), both in writeExcludeFile. Each caller verifies containment itself first, the managed-git-hook.ts way: info/ and info/exclude are lstat'ed and, where either is a symlink, must resolve inside the realpath'd git common dir, otherwise the write is refused with a status instead of followed (flow 361 T5 allowlist; T7 added the replace writer on the same single write).",
   },
 ];
 

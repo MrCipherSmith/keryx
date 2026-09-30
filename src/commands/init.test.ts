@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
 import { ContainedWriteError } from "../lib/contained-write";
@@ -633,3 +633,130 @@ test("flow 361: a second init reads the legacy string-array manifest instead of 
     await rm(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+// Flow 361 T7: init and update never write the tracked `.gitignore`. The
+// managed ignore block goes to `<git-common-dir>/info/exclude`, and the
+// per-developer files keryx writes are ignored there too.
+describe("flow 361: ignore rules go to info/exclude", () => {
+  const LOCAL_TARGETS = ["CLAUDE.local.md", "AGENTS.override.md", ".claude/settings.local.json"];
+
+  /**
+   * `core.excludesFile` points at a file that does not exist, so the
+   * developer's own global excludes (Claude Code adds
+   * `.claude/settings.local.json` there) cannot answer for the fixture.
+   */
+  async function committedRepo(prefix: string, files: Record<string, string>): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), prefix));
+    gitInEntrypointRepo(root, ["init", "-q"]);
+    gitInEntrypointRepo(root, ["config", "user.email", "test@test.com"]);
+    gitInEntrypointRepo(root, ["config", "user.name", "test"]);
+    gitInEntrypointRepo(root, ["config", "core.excludesFile", path.join(root, ".git", "no-global-excludes")]);
+    for (const [rel, content] of Object.entries(files)) {
+      await writeFile(path.join(root, rel), content, "utf8");
+    }
+    gitInEntrypointRepo(root, ["add", "--", ...Object.keys(files)]);
+    gitInEntrypointRepo(root, ["commit", "-q", "-m", "fixture"]);
+    return root;
+  }
+
+  function checkIgnore(root: string, target: string): number | null {
+    return Bun.spawnSync(["git", "check-ignore", "-q", "--", target], { cwd: root, stdout: "ignore", stderr: "ignore" }).exitCode;
+  }
+
+  async function readExclude(root: string): Promise<string> {
+    return readFile(path.join(root, ".git", "info", "exclude"), "utf8").catch(() => "");
+  }
+
+  test("init then update leave .gitignore out of git status and all three local targets ignored (AC2, AC6, AC7)", async () => {
+    const root = await committedRepo("keryx-init-ignore-", { "AGENTS.md": "# Team\n", "CLAUDE.md": "# Claude\n" });
+    try {
+      const assertIgnoredLocally = async () => {
+        expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
+        const status = gitInEntrypointRepo(root, ["status", "--porcelain"]);
+        expect(status).not.toContain(".gitignore");
+        for (const target of LOCAL_TARGETS) {
+          expect(checkIgnore(root, target)).toBe(0);
+          expect(status).not.toContain(target);
+        }
+        const exclude = await readExclude(root);
+        expect(exclude).toContain("# keryx:begin\n");
+        expect(exclude).toContain("\n.metaproject/runtime/\n");
+        expect(checkIgnore(root, ".metaproject/runtime/x")).toBe(0);
+      };
+
+      await withCwd(root, async () => {
+        await initCommand(ENTRYPOINT_INIT_ARGS);
+      });
+      await assertIgnoredLocally();
+      const afterInit = await readExclude(root);
+
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+      await assertIgnoredLocally();
+      expect(await readExclude(root)).toBe(afterInit);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("init writes no ignore block anywhere when .metaproject/ is ignored as a whole (AC6)", async () => {
+    const gitignore = `.metaproject/\n${LOCAL_TARGETS.join("\n")}\n`;
+    const root = await committedRepo("keryx-init-ignore-whole-", { ".gitignore": gitignore });
+    try {
+      const excludeBefore = await readExclude(root);
+      await withCwd(root, async () => {
+        await initCommand(ENTRYPOINT_INIT_ARGS);
+      });
+
+      expect(await readExclude(root)).toBe(excludeBefore);
+      expect(excludeBefore).not.toContain("# keryx:begin");
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
+      // `.keryx/sandbox-policy.json` is a project file init creates; nothing else shows up.
+      expect(gitInEntrypointRepo(root, ["status", "--porcelain"])).toBe("?? .keryx/\n");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("init --preview writes no ignore rule", async () => {
+    const root = await committedRepo("keryx-init-ignore-preview-", { "AGENTS.md": "# Team\n" });
+    try {
+      const excludeBefore = await readExclude(root);
+      const { restore } = captureInitConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await initCommand([...ENTRYPOINT_INIT_ARGS, "--preview"]);
+        });
+      } finally {
+        restore();
+      }
+
+      expect(await readExclude(root)).toBe(excludeBefore);
+      expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
+      expect(gitInEntrypointRepo(root, ["status", "--porcelain"])).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("outside a git repository init writes no .gitignore and prints one note", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-init-ignore-nogit-"));
+    try {
+      const { logs, restore } = captureInitConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await initCommand(ENTRYPOINT_INIT_ARGS);
+        });
+      } finally {
+        restore();
+      }
+
+      expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
+      expect(logs.filter((line) => line.includes("Ignore rules: skipped") && line.includes("not a git repository"))).toHaveLength(1);
+      expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain("<!-- keryx:index -->");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+});

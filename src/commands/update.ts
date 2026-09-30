@@ -62,6 +62,7 @@ import {
   type ProjectEntrypoints,
 } from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
+import { localTargetPaths } from "../rules/entrypoint-targets";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { reconcileCapabilitiesOnUpdate } from "../capability/registry";
@@ -109,7 +110,7 @@ import { resolveGitHooksRoot } from "../lib/git-hooks";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
-  syncMetaprojectGitignore,
+  syncMetaprojectIgnoreRules,
 } from "../lib/metaproject-gitignore";
 import { seedAssetsLock } from "../assets/seed";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
@@ -247,7 +248,6 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     await updateRuntime(projectRoot);
   }
 
-  await syncMetaprojectGitignore(projectRoot);
   const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
@@ -511,6 +511,15 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // the normalizer alone would leave a legacy entry provisionally shared.
   const entrypoints = await resolveProjectEntrypoints(projectRoot, manifest.agentEntrypoints);
   const entrypointNotices = [...entrypoints.notices];
+  // Ignore rules go to info/exclude, never to the tracked .gitignore — a block
+  // an older keryx left there is moved out — and before the local targets
+  // exist, so they are ignored from their first byte.
+  await syncMetaprojectIgnoreRules(projectRoot, {
+    localTargets: localTargetPaths(entrypoints.targets),
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
+  });
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,

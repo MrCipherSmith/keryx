@@ -127,10 +127,11 @@ import {
   type ProjectEntrypoints,
 } from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
+import { localTargetPaths } from "../rules/entrypoint-targets";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
-  syncMetaprojectGitignore,
+  syncMetaprojectIgnoreRules,
 } from "../lib/metaproject-gitignore";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { registerCapabilitiesFromArgs } from "../capability/registry";
@@ -587,7 +588,6 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   await createBaseStructure(metaprojectRoot);
-  await syncMetaprojectGitignore(projectRoot);
   const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
@@ -598,6 +598,14 @@ export async function initCommand(args: string[]): Promise<void> {
   // instead of being stripped out of a tracked file by a re-init.
   const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints);
   const entrypointNotices = [...entrypoints.notices];
+  // Ignore rules go to info/exclude, never to the tracked .gitignore, and
+  // before the local targets exist — so they are ignored from their first byte.
+  await syncMetaprojectIgnoreRules(projectRoot, {
+    localTargets: localTargetPaths(entrypoints.targets),
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
+  });
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,
