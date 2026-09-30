@@ -107,3 +107,6 @@
 - 2026-09-30T18:34:07.104Z - task-done: T11: End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence
 - 2026-09-30T18:34:08.026Z - task-added: T13: Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files
 - 2026-09-30T18:34:27.023Z - task-attempt: T13: started (attempt 1) — 361-T13
+- 2026-09-30T18:50:25.284Z - task-done: T13: Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files
+- 2026-09-30T19:10:33.124Z - task-attempt: T4: failed (attempt 1) — review round 2026-09-30-ingest-feat-local-scope-entrypoints at 578a14bd: 13 retained (5 major, 4 minor, 4 info), 0 refuted; fix task T14
+- 2026-09-30T19:10:35.174Z - task-added: T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info
