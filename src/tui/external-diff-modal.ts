@@ -1,4 +1,4 @@
-// Flow 370 (AC6): the `/external-diff` modal — claude write runs whose patch waits for a
+// Flow 370 (AC6): the `/external-diff` modal — claude and codex write runs whose patch waits for a
 // human decision. Review is read-only. Apply never lands on a single key: `a` asks for the
 // first 12 hex digits of the patch hash typed back, and only an exact match calls
 // `landWriteRun` with the FULL hash; a run with flagged paths also needs `f` first. Discard

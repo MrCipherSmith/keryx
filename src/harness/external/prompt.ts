@@ -63,8 +63,8 @@ export const EXTERNAL_WRITE_RUNTIME_DIRECTIVE = [
     "your final message, in the requested output schema. Do not ask questions, do not offer a " +
     "choice of modes, do not route to another skill, orchestrator, or flow, do not delegate to " +
     "another agent. You may create and modify files, only inside your current working " +
-    "directory, using the Read, Grep, Glob, Edit and Write tools; no shell is available. Do not " +
-    "touch .git, .github, .claude or .metaproject. Your changes are captured as a patch that a " +
+    "directory, using your file reading, searching and editing tools. Do not use a shell to reach " +
+    "outside it. Do not touch .git, .github, .claude or .metaproject. Your changes are captured as a patch that a " +
     "human reviews before anything lands, so summarise what you changed in the final message.",
 ].join("\n");
 

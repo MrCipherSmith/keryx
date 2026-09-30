@@ -41,6 +41,29 @@ export const CODEX_SANDBOX_MODES: Readonly<Record<ExternalSandbox, string>> = {
 };
 
 /**
+ * What confines a `worktree-write` codex run to its working directory. The full set was
+ * measured live on codex 0.159.2 only, in a scratch repository: writes to /tmp, /var/tmp,
+ * $HOME and a sibling directory all failed "read-only file system", DNS lookups failed and
+ * `.git` was read-only. The write gate in dispatch.ts admits only the versions measured.
+ *
+ * Two of these are MANDATORY and easy to lose. The `exclude_*` flags: `-s workspace-write`
+ * alone leaves /tmp and $TMPDIR writable, a place to write outside the worktree.
+ * `--ignore-rules`: without it the user's exec-policy rules let shell commands run OUTSIDE the
+ * sandbox (writes to /tmp and $HOME succeeded); with it they failed read-only. codex ignores an
+ * unknown `-c` key without a word, which is why the version gate has a ceiling.
+ * `danger-full-access` and the bypass flags are deliberately unreachable here.
+ */
+const CODEX_WRITE_CONFINEMENT_FLAGS: readonly string[] = [
+  "--ignore-rules",
+  "-c",
+  "sandbox_workspace_write.exclude_slash_tmp=true",
+  "-c",
+  "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+  "-c",
+  "sandbox_workspace_write.network_access=false",
+];
+
+/**
  * Build the complete argv for one `codex exec` run, prompt included. Pure.
  *
  * Shape (specification §5.1, `fixtures/external/manifest.json` `baseArgv`):
@@ -83,6 +106,7 @@ export function buildCodexArgv(input: ExternalRunInput): readonly string[] {
     "--ignore-user-config",
     "--skip-git-repo-check",
   ];
+  if (input.sandbox === "worktree-write") argv.push(...CODEX_WRITE_CONFINEMENT_FLAGS);
   if (input.resultSchemaPath !== undefined) argv.push("--output-schema", input.resultSchemaPath);
   if (input.model !== undefined) argv.push("-m", input.model);
   // Always last, always one element. Everything before it is either a boolean
@@ -101,20 +125,26 @@ export function buildCodexArgv(input: ExternalRunInput): readonly string[] {
  *
  * `codex exec resume` accepts a STRICTLY NARROWER flag set than `codex exec` —
  * no `-s/--sandbox`, no `-C/--cd`, no `--color` (verified against
- * `codex exec resume --help` on 0.147.0). Two consequences the caller owns:
+ * `codex exec resume --help` on 0.147.0 and 0.159.2). It does accept `-c key=value`.
+ * Two consequences the caller owns:
  *
- *   1. The sandbox level cannot be re-asserted; it is inherited from the resumed
- *      session, and the disposable worktree is doing the containment work.
+ *   1. There is no `-s`, so a read-only run's sandbox level is inherited from the
+ *      resumed session. A `worktree-write` run must never resume under anything
+ *      weaker than its first turn, so it re-asserts the whole confinement as `-c`
+ *      overrides (`sandbox_mode` plus the same flags as the first turn).
  *   2. THE CALLER MUST SPAWN THIS PROCESS WITH ITS CWD ALREADY SET TO THE
  *      WORKTREE. There is no flag to carry it, so a resume launched from the
  *      parent's cwd silently runs the agent against the wrong tree.
  *
- * The `ExternalRunInput` the codec port passes is deliberately unused here: not
- * one of its fields is expressible on this subcommand, and pretending otherwise
- * would hide requirement 2 behind an argument that looks like it handles it.
+ * `input` is read for its sandbox only: nothing else in it is expressible on this
+ * subcommand, and the cwd in particular is the spawner's responsibility.
  */
-export function buildCodexResumeArgv(sessionRef: string, message: string): readonly string[] {
-  return ["codex", "exec", "resume", sessionRef, "--json", "--ignore-user-config", "--skip-git-repo-check", message];
+export function buildCodexResumeArgv(sessionRef: string, message: string, input?: ExternalRunInput): readonly string[] {
+  const confinement =
+    input?.sandbox === "worktree-write"
+      ? ["-c", `sandbox_mode="${CODEX_SANDBOX_MODES["worktree-write"]}"`, ...CODEX_WRITE_CONFINEMENT_FLAGS]
+      : [];
+  return ["codex", "exec", "resume", sessionRef, "--json", "--ignore-user-config", "--skip-git-repo-check", ...confinement, message];
 }
 
 /**
@@ -311,9 +341,10 @@ export function classifyCodexFailure(outcome: ProcessOutcome): string | null {
 /**
  * The shipped `codex-cli` adapter.
  *
- * `buildResumeArgv` drops the `ExternalRunInput` the port hands it, for the reason
- * spelled out on {@link buildCodexResumeArgv}: `codex exec resume` cannot express
- * any of it, and the cwd in particular is the SPAWNER's responsibility.
+ * `buildResumeArgv` reads only the sandbox of the `ExternalRunInput` the port hands
+ * it, for the reason spelled out on {@link buildCodexResumeArgv}: the rest cannot be
+ * expressed on `codex exec resume`, and the cwd in particular is the SPAWNER's
+ * responsibility.
  */
 export const codexCliCodec: ExternalAgentCodec = {
   id: "codex-cli",
@@ -321,7 +352,7 @@ export const codexCliCodec: ExternalAgentCodec = {
   parseLine: parseCodexLine,
   parseEvents: parseCodexEvents,
   classifyFailure: classifyCodexFailure,
-  buildResumeArgv: (sessionRef, message) => buildCodexResumeArgv(sessionRef, message),
+  buildResumeArgv: buildCodexResumeArgv,
   isRecognisedLine: isRecognisedCodexLine,
 };
 

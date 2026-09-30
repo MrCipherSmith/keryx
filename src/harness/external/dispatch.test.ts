@@ -3,6 +3,7 @@
 // and AC3 (worktree-write refused with a DISTINGUISHABLE reason).
 import { describe, expect, test } from "bun:test";
 import {
+  CODEC_WRITE_AGENT_IDS,
   READ_ONLY_FORBIDDEN_ACTIONS,
   implementedSandboxModesFor,
   readRuntimeBlock,
@@ -88,30 +89,44 @@ describe("AC3 — worktree-write is refused, distinguishably", () => {
   });
 });
 
-describe("flow 370 — worktree-write is implemented for claude-cli among the codec agents", () => {
-  test("claude-cli is refused worktree-write for a caller that does not own the capture (the model-initiated path)", () => {
-    const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "worktree-write" }), ["read-file", "write"]);
-    expect(result).toMatchObject({ ok: false, code: "not-implemented" });
-    expect(result.ok === false && result.reason).toContain("claude-only in this release");
-    expect(implementedSandboxModesFor(getExternalAgent("claude-cli") as ExternalAgentEntry)).toEqual(["read-only"]);
+describe("flows 370, 371 — worktree-write is implemented for claude-cli and codex-cli among the codec agents", () => {
+  test("the write-capable codec agents are exactly claude-cli and codex-cli", () => {
+    expect([...CODEC_WRITE_AGENT_IDS]).toEqual(["claude-cli", "codex-cli"]);
   });
 
-  test("claude-cli is accepted with worktree-write for the caller that owns the capture, and returns the sandbox", () => {
-    const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "worktree-write" }), ["read-file", "write"], {
-      ownsWriteCapture: true,
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok && result.runtime === "external") {
-      expect(result.sandbox).toBe("worktree-write");
-      expect(result.entry.id).toBe("claude-cli");
+  test.each(["claude-cli", "codex-cli"])(
+    "%s is refused worktree-write for a caller that does not own the capture (the model-initiated path)",
+    (agent) => {
+      const result = validateRuntimeBlock(external({ agent, sandbox: "worktree-write" }), ["read-file", "write"]);
+      expect(result).toMatchObject({ ok: false, code: "not-implemented" });
+      expect(result.ok === false && result.reason).toContain("write mode is available for claude-cli, codex-cli only");
+      expect(result.ok === false && result.reason).not.toContain("claude-only");
+      expect(implementedSandboxModesFor(getExternalAgent(agent) as ExternalAgentEntry)).toEqual(["read-only"]);
+    },
+  );
+
+  test.each(["claude-cli", "codex-cli"])(
+    "%s is accepted with worktree-write for the caller that owns the capture, and returns the sandbox",
+    (agent) => {
+      const result = validateRuntimeBlock(external({ agent, sandbox: "worktree-write" }), ["read-file", "write"], {
+        ownsWriteCapture: true,
+      });
+      expect(result.ok).toBe(true);
+      if (result.ok && result.runtime === "external") {
+        expect(result.sandbox).toBe("worktree-write");
+        expect(result.entry.id).toBe(agent);
+      }
+    },
+  );
+
+  test("antigravity-cli is still refused with the release-gate code, even for the capture owner, naming why", () => {
+    for (const options of [{}, { ownsWriteCapture: true }]) {
+      const result = validateRuntimeBlock(external({ agent: "antigravity-cli", sandbox: "worktree-write" }), ["read-file", "write"], options);
+      expect(result).toMatchObject({ ok: false, code: "not-implemented" });
+      expect(result.ok === false && result.reason).toContain("not implemented in this release");
+      expect(result.ok === false && result.reason).toContain("write mode is available for claude-cli, codex-cli only");
+      expect(result.ok === false && result.reason).toContain("edit tool writes outside the worktree");
     }
-  });
-
-  test.each(["codex-cli", "antigravity-cli"])("%s is still refused with the release-gate code, naming claude-only", (agent) => {
-    const result = validateRuntimeBlock(external({ agent, sandbox: "worktree-write" }), ["read-file", "write"]);
-    expect(result).toMatchObject({ ok: false, code: "not-implemented" });
-    expect(result.ok === false && result.reason).toContain("not implemented in this release");
-    expect(result.ok === false && result.reason).toContain("claude-only in this release");
   });
 
   test("claude-cli read-only still refuses write in its allowed actions", () => {

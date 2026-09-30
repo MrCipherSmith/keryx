@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
-import { validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
+import { codecWriteVersionRefusal, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
 import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
@@ -376,11 +376,13 @@ export async function runExternalChild(
     return refuse("Error", `no codec is registered for external agent "${entry.id}"`);
   }
 
+  let detectedVersion: string | undefined;
   if (deps.detect !== undefined) {
     const availability = resolveAvailability(entry, await deps.detect(entry.binary, entry.detect));
     if (availability.state === "binary-missing") {
       return refuse("Denied", `${entry.label} is not installed (\`${entry.binary}\` not on PATH)`);
     }
+    if (availability.state === "available") detectedVersion = availability.version;
     if (availability.state === "available" && availability.verdict.state !== "in-range") {
       // Advisory by design: neither CLI publishes a stable event schema, so
       // hard-failing outside the recorded range would break the feature on the
@@ -390,6 +392,11 @@ export async function runExternalChild(
       );
     }
   }
+
+  // Unlike the advisory range check above, this is a hard refusal: a write run's confinement is
+  // the CLI's own sandbox, measured only on the versions in the range, and an unreadable version proves nothing.
+  const versionRefusal = sandbox === "worktree-write" ? codecWriteVersionRefusal(entry, detectedVersion) : undefined;
+  if (versionRefusal !== undefined) return refuse("Denied", versionRefusal);
 
   // R22/AC13: request a structured, schema-validated final message. Loaded and
   // staged BEFORE prompt assembly so the prompt can embed it, and fail-closed —

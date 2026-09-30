@@ -145,6 +145,49 @@ describe("buildCodexArgv", () => {
     expect(buildCodexArgv({ ...BASE_INPUT, sandbox: "worktree-write" })).not.toContain("worktree-write");
     expect(Object.values(CODEX_SANDBOX_MODES)).not.toContain("danger-full-access");
   });
+
+  describe("worktree-write confinement (flow 371)", () => {
+    const WRITE_INPUT: ExternalRunInput = { ...BASE_INPUT, sandbox: "worktree-write" };
+    // Measured on codex 0.159.x: /tmp stays writable without the two exclude flags, and the
+    // user's exec-policy rules run shell commands outside the sandbox without --ignore-rules.
+    const CONFINEMENT_PAIRS = [
+      ["-s", "workspace-write"],
+      ["-c", "sandbox_workspace_write.exclude_slash_tmp=true"],
+      ["-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true"],
+      ["-c", "sandbox_workspace_write.network_access=false"],
+    ] as const;
+
+    function hasPair(argv: readonly string[], flag: string, value: string): boolean {
+      return argv.some((element, i) => element === flag && argv[i + 1] === value);
+    }
+
+    test("carries the sandbox, both /tmp exclusions, the closed network and --ignore-rules", () => {
+      const argv = buildCodexArgv(WRITE_INPUT);
+      for (const [flag, value] of CONFINEMENT_PAIRS) expect(hasPair(argv, flag, value)).toBe(true);
+      expect(argv).toContain("--ignore-rules");
+    });
+
+    test("keeps the prompt as the last single element, with every optional flag present too", () => {
+      const argv = buildCodexArgv({ ...WRITE_INPUT, model: "gpt-5-codex", resultSchemaPath: "/tmp/s.json" });
+      expect(argv[argv.length - 1]).toBe(PROMPT);
+      expect(argv.filter((element) => element === PROMPT)).toHaveLength(1);
+      expect(argv[argv.length - 2]).toBe("gpt-5-codex");
+      expect(argv).toContain("--ignore-rules");
+    });
+
+    test("never contains danger-full-access or a bypass flag", () => {
+      for (const argv of [buildCodexArgv(WRITE_INPUT), buildCodexResumeArgv("t-1", "go", WRITE_INPUT)]) {
+        expect(argv).not.toContain("danger-full-access");
+        expect(argv.some((element) => /bypass|dangerously|full-auto|approval/i.test(element))).toBe(false);
+      }
+    });
+
+    test("the read-only argv is unchanged: no confinement flags", () => {
+      const argv = buildCodexArgv(BASE_INPUT);
+      expect(argv).not.toContain("-c");
+      expect(argv).not.toContain("--ignore-rules");
+    });
+  });
 });
 
 describe("buildCodexResumeArgv", () => {
@@ -177,12 +220,46 @@ describe("buildCodexResumeArgv", () => {
     expect(argv[argv.length - 1]).toBe("keep going");
   });
 
-  test("the codec port's ExternalRunInput cannot change the resume argv", () => {
-    // Nothing on the input is expressible on this subcommand; a caller that
+  test("a read-only run's resume argv is not changed by the rest of the ExternalRunInput", () => {
+    // Nothing but the sandbox on the input is expressible on this subcommand; a caller that
     // believes otherwise would ship a resume pointed at the wrong tree.
     expect(codexCliCodec.buildResumeArgv("thread-1", "keep going", { ...BASE_INPUT, model: "gpt-5-codex" })).toEqual(
       buildCodexResumeArgv("thread-1", "keep going"),
     );
+  });
+
+  describe("a worktree-write run never resumes under a weaker sandbox than its first turn (flow 371)", () => {
+    // `codex exec resume` has no -s, but it does accept `-c` and `--ignore-rules`
+    // (`codex exec resume --help`, 0.159.2), so the confinement is re-asserted, not inherited.
+    const WRITE_INPUT: ExternalRunInput = { ...BASE_INPUT, sandbox: "worktree-write" };
+
+    test("re-asserts the sandbox mode, both /tmp exclusions, the closed network and --ignore-rules", () => {
+      const argv = codexCliCodec.buildResumeArgv("thread-1", "keep going", WRITE_INPUT);
+      const pairs = [
+        ["-c", 'sandbox_mode="workspace-write"'],
+        ["-c", "sandbox_workspace_write.exclude_slash_tmp=true"],
+        ["-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true"],
+        ["-c", "sandbox_workspace_write.network_access=false"],
+      ];
+      for (const [flag, value] of pairs) {
+        expect(argv.some((element, i) => element === flag && argv[i + 1] === value)).toBe(true);
+      }
+      expect(argv).toContain("--ignore-rules");
+    });
+
+    test("keeps the message last and the session ref right after `resume`", () => {
+      const argv = buildCodexResumeArgv("thread-1", "keep going", WRITE_INPUT);
+      expect(argv.slice(0, 4)).toEqual(["codex", "exec", "resume", "thread-1"]);
+      expect(argv[argv.length - 1]).toBe("keep going");
+      for (const rejected of ["-s", "--sandbox", "-C", "--cd", "--color"]) expect(argv).not.toContain(rejected);
+    });
+
+    test("the first turn and its resume carry the same confinement flags", () => {
+      const first = buildCodexArgv(WRITE_INPUT);
+      const resume = buildCodexResumeArgv("thread-1", "keep going", WRITE_INPUT);
+      const confinement = first.filter((element, i) => element === "--ignore-rules" || first[i - 1] === "-c" || element === "-c");
+      for (const element of confinement) expect(resume).toContain(element);
+    });
   });
 });
 

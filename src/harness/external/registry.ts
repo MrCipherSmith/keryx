@@ -30,7 +30,7 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     label: "Codex",
     binary: "codex",
     detect: ["--version"],
-    versionPattern: "codex-cli (\\d+\\.\\d+\\.\\d+)",
+    versionPattern: "codex-cli (\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.]+)?)",
     knownGoodRange: { min: "0.147.0" },
     sandboxModes: ["read-only", "worktree-write"],
     // No documented mid-run input channel; operator messages go through resume.
@@ -41,8 +41,9 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     notes:
       "Resume requires NOT passing `--ephemeral`: an ephemeral thread fails resume with " +
       "`no rollout found for thread id … (code -32600)`. `codex exec resume` also takes a " +
-      "narrower flag set than `codex exec` — no `-s`, no `-C` — so its sandbox level cannot " +
-      "be re-asserted and it must be spawned with cwd already set to the worktree.",
+      "narrower flag set than `codex exec` — no `-s`, no `-C` — so a read-only resume inherits " +
+      "its sandbox, a write run re-asserts its confinement as `-c` overrides, and it must be " +
+      "spawned with cwd already set to the worktree. Write mode needs codex 0.159.2 up to, but not including, 0.160.0.",
   },
   {
     id: "claude-cli",

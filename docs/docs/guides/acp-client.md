@@ -20,7 +20,7 @@ gates, but no MCP server offer and no permission bridge, because a line-stream
 agent never asks keryx anything mid-run. See [Harness → External children](../harness.md#external-children-a-vendor-cli-as-a-child-agent)
 for that path, and its `agy` (Antigravity CLI) subsection for the install,
 login, one-time consent and data-collection notes specific to that agent. Of the
-line-stream agents only `claude-cli` can write, as a stored diff you review and
+line-stream agents only `claude-cli` and `codex-cli` can write, as a stored diff you review and
 land as a new local branch; see [Let an external agent write](external-agent-write.md).
 
 !!! warning "The MCP server keryx hands the agent reads the whole real project"

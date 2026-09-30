@@ -476,7 +476,7 @@ describe("flow 370 — `run claude-cli --write` stores a patch for review", () =
     expect(text).toContain("shown as \\xNN escapes");
   });
 
-  test("codex-cli --write is still refused, naming claude-only", async () => {
+  test("codex-cli --write with no readable version is refused before any spawn, naming the required version", async () => {
     const agent = "codex-cli";
     const project = gitProject();
     let outcome: ExternalChildOutcome | undefined;
@@ -497,7 +497,56 @@ describe("flow 370 — `run claude-cli --write` stores a patch for review", () =
       }),
     );
     expect(outcome?.status).toBe("Denied");
-    expect(outcome?.output).toContain("claude-only in this release");
+    expect(outcome?.output).toContain("0.159.2");
+    expect(outcome?.output).not.toContain("claude-only");
+    expect(sp.calls).toHaveLength(0);
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("codex-cli --write on a verified version stores a patch through the same path as claude", async () => {
+    const agent = "codex-cli";
+    const project = gitProject();
+    const d = deps({
+      cwd: project,
+      run: {
+        config: { ...ENABLED, agents: { [agent]: { enabled: true, model: null } } },
+        detect: async () => ({ binaryFound: true, detectOutput: "codex-cli 0.159.2" }),
+        isTTY: false,
+        dataDir: path.join(root, "data"),
+        spawn: editingSpawn((cwd) => writeFileSync(path.join(cwd, "README.md"), "hello\nworld\n")),
+      },
+    });
+    await agentsExternalCommand(["run", agent, "--task", "edit the readme", "--write"], d);
+    const text = d.lines.join("\n");
+    expect(text).toMatch(/patch \(never applied\): .*acp-worktree\.patch/);
+    expect(text).toContain("README.md");
+    expect(readFileSync(path.join(project, "README.md"), "utf8")).toBe("hello\n");
+  });
+
+  test("antigravity-cli --write is still refused, naming why", async () => {
+    const agent = "antigravity-cli";
+    const project = gitProject();
+    let outcome: ExternalChildOutcome | undefined;
+    const sp = fakeSpawn([]);
+    await agentsExternalCommand(
+      ["run", agent, "--task", "edit", "--write"],
+      deps({
+        cwd: project,
+        run: {
+          config: { ...ENABLED, agents: { [agent]: { enabled: true, model: null } } },
+          detect: null,
+          isTTY: true,
+          // antigravity-cli carries a vendor-consent gate that runs before the sandbox check.
+          requestConsent: async () => true,
+          spawn: sp.port,
+          onOutcome: (o) => {
+            outcome = o;
+          },
+        },
+      }),
+    );
+    expect(outcome?.status).toBe("Denied");
+    expect(outcome?.output).toContain("edit tool writes outside the worktree");
     expect(sp.calls).toHaveLength(0);
     expect(process.exitCode).toBe(1);
   });

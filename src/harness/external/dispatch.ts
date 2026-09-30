@@ -12,7 +12,7 @@
 // Plus one release gate: `worktree-write` is schema-valid and REFUSED, because
 // its prerequisite is a credible audit boundary for writes rather than more spawn
 // machinery (package decisions.md D-04). Implemented for ACP agents (flow 292)
-// and for claude-cli alone among the line-stream agents (flow 370).
+// and for claude-cli and codex-cli among the line-stream agents (flows 370, 371).
 //
 // Refusal reasons carry a `code` so callers — and tests — can tell the two
 // look-alike refusals apart. "This agent cannot do that" and "keryx does not do
@@ -20,7 +20,7 @@
 // string is how an operator ends up debugging the wrong thing.
 //
 // Pure: no registry mutation, no process, no clock.
-import { getExternalAgent, supportsSandbox, transportOf } from "./registry";
+import { compareVersions, getExternalAgent, supportsSandbox, transportOf } from "./registry";
 import type { ExternalAgentEntry, ExternalSandbox } from "./types";
 
 /** The `runtime` block as it appears on a dispatch. Absent means the native runtime. */
@@ -83,12 +83,38 @@ export const IMPLEMENTED_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only
 export const IMPLEMENTED_ACP_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only", "worktree-write"];
 
 /**
- * The one line-stream agent whose `worktree-write` is implemented (flow 370):
- * its Edit/Write roster and headless permission mode were verified live, and the
- * write run captures the worktree diff for review. codex and antigravity have no
- * verified narrow write mode yet.
+ * The line-stream agents whose `worktree-write` is implemented; the write run captures
+ * the worktree diff for review. claude (flow 370) is confined by a verified tool
+ * allow-list; codex (flow 371) by its OS sandbox, whose flags were measured live. antigravity
+ * stays out: its edit tool writes outside the worktree.
  */
-export const CODEC_WRITE_AGENT_ID = "claude-cli";
+export const CODEC_WRITE_AGENT_IDS: readonly string[] = ["claude-cli", "codex-cli"];
+
+/**
+ * The CLI versions whose write confinement was measured, for a write agent whose confinement
+ * is the CLI's own sandbox rather than a tool allow-list: `min` inclusive, `before` exclusive.
+ * The ceiling matters because codex ignores an unknown `-c` key without a word, so a release
+ * that renamed a confinement key would silently run unconfined. An older, newer, pre-release or
+ * unreadable version is refused before anything spawns (flow 371).
+ */
+export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, { readonly min: string; readonly before: string }>> = {
+  "codex-cli": { min: "0.159.2", before: "0.160.0" },
+};
+
+/** Why a write run must not start on this detected version, or undefined when the version is verified. */
+export function codecWriteVersionRefusal(entry: ExternalAgentEntry, version: string | undefined): string | undefined {
+  const verified = CODEC_WRITE_VERIFIED_VERSIONS[entry.id];
+  if (verified === undefined) return undefined;
+  const range = `\`${entry.binary}\` ${verified.min} up to, but not including, ${verified.before}`;
+  const prefix = `${entry.label} write mode needs ${range}, the versions whose sandbox confinement was measured; `;
+  if (version === undefined) return `${prefix}the installed version could not be read`;
+  if (!/^\d+\.\d+\.\d+$/.test(version)) return `${prefix}found ${version}, a pre-release`;
+  if (compareVersions(version, verified.min) < 0) return `${prefix}found ${version}, which is older`;
+  if (compareVersions(version, verified.before) >= 0) {
+    return `${prefix}found ${version}, which is newer and not yet verified: update keryx, or use \`--task\` without \`--write\``;
+  }
+  return undefined;
+}
 
 /** Who is asking: `ownsWriteCapture` is true only for the caller that captures and stores the worktree diff (`runExternalWriteChild`). */
 export interface ValidateRuntimeOptions {
@@ -102,7 +128,7 @@ export interface ValidateRuntimeOptions {
  */
 export function implementedSandboxModesFor(entry: ExternalAgentEntry, options: ValidateRuntimeOptions = {}): readonly ExternalSandbox[] {
   if (transportOf(entry) === "acp") return IMPLEMENTED_ACP_SANDBOX_MODES;
-  return entry.id === CODEC_WRITE_AGENT_ID && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
+  return CODEC_WRITE_AGENT_IDS.includes(entry.id) && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
 }
 
 /**
@@ -169,7 +195,8 @@ export function validateRuntimeBlock(
       reason:
         `sandbox "${sandbox}" is not implemented in this release; only ${implemented.join(", ")} is available` +
         (sandbox === "worktree-write" && transportOf(entry) !== "acp"
-          ? `; write mode is claude-only in this release (${CODEC_WRITE_AGENT_ID})`
+          ? `; write mode is available for ${CODEC_WRITE_AGENT_IDS.join(", ")} only` +
+            (entry.id === "antigravity-cli" ? ": antigravity-cli's edit tool writes outside the worktree" : "")
           : ""),
     };
   }

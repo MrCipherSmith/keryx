@@ -67,7 +67,7 @@ import { createGitWorktreePort } from "../harness/child/git-worktree-port";
 import type { WorktreePort } from "../harness/child/worktree";
 import { createBunSpawnPort } from "../harness/external/bun-spawn-port";
 import { readExternalDepth } from "../harness/external/env";
-import { CODEC_WRITE_AGENT_ID } from "../harness/external/dispatch";
+import { CODEC_WRITE_AGENT_IDS } from "../harness/external/dispatch";
 import { runExternalChild, type ExternalChildOutcome, type RunExternalChildInput } from "../harness/external/runtime";
 import { runExternalWriteChild, type ExternalWriteRunResult } from "../harness/external/write-run";
 import { discardWriteRun, landWriteRun, viewWriteRun, type WriteRunView } from "../harness/external/write-land";
@@ -109,7 +109,7 @@ export interface AgentsExternalRunSeams {
   readonly requestApproval?: AgentIO["requestApproval"];
   /** Everything ACP-specific the runtime forwards (argv override, context, data dir…). Ignored for a line-stream agent. */
   readonly acp?: AcpChildOptions;
-  /** keryx data dir for a claude write run's stored record (tests). */
+  /** keryx data dir for a write run's stored record (tests). */
   readonly dataDir?: string;
   readonly onOutcome?: (outcome: ExternalChildOutcome) => void;
   /**
@@ -549,9 +549,9 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
     onWarning: (warning: string) => console.error(`warning: ${plain(warning)}`),
   };
 
-  // A claude write run owns its worktree: the diff is captured just before the
+  // A claude or codex write run owns its worktree: the diff is captured just before the
   // worktree is removed, and stored for `keryx agents external review`.
-  if (write && id === CODEC_WRITE_AGENT_ID) {
+  if (write && CODEC_WRITE_AGENT_IDS.includes(id)) {
     let handle: { kill(): void } | undefined;
     let interrupted = false;
     // `on`, not `once`: a second Ctrl-C must not take the default disposition and skip the capture and cleanup.
@@ -858,7 +858,7 @@ export function printExternalHelp(): void {
     { flag: "--no-probe", desc: "Skip detection entirely; every entry reports `not-probed`." },
     { flag: "--task", desc: "run: what the agent should do. It runs in a disposable worktree; your tree is never touched." },
     { flag: "--unattended", desc: "run: refuse every permission that would need a human (also implied without a TTY)." },
-    { flag: "--write", desc: "run: writes land in the disposable worktree and leave as a never-applied patch. An ACP agent advertises fs.writeTextFile; for a line-stream agent only claude is supported (Edit and Write inside the worktree)." },
+    { flag: "--write", desc: "run: writes land in the disposable worktree and leave as a never-applied patch. An ACP agent advertises fs.writeTextFile; for a line-stream agent only claude-cli and codex-cli are supported. claude gets Edit and Write inside the worktree and no shell; codex runs under its OS sandbox (writes confined to the worktree, network closed as far as measured) and keeps a shell that can read any file you can read. codex needs version 0.159.2 or newer but older than 0.160.0. antigravity-cli is refused: its edit tool writes outside the worktree." },
     { flag: "--timeout", desc: "run: wall-clock ceiling in ms (default: externalAgents.defaultTimeoutMs)." },
   ]);
 }

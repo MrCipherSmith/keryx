@@ -1,4 +1,4 @@
-// Review, landing and discarding of a claude write run (flow 370). The contract
+// Review, landing and discarding of a claude or codex write run (flows 370, 371). The contract
 // is fixed here so the CLI (`keryx agents external review|apply|discard`) and the
 // TUI modal build on the same functions.
 //
