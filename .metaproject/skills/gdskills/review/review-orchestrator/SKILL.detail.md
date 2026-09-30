@@ -165,6 +165,37 @@ What those flags do and do not reach:
 - Add `--dry-run` first to read the plan. A file already on disk that the
   manifest installer did not write is left alone unless `--force` is passed.
 
+What to expect from the exit code:
+
+- **The manifest-installer forms can exit 1 after installing what was missing.**
+  `applyInstall` (`src/gdskills/manifest/apply.ts`) writes every planned file
+  whose destination is free, skips every planned file that already exists and
+  is not recorded in the manifest installer's install-state (or has drifted from
+  its recorded hash), and returns `ok: false` when it skipped anything;
+  `src/commands/skills.ts` turns that into exit 1. The legacy installer, which
+  `keryx init` uses, records no such state, so on a project it set up the output
+  is a `Wrote N file(s)` line for the missing skills, then a `Skipped (existing
+  file not recorded in install-state…)` list naming the skills already there,
+  then exit 1. Running the command again gives the same skip list and the same
+  exit code.
+- **Judge the outcome by the inventory, not the exit code.** Run
+  `keryx review reviewers --json`: a skill in the `bundled` half is installed.
+  If it is there, continue. If it is not, read the `Skipped` and `Errors` lines
+  for the skill's own path before doing anything else. `--force` makes the
+  installer overwrite the skipped files with the bundled copies, local edits
+  included, so it is the user's call, not a default retry.
+- **`keryx skills install --profile full` does not behave this way.** With no
+  manifest flag it takes the legacy route (`installGdskills`,
+  `src/gdskills/install.ts`), which copies each bundled skill directory over the
+  installed one without consulting install-state, and rewrites the project's
+  skills catalog and gdskills module manifest for the `full` profile. It sets
+  exit 1 only when `.metaproject/` is absent; a destination it will not write
+  through (a symlink, a non-directory) is listed under `Warnings` with exit 0.
+- **The dry-run's `Apply this plan:` hint is not the whole command.** It prints
+  only `--profile` and `--target`, so after a dry-run with
+  `--with capability:mobx` the hinted command installs the profile without
+  `code-mobx-store-review`. Re-type the command you dry-ran, minus `--dry-run`.
+
 Run `keryx review reviewers --json` again afterwards and dispatch from what it
 returns.
 
