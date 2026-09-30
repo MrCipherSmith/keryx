@@ -1097,6 +1097,43 @@ describe("/plan toggles read-only mode (flow 265, was a source-text audit)", () 
 });
 
 // ---------------------------------------------------------------------------
+// /settings (flow 374) — the readline view of the same rows the TUI modal shows.
+// ---------------------------------------------------------------------------
+
+describe("/settings prints the settings table (flow 374)", () => {
+  test("groups, labels, scopes and the command to run for each row", async () => {
+    const output = await repl(["/settings", "/exit"]);
+    for (const group of ["Safety", "Routing", "Display", "External"]) expect(output).toMatch(new RegExp(`^\\s*${group}$`, "m"));
+    expect(output).toMatch(/Permission mode\s+ask\s+\[session\]\s+\/mode \[ask\|trust\|auto\]/);
+    expect(output).toMatch(/Turn guard\s+off\s+\[saved\]/);
+    expect(output).toMatch(/Jev review profile\s+\d+ of 9 keys on/);
+  });
+
+  test("the rows this REPL has no command for are marked TUI only, the ones it has are not", async () => {
+    const output = await repl(["/settings", "/exit"]);
+    const line = (label: string): string => output.split("\n").find((l) => l.includes(label))!;
+    expect(line("Turn guard")).toContain("(TUI only)");
+    expect(line("External agents")).toContain("(TUI only)");
+    expect(line("Permission mode")).not.toContain("(TUI only)");
+    expect(line("Plan (read-only)")).not.toContain("(TUI only)");
+    expect(line("Reasoning effort")).not.toContain("(TUI only)");
+  });
+
+  test("it reads the session's live values: /plan, /mode and /reasoning show up in the next table", async () => {
+    const output = await repl(["/plan on", "/mode trust", "/reasoning high", "/settings", "/exit"]);
+    expect(output).toMatch(/Plan \(read-only\)\s+on\s+\[session\]/);
+    expect(output).toMatch(/Permission mode\s+trust\s+\[session\]/);
+    expect(output).toMatch(/Reasoning effort\s+high\s+\[saved\]/);
+  });
+
+  test("it only reads: nothing is written to the config dir", async () => {
+    const configDir = path.join(root, "cfg-settings-readonly");
+    await repl(["/settings", "/exit"], { configDir });
+    expect(existsSync(path.join(configDir, "auth.json"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // /reasoning — replaces the flow 268 T16 and T26 source-text audits.
 //
 // T16 checked for the literals `describeReasoningEffortSource(`,

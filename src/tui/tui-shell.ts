@@ -196,6 +196,7 @@ import {
   isSessionInfoCommand,
   openSessionInfo,
 } from "./session-info";
+import { smallActionButton } from "./action-button";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
 import { openSetupModal } from "./setup-modal";
@@ -225,7 +226,11 @@ import {
   parseThemeId,
   persistThemeId,
   themeLabel,
+  type ThemeId,
 } from "./theme";
+import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings-modal";
+import { buildSettingsRows, type SettingRow } from "./settings-model";
+import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
@@ -2649,64 +2654,6 @@ export function modelPickerNotice(label: string, result: ModelsResolveResult): s
   return modelsFailureLine(label, result.failure);
 }
 
-/**
- * Small styled label mimicking a clickable button — mirrors
- * `composer-choice.ts`'s "small styled label" pattern (bold/colored
- * `TextRenderable`, no border) rather than a bordered box: a bordered child
- * box next to a plain-text label in the same row would need its own explicit
- * height to avoid the row's cross-axis stretch fighting its border rows (see
- * `.metaproject/memory/lessons/tui-alignself-height-collapse.md` — this file
- * avoids `alignSelf` entirely for exactly that class of bug).
- *
- * The ONE button factory behind the queue dock's Force/Edit/Delete AND
- * `/connect`'s Test/Disconnect (flow 304) — both call this, not a parallel
- * copy, so "built the way `mainQueueButton` builds Force/Edit/Delete" is
- * true by construction rather than by two implementations staying in sync.
- */
-function smallActionButton(
-  otui: OpenTui,
-  r: Renderer,
-  label: string,
-  id: string,
-  color: string,
-  onMouseDown: () => void,
-): { box: Box; setActive: (active: boolean) => void } {
-  const box = new otui.BoxRenderable(r, {
-    id,
-    flexShrink: 0,
-    marginLeft: 1,
-    paddingLeft: 1,
-    paddingRight: 1,
-    onMouseDown: (event: { stopPropagation: () => void }) => {
-      // Part A (flow 170 T5 investigation): @opentui/core's
-      // Renderable.processMouseEvent fires this handler THEN, unless told
-      // otherwise, walks up .parent and fires every ancestor's onMouseDown
-      // too (confirmed against the bundled implementation,
-      // node_modules/@opentui/core/chunk-bun-tkm837n2.js, the
-      // processMouseEvent/onMouseDown setter pair) -- mouse events bubble by
-      // default. A row/dock above this button may have its own
-      // onMouseDown (queueDock's background click, or a row's label click
-      // here); without stopping it here, every button click would ALSO fire
-      // that ancestor handler as an unwanted bubbled side effect. Stop it at
-      // the deepest, most specific handler -- the button itself.
-      event.stopPropagation();
-      onMouseDown();
-    },
-  });
-  // Theme-driven color, not `otui.red`/`otui.yellow` (fixed ANSI-bright
-  // helpers) -- plain content + `.fg` is the same pattern
-  // `transcript-blocks.ts`'s block header already uses for theme colors.
-  const text = new otui.TextRenderable(r, { id: `${id}-t`, content: `[${label}]` });
-  text.fg = color;
-  box.add(text);
-  const setActive = (active: boolean): void => {
-    box.backgroundColor = active ? getTheme().highlight : undefined;
-    text.content = active ? otui.t`${boldChunk(otui, `[${label}]`)}` : `[${label}]`;
-    text.fg = color;
-  };
-  return { box, setActive };
-}
-
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
 function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
   const r = stepRenderer(target);
@@ -4110,7 +4057,13 @@ export async function launchTuiAgentShell(opts: {
     // posture were only ever toasts. One line under the model, not a labelled
     // block of its own: three more rows pushed Status off a 24-row terminal
     // (the macOS pty smoke leg). Painted by `paintModeRow` once both are known.
-    const sbModeV = new otui.TextRenderable(r, { id: "sb-mode-v", content: "" });
+    const sbModeV = new otui.TextRenderable(r, {
+      id: "sb-mode-v",
+      content: "",
+      onMouseDown: () => {
+        showSettings();
+      },
+    });
     sidebar.add(sbModeV);
     // Flow 275 (agent bus P4, T7; specification §4.3): a persistent banner
     // while a `turns` pause lease holds this instance — holder, reason,
@@ -4939,8 +4892,8 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
         });
     };
-    const setEditGuardEnabled = (next: boolean): void => {
-      void writeJevEditGuardEnabled(editGuardProjectDir(), next)
+    const setEditGuardEnabled = (next: boolean): Promise<void> =>
+      writeJevEditGuardEnabled(editGuardProjectDir(), next)
         .then(() => loadEditGuardStatus())
         .then((status) => {
           editGuardStatus = status;
@@ -4950,7 +4903,6 @@ export async function launchTuiAgentShell(opts: {
         .catch((error: unknown) => {
           io.onSystem?.(`editguard: ${error instanceof Error ? error.message : String(error)}\n`);
         });
-    };
 
     // --- flow 346: the EXTERNAL switch ---------------------------------------
     // Per-user default (`ShellConfig.external`), overridable per PROJECT
@@ -4992,9 +4944,9 @@ export async function launchTuiAgentShell(opts: {
       })
       .catch(() => {});
     /** `/external on|off`: live toggle + persistence of the PER-USER layer only — a project's own override (if any) still wins on the next resolve, exactly as `resolveExternalSetting`'s precedence documents. */
-    const setExternalEnabled = (next: "on" | "off"): void => {
+    const setExternalEnabled = (next: "on" | "off"): Promise<void> => {
       writeUserExternalSetting(next);
-      void loadExternalStatus()
+      return loadExternalStatus()
         .then((status) => {
           externalStatus = status;
           refreshExternalSidebar();
@@ -5693,9 +5645,13 @@ export async function launchTuiAgentShell(opts: {
     const paintModeRow = (): void => {
       const row = describeModeRow(permissionMode, readOnly);
       // Read-only is the state an operator must not forget they are in.
-      sbModeV.content = row.readOnly === undefined
-        ? otui.t`${dimChunk(otui, `mode ${row.mode}`)}`
-        : otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`;
+      // The row is also the sidebar's way into `/settings` (flow 374): clicking
+      // it opens the modal, and the hint names the command while there is room.
+      const hint = settingsSidebarHint(row.readOnly !== undefined);
+      sbModeV.content =
+        row.readOnly !== undefined
+          ? otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
+          : otui.t`${dimChunk(otui, `mode ${row.mode}${hint === undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
@@ -6854,6 +6810,12 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
+    const commitPermissionMode = (next: PermissionMode): void => {
+      permissionMode = next;
+      paintModeRow();
+      chrome.showToast(`Permission mode: ${next}`);
+    };
     const runModeCommand = (line: string): void => {
       const modeArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
       const wanted = modeArgs[0] ?? "";
@@ -6894,9 +6856,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
         }
-        permissionMode = next;
-        paintModeRow();
-        chrome.showToast(`Permission mode: ${next}`);
+        commitPermissionMode(next);
         if (saveFlag) {
           const saved = setProjectPermissionMode(sessionCwd, next);
           chrome.showToast(saved ? "Saved as this project's default." : "Could not save the project default.");
@@ -6974,6 +6934,143 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       io.onSystem?.("Usage: /plan [on|off]\n");
+    };
+
+    // The bodies of `/think`, `/reasoning` and `/theme <name>`, callable by the
+    // slash dispatcher and by `/settings`' buttons alike (flow 374).
+    //
+    // `/think auto|expand|hide` (flow 268 T17, AC16) sets the PERSISTED display
+    // mode for every FUTURE round and never touches the current block. Bare
+    // `/think` and `/think collapse` (or any other unrecognized trailing word)
+    // keep the original toggle-the-newest-block behaviour.
+    const runThinkCommand = (arg: string): void => {
+      const mode = parseThinkDisplayMode(arg);
+      if (arg.length > 0 && mode !== undefined) {
+        thinkDisplayMode = mode;
+        saveShellConfig({ thinkDisplay: mode });
+        io.onSystem?.(`Reasoning display: ${mode}\n`);
+        return;
+      }
+      if (arg.length > 0 && arg !== "collapse") {
+        io.onSystem?.(
+          `Unknown /think argument '${arg}'. Choose one of: ${THINK_DISPLAY_MODES.join(", ")} — ` +
+            "or run /think with no argument to expand/collapse the last reasoning block.\n",
+        );
+        return;
+      }
+      if (toggleNewestBlock("thought") === undefined) {
+        io.onSystem?.("No reasoning yet.\n");
+      }
+    };
+    const runReasoningCommand = (wanted: string): void => {
+      if (wanted.length === 0) {
+        const described = describeReasoningEffortSource({
+          sessionOverride: reasoningOverride,
+          globalEffort: loadShellConfig().reasoningEffort,
+        });
+        io.onSystem?.(
+          `Reasoning effort: ${described.effort} (${described.source})\n` +
+            `Usage: /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>\n`,
+        );
+      } else if (!isReasoningEffortLevel(wanted)) {
+        io.onSystem?.(`Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`);
+      } else {
+        reasoningOverride = wanted;
+        opts.setReasoningOverride?.(wanted);
+        deps.reasoningEffort = wanted;
+        saveShellConfig({ reasoningEffort: wanted });
+        io.onSystem?.(`Reasoning effort: ${wanted}\n`);
+        const compatProvider = providerByName(currentSel.provider);
+        if (currentSel.provider !== "openai" && compatProvider !== undefined && compatProvider.reasoning === undefined) {
+          io.onSystem?.(
+            `Note: ${currentSel.provider} is OpenAI-compatible with no "reasoning" entry — its reasoning ` +
+              "is configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
+          );
+        }
+      }
+    };
+    const applyTheme = (id: ThemeId): void => {
+      applyThemeId(id, r.themeMode);
+      persistThemeId(id);
+      chrome.showToast(`Theme: ${themeLabel(id)}`);
+    };
+    const runThemeCommand = (arg: string): void => {
+      const next = parseThemeId(arg);
+      if (next === undefined) {
+        io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
+        return;
+      }
+      applyTheme(next);
+    };
+
+    // --- flow 374: `/settings` -------------------------------------------------
+    // One modal over the settings-like commands. Every button runs the command's
+    // own handler (above and below in this file), so a press and the typed
+    // command cannot disagree; the modal only rebuilds its rows afterwards.
+    const loadSettingsRows = async (): Promise<SettingRow[]> =>
+      buildSettingsRows(
+        await loadSettingsSnapshot(sessionCwd, {
+          permissionMode,
+          plan: readOnly,
+          guard: guardEnabled,
+          routing: routingEnabled,
+          thinkDisplay: thinkDisplayMode,
+          reasoningOverride,
+        }),
+      );
+    const runSettingsAction = async (command: string): Promise<void> => {
+      const [name = "", ...rest] = command.trim().split(/\s+/);
+      const arg = rest.join(" ");
+      switch (name) {
+        case "/mode":
+          // `auto`'s confirmation already happened in the modal (second Enter).
+          if (arg === "auto") commitPermissionMode("auto");
+          else runModeCommand(command);
+          return;
+        case "/plan":
+          runPlanCommand(command);
+          return;
+        case "/guard":
+          setGuardEnabled(arg === "on");
+          return;
+        case "/editguard":
+          await setEditGuardEnabled(arg === "on");
+          return;
+        case "/route":
+          setRoutingEnabled(arg === "on");
+          return;
+        case "/external":
+          await setExternalEnabled(arg === "on" ? "on" : "off");
+          return;
+        case "/external-agents":
+          io.onSystem?.(await runExternalAgentsCommand(arg, sessionCwd));
+          return;
+        case "/reasoning":
+          runReasoningCommand(arg);
+          return;
+        case "/think":
+          runThinkCommand(arg);
+          return;
+        case "/theme":
+          runThemeCommand(arg);
+          return;
+      }
+    };
+    const showSettings = (): void => {
+      void loadSettingsRows()
+        .then((rows) => {
+          openSettings(otui, chrome, {
+            rows,
+            load: loadSettingsRows,
+            run: runSettingsAction,
+            renderer: r,
+            ...inspectorKeys,
+            inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+          });
+        })
+        .catch((error: unknown) => {
+          io.onSystem?.(`/settings: ${error instanceof Error ? error.message : String(error)}\n`);
+        });
     };
 
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
@@ -7079,7 +7176,7 @@ export async function launchTuiAgentShell(opts: {
       buttons: Record<QueueNavAction, { box: Box; setActive: (active: boolean) => void }>;
     }> = [];
     // Small styled label mimicking a clickable button -- `smallActionButton`
-    // (module level, beside `pickProviderStep`) holds the actual
+    // (`./action-button`) holds the actual
     // implementation now; `/connect`'s row-list step (flow 304) builds its
     // Test/Disconnect buttons the SAME way, off the SAME function, rather
     // than a parallel copy.
@@ -8022,24 +8119,7 @@ export async function launchTuiAgentShell(opts: {
         // unrecognized trailing word) fall through unchanged to the original
         // toggle-the-newest-block behaviour below.
         if (command.name === "/think") {
-          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
-          const mode = parseThinkDisplayMode(arg);
-          if (arg.length > 0 && mode !== undefined) {
-            thinkDisplayMode = mode;
-            saveShellConfig({ thinkDisplay: mode });
-            io.onSystem?.(`Reasoning display: ${mode}\n`);
-            return;
-          }
-          if (arg.length > 0 && arg !== "collapse") {
-            io.onSystem?.(
-              `Unknown /think argument '${arg}'. Choose one of: ${THINK_DISPLAY_MODES.join(", ")} — ` +
-                "or run /think with no argument to expand/collapse the last reasoning block.\n",
-            );
-            return;
-          }
-          if (toggleNewestBlock("thought") === undefined) {
-            io.onSystem?.("No reasoning yet.\n");
-          }
+          runThinkCommand(line.trim().split(/\s+/).slice(1).join(" ").trim());
           return;
         }
         if (command.name === "/expand") {
@@ -8266,7 +8346,7 @@ export async function launchTuiAgentShell(opts: {
           // flags, today's counts, and its own in-modal `t` toggle.
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
           if (arg === "on" || arg === "off") {
-            setEditGuardEnabled(arg === "on");
+            void setEditGuardEnabled(arg === "on");
             return;
           }
           if (arg.length > 0) {
@@ -8289,7 +8369,7 @@ export async function launchTuiAgentShell(opts: {
           // see the flow's own AC8 scope note, mirroring `/route`'s header).
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
           if (arg === "on" || arg === "off") {
-            setExternalEnabled(arg);
+            void setExternalEnabled(arg);
             return;
           }
           if (arg.length > 0) {
@@ -8297,6 +8377,10 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showExternalStatus();
+          return;
+        }
+        if (isSettingsCommand(command.name)) {
+          showSettings();
           return;
         }
         if (command.name === "/bus") {
@@ -8317,14 +8401,7 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/theme") {
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
           if (arg.length > 0) {
-            const next = parseThemeId(arg);
-            if (next === undefined) {
-              io.onSystem?.(`Unknown theme '${arg}'.\n${formatThemeList(getThemeId())}`);
-              return;
-            }
-            applyThemeId(next, r.themeMode);
-            persistThemeId(next);
-            chrome.showToast(`Theme: ${themeLabel(next)}`);
+            runThemeCommand(arg);
             return;
           }
           openThemePicker(otui, chrome, {
@@ -8333,9 +8410,7 @@ export async function launchTuiAgentShell(opts: {
             renderer: r,
             ...inspectorKeys,
             onApply: (id) => {
-              applyThemeId(id, r.themeMode);
-              persistThemeId(id);
-              chrome.showToast(`Theme: ${themeLabel(id)}`);
+              applyTheme(id);
             },
           });
           return;
@@ -8371,34 +8446,7 @@ export async function launchTuiAgentShell(opts: {
           // `commands/shell.ts` via `opts.setReasoningOverride` so a later
           // `/model`/`/connect` rebuild keeps it, and persist it to
           // `ShellConfig` so a fresh `keryx shell` process keeps it too.
-          const wanted = line.trim().split(/\s+/).slice(1).join(" ").trim();
-          if (wanted.length === 0) {
-            const described = describeReasoningEffortSource({
-              sessionOverride: reasoningOverride,
-              globalEffort: loadShellConfig().reasoningEffort,
-            });
-            io.onSystem?.(
-              `Reasoning effort: ${described.effort} (${described.source})\n` +
-                `Usage: /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>\n`,
-            );
-          } else if (!isReasoningEffortLevel(wanted)) {
-            io.onSystem?.(
-              `Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`,
-            );
-          } else {
-            reasoningOverride = wanted;
-            opts.setReasoningOverride?.(wanted);
-            deps.reasoningEffort = wanted;
-            saveShellConfig({ reasoningEffort: wanted });
-            io.onSystem?.(`Reasoning effort: ${wanted}\n`);
-            const compatProvider = providerByName(currentSel.provider);
-            if (currentSel.provider !== "openai" && compatProvider !== undefined && compatProvider.reasoning === undefined) {
-              io.onSystem?.(
-                `Note: ${currentSel.provider} is OpenAI-compatible with no "reasoning" entry — its reasoning ` +
-                  "is configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
-              );
-            }
-          }
+          runReasoningCommand(line.trim().split(/\s+/).slice(1).join(" ").trim());
           return;
         }
         if (command.name === "/plan") {

@@ -44,6 +44,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | Shell command | Summary |
 |---|---|
 | `/theme` | Open the theme picker — /theme [name] applies immediately. |
+| `/settings` | Every setting in one place, each with its On/Off or value buttons. |
 | `/model` | Switch the model. |
 | `/models` | Pick a model for the current provider (numbered menu). |
 | `/mode` | Show or switch the permission mode — /mode [ask\|trust\|auto]. |

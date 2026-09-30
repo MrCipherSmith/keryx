@@ -97,6 +97,8 @@ import { exportCallerSession } from "../lib/caller-session";
 import { collapseHome } from "../lib/statusbar";
 import { metaprojectIncompleteNotice } from "../lib/metaproject-state";
 import { LiveMarkdownBlock } from "../lib/live-render";
+import { buildSettingsRows, formatSettingsTable } from "../tui/settings-model";
+import { loadSettingsSnapshot } from "../tui/settings-state";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
 import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
@@ -263,6 +265,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/setup",
   "/reviews",
   "/theme",
+  "/settings",
   "/mode",
   "/reasoning",
   "/plan",
@@ -3018,6 +3021,13 @@ export async function runAgentRepl(
             agentIo.onSystem?.(`Theme: ${themeLabel(next)}\n`);
           }
         }
+      } else if (command === "/settings") {
+        // Flow 374: the same rows the TUI modal shows, as a table. The ones whose
+        // command this REPL does not have are marked "(TUI only)".
+        const rows = buildSettingsRows(
+          await loadSettingsSnapshot(sessionCwd, { permissionMode, plan: readOnly, reasoningOverride: reasoningSessionOverride }, configDir),
+        );
+        agentIo.onSystem?.(formatSettingsTable(rows, { available: new Set(READLINE_AGENT_COMMANDS) }));
       } else {
         // `/models` / `/provider` are chat-mode commands: say so instead of
         // calling them unknown. Anything else falls back to the old message.
