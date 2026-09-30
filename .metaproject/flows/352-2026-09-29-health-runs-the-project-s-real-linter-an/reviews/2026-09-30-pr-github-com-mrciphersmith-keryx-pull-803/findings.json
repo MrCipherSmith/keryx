@@ -33,6 +33,10 @@
       "method": "execution",
       "evidence": "probe-pass-to-fail.ts against the snapshot's runHealth: 'run1 pass complete health 100' then 'run2 fail complete health 70 regression 30 / FAIL: health regression 30 vs baseline'; probe-baseline.ts: run1 health 100 regression 0, run2 fail health 70 regression 30. Needs only a pre-oxlint baseline plus oxlint findings on an oxlint-naming project.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f recorded baseline sources; its adoption flaw (round 3 R3-01..R3-03) replaced by per-source fold in c173d329"
     }
   },
   {
@@ -65,6 +69,10 @@
       "method": "execution",
       "evidence": "gate.ts `lintSatisfied && isLinter(s) && s.status === \"skipped\";` -> `lintSatisfied && isLinter(s);`: bun test --timeout 30000 src/health 168 pass, 0 fail (28 files). Restored, cmp-verified.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: lintBroken in gate.test.ts; round 3 closed (mutant P29 red)"
     }
   },
   {
@@ -90,6 +98,10 @@
       "method": "site-check",
       "evidence": "keryx ctx rg 'filteredInfo|capability' src/health/run.ts: runAdapter spreads capability at line 342; filteredInfo at line 506 has none, called at lines 113, 133, 503. Shape confirmed; no harm executed.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: filteredOutcome capability + filtered flag; round 3 closed"
     }
   },
   {
@@ -115,6 +127,10 @@
       "method": "execution",
       "evidence": "Real oxlint 1.81.0 `--format json .` in an empty dir: exit 1, stdout 'No files found to lint. Please check your paths and ignore patterns.' then JSON with diagnostics [] and number_of_files 0. Snapshot oxlintAdapter.validate -> {valid:false, error:'oxlint JSON format was not recognized'}.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: OXLINT_NO_FILES; round 3 closed with real oxlint"
     }
   },
   {
@@ -140,6 +156,10 @@
       "method": "execution",
       "evidence": "oxlint.ts `diagnostic.severity === \"error\"` -> `diagnostic.severity !== \"warning\"`: bun test --timeout 30000 src/health 168 pass, 0 fail. Restored, cmp-verified.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: advice/missing severity test; round 3 closed (N9 red)"
     }
   }
 ]
