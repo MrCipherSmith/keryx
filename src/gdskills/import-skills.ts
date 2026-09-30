@@ -1353,15 +1353,39 @@ Usage:
   Required when --from is a tree of several packages and the import targets
   module \`review\`: every package there is dispatched as a reviewer, so the
   import is refused with the list of candidates until you say which ones.
-  A single package directory or a SKILL.md needs no --only.
+  A single package directory or a SKILL.md needs no --only. An empty value
+  (--only "") is an error.
+
+--name:
+  the name to import a SKILL.md file or URL under. With a tree, it selects the
+  one package whose directory has that name.
+
+--only and --name match the directory name as it is on disk. The package is
+written under the slug of that name (review_house_api -> review-house-api),
+and the destination, the already-exists and bundled-name checks and the
+reported row all use the slug. Two selected directories that slug to one
+destination are refused before anything is written.
 
 In a tree import a package whose frontmatter says \`deprecated: true\` is
 skipped. Pass its own directory as --from to import it anyway.
 
 A name that collides with a bundled keryx skill is skipped unless --force.
 
-A review package with neither \`metadata.paths\` nor a glob in its description
-is imported with a warning: it is dispatched on every round.
+A package landing in module \`review\` is imported with a warning for each of:
+  - neither \`metadata.paths\` nor a glob in its description (a file path named
+    without a glob is not a trigger): it is dispatched on every round.
+  - a \`metadata.flags\` entry that is not a flag after normalising (lower-case,
+    \`--\` prefixed): it is dropped. When metadata.flags is declared, the flags
+    in the description are not used.
+  - a flag that exactly one existing project reviewer carries: it becomes a
+    family flag for both, so that reviewer is path-gated under it from now on.
+
+Rules the skills cite (\`<dir>/<name>.mdc\`) are copied from a rules/ directory
+beside the source to .metaproject/rules/<dir>/<name>.mdc. When a file already
+answers the reference with other content, or keryx ships a core/ rule of that
+name, the copy goes to .metaproject/rules/project/<dir>/<name>.mdc, which a
+reviewer's reference resolves to first; an existing copy there that differs is
+replaced only with --force.
 
 Examples:
   keryx skills import --from ./overlays --module review --only 'review-house-*'

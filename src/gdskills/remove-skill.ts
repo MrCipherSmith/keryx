@@ -539,6 +539,7 @@ Removes, and lists each as removed or absent:
   - the projectSkillRegistry entry in .metaproject/metaproject.json
   - the row in the Project Skills section of .metaproject/skills/catalog.md
   - the verification report under .metaproject/data/gdskills/reports/
+    (a report whose body names another package is left alone)
 
 A part that is already gone is reported as absent, not as an error, so a skill
 half-removed by hand can be finished with this command.

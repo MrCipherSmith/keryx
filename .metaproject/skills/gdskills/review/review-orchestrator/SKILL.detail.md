@@ -14,13 +14,14 @@ them from the reviewer's prose.
 
 | Field | Use |
 |---|---|
-| `flags` | The reviewer's selection flags: `metadata.flags` from its frontmatter when declared — that takes precedence — otherwise the flags its description names. A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
+| `flags` | The reviewer's selection flags: `metadata.flags` from its frontmatter when declared — that takes precedence, even when none of its entries turns out to be a flag — otherwise the flags its description names. Already normalised (lower-case, `--` prefixed), so compare a passed flag with them as they are. A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
+| `flagWarnings` | One line per `metadata.flags` entry that was dropped because it is not a flag after normalising, plus one more when that left the reviewer with no flags. Empty in the ordinary case. A dropped entry selects nothing: do not match a passed flag against the raw spelling in the reviewer's frontmatter. Dispatch the reviewer as its other fields say, and name the warnings once in the report — a reviewer its author meant to be flag-selectable is not. Never a finding against the code. |
 | `familyFlags` | The subset of `flags` that at least one other project reviewer also carries. A passed flag listed here is a **family flag**: it selects this reviewer, and the reviewer stays path-gated. A passed flag that is in `flags` and not here is unique to this reviewer: the selection is **explicit** and never path-gated, like any flag-selected bundled reviewer. |
 | `paths` | Its path triggers for the **path gate**. No file in scope A matches → `Skipped reviewers`, reason `no-matching-paths`. |
-| `pathsSource` | `metadata` (declared `metadata.paths`) or `description` (globs and literal file paths such as `src/utils/column-zone.ts` read out of its description; a cited `.md` / `.mdc` document and a `.metaproject/` path are not triggers). `none` means there is nothing to gate on: **dispatch it** — ambiguity includes. |
+| `pathsSource` | `metadata` (declared `metadata.paths`) or `description` (globs read out of its description, and the literal file paths such as `src/utils/column-zone.ts` listed beside them; a cited `.md` / `.mdc` document and a `.metaproject/` path are not triggers). A description with no glob gives `none` even when it names a file: a literal path counts only beside a glob. `none` means there is nothing to gate on: **dispatch it** — ambiguity includes. |
 | `stackRequires` | Apply stack scoping exactly as for a bundled reviewer carrying `metadata.stack_requires`. |
 | `unresolvedRules` | Rules it cites that the project does not have. Dispatch it anyway, tell it in the prompt which rules are absent, and name them once in the report with the fix (`keryx review import --from <overlay> --only '<glob>'` copies them). Never a finding against the code. |
-| `shadowedRules` | `[{ ref, resolved }]`: rules it cites by one path and must read from another. The project holds its own version of the rule at `resolved` (under `.metaproject/rules/project/`), which answers the reference before the file `ref` names. In the dispatch prompt, tell the reviewer to read `resolved` in place of `ref` — see "Dispatching a project reviewer" below. Not a defect and not reported as one. |
+| `shadowedRules` | `[{ ref, resolved }]`: rules it cites by one path and must read from another. The project holds its own version of the rule at `resolved` — the reference's slot under `.metaproject/rules/project/`, the whole reference kept (`core/x.mdc` → `.metaproject/rules/project/core/x.mdc`) — which answers the reference before the file `ref` names. In the dispatch prompt, tell the reviewer to read `resolved` in place of `ref` — see "Dispatching a project reviewer" below. Not a defect and not reported as one. |
 | `unresolvedReferences` | `[{ ref, reason }]`: other references in its text that will not hold. `missing` — a backticked `skills/…` or `rules/…` path ending `.md` / `.json` with no file under `.metaproject/`; `non-portable` — a rule cited by an absolute or `~` path, true on one machine at most. Dispatch it anyway, tell it in the prompt which references are absent, and name them once in the report. Never a finding against the code. |
 
 A description saying another entry point dispatches it ("Dispatched by
@@ -57,7 +58,11 @@ Each `project` entry carries `path`, the directory its package is registered
 at. Dispatch it with the absolute path of `<path>/SKILL.md` as `skill_path` in
 the reviewer input, and state in the prompt that this file is the reviewer's
 definition and overrides the built-in definition of any agent type with the
-same name. This holds on every branch of "Agent Runtime Compatibility" in
+same name. `skill_path` in the reviewer input is set for project reviewers
+only, and it carries that override. A bundled reviewer's input never has it:
+when one runs through the `general-purpose` fallback, the prompt text names its
+skill file and `review_context.review_plan.dispatch_plan` records the path, but nothing is
+being overridden, so the input field stays out. This holds on every branch of "Agent Runtime Compatibility" in
 SKILL.md: when a same-named agent type exists, dispatch it **with** the path
 and the override sentence; when none exists, dispatch `general-purpose` with
 the same two things.
@@ -75,15 +80,22 @@ reviewer reads as coverage the round did not have.
 
 **Shadowed rules go into the same prompt.** For every entry in the reviewer's
 `shadowedRules`, add one line to the dispatch: "where your text names `<ref>`,
-read `<absolute path of resolved>` instead". An import keeps an overlay's rule
-under `.metaproject/rules/project/` whenever its filename is one keryx also
-ships, because `keryx install` and `keryx update` overwrite `rules/core` with
-keryx's own rules. The reviewer's text was written against the overlay and still
-says `core/<name>.mdc`, so followed literally it reads keryx's generic rule of
-the same name and reviews against the wrong standard — silently, since both
-files exist. The inventory computes the project-first order and reports it; no
-loader applies it. This line in the dispatch is the only place it takes effect,
-and a project reviewer run outside this orchestrator reads what its text names.
+read `<absolute path of resolved>` instead" — for a reviewer citing
+`core/error-handling.mdc`, that is
+`<project root>/.metaproject/rules/project/core/error-handling.mdc`. Take the
+path from `resolved`; do not build it from the rule's filename, because the slot
+keeps the reference's directory and a file lying directly in `rules/project/`
+answers only a literal `project/<name>.mdc` citation. An import keeps an
+overlay's rule in that slot whenever a file already answers the reference with
+other content, or the name is one keryx also ships under `rules/core`, because
+`keryx init`, `keryx update` and `keryx skills install` overwrite `rules/core`
+with keryx's own rules. The reviewer's text was written against the overlay and
+still says `core/<name>.mdc`, so followed literally it reads keryx's generic
+rule of the same name and reviews against the wrong standard — silently, since
+both files exist. The inventory computes the project-first order and reports
+it; no loader applies it. This line in the dispatch is the only place it takes
+effect, and a project reviewer run outside this orchestrator reads what its
+text names.
 
 ### `drift` — the source moved, the reviewer did not
 
@@ -118,9 +130,34 @@ install — they are in the `full` profile only (`src/gdskills/catalog.ts`):
 | `code-style-review` | `--code-style`, `--legacy-profiles` |
 | `code-mobx-store-review` | `--mobx-store`, `--legacy-profiles` |
 
-**Present** means the skill is in the `bundled` half of
-`keryx review reviewers --json`. Check there; do not infer it from the flag
-table, which describes what keryx ships, not what this project has.
+Whether one is **present** is read from `keryx review reviewers --json`, and
+the answer depends on the inventory's `bundledSource`, which says which tree
+the `bundled` half was read from. Do not infer presence from the flag table,
+which describes what keryx ships, not what this project has.
+
+| `bundledSource` | What the `bundled` half is | Is a listed skill installed here? |
+|---|---|---|
+| `"project"` | this project's `.metaproject/skills/gdskills/review` | yes; one that is not listed is not installed |
+| `"package"` | the review skills the keryx package itself ships | the list cannot say |
+| `"not-found"` | empty — neither tree could be located (the command exits 1) | the list cannot say |
+
+`"package"` means the project has no `.metaproject/skills/gdskills/review`
+directory at all — a worktree or clone whose `.metaproject/` holds only data,
+for instance. The inventory then lists every review skill in the package, all
+five above included, whatever profile the project would install, and each
+entry's `path` is relative to the keryx package (`src/gdskills/bundled/…`), not
+to the project. Nothing is installed in this project in that state, so a name
+being in the list is not evidence that it is, and a name missing from it is not
+what `not-installed` means either. Decide each of the five by what can actually
+be dispatched: if the runtime has an agent type of that exact name ("Agent
+Runtime Compatibility" in SKILL.md), the skill is usable and is dispatched as
+any other reviewer; if it does not, record `not-installed` with the command
+below, because the project holds no skill file to hand a `general-purpose`
+agent. Say once in the report that the bundled half came from the package, so
+nobody reads the round's reviewer list as this project's install.
+
+`"not-found"` is a failed inventory, not an empty install: report it and do not
+record any reviewer as `not-installed` on its strength.
 
 When one is absent:
 
@@ -179,8 +216,10 @@ What to expect from the exit code:
   then exit 1. Running the command again gives the same skip list and the same
   exit code.
 - **Judge the outcome by the inventory, not the exit code.** Run
-  `keryx review reviewers --json`: a skill in the `bundled` half is installed.
-  If it is there, continue. If it is not, read the `Skipped` and `Errors` lines
+  `keryx review reviewers --json`: with `bundledSource: "project"`, a skill in
+  the `bundled` half is installed. (`"package"` after an install means the
+  install did not write under `.metaproject/skills/gdskills/review` — check
+  `--target`.) If it is there, continue. If it is not, read the `Skipped` and `Errors` lines
   for the skill's own path before doing anything else. `--force` makes the
   installer overwrite the skipped files with the bundled copies, local edits
   included, so it is the user's call, not a default retry.

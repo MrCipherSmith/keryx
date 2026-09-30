@@ -87,13 +87,31 @@ Usage:
   Required when --from holds more than one package: every package in module
   review is dispatched as a reviewer, so the import is refused with the list
   of candidates until you say which ones. A single package needs no --only.
+  An empty value (--only "") is an error.
+
+--only matches the directory name as it is on disk. The package is written
+under the slug of that name (review_house_api -> review-house-api), and the
+already-exists and bundled-name checks and the reported row use the slug. Two
+selected directories that slug to one destination are refused.
 
 In a tree import a package whose frontmatter says \`deprecated: true\` is
 skipped; pass its own directory as --from to import it anyway. A name that
 collides with a bundled keryx skill is skipped unless --force.
 
-A reviewer with neither \`metadata.paths\` nor a glob in its description is
-imported with a warning: it is dispatched on every round.
+A reviewer is imported with a warning for each of:
+  - neither \`metadata.paths\` nor a glob in its description (a file path named
+    without a glob is not a trigger): it is dispatched on every round.
+  - a \`metadata.flags\` entry that is not a flag after normalising (lower-case,
+    \`--\` prefixed): it is dropped. When metadata.flags is declared, the flags
+    in the description are not used.
+  - a flag that exactly one existing project reviewer carries: it becomes a
+    family flag for both, so that reviewer is path-gated under it from now on.
+
+Rules the reviewers cite (\`<dir>/<name>.mdc\`) are copied from the overlay's
+rules/ to .metaproject/rules/<dir>/<name>.mdc. When a file already answers the
+reference with other content, or keryx ships a core/ rule of that name, the
+copy goes to .metaproject/rules/project/<dir>/<name>.mdc, which the reviewer's
+reference resolves to first.
 
 After import, \`keryx review reviewers\` must list the new names on the
 project half. That is the same call review-orchestrator makes.
