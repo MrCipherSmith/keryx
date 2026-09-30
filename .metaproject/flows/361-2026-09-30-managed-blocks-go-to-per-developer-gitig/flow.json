@@ -10,7 +10,7 @@
   "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
   "status": "in-progress",
   "createdAt": "2026-09-30T14:26:46.112Z",
-  "updatedAt": "2026-09-30T17:32:23.764Z",
+  "updatedAt": "2026-09-30T17:46:48.867Z",
   "source": {
     "type": "description",
     "ref": null
@@ -242,7 +242,7 @@
       "id": "T12",
       "title": "Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -258,7 +258,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -399,6 +400,11 @@
       "at": "2026-09-30T17:32:23.764Z",
       "event": "task-attempt",
       "detail": "T12: started (attempt 1) — 361-T12"
+    },
+    {
+      "at": "2026-09-30T17:46:48.867Z",
+      "event": "task-done",
+      "detail": "T12: Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped"
     }
   ],
   "owner": {
