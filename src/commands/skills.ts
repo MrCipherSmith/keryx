@@ -50,7 +50,13 @@ import {
 } from "../gdskills/sync";
 import {
   createProjectSkill,
+  metaprojectRelative,
   normalizeProjectSkillFormat,
+  PROJECT_SKILL_REPORTS_DIR,
+  PROJECT_SKILLS_CATALOG_PATH,
+  PROJECT_SKILLS_MANIFEST_PATH,
+  projectSkillKey,
+  projectSkillReportFileName,
   type ProjectSkillRegistryEntry,
 } from "../gdskills/project-skills";
 import {
@@ -718,14 +724,7 @@ async function inspectProjectSkill(args: string[]): Promise<void> {
   const skillMdPath = path.join(skillRoot, "SKILL.md");
   const verificationPath = path.join(skillRoot, "verification.md");
   const changelogPath = path.join(skillRoot, "skill-changelog.md");
-  const reportPath = path.join(
-    process.cwd(),
-    ".metaproject",
-    "data",
-    "gdskills",
-    "reports",
-    `${entry.module}-${entry.name}-verification.json`,
-  );
+  const reportPath = path.join(process.cwd(), PROJECT_SKILL_REPORTS_DIR, projectSkillReportFileName(entry.module, entry.name));
   const metadata = (await pathExists(skillMdPath))
     ? parseProjectSkillMetadata(await readFile(skillMdPath, "utf8"))
     : {};
@@ -764,7 +763,7 @@ async function inspectProjectSkill(args: string[]): Promise<void> {
 }
 
 async function readProjectSkillRegistryFromManifest(): Promise<ProjectSkillRegistryEntry[]> {
-  const manifestPath = path.join(process.cwd(), ".metaproject", "metaproject.json");
+  const manifestPath = path.join(process.cwd(), PROJECT_SKILLS_MANIFEST_PATH);
   if (!(await pathExists(manifestPath))) {
     return [];
   }
@@ -1413,7 +1412,7 @@ function verifyBundledSkills(args: string[]): void {
 }
 
 async function verifyAllProjectSkills(args: string[]): Promise<void> {
-  const manifestPath = path.join(process.cwd(), ".metaproject", "metaproject.json");
+  const manifestPath = path.join(process.cwd(), PROJECT_SKILLS_MANIFEST_PATH);
   if (!(await pathExists(manifestPath))) {
     console.error("Metaproject is not initialized. Run: keryx init");
     process.exitCode = 1;
@@ -1590,8 +1589,8 @@ async function printGdskillsStatus(args: string[]): Promise<void> {
 
 async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
   const root = path.join(process.cwd(), ".metaproject");
-  const manifestPath = path.join(root, "metaproject.json");
-  const catalogPath = path.join(root, "skills", "catalog.md");
+  const manifestPath = path.join(root, metaprojectRelative(PROJECT_SKILLS_MANIFEST_PATH));
+  const catalogPath = path.join(root, metaprojectRelative(PROJECT_SKILLS_CATALOG_PATH));
   const skillsRoot = path.join(root, "skills", "gdskills");
 
   if (!(await pathExists(root))) {
@@ -1632,8 +1631,8 @@ async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
     projectSkillRegistry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   }
 
-  const reports = await readVerificationReports(path.join(root, "data", "gdskills", "reports"));
-  const reportKeys = new Set(reports.map((report) => `${report.module}/${report.name}`));
+  const reports = await readVerificationReports(path.join(root, metaprojectRelative(PROJECT_SKILL_REPORTS_DIR)));
+  const reportKeys = new Set(reports.map(projectSkillKey));
   const proposals = await readProposalFiles(path.join(root, "data", "gdskills", "proposals"));
   const statusCounts = countVerificationStatuses(reports);
 
@@ -1646,7 +1645,7 @@ async function getGdskillsStatusSummary(): Promise<GdskillsStatusSummary> {
     catalog: (await pathExists(catalogPath)) ? relativeToCwd(catalogPath) : "missing",
     projectSkills: {
       registered: projectSkillRegistry.length,
-      withoutVerificationReport: projectSkillRegistry.filter((entry) => !reportKeys.has(`${entry.module}/${entry.name}`)).length,
+      withoutVerificationReport: projectSkillRegistry.filter((entry) => !reportKeys.has(projectSkillKey(entry))).length,
     },
     verificationReports: {
       total: reports.length,

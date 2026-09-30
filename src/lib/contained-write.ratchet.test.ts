@@ -62,6 +62,13 @@ const COVERED_FILES = [
   // removals and rewrites go through removeContained/rmdirIfEmptyContained/
   // writeContained, and a raw `rm`/`rmdir`/`writeFileAtomic` must not come back.
   "src/gdskills/remove-skill.ts",
+  // Flow 360 review G-001: `keryx skills import` / `keryx review import` /
+  // `keryx skills update` write rules, SKILL.md packages, the registry
+  // manifest and the catalog. Every one goes through writeContained/
+  // mkdirContained (import-skills.ts for rules and the stamped SKILL.md,
+  // project-skills.ts for the package, manifest and catalog).
+  "src/gdskills/import-skills.ts",
+  "src/gdskills/project-skills.ts",
   "src/lib/routing-entrypoint.ts",
   "src/mcp/client-config.ts",
   "src/capability/registry.ts",
@@ -181,6 +188,20 @@ function importsRawFsFunction(source: string, name: string): boolean {
   return false;
 }
 
+/** Every name a `{ ... }` import from `node:fs` binds its `promises` export to — `promises`, or the `as` alias. */
+function fsPromisesBindings(source: string): string[] {
+  const aliases: string[] = [];
+  const importBlockRe = /import\s*\{([^}]*)\}\s*from\s*["'](?:node:)?fs["']/g;
+  let match: RegExpExecArray | null;
+  while ((match = importBlockRe.exec(source)) !== null) {
+    for (const entry of (match[1] ?? "").split(",").map((n) => n.trim()).filter((n) => n.length > 0)) {
+      const parts = entry.split(/\s+as\s+/).map((p) => p.trim());
+      if (parts[0] === "promises") aliases.push(parts[1] ?? parts[0]);
+    }
+  }
+  return aliases;
+}
+
 /** Every raw-write shape this ratchet catches, named for the failure message. */
 function detectRawWrites(source: string): string[] {
   const hits: string[] = [];
@@ -197,6 +218,26 @@ function detectRawWrites(source: string): string[] {
       const re = new RegExp(`\\b${alias}\\.${fn}\\s*\\(`);
       if (re.test(source)) {
         hits.push(`calls "${alias}.${fn}(" — a namespace/default import of node:fs used as a raw writer`);
+      }
+    }
+  }
+
+  // G-016 (flow 360 round 2): the `promises` object of `node:fs` is the whole
+  // `node:fs/promises` API under another name. Reached as `fs.promises.rm(`
+  // through a default or namespace import, or bound by name —
+  // `import { promises as fsp } from "node:fs"` then `fsp.rm(` — it used to
+  // pass every matcher above.
+  for (const alias of aliases) {
+    for (const fn of WRITE_VERBS) {
+      if (new RegExp(`\\b${alias}\\.promises\\.${fn}\\s*\\(`).test(source)) {
+        hits.push(`calls "${alias}.promises.${fn}(" — node:fs's promises object used as a raw writer`);
+      }
+    }
+  }
+  for (const alias of fsPromisesBindings(source)) {
+    for (const fn of WRITE_VERBS) {
+      if (new RegExp(`\\b${alias}\\.${fn}\\s*\\(`).test(source)) {
+        hits.push(`imports node:fs's "promises" as "${alias}" and calls "${alias}.${fn}("`);
       }
     }
   }
@@ -360,6 +401,16 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
     { name: "createWriteStream", source: 'import { createWriteStream } from "node:fs";\ncreateWriteStream(p);' },
     { name: "rmSync", source: 'import { rmSync } from "node:fs";\nrmSync(p);' },
     { name: "namespace mkdir", source: 'import * as fs from "node:fs/promises";\nfs.mkdir(p, { recursive: true });' },
+    // G-016 (flow 360 round 2, C7/C8): the `promises` object of `node:fs`,
+    // reached through a default or namespace import or bound by name.
+    { name: "fs.promises.rm on a default node:fs import (G-016)", source: 'import fs from "node:fs";\nawait fs.promises.rm(p, { recursive: true });' },
+    { name: "fs.promises.writeFile on a namespace node:fs import (G-016)", source: 'import * as fs from "node:fs";\nawait fs.promises.writeFile(p, c);' },
+    { name: "{ promises as fsp } + fsp.rm (G-016)", source: 'import { promises as fsp } from "node:fs";\nawait fsp.rm(p, { recursive: true });' },
+    { name: "{ promises } + promises.unlink (G-016)", source: 'import { readFileSync, promises } from "node:fs";\nawait promises.unlink(p);' },
+    {
+      name: "multi-line { promises as fsp } + fsp.mkdir (G-016)",
+      source: 'import {\n  existsSync,\n  promises as fsp,\n} from "node:fs";\nawait fsp.mkdir(p);',
+    },
   ];
 
   for (const shape of shapes) {
@@ -374,6 +425,11 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
 
   test("a read-only dynamic import is never flagged", () => {
     expect(detectRawWrites('const { readFile } = await import("node:fs/promises");\nreadFile(p);')).toEqual([]);
+  });
+
+  test("G-016: a read through the promises object is never flagged", () => {
+    expect(detectRawWrites('import fs from "node:fs";\nawait fs.promises.readFile(p, "utf8");')).toEqual([]);
+    expect(detectRawWrites('import { promises as fsp } from "node:fs";\nawait fsp.readFile(p, "utf8");')).toEqual([]);
   });
 
   test("a type-only import(\"node:fs\") reference is never flagged", () => {

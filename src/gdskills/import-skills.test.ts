@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -12,8 +12,12 @@ import {
   stampImportHeader,
   updateProjectSkills,
 } from "./import-skills";
+import { parseSkillFrontmatter } from "./skill-frontmatter";
 import { verifyProjectSkill } from "./verify";
 import { collectReviewers } from "../review/reviewers";
+
+/** A UTF-8 byte-order mark, built from its code point so no invisible character sits in this file. */
+const BOM = String.fromCharCode(0xfeff);
 
 let cwd: string;
 let source: string;
@@ -443,6 +447,59 @@ describe("tree import selection", () => {
         expect(byName["review-house-core"]?.warnings).toBeUndefined();
       }
     });
+
+    const soleCarrierWarning = (flag: string, overwritten: string, remaining: string): string =>
+      `flag ${flag} is dropped by this version of ${overwritten}, which leaves ${remaining} its only carrier: ${flag} now dispatches ${remaining} outright instead of selecting it path-gated.`;
+
+    // G-010: the reverse of the collision above. A family flag that loses one of
+    // its two carriers becomes the remaining reviewer's own flag.
+    test("an overwrite that drops a flag from one of two carriers warns that the other becomes its only carrier", async () => {
+      await writeExistingReviewer("review-e2", "--fam");
+      await writeExistingReviewer("review-e3", "--fam");
+      await writeExistingReviewer("review-e1", "--api");
+      // The new review-e2 drops --fam and takes up --api, which review-e1 alone carries: both directions at once.
+      const dir = await writeReviewPackage("review-e2", '  flags: "--api"\n');
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: dir, force: true, dryRun });
+        expect(result.imported[0]?.status).toBe(dryRun ? "would-overwrite" : "overwritten");
+        expect(result.imported[0]?.warnings).toEqual([
+          collisionWarning("--api", "review-e1"),
+          soleCarrierWarning("--fam", "review-e2", "review-e3"),
+        ]);
+      }
+      // What the warning predicts is what the inventory now reports.
+      const inventory = await collectReviewers(cwd);
+      expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.familyFlags])).toEqual([
+        ["review-e1", ["--api"]],
+        ["review-e2", ["--api"]],
+        ["review-e3", []],
+      ]);
+    });
+
+    test("no sole-carrier warning when a dropped flag keeps two carriers, or the overwrite keeps the flag", async () => {
+      await writeExistingReviewer("review-e2", "--fam, --keep");
+      await writeExistingReviewer("review-e3", "--fam, --keep");
+      await writeExistingReviewer("review-e4", "--fam");
+      const dir = await writeReviewPackage("review-e2", '  flags: "--keep"\n');
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: dir, force: true, dryRun });
+        expect(result.imported[0]?.warnings).toBeUndefined();
+      }
+    });
+
+    // G-015: the module half of `isWritten`. Another module's package is not a
+    // reviewer, so a flag it happens to declare changes no reviewer's dispatch.
+    test("a non-review package declaring a flag one reviewer carries gets no collision warning", async () => {
+      await writeExistingReviewer("review-house-core", "--house");
+      const dir = path.join(source, "skills", "house-job");
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "SKILL.md"), '---\nname: house-job\nmetadata:\n  category: orchestration\n  flags: "--house"\n---\n\nbody\n', "utf8");
+      for (const dryRun of [true, false]) {
+        const result = await importProjectSkills({ projectRoot: cwd, from: dir, dryRun });
+        expect(result.imported[0]).toMatchObject({ module: "orchestration" });
+        expect(result.imported[0]?.warnings).toBeUndefined();
+      }
+    });
   });
 
   test("a package whose `deprecated: true` sits under metadata is skipped in a tree import like a top-level one", async () => {
@@ -572,6 +629,91 @@ describe("package names that are not already slugs", () => {
       importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review*"] }),
     ).rejects.toThrow(/review\.house and review_house both import as review\/review-house/);
     await expect(readFile(installed("review-house"), "utf8")).rejects.toThrow();
+  });
+
+  const reviewDirs = async (): Promise<string[]> =>
+    (await readdir(path.join(cwd, ".metaproject", "project-skills", "review")).catch(() => [] as string[])).sort();
+
+  // G-005: the slug is applied where each source is built, not only on the tree path.
+  test("a SKILL.md file whose frontmatter name slugs to a bundled name is skipped", async () => {
+    const file = path.join(source, "x.md");
+    await writeFile(file, '---\nname: review_logic\ndescription: "Reviews src/** changes."\nmetadata:\n  category: review\n---\n\nshadow\n', "utf8");
+    const result = await importProjectSkills({ projectRoot: cwd, from: file });
+    expect(result.imported.map((row) => [row.name, row.status])).toEqual([["review-logic", "skipped"]]);
+    expect(await reviewDirs()).toEqual([]);
+  });
+
+  test("a SKILL.md file whose --name slugs to an existing package is skipped without --force", async () => {
+    const first = path.join(source, "a.md");
+    await writeFile(first, '---\nname: review-house-api\ndescription: "Reviews src/** changes."\nmetadata:\n  category: review\n---\n\nmine\n', "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: first });
+    const second = path.join(source, "b.md");
+    await writeFile(second, '---\ndescription: "Reviews src/** changes."\nmetadata:\n  category: review\n---\n\ntheirs\n', "utf8");
+    const result = await importProjectSkills({ projectRoot: cwd, from: second, name: "review_house_api" });
+    expect(result.imported.map((row) => [row.name, row.status])).toEqual([["review-house-api", "skipped"]]);
+    expect(await readFile(installed("review-house-api"), "utf8")).toContain("mine");
+  });
+
+  test("a URL whose last segment slugs to a bundled name is skipped", async () => {
+    const result = await importProjectSkills({
+      projectRoot: cwd,
+      from: "https://github.com/org/repo/blob/main/skills/review_logic/SKILL.md",
+      module: "review",
+      fetcher: async () => ({ ok: true, status: 200, text: '---\ndescription: "Reviews src/** changes."\n---\n\nshadow\n' }),
+    });
+    expect(result.imported.map((row) => [row.name, row.status])).toEqual([["review-logic", "skipped"]]);
+    expect(await reviewDirs()).toEqual([]);
+  });
+
+  test("a tree of underscore-named reviewers lands in review by inference, so it is refused without --only", async () => {
+    for (const name of ["review_a", "review_b"]) {
+      await mkdir(path.join(source, "skills", name), { recursive: true });
+      await writeFile(path.join(source, "skills", name, "SKILL.md"), '---\ndescription: "Reviews src/** changes."\n---\n\nbody\n', "utf8");
+    }
+    await expect(importProjectSkills({ projectRoot: cwd, from: source })).rejects.toThrow(/--only/);
+    expect(await reviewDirs()).toEqual([]);
+  });
+
+  // G-012: a name with no letter or digit has no slug of its own; the writer's
+  // fallback would file it under a name nobody chose.
+  test("a package directory whose name has no letter or digit is refused, naming it", async () => {
+    await writePackage("___", "underscores");
+    await writePackage("review-ok", "ok");
+    for (const dryRun of [true, false]) {
+      await expect(
+        importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"], dryRun }),
+      ).rejects.toThrow(
+        "keryx skills import: package directory ___ has no letter or digit to name it by. Rename the directory, or leave it out with --only.",
+      );
+    }
+    expect(await reviewDirs()).toEqual([]);
+    // Left out, the rest imports.
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-*"] });
+    expect(result.imported.map((row) => row.name)).toEqual(["review-ok"]);
+  });
+
+  test("a SKILL.md whose name has no letter or digit is refused, and --name gives it one", async () => {
+    const file = path.join(source, "skills", "___", "SKILL.md");
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, '---\ndescription: "Reviews src/** changes."\n---\n\nbody\n', "utf8");
+    await expect(importProjectSkills({ projectRoot: cwd, from: file, module: "review" })).rejects.toThrow(
+      'keryx skills import: the name "___" has no letter or digit to name a package by. Pass --name <name>.',
+    );
+    const named = await importProjectSkills({ projectRoot: cwd, from: file, module: "review", name: "review-underscores" });
+    expect(named.imported[0]).toMatchObject({ name: "review-underscores", status: "imported" });
+  });
+
+  test("a deprecated alias beside its target does not refuse --only '*' as a shared destination", async () => {
+    await writePackage("review-x", "the target");
+    const alias = path.join(source, "skills", "review_x", "SKILL.md");
+    await mkdir(path.dirname(alias), { recursive: true });
+    await writeFile(alias, '---\ndescription: "Old alias. Reviews src/** changes."\ndeprecated: true\n---\n\nalias\n', "utf8");
+    for (const dryRun of [true, false]) {
+      const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"], dryRun });
+      const rows = result.imported.map((row) => `${row.name}:${row.status}:${row.reason ?? "-"}`).sort();
+      expect(rows).toEqual([`review-x:${dryRun ? "would-import" : "imported"}:-`, "review-x:skipped:deprecated"].sort());
+    }
+    expect(await readFile(installed("review-x"), "utf8")).toContain("the target");
   });
 });
 
@@ -719,6 +861,18 @@ describe("frontmatter is read from the frontmatter block only", () => {
     await expect(importProjectSkills({ projectRoot: cwd, from: dir, dryRun: true })).rejects.toThrow(/cannot infer module for helper/);
   });
 
+  // G-015: only a module keryx knows is taken from `category`; anything else
+  // is left to name inference, which then asks for --module.
+  test("a category that is not a known module does not choose the module", async () => {
+    const file = path.join(source, "one.md");
+    await writeFile(file, "---\nname: helper\nmetadata:\n  category: house-conventions\n---\n\nbody\n", "utf8");
+    await expect(importProjectSkills({ projectRoot: cwd, from: file, dryRun: true })).rejects.toThrow(
+      /cannot infer module for helper/,
+    );
+    await writeFile(file, "---\nname: review-house\ncategory: bogus\n---\n\nbody\n", "utf8");
+    expect((await importProjectSkills({ projectRoot: cwd, from: file, dryRun: true })).imported[0]?.module).toBe("review");
+  });
+
   test("a category nested under another mapping in metadata does not choose the module (G-011)", async () => {
     const file = path.join(source, "one.md");
     await writeFile(file, "---\nname: one\ncategory: quality\nmetadata:\n  nested:\n    category: review\n---\n\nbody\n", "utf8");
@@ -801,6 +955,43 @@ describe("imported skill header", () => {
   test("a Status: line in the author's body is left alone", () => {
     const stamped = stampImportHeader("---\nname: x\n---\n# Body\nStatus: draft\n", "Version: 1.0.0\n");
     expect(stamped).toContain("# Body\nStatus: draft\n");
+  });
+
+  // The frontmatter reader accepts a leading BOM and CRLF line ends; the header
+  // goes after that frontmatter, never in front of the BOM or inside the fence line.
+  test("a BOM or CRLF source keeps a frontmatter block the reader parses", () => {
+    const lf = "---\nname: x\nmetadata:\n  category: review\n---\n# Body\n";
+    for (const [shape, source] of [
+      ["bom", `${BOM}${lf}`],
+      ["crlf", lf.replace(/\n/g, "\r\n")],
+      ["bom+crlf", `${BOM}${lf.replace(/\n/g, "\r\n")}`],
+    ] as const) {
+      const once = stampImportHeader(source, "Version: 1.0.0\nStatus: active\n");
+      const twice = stampImportHeader(once, "Version: 2.0.0\nStatus: active\n");
+      for (const stamped of [once, twice]) {
+        expect({ shape, frontmatter: parseSkillFrontmatter(stamped) }).toEqual({
+          shape,
+          frontmatter: parseSkillFrontmatter(lf),
+        });
+        expect(stamped.match(/^Version: /gm)?.length).toBe(1);
+      }
+      expect(twice).toContain("Version: 2.0.0");
+      expect(twice.startsWith(BOM)).toBe(source.startsWith(BOM));
+    }
+  });
+
+  test("an imported BOM SKILL.md is written with its frontmatter intact", async () => {
+    const dir = path.join(source, "skills", "review-house");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `${BOM}---\nname: review-house\ndescription: "Reviews src/** changes."\nmetadata:\n  category: review\n---\n\nbody\n`,
+      "utf8",
+    );
+    await importProjectSkills({ projectRoot: cwd, from: dir });
+    const written = await readFile(path.join(cwd, ".metaproject", "project-skills", "review", "review-house", "SKILL.md"), "utf8");
+    expect(parseSkillFrontmatter(written)).toMatchObject({ name: "review-house", metadataCategory: "review" });
+    expect(written).toMatch(/^Version: /m);
   });
 });
 
@@ -1160,5 +1351,155 @@ describe("rules the imported skills cite", () => {
       expect(forced.rules[0]).toMatchObject({ status: "differs", written: true });
       expect(await readFile(projectCopy, "utf8")).toBe(OVERLAY);
     });
+  });
+});
+
+// G-001: every file the import writes goes through the contained-write
+// helpers. A symlinked directory anywhere on a destination that resolves out
+// of the project is refused before anything is written, and the dry run
+// refuses it with the same message.
+describe("a symlinked directory on a destination", () => {
+  let outside: string;
+
+  beforeEach(async () => {
+    outside = await mkdtemp(path.join(tmpdir(), "keryx-import-outside-"));
+    await writeFile(path.join(outside, "keep.txt"), "outside\n", "utf8");
+  });
+
+  afterEach(async () => {
+    await rm(outside, { recursive: true, force: true });
+  });
+
+  async function listing(dir: string): Promise<string[]> {
+    return (await readdir(dir, { recursive: true })).map(String).sort();
+  }
+
+  async function writeReviewer(name: string, cites: string): Promise<string> {
+    const dir = path.join(source, "skills", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `---\nname: ${name}\ndescription: "Reviews src/house/** changes."\nmetadata:\n  category: review\n---\n\nRead \`${cites}\` first.\n`,
+      "utf8",
+    );
+    await mkdir(path.join(source, "rules", path.dirname(cites)), { recursive: true });
+    await writeFile(path.join(source, "rules", cites), "# overlay rule\n", "utf8");
+    return dir;
+  }
+
+  const manifestText = (): Promise<string> => readFile(path.join(cwd, ".metaproject", "metaproject.json"), "utf8");
+
+  /** The dry run and the real run refuse with one message; nothing moves inside or outside the project. */
+  async function expectRefused(from: string, link: string, options: { force?: boolean } = {}): Promise<string> {
+    const outsideBefore = await listing(outside);
+    const manifestBefore = await manifestText();
+    const messages: string[] = [];
+    for (const dryRun of [true, false]) {
+      try {
+        await importProjectSkills({ projectRoot: cwd, from, dryRun, ...options });
+        messages.push("(no refusal)");
+      } catch (error) {
+        messages.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    expect(messages[0]).toBe(messages[1] as string);
+    expect(messages[0]).toStartWith("keryx skills import: ");
+    expect(messages[0]).toContain(`refuses to write through a symlink at ${link} that resolves outside the project root`);
+    expect(messages[0]).toEndWith("Nothing was written.");
+    expect(await listing(outside)).toEqual(outsideBefore);
+    expect(await manifestText()).toBe(manifestBefore);
+    await expect(readdir(path.join(cwd, ".metaproject", "project-skills", "review", "review-house"))).rejects.toThrow();
+    return messages[0] as string;
+  }
+
+  const variants: { label: string; link: string; cites: string }[] = [
+    // A name keryx ships under rules/core goes to the project slot rules/project/core/<name>.
+    { label: "rules/project/core", link: ".metaproject/rules/project/core", cites: "core/mobx-store-template.mdc" },
+    { label: "rules/project", link: ".metaproject/rules/project", cites: "core/mobx-store-template.mdc" },
+    { label: "rules/<dir>", link: ".metaproject/rules/house", cites: "house/x.mdc" },
+    { label: "rules/core, a name keryx does not ship", link: ".metaproject/rules/core", cites: "core/zz-house-only.mdc" },
+    { label: "rules", link: ".metaproject/rules", cites: "house/x.mdc" },
+  ];
+
+  for (const variant of variants) {
+    test(`a cited rule under a symlinked ${variant.label} is refused`, async () => {
+      const dir = await writeReviewer("review-house", variant.cites);
+      await mkdir(path.dirname(path.join(cwd, variant.link)), { recursive: true });
+      await symlink(outside, path.join(cwd, variant.link));
+      await expectRefused(dir, variant.link);
+    });
+  }
+
+  test("a project-slot rule under a symlinked directory is refused under --force too", async () => {
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    await mkdir(path.join(cwd, ".metaproject", "rules", "house"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), "# the project's\n", "utf8");
+    await mkdir(path.join(cwd, ".metaproject", "rules", "project"), { recursive: true });
+    await symlink(outside, path.join(cwd, ".metaproject", "rules", "project", "house"));
+    await expectRefused(dir, ".metaproject/rules/project/house", { force: true });
+  });
+
+  for (const link of [".metaproject/project-skills/review", ".metaproject/project-skills"]) {
+    test(`a package under a symlinked ${link} is refused`, async () => {
+      const dir = await writeReviewer("review-house", "house/x.mdc");
+      await mkdir(path.dirname(path.join(cwd, link)), { recursive: true });
+      await symlink(outside, path.join(cwd, link));
+      await expectRefused(dir, link);
+      // The rule the same import would have written was not written either.
+      await expect(readFile(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), "utf8")).rejects.toThrow();
+    });
+  }
+
+  test("a symlinked catalog directory is refused before the package is written", async () => {
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    await symlink(outside, path.join(cwd, ".metaproject", "skills"));
+    await expectRefused(dir, ".metaproject/skills");
+  });
+
+  test("a registry manifest that is a symlink out of the project is refused", async () => {
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    const manifest = path.join(cwd, ".metaproject", "metaproject.json");
+    await writeFile(path.join(outside, "metaproject.json"), await readFile(manifest, "utf8"), "utf8");
+    await rm(manifest);
+    await symlink(path.join(outside, "metaproject.json"), manifest);
+    await expectRefused(dir, ".metaproject/metaproject.json");
+  });
+
+  test("a symlink that stays inside the project is written through, as before", async () => {
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    const real = path.join(cwd, "house-rules");
+    await mkdir(real, { recursive: true });
+    await mkdir(path.join(cwd, ".metaproject", "rules"), { recursive: true });
+    await symlink(real, path.join(cwd, ".metaproject", "rules", "house"));
+    const result = await importProjectSkills({ projectRoot: cwd, from: dir });
+    expect(result.rules[0]).toMatchObject({ ref: "house/x.mdc", status: "imported" });
+    expect(await readFile(path.join(real, "x.mdc"), "utf8")).toBe("# overlay rule\n");
+  });
+
+  test("skills update refuses a package directory symlinked out of the project, dry run included", async () => {
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    await importProjectSkills({ projectRoot: cwd, from: dir });
+    const packageDir = path.join(cwd, ".metaproject", "project-skills", "review");
+    // Move the review module out of the project and link it back.
+    await writeFile(path.join(dir, "SKILL.md"), (await readFile(path.join(dir, "SKILL.md"), "utf8")).replace("first.", "first, v2."), "utf8");
+    const moved = path.join(outside, "review");
+    await rename(packageDir, moved);
+    await symlink(moved, packageDir);
+    const before = await readFile(path.join(moved, "review-house", "SKILL.md"), "utf8");
+    const messages: string[] = [];
+    for (const dryRun of [true, false]) {
+      try {
+        await updateProjectSkills({ projectRoot: cwd, skill: "review/review-house", dryRun });
+        messages.push("(no refusal)");
+      } catch (error) {
+        messages.push(error instanceof Error ? error.message : String(error));
+      }
+    }
+    expect(messages[0]).toBe(messages[1] as string);
+    expect(messages[0]).toStartWith("keryx skills update: ");
+    expect(messages[0]).toContain(
+      "refuses to write through a symlink at .metaproject/project-skills/review that resolves outside the project root",
+    );
+    expect(await readFile(path.join(moved, "review-house", "SKILL.md"), "utf8")).toBe(before);
   });
 });

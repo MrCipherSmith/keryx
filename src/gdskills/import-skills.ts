@@ -1,18 +1,26 @@
-import { mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { optionValue, optionValues } from "../lib/args";
-import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
+import { ContainedWriteError, writeContained } from "../lib/contained-write";
+import { pathExists, toPosix } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
 import { literalRulePath, projectRulePath, resolveRuleReference, ruleReferences } from "./rule-references";
 import { frontmatterScalar, parseSkillFrontmatter } from "./skill-frontmatter";
 import {
+  assertProjectWritesContained,
   createProjectSkill,
+  hasProjectSkillSlug,
+  PROJECT_SKILLS_MANIFEST_PATH,
+  projectSkillKey,
+  projectSkillPackagePath,
   projectSkillSlug,
+  projectSkillWritePaths,
   resolveOriginPath,
   type CreateProjectSkillResult,
 } from "./project-skills";
+import { flagCarriers, flagStatus, PROJECT_REVIEWER_MODULE, projectReviewerFlags } from "./project-reviewers";
 import { reviewerFlagReport, reviewerFlags, reviewerPathGate, type PathTriggerSource } from "./reviewer-triggers";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -161,8 +169,12 @@ const DEFAULT_FETCHER: SkillFetcher = async (url) => {
  * injected into flow-orchestrator's fixed pipeline.
  */
 export async function importProjectSkills(options: ImportProjectSkillsOptions): Promise<ImportProjectSkillsResult> {
+  const label = importLabel(options);
   if ((options.only ?? []).some((glob) => glob.trim().length === 0)) {
-    throw emptyOnlyError(options.commandLabel ?? "keryx skills import");
+    throw emptyOnlyError(label);
+  }
+  if (options.module !== undefined && !hasProjectSkillSlug(options.module)) {
+    throw new Error(`${label}: --module ${JSON.stringify(options.module)} has no letter or digit to name a module by.`);
   }
   const sources = await resolveImportSources(options);
   if (sources.length === 0) {
@@ -171,23 +183,45 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
     );
   }
 
-  // Read before anything is written, so a dry run and a real run compare the
-  // incoming packages with the same set of reviewers.
+  // Everything is decided before anything is written: which packages are
+  // written, and where every cited rule goes. Then every destination is
+  // checked for a symlink out of the project, and only then is the first file
+  // written — so a refusal leaves the project as it was, and a dry run refuses
+  // exactly what the real run would, in the same words.
+  //
+  // The reviewers on disk are read now too, so a dry run and a real run
+  // compare the incoming packages with the same set.
   const existingFlags = await projectReviewerFlags(options.projectRoot);
-  const imported: ImportedProjectSkill[] = [];
-  for (const source of sources) {
-    imported.push(await importOne(options, source));
-  }
-  addFlagCollisionWarnings(imported, sources, existingFlags);
+  const plans = await Promise.all(sources.map((source) => planOne(options, source)));
   // Rules are resolved for skipped skills too: re-running an import over a
   // project that already has the skills is how a project imported before this
   // step existed gets the rules its reviewers cite.
-  const rules = await importReferencedRules(
+  const ruleDecisions = await decideReferencedRules(
     options,
     sources
       .filter((source) => !skippedAsDeprecated(source))
       .filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
   );
+  await refuseUncontainedWrites(label, options.projectRoot, [
+    ...plans.flatMap((plan) => ("write" in plan ? projectSkillWritePaths(plan.write.module, plan.write.name, "single") : [])),
+    ...ruleDecisions.flatMap((decision) => ("placement" in decision ? [decision.placement.target] : [])),
+  ]);
+
+  const imported: ImportedProjectSkill[] = [];
+  for (const plan of plans) {
+    imported.push("row" in plan ? plan.row : await writeOne(options, plan));
+  }
+  addFlagWarnings(imported, sources, existingFlags);
+  const rules: ImportedRule[] = [];
+  for (const decision of ruleDecisions) {
+    rules.push(
+      "row" in decision
+        ? decision.row
+        : options.dryRun
+          ? unwrittenRow(decision.placement, decision.dryRunReason)
+          : await writePlacedRule(options, decision.placement),
+    );
+  }
   return {
     from: options.from,
     only: options.only ?? [],
@@ -196,6 +230,27 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
     dryRun: options.dryRun === true,
     force: options.force === true,
   };
+}
+
+function importLabel(options: ImportProjectSkillsOptions): string {
+  return options.commandLabel ?? "keryx skills import";
+}
+
+/**
+ * Refuse the whole run when any of `paths` (project-relative files) would be
+ * written through a symlink that leaves the project — checked by the same
+ * helper every write below goes through, before the first of them.
+ */
+async function refuseUncontainedWrites(label: string, projectRoot: string, paths: readonly string[]): Promise<void> {
+  if (paths.length === 0) return;
+  try {
+    await assertProjectWritesContained(projectRoot, paths);
+  } catch (error) {
+    if (error instanceof ContainedWriteError) {
+      throw new Error(`${label}: ${error.message}. Nothing was written.`, { cause: error });
+    }
+    throw error;
+  }
 }
 
 export type UpdateProjectSkillsOptions = {
@@ -222,9 +277,25 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
     );
   }
 
-  const imported: ImportedProjectSkill[] = [];
+  // Every origin is read first, then every destination is checked, then the
+  // first file is written — as in the import.
+  const plans: UpdatePlan[] = [];
   for (const entry of selected) {
-    imported.push(await updateOne(options, entry));
+    plans.push(await planUpdate(options, entry));
+  }
+  await refuseUncontainedWrites(
+    "keryx skills update",
+    options.projectRoot,
+    // createProjectSkill writes under the slugs of the registered module and name.
+    plans.flatMap((plan) =>
+      "content" in plan
+        ? projectSkillWritePaths(projectSkillSlug(plan.entry.module), projectSkillSlug(plan.entry.name), "single")
+        : [],
+    ),
+  );
+  const imported: ImportedProjectSkill[] = [];
+  for (const plan of plans) {
+    imported.push("row" in plan ? plan.row : await writeUpdate(options, plan));
   }
   return {
     from: options.from ?? "(each skill Origin)",
@@ -423,7 +494,7 @@ function importNotes(source: ImportSource): Pick<ImportedProjectSkill, "pathsSou
   if (isDeprecated(source.content)) {
     warnings.push("deprecated: true in its frontmatter — imported because it was named by its own path; a tree import skips it.");
   }
-  if (source.module !== REVIEW_MODULE) {
+  if (source.module !== PROJECT_REVIEWER_MODULE) {
     return warnings.length > 0 ? { warnings } : {};
   }
   const pathsSource = pathTriggerSource(source.content);
@@ -431,22 +502,6 @@ function importNotes(source: ImportSource): Pick<ImportedProjectSkill, "pathsSou
   // The `metadata.flags` entries `keryx review reviewers` will drop, in its words.
   warnings.push(...reviewerFlagReport(source.content).warnings);
   return { pathsSource, ...(warnings.length > 0 ? { warnings } : {}) };
-}
-
-/** The module review-orchestrator dispatches wholesale; `PROJECT_REVIEWER_MODULE` in `src/review`. */
-const REVIEW_MODULE = "review";
-
-/** The selection flags of every project reviewer on disk, by reviewer name. */
-async function projectReviewerFlags(projectRoot: string): Promise<Map<string, string[]>> {
-  const root = path.join(projectRoot, ".metaproject", "project-skills", REVIEW_MODULE);
-  const flags = new Map<string, string[]>();
-  const entries = await readdir(root, { withFileTypes: true }).catch(() => []);
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const content = await readFile(path.join(root, entry.name, "SKILL.md"), "utf8").catch(() => undefined);
-    if (content !== undefined) flags.set(entry.name, reviewerFlags(content));
-  }
-  return flags;
 }
 
 /**
@@ -464,35 +519,69 @@ function flagCollisionWarning(flag: string, existing: string): string {
 }
 
 /**
- * Add {@link flagCollisionWarning} to each written (or would-be-written) review
- * row. `rows[i]` is the outcome of `sources[i]`.
- *
- * The warning is about a change of status, so the carriers are counted as they
- * were on disk before this import — the copies this import replaces included.
- * A flag two or more of them shared was a family flag already: overwriting one
- * of them changes nothing for the other. The warning fires when there was
- * exactly one carrier and this import leaves that reviewer alone: a package
- * being overwritten does not collide with its own earlier copy, and two
- * packages arriving together that share a flag are an overlay's family, not a
- * change to anything the project had.
+ * The reverse: an overwrite drops a family flag its installed copy carried,
+ * and one reviewer is left carrying it. The flag is that reviewer's own from
+ * now on — passing it dispatches the reviewer outright, past its path gate.
  */
-function addFlagCollisionWarnings(
-  rows: ImportedProjectSkill[],
-  sources: ImportSource[],
-  existingFlags: Map<string, string[]>,
-): void {
-  const isWritten = (row: ImportedProjectSkill): boolean => row.module === REVIEW_MODULE && row.status !== "skipped";
+function soleCarrierWarning(flag: string, overwritten: string, remaining: string): string {
+  return `flag ${flag} is dropped by this version of ${overwritten}, which leaves ${remaining} its only carrier: ${flag} now dispatches ${remaining} outright instead of selecting it path-gated.`;
+}
+
+/**
+ * Add the flag warnings to each written (or would-be-written) review row.
+ * `rows[i]` is the outcome of `sources[i]`. Both warnings are about a change
+ * of {@link flagStatus} for a reviewer this row does not replace.
+ *
+ * {@link flagCollisionWarning}: the carriers are counted as they were on disk
+ * before this import — the copies this import replaces included. A flag two or
+ * more of them shared was a family flag already: overwriting one of them
+ * changes nothing for the other. It fires when there was exactly one carrier
+ * and this import leaves that reviewer alone: a package being overwritten does
+ * not collide with its own earlier copy, and two packages arriving together
+ * that share a flag are an overlay's family, not a change to anything the
+ * project had.
+ *
+ * {@link soleCarrierWarning}: for a flag the replaced copy carried and this
+ * version does not, the carriers after the import — every reviewer on disk
+ * this import does not replace, and every written package as it now reads. It
+ * fires when the flag was a family flag and one of its carriers is left alone
+ * with it.
+ */
+function addFlagWarnings(rows: ImportedProjectSkill[], sources: ImportSource[], existingFlags: Map<string, string[]>): void {
+  const isWritten = (row: ImportedProjectSkill): boolean =>
+    row.module === PROJECT_REVIEWER_MODULE && row.status !== "skipped";
   const replaced = new Set(rows.filter(isWritten).map((row) => row.name));
+  const flagsAfter = new Map(existingFlags);
+  for (const [index, row] of rows.entries()) {
+    const source = sources[index];
+    if (source !== undefined && isWritten(row)) flagsAfter.set(row.name, reviewerFlags(source.content));
+  }
   for (const [index, row] of rows.entries()) {
     const source = sources[index];
     if (source === undefined || !isWritten(row)) continue;
-    for (const flag of reviewerFlags(source.content)) {
-      const carriers = [...existingFlags].filter(([, flags]) => flags.includes(flag)).map(([name]) => name);
+    const incoming = reviewerFlags(source.content);
+    const warnings: string[] = [];
+    for (const flag of incoming) {
+      const carriers = flagCarriers(flag, existingFlags);
       const [only] = carriers;
-      if (carriers.length === 1 && only !== undefined && !replaced.has(only)) {
-        row.warnings = [...(row.warnings ?? []), flagCollisionWarning(flag, only)];
+      if (flagStatus(carriers.length) === "own" && only !== undefined && !replaced.has(only)) {
+        warnings.push(flagCollisionWarning(flag, only));
       }
     }
+    for (const flag of (existingFlags.get(row.name) ?? []).filter((flag) => !incoming.includes(flag))) {
+      const before = flagCarriers(flag, existingFlags);
+      const after = flagCarriers(flag, flagsAfter);
+      const [remaining] = after;
+      if (
+        flagStatus(before.length) === "family" &&
+        flagStatus(after.length) === "own" &&
+        remaining !== undefined &&
+        before.includes(remaining)
+      ) {
+        warnings.push(soleCarrierWarning(flag, row.name, remaining));
+      }
+    }
+    if (warnings.length > 0) row.warnings = [...(row.warnings ?? []), ...warnings];
   }
 }
 
@@ -549,7 +638,7 @@ function moduleOrUndefined(options: ImportProjectSkillsOptions, candidate: Packa
 function refuseSharedDestinations(label: string, picked: { directory: string; source: ImportSource }[]): void {
   const byDestination = new Map<string, string[]>();
   for (const { directory, source } of picked) {
-    const destination = `${source.module}/${source.name}`;
+    const destination = projectSkillKey(source);
     byDestination.set(destination, [...(byDestination.get(destination) ?? []), directory]);
   }
   for (const [destination, directories] of byDestination) {
@@ -623,9 +712,26 @@ async function sourceFromUrl(options: ImportProjectSkillsOptions): Promise<Impor
   if (!response.ok) {
     throw new Error(`keryx skills import: failed to fetch ${raw}: HTTP ${response.status}`);
   }
-  const name = projectSkillSlug(options.name ?? inferNameFromUrl(raw));
+  const name = sourceName(options, inferNameFromUrl(raw));
   const moduleName = requestedModule(options) ?? inferModule(name, response.text);
   return { name, module: moduleName, origin: url, content: response.text };
+}
+
+/**
+ * The slug a single-file or URL source is written under: `--name`, else the
+ * name inferred from the source. A name with no letter or digit is refused —
+ * its slug would be the writer's fallback, a name nobody chose (G-012).
+ */
+function sourceName(options: ImportProjectSkillsOptions, inferred: string): string {
+  const raw = options.name ?? inferred;
+  if (!hasProjectSkillSlug(raw)) {
+    throw new Error(
+      options.name !== undefined
+        ? `${importLabel(options)}: --name ${JSON.stringify(raw)} has no letter or digit to name a package by.`
+        : `${importLabel(options)}: the name ${JSON.stringify(raw)} has no letter or digit to name a package by. Pass --name <name>.`,
+    );
+  }
+  return projectSkillSlug(raw);
 }
 
 async function sourceFromFile(
@@ -633,7 +739,7 @@ async function sourceFromFile(
   absolute: string,
 ): Promise<ImportSource> {
   const content = await readFile(absolute, "utf8");
-  const name = projectSkillSlug(options.name ?? inferNameFromPath(absolute, content));
+  const name = sourceName(options, inferNameFromPath(absolute, content));
   const moduleName = requestedModule(options) ?? inferModule(name, content);
   return { name, module: moduleName, origin: portableOriginRef(absolute, options.projectRoot), content, sourcePath: absolute };
 }
@@ -651,7 +757,7 @@ async function sourceFromDirectory(
   }
   candidates.sort((a, b) => a.name.localeCompare(b.name));
 
-  const label = options.commandLabel ?? "keryx skills import";
+  const label = importLabel(options);
   const only = options.only ?? [];
   let selected = options.name ? candidates.filter((candidate) => candidate.name === options.name) : candidates;
   if (only.length > 0) {
@@ -696,6 +802,18 @@ async function sourceFromDirectory(
     );
   }
 
+  // A deprecated package in a tree is skipped, never written: it takes no
+  // destination, so it needs no name of its own and collides with nothing.
+  const skipped = (candidate: PackageCandidate): boolean => tree && isDeprecated(candidate.content);
+  for (const candidate of selected) {
+    if (!skipped(candidate) && !hasProjectSkillSlug(candidate.name)) {
+      throw new Error(
+        `${label}: package directory ${candidate.name} has no letter or digit to name it by. ${
+          tree ? "Rename the directory, or leave it out with --only." : "Rename the directory, or import its SKILL.md with --name <name>."
+        }`,
+      );
+    }
+  }
   const picked = selected.map((candidate) => ({
     directory: candidate.name,
     source: {
@@ -707,10 +825,13 @@ async function sourceFromDirectory(
       fromTree: tree,
     } satisfies ImportSource,
   }));
-  refuseSharedDestinations(label, picked);
+  refuseSharedDestinations(
+    label,
+    picked.filter(({ source }) => !skippedAsDeprecated(source)),
+  );
   return picked
     .map(({ source }) => source)
-    .sort((a, b) => `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`));
+    .sort((a, b) => projectSkillKey(a).localeCompare(projectSkillKey(b)));
 }
 
 /** The package directories under `root`; `tree` is false when `root` is itself one package. */
@@ -732,52 +853,69 @@ async function skillPackageDirs(root: string): Promise<{ dirs: string[]; tree: b
   return { dirs, tree: true };
 }
 
-async function importOne(options: ImportProjectSkillsOptions, source: ImportSource): Promise<ImportedProjectSkill> {
-  const dest = path.posix.join(".metaproject", "project-skills", source.module, source.name);
+/** What an import does with one source: a row that is already final, or a package to write. */
+type ImportPlan = { row: ImportedProjectSkill } | { write: ImportSource; exists: boolean };
+
+async function planOne(options: ImportProjectSkillsOptions, source: ImportSource): Promise<ImportPlan> {
+  const dest = projectSkillPackagePath(source.module, source.name);
   const destAbs = path.join(options.projectRoot, dest, "SKILL.md");
   const exists = await pathExists(destAbs);
   const bundled = BUNDLED_NAMES.has(source.name);
 
   if (skippedAsDeprecated(source)) {
     return {
-      name: source.name,
-      module: source.module,
-      status: "skipped",
-      path: dest,
-      origin: source.origin,
-      reason: DEPRECATED_REASON,
+      row: {
+        name: source.name,
+        module: source.module,
+        status: "skipped",
+        path: dest,
+        origin: source.origin,
+        reason: DEPRECATED_REASON,
+      },
     };
   }
 
   if (bundled && !options.force) {
     return {
-      name: source.name,
-      module: source.module,
-      status: "skipped",
-      path: dest,
-      origin: source.origin,
-      reason: "name collides with a bundled keryx skill; pass --force to shadow it",
+      row: {
+        name: source.name,
+        module: source.module,
+        status: "skipped",
+        path: dest,
+        origin: source.origin,
+        reason: "name collides with a bundled keryx skill; pass --force to shadow it",
+      },
     };
   }
 
   if (exists && !options.force) {
     return {
-      name: source.name,
-      module: source.module,
-      status: "skipped",
-      path: dest,
-      origin: source.origin,
-      reason: "already exists; pass --force to overwrite",
-      wired: wiringNote(source.module),
+      row: {
+        name: source.name,
+        module: source.module,
+        status: "skipped",
+        path: dest,
+        origin: source.origin,
+        reason: "already exists; pass --force to overwrite",
+        wired: wiringNote(source.module),
+      },
     };
   }
 
+  return { write: source, exists };
+}
+
+/** Write one planned package — or, on a dry run, say it would be written. */
+async function writeOne(
+  options: ImportProjectSkillsOptions,
+  { write: source, exists }: { write: ImportSource; exists: boolean },
+): Promise<ImportedProjectSkill> {
   if (options.dryRun) {
     return {
       name: source.name,
       module: source.module,
       status: exists ? "would-overwrite" : "would-import",
-      path: dest,
+      path: projectSkillPackagePath(source.module, source.name),
       origin: source.origin,
       wired: wiringNote(source.module),
       ...importNotes(source),
@@ -809,19 +947,18 @@ async function importOne(options: ImportProjectSkillsOptions, source: ImportSour
 
 type RegistryEntry = { module: string; name: string; path: string };
 
-async function updateOne(options: UpdateProjectSkillsOptions, entry: RegistryEntry): Promise<ImportedProjectSkill> {
+/** What an update does with one registry entry: a final row, or new content to write over it. */
+type UpdatePlan = { row: ImportedProjectSkill } | { entry: RegistryEntry; origin: string; content: string };
+
+async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEntry): Promise<UpdatePlan> {
   const skillMd = path.join(options.projectRoot, entry.path, "SKILL.md");
   const current = await readFile(skillMd, "utf8");
   let origin = options.from ?? metadataLine(current, "Origin");
+  const skippedRow = (reason: string, recorded: string): { row: ImportedProjectSkill } => ({
+    row: { name: entry.name, module: entry.module, status: "skipped", path: entry.path, origin: recorded, reason },
+  });
   if (!origin) {
-    return {
-      name: entry.name,
-      module: entry.module,
-      status: "skipped",
-      path: entry.path,
-      origin: "",
-      reason: "no Origin recorded",
-    };
+    return skippedRow("no Origin recorded", "");
   }
 
   let content: string;
@@ -829,32 +966,25 @@ async function updateOne(options: UpdateProjectSkillsOptions, entry: RegistryEnt
     const fetcher = options.fetcher ?? DEFAULT_FETCHER;
     const response = await fetcher(githubBlobToRaw(origin));
     if (!response.ok) {
-      return {
-        name: entry.name,
-        module: entry.module,
-        status: "skipped",
-        path: entry.path,
-        origin,
-        reason: `failed to fetch origin: HTTP ${response.status}`,
-      };
+      return skippedRow(`failed to fetch origin: HTTP ${response.status}`, origin);
     }
     content = response.text;
   } else {
     const resolved = resolveOriginPath(origin, options.projectRoot);
     if (!(await pathExists(resolved))) {
-      return {
-        name: entry.name,
-        module: entry.module,
-        status: "skipped",
-        path: entry.path,
-        origin,
-        reason: "origin file can no longer be read",
-      };
+      return skippedRow("origin file can no longer be read", origin);
     }
     content = await readFile(resolved, "utf8");
     origin = portableOriginRef(resolved, options.projectRoot);
   }
+  return { entry, origin, content };
+}
 
+/** Write one planned update — or, on a dry run, say it would be written. */
+async function writeUpdate(
+  options: UpdateProjectSkillsOptions,
+  { entry, origin, content }: { entry: RegistryEntry; origin: string; content: string },
+): Promise<ImportedProjectSkill> {
   if (options.dryRun) {
     return {
       name: entry.name,
@@ -892,11 +1022,10 @@ async function overwriteImportedSkill(
   created: CreateProjectSkillResult,
   source: string,
 ): Promise<void> {
-  const skillPath = path.join(projectRoot, created.skillPath, "SKILL.md");
-  const scaffold = await readFile(skillPath, "utf8");
+  const relative = toPosix(path.join(created.skillPath, "SKILL.md"));
+  const scaffold = await readFile(path.join(projectRoot, relative), "utf8");
   const header = extractImportHeader(scaffold, parseSkillFrontmatter(source).metadataVersion);
   const stamped = stampImportHeader(source, header);
-  const relative = toPosix(path.join(created.skillPath, "SKILL.md"));
   const guard = await guardOutput({
     cwd: projectRoot,
     content: stamped,
@@ -908,7 +1037,7 @@ async function overwriteImportedSkill(
   if (!output.allowed) {
     throw new Error(`Project skill blocked by the security gate: ${output.reason}`);
   }
-  await writeFileAtomic(skillPath, output.content);
+  await writeContained(projectRoot, relative, output.content);
 }
 
 /**
@@ -950,28 +1079,51 @@ export function extractImportHeader(scaffold: string, version?: string): string 
  * wherever they are, as before. Other labels deeper in the body are the
  * author's text and are left alone: a `Status:` line in a template is not ours.
  */
+/** U+FEFF, which the frontmatter reader skips at the start of a file. */
+const BYTE_ORDER_MARK = 0xfeff;
+
 export function stampImportHeader(source: string, header: string): string {
   if (!header) return source;
+  // The frontmatter reader (skill-frontmatter.ts) accepts a leading BOM and
+  // CRLF line ends, so the fences are found the same way here: the BOM stays in
+  // front of the file, and the header goes after the whole closing fence line.
+  const bom = source.charCodeAt(0) === BYTE_ORDER_MARK ? source.slice(0, 1) : "";
   const stripped = source
+    .slice(bom.length)
     .replace(/^Origin Hash:.*\n/gm, "")
     .replace(/^Origin:.*\n/gm, "")
     .replace(/^Imported At:.*\n/gm, "");
-  if (stripped.startsWith("---")) {
-    const end = stripped.indexOf("\n---", 3);
-    if (end !== -1) {
-      const afterFence = end + "\n---".length;
-      const insertAt = stripped[afterFence] === "\n" ? afterFence + 1 : afterFence;
-      let bodyStart = insertAt;
-      while (true) {
-        const lineEnd = stripped.indexOf("\n", bodyStart);
-        const line = stripped.slice(bodyStart, lineEnd === -1 ? stripped.length : lineEnd);
-        if (!IMPORT_HEADER_LINE.test(line)) break;
-        bodyStart = lineEnd === -1 ? stripped.length : lineEnd + 1;
-      }
-      return `${stripped.slice(0, insertAt)}${header}${stripped.slice(bodyStart)}`;
-    }
+  const insertAt = afterFrontmatter(stripped);
+  if (insertAt === undefined) return `${bom}${header}${stripped}`;
+  let bodyStart = insertAt;
+  while (true) {
+    const lineEnd = stripped.indexOf("\n", bodyStart);
+    const line = stripped.slice(bodyStart, lineEnd === -1 ? stripped.length : lineEnd);
+    if (!IMPORT_HEADER_LINE.test(line)) break;
+    bodyStart = lineEnd === -1 ? stripped.length : lineEnd + 1;
   }
-  return `${header}${stripped}`;
+  // A closing fence at the very end of the file has no line end of its own.
+  const separator = insertAt > 0 && stripped[insertAt - 1] !== "\n" ? "\n" : "";
+  return `${bom}${stripped.slice(0, insertAt)}${separator}${header}${stripped.slice(bodyStart)}`;
+}
+
+/**
+ * The offset just past the frontmatter's closing fence line — its line end
+ * included — or nothing when `text` does not open with a `---` line that is
+ * closed by another. The same fences `frontmatterLines` reads.
+ */
+function afterFrontmatter(text: string): number | undefined {
+  const firstEnd = text.indexOf("\n");
+  if (firstEnd === -1 || text.slice(0, firstEnd).trimEnd() !== "---") return undefined;
+  let start = firstEnd + 1;
+  while (start <= text.length) {
+    const lineEnd = text.indexOf("\n", start);
+    const next = lineEnd === -1 ? text.length : lineEnd + 1;
+    if (text.slice(start, lineEnd === -1 ? text.length : lineEnd).trimEnd() === "---") return next;
+    if (lineEnd === -1) return undefined;
+    start = next;
+  }
+  return undefined;
 }
 
 function versionOption(content: string): { version?: string } {
@@ -1072,11 +1224,13 @@ function writtenRow(placement: RulePlacement): ImportedRule {
  * is decided here, from the same placement a real run writes, so the two name
  * one destination.
  */
+type RuleDecision = { row: ImportedRule } | { placement: RulePlacement; dryRunReason?: string };
+
 async function decideRule(
   options: ImportProjectSkillsOptions,
   citation: RuleCitation,
   bundledRules: string,
-): Promise<{ row: ImportedRule } | { placement: RulePlacement }> {
+): Promise<RuleDecision> {
   const base = { ref: citation.ref, citedBy: citation.citedBy };
   const resolution = await resolveRuleReference(options.projectRoot, citation.ref);
   const existing = resolution.resolved;
@@ -1133,12 +1287,9 @@ async function decideRule(
   if (replacesProjectCopy && options.force !== true) {
     return { row: unwrittenRow(placement, "left as it is; pass --force to replace it with the overlay's") };
   }
-  if (options.dryRun) {
-    return {
-      row: unwrittenRow(placement, replacesProjectCopy ? "would be replaced with the overlay's (--force)" : undefined),
-    };
-  }
-  return { placement };
+  // A dry run turns this into an unwritten row — after the destination has
+  // been checked like the real run's, so both refuse the same symlink.
+  return replacesProjectCopy ? { placement, dryRunReason: "would be replaced with the overlay's (--force)" } : { placement };
 }
 
 /** Write a placed rule through the security gate, and report what became of it. */
@@ -1162,23 +1313,21 @@ async function writePlacedRule(options: ImportProjectSkillsOptions, placement: R
     // The gate rewrote the overlay's text and the project already holds that result.
     return { ref, citedBy, status: "present", origin, existing: placement.existing.path };
   }
-  const targetAbs = path.join(options.projectRoot, target);
-  await mkdir(path.dirname(targetAbs), { recursive: true });
-  await writeFileAtomic(targetAbs, output.content);
+  await writeContained(options.projectRoot, target, output.content);
   return writtenRow(placement);
 }
 
-async function importReferencedRules(
+/** One decision per cited rule, in citation order; nothing is written here. */
+async function decideReferencedRules(
   options: ImportProjectSkillsOptions,
   sources: ImportSource[],
-): Promise<ImportedRule[]> {
+): Promise<RuleDecision[]> {
   const bundledRules = bundledRulesSourcePath();
-  const rules: ImportedRule[] = [];
+  const decisions: RuleDecision[] = [];
   for (const citation of collectRuleCitations(sources)) {
-    const decision = await decideRule(options, citation, bundledRules);
-    rules.push("row" in decision ? decision.row : await writePlacedRule(options, decision.placement));
+    decisions.push(await decideRule(options, citation, bundledRules));
   }
-  return rules;
+  return decisions;
 }
 
 function inferNameFromPath(filePath: string, content: string): string {
@@ -1218,7 +1367,7 @@ function metadataLine(content: string, label: string): string | undefined {
 
 async function readRegistry(projectRoot: string): Promise<RegistryEntry[]> {
   const { readJsonFileOr } = await import("../lib/json");
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
   const manifest = await readJsonFileOr<{
     modules?: { gdskills?: { projectSkillRegistry?: RegistryEntry[] } };
   }>(manifestPath, {});
@@ -1229,7 +1378,7 @@ function selectForUpdate(registry: RegistryEntry[], options: UpdateProjectSkills
   if (options.skill) {
     const normalized = options.skill.replace(/\/SKILL\.md$/i, "");
     const hit = registry.find(
-      (entry) => `${entry.module}/${entry.name}` === normalized || entry.name === normalized,
+      (entry) => projectSkillKey(entry) === normalized || entry.name === normalized,
     );
     return hit ? [hit] : [];
   }
@@ -1352,6 +1501,17 @@ A package landing in module \`review\` is imported with a warning for each of:
     in the description are not used.
   - a flag that exactly one existing project reviewer carries: it becomes a
     family flag for both, so that reviewer is path-gated under it from now on.
+  - with --force, a family flag the new version drops that leaves exactly one
+    other reviewer carrying it: that reviewer is dispatched outright under it
+    from now on.
+
+A package directory, or a SKILL.md or URL name, with no letter or digit is
+refused: it has no name to be written under.
+
+Before anything is written, every destination — the package, the registry in
+.metaproject/metaproject.json, the catalog and each rule — is checked for a
+symlink on the way that resolves outside the project. One is refused, and the
+import writes nothing; --dry-run refuses it the same way.
 
 Rules the skills cite (\`<dir>/<name>.mdc\`) are copied from a rules/ directory
 beside the source to .metaproject/rules/<dir>/<name>.mdc. When a file already

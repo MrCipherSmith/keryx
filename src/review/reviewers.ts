@@ -1,7 +1,13 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath, packageRelativePath } from "../gdskills/catalog";
-import { hashOriginContent, resolveOriginPath } from "../gdskills/project-skills";
+import { hashOriginContent, PROJECT_SKILLS_DIR, resolveOriginPath } from "../gdskills/project-skills";
+import {
+  familyFlagsByReviewer,
+  PROJECT_REVIEWER_MODULE,
+  projectReviewersRoot,
+  skillPackageNames,
+} from "../gdskills/project-reviewers";
 import {
   shadowedRuleReferences,
   unresolvedReferences,
@@ -48,8 +54,11 @@ export {
  * `.metaproject/project-skills/review/<name>/` beside
  * `.metaproject/skills/gdskills/review/<name>/`. Nothing else marks it. A team
  * that already knows where bundled reviewers live knows where theirs go.
+ *
+ * The constant, the enumerator and the family-flag rule are owned by
+ * `gdskills/project-reviewers.ts`, which `keryx skills import` reads too.
  */
-export const PROJECT_REVIEWER_MODULE = "review";
+export { PROJECT_REVIEWER_MODULE };
 
 /** Whether the skill's origin file still matches what was imported. */
 export type OriginDrift =
@@ -181,35 +190,6 @@ function metadataLine(content: string, label: string): string | undefined {
   return match?.[1]?.trim();
 }
 
-/**
- * Directories under `root` that hold a `SKILL.md`.
- *
- * Never throws. A missing root is an empty list, not a failure: a project with
- * no project-skills is the common case, and a review round must not die because
- * the optional half of its reviewer set is absent.
- */
-async function skillDirs(root: string): Promise<string[]> {
-  let entries;
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const names: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    try {
-      await readFile(path.join(root, entry.name, "SKILL.md"), "utf8");
-      names.push(entry.name);
-    } catch {
-      // A directory without a SKILL.md is not a skill. Skipped silently: this is
-      // the shape a half-written package has, and listing it as a reviewer would
-      // dispatch an agent at a file that does not exist.
-    }
-  }
-  return names.sort();
-}
-
 async function driftFor(
   projectRoot: string,
   origin: string | undefined,
@@ -270,7 +250,7 @@ async function bundledReviewerFromFile(
  */
 async function projectInstalledReviewers(bundledRoot: string): Promise<BundledReviewer[]> {
   return Promise.all(
-    (await skillDirs(bundledRoot)).map((name) =>
+    (await skillPackageNames(bundledRoot)).map((name) =>
       bundledReviewerFromFile(
         name,
         path.join(bundledRoot, name, "SKILL.md"),
@@ -337,10 +317,10 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
     bundledSource = bundled.length > 0 ? "package" : "not-found";
   }
 
-  const projectRoot_ = path.join(projectRoot, ".metaproject", "project-skills", PROJECT_REVIEWER_MODULE);
+  const projectRoot_ = projectReviewersRoot(projectRoot);
   const project: ProjectReviewer[] = [];
-  for (const name of await skillDirs(projectRoot_)) {
-    const relative = path.posix.join(".metaproject", "project-skills", PROJECT_REVIEWER_MODULE, name);
+  for (const name of await skillPackageNames(projectRoot_)) {
+    const relative = path.posix.join(PROJECT_SKILLS_DIR, PROJECT_REVIEWER_MODULE, name);
     const content = await readFile(path.join(projectRoot_, name, "SKILL.md"), "utf8");
     const origin = metadataLine(content, "Origin");
     const originHash = metadataLine(content, "Origin Hash");
@@ -368,12 +348,9 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
     });
   }
 
-  const carriers = new Map<string, number>();
-  for (const flag of project.flatMap((reviewer) => reviewer.flags)) {
-    carriers.set(flag, (carriers.get(flag) ?? 0) + 1);
-  }
+  const family = familyFlagsByReviewer(new Map(project.map((reviewer) => [reviewer.name, reviewer.flags])));
   for (const reviewer of project) {
-    reviewer.familyFlags = reviewer.flags.filter((flag) => (carriers.get(flag) ?? 0) > 1);
+    reviewer.familyFlags = family.get(reviewer.name) ?? [];
   }
 
   return { bundled, bundledSource, project };

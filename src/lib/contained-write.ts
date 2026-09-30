@@ -211,6 +211,28 @@ async function assertContained(root: string, rel: string, opts: AssertOptions = 
   return { targetPath, dir: path.dirname(targetPath), resolvedPath, resolvedDir: path.dirname(resolvedPath) };
 }
 
+/**
+ * Run the containment checks `writeContained` (kind `"file"`) or
+ * `mkdirContained` (kind `"directory"`) would run for `root`/`rel`, and write
+ * nothing — not even a parent directory.
+ *
+ * For a caller that plans several writes and must refuse before the first of
+ * them (flow 360, G-001: `keryx skills import` checks every destination before
+ * it writes any), and for a dry run that must refuse what the real run would,
+ * in the same words: the error is the one the writer itself would throw.
+ */
+export async function assertWritableContained(
+  root: string,
+  rel: string,
+  kind: "file" | "directory" = "file",
+): Promise<void> {
+  await assertContained(
+    root,
+    rel,
+    kind === "file" ? { requireRegularIfExists: true } : { requireDirectoryIfExists: true },
+  );
+}
+
 async function pathExistsLstat(p: string): Promise<boolean> {
   try {
     await lstat(p);

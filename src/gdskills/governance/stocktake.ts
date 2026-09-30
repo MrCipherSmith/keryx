@@ -30,6 +30,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { writeContained } from "../../lib/contained-write";
+import { PROJECT_SKILL_REPORTS_DIR, projectSkillReportFileName } from "../project-skills";
 import { lintSkill } from "./authoring-lint";
 import { loadSkillCatalogWithDiagnostics, type CatalogEntry, type CatalogScope, type UnreadableCatalogEntry } from "./catalog-index";
 import { checkSkillSelectedLeaveOneOut, SCOUT_USE_THRESHOLD, scoutSkill } from "./scout";
@@ -202,7 +203,7 @@ async function saveCache(root: string, cachePath: string, cache: Cache): Promise
 }
 
 function verificationReportPath(root: string, entry: CatalogEntry): string {
-  return path.join(root, ".metaproject", "data", "gdskills", "reports", `${entry.category}-${entry.name}-verification.json`);
+  return path.join(root, PROJECT_SKILL_REPORTS_DIR, projectSkillReportFileName(entry.category, entry.name));
 }
 
 /** `update`, when a `keryx skills verify` report exists for this skill and reports stale/needs-review/blocked. `undefined` otherwise (bundled skills usually have none — see the workstream's own note). */
