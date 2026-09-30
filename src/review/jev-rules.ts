@@ -81,6 +81,7 @@
 //      (commit-message-formatting, tdd-workflow, opus-5-5-prompting,
 //      definition-of-done, ...). `--rules <paths>` always overrides — an
 //      operator who explicitly names a process doc still gets it checked.
+import { frontmatterScalar as frontmatterScalarIn } from "../gdskills/skill-frontmatter";
 import { extractReferenceClauses, type ReferenceClause } from "./conform-clauses";
 import { hunkClauseFacts, hunkRedactedStateText } from "./conform-state";
 import { estimateTokens } from "./cost";
@@ -119,28 +120,13 @@ export interface RuleSourceFile {
   readonly category?: RuleSourceCategory;
 }
 
-/** Read one `metadata.<key>: value` scalar out of a `SKILL.md`-shaped frontmatter block. Never throws. */
+/**
+ * Read one `metadata.<key>: value` scalar out of a `SKILL.md`-shaped frontmatter
+ * block, through the one frontmatter reader. A key with no value reads as not
+ * declared. Never throws.
+ */
 export function metadataScalar(content: string, key: string): string | undefined {
-  if (!content.startsWith("---")) return undefined;
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return undefined;
-  let inMetadata = false;
-  for (const line of content.slice(3, end).split("\n")) {
-    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (top) {
-      inMetadata = top[1] === "metadata";
-      continue;
-    }
-    if (!inMetadata) continue;
-    const field = new RegExp(`^\\s+${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)$`).exec(line);
-    if (field?.[1] !== undefined) {
-      const raw = field[1].trim();
-      return raw.length >= 2 && ((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'"))
-        ? raw.slice(1, -1)
-        : raw;
-    }
-  }
-  return undefined;
+  return frontmatterScalarIn(content, key, "metadata") || undefined;
 }
 
 /** AC2's discovery scope decision (see module header): is this skill a coding-convention rule source? */
@@ -167,14 +153,7 @@ export function isCodingConventionSkill(name: string, content: string): { readon
  * (see `.metaproject/rules/core/*.mdc`). Never throws.
  */
 export function frontmatterScalar(content: string, key: string): string | undefined {
-  if (!content.startsWith("---")) return undefined;
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return undefined;
-  const re = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*(.+)$`, "m");
-  const match = re.exec(content.slice(3, end));
-  if (match?.[1] === undefined) return undefined;
-  const raw = match[1].trim();
-  return raw.length >= 2 && ((raw[0] === '"' && raw.at(-1) === '"') || (raw[0] === "'" && raw.at(-1) === "'")) ? raw.slice(1, -1) : raw;
+  return frontmatterScalarIn(content, key, "top") || undefined;
 }
 
 // ---------------------------------------------------------------------------

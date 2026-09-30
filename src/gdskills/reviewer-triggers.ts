@@ -1,4 +1,4 @@
-import { parseSkillFrontmatter } from "./skill-frontmatter";
+import { metadataList, parseSkillFrontmatter } from "./skill-frontmatter";
 
 /**
  * What a review package's text says about when it is dispatched: its path
@@ -43,65 +43,12 @@ export function escapeRegexLiteral(literal: string): string {
   return literal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function unquoted(value: string): string {
-  return value.trim().replace(/^["']|["']$/g, "");
-}
-
-/** `a, b`, `"a, b"` or `[a, "b"]` on the key's own line. */
-function inlineEntries(value: string): string[] {
-  return value
-    .replace(/^["'[]|["'\]]$/g, "")
-    .split(",")
-    .map(unquoted)
-    .filter(Boolean);
-}
-
 /**
- * The `- item` lines that follow an empty `key:`, indented at least as far as
- * the key. The list ends at the first line that is not one of them.
+ * The entries of a list-valued key under `metadata:` — a comma-separated
+ * scalar, a flow list or a block list. Read by the one frontmatter reader
+ * (`./skill-frontmatter`), re-exported here where its callers import it from.
  */
-function blockEntries(lines: string[], keyIndent: number): string[] {
-  const entries: string[] = [];
-  for (const line of lines) {
-    if (line.trim() === "") continue;
-    const item = /^(\s*)-\s+(.*)$/.exec(line);
-    if (!item || (item[1] ?? "").length < keyIndent) break;
-    const entry = unquoted(item[2] ?? "");
-    if (entry) entries.push(entry);
-  }
-  return entries;
-}
-
-/**
- * The entries of a list-valued key under `metadata:` in a SKILL.md's
- * frontmatter, trimmed and unquoted.
- *
- * Every spelling YAML gives one list is read: a comma-separated scalar
- * (`paths: "a, b"`), a flow list (`paths: [a, b]`) and a block list (`paths:`
- * followed by `- a` lines). The block list used to be ignored without a word —
- * the key's line held no value, so the field read as not declared.
- */
-export function metadataList(content: string, key: string): string[] {
-  if (!content.startsWith("---")) return [];
-  const end = content.indexOf("\n---", 3);
-  if (end === -1) return [];
-  const lines = content.slice(3, end).split("\n");
-  const field = new RegExp(`^(\\s+)${escapeRegexLiteral(key)}:\\s*(.*)$`);
-  let inMetadata = false;
-  for (const [index, line] of lines.entries()) {
-    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (top) {
-      inMetadata = top[1] === "metadata";
-      continue;
-    }
-    if (!inMetadata) continue;
-    const match = field.exec(line);
-    if (!match) continue;
-    const value = (match[2] ?? "").trim();
-    return value ? inlineEntries(value) : blockEntries(lines.slice(index + 1), (match[1] ?? "").length);
-  }
-  return [];
-}
+export { metadataList };
 
 /** Extensions of documents a description cites as its standard — never a trigger. */
 const CITED_DOCUMENT_EXTENSIONS = new Set(["md", "mdc"]);

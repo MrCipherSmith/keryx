@@ -6,7 +6,7 @@ import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
 import { literalRulePath, projectRulePath, resolveRuleReference, ruleReferences } from "./rule-references";
-import { parseSkillFrontmatter } from "./skill-frontmatter";
+import { frontmatterScalar, parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   createProjectSkill,
   projectSkillSlug,
@@ -380,34 +380,6 @@ type ImportSource = {
 };
 
 const DEPRECATED_REASON = "deprecated";
-
-function frontmatterLines(content: string): string[] {
-  if (!content.startsWith("---")) return [];
-  const end = content.indexOf("\n---", 3);
-  return end === -1 ? [] : content.slice(3, end).split("\n");
-}
-
-/**
- * A frontmatter scalar, top-level (`key:`) or under `metadata:`, without its
- * quotes. The one reader for every field the importer decides on: a line in
- * the body — a fenced frontmatter example, say — is never frontmatter.
- */
-function frontmatterScalar(content: string, key: string, where: "top" | "metadata"): string | undefined {
-  const unquoted = (value: string | undefined): string | undefined => value?.trim().replace(/^["']|["']$/g, "");
-  let inMetadata = false;
-  for (const line of frontmatterLines(content)) {
-    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (top) {
-      if (where === "top" && top[1] === key) return unquoted(top[2]);
-      inMetadata = top[1] === "metadata";
-      continue;
-    }
-    if (where !== "metadata" || !inMetadata) continue;
-    const field = /^\s+([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (field?.[1] === key) return unquoted(field[2]);
-  }
-  return undefined;
-}
 
 /** `deprecated: true` in the frontmatter, top-level or under `metadata:`. */
 function isDeprecated(content: string): boolean {

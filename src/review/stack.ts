@@ -48,6 +48,8 @@
  * routing table itself is prose in a skill body outside this module's reach.
  */
 
+import { frontmatterScalar } from "../gdskills/skill-frontmatter";
+
 export const STACK_TAGS = ["nestjs", "react", "mobx", "prisma", "playwright", "sql", "http-server"] as const;
 export type StackTag = (typeof STACK_TAGS)[number];
 
@@ -214,8 +216,8 @@ export function parseStackRequires(value: string | undefined): StackTag[] {
 /**
  * Extract `metadata.stack_requires` from a `SKILL.md`'s YAML frontmatter.
  *
- * Forgiving by construction, matching `parseSkillFrontmatter` in
- * `metaproject-adapter.ts`: a missing frontmatter block, a missing `metadata:`
+ * Read through the one frontmatter reader (`src/gdskills/skill-frontmatter.ts`),
+ * forgiving by construction: a missing frontmatter block, a missing `metadata:`
  * key, or a missing `stack_requires:` line all degrade to `undefined` (which
  * {@link parseStackRequires} turns into "no requirement declared"), never to a
  * thrown error. A reviewer with no declared requirement is a generic reviewer,
@@ -223,41 +225,7 @@ export function parseStackRequires(value: string | undefined): StackTag[] {
  * parse quirk swallowed their frontmatter.
  */
 export function extractStackRequiresField(skillMdContent: string): string | undefined {
-  if (!skillMdContent.startsWith("---")) {
-    return undefined;
-  }
-  const end = skillMdContent.indexOf("\n---", 3);
-  if (end === -1) {
-    return undefined;
-  }
-  const lines = skillMdContent.slice(3, end).split("\n");
-  let inMetadata = false;
-  for (const line of lines) {
-    const topMatch = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
-    if (topMatch) {
-      inMetadata = topMatch[1] === "metadata";
-      continue;
-    }
-    if (!inMetadata) {
-      continue;
-    }
-    const fieldMatch = /^\s+stack_requires:\s*(.+)$/.exec(line);
-    if (fieldMatch && fieldMatch[1] !== undefined) {
-      return stripQuotes(fieldMatch[1].trim());
-    }
-  }
-  return undefined;
-}
-
-function stripQuotes(value: string): string {
-  if (value.length >= 2) {
-    const first = value[0];
-    const last = value[value.length - 1];
-    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
-      return value.slice(1, -1);
-    }
-  }
-  return value;
+  return frontmatterScalar(skillMdContent, "stack_requires", "metadata") || undefined;
 }
 
 export type StackScopingDecision = {

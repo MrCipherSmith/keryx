@@ -114,6 +114,41 @@ describe("reviewerPathGate", () => {
   });
 });
 
+describe("round-2 frontmatter shapes (G-002, G-003, G-011)", () => {
+  test("a YAML trailing comment is neither a flag nor part of a path (G-003)", () => {
+    for (const flags of ["  flags:\n    - --a # family flag\n", "  flags: --a # family flag\n", '  flags: "--a" # family flag\n']) {
+      expect({ flags, report: reviewerFlagReport(skill(`metadata:\n${flags}`)) }).toEqual({
+        flags,
+        report: { flags: ["--a"], warnings: [] },
+      });
+    }
+    for (const paths of ["  paths:\n    - src/x/** # the x tree\n", "  paths: [src/x/**] # the x tree\n"]) {
+      expect({ paths, gate: reviewerPathGate(skill(`metadata:\n${paths}`)) }).toEqual({
+        paths,
+        gate: { paths: ["src/x/**"], pathsSource: "metadata" },
+      });
+    }
+  });
+
+  test("a bare `-` item does not end a block list (G-011)", () => {
+    expect(reviewerFlags(skill("metadata:\n  flags:\n    - --a\n    -\n    - --b\n"))).toEqual(["--a", "--b"]);
+  });
+
+  test("a key nested under another mapping in metadata is not a metadata field (G-011)", () => {
+    const nested = skill("description: Dispatched for --house.\nmetadata:\n  other:\n    flags: --x\n    paths: src/x/**\n");
+    expect(reviewerFlags(nested)).toEqual(["--house"]);
+    expect(reviewerPathGate(nested)).toEqual({ paths: [], pathsSource: "none" });
+  });
+
+  test("CRLF line endings and a BOM read the same as LF (G-002)", () => {
+    const lf = skill("metadata:\n  flags:\n    - --a\n  paths: [src/x/**]\n");
+    for (const content of [lf.replace(/\n/g, "\r\n"), `\uFEFF${lf}`, `\uFEFF${lf.replace(/\n/g, "\r\n")}`]) {
+      expect(reviewerFlags(content)).toEqual(["--a"]);
+      expect(reviewerPathGate(content)).toEqual({ paths: ["src/x/**"], pathsSource: "metadata" });
+    }
+  });
+});
+
 test("src/review/reviewers re-exports these helpers rather than keeping its own", () => {
   for (const name of [
     "descriptionFlags",

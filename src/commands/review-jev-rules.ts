@@ -13,6 +13,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import { optionValue } from "../lib/args";
+import { metadataList } from "../gdskills/skill-frontmatter";
 import { detectProjectStack, extractStackRequiresField, parseStackRequires } from "../review/stack";
 import { hunkRegionsFromDiff } from "../review/conform-state";
 import { DEFAULT_CONTEXT_LINES } from "../review/scope";
@@ -29,7 +30,6 @@ import {
   findingStats,
   isCodingConventionSkill,
   isPlaceholderClauseText,
-  metadataScalar,
   renderJevRulesMarkdown,
   ruleQuestionKey,
   selectRuleHunkPairs,
@@ -130,15 +130,13 @@ async function walkMatching(root: string, suffixes: readonly string[]): Promise<
   return out.sort();
 }
 
-/** `metadata.paths` — a comma-separated glob list — from a rule/skill's frontmatter. Same shape `src/review/reviewers.ts`'s `metadataList` reads for a project reviewer, duplicated in `metadataScalar`'s minimal form rather than imported: that helper reads a LIST field and is not exported. */
+/**
+ * `metadata.paths` from a rule/skill's frontmatter — a comma-separated scalar, a
+ * flow list or a block list — through the same reader `keryx review reviewers`
+ * gates a project reviewer with, so the two cannot disagree about one field.
+ */
 function declaredPathsFromContent(content: string): string[] {
-  const raw = metadataScalar(content, "paths");
-  if (raw === undefined) return [];
-  return raw
-    .replace(/^["'[]|["'\]]$/g, "")
-    .split(",")
-    .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
-    .filter((entry) => entry.length > 0);
+  return metadataList(content, "paths");
 }
 
 export interface ExcludedRuleSource {

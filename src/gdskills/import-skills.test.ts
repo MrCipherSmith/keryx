@@ -680,6 +680,51 @@ describe("frontmatter is read from the frontmatter block only", () => {
     expect(named.imported[0]?.name).toBe("named-in-frontmatter");
   });
 
+  test("a CRLF or BOM SKILL.md keeps its metadata.category (G-002)", async () => {
+    const lf = "---\nname: review-lint\nmetadata:\n  category: quality\n---\n\n# Lint\n";
+    for (const [shape, content] of [
+      ["crlf", lf.replace(/\n/g, "\r\n")],
+      ["bom", `\uFEFF${lf}`],
+      ["bom+crlf", `\uFEFF${lf.replace(/\n/g, "\r\n")}`],
+    ] as const) {
+      const dir = path.join(source, shape, "review-lint");
+      await mkdir(dir, { recursive: true });
+      await writeFile(path.join(dir, "SKILL.md"), content, "utf8");
+      const result = await importProjectSkills({ projectRoot: cwd, from: path.join(dir, "SKILL.md"), dryRun: true });
+      expect({ shape, module: result.imported[0]?.module }).toEqual({ shape, module: "quality" });
+    }
+  });
+
+  test("a CRLF `deprecated: true # superseded` skips a listed package", async () => {
+    for (const name of ["house-old", "house-new"]) {
+      await mkdir(path.join(source, "skills", name), { recursive: true });
+    }
+    await writeFile(
+      path.join(source, "skills", "house-old", "SKILL.md"),
+      "---\r\nname: house-old\r\ndeprecated: true # superseded by house-new\r\nmetadata:\r\n  category: quality\r\n---\r\n\r\nbody\r\n",
+      "utf8",
+    );
+    await writeSkill(path.join(source, "skills"), "house-new", "body");
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, dryRun: true });
+    expect(result.imported.map((row) => `${row.name}:${row.status}`).sort()).toEqual([
+      "house-new:would-import",
+      "house-old:skipped",
+    ]);
+  });
+
+  test("a file that does not open with `---` has no frontmatter, whatever `---` lines follow", async () => {
+    const dir = path.join(source, "skills", "helper");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), "Example:\nname: review-logic\ncategory: review\n---\n\nbody\n", "utf8");
+    await expect(importProjectSkills({ projectRoot: cwd, from: dir, dryRun: true })).rejects.toThrow(/cannot infer module for helper/);
+  });
+
+  test("a category nested under another mapping in metadata does not choose the module (G-011)", async () => {
+    const file = path.join(source, "one.md");
+    await writeFile(file, "---\nname: one\ncategory: quality\nmetadata:\n  nested:\n    category: review\n---\n\nbody\n", "utf8");
+    expect((await importProjectSkills({ projectRoot: cwd, from: file, dryRun: true })).imported[0]?.module).toBe("quality");
+  });
+
   test("a `deprecated: true` line in the body does not skip a package", async () => {
     const dir = path.join(source, "skills", "review-house");
     await mkdir(dir, { recursive: true });
