@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { metadataList, reviewerFlagReport, reviewerFlags, reviewerPathGate } from "./reviewer-triggers";
+import {
+  descriptionFlags,
+  descriptionPathTriggers,
+  metadataList,
+  reviewerFlagReport,
+  reviewerFlags,
+  reviewerPathGate,
+} from "./reviewer-triggers";
 import * as viaReview from "../review/reviewers";
 import * as here from "./reviewer-triggers";
 
@@ -146,6 +153,28 @@ describe("round-2 frontmatter shapes (G-002, G-003, G-011)", () => {
       expect(reviewerFlags(content)).toEqual(["--a"]);
       expect(reviewerPathGate(content)).toEqual({ paths: ["src/x/**"], pathsSource: "metadata" });
     }
+  });
+});
+
+describe("description triggers and flags (round 3, H-008)", () => {
+  test("a bare `*.ext` is a glob trigger, not prose (T15)", () => {
+    expect(descriptionPathTriggers("Reviews *.ts files and *.ts(x) components.")).toEqual(["*.ts", "*.tsx"]);
+    expect(reviewerPathGate(skill("description: Reviews *.css changes.\n"))).toEqual({ paths: ["*.css"], pathsSource: "description" });
+  });
+
+  test("a literal beside a glob needs a `/` to be a file path (T05)", () => {
+    // A slash-less token with a dot is already refused as a first segment
+    // (`column-zone.ts`) unless it is a dotfile; the `/` rule is what refuses these.
+    expect(descriptionPathTriggers("Reviews src/core/** and .eslintrc.json, .env.local")).toEqual(["src/core/**"]);
+    expect(descriptionPathTriggers("Reviews src/core/** and src/utils/column-zone.ts")).toEqual([
+      "src/core/**",
+      "src/utils/column-zone.ts",
+    ]);
+  });
+
+  test("a flag is found only at a word start, never inside a word (T18)", () => {
+    expect(descriptionFlags("Dispatched by vantage-review--vantage, x=--house or a/--ui")).toEqual([]);
+    expect(descriptionFlags("--lead, then (--paren), x,--comma and --spaced")).toEqual(["--lead", "--paren", "--comma", "--spaced"]);
   });
 });
 

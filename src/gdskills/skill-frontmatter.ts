@@ -1,10 +1,12 @@
 /**
  * The one reader of a `SKILL.md`'s frontmatter.
  *
- * Every consumer that needs a frontmatter field — the catalog, the bundled-tree
- * validator, the importer, the review inventory, `review jev-rules`, the stack
- * gate — reads it through this module. When each owned its own parse they
- * drifted, and every fix to one parse left the others on the old behaviour:
+ * The catalog, the bundled-tree validator, the importer, the review inventory,
+ * `review jev-rules` and the stack gate read their frontmatter fields through
+ * this module. Two readers still parse for themselves and are not covered by
+ * what follows: `parseSkillModelTier` (`model-tier.ts`) and `frontmatterKeys`
+ * (`bundled-eval.ts`). When each consumer owned its own parse they drifted, and
+ * every fix to one parse left the others on the old behaviour:
  *
  * - the validator checked that a `description:` line existed while the runtime
  *   read only that line's text, and 15 bundled skills whose description was a
@@ -19,21 +21,36 @@
  * implementation (the package has no runtime dependencies by policy):
  *
  * - the block opens with a `---` line at the very start of the file (a leading
- *   BOM is ignored) and closes at the next `---` line; `\r\n` reads as `\n`;
+ *   BOM is ignored) and closes at the next `---` line, either fence allowing
+ *   trailing whitespace; `\r\n` reads as `\n`;
  * - top-level `key: value` pairs, and one level of nested mapping under a key
- *   with no value — `metadata:` is the one consumers ask about. Only keys at the
- *   mapping's own indentation are its fields; deeper keys belong to a nested
- *   mapping and are never read as the parent's;
- * - a value is a plain or quoted scalar (one layer of matching quotes removed,
- *   no escape processing), a flow list `[a, "b"]`, a block list of `- item`
- *   lines (an empty `-` item is skipped), or a block scalar `|` / `>` folded to
- *   one line;
+ *   with no value — `metadata:` is the one consumers ask about. A key may be
+ *   quoted (`"name": x` is `name`); it ends at a `:` followed by whitespace or
+ *   the line end, so `a:b` is not a key, and a `- ` line is never one. Only
+ *   keys at the mapping's own indentation are its fields; deeper keys belong to
+ *   a nested mapping and are never read as the parent's, and a line left of it
+ *   is not a field either. A tab counts as one column of indentation (YAML
+ *   forbids tabs there; this reader is lenient);
+ * - a value is a plain or quoted scalar (one layer of matching quotes removed —
+ *   a lone or mismatched quote stays — and no escape processing: `\"` and `''`
+ *   keep the quote open but are kept as written), a flow list `[a, "b"]`, a
+ *   block list of `- item` lines, or a block scalar `|` / `>` folded to one
+ *   line. A block list ends at the first line under its key that is not an
+ *   item; an empty `-` item is skipped, and a flow list or mapping as an item
+ *   makes the whole list unsupported. Empty items of a flow list are dropped;
+ * - a list-valued read also splits a scalar on commas outside quotes
+ *   (`paths: 'a,b', c` is two entries); a quote opens only at the start of an
+ *   entry;
  * - a `#` that starts the value or follows whitespace, outside quotes, starts a
- *   comment and is dropped — except inside a block scalar, where it is text;
+ *   comment and is dropped (`paths: # none` is an empty scalar) — except inside
+ *   a block scalar, where it is text; a `#` line at or left of the block
+ *   scalar's key is still a comment. A quote opens a quoted scalar only at the
+ *   start of a token, so `it's # c` reads `it's`;
  * - the first occurrence of a duplicated key wins.
  *
- * Anything else — flow mappings, nested flow lists, anchors, multi-line quoted
- * scalars — reads as "unsupported" and yields nothing rather than a guess.
+ * Anything else — flow mappings, nested flow lists, anchors, aliases, tags,
+ * multi-line quoted scalars — reads as "unsupported" and yields nothing rather
+ * than a guess.
  *
  * Lives in `gdskills` because that is the lower layer: `review`, `harness` and
  * `commands` import from here, never the other way round.
@@ -285,7 +302,7 @@ export interface SkillFrontmatter {
   readonly name?: string;
   /** The routing text, block scalars folded to one line. */
   readonly description?: string;
-  /** The `triggers:` list, in declaration order. */
+  /** The `triggers:` list, in declaration order. Only a flow or block list; a scalar is not split. */
   readonly triggers?: string[];
   /** `metadata.category`, whatever shape it was declared in. */
   readonly metadataCategory?: string;

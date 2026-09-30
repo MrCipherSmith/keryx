@@ -202,6 +202,23 @@ function fsPromisesBindings(source: string): string[] {
   return aliases;
 }
 
+/** A `require` of `node:fs` / `node:fs/promises` (either specifier style). */
+const REQUIRE_FS = String.raw`\brequire\(\s*["'](?:node:)?fs(?:\/promises)?["']\s*\)`;
+
+/**
+ * Regex sources for the expressions that evaluate to a raw fs writer object
+ * without going through an import the other matchers parse: `<alias>.promises`
+ * for every module alias, and `require("node:fs")` / `require("node:fs/promises")`
+ * with or without `.promises`.
+ */
+function fsReachedExpressions(aliases: readonly string[]): Array<{ readonly source: string; readonly label: string }> {
+  return [
+    ...aliases.map((alias) => ({ source: String.raw`\b${alias}\.promises`, label: `"${alias}.promises"` })),
+    { source: String.raw`${REQUIRE_FS}\.promises`, label: 'require("node:fs").promises' },
+    { source: REQUIRE_FS, label: 'require("node:fs") / require("node:fs/promises")' },
+  ];
+}
+
 /** Every raw-write shape this ratchet catches, named for the failure message. */
 function detectRawWrites(source: string): string[] {
   const hits: string[] = [];
@@ -238,6 +255,38 @@ function detectRawWrites(source: string): string[] {
     for (const fn of WRITE_VERBS) {
       if (new RegExp(`\\b${alias}\\.${fn}\\s*\\(`).test(source)) {
         hits.push(`imports node:fs's "promises" as "${alias}" and calls "${alias}.${fn}("`);
+      }
+    }
+  }
+
+  // H-009 (flow 360 round 3, C8c/C8d/C8e): the same `promises` object, or the
+  // module itself, reached without an import the matchers above parse — bound
+  // to a name (`const fsp = fs.promises`), destructured
+  // (`const { rm } = fs.promises`), or through `require("node:fs")` /
+  // `require("node:fs/promises")`. Reads through any of them stay allowed.
+  const reached = fsReachedExpressions(aliases);
+  const reachedAliases: string[] = [];
+  for (const expr of reached) {
+    const end = String.raw`(?![\w.$])`;
+    const bindRe = new RegExp(String.raw`\b(?:const|let|var)\s+(\w+)\s*(?::[^=;]+)?=\s*${expr.source}${end}`, "g");
+    for (const bound of source.matchAll(bindRe)) if (bound[1]) reachedAliases.push(bound[1]);
+    const destructureRe = new RegExp(String.raw`\b(?:const|let|var)\s*\{([^}]*)\}\s*(?::[^=;]+)?=\s*${expr.source}${end}`, "g");
+    for (const destructured of source.matchAll(destructureRe)) {
+      for (const entry of (destructured[1] ?? "").split(",")) {
+        const [key = "", local] = entry.split(":").map((part) => part.trim());
+        if (WRITE_VERBS.includes(key)) hits.push(`destructures raw "${key}" from ${expr.label}`);
+        // `const { promises: fsp } = require("node:fs")` binds the promises object.
+        if (key === "promises") reachedAliases.push(local || key);
+      }
+    }
+    for (const fn of WRITE_VERBS) {
+      if (new RegExp(String.raw`${expr.source}\.${fn}\s*\(`).test(source)) hits.push(`calls "${fn}(" on ${expr.label}`);
+    }
+  }
+  for (const alias of reachedAliases) {
+    for (const fn of WRITE_VERBS) {
+      if (new RegExp(String.raw`\b${alias}(?:\.promises)?\.${fn}\s*\(`).test(source)) {
+        hits.push(`binds node:fs's promises object or module to "${alias}" and calls a raw "${fn}(" through it`);
       }
     }
   }
@@ -411,6 +460,28 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
       name: "multi-line { promises as fsp } + fsp.mkdir (G-016)",
       source: 'import {\n  existsSync,\n  promises as fsp,\n} from "node:fs";\nawait fsp.mkdir(p);',
     },
+    // H-009 (flow 360 round 3, C8c/C8d/C8e): the promises object or the module
+    // reached by a binding, a destructuring or a `require`.
+    { name: "const fsp = fs.promises; fsp.rm (H-009, C8c)", source: 'import fs from "node:fs";\nconst fsp = fs.promises;\nawait fsp.rm(p, { recursive: true });' },
+    {
+      name: "typed const fsp: typeof fs.promises = fs.promises (H-009)",
+      source: 'import * as fs from "node:fs";\nconst fsp: typeof fs.promises = fs.promises;\nawait fsp.unlink(p);',
+    },
+    { name: "const { rm } = fs.promises (H-009, C8d)", source: 'import fs from "node:fs";\nconst { rm } = fs.promises;\nawait rm(p, { recursive: true });' },
+    {
+      name: "const { rm: removeTree } = fs.promises (H-009, C8d)",
+      source: 'import fs from "node:fs";\nconst { readFile, rm: removeTree } = fs.promises;\nawait removeTree(p, { recursive: true });',
+    },
+    { name: 'require("node:fs").promises.rm (H-009, C8e)', source: 'await require("node:fs").promises.rm(p, { recursive: true });' },
+    { name: 'require("fs").promises.writeFile (H-009)', source: "await require('fs').promises.writeFile(p, c);" },
+    { name: 'require("node:fs/promises").rm (H-009)', source: 'await require("node:fs/promises").rm(p, { recursive: true });' },
+    { name: 'require("node:fs").rmSync (H-009)', source: 'require("node:fs").rmSync(p, { recursive: true });' },
+    { name: 'const { rm } = require("node:fs/promises") (H-009)', source: 'const { rm } = require("node:fs/promises");\nawait rm(p);' },
+    { name: 'const { rmSync } = require("node:fs") (H-009)', source: 'const { rmSync } = require("node:fs");\nrmSync(p);' },
+    { name: 'const fsp = require("node:fs/promises"); fsp.rm (H-009)', source: 'const fsp = require("node:fs/promises");\nawait fsp.rm(p);' },
+    { name: 'const fsp = require("node:fs").promises; fsp.rm (H-009)', source: 'const fsp = require("node:fs").promises;\nawait fsp.rm(p);' },
+    { name: 'const fs = require("node:fs"); fs.promises.rm (H-009)', source: 'const fs = require("node:fs");\nawait fs.promises.rm(p);' },
+    { name: 'const { promises: fsp } = require("node:fs"); fsp.rm (H-009)', source: 'const { promises: fsp } = require("node:fs");\nawait fsp.rm(p);' },
   ];
 
   for (const shape of shapes) {
@@ -430,6 +501,19 @@ describe("contained-write ratchet: detection shapes (mutation coverage, R4-F1)",
   test("G-016: a read through the promises object is never flagged", () => {
     expect(detectRawWrites('import fs from "node:fs";\nawait fs.promises.readFile(p, "utf8");')).toEqual([]);
     expect(detectRawWrites('import { promises as fsp } from "node:fs";\nawait fsp.readFile(p, "utf8");')).toEqual([]);
+  });
+
+  test("H-009: a read through a bound, destructured or required promises object is never flagged", () => {
+    for (const source of [
+      'import fs from "node:fs";\nconst fsp = fs.promises;\nawait fsp.readFile(p, "utf8");',
+      'import fs from "node:fs";\nconst { readFile, readdir: list } = fs.promises;\nawait readFile(p);',
+      'await require("node:fs").promises.readFile(p, "utf8");',
+      'const { readFile } = require("node:fs/promises");\nawait readFile(p);',
+      'const fsp = require("node:fs/promises");\nawait fsp.stat(p);',
+      'const { promises: fsp } = require("node:fs");\nawait fsp.lstat(p);',
+    ]) {
+      expect({ source, hits: detectRawWrites(source) }).toEqual({ source, hits: [] });
+    }
   });
 
   test("a type-only import(\"node:fs\") reference is never flagged", () => {
