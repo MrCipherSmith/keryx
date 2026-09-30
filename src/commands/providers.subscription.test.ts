@@ -7,6 +7,8 @@ import { refreshProviderCatalogFromDetected } from "../harness/provider-catalog"
 import { filterConnectedDetectedProviders } from "../tui/tui-shell";
 import { configuredProviders, connectionProviderByName, resolveModelsForPicker, testProviderConnection } from "./providers";
 
+const registryUrl = "https://registry.npmjs.org/@openai%2Fcodex/latest";
+
 const roots: string[] = [];
 function root(): string { const dir = mkdtempSync(join(tmpdir(), "keryx-models-subscription-")); roots.push(dir); return dir; }
 afterEach(() => { for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -20,6 +22,11 @@ function liveFetch(urls: string[]): typeof fetch {
   return (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input); urls.push(url);
     const headers = new Headers(init?.headers);
+    if (url === registryUrl) {
+      expect(headers.has("Authorization")).toBe(false);
+      expect(headers.has("ChatGPT-Account-ID")).toBe(false);
+      return Response.json({ name: "@openai/codex", version: "0.159.2" });
+    }
     if (url.startsWith("https://chatgpt.com/backend-api/codex/models?client_version=")) {
       expect(headers.get("ChatGPT-Account-ID")).toBe("account-test");
       expect(headers.get("Authorization")).toStartWith("Bearer header.");
@@ -35,7 +42,7 @@ test("subscription picker resolves live authorized models independently of API k
   const dir = root(); login(dir); const urls: string[] = [];
   const result = await resolveModelsForPicker(liveFetch(urls), subscription, { OPENAI_API_KEY: "platform-key" }, { configDir: dir });
   expect(result).toEqual({ source: "live", models: ["subscription-live"] });
-  expect(urls).toHaveLength(1);
+  expect(urls).toEqual([registryUrl, "https://chatgpt.com/backend-api/codex/models?client_version=0.159.2"]);
 });
 
 test("catalog offers neither OpenAI identity as connected without its own credential", async () => {
@@ -74,6 +81,29 @@ test("subscription connection test uses its native model endpoint and configured
   expect(configuredProviders({}, dir).some((entry) => entry.name === "openai-codex")).toBe(true);
 });
 
+test.each(["0.159.2", "0.200.0"])("subscription connection test discovers catalog version %s rather than pinning it", async (latestVersion) => {
+  const dir = root(); login(dir);
+  const provider = connectionProviderByName("openai-codex", dir)!;
+  const urls: string[] = [];
+  const fetch = (async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    urls.push(url.href);
+    if (url.href === registryUrl) return Response.json({ name: "@openai/codex", version: latestVersion });
+    expect(url.origin + url.pathname).toBe("https://chatgpt.com/backend-api/codex/models");
+    const current = url.searchParams.get("client_version") === latestVersion;
+    return Response.json({ models: [
+      { slug: "gpt-6-sol", visibility: "list" },
+      ...(current ? [{ slug: "gpt-6.1-sol", visibility: "list" }] : []),
+      { slug: "gpt-reserve", visibility: "hide" },
+    ] });
+  }) as typeof globalThis.fetch;
+  const result = await testProviderConnection(provider, fetch, {}, { dir });
+  expect(result.source).toBe("live");
+  expect(result.models).toContain("gpt-6.1-sol");
+  expect(result.models).not.toContain("gpt-reserve");
+  expect(urls).toEqual([registryUrl, `https://chatgpt.com/backend-api/codex/models?client_version=${latestVersion}`]);
+});
+
 test("subscription rejects API-only auth without a network request", async () => {
   const dir = root(); const urls: string[] = [];
   const result = await resolveModelsForPicker(liveFetch(urls), subscription, { OPENAI_API_KEY: "platform-key" }, { configDir: dir });
@@ -83,8 +113,43 @@ test("subscription rejects API-only auth without a network request", async () =>
 
 test("subscription models reject server auth errors without echoing response secrets", async () => {
   const dir = root(); login(dir);
-  const fetch = (async () => Response.json({ error: "token=secret-response-value" }, { status: 401 })) as unknown as typeof globalThis.fetch;
+  const fetch = (async (input: string | URL | Request) => String(input) === registryUrl
+    ? Response.json({ name: "@openai/codex", version: "0.159.2" })
+    : Response.json({ error: "token=secret-response-value" }, { status: 401 })) as typeof globalThis.fetch;
   const result = await resolveModelsForPicker(fetch, subscription, {}, { configDir: dir });
   expect(result.failure).toEqual({ kind: "rejected", status: 401 });
   expect(JSON.stringify(result)).not.toContain("secret-response-value");
+});
+
+test("subscription reports unavailable discovery without a cached version and never guesses a catalog", async () => {
+  const dir = root(); login(dir); const urls: string[] = [];
+  const fetch = (async (input: string | URL | Request) => {
+    urls.push(String(input));
+    return Response.json({ error: "secret-response-value" }, { status: 503 });
+  }) as typeof globalThis.fetch;
+  const result = await testProviderConnection(connectionProviderByName("openai-codex", dir)!, fetch, {}, { dir });
+  expect(result.models).toEqual([]);
+  expect(result.failure?.kind).toBe("unreachable");
+  expect(result.failure).toHaveProperty("detail", "could not discover the Codex catalog version from npm; no cached version is available");
+  expect(urls).toEqual([registryUrl]);
+  expect(JSON.stringify(result)).not.toContain("secret-response-value");
+});
+
+test("connection Test refreshes the catalog version even while the picker cache is fresh", async () => {
+  const dir = root(); login(dir); const urls: string[] = [];
+  let latestVersion = "0.159.2";
+  const fetch = (async (input: string | URL | Request) => {
+    const url = String(input); urls.push(url);
+    if (url === registryUrl) return Response.json({ name: "@openai/codex", version: latestVersion });
+    return Response.json({ models: [{ slug: new URL(url).searchParams.get("client_version"), visibility: "list" }] });
+  }) as typeof globalThis.fetch;
+  expect((await resolveModelsForPicker(fetch, subscription, {}, { configDir: dir })).models).toEqual(["0.159.2"]);
+  latestVersion = "0.200.0";
+  // Ordinary picker discovery uses the daily cache; an explicit Test bypasses it.
+  expect((await resolveModelsForPicker(fetch, subscription, {}, { configDir: dir })).models).toEqual(["0.159.2"]);
+  const result = await testProviderConnection(connectionProviderByName("openai-codex", dir)!, fetch, {}, { dir });
+  expect(result.models).toEqual(["0.200.0"]);
+  expect(urls.filter((url) => url === registryUrl)).toHaveLength(2);
+  expect((await resolveModelsForPicker(fetch, subscription, {}, { configDir: dir })).models).toEqual(["0.200.0"]);
+  expect(urls.filter((url) => url === registryUrl)).toHaveLength(2);
 });

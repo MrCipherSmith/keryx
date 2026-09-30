@@ -16,6 +16,7 @@
 //   sandbox.json            global sandbox defaults
 //   tui.json                TUI theme preference (flow: /theme)
 //   version-check.json      cached npm latest metadata + failure backoff
+//   codex-catalog-version.json  discovered Codex catalog compatibility version
 //   turns/                  durable remote-turn records (flow 131 / R4c) — the
 //                           event log and terminal result each remote turn is
 //                           streamed and replayed from, plus the idempotency

@@ -1066,7 +1066,10 @@ export async function testProviderConnection(
   env: Record<string, string | undefined> = process.env,
   profiles?: ProfileRefreshOpts,
 ): Promise<ModelsResolveResult> {
-  if (provider.name === "openai-codex") return fetchOpenAiCodexModels(fetchFn, { ...(profiles?.dir !== undefined ? { configDir: profiles.dir } : {}) });
+  if (provider.name === "openai-codex") return fetchOpenAiCodexModels(fetchFn, {
+    refreshCatalogVersion: true,
+    ...(profiles?.dir !== undefined ? { configDir: profiles.dir } : {}),
+  });
   const apiKey = providerApiKey(provider, envWithSavedApiKeys(env, profiles?.dir)) ?? provider.apiKey;
   return fetchOpenAiCompatModelsDetailed(fetchFn, provider, apiKey, {
     timeoutMs: MODELS_FETCH_TIMEOUT_MS,

@@ -95,6 +95,13 @@ keryx auth login <provider>  # subscription login (device code / OAuth) or API k
 Inside a running session, `/provider` reopens the same add/reconfigure wizard
 and `/connect` switches between providers you already configured.
 
+ChatGPT / Codex model discovery reads the current stable Codex version from npm
+metadata and caches it for one day. **Test** in `/connect` (or
+`keryx providers test openai-codex`) always checks for a newer version before
+listing models. This does not install Codex or poll npm in the background.
+If npm is unavailable, a previously discovered version is reused; without a
+cached version, discovery reports the problem instead of guessing a version.
+
 Once you have more than one provider connected, `keryx routing` (and, inside a
 session, `/routing`) maps a task category — `review`, `subagents`, and a
 catalogue of others — to a specific model, so reviews and subagent spawns can

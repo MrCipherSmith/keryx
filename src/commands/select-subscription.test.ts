@@ -22,12 +22,17 @@ test("readline selection completes device login before requesting authorized mod
     if (url.endsWith("/deviceauth/usercode")) return Response.json({ device_auth_id: "device", user_code: "CODE-123", interval: 1 });
     if (url.endsWith("/deviceauth/token")) return Response.json({ authorization_code: "code", code_verifier: "verifier" });
     if (url.endsWith("/oauth/token")) return Response.json({ access_token: access, expires_in: 3600 });
+    if (url === "https://registry.npmjs.org/@openai%2Fcodex/latest") return Response.json({ name: "@openai/codex", version: "0.159.2" });
     return Response.json({ models: [{ slug: "authorized-model", visibility: "list" }] });
   }) as typeof globalThis.fetch;
   const result = await pickProviderModel(shell, detected, { fetch, env: {}, configDir: dir, openVerificationUrl: (url) => { opened.push(url); } });
   expect(result).toEqual({ provider: "openai-codex", model: "authorized-model" });
   expect(loadOAuthGrant("openai-codex", dir)?.access).toBe(access);
   expect(urls[0]).toEndWith("/deviceauth/usercode");
+  expect(urls.slice(-2)).toEqual([
+    "https://registry.npmjs.org/@openai%2Fcodex/latest",
+    "https://chatgpt.com/backend-api/codex/models?client_version=0.159.2",
+  ]);
   expect(opened).toEqual(["https://auth.openai.com/codex/device"]);
   expect(shell.output.join("")).toContain("CODE-123");
   expect(shell.output.join("")).toContain("Ctrl+C");
