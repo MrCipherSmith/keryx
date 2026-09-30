@@ -248,6 +248,35 @@ export interface RunDeps {
    * `src/harness/hooks/runtime.ts`).
    */
   hooks?: HookRuntime;
+  /**
+   * OPTIONAL out-of-band approver (flow 369 / R4d).
+   *
+   * Absent => byte-identical to before: a headless run turns an `ask` into a
+   * `deny` inside `decide()`. Present => the run is treated as able to ask, so
+   * `decide()`/`composeDecision` return `ask` where they would have failed it
+   * closed, and THIS callback is consulted for exactly those calls, AFTER every
+   * floor has been evaluated (policy deny, hard deny, flow-file guard, hook deny
+   * are terminal and never reach it). An answer can only turn `ask` into `allow`,
+   * and only when the fingerprint it returns is the one of this very call.
+   */
+  approver?: (request: ApprovalRequest) => Promise<ApprovalAnswer>;
+}
+
+/** What an approver is asked: the call's identity and the floors it sits under, never its arguments. */
+export interface ApprovalRequest {
+  toolCallId: string;
+  toolName: string;
+  risk: ToolRisk;
+  actionFingerprint: string;
+  floors: string[];
+}
+
+export interface ApprovalAnswer {
+  approved: boolean;
+  /** The fingerprint the answer was given for. Anything but this call's own fingerprint is a deny. */
+  fingerprint: string;
+  approvalId?: string;
+  reason?: string;
 }
 
 /**
@@ -559,10 +588,12 @@ export async function runOffline(
     };
 
     const actionFingerprint = sha256(canonicalize({ toolName, input: parsedInput }));
+    // An approver makes an `ask` answerable; without one it stays a headless deny.
+    const askable = deps.interactive || deps.approver !== undefined;
     const policyContext: PolicyContext = {
       profile: deps.policyProfile,
       role: input.role,
-      interactive: deps.interactive,
+      interactive: askable,
       approvals: [],
       actionFingerprint,
     };
@@ -623,7 +654,24 @@ export async function runOffline(
     // The composed decision (hooks can only tighten) is what is
     // pushed/persisted and gates execution below.
     if (preToolUseFire !== undefined) {
-      decision = composeDecision(decision, preToolUseFire.decisions, { interactive: deps.interactive });
+      decision = composeDecision(decision, preToolUseFire.decisions, { interactive: askable });
+    }
+
+    if (decision.decision === "ask" && deps.approver !== undefined) {
+      const floors: string[] = [];
+      if (risk === "destructive") floors.push("destructive");
+      if (risk === "credential") floors.push("credentials");
+      if (preToolUseFire?.decisions.some((entry) => entry.decision === "ask") === true) floors.push("hook-ask");
+      const answer = await deps.approver({ toolCallId, toolName, risk, actionFingerprint, floors });
+      const bound = answer.approved && answer.fingerprint === actionFingerprint;
+      decision = {
+        ...decision,
+        decision: bound ? "allow" : "deny",
+        matchedRules: [...decision.matchedRules, bound ? "remote-approval:allowed" : "remote-approval:denied"],
+        reason: bound
+          ? "Allowed once by an out-of-band approval bound to this call."
+          : `Denied: ${answer.reason ?? (answer.approved ? "approval fingerprint does not match the call" : "not approved")}.`,
+      };
     }
 
     decisions.push(decision);

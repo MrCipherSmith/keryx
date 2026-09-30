@@ -52,7 +52,7 @@
         "usage-limit.SYNTHETIC.jsonl": {
           "captured": false,
           "case": "quota exhausted",
-          "caveat": "HAND-AUTHORED, NOT OBSERVED. A usage limit cannot be provoked on demand. The wording is derived second-hand from a reference implementation's source comment recording a 2026-08-05 capture against an older codex, so both the phrasing and the event framing are unverified. Treat the classifier test built on this as provisional and replace the file the first time a real limit is hit."
+          "caveat": "HAND-AUTHORED, NOT OBSERVED. A usage limit cannot be provoked on demand. The wording is derived second-hand from a reference implementation's source comment recording a 2026-08-05 capture against an older codex, so both the phrasing and the event framing are unverified. Treat the classifier test built on this as provisional and replace the file the first time a real limit is hit. A real limit was hit on 2026-09-29 (codex 0.159.0): see fixtures/external/live/codex-cli/2026-09-29/usage-limit.stream.jsonl."
         }
       }
     },

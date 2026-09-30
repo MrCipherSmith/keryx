@@ -191,6 +191,12 @@ as a link that cannot open.
 
 ## Asynchronous approvals
 
+**Implemented in R4d (flow 369).** Deviations: the call fingerprint is the run loop's
+`actionFingerprint`, not `toolCallHash`; "self-grant" is enforced on a declared
+`x-keryx-turn` header; "delivery failure" is a consumer-attached heuristic (60 s after a list,
+event read or streaming submission) behind `approval.requireConsumer`; an answer never lifts a
+floor; the production listener registers no tools, so a stock `keryx serve` raises none.
+
 In the TUI, an `ask` is synchronous: the human is present, and the run loop
 blocks on a keypress. Over HTTP the request will usually finish long before a
 human answers, so `ask` becomes a durable record.

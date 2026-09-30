@@ -13,11 +13,13 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx shell` | Start the interactive TUI agent harness (--no-tui or --chat to opt out). |
 | `keryx help` | Grouped command help by task — keryx help [group\|command]. |
 | `keryx doctor` | One-page health check: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness. |
+| `keryx setup` | Print the Metaproject preparation guide: init, refresh, or repair. |
 
 | Shell command | Summary |
 |---|---|
 | `/help` | Show available commands, grouped by task. |
 | `/doctor` | Same one-page health check, inside the session. |
+| `/setup` | Same preparation guide, inside the session — prints steps, runs nothing. |
 
 ## Connect a model provider
 
@@ -61,6 +63,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/new` | Start a new session (old kept on disk). |
 | `/clear` | New session (alias of /new). |
 | `/compact` | Compact model context — /compact [focus] (archive kept). |
+| `/rewind` | Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files\|history\|both]]; snapshots cover the work tree only. |
 | `/copy` | Copy the newest transcript block to the clipboard. |
 | `/expand` | Expand the last tool output block. |
 | `/status` | Show session identity, context window, limits, workspaces, and flows. |
@@ -117,7 +120,9 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
+| `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+| `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
 
@@ -126,7 +131,11 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/triggers` | Declared triggers: last outcome, spend, reservations — run one now. |
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
+| `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
+| `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Show the last governance report, or run one in the background. |
+| `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
+| `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 
 ## External agents, ACP and MCP
 
@@ -145,7 +154,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 |---|---|
 | `/delegate` | Hand a task to an external agent CLI — /delegate <agent> <task>. |
 | `/demote` | Move a running foreground task to the background — /demote <task_id>. |
-| `/mcp` | MCP servers keryx is connected to — status, connect/disconnect. |
+| `/mcp` | MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all (session trust). |
 | `/integrate` | Wire this project into an editor over MCP (keryx integrate; see also keryx integrations). |
 | `/bus` | Message or view peers on the project agent bus — /bus @<name> <text>. |
 | `/workspace` | Show this session's SAC workspace and its slates. |

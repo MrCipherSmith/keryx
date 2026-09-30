@@ -1,0 +1,103 @@
+name: Keryx review bot
+description: Review a same-repository pull request with keryx and post one review with inline comments.
+
+inputs:
+  model-api-key:
+    description: API key for the model provider. Pass it from a repository secret and nothing else.
+    required: true
+  api-key-env:
+    description: Name of the environment variable the provider reads its key from.
+    required: false
+    default: ANTHROPIC_API_KEY
+  provider:
+    description: Model provider name; empty means the first provider that has a key.
+    required: false
+    default: ""
+  model:
+    description: Model id; empty means the provider default.
+    required: false
+    default: ""
+  max-diff-bytes:
+    description: Largest diff, in bytes, sent to the model. A larger diff is cut at a line boundary and the cut is stated.
+    required: false
+    default: "200000"
+  github-token:
+    description: Token used to read the pull request and to post the review.
+    required: false
+    default: ${{ github.token }}
+  keryx-version:
+    description: npm version or tag of @mrciphersmith/keryx to install.
+    required: false
+    default: latest
+  post:
+    description: Set to "false" for a dry run that prints the review and sends nothing.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - id: guard
+      name: Skip pull requests from forks
+      shell: bash
+      env:
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
+      run: |
+        if [ -n "$HEAD_REPO" ] && [ "${HEAD_REPO,,}" = "${BASE_REPO,,}" ]; then
+          echo "same-repo=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "same-repo=false" >> "$GITHUB_OUTPUT"
+          echo "Skipped: the pull request head is '${HEAD_REPO:-unknown}', not '$BASE_REPO'. The review bot never runs on a fork."
+        fi
+
+    - name: Set up Bun
+      if: steps.guard.outputs.same-repo == 'true'
+      uses: oven-sh/setup-bun@v2
+
+    - name: Install keryx
+      if: steps.guard.outputs.same-repo == 'true'
+      shell: bash
+      env:
+        KERYX_VERSION: ${{ inputs.keryx-version }}
+      run: npm install -g "@mrciphersmith/keryx@${KERYX_VERSION}"
+
+    - name: Review the pull request
+      if: steps.guard.outputs.same-repo == 'true'
+      shell: bash
+      env:
+        KERYX_BOT_MODEL_KEY: ${{ inputs.model-api-key }}
+        API_KEY_ENV: ${{ inputs.api-key-env }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PROVIDER: ${{ inputs.provider }}
+        MODEL: ${{ inputs.model }}
+        MAX_DIFF_BYTES: ${{ inputs.max-diff-bytes }}
+      run: |
+        if ! [[ "$API_KEY_ENV" =~ ^[A-Z][A-Z0-9_]*$ ]]; then
+          echo "api-key-env must be an upper-case environment variable name." >&2
+          exit 2
+        fi
+        export "$API_KEY_ENV=$KERYX_BOT_MODEL_KEY"
+        unset KERYX_BOT_MODEL_KEY
+        args=(--pr "$PR_NUMBER" --repo "$REPO" --max-diff-bytes "$MAX_DIFF_BYTES")
+        [ -n "$PROVIDER" ] && args+=(--provider "$PROVIDER")
+        [ -n "$MODEL" ] && args+=(--model "$MODEL")
+        keryx review bot run "${args[@]}"
+
+    - name: Post the review
+      if: steps.guard.outputs.same-repo == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        SEND: ${{ inputs.post }}
+      run: |
+        if [ "$SEND" = "false" ]; then
+          keryx review bot post --pr "$PR_NUMBER" --repo "$REPO" --sha "$HEAD_SHA"
+        else
+          keryx review bot post --pr "$PR_NUMBER" --repo "$REPO" --sha "$HEAD_SHA" --post
+        fi

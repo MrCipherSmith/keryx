@@ -54,6 +54,8 @@ export interface ServeCredentialRef {
 export interface ServeApproval {
   expirySeconds: number;
   maxPendingPerSession: number;
+  /** Absent means true: an approval with no consumer attached is undeliverable at once. */
+  requireConsumer?: boolean;
 }
 
 export interface ServeBounds {
@@ -277,7 +279,7 @@ const CONFIG_KEYS = [
 ] as const;
 const BIND_KEYS = ["address", "port", "acknowledgeNonLoopback"] as const;
 const CREDENTIAL_REF_KEYS = ["store", "id"] as const;
-const APPROVAL_KEYS = ["expirySeconds", "maxPendingPerSession"] as const;
+const APPROVAL_KEYS = ["expirySeconds", "maxPendingPerSession", "requireConsumer"] as const;
 const BOUNDS_KEYS = [
   "maxBodyBytes",
   "maxPromptChars",
@@ -353,6 +355,9 @@ export function projectServeConfig(
   if (!isInteger(rawApproval.maxPendingPerSession, 1, Number.MAX_SAFE_INTEGER)) {
     return null;
   }
+  if (rawApproval.requireConsumer !== undefined && typeof rawApproval.requireConsumer !== "boolean") {
+    return null;
+  }
 
   const config: ServeConfig = {
     schemaVersion: SERVE_CONFIG_SCHEMA_VERSION,
@@ -369,6 +374,7 @@ export function projectServeConfig(
     approval: {
       expirySeconds: rawApproval.expirySeconds,
       maxPendingPerSession: rawApproval.maxPendingPerSession,
+      ...(rawApproval.requireConsumer !== undefined ? { requireConsumer: rawApproval.requireConsumer } : {}),
     },
   };
 
@@ -421,7 +427,7 @@ export function defaultServeConfig(
     },
     profile: overrides.profile ?? DEFAULT_SERVE_PROFILE,
     credentialRef: { store: "auth-json", id: credentialId },
-    approval: { expirySeconds: 300, maxPendingPerSession: 4 },
+    approval: { expirySeconds: 300, maxPendingPerSession: 4, requireConsumer: true },
   };
 }
 

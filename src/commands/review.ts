@@ -37,6 +37,7 @@ import { runImportReviewers } from "../review/import-reviewers";
 // NEW files, so no other flow's concurrent work on this file collides with
 // any of them.
 import { runJevRules } from "./review-jev-rules";
+import { runReviewBotCommand, runReviewMetricsCommand } from "./review-bot";
 import { runJevRisk } from "./review-jev-risk";
 import { runJevScenarios } from "./review-jev-scenarios";
 import { runJevDocs } from "./review-jev-docs";
@@ -109,11 +110,13 @@ import { resolveCallerSession, type SessionSource } from "../lib/caller-session"
 import { envWithSavedApiKeys } from "../lib/shell-config";
 import {
   decideDispatchModel,
+  decideDispatchModelWithAgent,
   type DiscoveredProvider,
   type DispatchModelDecision,
   type SessionModelContext,
   type TierSignals,
 } from "../gdskills/model-tier";
+import { createTierRankHost, type TierRankHost } from "../harness/routing/tier-rank-agent";
 import { TEST_FILE_RE } from "../testing/selection";
 import { isVerificationMode, verificationClaims } from "../review/verification";
 import {
@@ -593,6 +596,15 @@ export async function reviewCommand(args: string[]): Promise<void> {
     // `src/commands/review-jev-rules.ts` for everything past registration.
     if (command === "jev-rules") {
       await runJevRules(args.slice(1));
+      return;
+    }
+    // flow 368: the review bot (headless run, one PR review) and its metrics.
+    if (command === "bot") {
+      await runReviewBotCommand(args.slice(1));
+      return;
+    }
+    if (command === "metrics") {
+      await runReviewMetricsCommand(args.slice(1));
       return;
     }
     // flow 343: the Jev EDIT GUARD — see `review-jev-edit-guard.ts` for
@@ -1134,6 +1146,36 @@ async function applyReviewRoutingCategory(
   return { decision, routed: false, notices };
 }
 
+/**
+ * Flow 358: the deterministic decision, plus the agent fallback for the one case
+ * the size words and version cannot settle. The fallback compares discovered model
+ * ids and profile prices only; if the host pieces cannot even be built, the
+ * deterministic decision stands, so `review tier` never fails on the fallback.
+ */
+async function decideTierWithFallback(
+  session: SessionModelContext,
+  signals: TierSignals,
+  catalog: readonly DiscoveredProvider[],
+): Promise<DispatchModelDecision> {
+  let host: TierRankHost;
+  try {
+    host = tierRankHostFactory();
+  } catch {
+    return decideDispatchModel(session, signals, catalog);
+  }
+  return await decideDispatchModelWithAgent(session, signals, catalog, {
+    agent: host.agent,
+    cache: host.cache,
+    prices: host.prices(session.providerId),
+  });
+}
+
+/** Test seam: the host the fallback runs on. Production always uses the real one. */
+let tierRankHostFactory: () => TierRankHost = () => createTierRankHost();
+export function setTierRankHostForTests(factory: (() => TierRankHost) | undefined): void {
+  tierRankHostFactory = factory ?? (() => createTierRankHost());
+}
+
 async function runTier(args: string[]): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
     printTierHelp();
@@ -1144,7 +1186,7 @@ async function runTier(args: string[]): Promise<void> {
   const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
   const { decision, routed, notices } = await applyReviewRoutingCategory(
-    decideDispatchModel(session, signals, catalog),
+    await decideTierWithFallback(session, signals, catalog),
     process.cwd(),
     catalog,
   );
@@ -1326,13 +1368,21 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
  * Whether the block names a model: only when discovery assigned one that is
  * NOT the session's.
  *
- * `session-ranked` and `session-fallback` both resolve to the session's own
- * model, and naming it there adds nothing a dispatch can use — it only pins an
+ * `session-ranked`, `session-fallback` and an agent answer that kept the session
+ * all resolve to the session's own model, and naming it there adds nothing a dispatch can use — it only pins an
  * id the runner may not have (a different host, a model switched mid-session)
  * and turns "whatever you are running" into a stale literal.
  */
 export function pinsModel(decision: DispatchModelDecision): boolean {
-  return decision.tier_resolution === "discovered" && decision.provider !== "" && decision.model !== "";
+  if (decision.provider === "" || decision.model === "") return false;
+  if (decision.tier_resolution === "discovered") return true;
+  // Flow 358: an agent-ranked answer names a different model only when it picked one
+  // above or below the session; "the agent kept the session" is the session's own id.
+  const resolved = decision.tier_reasons[decision.tier_reasons.length - 1];
+  return (
+    decision.tier_resolution === "agent-ranked" &&
+    (resolved === "resolve:agent-picked-above" || resolved === "resolve:agent-picked-below")
+  );
 }
 
 /**
@@ -3733,6 +3783,12 @@ never goes below standard. Reviewer name is not a signal.
 
 A model id is printed only when discovery assigned one other than the session model.
 Otherwise the block carries the tier and inherit: true. Exit status is 0.
+
+tier_resolution is discovered, session-ranked, session-fallback or agent-ranked.
+agent-ranked means the size words and version could not settle the tier and a
+one-shot fallback on the session provider's light tier compared the discovered
+model ids and prices; it never rates the task. A failed or malformed answer keeps
+the session model.
 `);
 }
 
@@ -3836,6 +3892,15 @@ Usage:
                           and verifier queue order (one noul per finding, lowest
                           plausibility first). Never drops or demotes a finding. Opt-in
                           via review.jev.triage in .metaproject/tasks.config.json.
+  keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                       [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+  keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                        [--post] [--fixtures <dir>] [--json]
+                        The pull request review bot: a headless review that drops what a
+                        verifier refutes, then ONE PR review with inline comments. Post is
+                        a dry run unless --post is given. Same-repository pull requests only.
+  keryx review metrics [--json] [--refresh] [--fixtures <dir>]
+                       Findings acted on, dismissed, still open; precision; resolved-before-merge.
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review learn --reviewer <id> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]

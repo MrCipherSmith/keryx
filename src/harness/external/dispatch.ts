@@ -11,7 +11,8 @@
 //
 // Plus one release gate: `worktree-write` is schema-valid and REFUSED, because
 // its prerequisite is a credible audit boundary for writes rather than more spawn
-// machinery (package decisions.md D-04).
+// machinery (package decisions.md D-04). Implemented for ACP agents (flow 292)
+// and for claude-cli alone among the line-stream agents (flow 370).
 //
 // Refusal reasons carry a `code` so callers — and tests — can tell the two
 // look-alike refusals apart. "This agent cannot do that" and "keryx does not do
@@ -81,9 +82,27 @@ export const IMPLEMENTED_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only
  */
 export const IMPLEMENTED_ACP_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only", "worktree-write"];
 
-/** The sandbox levels keryx implements for this entry's transport. */
-export function implementedSandboxModesFor(entry: ExternalAgentEntry): readonly ExternalSandbox[] {
-  return transportOf(entry) === "acp" ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
+/**
+ * The one line-stream agent whose `worktree-write` is implemented (flow 370):
+ * its Edit/Write roster and headless permission mode were verified live, and the
+ * write run captures the worktree diff for review. codex and antigravity have no
+ * verified narrow write mode yet.
+ */
+export const CODEC_WRITE_AGENT_ID = "claude-cli";
+
+/** Who is asking: `ownsWriteCapture` is true only for the caller that captures and stores the worktree diff (`runExternalWriteChild`). */
+export interface ValidateRuntimeOptions {
+  readonly ownsWriteCapture?: boolean;
+}
+
+/**
+ * The sandbox levels keryx implements for this entry's transport. A line-stream agent's
+ * `worktree-write` needs a caller that captures the diff; the model-initiated path has none,
+ * so its edits would be thrown away with the worktree.
+ */
+export function implementedSandboxModesFor(entry: ExternalAgentEntry, options: ValidateRuntimeOptions = {}): readonly ExternalSandbox[] {
+  if (transportOf(entry) === "acp") return IMPLEMENTED_ACP_SANDBOX_MODES;
+  return entry.id === CODEC_WRITE_AGENT_ID && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
 }
 
 /**
@@ -101,6 +120,7 @@ export function implementedSandboxModesFor(entry: ExternalAgentEntry): readonly 
 export function validateRuntimeBlock(
   runtime: RuntimeBlock | undefined,
   allowedActions: readonly string[],
+  options: ValidateRuntimeOptions = {},
 ): ValidateRuntimeResult {
   if (runtime === undefined || runtime.kind === "keryx") {
     return { ok: true, runtime: "keryx" };
@@ -141,12 +161,16 @@ export function validateRuntimeBlock(
     };
   }
 
-  const implemented = implementedSandboxModesFor(entry);
+  const implemented = implementedSandboxModesFor(entry, options);
   if (!implemented.includes(sandbox)) {
     return {
       ok: false,
       code: "not-implemented",
-      reason: `sandbox "${sandbox}" is not implemented in this release; only ${implemented.join(", ")} is available`,
+      reason:
+        `sandbox "${sandbox}" is not implemented in this release; only ${implemented.join(", ")} is available` +
+        (sandbox === "worktree-write" && transportOf(entry) !== "acp"
+          ? `; write mode is claude-only in this release (${CODEC_WRITE_AGENT_ID})`
+          : ""),
     };
   }
 

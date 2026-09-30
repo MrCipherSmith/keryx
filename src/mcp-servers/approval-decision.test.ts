@@ -21,11 +21,16 @@
 import { describe, expect, test } from "bun:test";
 import {
   APPROVAL_ALLOW_ID,
+  catalogFingerprintResolver,
   catalogResolver,
   isApprovalYes,
   isDockApproval,
   mcpDockVerdict,
+  mcpTrustOffered,
   promptUseToolApproval,
+  renderUseToolApprovalLines,
+  describeUseToolApproval,
+  untrustedOriginNotices,
   type ApprovalIo,
 } from "./approval-render";
 
@@ -86,6 +91,62 @@ describe("the readline prompt returns what the operator actually said", () => {
     expect(await promptUseToolApproval(fakeIo("t"), CALL, { fingerprint: "fp-1", mcpTrustAvailable: true }, () => undefined)).toBe(false);
     expect(await promptUseToolApproval(fakeIo("t"), CALL, { fingerprint: "fp-1" }, resolve)).toBe(false);
     expect(await promptUseToolApproval(fakeIo("t"), CALL, { mcpTrustAvailable: true }, resolve)).toBe(false);
+  });
+});
+
+describe("the untrusted-content floor withholds the trust option", () => {
+  const resolve = catalogResolver({ entries: [{ fqn: "linear__create_issue", server: "linear", rawName: "create_issue" }] });
+  const tainted = { fingerprint: "fp-1", mcpTrustAvailable: true, untrustedOrigin: true, mcpTrustWithheld: true } as const;
+
+  test("the readline prompt omits T, says why, and a typed T is a denial", async () => {
+    const io = fakeIo("t");
+    expect(await promptUseToolApproval(io, CALL, tainted, resolve)).toBe(false);
+    const shown = io.written();
+    expect(shown).toContain("[y/N] ");
+    expect(shown).not.toContain("T=trust");
+    expect(shown).toContain("follows untrusted external content");
+    expect(shown).toContain("trust for this session is not offered");
+  });
+
+  test("a plain yes still approves, with no grant attached", async () => {
+    expect(await promptUseToolApproval(fakeIo("y"), CALL, tainted, resolve)).toEqual({ approved: true, fingerprint: "fp-1" });
+  });
+
+  test("the option is offered only when the floor is off, and the dock verdict follows", () => {
+    expect(mcpTrustOffered({ fingerprint: "fp-1", mcpTrustAvailable: true }, true)).toBe(true);
+    expect(mcpTrustOffered(tainted, true)).toBe(false);
+    expect(mcpTrustOffered({ fingerprint: "fp-1", mcpTrustAvailable: true, untrustedOrigin: true }, true)).toBe(false);
+    expect(mcpTrustOffered({ fingerprint: "fp-1", mcpTrustAvailable: true }, false)).toBe(false);
+    expect(mcpDockVerdict("trust-mcp", mcpTrustOffered(tainted, true), "fp-1")).toBe(false);
+  });
+
+  test("both surfaces draw the reason from the same notice lines", () => {
+    expect(untrustedOriginNotices({ untrustedOrigin: true })).toHaveLength(1);
+    expect(untrustedOriginNotices({ untrustedOrigin: true, mcpTrustWithheld: true })).toHaveLength(2);
+    expect(untrustedOriginNotices({ mcpTrustWithheld: true })).toEqual([]);
+    const lines = renderUseToolApprovalLines(describeUseToolApproval(CALL, resolve), tainted);
+    expect(lines.join("\n")).toContain(untrustedOriginNotices(tainted)[1]!);
+  });
+});
+
+describe("catalogFingerprintResolver binds a grant to the tool definition", () => {
+  const entry = { fqn: "s__t", description: "does a thing", inputSchema: { type: "object", properties: { a: { type: "string" }, b: { type: "number" } } } };
+  const fingerprint = (e: typeof entry | Record<string, unknown>) => catalogFingerprintResolver({ entries: [e as typeof entry] })("s__t");
+
+  test("is stable across key order and unrelated fields", () => {
+    const reordered = { inputSchema: { properties: { b: { type: "number" }, a: { type: "string" } }, type: "object" }, description: "does a thing", fqn: "s__t", annotations: { readOnlyHint: true } };
+    expect(fingerprint(reordered)).toBe(fingerprint(entry));
+    expect(fingerprint(entry)).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  test("changes with the description and with the input schema", () => {
+    expect(fingerprint({ ...entry, description: "does another thing" })).not.toBe(fingerprint(entry));
+    expect(fingerprint({ ...entry, inputSchema: { type: "object", properties: { a: { type: "string" } } } })).not.toBe(fingerprint(entry));
+  });
+
+  test("is undefined for a tool the catalog does not hold", () => {
+    expect(catalogFingerprintResolver({ entries: [entry] })("s__other")).toBeUndefined();
+    expect(catalogFingerprintResolver(undefined)("s__t")).toBeUndefined();
   });
 });
 

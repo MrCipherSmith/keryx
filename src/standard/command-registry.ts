@@ -407,7 +407,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "tasks",
     command: "flow status",
-    summary: "One flow's full status: lifecycle state, AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
+    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
     intent: ["статус флоу", "flow status", "flow details", "show one flow"],
     args: [{ name: "<id>", type: "string", required: true, desc: "flow id" }],
     json: false,
@@ -419,7 +419,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     summary:
       "Create a new flow (managed work item): allocates an id, scaffolds its directory, and collects initial " +
       "context from the source issue if one is given. `--owner` is NEVER inferred — only an explicit value " +
-      "on this command populates it.",
+      "on this command populates it. `--outcome-author` records who wrote the outcome criterion (default " +
+      "`agent`; `human` only when the flag says so).",
     intent: ["создай флоу", "flow init", "start a new flow", "new managed work item", "заведи флоу"],
     args: [
       { name: "title", type: "string", required: false, desc: "work title; required unless --issue is given" },
@@ -432,6 +433,12 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
         type: "bool",
         required: false,
         desc: "opt this flow into the confirmation gate: `flow complete` then needs a token minted by `flow confirm` (flow 299)",
+      },
+      {
+        name: "outcome-author",
+        type: "string",
+        required: false,
+        desc: "who wrote the outcome criterion: agent (the default when omitted) or human; never inferred, any other value is refused before the flow is created; gates nothing",
       },
     ],
     json: false,
@@ -454,6 +461,22 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: false,
     read: false,
     sideEffects: ["writes flow.json's owner field (basis: stated) and appends a history entry"],
+  },
+  {
+    module: "tasks",
+    command: "flow outcome author",
+    summary:
+      "Change who wrote a flow's outcome criterion (agent or human). Requires a reason; appends one journal line " +
+      "naming the old value (or `unknown`), the new value and the reason, and writes nothing when the value is unchanged. Gates nothing.",
+    intent: ["кто написал критерий исхода", "flow outcome author", "set outcome author", "mark outcome criterion as human", "автор критерия исхода"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "<agent|human>", type: "string", required: true, desc: "who wrote the outcome criterion" },
+      { name: "reason", type: "string", required: true, desc: "why the author is being set or changed; one line" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's outcomeAuthor field and appends one journal.md line and a history entry"],
   },
   {
     module: "tasks",
@@ -517,6 +540,23 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: false,
     read: false,
     sideEffects: ["writes flow.json's acChecksum to match the file on disk; acConfirmed is left untouched"],
+  },
+  {
+    module: "tasks",
+    command: "flow ac kinds",
+    summary:
+      "Read a flow's acceptance-criteria.md and report each criterion's verification kind — exec, invariant, " +
+      "judged, none or unclassified — from its trailing `[verify: ...]` marker, with the distribution and the " +
+      "runnable coverage. Reads only: never gates, never runs a check, never calls a model. Exits 1 when a " +
+      "marker is malformed, naming the criterion; that criterion reads unclassified.",
+    intent: ["виды проверки критериев", "flow ac kinds", "acceptance criteria verification kinds", "ac coverage"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON, with the per-criterion records and any marker errors" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
   },
   {
     module: "tasks",
@@ -878,6 +918,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   // command-registry.coverage.test.ts): a descriptor is a query with no cost
   // or an action the operator explicitly approves in the moment, never a
   // model-spending action offered up for silent or remote discovery.
+  // `agents external review|apply|discard` (flow 370) are absent for the same
+  // reason: apply/discard are the human's consent decision on an agent's diff and
+  // must never be a callable operation for an agent; review shows that diff.
   // ---- maintenance ------------------------------------------------------
   // The "bring a project up" commands. They were absent while the registry
   // covered only query surfaces, which left an agent no machine-readable way to
@@ -1123,6 +1166,29 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     summary: "Reprint the most recently written governance report, without regenerating it.",
     intent: ["show governance report", "покажи governance report", "last governance report"],
     args: [{ name: "json", type: "bool", required: false, desc: "print the stored report as JSON instead of markdown" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "product",
+    command: "product index",
+    summary:
+      "Read every flow and requirements package into a disposable intent index. Reports the entries that state no intent. " +
+      "Deterministic: a second run writes the same bytes. Nothing reads product data from anywhere else.",
+    intent: ["product index", "индекс намерений", "what did the product set out to do", "index flow intents"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the index as JSON instead of a summary" }],
+    json: true,
+    read: false,
+    sideEffects: ["writes .metaproject/data/product/index.json"],
+  },
+  {
+    module: "product",
+    command: "product open",
+    summary:
+      "Intents closed in code with no recorded look back, each with its flow and outcome criterion, or " +
+      '"not measured — no instrument stated". Refuses to answer from a missing or stale index.',
+    intent: ["product open", "что закрыто но не проверено", "shipped but never checked", "flows nobody looked back at"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON instead of text" }],
     json: true,
     read: true,
   },

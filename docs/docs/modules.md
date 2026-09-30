@@ -826,6 +826,31 @@ report.
 (owner/signature/completion data), `review` (round cost), `trigger`
 (the spend ledger).
 
+## product
+
+**Purpose.** The product's intent as a derived index over what is already on
+disk, and the list of intents that were closed in code and never looked at
+again. It gates nothing, calls no model, and nothing calls it.
+
+**CLI surface.** `productCommand`:
+
+| Subcommand | Behavior |
+|---|---|
+| `index [--json]` | read every flow and requirements package, write the intent index, print the summary and the count of entries with no stated intent |
+| `open [--json]` | list intents closed in code with no `outcome-observed: <verdict> — <note>` line, with the three-way header and the verdict split; refuses a missing or stale index |
+
+**Key files.** `commands/product.ts` (dispatcher), `product/service.ts`
+(facade), `product/extract.ts` (pure extraction), `product/corpus.ts`,
+`product/store.ts`, `product/open.ts`, `product/types.ts`;
+`tui/product-open-surface.ts` for `/product`.
+
+**Data & artifacts.** `.metaproject/data/product/index.json`, disposable: it is
+rebuilt from `.metaproject/flows/` and `docs/requirements/`, and holds no
+timestamp.
+
+**Dependencies / integrations.** Node builtins only. **Cross-module:** `flow`
+(reads `AcKindRecord` through `flow/ac-kinds`, and the flow directories).
+
 ## review
 
 **Purpose.** The review module turns review output into a durable, validated
@@ -1371,6 +1396,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |
 | `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
 | `agents external list [--json] [--no-probe]` / `probe <id> [--json]` | inspect the external agent registry and its three-state availability; read-only, spends no quota (`src/commands/agents-external.ts`) |
+| `agents external review <run-id>` / `apply <run-id> [--allow-flagged]` / `discard <run-id>` | review, land (as a new local branch `external/<run-id>`, after you type the patch hash prefix at a terminal) or drop a stored `claude-cli --write` diff ([guide](guides/external-agent-write.md)) |
 | `agents external run <id> --task "<text>" [--unattended] [--write]` | drive one ACP agent (`transport: acp`) with keryx as its client, in a disposable worktree, under keryx's approval gate with the mode lowered to `ask`; spends the operator's quota ([ACP client guide](guides/acp-client.md)) |
 
 **Key files.**
@@ -1390,8 +1416,10 @@ vendor coding CLI — `codex exec` or `claude -p` — instead of the in-process 
 The hook runs *after* admission, so the budget ledger and the depth/child caps
 have already applied and no second spawn path exists. Execution is read-only in a
 disposable git worktree with a stripped environment and a restricted tool roster;
-`worktree-write` is a valid contract value the runtime refuses with its own named
-reason. The capability is **off by default**, opt-in through the user-global
+`worktree-write` is a valid contract value the runtime honours for `claude-cli`
+only (a stored, reviewed diff that lands as a new local branch; see
+[Let an external agent write](guides/external-agent-write.md)) and refuses for
+the other agents with its own named reason. The capability is **off by default**, opt-in through the user-global
 `externalAgents` config (plus `keryx init --external-agents` inside a workspace),
 and hard disabled on a remote transport or under CI. keryx never reads a vendor
 credential store, so
@@ -1522,8 +1550,11 @@ product can drive turns. Opt-in and off until started; not a manifest module.
 **How it works.** Authentication happens *before* routing, so an unauthenticated
 caller cannot distinguish a known path from an unknown one. The remote policy
 profile is compared against the local one on every turn and a weaker remote
-profile is refused. There is no approval transport yet: a turn whose decision is
-`ask` ends in a recorded denial rather than being auto-approved.
+profile is refused. A turn whose decision is
+`ask` becomes a durable pending approval answered once over
+`GET /v1/approvals` / `POST /v1/approvals/{id}` or by `keryx approvals`, and is
+denied at expiry rather than auto-approved; the stock listener registers no tools,
+so it raises none.
 
 **Key files.** `src/commands/serve.ts`, `src/lib/serve-*.ts`.
 

@@ -173,7 +173,8 @@ keryx agents monitor <events-file>    # offline fleet report over a recorded log
 
 ## External children: a vendor CLI as a child agent
 
-keryx can hand a bounded, **read-only** piece of work to a coding CLI you already
+keryx can hand a bounded, **read-only** piece of work (or, for `claude-cli` only, a
+[reviewed write](guides/external-agent-write.md)) to a coding CLI you already
 have installed — `codex exec`, `claude -p`, or Google's Antigravity CLI (`agy -p
 --output-format stream-json`) — as a child of this same harness. The vendor's own
 client authenticates itself from its own configuration and does the work on your
@@ -224,10 +225,12 @@ naming each denied action. To let a tool through, add a
 `permissions.allow` rule for it in `agy`'s `settings.json`. keryx never passes
 `--dangerously-skip-permissions`, even though `agy` suggests it.
 
-**Read-only only, same as the other two.** `worktree-write` is a registry-valid
-contract value `agy` itself supports, and this release refuses it with
-`not-implemented` — line-stream (codec) agents have no write path at all yet;
-only the ACP agent below does.
+**Read-only only.** `worktree-write` is a registry-valid contract value `agy`
+itself supports, and this release refuses it with `not-implemented` and the reason
+"write mode is claude-only in this release". `codex-cli` refuses it the same way;
+of the line-stream agents only `claude-cli` can write (see
+[Write mode for `claude-cli`](#write-mode-for-claude-cli)), plus the ACP agent
+below.
 
 ### Off by default, hard disabled where it matters
 
@@ -290,7 +293,8 @@ all — it has no API-key auth path, only its own subscription login under
 afterwards and honoured **on entry**, so a keryx started from inside an external
 child refuses to start another. The tool roster is restricted: `claude` runs with
 `--tools Read Grep Glob`, an allow-list over the built-in roster rather than a
-permission rule, and an empty strict MCP config.
+permission rule, and an empty strict MCP config. (A `--write` run of `claude-cli`
+adds `Edit` and `Write` to that roster and nothing else.)
 
 `ANTHROPIC_API_KEY` is stripped to make the subscription *work*, not for secrecy:
 with a key present the CLI initialises normally, retries, and then fails in a way
@@ -320,6 +324,9 @@ so there is no second spawn path and no second ledger.
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
 keryx agents external run <id> --task "<text>" [--unattended] [--write]
+keryx agents external review <run-id>
+keryx agents external apply <run-id> [--allow-flagged]
+keryx agents external discard <run-id>
 ```
 
 `list` and `probe` are read-only and spend no quota — the only process either
@@ -362,12 +369,35 @@ message was not delivered.
 the agent's own codec and shows it in the Command tab; running it in a real
 terminal is yours to do. The worktree is gone by then, and the tab says so.
 
+### Write mode for `claude-cli`
+
+`keryx agents external run claude-cli --task "<text>" --write` runs `claude` in a
+throwaway git worktree cut from the current commit with only the tools `Read Grep
+Glob Edit Write` — no shell, no network, no MCP server. The worktree's diff is
+captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a
+pending review; nothing reaches your checkout. `keryx agents external review
+<run-id>` shows it. `apply <run-id> [--allow-flagged]` needs a real terminal, shows
+the diff and asks you to type the first 12 hex digits of the patch hash, then
+creates a NEW local branch `external/<run-id>` with one commit, cut from the
+recorded base commit in a second throwaway worktree. Your current branch, index and
+working tree are never touched, a run lands at most once, and nothing is pushed and
+no pull request is opened. `discard <run-id>` drops it. There is no flag or
+environment variable that skips the confirmation, and a caller without a terminal
+lands nothing. In the TUI, `/external-diff` opens a review modal and a sidebar row
+`External diffs: N pending` shows while a diff waits.
+
+The full flow, the refusals and the limits are in
+[Let an external agent write](guides/external-agent-write.md).
+
 ### What this deliberately does not do
 
-- **No mutating external agents.** Read-only only. `worktree-write` is a valid
-  contract value the runtime refuses with its own named reason — distinguishable
-  from an agent that cannot do it — because its prerequisite is a credible audit
-  boundary for writes, not more spawn machinery.
+- **Write mode is `claude-cli` only, and a human is the only review.**
+  `codex-cli` and `antigravity-cli` still refuse `worktree-write` with their own
+  named reason ("write mode is claude-only in this release") — distinguishable
+  from an agent that cannot do it. A model review of the diff is not built, there
+  is no auto-approve, and keryx never pushes or opens a pull request. A full write
+  run through the installed `claude` CLI is not yet recorded; only its
+  narrow-permission flags were probed against `claude` 2.1.280.
 - **No supervision triggers.** The specification describes a folded,
   trigger-driven view of a *running* child for the parent agent. None of it is
   implemented: the parent receives the child's result and nothing before it.
@@ -376,9 +406,16 @@ terminal is yours to do. The worktree is gone by then, and the tab says so.
   own `spawn_subagent` path passes both.
 - **No resume is ever spawned.** The argv is built and displayed for detaching by
   hand.
-- **Nothing has been run against a real vendor process.** Every test drives a
-  fake process port against recorded transcripts, so "works" here means "works
-  offline against what the CLIs actually printed", not "proven end to end".
+- **Live-verified, with limits.** A real `claude` 2.1.280 process ran end to end
+  through `keryx agents external run` on 2026-09-29 and ended `Completed`;
+  `antigravity-cli` (`agy` 1.2.12) did the same on 2026-09-28 and again on
+  2026-09-29 (it denies any tool call it cannot ask about, so give it a task that
+  needs no tools). `codex-cli` 0.159.0 was run for real on 2026-09-29 but hit its
+  subscription usage limit, so only the failure path is recorded, not a successful
+  answer. Gemini has never been run. The raw transcripts live in
+  `fixtures/external/live/`, each with its vendor version, and the default tests
+  replay them offline. `KERYX_LIVE_EXTERNAL=1` runs live tests that assert against
+  real processes; they record nothing.
 
 ## Record and replay
 
@@ -418,11 +455,16 @@ Stated here rather than left to be discovered:
 - **No shipped path registers a tool.** Both production executors are refusals, so
   `keryx harness run` and `keryx serve` are single text turns today. The
   interactive shell is where tools actually run.
-- **No remote approvals.** A `keryx serve` turn whose decision is `ask` ends in a
-  recorded denial. Run approval-requiring work locally through `keryx shell`.
+- **Remote approvals need a tool registry.** A `keryx serve` turn whose decision is
+  `ask` becomes a durable approval a person answers once, for that call, over HTTP or
+  `keryx approvals`; but the stock listener registers no tools, so it raises none. See
+  [Answer a remote approval](guides/answer-remote-approvals.md).
 - **No real replay.** See above — `validate-log` only.
 - **No branch merge.** Reconcile by forking again from a shared ancestor.
-- **No mutating external children, and no supervision of a running one.** The
-  external runtime is read-only, off by default, and has never been run against a
-  real vendor process — see
+- **Limited mutating external children, and no supervision of a running one.** The
+  external runtime is read-only except `claude-cli --write` (reviewed by a human,
+  landed only as a new local branch; no full live write run recorded yet), off by
+  default, and live-verified only for
+  `claude` 2.1.280 and `agy` 1.2.12 (codex-cli: failure path only; Gemini: not at
+  all) — see
   [what this deliberately does not do](#what-this-deliberately-does-not-do).

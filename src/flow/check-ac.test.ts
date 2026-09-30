@@ -6,6 +6,7 @@ import {
   AC_CHECK_TOKEN_BUDGET,
   acCheckCacheKey,
   batchAcCheckItems,
+  classifyAcCriterionNotCheckable,
   classifyNotCheckable,
   computeAcFacts,
   evaluatedVerdict,
@@ -23,6 +24,7 @@ import {
   type AcCheckItem,
 } from "./check-ac";
 import type { ScopedRegion } from "../review/scope";
+import { stripVerifyMarker } from "./ac-kinds";
 
 async function tmpDir(): Promise<string> {
   return await mkdtemp(path.join(tmpdir(), "keryx-check-ac-"));
@@ -174,6 +176,12 @@ describe("batchAcCheckItems", () => {
     return { criterion, facts, matchedHunks: [], changedFiles: [] };
   }
 
+  test("the question sent to the model is identical for a marked criterion and its unmarked twin", () => {
+    const marked = batchAcCheckItems([item("AC1", "the panel shows the count [verify: exec `bun test src/x.test.ts`]")]);
+    const plain = batchAcCheckItems([item("AC1", "the panel shows the count")]);
+    expect(marked[0]!.questions["AC1"]).toEqual(plain[0]!.questions["AC1"]!);
+  });
+
   test("packs small items into a single batch", () => {
     const batches = batchAcCheckItems([item("AC1", "short one"), item("AC2", "short two")]);
     expect(batches).toHaveLength(1);
@@ -310,5 +318,56 @@ describe("rendering", () => {
       notCheckableVerdict({ id: "AC2", text: "" }, "r"),
     ]);
     expect(counts).toEqual({ likelyMet: 0, notEvident: 0, notCheckable: 2 });
+  });
+});
+
+// Acceptance layer W0, AC5: a trailing `[verify: …]` marker is metadata about how
+// a criterion is verified. It is stripped before token extraction and before
+// not-checkable classification, and a marked criterion yields byte-identical facts
+// to the same criterion without one.
+describe("verification marker is invisible to the deterministic facts (acceptance layer AC5)", () => {
+  const BASE = "`keryx flow ac kinds <id>` reports the kinds from `src/flow/ac-kinds.ts` and never refuses.";
+  const DIFF = "diff --git a/src/flow/ac-kinds.ts b/src/flow/ac-kinds.ts\n+export function parseAcKinds() {}\n";
+  const FILES = ["src/flow/ac-kinds.ts", "src/flow/ac-kinds.test.ts"];
+
+  const MARKERS = [
+    "[verify: exec `bun test src/flow/never-in-the-diff.test.ts`]",
+    "[verify: invariant `bun test src/flow/also-absent.test.ts`]",
+    "[verify: judged]",
+    "[verify: none — a judgement no check can settle]",
+  ];
+
+  test("extractCriterionTokens never receives the marker's backticked command", () => {
+    for (const marker of MARKERS) {
+      const facts = computeAcFacts({ id: "AC1", text: `${BASE} ${marker}` }, DIFF, FILES);
+      expect(facts.tokens.some((token) => token.includes("never-in-the-diff") || token.includes("also-absent"))).toBe(false);
+    }
+  });
+
+  test("a marked criterion produces byte-identical facts to the same criterion without one", () => {
+    const plain = computeAcFacts({ id: "AC1", text: BASE }, DIFF, FILES);
+    for (const marker of MARKERS) {
+      const marked = computeAcFacts({ id: "AC1", text: `${BASE} ${marker}` }, DIFF, FILES);
+      expect(JSON.stringify(marked)).toBe(JSON.stringify(plain));
+    }
+  });
+
+  test("a criterion with no marker is passed through untouched", () => {
+    expect(stripVerifyMarker(BASE)).toBe(BASE);
+    const withBracketProse = "Prose that says `[verify: …]` in code and verify: in words, with no trailing marker.";
+    expect(stripVerifyMarker(withBracketProse)).toBe(withBracketProse);
+  });
+
+  test("classifyNotCheckable is handed the text without the marker: a command inside it does not decide the classification", () => {
+    const text = "The freeze prints the distribution [verify: exec `keryx health run`]";
+    // Without the strip, "keryx health run" inside the marker would read as a `health passing` criterion.
+    expect(classifyNotCheckable(text)?.label).toBe("health passing");
+    expect(classifyAcCriterionNotCheckable({ id: "AC1", text })).toBeUndefined();
+    expect(classifyAcCriterionNotCheckable({ id: "AC1", text })).toEqual(classifyNotCheckable("The freeze prints the distribution"));
+  });
+
+  test("a genuinely not-checkable criterion stays not-checkable with or without a marker", () => {
+    const plain = "CI is green and the release ships.";
+    expect(classifyAcCriterionNotCheckable({ id: "AC1", text: `${plain} [verify: none — needs a live run]` })).toEqual(classifyNotCheckable(plain));
   });
 });

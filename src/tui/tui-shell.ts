@@ -61,18 +61,23 @@ import {
 import { renderAnchorsBlock } from "../session/slate";
 import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
+import { join as joinPath } from "node:path";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
 import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
+import { isProductCommand, openProduct } from "./product-open-surface";
+import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
 // CLI does — no separate TUI-only Jev path. Never triggered automatically;
 // only on an explicit key press.
 import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
+import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
@@ -116,6 +121,9 @@ import { isStaledocsCommand, runStaledocsForShell } from "./jev-docs-command";
 import { isOpencommentsCommand, runOpencommentsForShell } from "./jev-comments-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
 import { isTurnGuardCommand, openTurnGuard, TURN_GUARD_COMMAND } from "./turn-guard-inspector";
+import { isRewindCommand, openRewind } from "./rewind-inspector";
+import { applyRewind, type RewindMode } from "../rewind/apply";
+import { createRewindRecorder, rewindDisabledByEnv } from "../rewind/recorder";
 import { createTurnGuardCollector, insertTurnGuardResult, runTurnGuard, type TurnGuardResult } from "./turn-guard-source";
 import { isJevProfileCommand, openJevProfile } from "./jev-profile-inspector";
 import { applyRecommendedJevProfileForShell, readJevProfileForShell, toggleJevProfileKeyForShell } from "../commands/review-jev-profile";
@@ -157,12 +165,21 @@ import {
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
   APPROVAL_ALLOW_ID,
+  catalogDestructiveResolver,
+  catalogFingerprintResolver,
   catalogResolver,
+  catalogTrustStaleness,
   describeUseToolApproval,
+  destructiveTrustNotices,
   mcpDockVerdict,
+  mcpTrustOffered,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
+  parseMcpTrustCommand,
+  runMcpTrustCommand,
   summariseUseToolApproval,
+  TRUSTED_MARKER,
+  untrustedOriginNotices,
 } from "../mcp-servers/approval-render";
 import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
@@ -174,6 +191,8 @@ import {
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { openHelpModal } from "./help-modal"; // flow 303 AC6: the grouped, tabbed `/help` modal
+import { openSetupModal } from "./setup-modal";
+import { parseSetupArgs } from "../commands/setup-guide";
 import { helpFirstRunShown, markHelpFirstRunShown, resolveFirstRunHelp } from "./help-first-run"; // flow 303 AC8
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -274,6 +293,7 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
+import { REWIND_LEASE_REFUSAL } from "../rewind/history";
 import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, whilePersisting } from "../session/lease";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
@@ -3729,6 +3749,9 @@ export async function launchTuiAgentShell(opts: {
   // poller and possibly a running `keryx trigger run` child to stop on exit.
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
+  let liveReviewsPanel: ReviewsPanelHandle | undefined;
+  let liveApprovals: ApprovalsSidebar | undefined;
+  let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3823,6 +3846,9 @@ export async function launchTuiAgentShell(opts: {
     onDestroy: () => {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
+        liveReviewsPanel?.dispose();
+        liveApprovals?.dispose();
+        liveExternalDiff?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -4210,6 +4236,9 @@ export async function launchTuiAgentShell(opts: {
     // defined below once `guardEnabled`/`guardHistory` exist.
     const sbGuard = new otui.BoxRenderable(r, { id: "sb-guard", flexDirection: "column", flexShrink: 0 });
     sidebar.add(sbGuard);
+    // `/rewind`: snapshot count for this session — zero rows while snapshots are off.
+    const sbRewind = new otui.BoxRenderable(r, { id: "sb-rewind", flexDirection: "column", flexShrink: 0 });
+    sidebar.add(sbRewind);
     // Flow 338 (AC8): "Route" row — same zero-rows-while-off idiom as `sbGuard`
     // above. Created here (sidebar position); filled by `refreshRoutingSidebar`,
     // defined below once `routingEnabled`/`routingRoutedCount` exist.
@@ -4311,6 +4340,35 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveSchedules = schedules;
+    // `/reviews`: the managed pull request reviews, mounted after Schedules with the open-findings
+    // count; a click opens the same modal the slash command does.
+    const reviewsPanel = mountReviewsPanel(otui, r, sidebar, {
+      cwd: opts.session?.cwd ?? process.cwd(),
+      width: SIDEBAR_TEXT_WIDTH,
+      onOpen: () => showReviews(),
+    });
+    liveReviewsPanel = reviewsPanel;
+    // Flow 369 (R4d): one row, only while a remote approval is pending; it polls the
+    // approval store itself (that lives in the config dir, not the project).
+    const approvals = mountApprovalsSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      notice: (text) => io.onSystem?.(text),
+    });
+    liveApprovals = approvals;
+    // Flow 370 (AC6): one row, only while a write run awaits review.
+    const externalDiff = mountExternalDiffSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+    });
+    liveExternalDiff = externalDiff;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -5213,12 +5271,16 @@ export async function launchTuiAgentShell(opts: {
           inputJson,
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
         );
-        const canTrustMcp = meta?.mcpTrustAvailable === true && meta.fingerprint !== undefined &&
-          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined;
+        const canTrustMcp = mcpTrustOffered(
+          meta,
+          catalogResolver(deps.mcpRuntime?.()?.catalog())(described.fqn) !== undefined,
+          catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(described.fqn),
+        );
+        const trustedTag = meta?.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "";
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content: otui.t`${roleChunk(otui, "attention", `⚙ ${described.server} wants to run ${described.tool}`)}`,
+            content: otui.t`${roleChunk(otui, "attention", `⚙ ${described.server} wants to run ${described.tool}${trustedTag}`)}`,
           }),
         );
         for (const line of described.argumentLines) {
@@ -5231,6 +5293,11 @@ export async function launchTuiAgentShell(opts: {
               content: otui.t`${dimChunk(otui, `  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
             }),
           );
+        }
+        // The same untrusted-content notices the readline prompt prints, so the
+        // dock says why the trust option is missing while the floor is on.
+        for (const notice of [...untrustedOriginNotices(meta), ...destructiveTrustNotices(meta)]) {
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${dimChunk(otui, `  ${notice}`)}` }));
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
@@ -5261,8 +5328,8 @@ export async function launchTuiAgentShell(opts: {
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
             content: allowed
-              ? otui.t`${roleChunk(otui, "ok", `◇ ${described.fqn} approved`)}`
-              : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn} denied`)}`,
+              ? otui.t`${roleChunk(otui, "ok", `◇ ${described.fqn}${trustedTag} approved`)}`
+              : otui.t`${roleChunk(otui, "error", `◇ ${described.fqn}${trustedTag} denied`)}`,
           }),
         );
         return verdict;
@@ -5553,6 +5620,21 @@ export async function launchTuiAgentShell(opts: {
       });
     };
 
+    // `line` is the whole `/setup [id]` input. An unknown or extra argument
+    // prints the same error `keryx setup` gives instead of opening a tab.
+    const openSetup = (line: string): void => {
+      const request = parseSetupArgs(line.trim().split(/\s+/).slice(1));
+      if (request.kind === "error") {
+        io.onSystem?.(`${request.message}\n`);
+        return;
+      }
+      openSetupModal(otui, chrome, {
+        onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        ...(request.kind === "scenario" ? { initialScenario: request.scenario.id } : {}),
+      });
+    };
+
     // Flow 303 (AC8; HIGH 1 fix, PR #669 review): first-run onboarding —
     // opens `/help` on the "Connect a model provider" tab exactly once, only
     // when no provider is connected yet, and never again. Dispatched in the
@@ -5591,7 +5673,11 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
-    io.trustedMcpTools = new Set<string>();
+    io.trustedMcpTools = new Map<string, string>();
+    // Read fresh on every call: a grant holds only while the tool's definition
+    // in the live catalog still matches the fingerprint stored with it.
+    io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
+    io.mcpToolDestructive = (fqn) => catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(fqn);
     // Read-only ("plan") posture — orthogonal to `permissionMode` (see
     // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
@@ -5610,12 +5696,18 @@ export async function launchTuiAgentShell(opts: {
       // above: a mode-driven auto-approval was never okayed action-by-action,
       // only the mode itself was chosen, once, so the transcript line is the
       // only record of it.
-      const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+      const preview =
+        tool === "shell_exec"
+          ? parseShellExecCommand(input)
+          : isMcpToolCall(tool)
+            ? `${tool} ${describeUseToolApproval(input, catalogResolver(deps.mcpRuntime?.()?.catalog())).fqn}`
+            : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
-      const label = meta.destructive
-        ? `◇ auto-approved (${permissionMode}) [destructive]`
-        : `◇ auto-approved (${permissionMode})`;
+      const label =
+        `◇ auto-approved (${permissionMode})` +
+        (meta.destructive ? " [destructive]" : "") +
+        (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
@@ -5631,6 +5723,7 @@ export async function launchTuiAgentShell(opts: {
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
     let nextArchiveIndex = 0;
+    let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
     /**
      * SLATE-5 open/close wiring (parity with `runAgentRepl` in
@@ -5704,6 +5797,7 @@ export async function launchTuiAgentShell(opts: {
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
+      refreshRewindSidebar();
       // Flow 273 (specification §6.2, AC8): every path that lands here — the
       // startup picker (fork/view/cancel included) and `/resume` — is a live
       // session switch. Undefined before the bus has joined (every startup
@@ -6160,6 +6254,30 @@ export async function launchTuiAgentShell(opts: {
       }
       flushSessionCheckpoint();
     };
+    // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
+    const rewindRecorder = createRewindRecorder({
+      workTree: sessionCwd,
+      dir: () => joinPath(liveSession.dir, "rewind"),
+      enabled: () => !rewindDisabledByEnv() && sessionLease.canPersist(),
+      onError: (message) => io.onSystem?.(`${message}\n`),
+    });
+    io.beforeMutation = () => rewindRecorder.beforeMutation();
+    refreshRewindSidebar = (): void => {
+      clearTranscriptChildren(sbRewind);
+      if (rewindDisabledByEnv()) return;
+      const count = rewindRecorder.snapshotCount();
+      if (count === 0) return;
+      sbRewind.add(
+        new otui.TextRenderable(r, {
+          id: "sb-rewind-v",
+          content: otui.t`${dimChunk(otui, `Rewind ${count}`)}`,
+          onMouseDown: () => {
+            showRewind();
+          },
+        }),
+      );
+    };
+    refreshRewindSidebar();
     const resetSessionSurface = (): void => {
       nav.exit();
       chrome.stopBusy();
@@ -6192,10 +6310,13 @@ export async function launchTuiAgentShell(opts: {
         return false;
       }
       resetSessionSurface();
+      // A fresh session is a new trust boundary, like `applyOpened`'s.
+      io.trustedMcpTools?.clear();
       liveSession = opened.handle;
       history = [];
       archive = [];
       nextArchiveIndex = 0;
+      refreshRewindSidebar();
       // Flow 273 (specification §6.2, AC8): `/new` and `/clear` switch the
       // live session outside `applyOpened` (they reset the whole transcript
       // surface instead), so this is its own hook.
@@ -6323,6 +6444,18 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    const showProduct = (): void => {
+      void openProduct(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys }).catch(() => {
+        io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
+      });
+    };
+    const showReviews = (): void => {
+      void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
+        .then(() => liveReviewsPanel?.refresh())
+        .catch(() => {
+          io.onSystem?.("The managed reviews could not be read.\n");
+        });
+    };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
       openGamesModal(otui, chrome, {
@@ -6421,6 +6554,53 @@ export async function launchTuiAgentShell(opts: {
       openTurnGuard(otui, chrome, {
         history: () => guardHistory,
         enabled: () => guardEnabled,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
+    /** `/rewind`: pick an earlier turn, choose files / history / both, confirm, apply. */
+    const showRewind = (): void => {
+      if (rewindDisabledByEnv()) {
+        io.onSystem?.("Rewind is off (KERYX_REWIND=off), so no snapshots are recorded.\n");
+        return;
+      }
+      if (chrome.isBusy() || foregroundOperation.isActive) {
+        io.onSystem?.("Wait for the current turn to finish before rewinding.\n");
+        return;
+      }
+      if (!sessionLease.canPersist()) {
+        io.onSystem?.(`${REWIND_LEASE_REFUSAL}\n`);
+        return;
+      }
+      openRewind(otui, chrome, {
+        listings: () => rewindRecorder.describe(),
+        apply: async ({ seq, mode }: { seq: number; mode: RewindMode }) => {
+          syncArchive();
+          const outcome = await applyRewind({
+            recorder: rewindRecorder,
+            seq,
+            mode,
+            history,
+            archive,
+            canPersist: () => sessionLease.canPersist(),
+            persist: (nextHistory, nextArchive) => {
+              liveSession = persistHistory(liveSession, nextHistory, {
+                archive: nextArchive,
+                provider: currentSel.provider,
+                model: currentSel.model,
+              });
+            },
+          });
+          if (outcome.historyRewound) {
+            nextArchiveIndex = history.length;
+            io.onSystem?.("Conversation rewound. Earlier messages stay on screen but are no longer part of the context.\n");
+          }
+          if (outcome.filesRestored) io.onSystem?.("Files rewound. A pre-rewind snapshot is listed in /rewind.\n");
+          refreshRewindSidebar();
+          paintSessionHeader();
+          return { ok: outcome.ok, lines: outcome.lines };
+        },
         onKeypress: (handler) => onKeypress(r, handler),
         renderer: r,
         inputBlocked: () => chrome.keyboardOwnedElsewhere(),
@@ -6590,12 +6770,27 @@ export async function launchTuiAgentShell(opts: {
      * alone, and says which it did. A read-only view must not spawn
      * anything, so it never creates the runtime.
      */
+    const runMcpTrustLine = (line: string): boolean => {
+      const parsed = parseMcpTrustCommand(line);
+      if (parsed === undefined) return false;
+      const catalog = deps.mcpRuntime?.()?.catalog();
+      const lines = runMcpTrustCommand(parsed, io.trustedMcpTools, catalogResolver(catalog), catalogTrustStaleness(catalog));
+      io.onSystem?.(`${lines.join("\n")}\n`);
+      return true;
+    };
     const showMcpConsumer = (): void => {
       const cwd = inspectorCwd();
       const snapshot = () => {
         const live = deps.mcpRuntime?.();
         if (live === undefined) return undefined;
+        const resolve = catalogResolver(live.catalog());
+        const trustedByServer = new Map<string, number>();
+        for (const fqn of io.trustedMcpTools?.keys() ?? []) {
+          const server = resolve(fqn)?.server;
+          if (server !== undefined) trustedByServer.set(server, (trustedByServer.get(server) ?? 0) + 1);
+        }
         return buildConsumerModel({
+          trustedByServer,
           configured: live.configured(),
           states: live.servers(),
           problems: live.problems(),
@@ -7369,6 +7564,10 @@ export async function launchTuiAgentShell(opts: {
             openHelp();
             return;
           }
+          case "setup": {
+            openSetup(line);
+            return;
+          }
           case "interrupt": {
             if (foregroundOperation.isActive) {
               foregroundOperation.cancel("interrupted by user");
@@ -7455,8 +7654,24 @@ export async function launchTuiAgentShell(opts: {
             routeOpsCommand(line, true, ops);
             return;
           }
+          case "product": {
+            showProduct();
+            return;
+          }
+          case "reviews": {
+            showReviews();
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
+            return;
+          }
+          case "approvals": {
+            routeApprovalsCommand(line, true, approvals);
+            return;
+          }
+          case "external-diff": {
+            routeExternalDiffCommand(line, externalDiff);
             return;
           }
           case "mcp": {
@@ -7464,7 +7679,7 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           case "mcp-consumer": {
-            showMcpConsumer();
+            if (!runMcpTrustLine(line)) showMcpConsumer();
             return;
           }
           case "game": {
@@ -7853,11 +8068,25 @@ export async function launchTuiAgentShell(opts: {
         if (routeOpsCommand(line, false, ops)) {
           return;
         }
+        if (isProductCommand(command.name)) {
+          showProduct();
+          return;
+        }
+        if (isReviewsCommand(command.name)) {
+          showReviews();
+          return;
+        }
         if (routeSchedulesCommand(line, false, schedules)) {
           return;
         }
+        if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (routeExternalDiffCommand(line, externalDiff)) {
+          return;
+        }
         if (isMcpConsumerCommand(command.name)) {
-          showMcpConsumer();
+          if (!runMcpTrustLine(line)) showMcpConsumer();
           return;
         }
         if (isMcpToolsCommand(command.name)) {
@@ -7975,6 +8204,10 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`review-jev-triage: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           })();
+          return;
+        }
+        if (isRewindCommand(command.name)) {
+          showRewind();
           return;
         }
         if (isTurnGuardCommand(command.name)) {
@@ -8101,6 +8334,10 @@ export async function launchTuiAgentShell(opts: {
             const report = await buildDoctorReport(sessionCwd);
             io.onSystem?.(`${formatDoctorReport(report)}\n`);
           })();
+          return;
+        }
+        if (command.name === "/setup") {
+          openSetup(line);
           return;
         }
         if (command.name === "/game") {
@@ -8660,6 +8897,8 @@ export async function launchTuiAgentShell(opts: {
         // flow 329: starts collecting THIS turn's tool calls/final text fresh —
         // must run before `runAgentTurn` so no early tool call is missed.
         guardCollector.reset(line);
+        syncArchive();
+        rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
         const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
@@ -8674,6 +8913,7 @@ export async function launchTuiAgentShell(opts: {
       }).finally(() => {
         foregroundOperation.settle(operation);
         if (foregroundOperation.isDisposed) return;
+        refreshRewindSidebar();
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
         stopBusy();
         // SLATE-16 binds a workspace mid-turn, on the action-intent turn's
@@ -8909,6 +9149,9 @@ export async function launchTuiAgentShell(opts: {
     // where its output goes; the ledger watcher shows its outcome next start.
     // Review N6: read what is STILL running at print time, not dispose()'s snapshot.
     liveSchedules?.dispose();
+    liveReviewsPanel?.dispose();
+    liveApprovals?.dispose();
+    liveExternalDiff?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);

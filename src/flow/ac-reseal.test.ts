@@ -65,7 +65,115 @@ async function staleTheChecksum(root: string, dir: string, filler = "0"): Promis
   await writeFile(flowPath, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
+// Acceptance layer W0 (AC6): `acKinds` on flow.json is DERIVED from the sealed
+// file. `ac update` re-seals the file and re-parses the kinds in the same write,
+// so the field and the seal never disagree.
+describe("flow ac update keeps acKinds and the seal in step", () => {
+  const marked = (verify: string): string =>
+    `# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds ${verify}\n- AC2: an unmarked criterion\n`;
+
+  test("mutating a kind and re-updating changes both the checksum and the record", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-ac-kinds-reseal-"));
+    try {
+      const service = createFlowService(deps());
+      const created = await service.init({ cwd: root, title: "Kinds reseal" });
+      const dir = path.basename(created.dir);
+      const file = path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md");
+
+      await writeFile(file, marked("[verify: judged]"), "utf8");
+      const frozen = await service.freeze({ cwd: root, id: dir });
+      expect(frozen.acKinds?.["AC1"]).toEqual({ kind: "judged" });
+      expect(frozen.acKinds?.["AC2"]).toEqual({ kind: "unclassified" });
+
+      // Mutate the kind in the file, then re-freeze as already edited.
+      await writeFile(file, marked("[verify: exec `bun test src/flow/ac-kinds.test.ts`]"), "utf8");
+      const updated = await service.acUpdate({ cwd: root, id: dir, reason: "AC1 becomes machine-checkable" });
+
+      expect(updated.acChecksum).not.toBe(frozen.acChecksum);
+      expect(updated.acKinds?.["AC1"]).toEqual({ kind: "exec", check: "bun test src/flow/ac-kinds.test.ts" });
+      expect(updated.acKinds?.["AC2"]).toEqual({ kind: "unclassified" });
+
+      // The persisted file agrees with what was returned, and the seal holds.
+      const onDisk = JSON.parse(await readFile(path.join(root, ".metaproject", "flows", dir, "flow.json"), "utf8")) as {
+        acChecksum: string | null;
+        acKinds: Record<string, unknown>;
+      };
+      expect(onDisk.acChecksum).toBe(updated.acChecksum);
+      expect(onDisk.acKinds["AC1"]).toEqual({ kind: "exec", check: "bun test src/flow/ac-kinds.test.ts" });
+      await expect(service.get({ cwd: root, id: dir })).resolves.toBeDefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("--criterion/--text with a marker rewrites the record the same way", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-ac-kinds-reseal-"));
+    try {
+      const service = createFlowService(deps());
+      const created = await service.init({ cwd: root, title: "Kinds text" });
+      const dir = path.basename(created.dir);
+      await writeFile(
+        path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md"),
+        marked("[verify: judged]"),
+        "utf8",
+      );
+      await service.freeze({ cwd: root, id: dir });
+      const updated = await service.acUpdate({
+        cwd: root,
+        id: dir,
+        reason: "AC2 is honestly unverifiable",
+        criterion: "AC2",
+        text: "an unmarked criterion, now decided [verify: none — a human reads it]",
+      });
+      expect(updated.acKinds?.["AC2"]).toEqual({ kind: "none", reason: "a human reads it" });
+      expect(updated.acKinds?.["AC1"]).toEqual({ kind: "judged" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a malformed marker at update time is recorded as unclassified, and the update still succeeds", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-ac-kinds-reseal-"));
+    try {
+      const service = createFlowService(deps());
+      const created = await service.init({ cwd: root, title: "Kinds malformed" });
+      const dir = path.basename(created.dir);
+      const file = path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md");
+      await writeFile(file, marked("[verify: judged]"), "utf8");
+      await service.freeze({ cwd: root, id: dir });
+      await writeFile(file, marked("[verify: exec]"), "utf8");
+      const updated = await service.acUpdate({ cwd: root, id: dir, reason: "author slipped" });
+      expect(updated.acKinds?.["AC1"]).toEqual({ kind: "unclassified" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("flow ac reseal", () => {
+  test("re-derives acKinds from the file the new seal covers", async () => {
+    const root = await realRepo();
+    try {
+      const service = createFlowService(deps());
+      const created = await service.init({ cwd: root, title: "Reseal kinds" });
+      const dir = path.basename(created.dir);
+      const file = path.join(root, ".metaproject", "flows", dir, "acceptance-criteria.md");
+      const body = (verify: string): string => `# Acceptance Criteria\n\n## Criteria\n\n- AC1: the fixture criterion holds ${verify}\n`;
+      await writeFile(file, body("[verify: judged]"), "utf8");
+      const frozen = await service.freeze({ cwd: root, id: dir });
+      expect(frozen.acKinds?.["AC1"]).toEqual({ kind: "judged" });
+
+      await writeFile(file, body("[verify: exec `bun test x.test.ts`]"), "utf8");
+      await git(root, ["add", "-A"]);
+      await git(root, ["commit", "-q", "-m", "criteria edited after freeze"]);
+
+      const resealed = await service.acReseal({ cwd: root, id: dir, reason: "file committed after the seal" });
+      expect(resealed.acKinds?.["AC1"]).toEqual({ kind: "exec", check: "bun test x.test.ts" });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("re-seals a stale checksum over an unchanged file and KEEPS the confirmations", async () => {
     const root = await realRepo();
     try {

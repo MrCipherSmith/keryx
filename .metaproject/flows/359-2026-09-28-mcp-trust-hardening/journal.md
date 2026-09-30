@@ -1,0 +1,40 @@
+# Flow Journal
+
+- 2026-09-28T21:25:03.298Z - flow created
+- 2026-09-28T21:25:27.148Z - frozen: 6 criteria; checksum recorded
+- 2026-09-28T21:25:27.493Z - task-added: T5: context
+- 2026-09-28T21:25:27.834Z - task-added: T6: floor bypass and offer
+- 2026-09-28T21:25:28.180Z - task-added: T7: definition fingerprint and Map
+- 2026-09-28T21:25:28.544Z - task-added: T8: prompt text, docs, CHANGELOG
+- 2026-09-28T21:25:28.866Z - task-added: T9: verify and review
+- 2026-09-28T21:25:29.198Z - started
+- 2026-09-28T22:13:38.716Z - task-done: T1: Collect remaining context
+- 2026-09-28T22:13:39.010Z - task-done: T2: Implement per plan
+- 2026-09-28T22:13:39.321Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-28T22:13:39.612Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-28T22:13:39.919Z - task-done: T5: context
+- 2026-09-28T22:13:40.220Z - task-done: T6: floor bypass and offer
+- 2026-09-28T22:13:40.519Z - task-done: T7: definition fingerprint and Map
+- 2026-09-28T22:13:40.850Z - task-done: T8: prompt text, docs, CHANGELOG
+- 2026-09-28T22:13:41.178Z - task-done: T9: verify and review
+- 2026-09-28T22:13:56.387Z - ac-confirmed: AC1: executeCall requires !untrustedOrigin for the trusted-MCP bypass; test rewritten to assert an ask with untrustedOrigin, plus next-turn test; PR #789 merged e4b19829 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:13:56.704Z - ac-confirmed: AC2: mcpTrustAvailable withheld while the floor is on (mcpTrustWithheld meta); readline prompt and TUI dock omit the option and print the reason; meta asserted in tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:13:57.027Z - ac-confirmed: AC3: session grant is Map<fqn, definition fingerprint>; unchanged definition no prompt, changed description and changed input schema prompt and drop the grant; tests in agent-permission-mode.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:13:57.329Z - ac-confirmed: AC4: in-memory only, model cannot add, /new and resume clear it (readline sessions-off path fixed in cad1b4fe after review F-002), foreground facade shares the map (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:13:57.638Z - ac-confirmed: AC5: CHANGELOG 0.3.27 Security entries, docs/docs/guides/permission-modes.md, prompt and dock text say why the option is missing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:13:57.958Z - ac-confirmed: AC6: follow-ups recorded as flow 360: destructiveHint never offers trust; /mcp trust list and revoke plus trusted marker (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-28T22:14:06.260Z - completing: merged commit: e4b19829847fd641f71324535e85bd367e232439
+- 2026-09-28T22:14:06.279Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-28T22:14:06.280Z - completion-failed: review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/359-2026-09-28-mcp-trust-hardening/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from
+- 2026-09-28T22:14:18.275Z - completing: merged commit: e4b19829847fd641f71324535e85bd367e232439
+- 2026-09-28T22:14:18.334Z - completion-attempt-recorded: attempt 2: failed
+- 2026-09-28T22:14:18.336Z - completion-failed: review: 2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): no disposition recorded | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): no disposition recorded | verifier-stats (violated): round `2026-09-28-ingest-789` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-28-ingest-789#F-001, 2026-09-28-ingest-789#F-002). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`.
+- 2026-09-28T22:15:21.492Z - completing: merged commit: e4b19829847fd641f71324535e85bd367e232439
+- 2026-09-28T22:15:21.551Z - completion-attempt-recorded: attempt 3: failed
+- 2026-09-28T22:15:21.552Z - completion-failed: review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing
+- 2026-09-28T22:15:42.094Z - completing: merged commit: e4b19829847fd641f71324535e85bd367e232439
+- 2026-09-28T22:15:42.142Z - completion-attempt-recorded: attempt 4: failed
+- 2026-09-28T22:15:42.143Z - completion-failed: review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-28-ingest-789#F-001 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-ingest-789#F-002 (minor, round 2026-09-28-ingest-789): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing
+- 2026-09-28T22:16:43.530Z - completing: merged commit: e4b19829847fd641f71324535e85bd367e232439
+- 2026-09-28T22:16:43.563Z - completion-attempt-recorded: attempt 5: passed
+- 2026-09-28T22:16:43.564Z - done: all gates passed

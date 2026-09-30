@@ -4,6 +4,7 @@
 // produce the entries the model can reach and the ones it cannot, each with a
 // reason. No I/O, so the decision is testable without a subprocess.
 
+import { createHash } from "node:crypto";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
 /**
@@ -37,6 +38,37 @@ export type CatalogEntry = {
   /** `ToolAnnotations`, beside the schema — where the protocol puts it. */
   readonly annotations?: Record<string, unknown> | undefined;
 };
+
+function canonicalJson(value: unknown): string {
+  if (value === undefined) return "null";
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).filter((key) => record[key] !== undefined).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(",")}}`;
+}
+
+/**
+ * A stable digest of one tool's DEFINITION: its qualified name, description and
+ * input schema as the catalog reports them, and nothing else.
+ *
+ * A session grant to skip approval for a tool is bound to this, not only to the
+ * name: an MCP server may change what a tool does, or says it does, between two
+ * calls (a "rug pull"), and the name alone would carry the operator's earlier
+ * yes across that change. Key order is canonicalised so a reconnect that reports
+ * the same definition hashes the same; annotations are left out on purpose, as
+ * they are hints and not part of what the model is told the tool is.
+ */
+export function toolDefinitionFingerprint(
+  entry: Pick<CatalogEntry, "fqn" | "description" | "inputSchema">,
+): string {
+  const canonical = canonicalJson({
+    name: entry.fqn,
+    description: entry.description ?? null,
+    inputSchema: entry.inputSchema ?? null,
+  });
+  return createHash("sha256").update(canonical).digest("hex");
+}
 
 /**
  * A tool that exists on the server and cannot be offered.

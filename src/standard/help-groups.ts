@@ -125,6 +125,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Start here",
     summary: "Same one-page health check, inside the session.",
   },
+  {
+    kind: "cli",
+    name: "setup",
+    group: "Start here",
+    summary: "Print the Metaproject preparation guide: init, refresh, or repair.",
+  },
+  {
+    kind: "slash",
+    name: "/setup",
+    group: "Start here",
+    summary: "Same preparation guide, inside the session — prints steps, runs nothing.",
+  },
 
   // ---- Connect a model provider -------------------------------------------
   {
@@ -232,6 +244,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/compact",
     group: "Working in keryx shell",
     summary: "Compact model context — /compact [focus] (archive kept).",
+  },
+  {
+    kind: "slash",
+    name: "/rewind",
+    group: "Working in keryx shell",
+    summary: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]; snapshots cover the work tree only.",
   },
   {
     kind: "slash",
@@ -419,9 +437,21 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "approvals",
+    group: "Automation",
+    summary: "Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve).",
+  },
+  {
+    kind: "cli",
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
+  },
+  {
+    kind: "cli",
+    name: "product",
+    group: "Automation",
+    summary: "The product's intent as a derived index, and the intents closed in code that nobody looked back at.",
   },
   {
     kind: "cli",
@@ -455,9 +485,33 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/approvals",
+    group: "Automation",
+    summary: "Pending remote approvals with scope, consequence and expiry — allow or deny one call, once.",
+  },
+  {
+    kind: "slash",
+    name: "/external-diff",
+    group: "Automation",
+    summary: "External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard.",
+  },
+  {
+    kind: "slash",
     name: "/governance",
     group: "Automation",
     summary: "Show the last governance report, or run one in the background.",
+  },
+  {
+    kind: "slash",
+    name: "/product",
+    group: "Automation",
+    summary: "Intents closed in code that nobody looked back at, with their outcome criteria.",
+  },
+  {
+    kind: "slash",
+    name: "/reviews",
+    group: "Automation",
+    summary: "Managed pull request reviews: findings by outcome, precision, resolved before merge.",
   },
 
   // ---- External agents, ACP and MCP ----------------------------------------
@@ -525,7 +579,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/mcp",
     group: "External agents, ACP and MCP",
-    summary: "MCP servers keryx is connected to — status, connect/disconnect.",
+    summary: "MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all (session trust).",
   },
   {
     kind: "slash",

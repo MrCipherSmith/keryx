@@ -3,6 +3,149 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.40] — 2026-09-30
+### Added
+- **Write mode for the external agent `claude-cli`** — `keryx agents external run claude-cli --task "..." --write` runs `claude` in a throwaway git worktree cut from the current commit with only the tools `Read Grep Glob Edit Write`: no shell, no network, no MCP server (`--tools Read Grep Glob Edit Write --permission-mode acceptEdits --permission-prompts none`). The worktree's diff is captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a pending review; nothing reaches your checkout. Nothing is stored when the run changed nothing, and a changed symlink that points outside the worktree refuses the run at capture (it can only be discarded).
+- **`keryx agents external review <run-id>`** shows one stored run: flagged paths first, the file list, then the redacted patch. **`apply <run-id> [--allow-flagged]`** needs a real terminal on both ends, shows the diff and asks you to type the first 12 characters of the patch hash; only an exact match creates a NEW local branch `external/<run-id>` with one commit cut from the recorded base commit in a second throwaway worktree. Your current branch, index and working tree are never touched, a run lands at most once, and nothing is pushed and no pull request is opened. **`discard <run-id>`** drops the run and deletes its patch.
+- **Landing is refused** for a patch that redaction altered, for binary files (their content is not in the patch), for flagged paths (`.git`, `.github`, `.claude`, `.metaproject`, hooks, CI) unless `--allow-flagged`, when the branch already exists, and when the patch on disk no longer matches its recorded hash. There is no flag or environment variable that skips the confirmation, and a caller without a terminal lands nothing.
+- **`/external-diff`** — a TUI modal over the pending runs (up/down select, `j`/`k` and PageUp/PageDown scroll, `a` then the 12-character hash prefix, `f` allows flagged paths, `d` then `y` discards, Esc closes) and a one-row sidebar entry `External diffs: N pending`, shown only while a diff awaits review. In the readline shell `/external-diff` lists the pending runs and points at the CLI; it never lands anything.
+- **Guide** — [Let an external agent write](docs/docs/guides/external-agent-write.md).
+### Notes
+- Only `claude-cli` can write. `codex-cli` and `antigravity-cli` still refuse `--write` with "write mode is claude-only in this release"; `gemini-acp --write` is unchanged (its patch is still never applied by keryx).
+- The mandatory review is a human reading the shown diff. A model review is not built, there is no auto-approve, and keryx never pushes or opens a pull request.
+- Verified against the `claude` 2.1.280 narrow-permission probe (the write roster with `acceptEdits` edits inside the worktree, a write outside it is auto-denied, `--permission-prompts none` turns any other question into a refusal). A full write run through the installed CLI has NOT been recorded yet.
+
+## [0.3.39] — 2026-09-29
+### Added
+- **Asynchronous remote approvals (R4d)** — an `ask` in a `keryx serve` turn becomes a durable pending approval and the turn detaches (`202`) instead of ending in a denial. `GET /v1/approvals` lists (`?state=all` adds recently resolved); `POST /v1/approvals/{id}` with `{"decision":"allow"|"deny"}` applies the first valid answer once and returns the original outcome on a replay. An expired approval answers `410`, an answer from the raising turn (declared in `x-keryx-turn`) `403`, an unknown or unseen id an indistinguishable `404`, and a malformed or extended body `400` before any state changes. `/v1/status` `pendingApprovals` is real.
+- **An answer is one call** — bound to a fingerprint of that call, consumed once (restart included), never a session grant, and a destructive, credential or hook-ask call asks again the next time. Unanswered means denied at expiry; with no consumer attached the approval is `undeliverable` at once (`approval.requireConsumer`, default on).
+- **`keryx approvals list|allow|deny <id>`, `/approvals`** — a modal in the TUI (summary, scope, consequence, expires in, state; `a`/`d` then `y`), a one-row sidebar count shown only while something is pending, and a text form in the readline shell.
+- **Client contract page** — [Answer a remote approval](docs/docs/guides/answer-remote-approvals.md).
+### Notes
+- The production `keryx serve` registers no tools, so a stock listener raises no approvals; they are reachable through an injected tool registry. The self-grant rule rests on a declared header, so it stops an honest turn, not a lying caller. The chat card, remote session-wide grants and approvals for unattended trigger runs are not built.
+
+## [0.3.38] — 2026-09-29
+### Added
+- **Review as a pull request bot** — `keryx review bot run --pr <n> --repo <owner/repo>` reviews the pull request diff (one reviewer turn, one verifier turn per finding), drops findings the verifier refutes, and records the rest as a managed review; `keryx review bot post` builds ONE pull request review (event `COMMENT`, `commit_id` = the head) with an inline comment per finding inside the diff and the rest in the body. A dry run unless `--post` is given; refused when the pull request is closed, merged or from a fork, when `--sha` is not the head, or when the review was made at an older commit. The GitHub allow-list gains exactly this one write (`POST repos/{owner}/{repo}/pulls/{n}/reviews`). A comment body that would carry a secret-shaped string is withheld and counted, never masked and posted. The diff is cut at `--max-diff-bytes` (default 200,000) and the cut is stated in the run output, in `report.md` and in the posted review. The review body ends with a hidden `keryx-review-bot` marker for the head commit and the post step refuses when a review with that marker is already on the pull request.
+- **`keryx review metrics [--json] [--refresh]`** — findings raised, acted on, dismissed by kind, answered, still open; precision (acted on over acted on plus dismissed as incorrect) and resolved-before-merge. A ratio with nothing behind it prints `n/a`. Resolved-before-merge is a proxy: a package's `updatedAt` stands in for when a disposition was recorded. Metrics need the managed review packages on the machine where `keryx review complete` is run; the Action's runner keeps them only for the job and nothing uploads them.
+- **A root `action.yml` and `docs/examples/review-bot.yml`** — a composite action that skips fork pull requests, takes the provider key as one input and never puts it on a command line, and needs only `contents: read` and `pull-requests: write`. A test fails on `pull_request_target`, a missing fork guard or wider permissions.
+- **`/reviews`** — a TUI modal and a sidebar row (open-findings count) over the managed pull request reviews, and a text equivalent in the readline agent shell. `/review` is unchanged.
+### Fixed
+- **`keryx review bot post --help` and `keryx review metrics --help` print their own usage** instead of the generic `review` group usage.
+### Docs
+- New guide `review-as-a-pr-bot.md` (setup, secrets, the same-repository rule, dry run, cost and diff cap, metrics and the resolved-before-merge proxy) and a README section; the guide has not been exercised against a real GitHub repository or model provider.
+
+## [0.3.37] — 2026-09-29
+### Added
+- **`/rewind` — per-turn file snapshots with rollback of files and conversation.** Immediately before the first write, shell, destructive or delegate tool call of a turn (after approval), keryx snapshots the project work tree into a per-session shadow git repository under the session directory; a read-only turn snapshots nothing, and the project's own `.git` is never read or written. `/rewind` restores files, history or both to before a chosen turn: modified files come back, created files are removed, deleted files are recreated; `.git`, `node_modules`, `.metaproject/data` and gitignored paths are never touched, and files over 5 MB are skipped and named. A `pre-rewind` snapshot is taken first, so the restore can be undone (files only). History is cut by archive index, so it survives compaction, and persists through the session store; `/rewind` refuses when the session lease is held elsewhere. In the TUI it is a modal picker (time, prompt excerpt, files changed; files / history / both; confirmation) plus a sidebar section with the snapshot count; the readline shell has `/rewind`, `/rewind N [files|history|both]` and `/rewind confirm`.
+- **`keryx setup [init|refresh|repair]` and `/setup`** — a read-only guide for preparing a Metaproject from scratch, after a pull, or when something is stale. Each step shows the CLI line and a prompt to paste to an agent; the same guide opens in `keryx shell` as `/setup` (tabs in the TUI, plain text in the readline shell). It runs nothing: no init, update, sync or wiki enrichment. Merged as #802 in the same release without its own version bump, so this entry was added afterwards.
+- **Limits and retention** — 50 snapshots per session, oldest pruned; the shadow repository is removed with its session; `KERYX_REWIND=off` disables it. Unattended runs (triggers, `keryx serve`, external agents) create no shadow repository and refuse `/rewind`. Side effects of `shell_exec` outside the work tree are not undone. Documented in `docs/docs/guides/rewind.md`.
+
+
+## [0.3.36] — 2026-09-29
+### Added
+- **External agents verified against real vendor processes** — `claude` 2.1.280 (2026-09-29) and `agy` 1.2.12 (2026-09-28, run again 2026-09-29) ran end to end through `keryx agents external run` and ended `Completed`; the raw transcripts, each with its vendor version, are in `fixtures/external/live/` and replay offline (claude and codex in `live-fixtures.test.ts`, agy in `antigravity-cli.runtime.test.ts`). A fixture-scan test fails on a known set of private-data patterns (home path, e-mail, token, vendor credential-store reference). With `KERYX_LIVE_EXTERNAL=1` and `KERYX_LIVE_EXTERNAL_CWD` set to a clean scratch repo, live tests assert against real vendor processes; they record nothing.
+- **The first real codex-cli failure is recorded** — a subscription usage limit on codex 0.159.0, replacing the hand-authored stand-in as the reference for the limit classifier. No successful codex run exists yet; the subscription was at its limit until 2026-10-03.
+### Fixed
+- **codex-cli 0.159.0's expired-login wording is classified as an authentication failure** — "Your access token could not be refreshed. Please log out and sign in again." now yields the `codex login` hint instead of an unclassified failure.
+### Docs
+- `harness.md` and the shell/TUI test catalog no longer say the external runtime was never run against a real vendor process; they name the verified versions and keep Gemini and a successful codex run marked unverified.
+
+## [0.3.35] — 2026-09-29
+
+### Added
+- **MCP session trust is inspectable and revocable** — `/mcp trust list` prints every tool trusted for the session with its full name and server, and says `(will ask again: changed|destructive|gone)` instead of `[trusted]` for a grant the next call would not honour; `/mcp trust revoke <server__tool>` removes one and `/mcp trust revoke all` removes everything. An unknown name is reported and changes nothing, and revoke takes the full name only. Works in the TUI (also while the agent is busy) and in the readline shell, where `/mcp` was previously unhandled (plain `/mcp` there now points at `keryx mcp list`). `/mcp trust` is documented in the `/mcp` entry of the slash registry, dropdown, `/help` and the help modal.
+- **A `[trusted]` marker** on the approval transcript lines of a trusted tool, in the `/mcp` view (a per-server count), in `/mcp trust list`, and on the auto-approve line, which now also names the tool (`use_tool <server__tool>`).
+
+### Changed
+- **A tool marked `destructiveHint: true` is never offered session trust** — neither in the TUI dock nor in the readline prompt, and the approval carries a withheld reason saying it is destructive (`mcpTrustWithheldReason`). The annotation is read from the live catalog on every call, so a grant held for a tool that later reports `destructiveHint: true` is dropped and the call asks again. An absent or `false` annotation behaves exactly as in 0.3.27, because the MCP default for a missing hint is "destructive" and would withhold trust from nearly every server.
+
+### Fixed
+- **`/new` and `/clear` in the TUI now clear the session's MCP trust grants.** Only resume did, though the docs said `/new` cleared them.
+
+## [0.3.34] — 2026-09-29
+
+### Fixed
+- **`keryx flow outcome author` was unreachable from the command line in 0.3.33** — the router in `cli.ts` refuses a subcommand that `src/lib/group-subcommands.ts` does not list, and `outcome` was missing from the `flow` list, so the command answered `Unknown command: outcome` before the handler ran. The 0.3.33 tests called `flowCommand` directly and never went through the router. A new test compares every `case` in the `flow` switch with the router's list and runs the command through the real `cli.ts`.
+
+## [0.3.33] — 2026-09-29
+
+### Added
+- **Who wrote the outcome criterion** — a flow's `flow.json` gains an optional `outcomeAuthor`, `agent` or `human`; a flow without it reads `unknown`, and reading never rewrites a file. `keryx flow init --outcome-author agent|human` records it: `agent` when the flag is absent, `human` only when the flag says so (never inferred from a git identity, an owner or the environment), and any other value is refused before the flow is created. With `human`, the `## Outcome criteria` section of `description.md` is the template's own text, byte for byte. `keryx flow schema` lists the field.
+- **`keryx flow outcome author <id> agent|human --reason "<why>"`** — changes it. A missing reason or an unknown value is refused; the field and one `journal.md` line (old value or `unknown`, new value, reason) are written together; setting the value already held writes nothing. It is a `flow` command, so the product module keeps its four commands.
+- **The author is shown** — `keryx flow status` prints an `outcome author:` line; `keryx product index` carries it on each flow intent (optional in `index.json`, so an older index stays valid; covered by the fingerprint); `keryx product open` and the TUI `/product` print it per entry, and the `/flows` detail tab shows it. The flag gates nothing: no completion, freeze, creation or index result depends on it.
+
+### Changed
+- **G1a is counted in four cells and G1b split by author** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): `human` or `agent` crossed with a real criterion or `not measured — <reason>`. Agent flows measure compliance with the instruction; human flows measure acceptance, and conclusions about acceptance come only from human flows. This replaces the 0.3.32 passage that said authorship is classified by hand; the author is now read from flow.json.
+
+## [0.3.32] — 2026-09-29
+
+### Added
+- **Uncommitted closing-state note** — `keryx flow complete` writes flow.json, journal.md and reviews/ into the working copy after the pull request has merged, and nothing commits that afterwards, so a tracked flow directory commonly stayed dirty against HEAD. After a successful completion, and in `keryx flow status` for a `done` flow, keryx now prints one `note:` saying the flow directory has uncommitted changes, naming up to five changed entries (`+N more` beyond that), when git tracks the directory and it has changes; it does not claim to know what wrote them. Each git call is read-only (`--no-optional-locks`) and time-bounded. A directory git tracks nothing in, a clean one, no repository and any git failure print nothing. Read-only git, no model call, informational: it never changes an exit code or a completion result. The TUI `/flows` detail tab shows the same note.
+
+### Changed
+- **G1a is read separately by who created the flow** (`docs/requirements/keryx-product-module/implementation-plan.md`, `metrics-and-validation.md`): flows created by a person and flows created by an agent are counted apart, and an agent-created flow is a compliance check, not acceptance — the agent has just read the instruction to fill the slot. Authorship is classified by hand when the ten flows are read (flow.json does not record it), and the split between a real criterion and `not measured — <reason>` stays as a second axis.
+
+## [0.3.31] — 2026-09-29
+
+### Added
+- **Outcome verdicts** (product module, G1) — an observation is now `outcome-observed: <verdict> — <note>` at column 0 of a flow's `journal.md`, with the verdict exactly one of `helped`, `no-effect`, `harmed`, `inconclusive`. A line inside a fenced code block is ignored. The index stores the verdict and the note, `IntentCounts` splits the observed count by verdict, and the split appears in the `product index` summary, the `product open` header and the TUI `/product` view.
+- **Malformed observations are failures** — a line that starts `outcome-observed:` without a recognized verdict is listed by `product index`, naming the flow, and `index` exits non-zero. The flow stays in the `open` list (it was never validly observed) and is counted once by the staleness check; the header shows the failure count when it is non-zero.
+- **`## Outcome criteria` slot** in the description template `keryx flow init` writes, after Expected Outcome. An untouched hint is not a declared criterion; `not measured — <reason>` states there is no instrument.
+- **Docpack observations** — a requirements package may hold an `## Outcome observations` section in its README.md, one `- <verdict> — <note>` per line Fenced code blocks and HTML comments in the section are stripped first, and a section empty after that is no observation, not a failure. It is stored and parsed only: the package stays `open`. A malformed line is a failure naming the package.
+- **`flow init` note** — when the new description states no intent statement the product index could extract, `flow init` prints exactly one informational line saying so. It uses the same extraction as the index, never changes the exit code and never blocks.
+
+### Changed
+- **Decision gate G1 split into G1a and G1b** (`docs/requirements/keryx-product-module/implementation-plan.md`): G1a over the next 10 flows created after this release, the share that declared an outcome criterion or `not measured — <reason>`, reported as two separate shares; G1b, 2–4 weeks after the release of those flows, the share of them that got a verdict. `map` is built only if both pass. The historical "310 of 310 never checked" number is recorded as the before arm in `metrics-and-validation.md`, not as evidence for the premise.
+
+### Notes
+- Nothing gates: no flow transition, freeze, confirm or complete reads a verdict, criterion or note. No existing flow or requirements package was edited, and the free-text `outcome-observed:` form of 0.3.30 is no longer a valid observation.
+
+## [0.3.30] — 2026-09-29
+
+### Added
+- **`keryx product index [--json]`** (flow 362, product module P1) — reads every flow directory and every `docs/requirements/*/` package into one intent index at `.metaproject/data/product/index.json`. An intent is the Problem or Expected Outcome sentence, the criteria as `AcKindRecord`, the status, the close date and, for a requirements package, its outcome criteria. Deterministic: stable ordering, byte-identical on a second run, no timestamp in the body. The summary reports how many entries state no intent; a flow whose description holds only scaffold placeholders counts there and is not an error. The directory is disposable: delete it and the next `index` rebuilds an equivalent one, and nothing reads product data from anywhere else.
+- **`keryx product open [--json]`** — lists intents closed in code with no recorded observation. Each row names the flow and its outcome criterion, or the literal text `not measured — no instrument stated`. The header splits the never-checked count three ways: no outcome criterion stated, criterion stated but never observed, observed. The index carries a sha256 fingerprint of the flow and requirements files it was read from, plus the package names; when the index is missing or unreadable, or the fingerprint no longer matches the tree, it exits non-zero and names `keryx product index` instead of answering from stale data. Content, not modification time, decides: a restored or renamed directory is caught and a bare `touch` is not.
+- **Observations** — a line beginning `outcome-observed:` in a flow's `journal.md` is read by `index`, and that flow leaves the `open` list. Nothing writes the line.
+- **TUI** — `/product` opens the same header and rows in a scrollable modal, and opens while a turn is running because it only reads.
+
+### Notes
+- The module is one directory, two commands, no skill, no subagent and no gate. It makes no model call, and no other command calls it: no flow transition, freeze, confirm or complete waits on it.
+
+## [0.3.29] — 2026-09-28
+
+### Added
+- **Verification kinds on acceptance criteria** (flow 361, W0) — a criterion may end with one trailing marker: `[verify: exec `cmd`]`, `[verify: invariant `cmd`]`, `[verify: judged]` or `[verify: none — reason]`. The marker is part of the criterion line, so the freeze checksum covers it. A marker quoted in backticks is prose; two markers outside code, or a marker that is not last or does not close with `]`, is an error. An unmarked criterion is `unclassified`, never `none`. Nothing gates on a kind: freeze, `ac update`, confirm and complete behave exactly as before, and no existing criterion is migrated.
+- **`keryx flow ac kinds <id> [--json]`** — reads the criteria file and reports each criterion's kind, the distribution and the runnable coverage. Read-only, no model call; exits `1` naming the criterion when a marker is malformed (that criterion reads `unclassified`).
+- **`flow freeze` prints the distribution** and records a derived `acKinds` map on `flow.json`; `flow ac update` re-parses it in the same write as the new checksum. The file stays the source of truth; a malformed marker warns but never refuses.
+- **Governance coverage** — `keryx governance report` shows an `acceptance coverage` line per flow. A flow with no `acKinds` reads as fully unclassified, not as zero criteria.
+- **TUI** — the AC tab of `/flows` lists each criterion's kind under the same distribution block (`PgUp`/`PgDn` scroll it); a flow frozen before kinds existed says "not recorded".
+- **Requirements standard** — `requirements-package-standard` requires a `Verification:` field on every specification requirement and splits the PRD's success criteria into release criteria and outcome criteria (an outcome criterion names its observation or declares `not measured — <reason>`). The `docpack-orchestrator` Verify phase fails a package that omits either, and accepts an outcome list whose entries are all `not measured`.
+
+### Changed
+- `flow check-ac` strips a trailing verification marker before it extracts a criterion's tokens or decides it is not checkable, so a marker's command text is never read as the criterion's wording. Unmarked criteria are byte-identical.
+
+## [0.3.28] — 2026-09-28
+
+### Added
+- **Model-tier resolution is generation-aware** (flow 358) — within one family and vendor, a newer version now outranks an older one (`sonnet 5` over `5`, `opus 5.5` over `4.8`). A session on a newer model with an older, pricier model discovered never resolves `deep` to the older model: it keeps the session model, and `tier_resolution` / `tier_reasons` record why (`resolve:kept-older-generation-pricier`). `tier_reasons` now ends with a `resolve:<reason>` entry on every decision.
+- **`light` is the next size step below the session model** — an Opus session with Sonnet and Haiku discovered gets Sonnet; Haiku is taken only when nothing sits between.
+- **An agent fallback ranks candidate models when the deterministic ranking is refused or ambiguous** — one short call on the light tier of the session's own provider, shown discovered model ids and profile prices only (never a task), validated (foreign ids dropped, session model must be placed, standard/deep never below the session), cached by a catalogue hash in `tier-rank-cache.json`, and recorded as the new `tier_resolution: agent-ranked` (added to the dispatch and reviewer-input schemas). A failure, timeout or malformed answer keeps the session model. The rule states that it compares candidate models and never rates a task's own difficulty.
+- **`keryx review tier` and the shell's `spawn_subagent` row show the resolution source** — including `agent-ranked` and, for the agent, its trigger, the model it ran on and whether the answer came from cache.
+- The curated Anthropic lineup and seed profiles gain Opus 5.5 and Sonnet 5.5.
+
+### Changed
+- The Claude Code subagent alias map (`deep` → `opus`, `standard` → `sonnet`, `light` → `haiku`) is unchanged and now has a regression test.
+
+## [0.3.27] — 2026-09-28
+
+### Added
+- **Trust a single MCP tool for the rest of a shell session** (flow 359 hardens it) — in `trust` mode the `use_tool` approval prompt offers `T` (readline) / "Trust this tool (this session)" (TUI dock). The grant is the exact qualified tool name, lives only in memory for that interactive session, is cleared by `/new` and by resuming another session, and only a validated operator answer can add to it: the model cannot. A `PreToolUse` hook that asks still asks.
+
+### Security
+- **A trust grant never lifts the untrusted-content floor.** In a turn that holds external content (a web result, or any MCP tool result, the trusted tool's own included) a trusted tool asks like any other, the prompt does not offer `T`, and it says why. The grant applies again in the next turn.
+- **A trust grant is bound to the tool's definition, not only its name.** The session grant stores a fingerprint of the tool's name, description and input schema; if the server changes any of them, or the tool disappears, the grant is dropped and the call asks again.
+
 ## [0.3.26] — 2026-09-28
 
 ### Added

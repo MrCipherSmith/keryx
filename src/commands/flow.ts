@@ -7,8 +7,14 @@ import {
   acCriterionKnown,
   confirmPreconditionError,
   createFlowService,
+  describeAcKind,
+  intentNoteForNewFlow,
+  readOutcomeAuthor,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
+  renderAcKindDistribution,
+  resolveFlowDir,
+  uncommittedFlowStateNote,
   validateCriterionName,
 } from "../flow/service";
 import { durableExternalCommentsGate } from "../flow/review-gate";
@@ -343,6 +349,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runCheckAcCommand(args.slice(1));
       case "owner":
         return await runOwner(args.slice(1));
+      case "outcome":
+        return await runOutcome(args.slice(1));
       case "implemented":
         return await runImplemented(args.slice(1));
       case "complete":
@@ -392,6 +400,8 @@ async function runInit(args: string[]): Promise<void> {
     // Flow 299 (AC2): opt this flow into the confirmation gate. The project
     // default (`completion.require_confirmation`) is read by the service.
     requireConfirmation: args.includes("--require-confirmation"),
+    // Never inferred: `agent` unless the flag is given, `human` only when it says so.
+    outcomeAuthor: outcomeAuthorFlag(args),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -401,6 +411,7 @@ async function runInit(args: string[]): Promise<void> {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
   console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
+  console.log(`  outcome author: ${readOutcomeAuthor(result.flow.outcomeAuthor)}`);
   if (result.flow.gates?.confirmation) {
     console.log(`  confirmation: required ${style.dim("(a terminal-minted token: `keryx flow confirm <id>`)")}`);
   }
@@ -410,11 +421,30 @@ async function runInit(args: string[]): Promise<void> {
       console.log(`  ${style.cyan(symbols.bullet)} ${contextNote}`);
     }
   }
+  const intentNote = await intentNoteForNewFlow(process.cwd(), result.dir);
+  if (intentNote !== null) console.log(`  ${intentNote}`);
   nextSteps([
     "Enrich context.md, formalize description.md, and write plan.md.",
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,
     `Freeze and start: ${style.cyan(`keryx flow freeze ${result.flow.id}`)} then ${style.cyan(`flow start ${result.flow.id}`)}.`,
   ]);
+}
+
+/**
+ * The raw `--outcome-author` value, or `undefined` when the flag is absent. A flag
+ * given with no value (`--outcome-author` last, or followed by another flag) is
+ * passed on as an empty string so the service refuses it, rather than reading as
+ * an omitted flag and quietly taking the default.
+ */
+function outcomeAuthorFlag(args: string[]): string | undefined {
+  const given = args.filter((arg) => arg === "--outcome-author" || arg.startsWith("--outcome-author=")).length;
+  // `human` decides which row of the G1a table a flow lands in, so a repeated flag is
+  // refused outright: `optionValue` would answer with one of the spellings and the
+  // choice would depend on which one it happens to look at first.
+  if (given > 1) {
+    throw new Error("--outcome-author was given more than once; pass it once, as agent or human.");
+  }
+  return given === 1 ? (optionValue(args, "--outcome-author") ?? "") : undefined;
 }
 
 async function runPlan(args: string[]): Promise<void> {
@@ -501,6 +531,36 @@ async function runList(args: string[] = []): Promise<void> {
   }
 }
 
+/**
+ * The uncommitted-closing-state note for a flow, or null. Only a `done` flow has
+ * a final state to be left uncommitted; anything else gets nothing. Informational
+ * — it never changes an exit code, and a failure to work it out is silence.
+ */
+export async function closedFlowStateNote(
+  cwd: string,
+  flow: { id: string; status: FlowStatus },
+): Promise<string | null> {
+  if (flow.status !== "done") return null;
+  try {
+    return await uncommittedFlowStateNote(cwd, flow.id, await resolveFlowDir(cwd, flow.id));
+  } catch {
+    return null;
+  }
+}
+
+/** The note `flow complete` prints: only after a PASSED completion, where the state is final. */
+export async function completionStateNote(
+  cwd: string,
+  result: { passed: boolean; flow: { id: string; status: FlowStatus } },
+): Promise<string | null> {
+  return result.passed ? closedFlowStateNote(cwd, result.flow) : null;
+}
+
+async function printClosedFlowStateNote(cwd: string, flow: { id: string; status: FlowStatus }): Promise<void> {
+  const text = await closedFlowStateNote(cwd, flow);
+  if (text !== null) note(text);
+}
+
 async function runStatus(args: string[]): Promise<void> {
   const id = requireId(args);
   const flow = await getService().get({ cwd: process.cwd(), id });
@@ -522,6 +582,9 @@ async function runStatus(args: string[]): Promise<void> {
   // Flow 289, AC7: owner and the latest signature, in the same line style as
   // the rows above — no reader should have to open flow.json by hand to
   // learn who owns or last signed this flow.
+  // The author of the outcome criterion. A flow without the field reads `unknown`,
+  // and reading it writes nothing.
+  console.log(`  outcome author: ${readOutcomeAuthor(flow.outcomeAuthor)}`);
   console.log(
     `  owner:   ${flow.owner?.value ? `${flow.owner.value} ${style.dim(`[${flow.owner.basis}]`)}` : style.dim("not set")}`,
   );
@@ -581,6 +644,7 @@ async function runStatus(args: string[]): Promise<void> {
       `  ${style.dim(event.at)} ${event.event}${event.detail ? style.dim(`: ${event.detail}`) : ""}`,
     );
   }
+  await printClosedFlowStateNote(process.cwd(), flow);
 }
 
 /**
@@ -714,6 +778,68 @@ async function runSimple(args: string[], action: "freeze" | "start" | "unblock")
   const id = requireId(args);
   const flow = await getService()[action]({ cwd: process.cwd(), id });
   console.log(`  ${style.green(symbols.ok)} Flow ${flow.id} ${style.cyan(symbols.arrow)} ${flowStatusLabel(flow.status)}`);
+  if (action === "freeze") {
+    await printAcKindDistribution(process.cwd(), flow.id);
+  }
+}
+
+/**
+ * Acceptance layer W0: the kind distribution `flow freeze` prints after the
+ * freeze. REPORTS, NEVER REFUSES — it runs after the freeze has been written and
+ * swallows its own failures, so nothing about a kind (or a malformed marker) can
+ * change the outcome of the freeze that already happened.
+ */
+async function printAcKindDistribution(cwd: string, id: string): Promise<void> {
+  try {
+    const { report, errors } = await getService().acKinds({ cwd, id });
+    for (const line of renderAcKindDistribution(report)) {
+      console.log(`  ${style.dim(line)}`);
+    }
+    for (const error of errors) {
+      console.log(`  ${style.yellow(WARN)} ${error.id}: ${error.message} ${style.dim("(read as unclassified)")}`);
+    }
+    if (errors.length > 0) {
+      note(`\`keryx flow ac kinds ${id}\` names each malformed marker. The freeze went through: a kind never refuses one.`);
+    }
+  } catch {
+    // Reporting only. A failure to read the distribution must not turn a successful freeze into an error.
+  }
+}
+
+/**
+ * Acceptance layer W0: `keryx flow ac kinds <id> [--json]` — the distribution and
+ * the per-criterion kind, read from the flow's current criteria file. Read-only.
+ * Exits non-zero on a malformed marker (naming the criterion), zero otherwise;
+ * an `unclassified` criterion is not an error.
+ */
+async function runAcKinds(args: string[]): Promise<void> {
+  const asJson = args.includes("--json");
+  const { positionals } = parseAcArgs(
+    args.filter((arg) => arg !== "--json"),
+    "kinds",
+    [],
+    1,
+  );
+  const id = requireId(positionals);
+  const { report, errors } = await getService().acKinds({ cwd: process.cwd(), id });
+  if (errors.length > 0) {
+    process.exitCode = 1;
+  }
+  if (asJson) {
+    console.log(JSON.stringify({ ...report, errors }, null, 2));
+    return;
+  }
+  heading(`Flow ${report.flowId}: acceptance kinds`);
+  for (const [criterionId, record] of Object.entries(report.criteria)) {
+    console.log(`  ${style.bold(criterionId.padEnd(5))} ${describeAcKind(record)}`);
+  }
+  console.log("");
+  for (const line of renderAcKindDistribution(report)) {
+    console.log(`  ${line}`);
+  }
+  for (const error of errors) {
+    console.error(`${style.red(symbols.cross)} ${error.id}: ${error.message}`);
+  }
 }
 
 async function runTask(args: string[]): Promise<void> {
@@ -849,6 +975,44 @@ async function runOwner(args: string[]): Promise<void> {
   throw new Error('Usage: keryx flow owner set <id> --owner "<name>" --reason "<why>"');
 }
 
+const OUTCOME_AUTHOR_USAGE = 'Usage: keryx flow outcome author <id> agent|human --reason "<why>"';
+
+async function runOutcome(args: string[]): Promise<void> {
+  if (args[0] !== "author") {
+    throw new Error(OUTCOME_AUTHOR_USAGE);
+  }
+  // `<id> <agent|human>` are the two positionals; `--reason`'s value is not one of them.
+  const rest = args.slice(1);
+  const positionals: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] ?? "";
+    if (arg === "--reason") {
+      i += 1;
+    } else if (!arg.startsWith("--")) {
+      positionals.push(arg);
+    }
+  }
+  const id = positionals[0];
+  const author = positionals[1];
+  if (!id || author === undefined || positionals.length > 2) {
+    throw new Error(OUTCOME_AUTHOR_USAGE);
+  }
+  // The previous value and whether anything was written come back from inside the
+  // service's lock, so the message describes this call and not a racing read.
+  const result = await getService().outcomeAuthorSet({
+    cwd: process.cwd(),
+    id,
+    author,
+    reason: optionValue(rest, "--reason") ?? "",
+  });
+  const after = readOutcomeAuthor(result.flow.outcomeAuthor);
+  console.log(
+    result.changed
+      ? `  ${style.green(symbols.ok)} Outcome author ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(after)}`
+      : `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`,
+  );
+}
+
 async function runAc(args: string[]): Promise<void> {
   const sub = args[0];
   if (sub === "confirm") {
@@ -919,6 +1083,9 @@ async function runAc(args: string[]): Promise<void> {
     }
     return;
   }
+  if (sub === "kinds") {
+    return await runAcKinds(args.slice(1));
+  }
   if (sub === "reseal") {
     const { positionals, values } = parseAcArgs(args.slice(1), "reseal", AC_RESEAL_FLAGS, 1);
     const id = requireId(positionals);
@@ -934,7 +1101,7 @@ async function runAc(args: string[]): Promise<void> {
     return;
   }
   throw new Error(
-    'Usage: keryx flow ac <confirm <id> <ACn> | update <id> --reason "<why>" [--criterion ACn --text "<criterion>"] | reseal <id> --reason "<why>"> ...',
+    'Usage: keryx flow ac <confirm <id> <ACn> | update <id> --reason "<why>" [--criterion ACn --text "<criterion>"] | reseal <id> --reason "<why>" | kinds <id> [--json]> ...',
   );
 }
 
@@ -1098,6 +1265,8 @@ async function runComplete(args: string[]): Promise<void> {
     }
   }
   await printAcCheckAdvisory(cwd, id);
+  const closing = await completionStateNote(cwd, result);
+  if (closing !== null) note(closing);
   process.exitCode = result.passed ? 0 : 1;
 }
 
@@ -1341,10 +1510,12 @@ function printHelp(): void {
     'keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what happened>"]',
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
+    'keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
     'keryx flow ac reseal <id> --reason "<why>"   (checksum stale, file unchanged; KEEPS confirmations)',
+    "keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)",
     "  every `flow ac` subcommand refuses an argument it does not use — an extra positional, an unknown flag, or --criterion/--text given alone",
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",
@@ -1364,6 +1535,12 @@ function printHelp(): void {
       "RAN the command, not necessarily who signed), then to `unknown`. None of these is proof " +
       "a human signed: a flag, an environment variable, and a local git identity can all be set " +
       "by an agent. `--owner` is never inferred at all — see docs/decisions/keryx-harness/.",
+  );
+  note(
+    "`flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag " +
+      "is absent) or `human`, and `human` only when the flag says so — never inferred from a git " +
+      "identity, an owner or the environment. A flow without the field reads `unknown`. The flag " +
+      "labels a sample and gates nothing.",
   );
   note(
     "`flow confirm` mints a short-lived, single-use token only for a flow created with " +

@@ -23,6 +23,7 @@ import { createManagedReviewPackage } from "./managed";
 import { mergeVerifications } from "./verification";
 import type { NormalizedReviewFinding, StructuredReviewFinding } from "./types";
 import {
+  ALLOWED_GITHUB_WRITES,
   applyExternalVerdictRule,
   assertOutwardBrevity,
   buildReplyPass,
@@ -851,7 +852,7 @@ describe("AC11/AC18 the character ceiling", () => {
 // ---------------------------------------------------------------------------
 
 describe("AC12 the port cannot resolve anything", () => {
-  test("the six allowed endpoints are allowed", () => {
+  test("the seven allowed endpoints are allowed", () => {
     for (const path of [
       `repos/${REPO}/pulls/${PR}`,
       `repos/${REPO}/pulls/${PR}/comments`,
@@ -864,6 +865,24 @@ describe("AC12 the port cannot resolve anything", () => {
       guardGitHubRequest({ method: "POST", path: `repos/${REPO}/pulls/${PR}/comments/11/replies` }),
     ).not.toThrow();
     expect(() => guardGitHubRequest({ method: "POST", path: `repos/${REPO}/issues/${PR}/comments` })).not.toThrow();
+    expect(() => guardGitHubRequest({ method: "POST", path: `repos/${REPO}/pulls/${PR}/reviews` })).not.toThrow();
+  });
+
+  test("the review-bot write is exactly one endpoint, and nothing next to it opens", () => {
+    expect(ALLOWED_GITHUB_WRITES).toHaveLength(3);
+    for (const path of [
+      `repos/${REPO}/pulls/${PR}/reviews/900`,
+      `repos/${REPO}/pulls/${PR}/reviews/900/events`,
+      `repos/${REPO}/pulls/${PR}/reviews/900/dismissals`,
+      `repos/${REPO}/pulls/${PR}/reviews/900/comments`,
+      `repos/${REPO}/pulls/${PR}/reviews?x=1`,
+      `repos/${REPO}/pulls/${PR}/merge`,
+      `repos/${REPO}/pulls/${PR}/requested_reviewers`,
+      "graphql",
+    ]) {
+      expect(() => guardGitHubRequest({ method: "POST", path })).toThrow(/Resolving, hiding, minimising/);
+    }
+    expect(() => guardGitHubRequest({ method: "GET", path: `repos/${REPO}/pulls/${PR}/reviews/900/comments` })).toThrow();
   });
 
   test("resolving, hiding and dismissing are unreachable through the port", () => {

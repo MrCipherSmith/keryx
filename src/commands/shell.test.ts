@@ -429,6 +429,29 @@ describe("AC2 — slash commands + provider_error resilience", () => {
     expect(output).toMatch(/\/exit/);
   });
 
+  test("/setup prints the guide, /setup <id> one scenario, an unknown id an error — no model turn", async () => {
+    const streamCalls = { count: 0 };
+    const writes: string[] = [];
+    const io: ShellIO = {
+      lines: linesFrom("/setup", "/setup refresh", "/setup swarm", "/exit"),
+      write: (s: string) => writes.push(s),
+    };
+    const deps: ShellDeps = {
+      makeProvider: () => countingProvider(streamCalls),
+      clock: fixedClock(),
+      idSeq: fixedIdSeq(),
+      initial: { provider: "fake", model: "fixture-model" },
+    };
+
+    await runShell(io, deps);
+
+    expect(streamCalls.count).toBe(0);
+    const output = writes.join("");
+    expect(output).toContain("From scratch");
+    expect(output).toContain("$ keryx sync --apply");
+    expect(output).toContain("Unknown setup scenario: swarm");
+  });
+
   test("a provider_error turn writes a readable error line and the loop CONTINUES to the next input", async () => {
     const failing = errorTranscript("err1", {
       kind: "unavailable",

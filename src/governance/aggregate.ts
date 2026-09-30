@@ -3,7 +3,8 @@
 // (`flow.json`, review manifests, the trigger ledger) and writes nothing
 // (AC5).
 
-import { flowIdOf, listFlowDirs, readFlow } from "../flow/store";
+import { readAcKindRecords } from "../flow/ac-kinds";
+import { flowIdOf, listFlowDirs, readAcCriteria, readFlow } from "../flow/store";
 import { readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
 import {
   collectFlowDispatch,
@@ -11,7 +12,7 @@ import {
   summarizeProjectTriggerSpend,
   summarizeReviewSpend,
 } from "./spend";
-import { summarizeConfirmations, summarizeGateOutcomes } from "./accountability";
+import { summarizeAcceptance, summarizeConfirmations, summarizeGateOutcomes } from "./accountability";
 import type { FlowGovernance, GovernanceFilters, PolicyDecisionsSummary, ProjectGovernance } from "./types";
 
 /**
@@ -43,6 +44,16 @@ export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead
   for (const dir of dirs) {
     const flow = await readFlow(cwd, dir);
     const manifests = await readFlowReviewManifests(cwd, dir);
+    // Only a flow with no `acKinds` needs its criteria file counted: that is the
+    // one case where the total cannot come from the derived field.
+    let criteriaInFile: number | undefined;
+    if (readAcKindRecords(flow.acKinds) === undefined) {
+      try {
+        criteriaInFile = (await readAcCriteria(cwd, dir)).length;
+      } catch {
+        criteriaInFile = undefined;
+      }
+    }
     flows.push({
       id: flow.id,
       dir,
@@ -55,6 +66,7 @@ export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead
       spend: summarizeReviewSpend(manifests),
       confirmations: summarizeConfirmations(flow),
       gateOutcomes: summarizeGateOutcomes(flow),
+      acceptance: summarizeAcceptance(flow, criteriaInFile),
       dispatch: collectFlowDispatch(ledger, flow.id),
     });
   }

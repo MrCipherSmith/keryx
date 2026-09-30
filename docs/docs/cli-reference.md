@@ -93,6 +93,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `test` | Analyze testing context and normalize test reports. |
 | `memory` | Store and search long-term project memory. |
 | `flow` | Agent-first work lifecycle (Task Manager). |
+| `product` | The product's intent as a derived index (`index`), and intents closed in code that nobody looked back at (`open`). |
 | `review` | Create and complete durable managed review packages. |
 | `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
 | `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
@@ -199,6 +200,33 @@ Exits `0` unless at least one check is `fail`. `--json` emits
 In `keryx shell` (readline and the TUI), `/doctor` prints the identical
 report inside the session — the same builder, never a second
 implementation of any one check.
+
+---
+
+## setup
+
+Print the Metaproject preparation guide. Read-only: it does not run `init`,
+`update`, `sync`, or wiki enrichment.
+
+```
+keryx setup [init|refresh|repair]
+```
+
+| Argument | What it prints |
+|---|---|
+| _(none)_ | All three scenarios. |
+| `init` | From scratch: scaffold, graph, health, wiki drafts, memory index, gates. |
+| `refresh` | After a pull: refresh service files and rebuild only stale layers. |
+| `repair` | Partial or stale: read `standard doctor` first, then idempotent rebuild. |
+
+Each scenario shows the CLI lines and a prompt to paste to a coding agent.
+An unknown argument, or more than one, exits non-zero and names the three
+choices.
+
+In `keryx shell`, `/setup` opens the same guide. The TUI shows one tab per
+scenario; readline prints the text. `/setup init` opens that scenario, and an
+unknown or extra argument prints the same error instead of the guide.
+Neither form runs the commands.
 
 ---
 
@@ -1741,6 +1769,8 @@ keryx serve config init | set | show
 | `GET /v1/projects` | The projects this listener will accept turns for. |
 | `POST /v1/turns` | Submit a turn. Takes an idempotency key **scoped per project**, so two projects cannot collide on one key. |
 | `GET /v1/turns/<id>` | The durable turn record, and its server-sent-event stream. |
+| `GET /v1/approvals` | Pending approvals (`?state=all` adds recently resolved). See [Approvals over serve](guides/answer-remote-approvals.md). |
+| `POST /v1/approvals/<id>` | Answer one approval with `{"decision":"allow"}` or `{"decision":"deny"}`. |
 
 ### Boundaries
 
@@ -1753,12 +1783,39 @@ These are properties of the implementation, not advice:
   listen: a listener that cannot satisfy its configuration does not open a port.
 - **The remote policy profile may never be weaker than the local one.** It is
   compared per turn, and a weaker profile is refused rather than accepted.
-- **Approvals are not implemented.** A turn whose policy decision is `ask`
-  terminates in a **recorded denial**. This is written into the turn module as a
-  stated boundary rather than left to follow from the absence of an approval
-  store, because an accident stops holding the moment the store lands.
+- **Approvals are asynchronous and bound to one call.** A turn whose policy
+  decision is `ask` creates a durable pending approval, emits `approval.pending`,
+  and waits. It denies at expiry, when too many are pending, or at once when
+  nobody could answer. An allow applies to that one fingerprinted call, once, and
+  never lifts the destructive, credentials, publish-lease, untrusted-origin or
+  hook-ask floors. See [Approvals over serve](guides/answer-remote-approvals.md).
 - **Repeated authentication failures are throttled**, per peer.
 - **`GET /health` does not exist.** Liveness is authenticated-only today.
+
+---
+
+## approvals
+
+Answer, from this machine, a call a `keryx serve` turn is waiting on. It reads
+and writes the same durable approval store the HTTP routes use, so it needs no
+running server.
+
+```
+keryx approvals list [--all] [--json]
+keryx approvals allow <id>
+keryx approvals deny <id>
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` _(also the bare default)_ | `--all`, `--json` | Pending approvals with summary, scope, consequence and time to expiry. `--all` adds the recently resolved ones. `--json` prints the public projection (never the call fingerprint). |
+| `allow <id>` | — | Allow the one call the approval was raised for, once. A second answer reports the original outcome and changes nothing. An expired approval is refused. |
+| `deny <id>` | — | Deny it. |
+
+An answer never grants a session-wide trust and never lifts a destructive,
+credential or publish floor: the next identical call asks again. In the TUI the
+same list is `/approvals`. The client contract for a chat bridge is
+[Approvals over serve](guides/answer-remote-approvals.md).
 
 ---
 
@@ -2539,6 +2596,76 @@ only files a run writes are its own two artifacts, below.
 
 ---
 
+## product
+
+The product's intent as a derived index, and the list of intents that were
+closed in code and never looked at again. Two commands and nothing else.
+Read-only over the project: it reads `.metaproject/flows/*/` and
+`docs/requirements/*/`, writes one file of its own, calls no model and no
+network service, and gates nothing. No other keryx command calls it and no flow
+transition waits on it.
+
+```
+keryx product index [--json]
+keryx product open [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `index` | Read every flow directory and every requirements package into one intent index at `.metaproject/data/product/index.json`, and print a summary with the count of entries that state no intent. Deterministic: the same corpus gives byte-identical output, and the body carries no timestamp. |
+| `open` | List the intents that are closed in code and have no recorded observation. Each row names the flow and its outcome criterion, or the literal text `not measured — no instrument stated`. |
+| `--json` | Print the index summary, or the open report, as JSON. |
+
+An intent is the Problem or Expected Outcome sentence of a flow (or the
+outcome criteria of a requirements package), with its acceptance criteria read
+through the same `[verify: ...]` kinds `keryx flow` uses, its status and its
+close date. A flow whose description states no intent, only scaffold
+placeholders, is counted as having none; it is not an error.
+
+The `open` header separates three cases, so a number is never mistaken for an
+answer:
+
+```
+intents closed in code, never checked for effect: N of M
+  no outcome criterion stated: a
+  criterion stated, never observed: b
+  observed: c (helped h, no effect n, harmed m, inconclusive i)
+```
+
+A flow's outcome criterion is written in a `## Outcome criteria` section of its
+`description.md`; `keryx flow init` leaves that slot in the template, and an
+untouched hint is not a declared criterion. `not measured — <reason>` states
+that there is no instrument. An observation is a line at column 0 of the flow's
+`journal.md`:
+
+```
+outcome-observed: <verdict> — <note>
+```
+
+`<verdict>` is exactly one of `helped`, `no-effect`, `harmed`, `inconclusive`.
+A requirements package records the same in an `## Outcome observations` section
+of its README.md, as `- <verdict> — <note>`; it is stored and read only, and the
+package stays in the open list. `index` reads a flow's line, and that flow
+leaves the `open` list. A malformed line is a failure that names the flow or
+package: `index` lists it and exits non-zero, and the flow stays in the `open`
+list, which shows the failure count. Nothing writes the line for you and
+nothing gates on it. The index stores a content fingerprint of the flows and requirements
+it was read from. When the index is missing or unreadable, or the fingerprint no
+longer matches the tree, `open` exits non-zero and names `keryx product index`
+instead of answering from stale data. Only content counts, not file times: a
+restored or replaced directory is caught, and a bare `touch` is not.
+
+The index is disposable. `.metaproject/data/product/` can be deleted at any time
+and `keryx product index` rebuilds an equivalent one. In the TUI, `/product` shows the same
+header and rows.
+
+Each entry also prints `outcome author:` — `agent`, `human`, or `unknown` for a
+flow that never recorded it (see [the outcome author](#the-outcome-author)). The
+index stores it as an optional field, so an index written before it existed stays
+valid; it labels the sample for G1a and gates nothing.
+
+---
+
 ## hooks
 
 ```
@@ -3250,7 +3377,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -3262,10 +3389,12 @@ keryx flow task done <id> <taskId> [--disposition <d>] [--reason "<why>"]
 keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail "<what>"]
 keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
 keryx flow owner set <id> --owner "<name>" --reason "<why>"
+keryx flow outcome author <id> agent|human --reason "<why>"
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
 keryx flow ac reseal <id> --reason "<why>"
+keryx flow ac kinds <id> [--json]
 keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]
 keryx flow implemented <id> --pr <url>
 keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]
@@ -3281,10 +3410,11 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
-| `status <id>` | — | Print one flow: status, source, AC state, PR, owner, latest signature, tasks, recent history. |
-| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
+| `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
@@ -3296,11 +3426,12 @@ keryx flow schema [--out <path>]
 | `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
 | `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the only behaviour before flow 293). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
 | `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
+| `ac kinds <id>` | `--json` | Report each criterion's verification kind, the distribution and the runnable coverage, read from the criteria file (see [verification kinds](#verification-kinds)). Read-only, no model call; exits `1` when a marker is malformed, naming the criterion. |
 
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
 | `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
@@ -3318,6 +3449,45 @@ When the `security` module is enabled, `complete` adds a `security` completion
 gate. Advisory (the default) makes it informational (`pass`, never blocks);
 `enforced`/`ci`/`gateway` mode can fail the gate and hold the flow in
 `in-progress`. The gate is omitted entirely when the module is disabled.
+
+### Verification kinds
+
+A criterion may end with one trailing marker that says how it is verified. The
+marker is part of the criterion line, so the freeze checksum covers it:
+
+```markdown
+- AC1: the parser rejects two markers [verify: exec `bun test src/flow/ac-kinds-errors.test.ts`]
+- AC2: no code path refuses a freeze on a kind [verify: invariant `bun test src/flow/ac-kinds-never-gates.test.ts`]
+- AC3: the wording is clear to a new reader [verify: judged]
+- AC4: the release is announced [verify: none — a person posts it]
+```
+
+| Kind | Meaning |
+|---|---|
+| `exec` | a command whose exit code decides the criterion |
+| `invariant` | a command that must keep passing after the work |
+| `judged` | a person reads the evidence |
+| `none` | honestly unverifiable; the reason is required |
+| `unclassified` | no marker — every criterion written before kinds existed |
+
+Rules the parser keeps: a marker inside a code span is prose, not a marker; two
+markers outside code are an error; the marker must be the last thing on the line
+and close with `]`. An unmarked criterion is `unclassified`, never `none` — a
+missing decision is not a decision that nothing can be checked.
+
+`acKinds` on `flow.json` is **derived** from `acceptance-criteria.md` at
+`flow freeze` and `flow ac update`; the file stays the source of truth. A flow
+frozen before kinds existed has no `acKinds`, which reads as fully unclassified
+(not as zero criteria). A kind is **information only**: it never refuses a
+freeze, a confirmation or a completion, and it never makes a step mandatory.
+`flow check-ac` strips the marker before it looks at a criterion's wording.
+
+Where it shows up: the distribution block printed by `flow freeze`;
+`flow ac kinds <id> [--json]` (exit `1` naming the criterion on a malformed
+marker); an `acceptance coverage` line per flow in `keryx governance report`
+(a flow with no `acKinds` counts as fully unclassified); and the AC tab of the
+TUI `/flows` modal, one row per criterion under the distribution block
+(`PgUp`/`PgDn` scroll it).
 
 ### `flow check-ac`
 
@@ -3557,6 +3727,29 @@ loading, validating, passing `flow check`, and completing exactly as before —
 these fields are additive and optional, like every Task Manager v2 field, and
 reading an old file never rewrites it on disk.
 
+### The outcome author
+
+A flow's `flow.json` can record who wrote its outcome criterion, as `outcomeAuthor`:
+`agent` or `human`. It labels a sample and nothing more, so that the product
+module's G1a can be read in four cells (`human` or `agent`, by a real criterion or
+`not measured — <reason>`) and G1b split by author: agent flows measure compliance
+with the instruction to fill the slot, human flows measure acceptance, and
+conclusions about acceptance are drawn only from human flows.
+
+**It is never inferred.** `flow init` records `agent` when `--outcome-author` is
+absent and `human` only when the flag says `human`, never from a git identity, an
+owner or the environment; any other value, and a flag given more than once (in
+either spelling), is refused before the flow is created.
+`keryx flow outcome author <id> agent|human --reason "<why>"` changes it: the
+reason is required, one `journal.md` line names the old value (or `unknown`), the
+new value and the reason, and the field and the line are written together;
+setting the value the flow already holds writes nothing. A flow created before the
+field existed reads `unknown` in `flow status`, `product open` and the TUI, and
+reading it never rewrites the file. The flag gates nothing: no completion, freeze,
+creation or index result, and no exit code, depends on it. With `--outcome-author
+human` the `## Outcome criteria` section of `description.md` is the template's own
+text, with no example inserted.
+
 ### The confirmation token
 
 A flow can require a **confirmation token** before it completes. It opts in when
@@ -3697,6 +3890,42 @@ absent routing table leaves every category on tier words alone. Both
 `AGENTS.md` (Codex CLI's entrypoint) and `CLAUDE.md` (Claude Code's) carry the
 same block — nothing is written outside the project (no
 `~/.codex/config.toml` edit).
+
+#### How a tier becomes a model
+
+Tiers are anchored on the session model: `standard` is the session model, `deep`
+is a larger candidate above it, and `light` is the next size step below it. Size
+comes from the size words in the discovered ids, and version is a second axis:
+within one family and vendor a newer generation outranks an older one, and an
+older-generation model that is also pricier than the session model is never chosen
+for `deep`. The resolution source is recorded on every dispatch as
+`tier_resolution`:
+
+| Value | Meaning |
+|---|---|
+| `discovered` | Ranking worked and a model other than the session's was assigned. |
+| `session-ranked` | Ranking worked and the tier is the session model itself. |
+| `session-fallback` | Ranking was refused or ambiguous; the session model is kept, and `tier_reasons` says why. |
+| `agent-ranked` | The deterministic ranking could not settle the tier and the fallback agent ordered the candidates. |
+
+`tier_reasons` ends with a `resolve:<reason>` entry naming the rule that resolved
+the tier (for example `resolve:kept-older-generation-pricier`).
+
+**The agent fallback** runs only for a tier the deterministic ranking cannot settle.
+It compares candidate models; it never rates how hard a task is. It is shown
+discovered model ids and the prices from `model-profiles.json` (a missing price is
+left out, never sent as zero) and must answer JSON. Ids it was not shown are
+dropped, the session model must be placed in the order, and it can never put
+`standard` or `deep` below the session model. A failure, timeout (20 s) or malformed
+answer yields the session model. It runs on the light tier of the session's own
+provider, so no other provider is called. A validated order is cached in
+`tier-rank-cache.json` next to `model-profiles.json`, keyed by a hash of the
+catalogue; an unchanged catalogue makes zero further calls, and a failure is
+remembered in memory for five minutes rather than on disk.
+
+`keryx review tier` prints `tier_resolution` (including `agent-ranked`) and pins a
+model id only when the agent picked one other than the session's; the interactive
+shell's `spawn_subagent` records the same source and reason in its run-trace row.
 
 Disable it per project with `.metaproject/tasks.config.json`:
 
@@ -3844,13 +4073,19 @@ subscription quota: the only process either starts is the registry entry's own
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
 keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]
+keryx agents external review <run-id>
+keryx agents external apply <run-id> [--allow-flagged]
+keryx agents external discard <run-id>
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `list` | `--json`, `--no-probe` | Print every registered agent with its detected availability, transport (`line-stream` or `acp`), sandbox modes, and streaming/resume/cost facts, plus the capability gate's verdict. `--no-probe` skips detection entirely and reports every entry as `not probed`. |
 | `probe` | `<id>`, `--json` | The same report for one agent id (`codex-cli`, `claude-cli`, `antigravity-cli`, `gemini-acp`). An unknown id lists the known ones and exits `1`. |
-| `run` | `<id>`, `--task`, `--unattended`, `--write`, `--timeout`, `--json` | Drive one registry agent, either transport, in a disposable git worktree: a **line-stream** (codec) agent (`codex-cli`, `claude-cli`, `antigravity-cli`) through its own argv/parse/classify codec, or an **ACP** agent (today `gemini-acp`, which starts `gemini --experimental-acp`) with keryx as its ACP **client**. Guarded by the same `externalAgents` capability (hard-disabled in CI and under a remote transport) and per-agent config as every external run, plus — for an agent the `/external` block-list or the one-time-consent set names (today `antigravity-cli`) — the block-list check and, TTY only, a one-time consent prompt (`consent-required` without a TTY and no recorded consent). Without a TTY, or with `--unattended`, every ACP permission that would need a human is refused; a line-stream agent has no permission bridge to refuse into. `--write` advertises `fs.writeTextFile` for an ACP agent, or requests `worktree-write` sandbox for a line-stream one — refused with `not-implemented` today, since no line-stream agent has a write path yet. For an ACP run, prints the permission mode, whether keryx's MCP server was offered, the permission and fs counts, the patch path and the session id; for a line-stream run, prints the conversation/resume id, cost (if reported) and the count of unrecognised transcript lines. Exits `1` unless the run is `Completed`. See the [ACP client guide](guides/acp-client.md) and [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent). |
+| `run` | `<id>`, `--task`, `--unattended`, `--write`, `--timeout`, `--json` | Drive one registry agent, either transport, in a disposable git worktree: a **line-stream** (codec) agent (`codex-cli`, `claude-cli`, `antigravity-cli`) through its own argv/parse/classify codec, or an **ACP** agent (today `gemini-acp`, which starts `gemini --experimental-acp`) with keryx as its ACP **client**. Guarded by the same `externalAgents` capability (hard-disabled in CI and under a remote transport) and per-agent config as every external run, plus — for an agent the `/external` block-list or the one-time-consent set names (today `antigravity-cli`) — the block-list check and, TTY only, a one-time consent prompt (`consent-required` without a TTY and no recorded consent). Without a TTY, or with `--unattended`, every ACP permission that would need a human is refused; a line-stream agent has no permission bridge to refuse into. `--write` advertises `fs.writeTextFile` for an ACP agent, or requests `worktree-write` sandbox for a line-stream one — supported for `claude-cli` only (tools `Read Grep Glob Edit Write`, diff stored for `review`/`apply`/`discard` below, see [Let an external agent write](guides/external-agent-write.md)); `codex-cli` and `antigravity-cli` refuse it with `not-implemented` ("write mode is claude-only in this release"). For an ACP run, prints the permission mode, whether keryx's MCP server was offered, the permission and fs counts, the patch path and the session id; for a line-stream run, prints the conversation/resume id, cost (if reported) and the count of unrecognised transcript lines. Exits `1` unless the run is `Completed`. See the [ACP client guide](guides/acp-client.md) and [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent). |
+| `review` | `<run-id>` | Show one stored claude write run: run id, agent, base commit, run status and patch hash, then the **flagged paths first** (repo plumbing, CI, hooks, agent config), the file list with status (binary files marked), and the redacted patch. Changes nothing. Exits `1` when the run is not found; a run refused at capture (a symlink pointing outside the worktree) is described and can only be discarded. |
+| `apply` | `<run-id>`, `--allow-flagged` | Land a stored write run as the new local branch `external/<run-id>`: one commit cut from the recorded base commit in a second throwaway worktree, with your own git identity and no trailers. Needs a terminal on stdin **and** stdout, prints the review, then asks you to type the first 12 characters of the patch hash; anything else cancels. There is no flag or environment variable that answers for you. Refused, landing nothing, when the patch changed since capture, was altered by redaction, carries a binary file, touches flagged paths without `--allow-flagged`, or the branch already exists. Your current branch, index and working tree are never touched. A run is decided once. |
+| `discard` | `<run-id>` | Record a discard decision for a stored write run and delete its patch. A landed or already discarded run cannot be discarded. |
 
 Availability has **three** states, and the third is not a placeholder:
 
@@ -3981,6 +4216,11 @@ keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
                             --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                             [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
+                     [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
+keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]
+                      [--post] [--fixtures <dir>] [--json]
+keryx review metrics [--json] [--refresh] [--fixtures <dir>]
 keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                        [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
 keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)
@@ -5431,6 +5671,29 @@ concurrency cap holds across the nesting.
 | `--parallel <n>` | Override the wave size (default 4). |
 | `--outstanding <n>` | Subagents the caller already has in flight. The only thing that makes the cap mean anything across the orchestration nesting. |
 
+### `review bot` and `review metrics`
+
+Review a pull request with one reviewer turn plus one verifier turn per finding, and
+measure what that came to. See [Review as a pull request bot](guides/review-as-a-pr-bot.md).
+
+```bash
+keryx review bot run --pr 7 --repo acme/app
+keryx review bot post --pr 7 --repo acme/app
+keryx review bot post --pr 7 --repo acme/app --post
+keryx review metrics --refresh
+```
+
+- `review bot run` calls the model and records the surviving findings as a managed
+  review. Nothing is posted. A fork pull request is refused before any model call, and
+  the diff is cut at `--max-diff-bytes` with the cut stated in the output.
+- `review bot post` builds one review (event `COMMENT`, pinned to the pull request head).
+  It is a dry run unless you pass `--post`, and it refuses a closed, merged or fork pull
+  request, a `--sha` that is not the head, and a review made at an older commit.
+- `review metrics` prints findings raised, acted on, dismissed by kind, answered and still
+  open, precision (acted on over acted on plus dismissed as incorrect) and
+  resolved-before-merge. A ratio with no data prints `n/a`. `--refresh` reads merge state
+  from GitHub first.
+
 ### `review tier`
 
 Which model a dispatch is worth, **computed** — the `model` block the subagent
@@ -6109,7 +6372,11 @@ you — including a server awaiting `trust` or a variable you have not set.
 keryx is connected to — status, tool count, why a failed one failed, and
 the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
 session's live state and never dials anything itself, so opening it is
-free.
+free. A server that holds session-trusted tools carries a `[trusted]` marker
+with their count. `/mcp trust list` prints every trusted tool by full name;
+`/mcp trust revoke <server__tool>` (or `all`) removes grants. Both also run
+while the agent is busy and in the readline shell. See
+[Permission modes](./guides/permission-modes.md#trusting-one-mcp-tool-for-the-session).
 
 Do not confuse it with `/integrate`, which is the opposite direction:
 that is where keryx ITSELF is registered into an editor's MCP config. (The

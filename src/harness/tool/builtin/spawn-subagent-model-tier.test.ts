@@ -16,6 +16,7 @@
 import { expect, test } from "bun:test";
 import { createSpawnSubagentTool, type SpawnSubagentFleetEvent } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+import type { TierRankAgent, TierRankRequest } from "../../../gdskills/model-tier";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -50,6 +51,18 @@ const BELOW = "keryx-mini-1";
 /** Ids that carry no size word at all — nothing can be ordered against them. */
 const CODENAMES = ["keryx-quartz", "keryx-basalt", "keryx-slate"];
 
+type SpawnToolTierRank = NonNullable<Parameters<typeof createSpawnSubagentTool>[0]["tierRank"]>;
+
+/** A fake ranking agent (flow 358): a fixed answer, and a record of every request it was given. */
+function fakeRankAgent(answer: string | (() => string)) {
+  const requests: TierRankRequest[] = [];
+  const agent: TierRankAgent = async (request) => {
+    requests.push(request);
+    return typeof answer === "function" ? answer() : answer;
+  };
+  return { agent, requests };
+}
+
 /**
  * A tool wired the way a real host wires it, plus a box recording the
  * provider/model the child was actually built with.
@@ -57,6 +70,7 @@ const CODENAMES = ["keryx-quartz", "keryx-basalt", "keryx-slate"];
 function makeTool(
   detected: readonly { name: string; models?: readonly string[] }[],
   sessionModel: string = SESSION_MODEL,
+  tierRank?: SpawnToolTierRank,
 ) {
   const built: { providerId: string; modelId: string }[] = [];
   const fleetEvents: SpawnSubagentFleetEvent[] = [];
@@ -74,6 +88,7 @@ function makeTool(
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
     onFleetEvent: (event) => fleetEvents.push(event),
+    ...(tierRank !== undefined ? { tierRank } : {}),
   });
   return { tool, built, fleetEvents };
 }
@@ -174,4 +189,80 @@ test("a model NAME in model_tier is not a tier — it inherits instead of being 
 
   expect(built).toEqual([{ providerId: "ollama", modelId: SESSION_MODEL }]);
   expect(result.output).not.toContain("model tier");
+});
+
+// --- Flow 358 AC9: the run trace shows tier, resolution source and reason -------
+
+const tierLogs = (events: readonly SpawnSubagentFleetEvent[]): string[] =>
+  events.flatMap((event) =>
+    event.kind === "log" && event.entry.kind === "system" && event.entry.text.includes("model tier")
+      ? [event.entry.text]
+      : [],
+  );
+
+test("flow 358: an unrankable catalogue is ordered by the agent, and the trace row names tier, source and reason", async () => {
+  const [session, other, third] = CODENAMES as [string, string, string];
+  const { agent, requests } = fakeRankAgent(JSON.stringify({ order: [other, session, third] }));
+  const { tool, built, fleetEvents } = makeTool([{ name: "ollama", models: CODENAMES }], session, { agent });
+  const result = await tool.invoke({ task: "codename provider", mode: "read_only", model_tier: "deep" });
+
+  expect(result.isError).toBe(false);
+  // The child really runs on the model the agent placed above the session's.
+  expect(built).toEqual([{ providerId: "ollama", modelId: other }]);
+  expect(requests).toHaveLength(1);
+  expect(requests[0]!.runOn).toEqual({ providerId: "ollama", modelId: session });
+  expect(result.output).toMatch(/model tier deep .*\[agent-ranked\]/);
+
+  const [row] = tierLogs(fleetEvents);
+  expect(row).toBeDefined();
+  expect(row).toContain("model tier deep");
+  expect(row).toContain(`ollama/${other}`);
+  expect(row).toContain("[agent-ranked]");
+  expect(row).toContain("the agent fallback ordered the candidates");
+  expect(row).toContain("agent refused");
+});
+
+test("flow 358: an agent that fails leaves the child on the session model and the row says why", async () => {
+  const session = CODENAMES[0]!;
+  const { agent } = fakeRankAgent(() => {
+    throw new Error("rate limited");
+  });
+  const { tool, built, fleetEvents } = makeTool([{ name: "ollama", models: CODENAMES }], session, { agent });
+  const result = await tool.invoke({ task: "agent down", mode: "read_only", model_tier: "deep" });
+
+  expect(result.isError).toBe(false);
+  expect(built).toEqual([{ providerId: "ollama", modelId: session }]);
+  const [row] = tierLogs(fleetEvents);
+  expect(row).toContain("[session-fallback]");
+  expect(row).toContain("failed: rate limited");
+});
+
+test("flow 358: a settled tier never asks the agent, whatever is injected", async () => {
+  const { agent, requests } = fakeRankAgent(JSON.stringify({ order: [BELOW, SESSION_MODEL, ABOVE] }));
+  const { tool, built } = makeTool(RANKABLE, SESSION_MODEL, { agent });
+  await tool.invoke({ task: "deterministic", mode: "read_only", model_tier: "deep" });
+  await tool.invoke({ task: "deterministic", mode: "read_only", model_tier: "standard" });
+
+  expect(requests).toHaveLength(0);
+  expect(built).toEqual([
+    { providerId: "ollama", modelId: ABOVE },
+    { providerId: "ollama", modelId: SESSION_MODEL },
+  ]);
+});
+
+test("flow 358: an older-generation larger class is settled by the agent, and only when it says so", async () => {
+  // Session is medium generation 2; the only larger class is max generation 1: size words alone cannot call it stronger.
+  const detected = [{ name: "ollama", models: ["keryx-medium-2", "keryx-max-1", "keryx-mini-1"] }];
+  const asked = fakeRankAgent(JSON.stringify({ order: ["keryx-max-1", "keryx-medium-2", "keryx-mini-1"] }));
+  const picked = makeTool(detected, "keryx-medium-2", { agent: asked.agent });
+  const result = await picked.tool.invoke({ task: "ambiguous", mode: "read_only", model_tier: "deep" });
+  expect(picked.built).toEqual([{ providerId: "ollama", modelId: "keryx-max-1" }]);
+  expect(result.output).toMatch(/model tier deep .*\[agent-ranked\]/);
+  expect(tierLogs(picked.fleetEvents)[0]).toContain("agent ambiguous");
+
+  // Without an agent the same dispatch keeps the session.
+  const plain = makeTool(detected, "keryx-medium-2");
+  const kept = await plain.tool.invoke({ task: "ambiguous", mode: "read_only", model_tier: "deep" });
+  expect(plain.built).toEqual([{ providerId: "ollama", modelId: "keryx-medium-2" }]);
+  expect(kept.output).toMatch(/model tier deep .*\[session-fallback\]/);
 });

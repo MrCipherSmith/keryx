@@ -128,3 +128,24 @@ test("a definition whose declared model_tier is actually a model name fails sche
   if (result.ok) throw new Error("expected failure");
   expect(result.error.reason).toBe("invalid-definition");
 });
+
+// Flow 358 AC7: tier resolution became generation-aware, but the Claude Code export is a
+// different consumer. It maps a tier onto a version-free ALIAS and lets Claude Code pick the
+// generation; nothing about a discovered catalogue or a newer release reaches it.
+test("flow 358: the claude alias map is generation-blind and `model: inherit` stays available", () => {
+  const aliases = Object.fromEntries(
+    MODEL_TIERS.map((tier) => {
+      const result = compileAgentDefinition(fixture(tier), "claude");
+      if (!result.ok || result.result.target === "keryx-shell") throw new Error("expected a claude export");
+      return [tier, /^model: (.+)$/m.exec(result.result.content)?.[1]];
+    }),
+  );
+  expect(aliases).toEqual({ light: "haiku", standard: "sonnet", deep: "opus" });
+  for (const alias of Object.values(aliases)) expect(alias).not.toMatch(/\d/);
+
+  const inherit = compileAgentDefinition(fixture("deep"), "claude", { claudeSubagentAliases: false });
+  expect(inherit.ok).toBe(true);
+  if (inherit.ok && inherit.result.target !== "keryx-shell") {
+    expect(inherit.result.content).toContain("model: inherit");
+  }
+});

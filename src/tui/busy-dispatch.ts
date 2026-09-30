@@ -12,6 +12,7 @@
 export type BusyDispatchTarget =
   | "exit"
   | "help"
+  | "setup"
   | "interrupt"
   | "queue"
   /**
@@ -58,11 +59,31 @@ export type BusyDispatchTarget =
   | "governance"
   | "triggers"
   /**
+   * `/product` (flow 362): a read-only list over the derived intent index. It
+   * never rebuilds the index and never touches the main turn.
+   */
+  | "product"
+  /**
+   * `/reviews`: the managed pull request reviews and what the bot's findings
+   * came to. Read-only over the packages on disk; never touches the main turn.
+   */
+  | "reviews"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
    */
   | "schedules"
+  /**
+   * `/approvals` (flow 369): the pending remote approvals. Listing is read-only and an
+   * answer is one call, once, in the store; neither touches the main turn.
+   */
+  | "approvals"
+  /**
+   * `/external-diff` (flow 370): claude write runs awaiting review. Landing cuts a new local
+   * branch in a throwaway worktree, so it never touches the main turn's checkout.
+   */
+  | "external-diff"
   | "deferred"
   | "not-a-command";
 
@@ -85,6 +106,7 @@ export function classifyBusyDispatch(params: {
   const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp, isMcpConsumer } = params;
   if (commandName === "/exit") return "exit";
   if (commandName === "/help") return "help";
+  if (commandName === "/setup") return "setup";
   if (commandName === "/interrupt") return "interrupt";
   if (commandName === "/queue") return "queue";
   if (commandName === "/delegate") return "delegate";
@@ -98,7 +120,11 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/bus") return "bus";
   if (commandName === "/governance") return "governance";
   if (commandName === "/triggers") return "triggers";
+  if (commandName === "/product") return "product";
+  if (commandName === "/reviews") return "reviews";
   if (commandName === "/schedules") return "schedules";
+  if (commandName === "/approvals") return "approvals";
+  if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

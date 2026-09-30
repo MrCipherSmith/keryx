@@ -114,6 +114,24 @@ export function terminalSafe(value: string): TerminalSafeResult {
   return { text: out, escaped };
 }
 
+/**
+ * `terminalSafe` for multi-line text such as a patch: `\n` and `\t` stay as they are,
+ * everything else unsafe (ESC, a bare `\r` that could overwrite the line, ...) is escaped.
+ */
+export function terminalSafeBlock(value: string): TerminalSafeResult {
+  let escaped = false;
+  const text = value
+    .split(/([\n\t])/)
+    .map((part) => {
+      if (part === "\n" || part === "\t") return part;
+      const result = terminalSafe(part);
+      if (result.escaped) escaped = true;
+      return result.text;
+    })
+    .join("");
+  return { text, escaped };
+}
+
 /** `terminalSafe`, tracking whether ANY call in a batch escaped something via a shared mutable flag. */
 export class TerminalSafeTracker {
   private anyEscaped = false;
@@ -121,6 +139,13 @@ export class TerminalSafeTracker {
   /** Sanitise one string, recording whether it needed escaping into this tracker's overall flag. */
   render(value: string): string {
     const { text, escaped } = terminalSafe(value);
+    if (escaped) this.anyEscaped = true;
+    return text;
+  }
+
+  /** {@link terminalSafeBlock} for a multi-line string, recorded the same way. */
+  renderBlock(value: string): string {
+    const { text, escaped } = terminalSafeBlock(value);
     if (escaped) this.anyEscaped = true;
     return text;
   }

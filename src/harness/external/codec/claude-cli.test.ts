@@ -196,8 +196,9 @@ describe("buildArgv — the ordering is load-bearing", () => {
     expect(argv[argv.indexOf("--mcp-config") + 1]).toBe(CLAUDE_EMPTY_MCP_CONFIG);
   });
 
-  test("sandbox level does not change the argv in this release", () => {
-    expect(buildClaudeArgv({ ...BASE_INPUT, sandbox: "worktree-write" })).toEqual(buildClaudeArgv(BASE_INPUT));
+  test("an explicit read-only sandbox is byte-identical to the default argv", () => {
+    expect(buildClaudeArgv({ ...BASE_INPUT, sandbox: "read-only" })).toEqual(buildClaudeArgv(BASE_INPUT));
+    expect(buildClaudeArgv(BASE_INPUT)).not.toContain("--permission-prompts");
   });
 
   test("--input-format is NEVER sent alongside a positional prompt", () => {
@@ -208,6 +209,81 @@ describe("buildArgv — the ordering is load-bearing", () => {
     expect(buildClaudeArgv(BASE_INPUT)).not.toContain("--input-format");
     expect(buildClaudeArgv({ ...BASE_INPUT, sessionId: "" })).not.toContain("--input-format");
     expect(buildClaudeResumeArgv("sid", "msg", BASE_INPUT)).not.toContain("--input-format");
+  });
+});
+
+describe("worktree-write argv (flow 370)", () => {
+  const WRITE_INPUT: ExternalRunInput = { ...BASE_INPUT, sandbox: "worktree-write" };
+  const FORBIDDEN_TOOLS = ["Bash", "NotebookEdit", "WebFetch", "WebSearch", "Task", "Agent"];
+
+  test("adds Edit and Write to the allow-list plus the narrow headless permission flags", () => {
+    expect(buildClaudeArgv(WRITE_INPUT)).toEqual([
+      "claude",
+      "-p",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--safe-mode",
+      "--tools",
+      "Read",
+      "Grep",
+      "Glob",
+      "Edit",
+      "Write",
+      "--strict-mcp-config",
+      "--mcp-config",
+      '{"mcpServers":{}}',
+      "--permission-mode",
+      "acceptEdits",
+      "--permission-prompts",
+      "none",
+      "--add-dir",
+      "/tmp/keryx-worktree",
+      "--session-id",
+      "9a3e7c11-0b52-4d68-a7f3-6c1e94b25d07",
+      "Report on the failing test.",
+    ]);
+  });
+
+  test("still no Bash, NotebookEdit, WebFetch or MCP server in the roster", () => {
+    const argv = buildClaudeArgv(WRITE_INPUT);
+    const start = argv.indexOf("--tools");
+    const roster = argv.slice(start + 1, argv.indexOf("--strict-mcp-config"));
+    expect(roster).toEqual(["Read", "Grep", "Glob", "Edit", "Write"]);
+    for (const tool of FORBIDDEN_TOOLS) expect(argv).not.toContain(tool);
+    expect(argv).not.toContain("bypassPermissions");
+    expect(argv).not.toContain("--dangerously-skip-permissions");
+    expect(argv).not.toContain("--allowed-tools");
+    expect(argv[argv.indexOf("--mcp-config") + 1]).toBe(CLAUDE_EMPTY_MCP_CONFIG);
+  });
+
+  test("the prompt never directly follows a variadic flag, with and without a session id", () => {
+    for (const sessionId of ["9a3e7c11-0b52-4d68-a7f3-6c1e94b25d07", ""]) {
+      for (const cwd of ["/tmp/keryx-worktree", ""]) {
+        const argv = buildClaudeArgv({ ...WRITE_INPUT, sessionId, cwd, model: "m", maxCostUnits: 1 });
+        expect(argv[argv.length - 1]).toBe(WRITE_INPUT.prompt);
+        expect(CLAUDE_VARIADIC_FLAGS).not.toContain(argv[argv.length - 2] as string);
+      }
+    }
+  });
+
+  test("the resume and streaming shapes carry the same write roster", () => {
+    for (const argv of [
+      buildClaudeStreamingArgv(WRITE_INPUT),
+      buildClaudeResumeArgv("sid", "msg", WRITE_INPUT),
+    ]) {
+      const start = argv.indexOf("--tools");
+      expect(argv.slice(start + 1, start + 6)).toEqual(["Read", "Grep", "Glob", "Edit", "Write"]);
+      expect(argv[argv.indexOf("--permission-mode") + 1]).toBe("acceptEdits");
+      expect(argv[argv.indexOf("--permission-prompts") + 1]).toBe("none");
+    }
+  });
+
+  test("read-only argv never carries Edit, Write or a permission flag", () => {
+    const argv = buildClaudeArgv(BASE_INPUT);
+    expect(argv).not.toContain("Edit");
+    expect(argv).not.toContain("Write");
+    expect(argv).not.toContain("--permission-mode");
   });
 });
 

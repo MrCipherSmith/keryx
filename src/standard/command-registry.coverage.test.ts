@@ -38,11 +38,20 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   { verb: "session", reason: "alias of sessions" },
   { verb: "init", reason: "project lifecycle; scaffolds and rewrites the workspace" },
   { verb: "update", reason: "toolkit lifecycle; replaces the installed runtime" },
+  {
+    verb: "setup",
+    reason: "prints a preparation guide and runs nothing; not an agent-callable operation",
+  },
   { verb: "harness", reason: "executes arbitrary subprocesses and spends provider tokens; gated by policy, never by a descriptor" },
   {
     verb: "serve",
     reason:
       "binds a network socket and runs until signalled, like shell and harness; its token subcommands mint and invalidate a credential. Neither shape is a single callable operation with a machine-consumable result, and a descriptor would advertise the credential surface to exactly the agents that must not reach it",
+  },
+  {
+    verb: "approvals",
+    reason:
+      "the local answer path for remote approvals (flow 369): allow/deny is a consent decision and must never be a callable operation for an agent — a descriptor would advertise it to exactly the caller the approval exists to gate; the same reason learn accept is excluded",
   },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
@@ -100,6 +109,18 @@ const SUBCOMMAND_EXCLUSIONS: ReadonlyArray<{ command: string; reason: string }> 
   {
     command: "hooks disable",
     reason: "can switch off the agent's own security gates",
+  },
+  {
+    command: "agents external apply",
+    reason: "the operator's consent decision on an external agent's diff (flow 370); it needs a human at a terminal and must never be a callable operation for an agent",
+  },
+  {
+    command: "agents external discard",
+    reason: "the operator's decision on an external agent's diff (flow 370); an agent must not be able to drop the diff it produced",
+  },
+  {
+    command: "agents external review",
+    reason: "shows the stored diff of an external agent's write run for the operator; not offered to agents, like `agents external run`",
   },
 ];
 

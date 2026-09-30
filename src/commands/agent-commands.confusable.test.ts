@@ -40,6 +40,12 @@ const ALLOWED_CONFUSABLE: ReadonlyArray<{ pair: readonly [string, string]; becau
       "confirmation card that always asks and writes nothing when declined (bare /schedule just prints its " +
       "usage); /schedules (meant /schedule) only opens the read-only list, whose actions each need their own key.",
   },
+  {
+    pair: ["/review", "/reviews"],
+    because:
+      "Same subject, and both only open a modal: /review lists items needing review and /reviews lists " +
+      "managed pull request reviews. Neither acts on open; accepting a proposal in /review needs its own key.",
+  },
 ];
 
 function names(): string[] {

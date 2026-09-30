@@ -27,6 +27,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { compareProfiles, localBaselineProfile, resolveLocalProfile } from "../harness/policy/profiles";
@@ -45,6 +46,7 @@ import {
   type ServeCredentialRecord,
   type ServeCredentialResult,
 } from "./serve-credential";
+import { createApproval, newApprovalId, readApproval } from "./serve-approvals-store";
 import {
   describeServeStatus,
   handleServeRequest,
@@ -1005,6 +1007,23 @@ describe("the listener", () => {
       // The occupant is untouched, and nothing of ours is anywhere else.
       const still = await fetch(`http://127.0.0.1:${occupiedPort}/`);
       expect(await still.text()).toBe("occupant");
+    } finally {
+      await occupied.stop(true);
+    }
+  });
+
+  test("a start that fails to bind does not settle the approvals of the listener that is running", async () => {
+    const id = newApprovalId();
+    createApproval(
+      { approvalId: id, turnId: randomUUID(), sessionId: randomUUID(), summary: "Run tool", scope: "This call only", consequence: "Writes", expiresAt: new Date(Date.now() + 300_000), correlationId: randomUUID(), callFingerprint: "a".repeat(64), floors: [] },
+      configDir,
+    );
+    const occupied = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response("occupant") });
+    try {
+      const outcome = await start(defaultServeConfig(credential.id, { port: boundPortOf(occupied) }));
+      expect(outcome.ok).toBe(false);
+      const view = readApproval(id, configDir);
+      expect(view.ok && view.value.state).toBe("pending");
     } finally {
       await occupied.stop(true);
     }

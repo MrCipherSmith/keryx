@@ -147,6 +147,11 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: BOTH,
   },
   {
+    name: "/setup",
+    description: "Metaproject preparation guide — /setup [init|refresh|repair] (prints steps, runs nothing)",
+    modes: BOTH,
+  },
+  {
     name: "/ac",
     description: "Check the active flow's acceptance criteria (advisory, cached) — press `c` in /flows to re-check",
     modes: AGENT_ONLY,
@@ -165,6 +170,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // TUI-only, same reasoning as /workspace: the sidebar badge, mouse
     // click, and list+detail modal (with its [a]/[y] accept) all need the
     // OpenTUI surface.
+    modes: AGENT_ONLY,
+  },
+  {
+    // The managed pull request reviews and what the review bot's findings came to. The modal and
+    // the sidebar row need the OpenTUI surface; the readline agent REPL prints the same numbers as text.
+    name: "/reviews",
+    description: "Managed pull request reviews: findings by outcome, precision, resolved before merge",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
+    // the OpenTUI surface. Reads the index; never rebuilds it.
+    name: "/product",
+    description: "Intents closed in code that nobody looked back at, with their outcome criteria",
     modes: AGENT_ONLY,
   },
   {
@@ -201,6 +220,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // everything the sidebar section offers (pause/resume, run now, delete, report).
     name: "/schedules",
     description: "Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 369 (R4d): calls a remote `keryx serve` turn is waiting on. Allow or deny
+    // is one call, once; the local answer path of the serve approval broker.
+    name: "/approvals",
+    description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
     modes: AGENT_ONLY,
   },
   {
@@ -327,6 +353,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 370 (AC6): claude write runs whose patch waits for a human decision. Apply needs
+    // the patch hash typed back; the readline fallback only lists and points at the CLI.
+    name: "/external-diff",
+    description: "External agent write runs awaiting review: patch, flagged paths — apply (typed hash prefix) or discard",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 344: every `review.jev.*` key next to its measured verdict
     // (CI triage proven; risk/contract measured weaker than a strong model;
     // rules not useful on top of one; scenarios/docs/comments experimental;
@@ -353,7 +386,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // and a slash command carries no flags to say which you invoked.
     // Guarded by agent-commands.confusable.test.ts.
     name: "/mcp",
-    description: "MCP servers keryx is connected to — status, connect/disconnect",
+    description: "MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all",
     // TUI-only, same reasoning as /review: it renders into the transcript
     // of an OpenTUI session.
     modes: AGENT_ONLY,
@@ -362,6 +395,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     name: "/compact",
     description: "Compact model context — /compact [focus] (archive kept)",
     modes: BOTH,
+  },
+  {
+    // Per-turn file snapshots (a shadow git repository beside the session) and
+    // conversation rollback. Agent-only: chat mode has no tools, so nothing
+    // changes files there.
+    name: "/rewind",
+    description: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]",
+    modes: AGENT_ONLY,
   },
   { name: "/theme", description: "Open the theme picker — /theme [name] applies immediately", modes: BOTH },
   {

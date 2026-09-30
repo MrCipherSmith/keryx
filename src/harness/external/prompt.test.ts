@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   EXTERNAL_RUNTIME_DIRECTIVE,
+  EXTERNAL_WRITE_RUNTIME_DIRECTIVE,
   type ExternalPromptInput,
   PROMPT_TRUNCATION_MARKER,
   buildExternalPrompt,
@@ -70,6 +71,20 @@ describe("the runtime directive comes first and is complete", () => {
   test("it says the work itself is the final message, in the requested schema", () => {
     expect(EXTERNAL_RUNTIME_DIRECTIVE).toContain("Produce the work itself as your final message");
     expect(EXTERNAL_RUNTIME_DIRECTIVE).toContain("in the requested output schema");
+  });
+
+  test("a writable run opens with the write directive, which keeps the no-menu rules and allows edits", () => {
+    const result = okPrompt(buildExternalPrompt(input({ writable: true })));
+    expect(result.prompt.startsWith(EXTERNAL_WRITE_RUNTIME_DIRECTIVE)).toBe(true);
+    expect(EXTERNAL_WRITE_RUNTIME_DIRECTIVE).toContain("Do not ask questions");
+    expect(EXTERNAL_WRITE_RUNTIME_DIRECTIVE).toContain("do not delegate to another agent");
+    expect(EXTERNAL_WRITE_RUNTIME_DIRECTIVE).not.toContain("do not create or modify any files");
+    expect(EXTERNAL_WRITE_RUNTIME_DIRECTIVE).toContain("only inside your current working directory");
+  });
+
+  test("a run that is not writable keeps the read-only directive", () => {
+    expect(okPrompt(buildExternalPrompt(input({ writable: false }))).prompt.startsWith(EXTERNAL_RUNTIME_DIRECTIVE)).toBe(true);
+    expect(okPrompt(buildExternalPrompt(input())).prompt.startsWith(EXTERNAL_RUNTIME_DIRECTIVE)).toBe(true);
   });
 });
 

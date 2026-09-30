@@ -136,12 +136,30 @@ export interface ApprovalMeta {
    * `resolveApprovalDecision`: a permission mode is the operator's standing
    * statement about THEIR OWN commands, and cannot answer "external content
    * asked for this — do YOU authorize it?". Neither `trust` nor `auto` stands
-   * in for that answer; the sole exception is an explicit, session-local grant
-   * for one exact MCP FQN, made by the operator at a prior approval prompt.
+   * in for that answer. A session-local MCP trust grant does not lift this
+   * floor either: it is never offered while the floor is on, and a grant made
+   * in an earlier turn does not apply to a call that carries it.
    */
   untrustedOrigin?: boolean;
-  /** Offer an exact-FQN, session-only grant, never a wildcard. */
+  /**
+   * Offer an exact-FQN, session-only grant, never a wildcard. Never sent while
+   * `untrustedOrigin` is set.
+   */
   mcpTrustAvailable?: boolean;
+  /**
+   * The grant would have been offered but the untrusted-content floor is on.
+   * Only ever set together with `untrustedOrigin`; it lets the approver say why
+   * the trust option is missing.
+   */
+  mcpTrustWithheld?: boolean;
+  /**
+   * Why {@link mcpTrustWithheld} is set: `destructive` when the tool's catalog
+   * entry says `destructiveHint: true` (a hint, but never trustable), else
+   * `untrusted-origin`. `destructive` wins when both hold.
+   */
+  mcpTrustWithheldReason?: "untrusted-origin" | "destructive";
+  /** The tool already holds a live session grant (it asks anyway because of the floor, a hook or `/plan`). */
+  mcpTrusted?: boolean;
   /**
    * Flow 295 (AC7): the call is one only the operator can confirm (a tool with
    * `InteractiveTool.confirmation`, e.g. `schedule_create`). An approver must show
@@ -179,7 +197,8 @@ export interface ApprovalMeta {
  * a denial. That closes the gap where "the user said yes" and "this is what
  * runs" are two independent facts that merely happen to line up.
  * `trustMcpTool` is accepted only for `use_tool`, in trust mode, after that
- * fingerprint check; hosts must offer it only for catalog-resolved MCP tools.
+ * fingerprint check, and never for a call under the untrusted-content floor;
+ * hosts must offer it only for catalog-resolved MCP tools.
  */
 export type ApprovalResponse = boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
 
@@ -255,6 +274,13 @@ export interface AgentIO {
    */
   onUnattendedDenial?: (tool: string, reason: string) => void;
   /**
+   * `/rewind`: called after a call has passed every approval and immediately
+   * before a `write`/`shell`/`destructive`/`delegate` tool runs, so the host can
+   * snapshot the work tree. Awaited; a throw never blocks the tool. Never wired
+   * for unattended runs. Read-only tools never reach it.
+   */
+  beforeMutation?: () => Promise<void>;
+  /**
    * Approve a mutating (risk `shell`/`destructive`) tool call before it runs.
    * DEFAULT-DENY: when this is absent the driver denies the call and never
    * executes it. `input` is the raw JSON input string the model proposed.
@@ -272,7 +298,11 @@ export interface AgentIO {
    * auto-approval they cannot object to." Never called for risk `read` — that
    * was already silent before permission modes existed, and stays that way.
    */
-  onAutoApproved?: (tool: string, input: string, meta: { destructive: boolean; credentials: boolean }) => void;
+  onAutoApproved?: (
+    tool: string,
+    input: string,
+    meta: { destructive: boolean; credentials: boolean; mcpTrusted?: boolean },
+  ) => void;
   /**
    * The session's current permission mode (see `permission-mode.ts`).
    * Read fresh on every gated call, never cached — this is how a live `/mode`
@@ -284,8 +314,28 @@ export interface AgentIO {
    * getter, never a missing `requestApproval`.
    */
   permissionMode?: () => PermissionMode;
-  /** Explicit operator grants, isolated to this interactive shell session. */
-  trustedMcpTools?: Set<string>;
+  /**
+   * Explicit operator grants, isolated to this interactive shell session and
+   * never persisted: exact MCP FQN -> the fingerprint of the tool's definition
+   * (name, description, input schema) at grant time. Only a validated operator
+   * answer adds an entry; the model cannot.
+   */
+  trustedMcpTools?: Map<string, string>;
+  /**
+   * The CURRENT definition fingerprint for an MCP FQN, from the live catalog,
+   * or `undefined` when the tool is gone. A grant is honoured only while this
+   * still equals the fingerprint stored with it; absent, no grant can be made.
+   */
+  mcpToolFingerprint?: (fqn: string) => string | undefined;
+  /**
+   * Whether the LIVE catalog marks an MCP FQN `destructiveHint: true`. Read at
+   * call time because annotations are not part of the definition fingerprint.
+   * Absent or `false` annotations are NOT destructive (they are advisory and
+   * server-supplied; the MCP default of `true` would remove trust for nearly
+   * every server). A destructive tool is never offered trust and its grant is
+   * dropped.
+   */
+  mcpToolDestructive?: (fqn: string) => boolean;
   /**
    * The session's current read-only ("plan") posture (see
    * `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring for the
@@ -3322,6 +3372,9 @@ async function runAgentTurnCore(
             deps.hooks,
             untrustedOrigin,
             io.trustedMcpTools,
+            io.mcpToolFingerprint,
+            io.mcpToolDestructive,
+            deps.unattended === true ? undefined : io.beforeMutation,
           );
         } catch (err) {
           // AC4 (flow 354, L-12): same posture as the concurrent path's own
@@ -4089,6 +4142,11 @@ async function runConcurrentSpawnBatch(
       undefined,
       deps.hardDeny === undefined ? undefined : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
       deps.hooks,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      deps.unattended === true ? undefined : io.beforeMutation,
     );
 
   const plan = planWaves(tasks, {
@@ -4350,7 +4408,10 @@ async function executeCall(
   // An external result in this turn cannot authorize this call. Force a real
   // approval through the SAME risk/hook gate, not a second prompt ahead of it.
   untrustedOrigin = false,
-  trustedMcpTools?: Set<string>,
+  trustedMcpTools?: Map<string, string>,
+  mcpToolFingerprint?: (fqn: string) => string | undefined,
+  mcpToolDestructive?: (fqn: string) => boolean,
+  beforeMutation?: () => Promise<void>,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -4462,7 +4523,23 @@ async function executeCall(
     // The model supplies this name, but cannot grant it: only a validated
     // operator response from the host below can put it in the session set.
     const mcpFqn = call.name === "use_tool" && typeof input.tool_name === "string" ? input.tool_name : undefined;
-    const trustedMcp = mode === "trust" && mcpFqn !== undefined && trustedMcpTools?.has(mcpFqn) === true;
+    // The definition this decision is made against. A grant is bound to it: if
+    // the tool changed (or vanished) since the operator said yes, the entry is
+    // dropped and the call asks again, in any mode.
+    const currentMcpFingerprint = mcpFqn !== undefined ? mcpToolFingerprint?.(mcpFqn) : undefined;
+    // Annotations are outside the fingerprint, so they are asked of the live catalog on every call.
+    const mcpDestructive = mcpFqn !== undefined && mcpToolDestructive?.(mcpFqn) === true;
+    if (
+      mcpFqn !== undefined &&
+      trustedMcpTools?.has(mcpFqn) === true &&
+      (mcpDestructive || trustedMcpTools.get(mcpFqn) !== currentMcpFingerprint)
+    ) {
+      trustedMcpTools.delete(mcpFqn);
+    }
+    const mcpGranted = mcpFqn !== undefined && trustedMcpTools?.has(mcpFqn) === true;
+    const trustedMcp = mode === "trust" && mcpGranted;
+    const mcpTrustPossible = mcpFqn !== undefined && mode === "trust" && !gated.hookAsked && currentMcpFingerprint !== undefined;
+    const mcpTrustEligible = mcpTrustPossible && !mcpDestructive;
     if (gated.decision === "deny") {
       return {
         output: gated.hookTightened
@@ -4471,8 +4548,10 @@ async function executeCall(
         isError: true,
       };
     }
-    if ((gated.decision === "auto" && !untrustedOrigin) || (trustedMcp && !gated.hookAsked && !isReadOnly)) {
-      onAutoApproved?.(call.name, call.input, { destructive, credentials });
+    // A trust grant is not a way around the untrusted-content floor: with
+    // external content in this turn the call asks even for a trusted tool.
+    if ((gated.decision === "auto" && !untrustedOrigin) || (trustedMcp && !untrustedOrigin && !gated.hookAsked && !isReadOnly)) {
+      onAutoApproved?.(call.name, call.input, { destructive, credentials, ...(trustedMcp ? { mcpTrusted: true } : {}) });
     } else {
       const fingerprint = toolCallHash(call.name, call.input);
       const response =
@@ -4488,13 +4567,27 @@ async function executeCall(
                 : {}),
               ...(gated.hookAsked ? { hookAsk: true } : {}),
               ...(untrustedOrigin ? { untrustedOrigin: true } : {}),
-              ...(mcpFqn !== undefined && mode === "trust" && !gated.hookAsked ? { mcpTrustAvailable: true } : {}),
+              ...(mcpTrustPossible
+                ? mcpDestructive
+                  ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" as const }
+                  : untrustedOrigin
+                    ? { mcpTrustWithheld: true, mcpTrustWithheldReason: "untrusted-origin" as const }
+                    : { mcpTrustAvailable: true }
+                : {}),
+              ...(mcpGranted ? { mcpTrusted: true } : {}),
             });
       if (!isApprovalFor(response, fingerprint)) {
         return { output: untrustedOrigin ? untrustedDenial : "command not approved by the user; not executed", isError: true };
       }
-      if (mcpFqn !== undefined && typeof response === "object" && response.trustMcpTool === true && mode === "trust" && !gated.hookAsked) {
-        trustedMcpTools?.add(mcpFqn);
+      if (
+        mcpFqn !== undefined &&
+        currentMcpFingerprint !== undefined &&
+        typeof response === "object" &&
+        response.trustMcpTool === true &&
+        mcpTrustEligible &&
+        !untrustedOrigin
+      ) {
+        trustedMcpTools?.set(mcpFqn, currentMcpFingerprint);
       }
     }
   } else if (risk === "delegate") {
@@ -4643,6 +4736,14 @@ async function executeCall(
 
   if (!reserveInvocation()) {
     return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
+  }
+  // `/rewind` seam: after every approval, before the tool can touch the work tree.
+  if (beforeMutation !== undefined && (risk === "write" || risk === "shell" || risk === "destructive" || risk === "delegate")) {
+    try {
+      await beforeMutation();
+    } catch {
+      // A failed snapshot never blocks the tool.
+    }
   }
   // The context is passed unconditionally: a tool that ignores it is unaffected,
   // and making the parameter conditional would hide which calls are abortable.

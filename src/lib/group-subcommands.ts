@@ -52,6 +52,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["external", ["on", "off", "status", "list"]],
   // commands/auth.ts:24-36
   ["auth", ["list", "login", "logout", "status"]],
+  // commands/approvals.ts (flow 369): list (also the bare default), allow, deny
+  ["approvals", ["list", "allow", "deny"]],
   // commands/version.ts:19 (`args[0] !== "check"` is refused)
   ["version", ["check"]],
   // commands/gdgraph.ts:81-206
@@ -103,6 +105,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "ac",
       "check-ac",
       "owner",
+      "outcome",
       "implemented",
       "complete",
       "confirm",
@@ -133,6 +136,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "comments",
       "ci-triage",
       "conform",
+      "bot",
+      "metrics",
       "jev-rules",
       "jev-edit-guard",
       "jev-risk",
@@ -218,6 +223,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["schedule", ["add", "list", "show", "pause", "resume", "run", "remove"]],
   // commands/governance.ts:86-90
   ["governance", ["report", "show"]],
+  // commands/product.ts (productCommand dispatch)
+  ["product", ["index", "open"]],
   // commands/hooks.ts:1247-1271 (excludes the unrelated hook-event-name switch earlier in the same file)
   ["hooks", ["list", "validate", "test", "enable", "disable", "trust", "untrust"]],
   // commands/bundle.ts:52-68

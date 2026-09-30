@@ -8,7 +8,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn } from "./agent";
-import type { AgentDeps, AgentIO } from "./agent";
+import type { AgentDeps, AgentIO, ApprovalMeta } from "./agent";
+import { catalogFingerprintResolver } from "../mcp-servers/approval-render";
 import type { PermissionMode } from "./permission-mode";
 import { busLeasesFromClient } from "./shell";
 import type { BusClient } from "../bus/client";
@@ -56,6 +57,17 @@ async function realGitPublishBusLeases(
   const view = createLeaseView({ root, instanceId });
   await view.refresh();
   return busLeasesFromClient({ leaseView: () => view } as unknown as BusClient);
+}
+
+/** A catalog holding the two tools the MCP-trust tests call, resolved like the real host does. */
+function mcpCatalogFingerprints(): (fqn: string) => string | undefined {
+  const catalog = {
+    entries: [
+      { fqn: "playwright__snapshot", description: "Take a snapshot", inputSchema: { type: "object" } },
+      { fqn: "playwright__find", description: "Find an element", inputSchema: { type: "object" } },
+    ],
+  };
+  return catalogFingerprintResolver(catalog);
 }
 
 const DESCRIPTION: ProviderDescription = {
@@ -1111,7 +1123,7 @@ test("AC6: publishLease still asks even when heldBy() has no detail to offer", a
 test("trust grants only one MCP FQN for this shell, not other tools or modes", async () => {
   const calls: string[] = [];
   const approvals: string[] = [];
-  const trustedMcpTools = new Set<string>();
+  const trustedMcpTools = new Map<string, string>();
   const tool: InteractiveTool = {
     definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: {
       type: "object", properties: { tool_name: { type: "string" }, tool_input: { type: "object" } },
@@ -1121,7 +1133,7 @@ test("trust grants only one MCP FQN for this shell, not other tools or modes", a
   };
   let mode: PermissionMode = "trust";
   let readOnly = false;
-  const io: AgentIO = { write: () => {}, trustedMcpTools, permissionMode: () => mode, readOnly: () => readOnly,
+  const io: AgentIO = { write: () => {}, trustedMcpTools, mcpToolFingerprint: mcpCatalogFingerprints(), permissionMode: () => mode, readOnly: () => readOnly,
     requestApproval: async (_tool, raw, meta) => {
       approvals.push(JSON.parse(raw).tool_name);
       return approvals.length === 1
@@ -1134,7 +1146,7 @@ test("trust grants only one MCP FQN for this shell, not other tools or modes", a
       providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
   };
   await run("playwright__snapshot"); await run("playwright__snapshot"); await run("playwright__find");
-  expect([...trustedMcpTools]).toEqual(["playwright__snapshot"]);
+  expect([...trustedMcpTools.keys()]).toEqual(["playwright__snapshot"]);
   expect(approvals).toEqual(["playwright__snapshot", "playwright__find"]);
   mode = "ask"; await run("playwright__snapshot");
   readOnly = true; mode = "trust"; await run("playwright__snapshot");
@@ -1143,35 +1155,154 @@ test("trust grants only one MCP FQN for this shell, not other tools or modes", a
 });
 
 
-test("a trusted MCP FQN bypasses the untrusted-result latch later in the same turn", async () => {
+const MCP_INPUT = JSON.stringify({ tool_name: "playwright__snapshot", tool_input: {} });
+
+function useToolCall(id: string): Partial<NormalizedEvent>[] {
+  return [
+    { kind: "tool_call_start", toolCallId: id, toolName: "use_tool" },
+    { kind: "tool_call_end", toolCallId: id, input: MCP_INPUT },
+    { kind: "model_end" },
+  ];
+}
+
+const MCP_TOOL_SCHEMA = {
+  type: "object", properties: { tool_name: { type: "string" }, tool_input: { type: "object" } },
+  required: ["tool_name", "tool_input"],
+};
+
+test("a trusted MCP FQN does NOT bypass the untrusted-result latch later in the same turn", async () => {
+  const metas: (ApprovalMeta | undefined)[] = [];
+  let invocations = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => { invocations++; return { output: "third-party response", isError: false, untrusted: true }; },
+  };
+  const trustedMcpTools = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools, mcpToolFingerprint: mcpCatalogFingerprints(),
+    requestApproval: async (_tool, _raw, meta) => {
+      metas.push(meta);
+      // Even if a host answered "trust" here, the floor must not record a grant.
+      return { approved: true, fingerprint: meta!.fingerprint, trustMcpTool: true };
+    },
+  };
+  const provider = scriptedProvider([useToolCall("c1"), useToolCall("c2"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+  await runAgentTurn(io, { provider, providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(invocations).toBe(2);
+  expect(metas).toHaveLength(2);
+  expect(metas[0]?.untrustedOrigin).toBeUndefined();
+  expect(metas[0]?.mcpTrustAvailable).toBe(true);
+  expect(metas[1]?.untrustedOrigin).toBe(true);
+});
+
+test("under the untrusted-content floor the trust option is withheld, not offered", async () => {
+  const metas: (ApprovalMeta | undefined)[] = [];
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "third-party response", isError: false, untrusted: true }),
+  };
+  const trustedMcpTools = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools, mcpToolFingerprint: mcpCatalogFingerprints(),
+    requestApproval: async (_tool, _raw, meta) => { metas.push(meta); return { approved: true, fingerprint: meta!.fingerprint }; },
+  };
+  const provider = scriptedProvider([useToolCall("c1"), useToolCall("c2"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
+  await runAgentTurn(io, { provider, providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(metas[1]).toMatchObject({ untrustedOrigin: true, mcpTrustWithheld: true });
+  expect("mcpTrustAvailable" in (metas[1] ?? {})).toBe(false);
+  expect(trustedMcpTools.size).toBe(0);
+});
+
+test("a trusted MCP FQN applies again in the next turn without a prompt", async () => {
   let approvalCalls = 0;
   let invocations = 0;
   const tool: InteractiveTool = {
-    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: {
-      type: "object", properties: { tool_name: { type: "string" }, tool_input: { type: "object" } },
-      required: ["tool_name", "tool_input"],
-    } },
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
     invoke: async () => { invocations++; return { output: "third-party response", isError: false, untrusted: true }; },
   };
-  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: new Set(),
+  const trustedMcpTools = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools, mcpToolFingerprint: mcpCatalogFingerprints(),
     requestApproval: async (_tool, _raw, meta) => {
       approvalCalls++;
       return { approved: true, fingerprint: meta!.fingerprint, trustMcpTool: true };
     },
   };
-  const input = JSON.stringify({ tool_name: "playwright__snapshot", tool_input: {} });
-  const provider = scriptedProvider([[
-    { kind: "tool_call_start", toolCallId: "c1", toolName: "use_tool" },
-    { kind: "tool_call_end", toolCallId: "c1", input },
-    { kind: "model_end" },
-  ], [
-    { kind: "tool_call_start", toolCallId: "c2", toolName: "use_tool" },
-    { kind: "tool_call_end", toolCallId: "c2", input },
-    { kind: "model_end" },
-  ], [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]);
-  await runAgentTurn(io, { provider, providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  const deps = (script: Partial<NormalizedEvent>[][]) => ({ provider: scriptedProvider(script), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq });
+  await runAgentTurn(io, deps([useToolCall("c1"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), [], "one");
+  expect(approvalCalls).toBe(1);
+  expect(trustedMcpTools.has("playwright__snapshot")).toBe(true);
+  // A fresh turn: the latch is per turn, so the grant applies with no prompt.
+  await runAgentTurn(io, deps([useToolCall("c2"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), [], "two");
   expect(approvalCalls).toBe(1);
   expect(invocations).toBe(2);
+});
+
+/** A one-tool catalog whose definition a test can change between calls. */
+function mutableCatalog() {
+  const entry: { fqn: string; server: string; rawName: string; description?: string; inputSchema?: Record<string, unknown> } = {
+    fqn: "playwright__snapshot", server: "playwright", rawName: "snapshot",
+    description: "Take a snapshot", inputSchema: { type: "object", properties: { url: { type: "string" } } },
+  };
+  return { entry, catalog: { entries: [entry] } };
+}
+
+async function trustThenCallAgain(mutate: (entry: ReturnType<typeof mutableCatalog>["entry"]) => void): Promise<{ approvals: number; trusted: Map<string, string> }> {
+  const { entry, catalog } = mutableCatalog();
+  let approvals = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "ok", isError: false }),
+  };
+  const trusted = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: trusted,
+    mcpToolFingerprint: (fqn) => catalogFingerprintResolver(catalog)(fqn),
+    requestApproval: async (_tool, _raw, meta) => { approvals++; return { approved: true, fingerprint: meta!.fingerprint, trustMcpTool: approvals === 1 }; },
+  };
+  const deps = (id: string) => ({ provider: scriptedProvider([useToolCall(id), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq });
+  await runAgentTurn(io, deps("c1"), [], "one");
+  expect(trusted.has("playwright__snapshot")).toBe(true);
+  mutate(entry);
+  await runAgentTurn(io, deps("c2"), [], "two");
+  return { approvals, trusted };
+}
+
+test("a trust grant holds while the tool definition is unchanged", async () => {
+  const { approvals, trusted } = await trustThenCallAgain(() => {});
+  expect(approvals).toBe(1);
+  expect(trusted.has("playwright__snapshot")).toBe(true);
+});
+
+test("a changed tool description drops the grant and asks again", async () => {
+  const { approvals, trusted } = await trustThenCallAgain((entry) => { entry.description = "Take a snapshot and upload it"; });
+  expect(approvals).toBe(2);
+  expect(trusted.has("playwright__snapshot")).toBe(false);
+});
+
+test("a changed tool input schema drops the grant and asks again", async () => {
+  const { approvals, trusted } = await trustThenCallAgain((entry) => {
+    entry.inputSchema = { type: "object", properties: { url: { type: "string" }, target: { type: "string" } } };
+  });
+  expect(approvals).toBe(2);
+  expect(trusted.has("playwright__snapshot")).toBe(false);
+});
+
+test("a tool that left the catalog loses its grant", async () => {
+  const { approvals, trusted } = await trustThenCallAgain((entry) => { entry.fqn = "playwright__gone"; });
+  expect(approvals).toBe(2);
+  expect(trusted.has("playwright__snapshot")).toBe(false);
+});
+
+test("without a fingerprint resolver the trust option is not offered", async () => {
+  let meta: ApprovalMeta | undefined;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "ok", isError: false }),
+  };
+  const trusted = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: trusted,
+    requestApproval: async (_tool, _raw, m) => { meta = m; return { approved: true, fingerprint: m!.fingerprint, trustMcpTool: true }; },
+  };
+  await runAgentTurn(io, { provider: scriptedProvider([useToolCall("c1"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(meta?.mcpTrustAvailable).toBeUndefined();
+  expect(trusted.size).toBe(0);
 });
 
 
@@ -1184,12 +1315,130 @@ test("MCP trust cannot be recorded from a stale approval fingerprint", async () 
     } },
     invoke: async () => { ran++; return { output: "ok", isError: false }; },
   };
-  const trustedMcpTools = new Set<string>();
-  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools,
+  const trustedMcpTools = new Map<string, string>();
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools, mcpToolFingerprint: mcpCatalogFingerprints(),
     requestApproval: async () => ({ approved: true, fingerprint: "wrong", trustMcpTool: true }),
   };
   await runAgentTurn(io, { provider: scriptedProvider(callScript("use_tool", JSON.stringify({ tool_name: "playwright__snapshot", tool_input: {} }))),
     providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
   expect(ran).toBe(0);
   expect(trustedMcpTools.size).toBe(0);
+});
+
+// ---- Flow 360: destructive-tool trust withholding and the trusted marker ----
+
+interface DestructiveRun { metas: (ApprovalMeta | undefined)[]; autos: (ApprovalMeta | undefined)[]; trusted: Map<string, string>; invocations: number }
+
+async function runTwoUseToolCalls(opts: {
+  destructive: () => boolean;
+  answer: (n: number, meta: ApprovalMeta | undefined) => boolean | { approved: boolean; fingerprint?: string; trustMcpTool?: boolean };
+  untrusted?: boolean;
+  twoTurns?: boolean;
+  between?: () => void;
+}): Promise<DestructiveRun> {
+  const metas: (ApprovalMeta | undefined)[] = [];
+  const autos: (ApprovalMeta | undefined)[] = [];
+  let invocations = 0;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => { invocations++; return { output: "ok", isError: false, ...(opts.untrusted ? { untrusted: true } : {}) }; },
+  };
+  const trusted = new Map<string, string>();
+  let n = 0;
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: trusted,
+    mcpToolFingerprint: mcpCatalogFingerprints(), mcpToolDestructive: () => opts.destructive(),
+    onAutoApproved: (_t, _i, meta) => { autos.push(meta as ApprovalMeta); },
+    requestApproval: async (_tool, _raw, meta) => { metas.push(meta); n++; return opts.answer(n, meta) as never; },
+  };
+  const deps = (script: Partial<NormalizedEvent>[][]) => ({ provider: scriptedProvider(script), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq });
+  const done = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }] as Partial<NormalizedEvent>[];
+  if (opts.twoTurns) {
+    await runAgentTurn(io, deps([useToolCall("c1"), done]), [], "one");
+    opts.between?.();
+    await runAgentTurn(io, deps([useToolCall("c2"), done]), [], "two");
+  } else {
+    await runAgentTurn(io, deps([useToolCall("c1"), useToolCall("c2"), done]), [], "run");
+  }
+  return { metas, autos, trusted, invocations };
+}
+
+const trustAnswer = (_n: number, meta: ApprovalMeta | undefined) => ({ approved: true, fingerprint: meta!.fingerprint, trustMcpTool: true });
+
+test("AC1: a destructiveHint tool is never offered trust and the meta says why", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => true, answer: trustAnswer });
+  expect(run.metas).toHaveLength(2);
+  for (const meta of run.metas) {
+    expect(meta).toMatchObject({ mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" });
+    expect("mcpTrustAvailable" in (meta ?? {})).toBe(false);
+  }
+  expect(run.trusted.size).toBe(0);
+});
+
+test("AC1: a host that answers trust for a destructive tool records no grant", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => true, answer: trustAnswer, twoTurns: true });
+  expect(run.metas).toHaveLength(2);
+  expect(run.trusted.size).toBe(0);
+});
+
+test("AC1: an absent or false annotation is offered trust as before", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer });
+  expect(run.metas[0]?.mcpTrustAvailable).toBe(true);
+  expect(run.metas[0]?.mcpTrustWithheldReason).toBeUndefined();
+  // Granted on the first call, so the second is auto-approved with no prompt.
+  expect(run.metas).toHaveLength(1);
+  expect(run.trusted.has("playwright__snapshot")).toBe(true);
+});
+
+test("AC1: with no destructive resolver at all the trust option is still offered", async () => {
+  let meta: ApprovalMeta | undefined;
+  const tool: InteractiveTool = {
+    definition: { name: "use_tool", description: "MCP", risk: "destructive", inputSchema: MCP_TOOL_SCHEMA },
+    invoke: async () => ({ output: "ok", isError: false }),
+  };
+  const io: AgentIO = { write: () => {}, permissionMode: () => "trust", trustedMcpTools: new Map(), mcpToolFingerprint: mcpCatalogFingerprints(),
+    requestApproval: async (_t, _r, m) => { meta = m; return { approved: true, fingerprint: m!.fingerprint }; },
+  };
+  await runAgentTurn(io, { provider: scriptedProvider([useToolCall("c1"), [{ kind: "text_delta", text: "done" }, { kind: "model_end" }]]), providerId: "s", modelId: "m", tools: [tool], systemInstruction: "sys", idSeq }, [], "run");
+  expect(meta?.mcpTrustAvailable).toBe(true);
+});
+
+test("AC2: a grant is dropped and the call asks again once the tool turns destructive", async () => {
+  let destructive = false;
+  const run = await runTwoUseToolCalls({
+    destructive: () => destructive,
+    answer: (n, meta) => (n === 1 ? trustAnswer(n, meta) : true),
+    twoTurns: true,
+    between: () => { destructive = true; },
+  });
+  expect(run.metas).toHaveLength(2);
+  expect(run.metas[1]).toMatchObject({ mcpTrustWithheld: true, mcpTrustWithheldReason: "destructive" });
+  expect(run.metas[1]?.mcpTrusted).toBeUndefined();
+  expect(run.trusted.size).toBe(0);
+  expect(run.invocations).toBe(2);
+});
+
+test("AC2: a grant still holds while the annotation stays absent", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer, twoTurns: true });
+  expect(run.metas).toHaveLength(1);
+  expect(run.invocations).toBe(2);
+});
+
+test("AC5: an auto-approved trusted call carries the trusted flag", async () => {
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: trustAnswer, twoTurns: true });
+  expect(run.autos).toHaveLength(1);
+  expect(run.autos[0]?.mcpTrusted).toBe(true);
+});
+
+test("AC5: an approval that still asks under a live grant is marked trusted", async () => {
+  // The untrusted-content floor forces the second ask even though the grant is live.
+  const run = await runTwoUseToolCalls({ destructive: () => false, answer: (n, meta) => (n === 1 ? trustAnswer(n, meta) : true), untrusted: true });
+  expect(run.metas).toHaveLength(2);
+  expect(run.metas[0]?.mcpTrusted).toBeUndefined();
+  expect(run.metas[1]).toMatchObject({ untrustedOrigin: true, mcpTrusted: true });
+});
+
+test("AC7: a fingerprint change still drops a grant when the tool is not destructive", async () => {
+  const { approvals, trusted } = await trustThenCallAgain((entry) => { entry.description = "changed again"; });
+  expect(approvals).toBe(2);
+  expect(trusted.has("playwright__snapshot")).toBe(false);
 });

@@ -783,3 +783,31 @@ describe("presentMcpConsumer — clickable connect/disconnect", () => {
     expect(connectCalls).toBe(1);
   });
 });
+
+describe("AC5 — the /mcp view marks servers that hold session trust", () => {
+  const server = configured({ command: "node", args: ["a.js"] }, { name: "linear" });
+  const withTrust = (trustedByServer?: ReadonlyMap<string, number>) =>
+    buildConsumerModel({
+      configured: [server],
+      states: [{ name: "linear", status: "connected", toolCount: 3 }],
+      problems: [],
+      userFile: "/cfg/mcp-servers.json",
+      projectFile: "/repo/.keryx/mcp-servers.json",
+      ...(trustedByServer === undefined ? {} : { trustedByServer }),
+    });
+
+  test("AC5: a server with trusted tools carries the marker and the count on both row formats", () => {
+    const row = withTrust(new Map([["linear", 2]])).rows[0]!;
+    expect(row.trustedTools).toBe(2);
+    expect(formatConsumerRow(row)).toContain("[trusted] 2 tool(s)");
+    expect(formatConsumerModalRow(row, false, { kind: "idle" })).toContain("[trusted] 2 tool(s)");
+  });
+
+  test("AC5: no marker without a grant, for another server's grant, or with a zero count", () => {
+    for (const map of [undefined, new Map<string, number>(), new Map([["other", 4]]), new Map([["linear", 0]])]) {
+      const row = withTrust(map).rows[0]!;
+      expect(formatConsumerRow(row)).not.toContain("[trusted]");
+      expect(formatConsumerModalRow(row, false, { kind: "idle" })).not.toContain("[trusted]");
+    }
+  });
+});

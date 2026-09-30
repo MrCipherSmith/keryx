@@ -38,6 +38,7 @@ import { createSecurityService } from "../security/service";
 import type { SecurityService } from "../security/types";
 import { createLearningObservationSink } from "../learning/service";
 import { createShellImpactEvidenceProvider } from "./impact-evidence-hook-adapter";
+import type { ApprovalBroker } from "./serve-approvals-broker";
 import { listProjects } from "./project-registry";
 import {
   appendTurnEvent,
@@ -297,6 +298,13 @@ export interface RunTurnInput {
    * be a claim about a branch nothing can enter.
    */
   toolRegistry?: ToolRegistry;
+  /** Executes an allowed call. Denies everything by default: production serve registers no tools. */
+  toolExecutor?: ToolExecutorPort;
+  /**
+   * Turns an `ask` into a durable pending approval and waits for the answer.
+   * Without it an `ask` stays the release-boundary deny.
+   */
+  approvals?: ApprovalBroker;
 }
 
 /**
@@ -728,7 +736,9 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     projectRoot: input.project,
     role: "build",
     policy: input.profile.profileId,
-    budget: { maxSeconds: 300, maxToolCalls: 0, maxRetries: 1 },
+    // With a broker the budget admits as many calls as can be pending at once,
+    // so an allowed call is not refused by the zero that guards a broker-less turn.
+    budget: { maxSeconds: 300, maxToolCalls: input.approvals !== undefined ? Math.max(1, input.approvals.maxPending) : 0, maxRetries: 1 },
     sessionId,
     provider: input.providerName,
     model: input.model,
@@ -760,10 +770,13 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     ...(input.hooksEnv !== undefined ? { env: input.hooksEnv } : {}),
     ...(input.dir !== undefined ? { configDir: input.dir } : {}),
   });
+  const broker = input.approvals;
+  const resolvedApprovals: NonNullable<TurnResult["approvals"]> = [];
+  const approvalDenial: { first?: { resolution: string; reason?: string } } = {};
   const deps: RunDeps = {
     provider: input.provider,
     toolRegistry: input.toolRegistry ?? new ToolRegistry(),
-    toolExecutor: denyingExecutor,
+    toolExecutor: input.toolExecutor ?? denyingExecutor,
     // The profile resolved and CHECKED at startup, passed through unchanged.
     // Re-resolving here would allow the profile a turn runs under to differ
     // from the one the non-weakening check cleared.
@@ -775,6 +788,32 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     // answer, and there is not one.
     interactive: false,
     ...(hookRuntime !== undefined ? { hooks: hookRuntime } : {}),
+    ...(broker !== undefined
+      ? {
+          approver: async (request) => {
+            const outcome = await broker.request({
+              turnId,
+              sessionId,
+              toolName: request.toolName,
+              risk: request.risk,
+              callFingerprint: request.actionFingerprint,
+              floors: request.floors,
+              deliver: (view) => emitForced("approval.pending", { approvalId: view.approvalId }),
+              resolved: (approvalId, resolution) => emitForced("approval.resolved", { approvalId, resolution }),
+            });
+            resolvedApprovals.push({ approvalId: outcome.approvalId, resolution: outcome.resolution });
+            if (!outcome.approved) {
+              approvalDenial.first ??= outcome;
+            }
+            return {
+              approved: outcome.approved,
+              fingerprint: request.actionFingerprint,
+              approvalId: outcome.approvalId,
+              ...(outcome.reason !== undefined ? { reason: outcome.reason } : {}),
+            };
+          },
+        }
+      : {}),
   };
 
   let events: NormalizedEvent[];
@@ -877,7 +916,15 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
     }
   }
 
-  if (asked) {
+  if (resolvedApprovals.length > 0 && approvalDenial.first !== undefined) {
+    const reasonCode =
+      approvalDenial.first.reason === "max-pending-exceeded"
+        ? "approval-limit-exceeded"
+        : `approval-${approvalDenial.first.resolution}`;
+    return terminate("denied", reasonCode, undefined, resolvedApprovals);
+  }
+
+  if (asked && broker === undefined) {
     // Visible in BOTH surfaces, which is what AC5 asks: the stream carries the
     // pending-then-denied pair so a client watching live sees why the turn
     // ended, and the result carries the same resolution so a client that only
@@ -912,7 +959,11 @@ export async function runRemoteTurn(input: RunTurnInput): Promise<RunTurnOutput>
   // function does not recognise is a status it cannot map, and inventing
   // `completed` for it is exactly the defect. TypeScript makes the switch
   // exhaustive, so a new status is a compile error rather than a silent success.
-  return terminate(...outcomeOf(runStatus, runGate, unresolvedBlockerIds), text);
+  return terminate(
+    ...outcomeOf(runStatus, runGate, unresolvedBlockerIds),
+    text,
+    resolvedApprovals.length > 0 ? resolvedApprovals : undefined,
+  );
 }
 
 /**
@@ -1003,6 +1054,9 @@ export interface SubmitDeps {
   toolRegistry?: ToolRegistry;
   /** Forwarded to `RunTurnInput.hooksEnv` unchanged — see that field's own doc comment. */
   hooksEnv?: NodeJS.ProcessEnv;
+  /** Forwarded to `RunTurnInput`. With a broker the run is detached, see `createSubmitTurn`. */
+  approvals?: ApprovalBroker;
+  toolExecutor?: ToolExecutorPort;
 }
 
 /**
@@ -1087,12 +1141,23 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
     // Flipped by `runRemoteTurn` immediately before the provider can be
     // invoked. See the catch below.
     let effected = false;
+    // A turn that can raise an approval can wait on a human for minutes, so the
+    // 202 cannot wait for it: the answer would arrive on a request still open.
+    // With no tools registered nothing can ask, and the run stays awaited so the
+    // record is final when the 202 is sent.
+    const detached = deps.approvals !== undefined && (deps.toolRegistry?.list().length ?? 0) > 0;
+    const sessionId = request.sessionId ?? (deps.newId ?? (() => randomUUID()))();
+    let onStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      onStarted = resolve;
+    });
     try {
-      const run = await runRemoteTurn({
+      const running = runRemoteTurn({
         onEffect: () => {
           effected = true;
+          onStarted();
         },
-        request,
+        request: detached ? { ...request, sessionId } : request,
         project,
         profile: deps.profile,
         provider: deps.provider,
@@ -1108,7 +1173,26 @@ export function createSubmitTurn(deps: SubmitDeps): (request: TurnRequest, proje
         ...(deps.clock !== undefined ? { clock: deps.clock } : {}),
         ...(deps.containmentAvailable !== undefined ? { containmentAvailable: deps.containmentAvailable } : {}),
         ...(deps.hooksEnv !== undefined ? { hooksEnv: deps.hooksEnv } : {}),
+        ...(deps.approvals !== undefined ? { approvals: deps.approvals } : {}),
+        ...(deps.toolExecutor !== undefined ? { toolExecutor: deps.toolExecutor } : {}),
       });
+      if (detached) {
+        // A failure before the effect still reaches the catch below and answers 500;
+        // one after it has nowhere to be answered, so it is reported to the operator.
+        const settled = running.then(
+          () => undefined,
+          (cause: unknown) => {
+            if (effected) {
+              console.error(`keryx serve: turn ${turnId} ended abnormally: ${cause instanceof Error ? cause.name : "error"}`);
+              return undefined;
+            }
+            throw cause;
+          },
+        );
+        await Promise.race([started, settled]);
+        return { kind: "accepted", turnId, sessionId };
+      }
+      const run = await running;
       return { kind: "accepted", turnId: run.turnId, sessionId: run.sessionId };
     } catch (cause) {
       // The release path, and `effected` is the whole of its correctness.

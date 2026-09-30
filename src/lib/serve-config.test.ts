@@ -127,6 +127,22 @@ describe("defaults", () => {
   });
 });
 
+describe("approval.requireConsumer", () => {
+  test("defaults to true and round-trips false", () => {
+    expect(defaultServeConfig("cred-1").approval.requireConsumer).toBe(true);
+    const config = defaultServeConfig("cred-1");
+    config.approval.requireConsumer = false;
+    expect(projectServeConfig(config, () => undefined)).toEqual(config);
+  });
+
+  test("a non-boolean value is refused, and an absent one is accepted", () => {
+    const config = defaultServeConfig("cred-1");
+    expect(projectServeConfig({ ...config, approval: { ...config.approval, requireConsumer: "yes" } }, () => undefined)).toBeNull();
+    const { requireConsumer: _dropped, ...rest } = config.approval;
+    expect(projectServeConfig({ ...config, approval: rest }, () => undefined)?.approval.requireConsumer).toBeUndefined();
+  });
+});
+
 describe("the whitelist projection", () => {
   test("accepts a valid configuration unchanged", () => {
     const config = defaultServeConfig("cred-1");

@@ -38,14 +38,18 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
+    "/reviews",
+    "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/approvals",
     "/integrate",
     "/ci",
     "/conform",
@@ -60,9 +64,11 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-diff",
     "/jevprofile",
     "/mcp",
     "/compact",
+    "/rewind",
     "/theme",
     "/game",
     "/mode",
@@ -149,14 +155,18 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
+    "/reviews",
+    "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/approvals",
     "/integrate",
     "/ci",
     "/conform",
@@ -171,9 +181,11 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-diff",
     "/jevprofile",
     "/mcp",
     "/compact",
+    "/rewind",
     "/theme",
     "/game",
     "/mode",
@@ -201,6 +213,7 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/compact",
     "/theme",
     "/clear",
@@ -291,14 +304,18 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/ac",
     "/workspace",
     "/review",
+    "/reviews",
+    "/product",
     "/governance",
     "/triggers",
     "/routing",
     "/schedule",
     "/schedules",
+    "/approvals",
     "/integrate",
     "/ci",
     "/conform",
@@ -313,9 +330,11 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-diff",
     "/jevprofile",
     "/mcp",
     "/compact",
+    "/rewind",
     "/theme",
     "/game",
     "/mode",
@@ -339,6 +358,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/status",
     "/flows",
     "/doctor",
+    "/setup",
     "/compact",
     "/theme",
     "/clear",
@@ -358,7 +378,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
     "/clear",
   ]);
-  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/external", "/exit"]);
+  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/external", "/external-diff", "/exit"]);
   expect(filterCommands("/co", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",
@@ -367,7 +387,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
-  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reasoning"]);
+  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/rewind", "/reasoning"]);
   // `/integrate` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix
@@ -382,6 +402,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/search-connect",
     "/sessions",
     "/status",
+    "/setup",
     "/schedule",
     "/schedules",
     "/scenarios",
@@ -399,14 +420,14 @@ test("filterCommands: prefix narrows the set (agent)", () => {
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
   expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/plan"]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/plan"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",
     "/compact",
     "/clear",
   ]);
-  expect(filterCommands("/s", "chat").map((c) => c.name)).toEqual(["/status"]);
+  expect(filterCommands("/s", "chat").map((c) => c.name)).toEqual(["/status", "/setup"]);
   expect(filterCommands("/f", "chat").map((c) => c.name)).toEqual(["/flows"]);
   expect(filterCommands("/re", "chat")).toEqual([]);
 });

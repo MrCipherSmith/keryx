@@ -61,6 +61,7 @@ import { busCommand } from "./commands/bus";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
+import { approvalsCommand } from "./commands/approvals";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -76,11 +77,13 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
+import { productCommand } from "./commands/product";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
 import { sandboxNetForwardCommand } from "./commands/sandbox-net-forward";
 import { doctorCommand } from "./commands/doctor";
+import { setupCommand } from "./commands/setup";
 import { GROUP_SUBCOMMANDS } from "./lib/group-subcommands";
 import { MCP_CONSUMER_SUBCOMMANDS } from "./commands/mcp-servers";
 import packageJson from "../package.json" with { type: "json" };
@@ -115,6 +118,8 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   help: (rest) => import("./commands/help").then((mod) => mod.helpCommand(rest)),
   // Flow 353 (AC1): one page of ok/warn/fail checks, `--json` machine-readable.
   doctor: doctorCommand,
+  // Read-only Metaproject preparation guide. Does not run init, update, or sync.
+  setup: setupCommand,
   status: statusCommand,
   modules: modulesCommand,
   projects: projectsCommand,
@@ -123,6 +128,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   external: externalCommand,
   auth: authCommand,
   serve: serveCommand,
+  approvals: approvalsCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -165,6 +171,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
   learn: learnCommand,
@@ -233,6 +240,7 @@ export const USAGE_BODY = `Usage:
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
+  keryx setup [init|refresh|repair]            Print the Metaproject preparation guide (does not run it)
   keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
@@ -257,6 +265,8 @@ export const USAGE_BODY = `Usage:
   keryx serve status [--json]
   keryx serve token issue | rotate | revoke
   keryx serve config init|set|show
+  keryx approvals list [--all] [--json] | allow <id> | deny <id>
+                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -381,6 +391,8 @@ export const USAGE_BODY = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
+  keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
+  keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
   keryx hooks validate [--json] [--ci]          Validate .metaproject/hooks.json and ~/.keryx/hooks.json
   keryx hooks test <id> [--event <name>] [--payload-file <path>] [--json] [--profile <id>]
@@ -413,6 +425,7 @@ export const USAGE_BODY = `Usage:
 Commands:
   help      Grouped command help by task: every verb, in nine onboarding-ordered groups
   doctor    One-page health check with a fix hint per line; --json for {checks:[...]}
+  setup     Print the Metaproject preparation guide: init, refresh, or repair
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
@@ -425,6 +438,7 @@ Commands:
   modules   View and toggle Metaproject modules (interactive)
   projects  Inspect the user-global registry of initialized projects
   serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
+  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html
@@ -462,6 +476,7 @@ Commands:
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+  product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
@@ -521,8 +536,8 @@ const HELP_SAFE_VERBS: ReadonlySet<string> = new Set(["skills", "memory", "secur
 const SAFE_SUBCOMMAND_HELP: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["skills", new Set(["doctor", "uninstall", "scout", "eval", "judge-check", "stocktake"])],
   // Not the whole `review` group: ingest/complete/comments reply write.
-  // scope and tier only print usage and return.
-  ["review", new Set(["scope", "tier"])],
+  // scope, tier, bot and metrics answer --help with usage before doing anything else.
+  ["review", new Set(["scope", "tier", "bot", "metrics"])],
   ["memory", new Set(["handoff"])],
   ["security", new Set(["audit-harness", "impact-evidence"])],
 ]);

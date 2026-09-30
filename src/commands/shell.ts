@@ -19,7 +19,10 @@
 // the network directly; all provider I/O flows through the injected port.
 
 import { randomUUID } from "node:crypto";
+import { join as joinPath } from "node:path";
 import * as readline from "node:readline";
+import { createRewindReadlineCommand } from "../rewind/readline-command";
+import { createRewindRecorder, rewindDisabledByEnv } from "../rewind/recorder";
 import { buildBusTools } from "../bus/agent-tools";
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
@@ -49,10 +52,22 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
-import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
+import {
+  catalogDestructiveResolver,
+  catalogFingerprintResolver,
+  catalogResolver,
+  catalogTrustStaleness,
+  describeUseToolApproval,
+  isMcpToolCall,
+  parseMcpTrustCommand,
+  promptUseToolApproval,
+  runMcpTrustCommand,
+  TRUSTED_MARKER,
+} from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
+import { createTierRankHost } from "../harness/routing/tier-rank-agent";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
@@ -87,7 +102,12 @@ import { estimateContextTokens, launchTuiAgentShell } from "../tui/tui-shell";
 import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
+import { approvalsSlashText } from "./approvals";
+import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
+import { renderSetupSlash } from "./setup-guide";
+import { computeBotMetrics } from "../review/bot/metrics";
+import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -234,13 +254,19 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/goal",
   "/clear",
   "/compact",
+  "/rewind",
   "/status",
   "/flows",
+  "/approvals",
+  "/external-diff",
   "/doctor",
+  "/setup",
+  "/reviews",
   "/theme",
   "/mode",
   "/reasoning",
   "/plan",
+  "/mcp",
   "/exit",
 ];
 
@@ -942,6 +968,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         // second implementation of any one check.
         const report = await buildDoctorReport(deps.session?.cwd ?? process.cwd());
         system(`${formatDoctorReport(report)}\n`);
+        continue;
+      }
+      if (command === "/setup") {
+        system(renderSetupSlash(argument));
         continue;
       }
       if (isSessionInfoCommand(command)) {
@@ -1974,6 +2004,7 @@ export async function runAgentRepl(
           catalogResolver(deps.mcpRuntime?.()?.catalog()),
           style,
           GUTTER,
+          catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog()),
         );
       }
       if (tool !== "shell_exec") {
@@ -2114,7 +2145,11 @@ export async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
-  agentIo.trustedMcpTools = new Set<string>();
+  agentIo.trustedMcpTools = new Map<string, string>();
+  // The live catalog's current definition fingerprint, read fresh on every
+  // call: a grant holds only while the tool's definition still matches it.
+  agentIo.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
+  agentIo.mcpToolDestructive = (fqn) => catalogDestructiveResolver(deps.mcpRuntime?.()?.catalog())(fqn);
   // Flow 268 T16 (AC11): this readline session's own `/reasoning` override —
   // local to THIS function (unlike the TUI, readline agent mode has no
   // `/model`-style deps rebuild, so there is no second `AgentDeps` build that
@@ -2132,13 +2167,19 @@ export async function runAgentRepl(
     // "Always"-remembered grant below, which the user explicitly opted into
     // for that exact command, a mode-driven auto-approval was never okayed
     // action-by-action — only the mode itself was chosen, once.
-    const preview = tool === "shell_exec" ? parseShellExecCommand(input) : tool;
+    const preview =
+      tool === "shell_exec"
+        ? parseShellExecCommand(input)
+        : isMcpToolCall(tool)
+          ? `${tool} ${describeUseToolApproval(input, catalogResolver(deps.mcpRuntime?.()?.catalog())).fqn}`
+          : tool;
     // `meta.credentials` never reaches here — resolveApprovalDecision's hard
     // floor means a credentials-touching call is never `auto`, in any mode.
     // Only `destructive` is worth flagging: it means `auto` mode (not `trust`,
     // which always asks for a destructive command) just bypassed it.
     const flag = meta.destructive ? style.yellow(" [destructive]") : "";
-    out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag} ${style.dim(preview)}\n`);
+    const trustedFlag = meta.mcpTrusted === true ? style.yellow(` ${TRUSTED_MARKER}`) : "";
+    out(`${GUTTER}${style.yellow(`◇ auto-approved (${permissionMode})`)}${flag}${trustedFlag} ${style.dim(preview)}\n`);
   };
 
   let live: SessionHandle | undefined;
@@ -2418,6 +2459,29 @@ export async function runAgentRepl(
     syncArchive();
     save();
   };
+  // `/rewind`: per-turn file snapshots in a shadow repo under the session dir.
+  const rewindRecorder = createRewindRecorder({
+    workTree: sessionCwd,
+    dir: () => (live === undefined ? undefined : joinPath(live.dir, "rewind")),
+    enabled: () => !rewindDisabledByEnv() && leaseWatch.canPersist(),
+    onError: (message) => agentIo.onSystem?.(`${message}\n`),
+  });
+  agentIo.beforeMutation = () => rewindRecorder.beforeMutation();
+  const rewindCommand = createRewindReadlineCommand({
+    recorder: rewindRecorder,
+    hasSession: () => live !== undefined,
+    history: () => history,
+    archive: () => archive,
+    syncArchive,
+    canPersist: () => live !== undefined && leaseWatch.canPersist(),
+    persist: (nextHistory, nextArchive) => {
+      if (live === undefined) throw new Error("no persistent session");
+      live = persistHistory(live, nextHistory, { archive: nextArchive, provider: deps.providerId, model: deps.modelId });
+    },
+    afterHistoryRewind: () => {
+      nextArchiveIndex = history.length;
+    },
+  });
   agentIo.onHistoryChange = (kind) => {
     syncArchive();
     if (kind === "assistant_delta") {
@@ -2439,6 +2503,8 @@ export async function runAgentRepl(
     turnToolCalls = 0;
     turnText = "";
     turnError = undefined;
+    syncArchive();
+    rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: operatorLine });
     events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
@@ -2566,6 +2632,7 @@ export async function runAgentRepl(
       return; // end of input
     }
     rich.safeBoundary?.();
+    if (line.trim() !== "/rewind confirm") rewindCommand.cancelPending();
     if (line.startsWith("/")) {
       const parts = line.trim().split(/\s+/);
       const command = parts[0] ?? "";
@@ -2588,6 +2655,15 @@ export async function runAgentRepl(
         // second implementation of any one check.
         const report = await buildDoctorReport(sessionCwd);
         agentIo.onSystem?.(`${formatDoctorReport(report)}\n`);
+      } else if (command === "/setup") {
+        agentIo.onSystem?.(renderSetupSlash(rest));
+      } else if (isReviewsCommand(command)) {
+        // Same numbers as `keryx review metrics` and the TUI's /reviews modal, as text.
+        try {
+          agentIo.onSystem?.(renderReviewsText(await computeBotMetrics(sessionCwd)));
+        } catch {
+          agentIo.onSystem?.("The managed reviews could not be read.\n");
+        }
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([
@@ -2612,6 +2688,10 @@ export async function runAgentRepl(
             }),
           ),
         );
+      } else if (command === "/approvals") {
+        agentIo.onSystem?.(approvalsSlashText(rest));
+      } else if (command === "/external-diff") {
+        agentIo.onSystem?.(externalDiffSlashText(defaultExternalDiffDeps(sessionCwd)));
       } else if (isFlowsCommand(command)) {
         const items = await loadInspectorFlows(sessionCwd);
         if (rest.length > 0) {
@@ -2669,8 +2749,11 @@ export async function runAgentRepl(
         } else {
           history = [];
           archive = [];
+          agentIo.trustedMcpTools?.clear();
           agentIo.onSystem?.("Conversation cleared.\n");
         }
+      } else if (command === "/rewind") {
+        agentIo.onSystem?.(await rewindCommand.run(rest));
       } else if (command === "/compact") {
         if (live === undefined) {
           agentIo.onSystem?.("No persistent session.\n");
@@ -2818,6 +2901,18 @@ export async function runAgentRepl(
         } else {
           agentIo.onSystem?.("Usage: /plan [on|off]\n");
         }
+      } else if (command === "/mcp") {
+        const trust = parseMcpTrustCommand(line);
+        agentIo.onSystem?.(
+          trust === undefined
+            ? "The MCP server view is TUI-only here; `keryx mcp list` shows servers. Session trust: /mcp trust list | revoke <server__tool> | revoke all\n"
+            : `${runMcpTrustCommand(
+                trust,
+                agentIo.trustedMcpTools,
+                catalogResolver(deps.mcpRuntime?.()?.catalog()),
+                catalogTrustStaleness(deps.mcpRuntime?.()?.catalog()),
+              ).join("\n")}\n`,
+        );
       } else if (command === "/search-provider") {
         const args = parseSearchProviderArgs(parts.slice(1));
         const all = searchProviderController.configurable();
@@ -3734,6 +3829,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           }
           return [...byName.values()];
         },
+        // Flow 358: when the size words and version cannot settle a `model_tier`
+        // (ranking refused, or only an older-generation larger class above the
+        // session), a one-shot call on this provider's light tier orders the
+        // discovered models. Its answer is cached on disk by catalogue hash and
+        // recorded as `agent-ranked`; any failure keeps the session model.
+        tierRank: createTierRankHost(),
         // Finding 1 fix: thread the LIVE getter through so a dispatched
         // subagent's Seeds/Anchors actually fold into this TUI session's
         // slate once it opens — `createSpawnSubagentTool` calls this at fold
@@ -4325,6 +4426,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
+        mcpRuntime: () => mcpRuntime,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         // flow 268: `initialModelParams` is resolved once above (same

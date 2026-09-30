@@ -24,7 +24,7 @@ adapter beside the existing TUI adapter, not a rewrite of either.
 | R4a | user-global project registry (`keryx projects`; `keryx init` registers) | **merged** — flow 127, PR #215 |
 | R4b | `keryx serve` skeleton: loopback listener, bearer auth, token lifecycle, `GET /v1/status` + `GET /v1/projects` | **merged** — flow 128, PR #216 |
 | R4c | turn submission (`task.submit`) + streaming, and with it the non-weakening remote-profile check (AC-04) | **merged** — flow 133, PR #220 |
-| R4d | asynchronous fail-closed approvals | not started |
+| R4d | asynchronous fail-closed approvals: `GET /v1/approvals`, `POST /v1/approvals/{id}`, `keryx approvals`, `/approvals` | **implemented** — flow 369; see [the client contract](../../docs/guides/answer-remote-approvals.md) and the deviations below |
 | R4e | maintenance operations projected from `src/standard/command-registry.ts` | not started |
 | R4f | one-time expiring loopback credential handoff | not started |
 
@@ -42,9 +42,15 @@ authentication failures are throttled from the first mutating route, as they
 were owed. Approvals are not in R4c: an `ask` decision terminates in a
 **recorded denial**, written into `serve-turn.ts` as a stated boundary rather
 than left to emerge from there being no approval store — because an accident
-stops holding the moment R4d lands the store.
+stopped holding the moment R4d landed the store, and R4d replaced it.
 
-Still deferred, and now the only items outstanding besides R4d–R4f: the
+R4d turns that denial into a durable approval a person answers. Deviations from this specification, named:
+the call fingerprint is the run loop's `actionFingerprint`; the self-grant rule rests on a declared
+`x-keryx-turn` header; delivery is judged by a consumer-attached heuristic; extra fields in an answer are
+refused; the production listener registers no tools, so approvals are reachable only through an injected
+tool registry. The chat card, remote session-wide grants and unattended trigger runs are not built.
+
+Still deferred, and now the only items outstanding besides R4e–R4f: the
 unauthenticated `GET /health` liveness route together with cross-process
 liveness (no PID file exists, so `keryx serve status` reports configuration
 state only and `listening` / `draining` are knowable only over

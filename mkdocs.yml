@@ -77,13 +77,17 @@ nav:
   - Guides:
       - Give an agent context: guides/give-an-agent-context.md
       - Choose an approval mode (ask, trust, auto): guides/permission-modes.md
+      - "Undo a turn with /rewind": guides/rewind.md
       - Run an agent without giving it your machine: guides/contain-an-agent.md
       - Give a subagent a name instead of a paragraph: guides/agent-catalog.md
       - "ACP client: drive a foreign agent under keryx's policy": guides/acp-client.md
+      - "Let an external agent write (claude-cli)": guides/external-agent-write.md
       - Agent web search: guides/web-search.md
       - Use local SearXNG for web search: guides/use-local-searxng.md
       - Drive keryx from a bot: guides/drive-keryx-remotely.md
+      - Answer a remote approval from a bot: guides/answer-remote-approvals.md
       - Review with a durable record: guides/review-with-a-record.md
+      - Review as a pull request bot: guides/review-as-a-pr-bot.md
       - Jev in the delivery loop: guides/jev-in-the-delivery-loop.md
       - Shared Agent Context (experimental): guides/shared-agent-context.md
       - "/goal: deterministic starts, autonomous continuation": guides/goal.md

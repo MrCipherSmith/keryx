@@ -98,6 +98,9 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "harness", zone: "client" },
   { segment: "tui", zone: "client" },
   { segment: "session", zone: "client" },
+  // Per-turn file snapshots for `/rewind`: a shadow git repository beside the
+  // session, driven by the turn loop and the shells. Client like `session`.
+  { segment: "rewind", zone: "client" },
   { segment: "mcp-client", zone: "client" },
   // The OUTBOUND consumer of third-party MCP servers. Client for the same
   // reason `mcp-client` is: it exists to put tools in front of the model —
@@ -169,6 +172,10 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `sync`/`forgetting`/`trigger` above; `src/commands/governance.ts`
   // (adapter) is what actually writes the report artifacts and prints.
   { segment: "governance", zone: "core" },
+  // Flow 362: the product intent index — a pure reader over flow packages and
+  // requirements packages, no provider registry, no model call, no network.
+  // `src/commands/product.ts` (adapter) prints and writes the disposable index.
+  { segment: "product", zone: "core" },
   // Flow 309, W1 Lane A: deterministic, offline stack detection
   // (`detectStack`) and its persisted `stack.json`. Same shape as
   // `sync`/`forgetting`/`trigger`/`governance` above — project-state
