@@ -515,15 +515,8 @@ $ keryx review import --from ./vendor/acme-overlay/skills/review-acme-styling --
 …
 - review/review-acme-styling: overwritten — review-orchestrator will dispatch this after `keryx review reviewers` lists it
   - warning: metadata.flags: "--acme_css" dropped — a flag is `--` and a name of lower-case letters, digits and dashes that starts with a letter
-  - warning: flag --acme is carried by one existing project reviewer, review-acme-api: it becomes a family flag for both, so --acme now selects review-acme-api path-gated instead of dispatching it outright.
 …
 ```
-
-The second warning is worth reading twice on an overwrite. The package being
-replaced is left out of the comparison, so `review-acme-api` looks like the
-only carrier of `--acme` — but `--acme` was already a family flag through the
-copy being replaced, and nothing changes for `review-acme-api`. Check
-`family flags` in `keryx review reviewers` before acting on it.
 
 An origin that reads `missing` cannot be updated from: pass the new location
 with `keryx skills update <module>/<name> --from <new-origin>`.

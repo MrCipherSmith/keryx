@@ -495,11 +495,14 @@ function flagCollisionWarning(flag: string, existing: string): string {
  * Add {@link flagCollisionWarning} to each written (or would-be-written) review
  * row. `rows[i]` is the outcome of `sources[i]`.
  *
- * "Existing" is a reviewer that was on disk before this import and is not
- * replaced by it: a package being overwritten does not collide with its own
- * earlier copy, and two packages arriving together that share a flag are an
- * overlay's family, not a change to anything the project had. A flag two or
- * more existing reviewers share is a family flag already.
+ * The warning is about a change of status, so the carriers are counted as they
+ * were on disk before this import — the copies this import replaces included.
+ * A flag two or more of them shared was a family flag already: overwriting one
+ * of them changes nothing for the other. The warning fires when there was
+ * exactly one carrier and this import leaves that reviewer alone: a package
+ * being overwritten does not collide with its own earlier copy, and two
+ * packages arriving together that share a flag are an overlay's family, not a
+ * change to anything the project had.
  */
 function addFlagCollisionWarnings(
   rows: ImportedProjectSkill[],
@@ -512,11 +515,9 @@ function addFlagCollisionWarnings(
     const source = sources[index];
     if (source === undefined || !isWritten(row)) continue;
     for (const flag of reviewerFlags(source.content)) {
-      const carriers = [...existingFlags]
-        .filter(([name, flags]) => !replaced.has(name) && flags.includes(flag))
-        .map(([name]) => name);
+      const carriers = [...existingFlags].filter(([, flags]) => flags.includes(flag)).map(([name]) => name);
       const [only] = carriers;
-      if (carriers.length === 1 && only !== undefined) {
+      if (carriers.length === 1 && only !== undefined && !replaced.has(only)) {
         row.warnings = [...(row.warnings ?? []), flagCollisionWarning(flag, only)];
       }
     }

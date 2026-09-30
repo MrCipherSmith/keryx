@@ -402,6 +402,32 @@ describe("tree import selection", () => {
       expect(again.imported[0]?.warnings).toBeUndefined();
     });
 
+    // The warning is about a change of status. `--acme` is already a family flag
+    // through the installed copy this run replaces, so review-acme-api is
+    // dispatched exactly as before and there is nothing to say.
+    test("overwriting a package whose installed copy already shared the flag is no warning", async () => {
+      await writeExistingReviewer("review-acme-api", "--acme, --api");
+      const dir = await writeReviewPackage("review-acme-styling", '  flags: "--acme"\n');
+      await importProjectSkills({ projectRoot: cwd, from: dir });
+      for (const dryRun of [true, false]) {
+        const again = await importProjectSkills({ projectRoot: cwd, from: dir, force: true, dryRun });
+        expect(again.imported[0]?.status).toBe(dryRun ? "would-overwrite" : "overwritten");
+        expect(again.imported[0]?.warnings).toBeUndefined();
+      }
+    });
+
+    test("an overwrite whose new version adds a flag one other reviewer carries still warns, for that flag only", async () => {
+      await writeExistingReviewer("review-acme-api", "--acme, --api");
+      const dir = await writeReviewPackage("review-acme-styling", '  flags: "--acme"\n');
+      await importProjectSkills({ projectRoot: cwd, from: dir });
+      await writeReviewPackage("review-acme-styling", '  flags: "--acme, --api"\n');
+      for (const dryRun of [true, false]) {
+        const again = await importProjectSkills({ projectRoot: cwd, from: dir, force: true, dryRun });
+        expect(again.imported[0]?.status).toBe(dryRun ? "would-overwrite" : "overwritten");
+        expect(again.imported[0]?.warnings).toEqual([collisionWarning("--api", "review-acme-api")]);
+      }
+    });
+
     test("two packages imported together that share a new flag do not collide with each other; a skipped one gets no warning", async () => {
       await writeExistingReviewer("review-house-core", "--core");
       await writeReviewPackage("review-house-a", '  flags: "--house, --core"\n');
