@@ -93,12 +93,13 @@ export function computeGate(input: {
   //     blocking -- a half-installed tool is a broken check, not an unused one.
   //   * `required` itself is unchanged, so a project with NEITHER linter keeps
   //     the existing required-eslint INCOMPLETE behavior (AC2).
-  const LINT_FAMILY = new Set(["eslint", "oxlint"]);
-  const lintSatisfied = sources.some(
-    (s) => LINT_FAMILY.has(s.source) && !didNotProduceResult(s),
-  );
+  // The family is whatever declares `capability: "lint"` (copied from the
+  // adapter by `runAdapter`), not a list of ids here: a linter added later is
+  // in the family by declaring it, and cannot be forgotten in this file.
+  const isLinter = (s: SourceRunInfo): boolean => s.capability === "lint";
+  const lintSatisfied = sources.some((s) => isLinter(s) && !didNotProduceResult(s));
   const excusedByLintFamily = (s: SourceRunInfo): boolean =>
-    lintSatisfied && LINT_FAMILY.has(s.source) && s.status === "skipped";
+    lintSatisfied && isLinter(s) && s.status === "skipped";
 
   const brokenRequired = sources.filter(
     (s) => s.required && didNotProduceResult(s) && !excusedByLintFamily(s),
@@ -109,9 +110,7 @@ export function computeGate(input: {
   // F-240-03 closed for optional sources -- and it would hide the fact that
   // the lint check is running under a different tool. Informational only:
   // like `OPTIONAL:`/`COVERAGE:`, this line never calls `escalate`.
-  const lintProvider = sources.find(
-    (s) => LINT_FAMILY.has(s.source) && !didNotProduceResult(s),
-  );
+  const lintProvider = sources.find((s) => isLinter(s) && !didNotProduceResult(s));
   const excusedLinter = sources.find((s) => s.required && excusedByLintFamily(s));
   if (excusedLinter && lintProvider) {
     reasons.push(
@@ -124,7 +123,11 @@ export function computeGate(input: {
       escalate("incomplete", `required source unavailable: ${source.source}${detail}`);
     }
   }
-  const skippedOptional = sources.filter((s) => !s.required && s.status === "skipped");
+  // An optional linter excused by a sibling that ran is not an absence worth a
+  // line: coverage already counts it as measured, and the reasons must agree.
+  const skippedOptional = sources.filter(
+    (s) => !s.required && s.status === "skipped" && !excusedByLintFamily(s),
+  );
   for (const source of skippedOptional) {
     reasons.push(`OPTIONAL: ${source.source} source skipped`);
   }

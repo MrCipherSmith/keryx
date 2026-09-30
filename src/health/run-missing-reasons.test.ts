@@ -27,10 +27,15 @@ function stub(id: SourceId, status: SourceStatus): SourceAdapter {
   };
 }
 
+// A tree with no files at all: nothing in it can make a reason claim a config
+// file. oxlint's reason reads the tree to name the intent signal that fired
+// (config file vs package.json), so the context needs a real `cwd`.
+const EMPTY_TREE = { cwd: "/nonexistent-keryx-health-fixture" } as HealthContext;
+
 async function missingInfo(source: SourceId, required: boolean) {
   const outcome = await runAdapter(
     stub(source, "missing"),
-    {} as HealthContext,
+    EMPTY_TREE,
     { mode: "auto", required },
     `test-${Date.now()}`,
   );
@@ -39,7 +44,8 @@ async function missingInfo(source: SourceId, required: boolean) {
 
 for (const [source, binary, configHint] of [
   ["eslint", "eslint", "config"],
-  ["oxlint", "oxlint", "config"],
+  // No `.oxlintrc.*` in the tree, so the only intent signal left is package.json.
+  ["oxlint", "oxlint", "package.json"],
   ["typescript", "tsc", "tsconfig.json"],
 ] as const) {
   test(`AC5: a missing ${source} source names ${binary} and both lookup places`, async () => {
@@ -84,7 +90,7 @@ test("a SKIPPED source carries no reason -- it never performed a failed lookup",
   for (const id of ["eslint", "oxlint", "typescript", "tests"] as const) {
     const outcome = await runAdapter(
       stub(id, "skipped"),
-      {} as HealthContext,
+      EMPTY_TREE,
       { mode: "auto", required: false },
       `test-${Date.now()}`,
     );

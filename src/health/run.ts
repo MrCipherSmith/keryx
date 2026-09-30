@@ -16,6 +16,7 @@ import { loadSkillOwnership } from "./skills";
 import { analyzeSourceFiles } from "./source-analysis";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
 import { makeFinding } from "./sources/helpers";
+import { OXLINT_PARSE_ERROR, oxlintMissingReason } from "./sources/oxlint";
 import {
   commandExists,
   dataRoot,
@@ -272,7 +273,7 @@ function errorCodeSuffix(error: unknown): string {
  * has not been written for yet, so its report line falls back to naming
  * only the source — unchanged from before this flow.
  */
-function missingSourceReason(sourceId: string): string | undefined {
+function missingSourceReason(sourceId: string, cwd: string): string | undefined {
   if (sourceId === "tests") {
     return "no `bun` binary found (checked node_modules/.bin and PATH)";
   }
@@ -280,7 +281,9 @@ function missingSourceReason(sourceId: string): string | undefined {
     return "eslint config found, binary not found (node_modules/.bin/eslint and PATH)";
   }
   if (sourceId === "oxlint") {
-    return "oxlint config found, binary not found (node_modules/.bin/oxlint and PATH)";
+    // Two intent signals, two sentences: naming a config file the tree does
+    // not have is the false-claim defect the `skipped` rule below closes.
+    return oxlintMissingReason(cwd);
   }
   if (sourceId === "typescript") {
     return "tsconfig.json found, binary not found (node_modules/.bin/tsc and PATH)";
@@ -306,7 +309,7 @@ function missingSourceReason(sourceId: string): string | undefined {
 const KNOWN_VALIDATION_ERRORS = new Set<string>([
   "ESLint JSON format was not recognized",
   "ESLint JSON parse failed",
-  "oxlint JSON format was not recognized",
+  OXLINT_PARSE_ERROR,
   "dependency audit JSON contains an invalid or unsupported entry",
   "dependency audit JSON parse failed",
   "dependency audit JSON format was not recognized",
@@ -336,6 +339,7 @@ export async function runAdapter(
 ): Promise<{ info: SourceRunInfo; findings: Finding[] }> {
   const base = {
     source: adapter.id,
+    ...(adapter.capability !== undefined ? { capability: adapter.capability } : {}),
     mode: cfg.mode,
     required: cfg.required,
     imported: false,
@@ -379,7 +383,7 @@ export async function runAdapter(
     // line -- put the sentence "eslint config found" into the artifact of a
     // project that has no eslint config at all, i.e. replaced a silent absence
     // with a false claim about the tree.
-    const reason = status === "missing" ? missingSourceReason(adapter.id) : undefined;
+    const reason = status === "missing" ? missingSourceReason(adapter.id, ctx.cwd) : undefined;
     return { info: { ...base, status, ...(reason !== undefined ? { error: reason } : {}) }, findings: [] };
   }
 

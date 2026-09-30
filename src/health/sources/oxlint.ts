@@ -29,21 +29,44 @@ export function oxlintConfigured(cwd: string): boolean {
   return hasConfigFile(cwd) || packageNamesOxlint(cwd);
 }
 
-type OxlintMessage = { ruleId?: string | null; severity?: number | string; message?: string; line?: number };
-type OxlintFile = { filePath?: string; filename?: string; messages?: OxlintMessage[] };
+export const OXLINT_MISSING_CONFIG = "oxlint config found, binary not found (node_modules/.bin/oxlint and PATH)";
+export const OXLINT_MISSING_PACKAGE = "oxlint named in package.json, binary not found (node_modules/.bin/oxlint and PATH)";
 
-export function parseOxlintJson(content: string): OxlintFile[] | null {
+/** Why a `missing` oxlint is missing, naming the intent signal that actually fired. */
+export function oxlintMissingReason(cwd: string): string {
+  return hasConfigFile(cwd) ? OXLINT_MISSING_CONFIG : OXLINT_MISSING_PACKAGE;
+}
+
+// `oxlint --format json` (1.x): one FLAT record per diagnostic under
+// `diagnostics`, not ESLint's per-file `messages[]`. Shape captured from
+// oxlint 1.81.0; the regression fixture in oxlint.test.ts is that output
+// verbatim, because a hand-written ESLint-shaped fixture is how this parser
+// once passed its tests while dropping every real diagnostic.
+type OxlintDiagnostic = {
+  message: string;
+  code?: string;
+  severity?: string;
+  filename?: string;
+  labels?: Array<{ span?: { line?: number } }>;
+};
+
+function isDiagnostic(item: unknown): item is OxlintDiagnostic {
+  return item !== null && typeof item === "object" && typeof (item as { message?: unknown }).message === "string";
+}
+
+/** `null` when the output is not oxlint JSON, including a record that is not a diagnostic. */
+export function parseOxlintJson(content: string): OxlintDiagnostic[] | null {
   let data: unknown;
   try { data = JSON.parse(content); } catch { return null; }
-  if (Array.isArray(data)) return data as OxlintFile[];
-  if (data !== null && typeof data === "object" && Array.isArray((data as { diagnostics?: unknown }).diagnostics)) {
-    return (data as { diagnostics: OxlintFile[] }).diagnostics;
-  }
-  return null;
+  if (data === null || typeof data !== "object") return null;
+  const diagnostics = (data as { diagnostics?: unknown }).diagnostics;
+  if (!Array.isArray(diagnostics) || !diagnostics.every(isDiagnostic)) return null;
+  return diagnostics;
 }
 
 export const oxlintAdapter: SourceAdapter = {
   id: "oxlint",
+  capability: "lint",
   // Same two-question shape as the eslint adapter: the project's OWN config (a
   // config file, or oxlint named in package.json) is the intent signal, and the
   // binary only decides whether that intent can be carried out. A binary alone
@@ -64,16 +87,24 @@ export const oxlintAdapter: SourceAdapter = {
   parse(raw: RawSourceResult, ctx: HealthContext): Finding[] {
     const data = parseOxlintJson(raw.content);
     if (data === null) return [];
-    const findings: Finding[] = [];
-    for (const file of data) {
-      const filePath = file.filePath ?? file.filename ?? "";
+    return data.map((diagnostic) => {
+      const filePath = diagnostic.filename ?? "";
       const relative = filePath && path.isAbsolute(filePath) ? path.relative(ctx.cwd, filePath) : filePath;
-      for (const message of file.messages ?? []) {
-        const isError = message.severity === 2 || message.severity === "error";
-        findings.push(makeFinding({ source: "oxlint", severity: isError ? "error" : "warning", priority: isError ? "P1" : "P2", category: "lint", message: message.message ?? "", ruleKey: message.ruleId ?? "oxlint", file: relative || null, line: message.line ?? null, command: raw.command, toolVersion: raw.toolVersion, rawLog: raw.rawPath }));
-      }
-    }
-    return findings;
+      const isError = diagnostic.severity === "error";
+      return makeFinding({
+        source: "oxlint",
+        severity: isError ? "error" : "warning",
+        priority: isError ? "P1" : "P2",
+        category: "lint",
+        message: diagnostic.message,
+        ruleKey: diagnostic.code ?? "oxlint",
+        file: relative || null,
+        line: diagnostic.labels?.[0]?.span?.line ?? null,
+        command: raw.command,
+        toolVersion: raw.toolVersion,
+        rawLog: raw.rawPath,
+      });
+    });
   },
   validate(raw: RawSourceResult) {
     return parseOxlintJson(raw.content) === null ? { valid: false, error: OXLINT_PARSE_ERROR } : { valid: true, format: "oxlint-json" };

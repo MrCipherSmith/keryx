@@ -169,10 +169,12 @@ test("configUnreadable adds a discoverable, constant reason without changing the
 // A project that adopted oxlint and switched ESLint off was blocked with
 // `INCOMPLETE: required source unavailable: eslint` while its lint check was
 // in fact running and parsing. `sources.eslint.required` means "this project is
-// linted"; one linter producing a result satisfies that.
+// linted"; one linter producing a result satisfies that. The family is every
+// source whose adapter declares `capability: "lint"` (runAdapter copies it).
 function lintRan(name: string): SourceRunInfo {
   return source({
     source: name,
+    capability: "lint",
     status: "available",
     required: name === "eslint",
     findings: 3,
@@ -181,7 +183,7 @@ function lintRan(name: string): SourceRunInfo {
   });
 }
 function lintSkipped(name: string, required: boolean): SourceRunInfo {
-  return source({ source: name, status: "skipped", required });
+  return source({ source: name, capability: "lint", status: "skipped", required });
 }
 
 test("AC3: oxlint satisfying lint keeps a skipped required eslint from blocking", () => {
@@ -200,6 +202,22 @@ test("AC3: the reverse direction works too -- eslint ran, oxlint skipped", () =>
   const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
   expect(g.status).toBe("pass");
   expect(g.coverage).toBe("complete");
+  // Reasons agree with coverage: an excused sibling is not reported as an
+  // optional source that produced nothing.
+  expect(g.reasons.some((r) => /OPTIONAL: oxlint/.test(r))).toBe(false);
+});
+
+test("the family is declared by capability, not by id -- a new linter joins without editing the gate", () => {
+  const sources = [lintRan("biome"), lintSkipped("eslint", true)];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+  expect(g.status).toBe("pass");
+  expect(g.reasons).toContain("NOTE: eslint skipped; lint capability provided by biome");
+});
+
+test("a source without the lint capability cannot excuse a required linter", () => {
+  const typecheck = source({ source: "typescript", status: "available", required: true, findings: 0, execution: "completed", parse: "parsed" });
+  const g = computeGate({ findings: [], projectMetrics: project(), sources: [typecheck, lintSkipped("eslint", true)], config: C, strict: true });
+  expect(g.status).toBe("incomplete");
 });
 
 test("AC2: with NEITHER linter the required-eslint INCOMPLETE behavior is unchanged", () => {
@@ -229,13 +247,20 @@ test("AC3: a required eslint that ran and FAILED to parse still blocks", () => {
   expect(g.status).toBe("incomplete");
 });
 
-test("AC3: a DISABLED required eslint keeps its pre-existing behavior (skipped, unblocked)", () => {
-  // `mode: "disabled"` already reported `skipped` and was already excused from
-  // coverage; this asserts the family change did not alter it.
+test("AC3: a DISABLED required eslint is excused when oxlint ran (new with the lint family)", () => {
+  // Before flow 352 a disabled REQUIRED source blocked: `brokenRequired` has no
+  // mode check, and `mode: "disabled"` is excused only on the optional side.
+  // The family excuse is what unblocks it here -- and only because oxlint ran.
   const sources = [lintRan("oxlint"), { ...lintSkipped("eslint", true), mode: "disabled" as const }];
   const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
   expect(g.status).toBe("pass");
   expect(g.coverage).toBe("complete");
+});
+
+test("a DISABLED required eslint with no other linter still blocks, as it always did", () => {
+  const sources = [{ ...lintSkipped("eslint", true), mode: "disabled" as const }];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+  expect(g.status).toBe("incomplete");
 });
 
 test("configUnreadable is reported even when it is the only gate condition (clean project)", () => {

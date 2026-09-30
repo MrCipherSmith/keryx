@@ -187,6 +187,8 @@ export type SourceRunInfo = {
   parse?: "parsed" | "failed" | "not-run";
   exitCode?: number | null;
   error?: string;
+  /** Copied from the adapter by `runAdapter`; see `SourceCapability`. */
+  capability?: SourceCapability;
 };
 
 import type { WikiFreshnessMetric } from "./metrics/wiki-freshness";
@@ -239,8 +241,16 @@ export type HealthContext = {
   moduleOf: (file: string) => string | null;
 };
 
+/**
+ * What a source measures, when more than one tool can measure it. The gate
+ * groups sources by this, not by id: `sources.eslint.required` means "this
+ * project is linted", and any adapter declaring `"lint"` can satisfy it.
+ */
+export type SourceCapability = "lint";
+
 export interface SourceAdapter {
   id: SourceId;
+  capability?: SourceCapability;
   detect(ctx: HealthContext): Promise<SourceStatus>;
   run(ctx: HealthContext): Promise<RawSourceResult>;
   import(ctx: HealthContext): Promise<RawSourceResult>;

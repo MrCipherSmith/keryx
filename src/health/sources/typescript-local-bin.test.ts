@@ -39,3 +39,40 @@ test("a local tsc is available even when PATH has no tsc", async () => {
     await rm(cwd, { recursive: true, force: true });
   }
 });
+
+test("AC4: the project's own tsc wins over a tsc on PATH", async () => {
+  // The precedence has to be proven against a PATH that DOES have a tsc:
+  // on a machine (or CI runner) with none, a PATH-first lookup would pass the
+  // test above by accident. So put a decoy on PATH and require the local one.
+  const cwd = root();
+  const decoyDir = `${cwd}-path`;
+  const local = path.join(cwd, "node_modules", ".bin", "tsc");
+  const decoy = path.join(decoyDir, "tsc");
+  try {
+    await mkdir(path.dirname(local), { recursive: true });
+    await mkdir(decoyDir, { recursive: true });
+    await writeFile(path.join(cwd, "tsconfig.json"), "{}\n");
+    for (const bin of [local, decoy]) {
+      await writeFile(bin, "#!/bin/sh\nexit 0\n");
+      await chmod(bin, 0o755);
+    }
+    // Bun reads PATH for `Bun.which` at process start, so assigning
+    // process.env.PATH here would not reach it. Resolve in a child whose PATH
+    // is set explicitly -- and prove the decoy really is visible there.
+    const helpers = path.join(import.meta.dir, "helpers.ts");
+    const script = [
+      `const { resolveBin } = await import(${JSON.stringify(helpers)});`,
+      `console.log(JSON.stringify({ which: Bun.which("tsc"), resolved: resolveBin(${JSON.stringify(cwd)}, "tsc") }));`,
+    ].join("\n");
+    const child = Bun.spawnSync([process.execPath, "-e", script], {
+      env: { ...process.env, PATH: `${decoyDir}${path.delimiter}${process.env.PATH ?? ""}` },
+    });
+    expect(child.exitCode).toBe(0);
+    const seen = JSON.parse(child.stdout.toString()) as { which: string | null; resolved: string | null };
+    expect(seen.which).toBe(decoy);
+    expect(seen.resolved).toBe(local);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+    await rm(decoyDir, { recursive: true, force: true });
+  }
+});

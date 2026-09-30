@@ -3036,13 +3036,23 @@ provided by oxlint` instead of `INCOMPLETE`). A project with neither linter keep
 the previous required-ESLint `INCOMPLETE`, and a half-installed one (config present,
 binary absent → `missing`) still blocks.
 
+`required` on a linter therefore means the capability, not the tool: any source
+whose adapter declares the lint capability satisfies it, and there is no setting
+for "must be linted by ESLint specifically". oxlint is a default optional source,
+so a configuration that switches ESLint off and uses neither linter now reports
+`coverage: partial` (lint is genuinely unmeasured there) where it used to report
+`complete`; the gate status does not change. A linter excused because another
+one ran gets no `OPTIONAL: … skipped` line, so the reasons agree with coverage.
+
 **A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
 and `typescript` now report e.g. `tsconfig.json found, binary not found
 (node_modules/.bin/tsc and PATH)`, so the fix is visible in `latest.md` instead of
-requiring a guess about whether the tool or the config was absent. The TypeScript
-source resolves `tsc` from the project's own `node_modules/.bin` before `PATH`
-(AC4), so a repository whose compiler is a dev-dependency is checked by that
-compiler.
+requiring a guess about whether the tool or the config was absent. oxlint's reason
+names the signal that fired: `.oxlintrc.*` found, or oxlint named in
+`package.json`. The TypeScript source resolves `tsc` from the project's own
+`node_modules/.bin` before `PATH`, so a repository whose compiler is a
+dev-dependency is checked by that compiler; that behaviour predates flow 352,
+which pins it with a test that puts a decoy `tsc` on `PATH` (AC4).
 
 **The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
 used to report the `tests` source as `missing` whenever no persisted
