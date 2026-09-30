@@ -135,6 +135,31 @@ export function projectSkillCatalogRow(entry: Pick<ProjectSkillRegistryEntry, "m
   return `| ${entry.module} | ${entry.name} | \`${entry.target}\` | ${entry.path}/SKILL.md |`;
 }
 
+const CATALOG_ROW_ENTRY_SUFFIX = "/SKILL.md";
+
+/**
+ * The inverse of {@link projectSkillCatalogRow}: the skill a catalog line is
+ * the row of, or undefined for any other line — the header, the separator, the
+ * empty-registry row, prose. A hand-edited target without its backticks is
+ * still read; a row whose Entry cell does not end in `/SKILL.md` is not a row.
+ */
+export function parseProjectSkillCatalogRow(
+  line: string,
+): Pick<ProjectSkillRegistryEntry, "module" | "name" | "target" | "path"> | undefined {
+  const trimmed = line.trim();
+  if (trimmed.length < 2 || !trimmed.startsWith("|") || !trimmed.endsWith("|")) return undefined;
+  const cells = trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+  if (cells.length !== 4) return undefined;
+  const [moduleName = "", skillName = "", target = "", entry = ""] = cells;
+  if (moduleName === "" || skillName === "" || !entry.endsWith(CATALOG_ROW_ENTRY_SUFFIX)) return undefined;
+  return {
+    module: moduleName,
+    name: skillName,
+    target: /^`(.*)`$/.exec(target)?.[1] ?? target,
+    path: entry.slice(0, -CATALOG_ROW_ENTRY_SUFFIX.length),
+  };
+}
+
 /**
  * Every project-relative file `createProjectSkill` writes for `moduleName/skillName`
  * in `format`: the package's files, then the registry manifest and the catalog.

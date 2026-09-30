@@ -16,6 +16,9 @@ import {
   PROJECT_SKILLS_DIR,
   PROJECT_SKILLS_LOCK_PATH,
   PROJECT_SKILLS_MANIFEST_PATH,
+  parseProjectSkillCatalogRow,
+  projectSkillKey,
+  projectSkillPackagePath,
   projectSkillReportFileName,
 } from "./project-skills";
 
@@ -59,6 +62,12 @@ import {
  * case-insensitive filesystem whether a composed path exists; and the registry
  * entry is applied last, so a step that fails leaves the entry that lets the
  * same command find the skill again and finish.
+ *
+ * Review round 3 (H-001): exact names alone are not enough the other way round.
+ * A package whose exact path is gone but which `readdir` lists under a case
+ * variant (`review/Alpha` for `review/alpha`) is, on a case-insensitive
+ * filesystem, this skill's package still on disk — so it is refused, naming
+ * the on-disk spelling, rather than reported absent while the entry and row go.
  */
 
 export type RemovedPartKind = "registry" | "catalog" | "package" | "module-directory" | "report";
@@ -162,15 +171,19 @@ export async function removeProjectSkill(
  */
 function applyFailure(plan: Plan, done: readonly RemovedPart[], failedIndex: number, error: unknown): Error {
   const failed = plan.parts[failedIndex]?.part;
-  const key = `${plan.target.module}/${plan.target.name}`;
+  const key = projectSkillKey(plan.target);
   const cause = error instanceof Error ? error.message : String(error);
   const describe = (part: RemovedPart): string => `${PART_LABEL[part.part]} ${part.path}`;
   const removed = done.filter((part) => part.status === "removed").map(describe);
+  // A recursive delete that fails has usually deleted some of the tree first
+  // (H-013): the package is there, but not necessarily all of it.
+  const describeRemaining = (part: RemovedPart): string =>
+    part === failed && part.part === "package" ? `${describe(part)} (may be partly removed)` : describe(part);
   const remaining = plan.parts
     .slice(failedIndex)
     .map((planned) => planned.part)
     .filter((part) => part.status === "would-remove")
-    .map(describe);
+    .map(describeRemaining);
   return new Error(
     `${LABEL}: could not remove the ${failed === undefined ? "next part" : describe(failed)}: ${cause}. ` +
       `Removed so far: ${removed.length > 0 ? removed.join(", ") : "nothing"}. ` +
@@ -217,7 +230,7 @@ async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
       (catalogText !== undefined && withoutCatalogRow(catalogText, candidate) !== undefined) ||
       (await findReports(root, candidate)).existing.length > 0,
   );
-  const key = `${target.module}/${target.name}`;
+  const key = projectSkillKey(target);
   const parts: PlannedPart[] = [];
 
   // 1. Verification report(s).
@@ -251,11 +264,22 @@ async function planRemoval(projectRoot: string, input: string): Promise<Plan> {
   // listed only when that is the case. Both are found by their exact names
   // (G-006): on a case-insensitive filesystem `Review/Alpha` would otherwise
   // reach `review/alpha`.
-  const modulePath = `${PROJECT_SKILLS_DIR}/${target.module}`;
+  const modulePath = path.posix.dirname(target.packagePath);
   const moduleExists = await isRealDirectoryChain(root, modulePath);
   const packageStats = moduleExists ? await exactEntry(path.join(root, modulePath), target.name) : undefined;
   if (packageStats?.isSymbolicLink()) {
     throw symlinkRefusal(target.packagePath, await linkTarget(path.join(root, target.packagePath)));
+  }
+  if (packageStats === undefined) {
+    const variant = await packageUnderAnotherSpelling(root, target, registry);
+    if (variant !== undefined) {
+      throw new Error(
+        `${LABEL}: the package of ${key} is on disk as ${variant}, not ${target.packagePath}. ` +
+          `Skill names are case-sensitive, and on a filesystem that ignores case the two are one directory: ` +
+          `removing ${key} now would drop its registry entry and catalog row and leave that package in place, still found as a skill. ` +
+          `Rename the directory to ${target.packagePath} and retry. ${UNCHANGED}`,
+      );
+    }
   }
   parts.push(
     packageStats === undefined
@@ -311,7 +335,33 @@ function manifestWithoutEntry(manifest: MetaprojectManifest | null | undefined, 
 function registryKey(entry: unknown): string | undefined {
   if (entry === null || typeof entry !== "object") return undefined;
   const { module: moduleName, name } = entry as { module?: unknown; name?: unknown };
-  return typeof moduleName === "string" && typeof name === "string" ? `${moduleName}/${name}` : undefined;
+  return typeof moduleName === "string" && typeof name === "string" ? projectSkillKey({ module: moduleName, name }) : undefined;
+}
+
+/**
+ * The package directory of `target` under another spelling — a case variant
+ * of its module, its name, or both, as `readdir` lists it — when the exact one
+ * is not there. On a case-insensitive filesystem that variant IS this skill's
+ * package; on a case-sensitive one it is a package with no entry. Either way a
+ * removal that reported the package absent would leave it on disk and found.
+ * A variant another registry entry names exactly is that entry's, not this one's.
+ */
+async function packageUnderAnotherSpelling(root: string, target: Target, registry: readonly unknown[]): Promise<string | undefined> {
+  if (!(await isRealDirectoryChain(root, PROJECT_SKILLS_DIR))) return undefined;
+  const ownKey = projectSkillKey(target);
+  const claimed = new Set(registry.map(registryKey).filter((key): key is string => key !== undefined && key !== ownKey));
+  const sameIgnoringCase = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase();
+  const skillsRoot = path.join(root, PROJECT_SKILLS_DIR);
+  for (const moduleEntry of await readdir(skillsRoot, { withFileTypes: true })) {
+    if (!moduleEntry.isDirectory() || !sameIgnoringCase(moduleEntry.name, target.module)) continue;
+    for (const skillName of await readdir(path.join(skillsRoot, moduleEntry.name))) {
+      const variant = { module: moduleEntry.name, name: skillName };
+      if (sameIgnoringCase(skillName, target.name) && projectSkillKey(variant) !== ownKey && !claimed.has(projectSkillKey(variant))) {
+        return projectSkillPackagePath(variant.module, variant.name);
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -335,7 +385,8 @@ async function resolveTarget(
   const [moduleName, skillName] = segments;
   const addressable =
     segments.length === 2 && moduleName !== undefined && skillName !== undefined && SEGMENT.test(moduleName) && SEGMENT.test(skillName);
-  const packagePath = `${PROJECT_SKILLS_DIR}/${key}`;
+  // Only ever compared or acted on when `addressable`, i.e. when `key` is `<module>/<name>`.
+  const packagePath = projectSkillPackagePath(moduleName ?? "", skillName ?? "");
 
   const registered = registry.filter((entry) => registryKey(entry) === key);
   for (const entry of registered) {
@@ -539,9 +590,8 @@ function withoutCatalogRow(catalog: string, target: Target): string | undefined 
 
   const isTableLine = (line: string): boolean => line.trimStart().startsWith("|");
   const isTargetRow = (line: string): boolean => {
-    if (!isTableLine(line)) return false;
-    const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
-    return cells[0] === target.module && cells[1] === target.name;
+    const row = parseProjectSkillCatalogRow(line);
+    return row !== undefined && row.module === target.module && row.name === target.name;
   };
 
   const section = lines.slice(start + 1, end);
@@ -683,7 +733,8 @@ whose entry and package are gone is still found by a leftover catalog row or
 verification report, so one half-removed by hand can be finished with this
 command. The registry entry goes last: if a step fails (a read-only directory,
 say), the error names that part and lists what is already gone and what is
-still in place, and running the same command again once the cause is fixed
+still in place (a package directory that failed part-way is listed as possibly
+partly removed), and running the same command again once the cause is fixed
 finishes the removal.
 
 --dry-run:
@@ -702,6 +753,9 @@ Refused, always before anything is changed:
     and are case-sensitive: Review/Alpha does not name review/alpha, even on a
     filesystem that does not tell the two apart, and the refusal names the
     registered spelling.
+  - a skill whose package directory is on disk only under another spelling
+    (review/Alpha/ for review/alpha). The refusal names the on-disk spelling;
+    rename the directory to the registered one and retry.
   - a registry entry whose "path" is not its own
     .metaproject/project-skills/<module>/<name>, or whose module or name is not
     a plain path segment. Fix the entry in .metaproject/metaproject.json.
