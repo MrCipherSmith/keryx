@@ -7,7 +7,7 @@ import {
   SCHEMA_REGISTRY,
   type JsonSchema,
 } from "./schemas";
-import { evaluateProfiles } from "./profiles";
+import { evaluateProfiles, namedEntrypoints } from "./profiles";
 import type {
   Issue,
   MetaprojectManifest,
@@ -183,7 +183,6 @@ function validateBranch(value: unknown, schema: JsonSchema, rootSchema: JsonSche
 // Workspace validation (specification.md §11).
 // ---------------------------------------------------------------------------
 
-const ROOT_ENTRYPOINTS = ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"];
 const INDEX_LINK = ".metaproject/index.md";
 const MODULE_PATH_FIELDS: Array<keyof ModuleManifestEntry> = [
   "core",
@@ -362,8 +361,12 @@ export async function validateWorkspace(cwd: string): Promise<ValidationResult> 
     }
   }
 
-  // 7. Root agent entrypoints (when present) link .metaproject/index.md.
-  for (const name of ROOT_ENTRYPOINTS) {
+  // 7. The root entrypoints the manifest names as the block's targets (when
+  // present) link .metaproject/index.md. Flow 361: for a runtime whose scope
+  // is local that is the per-developer file, and the team file it replaced is
+  // not held to it; a local target missing from this checkout is not an error
+  // (it is gitignored and per checkout — `keryx doctor` reports it).
+  for (const { path: name, scope } of namedEntrypoints(manifest)) {
     const filePath = path.join(cwd, name);
     if (!(await pathExists(filePath))) {
       continue;
@@ -374,7 +377,9 @@ export async function validateWorkspace(cwd: string): Promise<ValidationResult> 
         issue(
           "entrypoint-missing-index-link",
           `Root entrypoint ${name} does not link ${INDEX_LINK}`,
-          `Add a reference to ${INDEX_LINK} in ${name} (\`keryx rules sync\` does this).`,
+          scope === "local"
+            ? `Run \`keryx update\` to put the managed block back into ${name}.`
+            : `Add a reference to ${INDEX_LINK} in ${name} (\`keryx rules sync\` does this).`,
         ),
       );
     }

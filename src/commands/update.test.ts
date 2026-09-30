@@ -1065,6 +1065,34 @@ test("flow 361: one update migrates a legacy repository off its tracked entrypoi
   }
 }, 120_000);
 
+test("flow 361: update --preview names where the index block would move and writes nothing", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const root = await entrypointFixture("keryx-update-entry-preview-", { "AGENTS.md": agents, "CLAUDE.md": "# Claude\n" }, { root: ["AGENTS.md", "CLAUDE.md"] });
+  try {
+    await settleAsLegacyRepository(root, ["AGENTS.md", "CLAUDE.md"]);
+    await writeLegacyBlockInto(root, "AGENTS.md");
+    const before = await snapshotTree(root);
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
+      });
+    } finally {
+      restore();
+    }
+    const output = logs.join("\n");
+
+    expect(output).toContain("AGENTS.md: the managed keryx block would be taken out");
+    expect(output).toContain("CLAUDE.local.md: would be created with the managed keryx block");
+    expect(output).toContain("AGENTS.override.md: would be generated from AGENTS.md");
+    expect(output).not.toContain("CLAUDE.md: the managed keryx block would be taken out");
+    expect(await snapshotTree(root)).toEqual(before);
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
 test("flow 361: a tracked file with the block plus unrelated edits loses only the block and is named", async () => {
   const agents = "# Team\n\nUse metaproject rules.\n\n## Build\n\nRun the suite.\n";
   const root = await entrypointFixture("keryx-update-entry-edits-", { "AGENTS.md": agents }, { root: ["AGENTS.md"] });
@@ -1415,11 +1443,11 @@ describe("flow 361: ignore rules go to info/exclude", () => {
     }
   }, 120_000);
 
-  test("update --preview neither migrates .gitignore nor writes info/exclude", async () => {
+  test("update --preview neither migrates .gitignore nor writes info/exclude, and says what it would do", async () => {
     const working = `node_modules/\n\n${LEGACY_IGNORE_BLOCK}\n`;
     const root = await legacyIgnoreFixture("keryx-update-ignore-preview-", "node_modules/\n", working);
     try {
-      const { restore } = captureUpdateConsoleLog();
+      const { logs, restore } = captureUpdateConsoleLog();
       try {
         await withCwd(root, async () => {
           await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
@@ -1427,7 +1455,13 @@ describe("flow 361: ignore rules go to info/exclude", () => {
       } finally {
         restore();
       }
+      const output = logs.join("\n");
 
+      expect(output).toContain(".gitignore: the managed keryx ignore block would move to info/exclude");
+      // The entries the .gitignore block covers today are counted as moving,
+      // not as "already ignored".
+      expect(output).toMatch(/info\/exclude .*would write keryx's managed block \(\d+ entries\)/);
+      expect(output).toContain("CLAUDE.local.md, AGENTS.override.md, .claude/settings.local.json");
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(working);
       expect(await readExclude(root)).toBe("");
     } finally {
@@ -1696,13 +1730,13 @@ describe("flow 361: Claude hooks follow agentEntrypoints.claudeSettings", () => 
     }
   }, 120_000);
 
-  test("update --preview moves no hook", async () => {
+  test("update --preview moves no hook, and says which would move", async () => {
     const root = await hooksFixture("keryx-update-hooks-preview-", TEAM_SETTINGS, { root: ["AGENTS.md"] });
     try {
       await settleWithLegacyHooks(root, TEAM_SETTINGS);
       const working = await readFile(path.join(root, SHARED_SETTINGS), "utf8");
       const before = await snapshotTree(root);
-      const { restore } = captureUpdateConsoleLog();
+      const { logs, restore } = captureUpdateConsoleLog();
       try {
         await withCwd(root, async () => {
           await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
@@ -1711,6 +1745,7 @@ describe("flow 361: Claude hooks follow agentEntrypoints.claudeSettings", () => 
         restore();
       }
 
+      expect(logs.join("\n")).toContain(`${SHARED_SETTINGS}: the keryx-managed hooks would move to ${LOCAL_SETTINGS}`);
       expect(await readFile(path.join(root, SHARED_SETTINGS), "utf8")).toBe(working);
       expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
       expect(await snapshotTree(root)).toEqual(before);

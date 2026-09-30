@@ -560,6 +560,31 @@ describe("zed instructions surface: probe-only, never writes/deletes AGENTS.md",
       expect(content).toBe("# repo\n\n<!-- keryx:index -->\nstuff\n<!-- /keryx:index -->\n");
     });
   });
+
+  // Flow 361: with the codex entry local, the block goes to AGENTS.override.md,
+  // which Zed never reads. `keryx update` alone cannot put it back into
+  // AGENTS.md, so the probe must name the scope setting that can.
+  test("with the codex entry local, the probe names the scope setting instead of keryx update", async () => {
+    await withTempDir(async (root) => {
+      const zed = getHarnessAdapter("zed")!;
+      const surface = surfacesOf(zed, { flag: "instructions" })[0]!;
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(
+        path.join(root, ".metaproject", "metaproject.json"),
+        JSON.stringify({ agentEntrypoints: { root: [{ runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" }] } }),
+        "utf8",
+      );
+      await writeFile(path.join(root, "AGENTS.md"), "# repo\n", "utf8");
+      await writeFile(path.join(root, "AGENTS.override.md"), "# repo\n\n<!-- keryx:index -->\nstuff\n<!-- /keryx:index -->\n", "utf8");
+
+      const problems = await surface.probe!(root);
+      expect(problems).toHaveLength(1);
+      expect(problems[0]).toContain("AGENTS.override.md");
+      expect(problems[0]).toContain('"shared"');
+      // Not the old advice: a plain `keryx update` would write the override again, never AGENTS.md.
+      expect(problems[0]).not.toContain("missing Keryx's block — run `keryx update`");
+    });
+  });
 });
 
 describe("opencode plugin surface: probe reports missing/stale/healthy", () => {

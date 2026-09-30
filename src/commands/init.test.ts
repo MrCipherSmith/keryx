@@ -719,11 +719,11 @@ describe("flow 361: ignore rules go to info/exclude", () => {
     }
   }, 120_000);
 
-  test("init --preview writes no ignore rule", async () => {
+  test("init --preview writes no ignore rule, and says what it would write", async () => {
     const root = await committedRepo("keryx-init-ignore-preview-", { "AGENTS.md": "# Team\n" });
     try {
       const excludeBefore = await readExclude(root);
-      const { restore } = captureInitConsoleLog();
+      const { logs, restore } = captureInitConsoleLog();
       try {
         await withCwd(root, async () => {
           await initCommand([...ENTRYPOINT_INIT_ARGS, "--preview"]);
@@ -731,10 +731,63 @@ describe("flow 361: ignore rules go to info/exclude", () => {
       } finally {
         restore();
       }
+      const output = logs.join("\n");
 
+      expect(output).toContain("CLAUDE.local.md: would be created with the managed keryx block");
+      expect(output).toContain("AGENTS.override.md: would be generated from AGENTS.md");
+      expect(output).toMatch(/info\/exclude .*would write keryx's managed block \(\d+ entries\)/);
+      expect(output).toContain("CLAUDE.local.md, AGENTS.override.md, .claude/settings.local.json");
       expect(await readExclude(root)).toBe(excludeBefore);
       expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
       expect(gitInEntrypointRepo(root, ["status", "--porcelain"])).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("init --preview in a repository with no team file promises no tracked entrypoint under local scope", async () => {
+    const root = await committedRepo("keryx-init-preview-noteam-", { "README.md": "# Project\n" });
+    try {
+      const { logs, restore } = captureInitConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await initCommand([...ENTRYPOINT_INIT_ARGS, "--preview"]);
+        });
+      } finally {
+        restore();
+      }
+      const output = logs.join("\n");
+
+      expect(output).not.toContain("would create a default one");
+      expect(output).not.toContain("a real run would create it");
+      expect(output).toContain("CLAUDE.local.md: would be created with the managed keryx block");
+      expect(output).toContain("Codex: skipped — AGENTS.md does not exist");
+      expect(gitInEntrypointRepo(root, ["status", "--porcelain"])).toBe("");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("init --preview names a missing shared team file as one a real run would create", async () => {
+    const shared = { root: [{ runtime: "claude", path: "CLAUDE.md", scope: "shared" }, { runtime: "codex", path: "AGENTS.md", scope: "shared" }], claudeSettings: { path: ".claude/settings.json", scope: "shared" } };
+    const root = await committedRepo("keryx-init-preview-shared-", { "README.md": "# Project\n" });
+    try {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      await writeFile(path.join(root, ".metaproject", "metaproject.json"), `${JSON.stringify({ modules: {}, agentEntrypoints: shared }, null, 2)}\n`, "utf8");
+      const { logs, restore } = captureInitConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await initCommand([...ENTRYPOINT_INIT_ARGS, "--preview"]);
+        });
+      } finally {
+        restore();
+      }
+      const output = logs.join("\n");
+
+      expect(output).toContain('CLAUDE.md: does not exist; its scope is "shared", so a real run would create it');
+      expect(output).toContain('AGENTS.md: does not exist; its scope is "shared", so a real run would create it');
+      expect(output).not.toContain("CLAUDE.local.md: would be created");
+      expect(existsSync(path.join(root, "CLAUDE.md"))).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

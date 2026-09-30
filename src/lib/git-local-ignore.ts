@@ -159,13 +159,9 @@ export async function replaceLocalIgnoreBlock(projectRoot: string, lines: readon
   if (refusal !== undefined) return { status: "refused", excludePath, detail: refusal };
 
   const existing = await readExcludeFile(excludePath);
-  const current = findManagedBlock(existing, location.prefix);
-  const held = current?.lines ?? [];
-  const wanted = [...new Set(lines.map((line) => line.trim()).filter((line) => line.length > 0))].map((line) =>
-    scopedPattern(line, location.prefix),
-  );
-  const same = held.length === wanted.length && held.every((line, index) => line === wanted[index]);
-  if (wanted.length === 0 ? current === undefined : current !== undefined && same) return { status: "unchanged", excludePath };
+  const change = compareManagedBlock(existing, location.prefix, lines);
+  if (change === "unchanged") return { status: "unchanged", excludePath };
+  const { current, held, wanted } = change;
 
   let next: string;
   if (wanted.length === 0 && current !== undefined) {
@@ -194,6 +190,47 @@ export async function replaceLocalIgnoreBlock(projectRoot: string, lines: readon
   };
 }
 
+export type PlanLocalIgnoreResult =
+  | { status: "not-a-git-repository" }
+  | { status: "unchanged"; excludePath: string }
+  | { status: "would-write"; excludePath: string; added: string[]; removed: string[] };
+
+/**
+ * What `replaceLocalIgnoreBlock(projectRoot, lines)` would do, without doing
+ * it — the read-only twin `--preview` prints. An exclude file that cannot be
+ * read has no block, so it plans a write.
+ */
+export async function planLocalIgnoreBlock(projectRoot: string, lines: readonly string[]): Promise<PlanLocalIgnoreResult> {
+  const commonDir = await resolveGitCommonDir(projectRoot);
+  const location = commonDir === undefined ? undefined : await resolveWorktreeLocation(projectRoot);
+  if (commonDir === undefined || location === undefined) return { status: "not-a-git-repository" };
+  const excludePath = path.join(commonDir, "info", "exclude");
+  const change = compareManagedBlock(await readExcludeFile(excludePath).catch(() => ""), location.prefix, lines);
+  if (change === "unchanged") return { status: "unchanged", excludePath };
+  return {
+    status: "would-write",
+    excludePath,
+    added: change.wanted.filter((line) => !change.held.includes(line)),
+    removed: change.held.filter((line) => !change.wanted.includes(line)),
+  };
+}
+
+/** The managed block of `existing` against the one `lines` asks for: `unchanged`, or both sides of the change. */
+function compareManagedBlock(
+  existing: string,
+  prefix: string,
+  lines: readonly string[],
+): "unchanged" | { current: ManagedBlock | undefined; held: string[]; wanted: string[] } {
+  const current = findManagedBlock(existing, prefix);
+  const held = current?.lines ?? [];
+  const wanted = [...new Set(lines.map((line) => line.trim()).filter((line) => line.length > 0))].map((line) =>
+    scopedPattern(line, prefix),
+  );
+  const same = held.length === wanted.length && held.every((line, index) => line === wanted[index]);
+  if (wanted.length === 0 ? current === undefined : current !== undefined && same) return "unchanged";
+  return { current, held, wanted };
+}
+
 export type IgnoreExplanation = {
   /** The path as it was asked about. */
   path: string;
@@ -203,6 +240,9 @@ export type IgnoreExplanation = {
   managed: boolean;
   /** `<source>:<line>` of the winning rule — a `!` rule included; absent when no rule matched. */
   rule?: string;
+  /** The file holding the winning rule, absolute and realpath'd, and the rule's 1-based line in it; absent when no rule matched. */
+  sourcePath?: string;
+  line?: number;
 };
 
 /**
@@ -245,7 +285,7 @@ export async function explainIgnoredPaths(
   // `<source> NUL <line> NUL <pattern> NUL <path> NUL` per path.
   if (fields.length < relativePaths.length * 4) return undefined;
 
-  const inExcludeFile = new Map<string, boolean>();
+  const sourcePaths = new Map<string, string>();
   const explanations: IgnoreExplanation[] = [];
   for (const [index, asked] of relativePaths.entries()) {
     const source = fields[index * 4] ?? "";
@@ -255,16 +295,16 @@ export async function explainIgnoredPaths(
       explanations.push({ path: asked, ignored: false, managed: false });
       continue;
     }
-    let fromExclude = inExcludeFile.get(source);
-    if (fromExclude === undefined) {
+    let sourcePath = sourcePaths.get(source);
+    if (sourcePath === undefined) {
       // Git names a source relative to the top level, or absolutely.
       const resolved = path.resolve(location.toplevel, source);
-      fromExclude = (await realpath(resolved).catch(() => resolved)) === excludeReal;
-      inExcludeFile.set(source, fromExclude);
+      sourcePath = await realpath(resolved).catch(() => resolved);
+      sourcePaths.set(source, sourcePath);
     }
     const ignored = !pattern.startsWith("!");
-    const managed = ignored && fromExclude && block !== undefined && line > block.firstLine && line < block.lastLine;
-    explanations.push({ path: asked, ignored, managed, rule: `${source}:${line}` });
+    const managed = ignored && sourcePath === excludeReal && block !== undefined && line > block.firstLine && line < block.lastLine;
+    explanations.push({ path: asked, ignored, managed, rule: `${source}:${line}`, sourcePath, line });
   }
   return explanations;
 }

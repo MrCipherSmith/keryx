@@ -34,6 +34,7 @@ const EXPECTED_CHECK_IDS = [
   "mcp",
   "integrations",
   "standard",
+  "entrypoints",
   "worktrees",
   "graph-freshness",
   "wiki-freshness",

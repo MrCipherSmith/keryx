@@ -121,6 +121,10 @@ const FLAGGED_BASENAMES: ReadonlySet<string> = new Set([
   ".gitmodules",
   "claude.md",
   "agents.md",
+  // Flow 361: the per-developer entrypoints — Claude Code reads the first
+  // alongside CLAUDE.md, Codex reads the second instead of AGENTS.md.
+  "claude.local.md",
+  "agents.override.md",
 ]);
 
 /** A bare directory name (a symlink or file entry named like the directory) is flagged like its contents. */

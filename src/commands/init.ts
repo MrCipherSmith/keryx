@@ -127,6 +127,7 @@ import {
 } from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { localTargetPaths } from "../rules/entrypoint-targets";
+import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
@@ -568,19 +569,24 @@ export async function initCommand(args: string[]): Promise<void> {
       formatInstallPlan(plan, {
         ...(divergenceResolution === undefined ? {} : { resolution: divergenceResolution }),
         relativeTo: projectRoot,
-        notes: initPreviewNotes({
-          alreadyExists,
-          ruleSources: previewRuleSources,
-          hooks: {
-            gdgraph: enableGdgraph && enableGdgraphHook,
-            gdskills: enableGdskills && enableGdskillsHook,
-            health: enableHealth && enableHealthHook,
-            testingPostCommit: enableTesting && enableTestingPostCommitHook,
-            testingPrePush: enableTesting && enableTestingPrePushHook,
-            securityPrePush: enableSecurity && enableSecurityPrePushHook,
-            securityAgent: enableSecurity && enableSecurityAgentHook,
-          },
-        }),
+        notes: [
+          ...initPreviewNotes({
+            alreadyExists,
+            ruleSources: previewRuleSources,
+            hooks: {
+              gdgraph: enableGdgraph && enableGdgraphHook,
+              gdskills: enableGdskills && enableGdskillsHook,
+              health: enableHealth && enableHealthHook,
+              testingPostCommit: enableTesting && enableTestingPostCommitHook,
+              testingPrePush: enableTesting && enableTestingPrePushHook,
+              securityPrePush: enableSecurity && enableSecurityPrePushHook,
+              securityAgent: enableSecurity && enableSecurityAgentHook,
+            },
+          }),
+          // Flow 361: where the managed block, the ignore block and the
+          // Claude hooks would go, and what info/exclude would hold — read-only.
+          ...(await previewEntrypointLines(projectRoot, existingManifest?.agentEntrypoints)),
+        ],
       }),
     );
     return;
@@ -1330,10 +1336,13 @@ function initPreviewNotes(input: {
       "metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
       "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
   );
+  // Flow 361: whether a real run creates a team file depends on the scope —
+  // under local scope it never does. The "Entrypoints:" lines below say, per
+  // runtime, what it would write instead.
   notes.push(
     input.ruleSources.length > 0
       ? `Root rule sources that would be imported: ${input.ruleSources.join(", ")}.`
-      : "No root AGENTS.md/CLAUDE.md found; a real run would create a default one.",
+      : "No root AGENTS.md/CLAUDE.md found, so no team file would be imported; the Entrypoints lines say what a real run would write for each runtime.",
   );
   const intended = Object.entries(input.hooks)
     .filter(([, on]) => on)

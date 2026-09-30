@@ -19,11 +19,20 @@ async function run(cwd: string, args: string[]): Promise<void> {
   if (code !== 0) throw new Error(`git ${args.join(" ")} failed: ${stderr}`);
 }
 
+/**
+ * `core.excludesFile` points at a file that does not exist, so the
+ * developer's own global excludes (Claude Code adds
+ * `.claude/settings.local.json` there, and a machine may list
+ * `CLAUDE.local.md`) cannot answer for the fixture. Set in the repository's
+ * own config — changing `process.env` would not reach the `git` processes
+ * `Bun.spawn` starts — and shared by every linked worktree of it.
+ */
 async function initRepo(root: string): Promise<void> {
   await mkdir(root, { recursive: true });
   await run(root, ["init", "-q"]);
   await run(root, ["config", "user.email", "keryx@example.test"]);
   await run(root, ["config", "user.name", "Keryx Test"]);
+  await run(root, ["config", "core.excludesFile", path.join(root, ".git", "no-global-excludes")]);
 }
 
 const LOCAL_TARGETS = ["CLAUDE.local.md", "AGENTS.override.md", ".claude/settings.local.json"];

@@ -16,6 +16,7 @@
 // by code (`src/acp/permission.ts`) and a pinning test, not a doc fetch.
 
 import path from "node:path";
+import { normalizeEntrypointTargets } from "../rules/entrypoint-targets";
 import {
   MANAGED_KEY,
   arrayAt,
@@ -379,6 +380,38 @@ async function agentsMdHasKeryxBlock(root: string): Promise<boolean> {
   return content.includes("<!-- keryx:index -->");
 }
 
+/**
+ * Flow 361: the codex entry of `agentEntrypoints` when it is local — the
+ * block then goes to the per-developer override (`AGENTS.override.md`),
+ * which Zed never reads, and `keryx update` will not put it back into
+ * `AGENTS.md`. `undefined` for a shared entry, a legacy manifest (the team
+ * file is still the target there) or no manifest.
+ */
+async function localCodexEntryPath(root: string): Promise<string | undefined> {
+  const { readFile } = await import("node:fs/promises");
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  const agentEntrypoints = typeof manifest === "object" && manifest !== null ? (manifest as { agentEntrypoints?: unknown }).agentEntrypoints : undefined;
+  const codex = normalizeEntrypointTargets(agentEntrypoints).targets.root.find((entry) => entry.runtime === "codex");
+  return codex?.scope === "local" ? codex.path : undefined;
+}
+
+async function probeZedInstructions(root: string): Promise<string[]> {
+  if (await agentsMdHasKeryxBlock(root)) return [];
+  const localCodex = await localCodexEntryPath(root);
+  if (localCodex !== undefined) {
+    return [
+      `zed: AGENTS.md carries no Keryx block — the codex entry is local, so the block goes to ${localCodex}, which Zed does not read. ` +
+        'To route Zed through Keryx, set the codex entry\'s scope to "shared" under agentEntrypoints.root in .metaproject/metaproject.json and run `keryx update`.',
+    ];
+  }
+  return ["zed: AGENTS.md is missing or missing Keryx's block — run `keryx update`"];
+}
+
 export const INSTRUCTIONS_ZED: SurfaceAdapter = {
   id: "instructions",
   flag: "instructions",
@@ -392,8 +425,7 @@ export const INSTRUCTIONS_ZED: SurfaceAdapter = {
   settingsFile: (root) => path.join(root, "AGENTS.md"),
   relativePath: "AGENTS.md",
   slots: [],
-  probe: async (root) =>
-    (await agentsMdHasKeryxBlock(root)) ? [] : ["zed: AGENTS.md is missing or missing Keryx's block — run `keryx update`"],
+  probe: probeZedInstructions,
 };
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { readFile } from "node:fs/promises";
+import { normalizeEntrypointTargets, type EntrypointScope } from "../rules/entrypoint-targets";
 import type { MetaprojectManifest, ProfileEvaluation, ProfileName } from "./types";
 import { PROFILE_NAMES } from "./types";
 
@@ -14,10 +15,32 @@ const AGENT_MODULES = ["gdgraph", "gdctx", "gdskills", "gdwiki", "memory"];
 // Modules that publish normalized CI report artifacts.
 const CI_MODULES = ["health", "testing"];
 
-// Root agent entrypoints that must link `.metaproject/index.md`.
-const ROOT_ENTRYPOINTS = ["AGENTS.md", "agents.md", "CLAUDE.md", "claude.md"];
-
 const INDEX_LINK = ".metaproject/index.md";
+
+export type NamedEntrypoint = { path: string; scope: EntrypointScope };
+
+/**
+ * Flow 361: the root entrypoints that must link `.metaproject/index.md` are
+ * the ones the manifest names as the managed block's target per runtime —
+ * the per-developer file (`CLAUDE.local.md`, `AGENTS.override.md`) for
+ * `scope: "local"`, the team file for `scope: "shared"`. A team file whose
+ * runtime is local no longer carries the block, and that is the point, not a
+ * defect. A legacy manifest reads as it always did: its team files are the
+ * targets. Codex `mode: "skip"` names no file. Deduplicated case-insensitively,
+ * so `AGENTS.md` and `agents.md` on a case-insensitive filesystem are one file.
+ */
+export function namedEntrypoints(manifest: MetaprojectManifest): NamedEntrypoint[] {
+  const agentEntrypoints = (manifest as { agentEntrypoints?: unknown }).agentEntrypoints;
+  const named: NamedEntrypoint[] = [];
+  const seen = new Set<string>();
+  for (const entry of normalizeEntrypointTargets(agentEntrypoints).targets.root) {
+    if (entry.runtime === "codex" && entry.scope === "local" && entry.mode === "skip") continue;
+    if (seen.has(entry.path.toLowerCase())) continue;
+    seen.add(entry.path.toLowerCase());
+    named.push({ path: entry.path, scope: entry.scope });
+  }
+  return named;
+}
 
 // Compute the profiles a freshly generated manifest should declare, from the
 // set of enabled module keys. Used by both `init` and `update` manifest
@@ -51,8 +74,15 @@ function enabledModuleKeys(manifest: MetaprojectManifest): string[] {
     .map(([key]) => key);
 }
 
-async function rootEntrypointLinksIndex(cwd: string): Promise<boolean> {
-  for (const name of ROOT_ENTRYPOINTS) {
+/**
+ * True when one of the manifest's named entrypoints exists in this checkout
+ * and links the index. A local target is per-developer and gitignored, so a
+ * fresh clone or a linked worktree has none until `keryx update` runs there —
+ * and until then its agents really do lack the pointer, so the `agent`
+ * profile is not claimed. (`keryx doctor` names the missing file and the fix.)
+ */
+async function rootEntrypointLinksIndex(cwd: string, manifest: MetaprojectManifest): Promise<boolean> {
+  for (const { path: name } of namedEntrypoints(manifest)) {
     const filePath = path.join(cwd, name);
     if (!(await pathExists(filePath))) {
       continue;
@@ -124,7 +154,7 @@ export async function evaluateProfiles(
   const agent =
     minimal &&
     hasAgentModule &&
-    (await rootEntrypointLinksIndex(cwd)) &&
+    (await rootEntrypointLinksIndex(cwd, manifest)) &&
     (await pathExists(path.join(cwd, ".metaproject", "rules")));
   if (agent) {
     satisfied.push("agent");

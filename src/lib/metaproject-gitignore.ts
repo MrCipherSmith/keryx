@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
 import { removeContained, writeContained } from "./contained-write";
@@ -6,8 +6,10 @@ import { readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "
 import {
   explainIgnoredPaths,
   isMetaprojectIgnoredAsWhole,
+  planLocalIgnoreBlock,
   replaceLocalIgnoreBlock,
   resolveLocalExcludePath,
+  type PlanLocalIgnoreResult,
 } from "./git-local-ignore";
 
 export const LEGACY_MEMORY_ARTIFACT_PATHS = [
@@ -75,30 +77,13 @@ export async function syncMetaprojectIgnoreRules(
 
   await moveBlockOutOfGitignore(projectRoot, notice);
 
-  const wholeWorkspace = await isMetaprojectIgnoredAsWhole(projectRoot);
-  const candidates = [
-    ...(wholeWorkspace.git && wholeWorkspace.ignored ? [] : renderMetaprojectGitignoreBlock().trim().split("\n")),
-    ...(localTargets.length > 0 ? [LOCAL_TARGETS_COMMENT, ...localTargets] : []),
-  ];
-  const patterns = candidates.filter((line) => !line.startsWith("#"));
-  const explanations = await explainIgnoredPaths(projectRoot, patterns.map(probePathFor));
-  if (explanations === undefined) {
+  const wanted = await wantedIgnoreLines(projectRoot, localTargets, undefined);
+  if (wanted === undefined) {
     notice("Ignore rules: skipped — git could not evaluate ignore rules here (no working tree); nothing was written.");
     return { status: "not-a-git-repository", entries: [] };
   }
-
-  const covered = new Set<string>();
-  const reincluded: string[] = [];
-  for (const [index, pattern] of patterns.entries()) {
-    const explanation = explanations[index];
-    if (explanation === undefined) continue;
-    if (explanation.ignored && !explanation.managed) covered.add(pattern);
-    if (!explanation.ignored && explanation.rule !== undefined && localTargets.includes(pattern)) {
-      reincluded.push(`${pattern} (${explanation.rule})`);
-    }
-  }
-  const entries = patterns.filter((pattern) => !covered.has(pattern));
-  const result = await replaceLocalIgnoreBlock(projectRoot, dropCoveredEntries(candidates, covered));
+  const { lines, entries, reincluded } = wanted;
+  const result = await replaceLocalIgnoreBlock(projectRoot, lines);
 
   const shown = displayPath(projectRoot, excludePath);
   if (result.status === "refused") {
@@ -117,6 +102,102 @@ export async function syncMetaprojectIgnoreRules(
     );
   }
   return { status: result.status, entries };
+}
+
+export type IgnoreRulesPlan =
+  | { status: "not-a-git-repository" }
+  | {
+      status: "planned";
+      /** What becomes of a managed block in `.gitignore`: none there, committed in `HEAD` (stays), or moved out. */
+      gitignoreBlock: "none" | "committed" | "moves";
+      /** `info/exclude`: already holding exactly these entries, or about to be written. */
+      exclude: PlanLocalIgnoreResult;
+      /** The patterns the managed block would hold, as written in `.gitignore` terms. */
+      entries: string[];
+    };
+
+/**
+ * What `syncMetaprojectIgnoreRules` would do, without writing anything — the
+ * read-only twin `init --preview` and `update --preview` print. A managed
+ * block `.gitignore` still carries as an uncommitted edit is about to move, so
+ * the entries it covers today count as not yet ignored.
+ */
+export async function planMetaprojectIgnoreRules(
+  projectRoot: string,
+  options: Pick<SyncIgnoreRulesOptions, "localTargets"> = {},
+): Promise<IgnoreRulesPlan> {
+  if ((await resolveLocalExcludePath(projectRoot)) === undefined) return { status: "not-a-git-repository" };
+  const gitignorePath = path.join(projectRoot, GITIGNORE);
+  const content = (await pathExists(gitignorePath)) ? await readFile(gitignorePath, "utf8") : "";
+  let gitignoreBlock: "none" | "committed" | "moves" = "none";
+  let pending: PendingGitignoreBlock | undefined;
+  const match = managedBlockPattern().exec(content);
+  if (match !== null) {
+    const head = await readHeadBlob(projectRoot, GITIGNORE);
+    gitignoreBlock = head !== undefined && managedBlockPattern().test(head) ? "committed" : "moves";
+    if (gitignoreBlock === "moves") {
+      const firstLine = content.slice(0, match.index).split("\n").length;
+      pending = {
+        sourcePath: await realpath(gitignorePath).catch(() => gitignorePath),
+        firstLine,
+        lastLine: firstLine + match[0].split("\n").length - 1,
+      };
+    }
+  }
+  const wanted = await wantedIgnoreLines(projectRoot, [...new Set(options.localTargets ?? [])], pending);
+  if (wanted === undefined) return { status: "not-a-git-repository" };
+  return { status: "planned", gitignoreBlock, exclude: await planLocalIgnoreBlock(projectRoot, wanted.lines), entries: wanted.entries };
+}
+
+/** A managed block still in `.gitignore` that is about to move: its lines do not count as already ignoring anything. */
+type PendingGitignoreBlock = { sourcePath: string; firstLine: number; lastLine: number };
+
+/**
+ * The lines the managed block in `info/exclude` should hold: keryx's
+ * `.metaproject` entries (none when the workspace is ignored as a whole) and
+ * the local targets, minus every entry a rule outside keryx's own block
+ * already ignores. `undefined` when git cannot evaluate ignore rules here.
+ */
+async function wantedIgnoreLines(
+  projectRoot: string,
+  localTargets: readonly string[],
+  pending: PendingGitignoreBlock | undefined,
+): Promise<{ lines: string[]; entries: string[]; reincluded: string[] } | undefined> {
+  const wholeWorkspace = await isMetaprojectIgnoredAsWhole(projectRoot);
+  const candidates = [
+    ...(wholeWorkspace.git && wholeWorkspace.ignored ? [] : renderMetaprojectGitignoreBlock().trim().split("\n")),
+    ...(localTargets.length > 0 ? [LOCAL_TARGETS_COMMENT, ...localTargets] : []),
+  ];
+  const patterns = candidates.filter((line) => !line.startsWith("#"));
+  const explanations = await explainIgnoredPaths(projectRoot, patterns.map(probePathFor));
+  if (explanations === undefined) return undefined;
+
+  const covered = new Set<string>();
+  const reincluded: string[] = [];
+  for (const [index, pattern] of patterns.entries()) {
+    const explanation = explanations[index];
+    if (explanation === undefined) continue;
+    const fromPendingBlock =
+      pending !== undefined &&
+      explanation.sourcePath === pending.sourcePath &&
+      explanation.line !== undefined &&
+      explanation.line > pending.firstLine &&
+      explanation.line < pending.lastLine;
+    if (explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);
+    if (!explanation.ignored && explanation.rule !== undefined && localTargets.includes(pattern)) {
+      reincluded.push(`${pattern} (${explanation.rule})`);
+    }
+  }
+  return {
+    lines: dropCoveredEntries(candidates, covered),
+    entries: patterns.filter((pattern) => !covered.has(pattern)),
+    reincluded,
+  };
+}
+
+/** True when `content` (a `.gitignore`) carries keryx's managed `# keryx:begin … # keryx:end` block. */
+export function hasManagedIgnoreBlock(content: string): boolean {
+  return managedBlockPattern().test(content);
 }
 
 /**

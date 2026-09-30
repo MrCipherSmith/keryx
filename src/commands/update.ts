@@ -63,6 +63,7 @@ import {
 } from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { localTargetPaths } from "../rules/entrypoint-targets";
+import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { reconcileCapabilitiesOnUpdate } from "../capability/registry";
@@ -356,11 +357,12 @@ async function offerStaleWorktreePrune(projectRoot: string, options: UpdateOptio
   // guarantee. "No blocking changes" covers what's actually checked: zero
   // commits ahead of main, no tracked/untracked change, and no gitignored
   // file present other than the allowlisted carry-overs (node_modules,
-  // .metaproject/data, dist) `hasUncommittedChanges` exempts.
+  // .metaproject/data, dist) and keryx's own generated local targets that
+  // `hasUncommittedChanges` exempts.
   note(
     `${stale.length} worktree(s) under .claude/worktrees/ are 7+ days old, merged into main, and have ` +
       "no blocking changes (no commits ahead, no tracked/untracked edits, no gitignored file besides " +
-      "node_modules/.metaproject/data/dist):",
+      "node_modules/.metaproject/data/dist and keryx-generated CLAUDE.local.md/AGENTS.override.md/.claude/settings.local.json):",
   );
   for (const candidate of stale) {
     console.log(`  ${style.dim(symbols.bullet)} ${candidate.name} ${style.dim(`(${Math.floor(candidate.ageDays)}d old)`)}`);
@@ -470,6 +472,9 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
         "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
       "Hooks are merged into existing files by their own installers and are not digest-planned; " +
         "a real run reports which of them it touched.",
+      // Flow 361: where the managed block, the ignore block and the Claude
+      // hooks would move, and what info/exclude would hold — read-only.
+      ...(await previewEntrypointLines(projectRoot, manifest.agentEntrypoints)),
     ],
   });
 }
@@ -1927,7 +1932,7 @@ function printHelp(): void {
     "updates managed runtime when present;",
     "refreshes service files, core scripts, managed skills, manifests, dashboard, hooks;",
     "backfills the Task Manager (tasks) module for projects initialized before it existed;",
-    "migrates agent entrypoint policies (AGENTS.md/CLAUDE.md);",
+    "writes the managed index block to CLAUDE.local.md / AGENTS.override.md, Claude hooks to .claude/settings.local.json and ignore rules to .git/info/exclude (scope local, the default), and moves uncommitted keryx edits out of the tracked AGENTS.md, CLAUDE.md, .claude/settings.json and .gitignore;",
     "does not write .metaproject/data artifacts.",
   ]) {
     console.log(`  ${style.dim(symbols.bullet)} ${style.dim(line)}`);
