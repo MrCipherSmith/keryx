@@ -1,0 +1,39 @@
+# Flow Journal
+
+- 2026-09-30T14:26:46.112Z - flow created
+- 2026-09-30T14:36:33.228Z - owner-set: not set -> MrCipherSmith (named by the user when asked at flow initialization)
+- 2026-09-30 - routing: other flows are in flight (339, 341, 342, 346–348, 350, 351 in-progress; 340, 343–345, 349 implemented). None matches this request; the user asked for a new worktree and a new piece of work, so a new flow was created without the resume question.
+- 2026-09-30 - execution metrics: not collected. The opt-in question was not asked, to avoid stopping the run for it.
+- 2026-09-30 - the pasted request had lines cut mid-sentence; the readings used are listed in description.md ("Reconstructed request text").
+- 2026-09-30 - context-collector (dispatch 361-context) returned DONE_WITH_CONCERNS; findings in context.md A–H. Disposition of each concern:
+  - H1 (CLAUDE.local.md vs AGENTS.md fallback): T6 verifies against the Claude Code docs before adding an `@AGENTS.md` import; result journaled.
+  - H2 (local files exist only in the worktree that ran update): not solved; doctor reports a missing local target (T9). Listed as a risk.
+  - H3 (override staleness, 32 KiB cap): provenance hash in the override file, doctor warnings (T6, T9).
+  - H4 (standard doctor errors on migrated repos): T9.
+  - H5 (root list doubles as rule-import list): the import list is decoupled from `root` (T5/T6).
+  - H6 (init creates tracked AGENTS.md/CLAUDE.md): stopped for scope local (T6). Owner decision: AGENTS.md absent → skip Codex.
+  - H7 (tracked manifest makes scope a team setting): accepted, documented (T10).
+  - H8/H9 (byte-identity not reachable by re-serialising): migration restores HEAD bytes instead (T6, T8).
+  - H10/H11 (several sentinels, double firing): all Claude settings surfaces move together behind one resolver (T8).
+  - H12 (exclude file is outside projectRoot in a worktree): managed-git-hook write pattern + ratchet allowlist (T5/T7).
+  - H13 (check-ignore on tracked paths): `--no-index` (T5).
+  - H14, H15, H18 (worktree prune, audit basenames, preview): T9.
+  - H16 (`rules-export` block has the same problem): out of scope, follow-up.
+  - H17 (guards that will fire): handled in the task that trips each; T3 is the full-suite gate.
+  - H19 (non-git project): local files written, ignore step skipped with a note (T7).
+  - H20/H21 (no ADR; release convention): CHANGELOG + version bump in T10.
+  - H22 (cloud sessions ignore settings.local.json): documented; `scope: "shared"` is the answer (T10).
+- 2026-09-30 - owner decisions (asked once, interactive): (1) a managed block already committed in HEAD migrates as `scope: "shared"` and the file is left alone; (2) with no AGENTS.md, Codex is skipped and no tracked entrypoint is created; (3) owner MrCipherSmith.
+- 2026-09-30 - own decisions where the request left room: Codex default mode `override`; default scope `local` for init and for migrating the legacy array; Claude settings target follows `agentEntrypoints.claudeSettings`.
+- 2026-09-30T14:38:03.479Z - task-added: T5: Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)
+- 2026-09-30T14:38:07.118Z - task-added: T6: Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill
+- 2026-09-30T14:38:10.804Z - task-added: T7: Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored
+- 2026-09-30T14:38:14.494Z - task-added: T8: Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files
+- 2026-09-30T14:38:18.262Z - task-added: T9: Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output
+- 2026-09-30T14:38:21.809Z - task-added: T10: Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump
+- 2026-09-30T14:38:25.773Z - task-added: T11: End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence
+- 2026-09-30T14:38:52.951Z - task-done: T1: Collect remaining context
+- 2026-09-30T14:38:56.516Z - task-done: T2: Implement per plan
+- 2026-09-30T14:39:00.410Z - frozen: 13 criteria; checksum recorded
+- 2026-09-30T14:39:03.724Z - started
+- 2026-09-30T14:39:09.947Z - task-attempt: T5: started (attempt 1) — 361-T5
