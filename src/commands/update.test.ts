@@ -1481,7 +1481,10 @@ describe("flow 361: ignore rules go to info/exclude", () => {
     }
   }, 120_000);
 
-  test("a block committed in HEAD stays in .gitignore and is not duplicated into info/exclude", async () => {
+  // Review round 1, F-005: info/exclude is shared by every worktree, and
+  // another worktree's branch may not carry the committed block — so the
+  // entries are written there as well; a redundant line is harmless.
+  test("a block committed in HEAD stays in .gitignore, and info/exclude still carries every entry", async () => {
     const gitignore = `node_modules/\n\n${LEGACY_IGNORE_BLOCK}\n`;
     const root = await ignoreFixture("keryx-update-ignore-head-", { "AGENTS.md": AGENTS, ".gitignore": gitignore });
     try {
@@ -1490,8 +1493,9 @@ describe("flow 361: ignore rules go to info/exclude", () => {
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
       expect(diffIsQuiet(root, ".gitignore")).toBe(true);
       expect(output).toContain(".gitignore: the managed keryx ignore block is committed in HEAD");
-      const lines = managedLines(await readExclude(root));
-      expect(lines.filter((line) => !line.startsWith("#"))).toEqual(LOCAL_TARGETS);
+      const lines = managedLines(await readExclude(root)).filter((line) => !line.startsWith("#"));
+      expect(lines).toContain(".metaproject/runtime/");
+      expect(lines.slice(-LOCAL_TARGETS.length)).toEqual(LOCAL_TARGETS);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

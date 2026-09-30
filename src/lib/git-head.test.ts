@@ -1,8 +1,15 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { classifyAgainstHead, readHeadBlob } from "./git-head";
+import {
+  classifyAgainstHead,
+  indexHoldsFile,
+  readHeadBlob,
+  readIndexBlob,
+  restoreWorktreeFileFromHead,
+  worktreeFileIsClean,
+} from "./git-head";
 import { uniqueTestRoot } from "./test-tmp";
 
 async function run(cwd: string, args: string[]): Promise<void> {
@@ -87,6 +94,50 @@ test("classifyAgainstHead tells untracked, equal and differs apart", async () =>
     await run(root, ["commit", "-q", "-m", "second"]);
     await rm(path.join(root, "AGENTS.md"));
     expect(await classifyAgainstHead(root, "AGENTS.md")).toBe("differs");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 361 review round 1, F-003: a path after `--` is still a pathspec, so a
+// manifest path holding glob characters answered for other files.
+test("paths are literal: a glob or pathspec magic never answers for another file", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-git-head-literal");
+  try {
+    await initRepo(root);
+    await writeFile(path.join(root, "s.ts"), "committed\n");
+    await run(root, ["add", "s.ts"]);
+    await run(root, ["commit", "-q", "-m", "fixture"]);
+    await writeFile(path.join(root, "s.ts"), "edited\n");
+
+    expect(await indexHoldsFile(root, "s*")).toBe(false);
+    expect(await indexHoldsFile(root, ":(glob)s*")).toBe(false);
+    expect(await worktreeFileIsClean(root, "s*")).toBe(true);
+    expect(await restoreWorktreeFileFromHead(root, "s*")).toBe(false);
+    expect(await readFile(path.join(root, "s.ts"), "utf8")).toBe("edited\n");
+    expect(await classifyAgainstHead(root, "s*")).toBe("untracked");
+    // The file itself still answers.
+    expect(await indexHoldsFile(root, "s.ts")).toBe(true);
+    expect(await worktreeFileIsClean(root, "s.ts")).toBe(false);
+    expect(await readHeadBlob(root, "s.ts")).toBe("committed\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("readIndexBlob returns the staged bytes, and nothing for a file the index does not hold", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-git-head-index");
+  try {
+    await initRepo(root);
+    await writeFile(path.join(root, "AGENTS.md"), "committed\n");
+    await run(root, ["add", "AGENTS.md"]);
+    await run(root, ["commit", "-q", "-m", "fixture"]);
+    await writeFile(path.join(root, "AGENTS.md"), "staged\n");
+    await run(root, ["add", "AGENTS.md"]);
+    await writeFile(path.join(root, "AGENTS.md"), "working\n");
+
+    expect(await readIndexBlob(root, "AGENTS.md")).toBe("staged\n");
+    expect(await readIndexBlob(root, "MISSING.md")).toBeUndefined();
   } finally {
     await rm(root, { recursive: true, force: true });
   }

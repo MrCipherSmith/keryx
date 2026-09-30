@@ -205,7 +205,12 @@ describe("syncMetaprojectIgnoreRules", () => {
     }
   });
 
-  test("an entry the repository or the global excludes file already ignores is not written again", async () => {
+  // Flow 361 review round 1, F-005: `info/exclude` is shared by every
+  // worktree of the clone, while `.gitignore` belongs to one checkout. An
+  // entry this checkout's `.gitignore` (or the global excludes file) already
+  // covers is written all the same — a redundant line is harmless, a missing
+  // one un-ignores files in the other worktrees.
+  test("an entry the repository or the global excludes file already ignores is still written", async () => {
     const root = await repo({ ".gitignore": ".metaproject/runtime/\nCLAUDE.local.md\n" });
     const globalExcludes = `${root}-global-excludes`;
     try {
@@ -214,13 +219,10 @@ describe("syncMetaprojectIgnoreRules", () => {
       await sync(root);
 
       const lines = managedLines(await readExclude(root));
-      expect(lines).not.toContain(".metaproject/runtime/");
-      // Covered by its parent directory's rule.
-      expect(lines).not.toContain(".metaproject/runtime/memory/");
-      expect(lines).not.toContain("CLAUDE.local.md");
-      expect(lines).not.toContain("AGENTS.override.md");
-      expect(lines).toContain(".metaproject/data/bundles/");
-      expect(lines).toContain(".claude/settings.local.json");
+      expect(lines).toEqual(renderMetaprojectGitignoreBlock().trim().split("\n").concat(
+        "# Per-developer agent files keryx writes; they are never committed.",
+        ...LOCAL_TARGETS,
+      ));
       for (const target of LOCAL_TARGETS) {
         expect(git(root, ["check-ignore", "-q", "--", target]).code).toBe(0);
       }
@@ -230,7 +232,56 @@ describe("syncMetaprojectIgnoreRules", () => {
     }
   });
 
-  test("the block is replaced, not extended: retired entries and entries the repository took over are dropped, foreign lines stay", async () => {
+  test("the shared info/exclude block is the same whichever worktree writes it, and keeps a worktree without keryx's .gitignore lines ignored (F-005)", async () => {
+    const main = await repo();
+    const feature = `${main}-feature`;
+    try {
+      mustGit(main, ["worktree", "add", "-q", feature, "-b", "feature"]);
+      // main's team committed keryx's lines into .gitignore by hand; feature has none.
+      await writeFile(path.join(main, ".gitignore"), renderMetaprojectGitignoreBlock());
+      mustGit(main, ["add", "--", ".gitignore"]);
+      mustGit(main, ["commit", "-q", "-m", "team ignores"]);
+
+      await sync(feature);
+      const fromFeature = await readExclude(main);
+      expect(git(feature, ["check-ignore", "-q", "--no-index", "--", ".metaproject/runtime/x"]).code).toBe(0);
+
+      const fromMain = await sync(main);
+      expect(fromMain.result.status).toBe("unchanged");
+      expect(await readExclude(main)).toBe(fromFeature);
+      expect(git(feature, ["check-ignore", "-q", "--no-index", "--", ".metaproject/runtime/x"]).code).toBe(0);
+      expect((await sync(feature)).result.status).toBe("unchanged");
+    } finally {
+      await rm(feature, { recursive: true, force: true });
+      await rm(main, { recursive: true, force: true });
+    }
+  });
+
+  // Flow 361 review round 1, F-001: the paths come from a tracked,
+  // hand-editable manifest. Whatever a caller passes, nothing reaches
+  // info/exclude that re-includes a file or forges the block's end marker.
+  test("local targets that would un-ignore a file or inject lines are refused, and nothing is written (F-001)", async () => {
+    const root = await repo();
+    const globalExcludes = `${root}-global-excludes`;
+    try {
+      await writeFile(globalExcludes, ".env\n");
+      mustGit(root, ["config", "core.excludesFile", globalExcludes]);
+      await writeFile(path.join(root, ".env"), "SECRET=1\n");
+      const excludeBefore = await readExclude(root);
+
+      const { result, notices } = await sync(root, ["!.env", "AGENTS.override.md\n!*.pem\n# keryx:end", ".claude/settings.local.json"]);
+
+      expect(result.status).toBe("refused");
+      expect(await readExclude(root)).toBe(excludeBefore);
+      expect(mustGit(root, ["status", "--porcelain"])).not.toContain(".env");
+      expect(notices.some((line) => line.startsWith("Ignore rules: not written"))).toBe(true);
+    } finally {
+      await rm(globalExcludes, { force: true });
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the block is replaced, not extended: retired entries are dropped, foreign lines stay", async () => {
     const root = await repo();
     try {
       const excludePath = path.join(root, ".git", "info", "exclude");
@@ -246,11 +297,12 @@ describe("syncMetaprojectIgnoreRules", () => {
       expect(managedLines(exclude)).not.toContain(".metaproject/retired-by-keryx/");
       expect(managedLines(exclude)).toContain(".metaproject/data/bundles/");
 
-      // The team starts ignoring one entry itself: it leaves the local block.
+      // The team starts ignoring one entry itself: it stays in the shared
+      // block, which other worktrees without that .gitignore line rely on (F-005).
       await writeFile(path.join(root, ".gitignore"), ".metaproject/data/bundles/\n");
-      await sync(root);
+      expect((await sync(root)).result.status).toBe("unchanged");
       exclude = await readExclude(root);
-      expect(managedLines(exclude)).not.toContain(".metaproject/data/bundles/");
+      expect(managedLines(exclude)).toContain(".metaproject/data/bundles/");
       expect(managedLines(exclude)).toContain(".metaproject/runtime/");
       expect(exclude.startsWith(before)).toBe(true);
       expect(exclude.endsWith(after)).toBe(true);
@@ -278,21 +330,22 @@ describe("syncMetaprojectIgnoreRules", () => {
     }
   });
 
-  test("a managed block committed in HEAD is left alone and its entries are not repeated in info/exclude", async () => {
+  // F-005: another worktree's branch may not carry the committed block, so
+  // info/exclude still holds every entry.
+  test("a managed block committed in HEAD is left alone; info/exclude still holds every entry", async () => {
     const gitignore = `node_modules/\n\n${LEGACY_BLOCK}\n`;
     const root = await repo({ ".gitignore": gitignore });
     try {
-      const excludeBefore = await readExclude(root);
       const first = await sync(root, []);
 
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
-      expect(await readExclude(root)).toBe(excludeBefore);
+      expect(managedLines(await readExclude(root))).toEqual(renderMetaprojectGitignoreBlock().trim().split("\n"));
       expect(mustGit(root, ["status", "--porcelain"])).toBe("");
       expect(first.notices.some((line) => line.includes(".gitignore") && line.includes("HEAD"))).toBe(true);
+      expect(first.notices.some((line) => line.includes("not repeated"))).toBe(false);
 
-      // Local targets are not in the committed block, so they alone go local.
       await sync(root);
-      expect(managedLines(await readExclude(root)).filter((line) => !line.startsWith("#"))).toEqual(LOCAL_TARGETS);
+      expect(managedLines(await readExclude(root)).slice(-LOCAL_TARGETS.length)).toEqual(LOCAL_TARGETS);
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
     } finally {
       await rm(root, { recursive: true, force: true });
@@ -326,6 +379,67 @@ describe("syncMetaprojectIgnoreRules", () => {
       }
     });
   }
+
+  // Flow 361 review round 1, F-004: the pre-361 writer also deleted team
+  // lines OUTSIDE its block — every line duplicating one of its own, and a
+  // blanket `.metaproject/` line where `.metaproject` was tracked. That
+  // deletion was keryx's, not the developer's, so the file still goes back to HEAD.
+  test("a .gitignore whose team lines the legacy writer deduplicated goes back to HEAD", async () => {
+    const head = "node_modules/\n.metaproject/runtime/\n";
+    const root = await repo({ ".gitignore": head });
+    try {
+      await writeFile(path.join(root, ".gitignore"), `node_modules/\n\n${LEGACY_BLOCK}\n`);
+      const { notices } = await sync(root, ["CLAUDE.local.md"]);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(head);
+      expect(git(root, ["diff", "--quiet", "--", ".gitignore"]).code).toBe(0);
+      expect(notices.some((line) => line.startsWith(".gitignore: moved the managed keryx ignore block"))).toBe(true);
+      expect(notices.some((line) => line.includes("your other uncommitted edits"))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a blanket .metaproject/ line the legacy writer dropped where .metaproject was tracked goes back to HEAD", async () => {
+    const head = "node_modules/\n.metaproject/\n";
+    const root = await repo({ ".gitignore": head, ".metaproject/index.md": "# index\n" });
+    try {
+      await writeFile(path.join(root, ".gitignore"), `node_modules/\n\n${LEGACY_BLOCK}\n`);
+      await sync(root);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(head);
+      expect(git(root, ["diff", "--quiet", "--", ".gitignore"]).code).toBe(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a developer's own removal of a line the legacy writer never touched is still their edit", async () => {
+    const root = await repo({ ".gitignore": "node_modules/\ndist/\n.metaproject/runtime/\n" });
+    try {
+      await writeFile(path.join(root, ".gitignore"), `node_modules/\n\n${LEGACY_BLOCK}\n`);
+      const { notices } = await sync(root);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe("node_modules/\n");
+      expect(notices.some((line) => line.includes("your other uncommitted edits"))).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // Flow 361 review round 1, F-008: CRLF files keep CRLF on the strip path.
+  test("a CRLF .gitignore loses the block and keeps its CRLF line endings", async () => {
+    const root = await repo();
+    try {
+      const crlfBlock = LEGACY_BLOCK.split("\n").join("\r\n");
+      await writeFile(path.join(root, ".gitignore"), `dist/\r\n\r\n${crlfBlock}\r\n\r\ncoverage/\r\n`);
+      await sync(root);
+
+      expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe("dist/\r\n\r\ncoverage/\r\n");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 
   // Flow 361 T13 (T11 finding): the run that moves the block used to print
   // "moved … the file is back at HEAD" and then ".gitignore is not modified" —

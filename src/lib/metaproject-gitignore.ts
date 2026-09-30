@@ -2,7 +2,7 @@ import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
 import { removeContained, writeContained } from "./contained-write";
-import { readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "./git-head";
+import { indexHoldsFile, readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "./git-head";
 import {
   explainIgnoredPaths,
   isMetaprojectIgnoredAsWhole,
@@ -44,16 +44,18 @@ export type SyncIgnoreRulesResult = {
 
 /**
  * Flow 361: keryx's ignore rules, without touching a tracked file. The
- * managed block goes to `<git-common-dir>/info/exclude` and holds only what
- * the repository does not already ignore — git is asked per entry, so a rule
- * in the team's `.gitignore`, in the global excludes file, or a blanket
- * `.metaproject/` line each make the matching entries unnecessary. When
- * nothing is left, nothing is written.
+ * managed block goes to `<git-common-dir>/info/exclude` and holds every entry
+ * keryx wants, whether or not this checkout's `.gitignore` already covers it:
+ * `info/exclude` is shared by every worktree of the clone, while `.gitignore`
+ * is one branch's, so trimming the block against it would un-ignore files in
+ * a worktree whose branch lacks those lines (review round 1, F-005). A
+ * redundant line is harmless; the block comes out the same whichever
+ * worktree runs this.
  *
- * A blanket `.metaproject/` line used to be edited here (dropped where
- * `.metaproject` was tracked, kept otherwise). It is the team's rule in the
- * team's file either way, so it is now only read: it means "no `.metaproject`
- * entry is needed".
+ * The one exception is a blanket `.metaproject/` rule (AC6): the team keeps
+ * the workspace out of git, so no `.metaproject` entry is written, and a
+ * local target git already ignores is not repeated either. That rule is read,
+ * never edited — it used to be dropped where `.metaproject` was tracked.
  *
  * A managed block an older keryx left in `.gitignore` is moved out first —
  * see `moveBlockOutOfGitignore`. Outside a git repository there is no exclude
@@ -157,9 +159,11 @@ type PendingGitignoreBlock = { sourcePath: string; firstLine: number; lastLine: 
 
 /**
  * The lines the managed block in `info/exclude` should hold: keryx's
- * `.metaproject` entries (none when the workspace is ignored as a whole) and
- * the local targets, minus every entry a rule outside keryx's own block
- * already ignores. `undefined` when git cannot evaluate ignore rules here.
+ * `.metaproject` entries and the local targets. When the workspace is ignored
+ * as a whole (AC6) there are no `.metaproject` entries, and a local target a
+ * rule outside keryx's own block already ignores is left out too; otherwise
+ * nothing is left out (see `syncMetaprojectIgnoreRules`). `undefined` when git
+ * cannot evaluate ignore rules here.
  */
 async function wantedIgnoreLines(
   projectRoot: string,
@@ -167,8 +171,9 @@ async function wantedIgnoreLines(
   pending: PendingGitignoreBlock | undefined,
 ): Promise<{ lines: string[]; entries: string[]; reincluded: string[] } | undefined> {
   const wholeWorkspace = await isMetaprojectIgnoredAsWhole(projectRoot);
+  const ignoredAsWhole = wholeWorkspace.git && wholeWorkspace.ignored;
   const candidates = [
-    ...(wholeWorkspace.git && wholeWorkspace.ignored ? [] : renderMetaprojectGitignoreBlock().trim().split("\n")),
+    ...(ignoredAsWhole ? [] : renderMetaprojectGitignoreBlock().trim().split("\n")),
     ...(localTargets.length > 0 ? [LOCAL_TARGETS_COMMENT, ...localTargets] : []),
   ];
   const patterns = candidates.filter((line) => !line.startsWith("#"));
@@ -186,7 +191,7 @@ async function wantedIgnoreLines(
       explanation.line !== undefined &&
       explanation.line > pending.firstLine &&
       explanation.line < pending.lastLine;
-    if (explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);
+    if (ignoredAsWhole && explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);
     if (!explanation.ignored && explanation.rule !== undefined && localTargets.includes(pattern)) {
       reincluded.push(`${pattern} (${explanation.rule})`);
     }
@@ -207,12 +212,12 @@ export function hasManagedIgnoreBlock(content: string): boolean {
  * Takes the managed block out of `.gitignore`, by the same cases as the
  * index block in a team file (`moveBlockOutOfTeamFile`):
  *
- * - The block is in `HEAD`: the team committed it. The file is left alone,
- *   and since git then already ignores those entries, none is repeated in
- *   `info/exclude`.
+ * - The block is in `HEAD`: the team committed it. The file is left alone.
  * - Not in `HEAD`, the file otherwise equal to `HEAD`: restored to `HEAD`,
  *   so `git diff --quiet -- .gitignore` passes. "Otherwise equal" ignores
- *   blank lines — the old writer trimmed the file's tail before appending.
+ *   blank lines — the old writer trimmed the file's tail before appending —
+ *   and the team lines the old writer itself deleted outside its block
+ *   (`headAsLegacyWriterLeftIt`): those were keryx's edits, not the developer's.
  * - Not in `HEAD`, other uncommitted edits: only the block goes.
  * - The file is not in `HEAD` at all: only the block goes — unless that
  *   leaves nothing but whitespace and the file is not staged either. Then
@@ -231,15 +236,15 @@ async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: strin
   const head = await readHeadBlob(projectRoot, GITIGNORE);
   if (head !== undefined && managedBlockPattern().test(head)) {
     notice(
-      `${GITIGNORE}: the managed keryx ignore block is committed in HEAD, so it stays there and its entries are not repeated in info/exclude. ` +
-        `To move it, delete the block from ${GITIGNORE} and commit that; the next \`keryx update\` writes the entries to info/exclude.`,
+      `${GITIGNORE}: the managed keryx ignore block is committed in HEAD, so it stays there; info/exclude carries the same entries for ` +
+        `worktrees whose branch lacks it. To move it, delete the block from ${GITIGNORE} and commit that.`,
     );
     return false;
   }
 
   const stripped = stripManagedBlock(content);
   if (head === undefined) {
-    if (stripped.trim().length === 0 && !(await isInIndex(projectRoot, GITIGNORE))) {
+    if (stripped.trim().length === 0 && !(await indexHoldsFile(projectRoot, GITIGNORE))) {
       await removeContained(projectRoot, GITIGNORE);
       notice(
         `${GITIGNORE}: removed the file — it was untracked and held nothing but the managed keryx ignore block. keryx now keeps its ignore rules in info/exclude.`,
@@ -253,7 +258,7 @@ async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: strin
     );
     return true;
   }
-  if (sameApartFromBlankLines(stripped, head)) {
+  if (sameApartFromBlankLines(stripped, head) || sameApartFromBlankLines(stripped, await headAsLegacyWriterLeftIt(projectRoot, head, content))) {
     if (!(await restoreWorktreeFileFromHead(projectRoot, GITIGNORE))) {
       await writeContained(projectRoot, GITIGNORE, head);
     }
@@ -329,11 +334,46 @@ function sameApartFromBlankLines(a: string, b: string): boolean {
   return left.length === right.length && left.every((line, index) => line === right[index]);
 }
 
-/** True when the index holds `relativePath` — staged, even if never committed. No git counts as not staged. */
-async function isInIndex(projectRoot: string, relativePath: string): Promise<boolean> {
+/**
+ * `head` (the committed `.gitignore`) as the pre-361 writer would have left
+ * it outside its block. Besides appending the block, that writer deleted
+ * every line elsewhere in the file repeating one of the block's own lines
+ * (comments included), and a blanket `.metaproject/` line where
+ * `.metaproject` was tracked. The block's lines are both the current ones and
+ * those the file's own block carries, since an older keryx wrote older lines.
+ */
+async function headAsLegacyWriterLeftIt(projectRoot: string, head: string, content: string): Promise<string> {
+  const blockLines = new Set(
+    [...renderMetaprojectGitignoreBlock().split("\n"), ...managedBlockLines(content)]
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+  const blanketDropped = await metaprojectIsTracked(projectRoot);
+  return head
+    .split(/\r?\n/)
+    .filter((line) => {
+      const trimmed = line.trim();
+      if (trimmed === ".metaproject/" || trimmed === ".metaproject") return !blanketDropped;
+      return !blockLines.has(trimmed);
+    })
+    .join("\n");
+}
+
+/** The lines between the markers of every managed block in `content`. */
+function managedBlockLines(content: string): string[] {
+  const lines: string[] = [];
+  for (const match of content.matchAll(managedBlockPattern())) {
+    lines.push(...match[0].split(/\r?\n/).slice(1, -1));
+  }
+  return lines;
+}
+
+/** True when git tracks at least one file under `.metaproject/`. No git, or a git error, counts as not tracked. */
+async function metaprojectIsTracked(projectRoot: string): Promise<boolean> {
   try {
-    const proc = Bun.spawn(["git", "ls-files", "--error-unmatch", "--", relativePath], { cwd: projectRoot, stdout: "ignore", stderr: "ignore" });
-    return (await proc.exited) === 0;
+    const proc = Bun.spawn(["git", "--literal-pathspecs", "ls-files", "--", ".metaproject"], { cwd: projectRoot, stdout: "pipe", stderr: "ignore" });
+    const out = await new Response(proc.stdout).text();
+    return (await proc.exited) === 0 && out.trim().length > 0;
   } catch {
     return false;
   }

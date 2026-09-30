@@ -501,6 +501,42 @@ describe("moving managed hooks out of the tracked .claude/settings.json", () => 
     }
   });
 
+  // Flow 361 review round 1, F-006: the way back to shared used to delete the
+  // local file outright — a change for the team to commit when it is tracked.
+  test("a tracked .claude/settings.local.json is stripped, never deleted, when hooks move back to shared", async () => {
+    const root = await project({ [SHARED]: TEAM_SETTINGS });
+    try {
+      await put(root, LOCAL, withEverySurface({}));
+      // `-f`: the developer's global excludes may list the file.
+      git(root, ["add", "-f", "--", LOCAL]);
+      git(root, ["commit", "-q", "-m", "team commits the local file"]);
+      await manifest(root, { path: SHARED, scope: "shared" });
+
+      const { scope, output } = await migrate(root);
+
+      expect(scope).toBe("shared");
+      expect(existsSync(path.join(root, LOCAL))).toBe(true);
+      expect(hasManaged(await readFile(path.join(root, LOCAL), "utf8"))).toBe(false);
+      expect(output).toContain(`${LOCAL}:`);
+      expect(output).toContain("tracked");
+      expectEverySurfaceOncePerEvent(await managedCommandCounts(root));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("an untracked .claude/settings.local.json holding only keryx hooks is still removed on the way back to shared", async () => {
+    const root = await project({ [SHARED]: TEAM_SETTINGS });
+    try {
+      await put(root, LOCAL, withEverySurface({}));
+      await manifest(root, { path: SHARED, scope: "shared" });
+      await migrate(root);
+      expect(existsSync(path.join(root, LOCAL))).toBe(false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("install-state follows the hooks to the new path and is not rewritten by a second run", async () => {
     const root = await project({ [SHARED]: TEAM_SETTINGS });
     try {

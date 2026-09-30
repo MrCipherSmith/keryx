@@ -195,6 +195,53 @@ describe("normalizeEntrypointTargets", () => {
     expect(result.needsRewrite).toBe(true);
   });
 
+  // Flow 361 review round 1, F-001: local paths end up in `info/exclude` and
+  // as write destinations. A cloned manifest must not be able to plant `!.env`
+  // (un-ignoring a secret) or a newline-injected `# keryx:end` there.
+  test("a local entry always resolves to its runtime's standard local path, whatever path the manifest states", () => {
+    // `.env` as a local target would have keryx write its block into the secrets file.
+    const result = normalizeEntrypointTargets({
+      root: [
+        { runtime: "claude", scope: "local", path: ".env" },
+        { runtime: "codex", scope: "local", path: "docs/AGENTS.override.md", mode: "override", source: "AGENTS.md" },
+      ],
+      claudeSettings: { scope: "local", path: ".claude/other.json" },
+    });
+    expect(result.targets).toEqual({ root: [CLAUDE_LOCAL, CODEX_LOCAL], claudeSettings: SETTINGS_LOCAL });
+    expect(localTargetPaths(result.targets)).toEqual(["CLAUDE.local.md", "AGENTS.override.md", ".claude/settings.local.json"]);
+
+    const inferred = normalizeEntrypointTargets({ root: ["claude.local.md", { runtime: "codex", path: "agents.override.md" }] });
+    expect(inferred.targets.root).toEqual([CLAUDE_LOCAL, CODEX_LOCAL]);
+
+    // One that would un-ignore a file or inject lines is junk, like a path leaving the project.
+    const hostile = normalizeEntrypointTargets({
+      root: [
+        { runtime: "claude", scope: "local", path: "!.env" },
+        { runtime: "codex", scope: "local", path: "AGENTS.override.md\n!*.pem\n# keryx:end", mode: "override", source: "AGENTS.md" },
+      ],
+      claudeSettings: { scope: "local", path: "!secrets.json" },
+    });
+    expect(hostile.ignored).toHaveLength(2);
+    expect(hostile.targets).toEqual(sharedEntrypointTargets());
+    expect(localTargetPaths(hostile.targets)).toEqual([]);
+  });
+
+  test("a path or Codex source with a control character, or starting with ! or #, is refused", () => {
+    const result = normalizeEntrypointTargets({
+      root: [
+        { runtime: "claude", scope: "shared", path: "CLAUDE.md\n!.env" },
+        { runtime: "codex", scope: "local", mode: "override", source: "!AGENTS.md" },
+      ],
+      claudeSettings: SETTINGS_LOCAL,
+    });
+    expect(result.ignored).toEqual([{ runtime: "claude", scope: "shared", path: "CLAUDE.md\n!.env" }]);
+    expect(result.targets.root).toEqual([CODEX_LOCAL, { runtime: "claude", path: "CLAUDE.md", scope: "shared" }]);
+    for (const source of ["#notes.md", "AGENTS.md\r", "AGENTS.md\n# keryx:end", "docs/\tAGENTS.md"]) {
+      const codex = normalizeEntrypointTargets({ root: [{ ...CODEX_LOCAL, source }] }).targets.root[0];
+      expect(codex).toEqual(CODEX_LOCAL);
+    }
+  });
+
   test("the first entry per runtime wins; a duplicate is ignored", () => {
     const duplicate = { runtime: "claude", path: "CLAUDE.md", scope: "shared" };
     const result = normalizeEntrypointTargets({ root: [CLAUDE_LOCAL, duplicate, CODEX_LOCAL], claudeSettings: SETTINGS_LOCAL });

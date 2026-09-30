@@ -2,11 +2,12 @@ import { mkdir, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
+import * as localIgnore from "./git-local-ignore";
 import {
-  ensureLocalIgnorePatterns,
   explainIgnoredPaths,
   isMetaprojectIgnoredAsWhole,
   isPathIgnored,
+  planLocalIgnoreBlock,
   replaceLocalIgnoreBlock,
   resolveLocalExcludePath,
 } from "./git-local-ignore";
@@ -87,64 +88,18 @@ test("isMetaprojectIgnoredAsWhole is true only for a blanket rule", async () => 
   }
 });
 
-test("ensureLocalIgnorePatterns writes the managed block, keeps foreign lines, and is idempotent", async () => {
-  const root = uniqueTestRoot(tmpdir(), "keryx-local-ignore-ensure");
-  try {
-    await initRepo(root);
-    const excludePath = path.join(root, ".git", "info", "exclude");
-    await mkdir(path.dirname(excludePath), { recursive: true });
-    const foreign = "# a developer's own rules\n*.swp\n\n\nscratch/\n";
-    await writeFile(excludePath, foreign);
-
-    const first = await ensureLocalIgnorePatterns(root, LOCAL_TARGETS);
-    expect(first.status).toBe("written");
-    if (first.status !== "written") throw new Error("unreachable");
-    expect(first.added).toEqual(LOCAL_TARGETS);
-    expect(await realpath(first.excludePath)).toBe(await realpath(excludePath));
-
-    const written = await readFile(excludePath, "utf8");
-    expect(written.startsWith(foreign)).toBe(true);
-    expect(written).toBe(`${foreign}\n# keryx:begin\n${LOCAL_TARGETS.join("\n")}\n# keryx:end\n`);
-    for (const target of LOCAL_TARGETS) {
-      expect(await isPathIgnored(root, target)).toEqual({ git: true, ignored: true });
-    }
-
-    const before = await stat(excludePath);
-    const second = await ensureLocalIgnorePatterns(root, LOCAL_TARGETS);
-    expect(second.status).toBe("unchanged");
-    expect(await readFile(excludePath, "utf8")).toBe(written);
-    expect((await stat(excludePath)).mtimeMs).toBe(before.mtimeMs);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+// Flow 361 review round 1, F-007: the additive writer had no caller outside
+// its tests and ignored the subdirectory prefix; the replace writer is the one.
+test("the additive exclude writer is gone; replaceLocalIgnoreBlock is the only writer", () => {
+  expect("ensureLocalIgnorePatterns" in localIgnore).toBe(false);
 });
 
-test("ensureLocalIgnorePatterns adds only the missing patterns and keeps the block's earlier ones", async () => {
-  const root = uniqueTestRoot(tmpdir(), "keryx-local-ignore-extend");
-  try {
-    await initRepo(root);
-    const excludePath = path.join(root, ".git", "info", "exclude");
-    await ensureLocalIgnorePatterns(root, ["# Metaproject internals", ".metaproject/runtime/"]);
-    // Foreign lines on BOTH sides of the block.
-    await writeFile(excludePath, `${await readFile(excludePath, "utf8")}\nafter-block/\n`);
-    const head = (await readFile(excludePath, "utf8")).split("# keryx:begin")[0];
-
-    const result = await ensureLocalIgnorePatterns(root, [".metaproject/runtime/", "CLAUDE.local.md", "CLAUDE.local.md"]);
-    expect(result).toMatchObject({ status: "written", added: ["CLAUDE.local.md"] });
-    expect(await readFile(excludePath, "utf8")).toBe(
-      `${head}# keryx:begin\n# Metaproject internals\n.metaproject/runtime/\nCLAUDE.local.md\n# keryx:end\n\nafter-block/\n`,
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test("ensureLocalIgnorePatterns creates info/ when it is missing", async () => {
+test("replaceLocalIgnoreBlock creates info/ when it is missing", async () => {
   const root = uniqueTestRoot(tmpdir(), "keryx-local-ignore-mkdir");
   try {
     await initRepo(root);
     await rm(path.join(root, ".git", "info"), { recursive: true, force: true });
-    const result = await ensureLocalIgnorePatterns(root, ["CLAUDE.local.md"]);
+    const result = await replaceLocalIgnoreBlock(root, ["CLAUDE.local.md"]);
     expect(result.status).toBe("written");
     expect(await readFile(path.join(root, ".git", "info", "exclude"), "utf8")).toBe(
       "# keryx:begin\nCLAUDE.local.md\n# keryx:end\n",
@@ -154,13 +109,32 @@ test("ensureLocalIgnorePatterns creates info/ when it is missing", async () => {
   }
 });
 
-test("an empty pattern list writes nothing", async () => {
-  const root = uniqueTestRoot(tmpdir(), "keryx-local-ignore-empty");
+// Flow 361 review round 1, F-001 (defence in depth): whatever a caller hands
+// the writer, a line that re-includes a path (`!`), carries a line break, or
+// forges a marker is refused — nothing is written.
+test("replaceLocalIgnoreBlock refuses a line that would un-ignore a path or break the block", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-local-ignore-refuse-lines");
   try {
     await initRepo(root);
-    await rm(path.join(root, ".git", "info"), { recursive: true, force: true });
-    expect((await ensureLocalIgnorePatterns(root, [])).status).toBe("unchanged");
-    expect(await Bun.file(path.join(root, ".git", "info", "exclude")).exists()).toBe(false);
+    const excludePath = path.join(root, ".git", "info", "exclude");
+    await mkdir(path.dirname(excludePath), { recursive: true });
+    const foreign = "# mine\n.env\n";
+    await writeFile(excludePath, foreign);
+
+    for (const lines of [
+      ["!.env"],
+      ["  !*.pem"],
+      ["CLAUDE.local.md\n!.env"],
+      ["CLAUDE.local.md\r!.env"],
+      ["CLAUDE.local.md", "# keryx:end"],
+      ["# keryx:begin", "CLAUDE.local.md"],
+    ]) {
+      const result = await replaceLocalIgnoreBlock(root, lines);
+      expect(result.status).toBe("refused");
+      expect((await planLocalIgnoreBlock(root, lines)).status).toBe("refused");
+    }
+    expect(await readFile(excludePath, "utf8")).toBe(foreign);
+    expect(await isPathIgnored(root, ".env")).toEqual({ git: true, ignored: true });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -182,7 +156,7 @@ test("from a linked worktree the shared exclude file of the common dir is writte
       await realpath(path.dirname(mainExclude)),
     );
 
-    const result = await ensureLocalIgnorePatterns(linked, LOCAL_TARGETS);
+    const result = await replaceLocalIgnoreBlock(linked, LOCAL_TARGETS);
     expect(result.status).toBe("written");
     expect(await readFile(mainExclude, "utf8")).toContain("# keryx:begin\nCLAUDE.local.md\n");
     // Nothing was written under the linked worktree's own private git dir.
@@ -194,7 +168,7 @@ test("from a linked worktree the shared exclude file of the common dir is writte
         expect(await isPathIgnored(checkout, target)).toEqual({ git: true, ignored: true });
       }
     }
-    expect((await ensureLocalIgnorePatterns(main, LOCAL_TARGETS)).status).toBe("unchanged");
+    expect((await replaceLocalIgnoreBlock(main, LOCAL_TARGETS)).status).toBe("unchanged");
   } finally {
     await rm(base, { recursive: true, force: true });
   }
@@ -206,7 +180,7 @@ test("outside a git repository every call reports it instead of throwing", async
     expect(await isPathIgnored(root, "CLAUDE.local.md")).toEqual({ git: false });
     expect(await isMetaprojectIgnoredAsWhole(root)).toEqual({ git: false });
     expect(await resolveLocalExcludePath(root)).toBeUndefined();
-    expect(await ensureLocalIgnorePatterns(root, LOCAL_TARGETS)).toEqual({ status: "not-a-git-repository" });
+    expect(await replaceLocalIgnoreBlock(root, LOCAL_TARGETS)).toEqual({ status: "not-a-git-repository" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -364,15 +338,13 @@ test("an exclude file symlinked outside the git common dir is refused, not writt
     await rm(excludePath, { force: true });
     await symlink(victim, excludePath);
 
-    const result = await ensureLocalIgnorePatterns(root, LOCAL_TARGETS);
-    expect(result.status).toBe("refused");
     expect((await replaceLocalIgnoreBlock(root, LOCAL_TARGETS)).status).toBe("refused");
     expect(await readFile(victim, "utf8")).toBe("untouched\n");
 
     // The same for a symlinked info/ directory.
     await rm(path.join(root, ".git", "info"), { recursive: true, force: true });
     await symlink(outside, path.join(root, ".git", "info"));
-    expect((await ensureLocalIgnorePatterns(root, LOCAL_TARGETS)).status).toBe("refused");
+    expect((await replaceLocalIgnoreBlock(root, LOCAL_TARGETS)).status).toBe("refused");
     expect(await Bun.file(path.join(outside, "exclude")).exists()).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });

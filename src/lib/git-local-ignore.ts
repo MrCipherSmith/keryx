@@ -8,10 +8,10 @@
 // inside `.git`, and from a linked worktree the common dir is not even under
 // the project root, so `writeContained` refuses it on both counts. As in
 // `managed-git-hook.ts`, this module carries its own containment instead:
-// before the one `mkdir`/`writeFile` below (`writeExcludeFile`, shared by the
-// additive and the replace writer), `info/` and `info/exclude` are
-// `lstat`ed and, where either is a symlink, must resolve inside the
-// `realpath`'d git common dir — otherwise the write is refused, not followed.
+// before the one `mkdir`/`writeFile` below (`writeExcludeFile`, called only by
+// `replaceLocalIgnoreBlock`), `info/` and `info/exclude` are `lstat`ed and,
+// where either is a symlink, must resolve inside the `realpath`'d git common
+// dir — otherwise the write is refused, not followed.
 
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -22,14 +22,6 @@ const BLOCK_END = "# keryx:end";
 
 /** `git: false` outside a git repository (or without a `git` binary): there is nothing to ask. */
 export type IgnoreCheck = { git: true; ignored: boolean } | { git: false };
-
-export type EnsureLocalIgnoreResult =
-  | { status: "not-a-git-repository" }
-  /** Every pattern was already in the managed block; nothing was written. */
-  | { status: "unchanged"; excludePath: string }
-  | { status: "written"; excludePath: string; added: string[] }
-  /** The exclude file could not be reached safely; nothing was written. */
-  | { status: "refused"; excludePath: string; detail: string };
 
 /**
  * Whether git's ignore rules (`.gitignore` files, `info/exclude`, the user's
@@ -68,58 +60,7 @@ export async function resolveLocalExcludePath(projectRoot: string): Promise<stri
   return commonDir === undefined ? undefined : path.join(commonDir, "info", "exclude");
 }
 
-/**
- * Makes sure every line of `patterns` is present in the managed block of the
- * local exclude file. Additive: lines already in the block stay, missing ones
- * are appended in the order given, and everything outside the block is left
- * as it was. A second call with the same patterns writes nothing. Creates
- * `info/` and the file when missing. Never throws for "not a git repository"
- * or an unsafe destination — both come back as a status.
- */
-export async function ensureLocalIgnorePatterns(
-  projectRoot: string,
-  patterns: readonly string[],
-): Promise<EnsureLocalIgnoreResult> {
-  const commonDir = await resolveGitCommonDir(projectRoot);
-  if (commonDir === undefined) return { status: "not-a-git-repository" };
-  const infoDir = path.join(commonDir, "info");
-  const excludePath = path.join(infoDir, "exclude");
-
-  const refusal = await refuseUnsafeExcludePath(commonDir, infoDir, excludePath);
-  if (refusal !== undefined) return { status: "refused", excludePath, detail: refusal };
-
-  const existing = await readFile(excludePath, "utf8").catch((error: NodeJS.ErrnoException) => {
-    if (error.code === "ENOENT") return "";
-    throw error;
-  });
-  const blockPattern = new RegExp(`${escapeRegExp(BLOCK_START)}\\n([\\s\\S]*?)${escapeRegExp(BLOCK_END)}`);
-  const current = blockPattern.exec(existing);
-  const lines = current === null ? [] : (current[1] ?? "").split("\n").filter((line) => line.trim().length > 0);
-
-  const present = new Set(lines.map((line) => line.trim()));
-  const added: string[] = [];
-  for (const pattern of patterns) {
-    const trimmed = pattern.trim();
-    if (trimmed.length === 0 || present.has(trimmed)) continue;
-    present.add(trimmed);
-    added.push(trimmed);
-  }
-  if (added.length === 0) return { status: "unchanged", excludePath };
-
-  const managedBlock = `${BLOCK_START}\n${[...lines, ...added].join("\n")}\n${BLOCK_END}`;
-  const head = existing.trimEnd();
-  // `() => managedBlock`: the string form of `replace` would read `$&`-style
-  // sequences in a pattern line as substitutions.
-  const next =
-    current !== null
-      ? existing.replace(blockPattern, () => managedBlock)
-      : `${head.length > 0 ? `${head}\n\n` : ""}${managedBlock}\n`;
-
-  await writeExcludeFile(infoDir, excludePath, next);
-  return { status: "written", excludePath, added };
-}
-
-/** The one raw write of this module; both callers have run `refuseUnsafeExcludePath` first. */
+/** The one raw write of this module; its caller has run `refuseUnsafeExcludePath` first. */
 async function writeExcludeFile(infoDir: string, excludePath: string, content: string): Promise<void> {
   await mkdir(infoDir, { recursive: true });
   await writeFile(excludePath, content, "utf8");
@@ -134,12 +75,11 @@ export type ReplaceLocalIgnoreResult =
   | { status: "refused"; excludePath: string; detail: string };
 
 /**
- * Makes the managed block of the local exclude file hold exactly `lines` —
- * the replace-mode twin of `ensureLocalIgnorePatterns`. A line keryx stopped
- * emitting, or one the repository has started ignoring itself, leaves the
- * block; everything outside the markers is left as it was, and a second call
- * with the same lines writes nothing. No lines means no block: an existing
- * one is removed and none is created.
+ * Makes the managed block of the local exclude file hold exactly `lines`. A
+ * line keryx stopped emitting leaves the block; everything outside the
+ * markers is left as it was, and a second call with the same lines writes
+ * nothing. No lines means no block: an existing one is removed and none is
+ * created. Creates `info/` and the file when missing.
  *
  * `lines` are written the way they would stand in a `.gitignore` at
  * `projectRoot` (comments included). `info/exclude` patterns are relative to
@@ -147,6 +87,11 @@ export type ReplaceLocalIgnoreResult =
  * repository, so a project in a subdirectory gets its patterns prefixed and a
  * block of its own (`# keryx:begin <prefix>`), which a replace from another
  * project cannot touch.
+ *
+ * Refused, whatever the caller, with nothing written: a line holding a line
+ * break (it would inject further lines), one starting with `!` (it would
+ * re-include — un-ignore — a path, a secret the developer's own excludes keep
+ * out of git included), and one forging a block marker.
  */
 export async function replaceLocalIgnoreBlock(projectRoot: string, lines: readonly string[]): Promise<ReplaceLocalIgnoreResult> {
   const commonDir = await resolveGitCommonDir(projectRoot);
@@ -155,6 +100,8 @@ export async function replaceLocalIgnoreBlock(projectRoot: string, lines: readon
   const infoDir = path.join(commonDir, "info");
   const excludePath = path.join(infoDir, "exclude");
 
+  const unsafeLine = refuseUnsafeLines(lines);
+  if (unsafeLine !== undefined) return { status: "refused", excludePath, detail: unsafeLine };
   const refusal = await refuseUnsafeExcludePath(commonDir, infoDir, excludePath);
   if (refusal !== undefined) return { status: "refused", excludePath, detail: refusal };
 
@@ -193,7 +140,9 @@ export async function replaceLocalIgnoreBlock(projectRoot: string, lines: readon
 export type PlanLocalIgnoreResult =
   | { status: "not-a-git-repository" }
   | { status: "unchanged"; excludePath: string }
-  | { status: "would-write"; excludePath: string; added: string[]; removed: string[] };
+  | { status: "would-write"; excludePath: string; added: string[]; removed: string[] }
+  /** A line the writer would refuse (`replaceLocalIgnoreBlock`). */
+  | { status: "refused"; excludePath: string; detail: string };
 
 /**
  * What `replaceLocalIgnoreBlock(projectRoot, lines)` would do, without doing
@@ -205,6 +154,8 @@ export async function planLocalIgnoreBlock(projectRoot: string, lines: readonly 
   const location = commonDir === undefined ? undefined : await resolveWorktreeLocation(projectRoot);
   if (commonDir === undefined || location === undefined) return { status: "not-a-git-repository" };
   const excludePath = path.join(commonDir, "info", "exclude");
+  const unsafeLine = refuseUnsafeLines(lines);
+  if (unsafeLine !== undefined) return { status: "refused", excludePath, detail: unsafeLine };
   const change = compareManagedBlock(await readExcludeFile(excludePath).catch(() => ""), location.prefix, lines);
   if (change === "unchanged") return { status: "unchanged", excludePath };
   return {
@@ -378,6 +329,18 @@ async function readExcludeFile(excludePath: string): Promise<string> {
     if (error.code === "ENOENT" || error.code === "ENOTDIR") return "";
     throw error;
   });
+}
+
+/** A reason to refuse the block's `lines`, or `undefined` when every one is a plain pattern or comment. */
+function refuseUnsafeLines(lines: readonly string[]): string | undefined {
+  for (const line of lines) {
+    const shown = JSON.stringify(line);
+    if (/[\r\n]/.test(line)) return `the ignore line ${shown} holds a line break`;
+    const trimmed = line.trim();
+    if (trimmed.startsWith("!")) return `the ignore line ${shown} would re-include a path (a leading "!")`;
+    if (trimmed.startsWith(BLOCK_START) || trimmed.startsWith(BLOCK_END)) return `the ignore line ${shown} forges a keryx block marker`;
+  }
+  return undefined;
 }
 
 /** A reason to refuse writing `excludePath`, or `undefined` when it is safe to. */

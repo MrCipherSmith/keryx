@@ -177,11 +177,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * A project-relative path that stays inside the project: these strings come
- * from a tracked, hand-editable manifest and end up as write destinations.
+ * from a tracked, hand-editable manifest — one a cloned repository controls —
+ * and end up as write destinations, git arguments and ignore patterns. So no
+ * control character (a newline would inject lines into `info/exclude`), and
+ * no leading `!` (re-includes a path there) or `#` (a comment, or a forged
+ * `# keryx:end`).
  */
 function safeRelativePath(value: unknown): string | undefined {
-  if (typeof value !== "string" || value.length === 0 || value.includes("\0")) return undefined;
+  // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
+  if (typeof value !== "string" || value.length === 0 || /[\u0000-\u001f\u007f]/.test(value)) return undefined;
   if (value.startsWith("/") || value.startsWith("\\") || /^[A-Za-z]:/.test(value)) return undefined;
+  if (value.startsWith("!") || value.startsWith("#")) return undefined;
   if (value.split(/[\\/]/).includes("..")) return undefined;
   return value;
 }
@@ -194,16 +200,27 @@ function runtimeOf(value: unknown): EntrypointRuntime | undefined {
   return value === "claude" || value === "codex" ? value : undefined;
 }
 
-/** A legacy `root` string: one of the known root file names, matched case-insensitively and kept as written. */
+/**
+ * A legacy `root` string: one of the known root file names, matched
+ * case-insensitively. A team file is kept as written; a local one is the
+ * runtime's standard local path, as every local entry is.
+ */
 function rootEntryFromLegacyString(value: string): RootEntrypointEntry | undefined {
   const lower = value.toLowerCase();
   for (const runtime of RUNTIMES) {
     if (lower === SHARED_ROOT_PATH[runtime].toLowerCase()) return sharedRootEntry(runtime, value);
-    if (lower === LOCAL_ROOT_PATH[runtime].toLowerCase()) return { ...localRootEntry(runtime), path: value };
+    if (lower === LOCAL_ROOT_PATH[runtime].toLowerCase()) return localRootEntry(runtime);
   }
   return undefined;
 }
 
+/**
+ * A local entry names its scope, never its file: it always resolves to the
+ * runtime's standard local path. The path a manifest states for it lands in
+ * `info/exclude` and is where keryx writes — a cloned manifest saying `.env`
+ * would have the block written into the secrets file. A stated path still has
+ * to be safe, or the whole entry is junk.
+ */
 function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntry | undefined {
   const runtime = runtimeOf(value.runtime);
   if (runtime === undefined) return undefined;
@@ -214,18 +231,15 @@ function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntr
 
   const scope =
     statedScope ?? (statedPath?.toLowerCase() === LOCAL_ROOT_PATH[runtime].toLowerCase() ? "local" : "shared");
-  const entryPath = statedPath ?? (scope === "local" ? LOCAL_ROOT_PATH[runtime] : SHARED_ROOT_PATH[runtime]);
-  if (scope === "shared") return sharedRootEntry(runtime, entryPath);
-  if (runtime === "claude") return { runtime, path: entryPath, scope };
+  if (scope === "shared") return sharedRootEntry(runtime, statedPath ?? SHARED_ROOT_PATH[runtime]);
+  if (runtime === "claude") return localRootEntry(runtime);
   return {
-    runtime,
-    path: entryPath,
-    scope,
+    ...(localRootEntry(runtime, safeRelativePath(value.source) ?? DEFAULT_CODEX_SOURCE) as CodexLocalRootEntry),
     mode: value.mode === "skip" ? "skip" : "override",
-    source: safeRelativePath(value.source) ?? DEFAULT_CODEX_SOURCE,
   };
 }
 
+/** The settings target: the standard file for its scope, whatever path is stated (see `rootEntryFromRecord`). */
 function claudeSettingsFromValue(value: unknown): ClaudeSettingsTarget | undefined {
   if (!isRecord(value)) return undefined;
   const statedPath = safeRelativePath(value.path);
@@ -233,5 +247,5 @@ function claudeSettingsFromValue(value: unknown): ClaudeSettingsTarget | undefin
   const statedScope = scopeOf(value.scope);
   if (statedPath === undefined && statedScope === undefined) return undefined;
   const scope = statedScope ?? (statedPath === LOCAL_SETTINGS_PATH ? "local" : "shared");
-  return { path: statedPath ?? (scope === "local" ? LOCAL_SETTINGS_PATH : SHARED_SETTINGS_PATH), scope };
+  return scope === "local" ? localClaudeSettingsTarget() : sharedClaudeSettingsTarget();
 }

@@ -12,9 +12,14 @@ export type HeadStatus =
   /** `HEAD` has the file and the working tree or index differs from it, a deleted file included. */
   | "differs";
 
+/**
+ * Every path handed to git here comes from a tracked, hand-editable manifest,
+ * and a path after `--` is still a pathspec: `s*` or `:(glob)…` would answer
+ * for other files. `--literal-pathspecs` makes each one name exactly one file.
+ */
 async function runGit(cwd: string, args: string[]): Promise<{ code: number; stdout: string } | undefined> {
   try {
-    const proc = Bun.spawn(["git", ...args], { cwd, stdout: "pipe", stderr: "ignore" });
+    const proc = Bun.spawn(["git", "--literal-pathspecs", ...args], { cwd, stdout: "pipe", stderr: "ignore" });
     const stdout = await new Response(proc.stdout).text();
     return { code: await proc.exited, stdout };
   } catch {
@@ -34,6 +39,16 @@ function headSpec(relativePath: string): string {
  */
 export async function readHeadBlob(projectRoot: string, relativePath: string): Promise<string | undefined> {
   const result = await runGit(projectRoot, ["show", headSpec(relativePath)]);
+  return result !== undefined && result.code === 0 ? result.stdout : undefined;
+}
+
+/**
+ * The content of `relativePath` as staged in the index, or `undefined` when
+ * the index does not hold it (or there is no repository). What the next
+ * plain `git commit` would record.
+ */
+export async function readIndexBlob(projectRoot: string, relativePath: string): Promise<string | undefined> {
+  const result = await runGit(projectRoot, ["show", `:./${relativePath.split("\\").join("/")}`]);
   return result !== undefined && result.code === 0 ? result.stdout : undefined;
 }
 

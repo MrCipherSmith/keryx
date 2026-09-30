@@ -89,23 +89,30 @@ live under a flow's `reviews/` subtree.
 ### Versioned vs gitignored
 
 `init` and `update` keep keryx's ignore rules out of the tracked `.gitignore`.
-They ask git first (`git check-ignore`) which of the entries below the
-repository already ignores — through its own `.gitignore`, a global excludes
-file, or a blanket `.metaproject/` line — and write only the rest, as a managed
-block delimited by `# keryx:begin … # keryx:end`, to `.git/info/exclude`. That
-file is per clone and never committed; from a linked worktree keryx writes the
-clone's common `info/exclude`, which every worktree shares. When `.metaproject/`
-is ignored as a whole, no `.metaproject` entry is written at all. The same block
-lists the per-developer agent files keryx writes (`CLAUDE.local.md`,
-`AGENTS.override.md`, `.claude/settings.local.json` — see
-[where the block goes](#where-the-block-goes-local-and-shared-scope)) unless git
-already ignores them. Outside a git repository the step is skipped with a note
-and `.gitignore` is neither created nor changed.
+They write the entries below as a managed block delimited by
+`# keryx:begin … # keryx:end` to `.git/info/exclude`. That file is per clone
+and never committed; from a linked worktree keryx writes the clone's common
+`info/exclude`, which every worktree shares. Because it is shared while each
+worktree's `.gitignore` belongs to its own branch, the block holds every entry
+even when this checkout's `.gitignore` or your global excludes file already
+covers it: a redundant line is harmless, and the block comes out the same
+whichever worktree runs `update`. The same block lists the per-developer agent
+files keryx writes (`CLAUDE.local.md`, `AGENTS.override.md`,
+`.claude/settings.local.json` — see
+[where the block goes](#where-the-block-goes-local-and-shared-scope)). The one
+exception is `.metaproject/` ignored as a whole (`git check-ignore` says so):
+then no `.metaproject` entry is written at all, and a per-developer file git
+already ignores is not repeated. keryx refuses to write a line that starts
+with `!` (it would re-include a path) or holds a line break. Outside a git
+repository the step is skipped with a note and `.gitignore` is neither created
+nor changed.
 
 A block an older keryx left in `.gitignore` is moved out by the next `update`,
 by the same rules as the entrypoint block (see [Migration](#migration-from-the-tracked-files)):
-an uncommitted block is removed and the file restored to `HEAD`; a block the
-team committed stays where it is and its entries are not repeated.
+an uncommitted block is removed and the file restored to `HEAD` — also when
+the older keryx had deleted team lines that repeated its own, or a blanket
+`.metaproject/` line, since that deletion was keryx's; a block the team
+committed stays where it is.
 
 The policy is: **keep agent-facing context versioned, ignore
 executable/generated internals.** The current entries (abridged):
@@ -282,9 +289,14 @@ The older form, `"root": ["AGENTS.md", "CLAUDE.md"]`, is still read, and one
 Local targets are gitignored per clone, so `init` and `update` leave `AGENTS.md`,
 `CLAUDE.md`, `.gitignore` and `.claude/settings.json` untouched and a `git pull`
 of upstream changes to them never meets a local edit. Each local target is
-checked with `git check-ignore`, and any that git does not already ignore is
 added to `.git/info/exclude`. If a `!` rule in the team's `.gitignore`
-re-includes one, keryx says so: that rule outranks `info/exclude`.
+re-includes one, keryx says so: that rule outranks `info/exclude`. A local
+entry always uses its runtime's standard file — `CLAUDE.local.md`,
+`AGENTS.override.md`, `.claude/settings.local.json` — whatever `path` the
+manifest states, and a path with a control character or a leading `!` or `#`
+is rejected: the manifest is tracked, so a cloned repository controls it. A
+`CLAUDE.local.md` the team tracks gets no block; the output says to untrack it
+or set the claude entry to `"shared"`.
 
 **Claude Code** loads `CLAUDE.local.md` after `CLAUDE.md`. Claude Code also counts
 a `CLAUDE.local.md` as a `CLAUDE.md` when it decides whether to fall back to
@@ -304,7 +316,11 @@ already had only gets the block.
   stale. Codex also reads at most 32 KiB of project instructions by default
   (`project_doc_max_bytes`), and the override holds `AGENTS.md` plus the block, so
   a large `AGENTS.md` can be cut off. An `AGENTS.override.md` keryx did not
-  generate is left alone and reported.
+  generate is left alone and reported. When `AGENTS.md` is gone, an override
+  keryx generated (untracked, with its provenance line) is removed, so Codex
+  does not keep reading the old copy. A `source` reached through a symlink
+  leaving the project is never read: the override is not generated, and the
+  output and `keryx doctor` say so.
 - `skip` — nothing is written for Codex, and the command output says so. The
   one change a `skip` run makes to a Codex file is removing an
   `AGENTS.override.md` that keryx generated earlier (its first line is keryx's
@@ -333,7 +349,9 @@ old copy of `AGENTS.md`:
   line; one keryx did not generate is left alone and reported. The same
   happens when the Codex mode is set to `skip`.
 - A tracked copy of either file is not deleted: that would be a change for the
-  team to commit, so the output names it instead.
+  team to commit, so the output names it instead. The same holds for a tracked
+  `.claude/settings.local.json` when the hooks move back to
+  `.claude/settings.json`: keryx's hooks leave it, the file stays.
 
 `keryx update --preview` lists what would be removed, and `keryx doctor` warns
 while a shared runtime still has keryx content in its local file.

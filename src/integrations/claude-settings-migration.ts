@@ -93,6 +93,10 @@ export async function decideClaudeSettingsTarget(projectRoot: string): Promise<{
  *   nothing else is left and the file is not staged either. Then every byte
  *   of it was keryx's and it is removed; the alternative, an untracked `{}`,
  *   would sit in `git status` for good.
+ *
+ * The per-developer file the hooks leave on the way back to shared is
+ * removed when nothing else is in it — unless git tracks it, when it is only
+ * stripped and the output says so.
  */
 export async function moveClaudeSettingsHooks(
   projectRoot: string,
@@ -127,15 +131,26 @@ export async function moveClaudeSettingsHooks(
   await retargetInstallStatePath(projectRoot, CLAUDE_RUNTIME_ID, from, to);
 
   const nothingElse = Object.keys(remainder).length === 0;
+  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
   if (!toLocal) {
-    // The per-developer file: gitignored, so there is no HEAD to honour.
+    // The per-developer file is normally gitignored, with no HEAD to honour.
+    // A team that tracks it anyway gets the same rule as the other direction:
+    // a tracked file is stripped, never deleted (review round 1, F-006).
+    const tracked = inGit && ((await indexHoldsFile(projectRoot, from)) || (await readHeadBlob(projectRoot, from)) !== undefined);
+    if (tracked) {
+      await writeSettingsFile(projectRoot, from, remainder);
+      onNotice(
+        `${from}: moved the keryx-managed hooks to ${to} (claudeSettings scope is "shared"). The file is tracked in git, so it is kept without ` +
+          "them — commit that change (or `git rm` the file if nothing else in it is needed).",
+      );
+      return;
+    }
     if (nothingElse) await removeContained(projectRoot, from);
     else await writeSettingsFile(projectRoot, from, remainder);
     onNotice(`${from}: moved the keryx-managed hooks to ${to} (claudeSettings scope is "shared").`);
     return;
   }
 
-  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
   const head = inGit ? await readHeadBlob(projectRoot, from) : undefined;
   if (head === undefined) {
     const noHead = inGit ? "" : " Not a git repository, so there is no HEAD to restore the file to.";

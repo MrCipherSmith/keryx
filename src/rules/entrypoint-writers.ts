@@ -13,7 +13,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { removeContained, writeContained } from "../lib/contained-write";
 import { pathExists } from "../lib/fs";
-import { indexHoldsFile, readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
+import { indexHoldsFile, readHeadBlob, readIndexBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
 import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
@@ -156,6 +156,7 @@ export async function writeEntrypointBlocks(
   const notice = options.onNotice ?? (() => {});
   const blockOptions = { ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }), root: projectRoot };
 
+  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
   const sharedPaths = new Set<string>();
   for (const entry of targets.root) {
     if (entry.scope === "shared") {
@@ -163,7 +164,14 @@ export async function writeEntrypointBlocks(
       const filePath = path.join(projectRoot, entry.path);
       if (await pathExists(filePath)) await ensureMetaprojectReference(filePath, blockOptions);
     } else if (entry.runtime === "claude") {
-      if (await writeClaudeLocalTarget(projectRoot, entry.path, options.sources, blockOptions)) {
+      // A tracked local file is the team's: the block would be a change to
+      // commit after every update (review round 1, F-011).
+      if (inGit && (await trackedInGit(projectRoot, entry.path))) {
+        notice(
+          `${entry.path}: tracked in git, so keryx does not write its block there — it would show as a change after every update. ` +
+            `Untrack it (\`git rm --cached ${entry.path}\`) to keep it per-developer, or set the claude entry's scope to "shared" in ${MANIFEST_REL}.`,
+        );
+      } else if (await writeClaudeLocalTarget(projectRoot, entry.path, options.sources, blockOptions)) {
         notice(`${entry.path}: created with the keryx block (${await localFileNote(projectRoot, entry.path)}).`);
       }
     }
@@ -171,7 +179,6 @@ export async function writeEntrypointBlocks(
   // After the shared target has its block, so Claude is never left without one.
   await removeLocalLeftovers(projectRoot, await planLocalLeftovers(projectRoot, targets, "claude"), notice);
 
-  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
   const codexSources = new Set(targets.root.flatMap((entry) => (entry.runtime === "codex" && entry.scope === "local" ? [entry.source] : [])));
   for (const source of options.sources) {
     if (sharedPaths.has(source.toLowerCase())) continue;
@@ -200,8 +207,26 @@ export async function writeCodexLocalTargets(
       notice(`Codex: skipped — the codex entry in ${MANIFEST_REL} has mode "skip", so no Codex file is written.`);
       continue;
     }
+    // `readFile` follows symlinks: a source under a committed `home -> $HOME`
+    // link would be copied into the file Codex sends to its model provider
+    // (review round 1, F-002). Checked before every read of the source.
+    const refusal = (await refuseEscapingSymlink(projectRoot, entry.source)) ?? (await refuseEscapingSymlink(projectRoot, entry.path));
+    if (refusal !== undefined) {
+      notice(
+        `Codex: skipped — ${refusal} (a symlink keryx does not follow), so ${entry.source} is not read and ${entry.path} is not generated. ` +
+          `Point the codex entry's source at a file inside the project in ${MANIFEST_REL}.`,
+      );
+      continue;
+    }
     const sourcePath = path.join(projectRoot, entry.source);
     if (!(await pathExists(sourcePath))) {
+      if (await removeOrphanedOverride(projectRoot, entry)) {
+        notice(
+          `${entry.path}: removed the keryx-generated override — ${entry.source} no longer exists, and Codex would keep reading the override in its place. ` +
+            `Create ${entry.source} and run \`keryx update\` to generate it again.`,
+        );
+        continue;
+      }
       notice(
         `Codex: skipped — ${entry.source} does not exist, and ${entry.path} is only ever generated from it. ` +
           `Create ${entry.source}, or set the codex entry's scope to "shared" in ${MANIFEST_REL}.`,
@@ -229,6 +254,29 @@ export async function writeCodexLocalTargets(
       );
     }
   }
+}
+
+/**
+ * Removes the override `entry` names when its source is gone and keryx made
+ * it: it carries keryx's provenance line, is not tracked, and is not reached
+ * through an escaping symlink. Codex reads `AGENTS.override.md` instead of
+ * `AGENTS.md`, so a leftover would keep serving stale team text (review round
+ * 1, F-010). True when the file was removed.
+ */
+async function removeOrphanedOverride(projectRoot: string, entry: CodexLocalRootEntry): Promise<boolean> {
+  const overridePath = path.join(projectRoot, entry.path);
+  if (!(await pathExists(overridePath))) return false;
+  if ((await refuseEscapingSymlink(projectRoot, entry.path)) !== undefined) return false;
+  if (parseCodexOverrideProvenance(await readFile(overridePath, "utf8")) === undefined) return false;
+  if (await trackedInGit(projectRoot, entry.path)) return false;
+  await removeContained(projectRoot, entry.path);
+  return true;
+}
+
+/** True when git tracks `relativePath` — committed in `HEAD`, or staged. No git counts as not tracked. */
+async function trackedInGit(projectRoot: string, relativePath: string): Promise<boolean> {
+  if ((await resolveGitCommonDir(projectRoot)) === undefined) return false;
+  return (await indexHoldsFile(projectRoot, relativePath)) || (await readHeadBlob(projectRoot, relativePath)) !== undefined;
 }
 
 /**
@@ -272,6 +320,8 @@ export type CodexOverrideState =
   | "missing"
   /** The override exists but its source is gone. */
   | "source-missing"
+  /** The source is reached through a symlink leaving the project: keryx does not read it (review round 1, F-002). */
+  | "source-refused"
   /** The file has no keryx provenance line: not generated by keryx. */
   | "unmanaged";
 
@@ -280,6 +330,7 @@ export async function codexOverrideState(projectRoot: string, entry: Pick<CodexL
   if (!(await pathExists(overridePath))) return "missing";
   const provenance = parseCodexOverrideProvenance(await readFile(overridePath, "utf8"));
   if (provenance === undefined) return "unmanaged";
+  if ((await refuseEscapingSymlink(projectRoot, entry.source)) !== undefined) return "source-refused";
   const sourcePath = path.join(projectRoot, entry.source);
   if (!(await pathExists(sourcePath))) return "source-missing";
   return provenance.sha256 === sha256(await readFile(sourcePath, "utf8")) ? "fresh" : "stale";
@@ -387,9 +438,7 @@ export async function planLocalLeftovers(
   targets: EntrypointTargets,
   only?: EntrypointRuntime,
 ): Promise<LocalLeftover[]> {
-  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
-  const tracked = async (relativePath: string) =>
-    inGit && ((await indexHoldsFile(projectRoot, relativePath)) || (await readHeadBlob(projectRoot, relativePath)) !== undefined);
+  const tracked = (relativePath: string) => trackedInGit(projectRoot, relativePath);
   const leftovers: LocalLeftover[] = [];
   for (const entry of targets.root) {
     if (only !== undefined && entry.runtime !== only) continue;
@@ -471,13 +520,19 @@ export async function ignoredLocalTargetPaths(projectRoot: string, targets: Entr
   return paths;
 }
 
-/** `content` without the `@AGENTS.md` import keryx added under its own comment, and the blank line before that comment. */
+/**
+ * `content` without the `@AGENTS.md` import keryx added under its own
+ * comment, and the blank line before that comment. Lines are compared
+ * without a trailing `\r` and the rest is rejoined as it was, so a CRLF file
+ * stays CRLF.
+ */
 function removeKeryxAgentsImport(content: string): string {
   const lines = content.split("\n");
+  const bare = (index: number) => lines[index]?.replace(/\r$/, "");
   for (let index = 0; index < lines.length - 1; index += 1) {
-    const match = KERYX_AGENTS_IMPORT_COMMENT.exec(lines[index] ?? "");
-    if (match === null || lines[index + 1] !== `@${match[1]}`) continue;
-    const from = index > 0 && lines[index - 1] === "" ? index - 1 : index;
+    const match = KERYX_AGENTS_IMPORT_COMMENT.exec(bare(index) ?? "");
+    if (match === null || bare(index + 1) !== `@${match[1]}`) continue;
+    const from = index > 0 && bare(index - 1) === "" ? index - 1 : index;
     lines.splice(from, index + 2 - from);
     return lines.join("\n");
   }
@@ -501,6 +556,10 @@ function holdsOnlyLocalHeading(content: string): boolean {
  *   import source is left alone in that case — nothing claimed it as a target.
  * - Untracked, or no git repository: only the block goes; the file stays,
  *   since keryx cannot prove it created it.
+ *
+ * A strip changes the working tree only. Where the index still holds a copy
+ * with the block, the notice says so — a plain `git commit` would record it
+ * (review round 1, F-009).
  */
 async function moveBlockOutOfTeamFile(
   projectRoot: string,
@@ -514,11 +573,19 @@ async function moveBlockOutOfTeamFile(
   const head = context.inGit ? await readHeadBlob(projectRoot, relativePath) : undefined;
   if (head === undefined) {
     await writeContained(projectRoot, relativePath, removeBlock(content, filePath, undefined));
-    context.notice(
-      context.inGit
-        ? `${relativePath}: removed the managed keryx block. The file is untracked, so it is left in place — delete it if keryx created it and nothing else is in it.`
-        : `${relativePath}: removed the managed keryx block. Not a git repository, so there is no HEAD to restore the file to — only the block was stripped.`,
-    );
+    const staged = context.inGit ? await readIndexBlob(projectRoot, relativePath) : undefined;
+    if (!context.inGit) {
+      context.notice(`${relativePath}: removed the managed keryx block. Not a git repository, so there is no HEAD to restore the file to — only the block was stripped.`);
+    } else if (staged === undefined) {
+      context.notice(`${relativePath}: removed the managed keryx block. The file is untracked, so it is left in place — delete it if keryx created it and nothing else is in it.`);
+    } else {
+      context.notice(
+        `${relativePath}: removed the managed keryx block. The file is staged but not committed yet` +
+          (hasManagedIndexBlock(staged)
+            ? `, and the staged copy still carries the block — \`git add ${relativePath}\` stages this version (or \`git restore --staged ${relativePath}\` unstages the file).`
+            : "."),
+      );
+    }
     return;
   }
   if (hasManagedIndexBlock(head)) {
@@ -539,7 +606,13 @@ async function moveBlockOutOfTeamFile(
     return;
   }
   await writeContained(projectRoot, relativePath, removeBlock(content, filePath, head));
-  context.notice(`${relativePath}: removed the managed keryx block; your other uncommitted edits in ${relativePath} are kept as they were.`);
+  const staged = await readIndexBlob(projectRoot, relativePath);
+  context.notice(
+    `${relativePath}: removed the managed keryx block; your other uncommitted edits in ${relativePath} are kept as they were.` +
+      (staged !== undefined && hasManagedIndexBlock(staged)
+        ? ` A staged copy still carries the block — \`git restore --staged ${relativePath}\` drops it from the index (or \`git add ${relativePath}\` stages this version).`
+        : ""),
+  );
 }
 
 /**
@@ -547,27 +620,36 @@ async function moveBlockOutOfTeamFile(
  * keryx put around the block when it inserted it. Only the blank lines
  * directly around the first block are touched: when `head` shows the two
  * neighbouring lines adjacent, their spacing there is reused; otherwise one
- * blank line separates them. Every other byte is `stripManagedIndexBlock`'s.
+ * blank line separates them. Every other byte is `stripManagedIndexBlock`'s,
+ * and the padding is written in the file's own line ending, so a CRLF file
+ * stays CRLF (review round 1, F-008).
  */
 function removeBlock(content: string, filePath: string, head: string | undefined): string {
   const stripped = stripManagedIndexBlock(content, filePath);
   const start = indexOfMarkerLine(content, MANAGED_INDEX_BLOCK_START, computeFencedRanges(content));
   if (start < 0) return stripped;
-  const before = content.slice(0, start).replace(/\n+$/, "");
-  const after = stripped.slice(start).replace(/^\n+/, "");
+  const eol = lineEndingOf(content);
+  const before = content.slice(0, start).replace(/(\r?\n)+$/, "");
+  const after = stripped.slice(start).replace(/^(\r?\n)+/, "");
   if (before.length === 0) return after;
-  if (after.length === 0) return `${before}\n`;
+  if (after.length === 0) return `${before}${eol}`;
   const blankLines = head === undefined ? undefined : blankLinesBetween(head, lastLine(before), firstLine(after));
-  return `${before}${"\n".repeat((blankLines ?? 1) + 1)}${after}`;
+  return `${before}${eol.repeat((blankLines ?? 1) + 1)}${after}`;
+}
+
+/** `\r\n` when the file's first line ends that way, `\n` otherwise. */
+function lineEndingOf(content: string): string {
+  const newline = content.indexOf("\n");
+  return newline > 0 && content[newline - 1] === "\r" ? "\r\n" : "\n";
 }
 
 function lastLine(text: string): string {
-  return text.slice(text.lastIndexOf("\n") + 1);
+  return text.slice(text.lastIndexOf("\n") + 1).replace(/\r$/, "");
 }
 
 function firstLine(text: string): string {
   const newline = text.indexOf("\n");
-  return newline < 0 ? text : text.slice(0, newline);
+  return (newline < 0 ? text : text.slice(0, newline)).replace(/\r$/, "");
 }
 
 /** How many blank lines separate `first` from `second` where they follow each other in `text`; `undefined` when they do not. */
