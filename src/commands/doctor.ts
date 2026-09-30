@@ -386,6 +386,20 @@ export async function checkEntrypoints(cwd: string): Promise<DoctorCheck> {
     }
   }
 
+  // A runtime back on shared (or Codex on `skip`) whose local target keryx
+  // has not cleaned yet: Claude reads the block twice, or Codex keeps reading
+  // an old copy of the team file. A file keryx leaves alone is not warned about.
+  for (const leftover of inspection.localLeftovers) {
+    if (leftover.action === "keep") continue;
+    warnings.push({
+      detail:
+        leftover.runtime === "claude"
+          ? `${leftover.path} still carries the managed keryx:index block, but ${leftover.because} — Claude Code reads the block from both ${leftover.path} and ${leftover.instead}`
+          : `${leftover.path} is a keryx-generated override, but ${leftover.because} — Codex reads it instead of ${leftover.instead}`,
+      fix: UPDATE_FIX,
+    });
+  }
+
   // Hooks still sitting in the other file are what `update` moves in; the
   // local file being absent meanwhile is the same finding, not a second one.
   const missing = inspection.localTargets.filter(
@@ -639,8 +653,10 @@ export async function doctorCommand(
 One page: keryx's own version and update availability, the Bun floor,
 ripgrep on PATH, the OS sandbox launcher, providers with a credential
 present (names only), MCP servers and their trust state, integrations
-drift, Metaproject Standard warnings, stale .claude/worktrees entries, and
-graph/wiki freshness. Exits 0 unless something is a "fail".`);
+drift, Metaproject Standard warnings, stale .claude/worktrees entries,
+graph/wiki freshness, and entrypoints: the managed block, ignore rules and
+Claude hooks against where agentEntrypoints says they belong. Exits 0
+unless something is a "fail".`);
     return;
   }
   const report = await buildDoctorReport(cwd, process.env, overrides);

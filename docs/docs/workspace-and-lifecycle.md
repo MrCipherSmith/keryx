@@ -316,9 +316,22 @@ runtime's entry to `{ "runtime": "claude", "path": "CLAUDE.md", "scope": "shared
 (or `claudeSettings` to `{ "path": ".claude/settings.json", "scope": "shared" }`)
 and run `keryx update`; keryx creates a missing team file under shared scope only.
 A local entry that names a team file is read as "switch this runtime to local"
-and gets the local path. Switching to shared does not clean up the old local
-files: remove the block from `CLAUDE.local.md` and delete `AGENTS.override.md`
-yourself, or Claude reads the block twice and Codex keeps reading the override.
+and gets the local path. Switching back to shared cleans up the old local
+files, so Claude never reads the block twice and Codex does not keep reading an
+old copy of `AGENTS.md`:
+
+- `CLAUDE.local.md` loses keryx's block, and the `@AGENTS.md` import when
+  keryx's comment above it shows keryx added it. A file left with nothing but
+  that is removed; one holding your own lines keeps them byte for byte, stays
+  in `info/exclude`, and is named in the output.
+- `AGENTS.override.md` is removed when its first line is keryx's provenance
+  line; one keryx did not generate is left alone and reported. The same
+  happens when the Codex mode is set to `skip`.
+- A tracked copy of either file is not deleted: that would be a change for the
+  team to commit, so the output names it instead.
+
+`keryx update --preview` lists what would be removed, and `keryx doctor` warns
+while a shared runtime still has keryx content in its local file.
 
 ### Migration from the tracked files
 

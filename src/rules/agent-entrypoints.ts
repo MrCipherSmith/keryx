@@ -68,14 +68,16 @@ export async function syncAgentRules(
   // The import list is the team files, never a local target (flow 361, H5):
   // mirroring `CLAUDE.local.md` would put per-developer content into tracked
   // rules, and `AGENTS.override.md` is a copy of a file already imported.
-  const entrypoints = await findAgentEntrypoints(projectRoot, [
-    ...ruleImportSources(targets),
-    ...(options.manifestSources ?? []),
-  ]);
-  const sources =
-    options.createDefault === false
-      ? entrypoints
-      : await ensureDefaultAgentEntrypoints(projectRoot, entrypoints, targets);
+  const candidates = [...ruleImportSources(targets), ...(options.manifestSources ?? [])];
+  const entrypoints = await findAgentEntrypoints(projectRoot, candidates);
+  let sources = entrypoints;
+  if (options.createDefault !== false) {
+    const withDefaults = await ensureDefaultAgentEntrypoints(projectRoot, entrypoints, targets);
+    // A team file created just now is listed where the next run's discovery
+    // finds it, so that run does not reorder the imported rules (flow 361 T12:
+    // switching Claude back to shared creates `CLAUDE.md`).
+    if (withDefaults.length !== entrypoints.length) sources = await findAgentEntrypoints(projectRoot, candidates);
+  }
 
   // Review round 2 fix (R2-F15): validate EVERY existing entrypoint BEFORE
   // scaffolding `.metaproject/rules` and `.metaproject/skills/project-rules`

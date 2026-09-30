@@ -1093,6 +1093,104 @@ test("flow 361: update --preview names where the index block would move and writ
   }
 }, 120_000);
 
+/** A hand edit of `metaproject.json`: `runtime`'s root entry set to `entry`. */
+async function switchRootEntry(root: string, runtime: string, entry: Record<string, unknown>): Promise<void> {
+  const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { agentEntrypoints: { root: Array<{ runtime: string }> } };
+  manifest.agentEntrypoints.root = manifest.agentEntrypoints.root.map((item) => (item.runtime === runtime ? { runtime, ...entry } : item));
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+test("flow 361 T12: Claude switched back to shared — a keryx-only CLAUDE.local.md is removed, the block is in CLAUDE.md once, and a second update changes no file", async () => {
+  const root = await entrypointFixture("keryx-update-entry-back-claude-", { "AGENTS.md": "# Team\n\nUse metaproject rules.\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
+    await switchRootEntry(root, "claude", { path: "CLAUDE.md", scope: "shared" });
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+    expect(countOccurrences(await readFile(path.join(root, "CLAUDE.md"), "utf8"), BLOCK_START)).toBe(1);
+    expect(output).toContain("CLAUDE.local.md: removed the file");
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361 T12: Claude switched back to shared — the developer's own CLAUDE.local.md keeps their content byte for byte and stays out of git status", async () => {
+  const mine = "# My notes\n\nMy sandbox URL is http://localhost:4000.\n";
+  const root = await entrypointFixture("keryx-update-entry-back-mine-", { "AGENTS.md": "# Team\n\nUse metaproject rules.\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await writeFile(path.join(root, "CLAUDE.local.md"), mine, "utf8");
+    await runEntrypointUpdate(root);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
+    await switchRootEntry(root, "claude", { path: "CLAUDE.md", scope: "shared" });
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toBe(mine);
+    expect(output).toContain("CLAUDE.local.md: removed the managed keryx block");
+    expect(gitForUpdateIdempotency(root, ["status", "--porcelain"])).not.toContain("CLAUDE.local.md");
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361 T12: Codex switched back to shared — the keryx-generated AGENTS.override.md is removed and the block is in AGENTS.md", async () => {
+  const root = await entrypointFixture("keryx-update-entry-back-codex-", { "AGENTS.md": "# Team\n\nUse metaproject rules.\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(true);
+    await switchRootEntry(root, "codex", { path: "AGENTS.md", scope: "shared" });
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    expect(countOccurrences(await readFile(path.join(root, "AGENTS.md"), "utf8"), BLOCK_START)).toBe(1);
+    expect(output).toContain("AGENTS.override.md: removed");
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 361 T12: update --preview after a switch back to shared says what would be removed and removes nothing", async () => {
+  const root = await entrypointFixture("keryx-update-entry-back-preview-", { "AGENTS.md": "# Team\n\nUse metaproject rules.\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    await switchRootEntry(root, "claude", { path: "CLAUDE.md", scope: "shared" });
+    await switchRootEntry(root, "codex", { path: "AGENTS.md", scope: "shared" });
+    const before = await snapshotTree(root);
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
+      });
+    } finally {
+      restore();
+    }
+    const output = logs.join("\n");
+
+    expect(output).toContain("CLAUDE.local.md: would be removed");
+    expect(output).toContain("AGENTS.override.md: would be removed");
+    expect(await snapshotTree(root)).toEqual(before);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
 test("flow 361: a tracked file with the block plus unrelated edits loses only the block and is named", async () => {
   const agents = "# Team\n\nUse metaproject rules.\n\n## Build\n\nRun the suite.\n";
   const root = await entrypointFixture("keryx-update-entry-edits-", { "AGENTS.md": agents }, { root: ["AGENTS.md"] });

@@ -17,7 +17,7 @@ All notable changes to `keryx` are documented here. The format follows
 ### Notes
 - Local files exist per checkout: a linked worktree has no block and no keryx hooks until `keryx update` runs in it. Cloud and remote Claude sessions have no `CLAUDE.local.md` and do not read `.claude/settings.local.json`; use `scope: "shared"` there.
 - `AGENTS.override.md` is refreshed by `keryx update` or `keryx rules sync`, not when `AGENTS.md` changes, and Codex reads at most 32 KiB of it by default (`project_doc_max_bytes`).
-- `metaproject.json` is tracked, so the scopes and the Codex mode are a team setting. A blank-line-only edit to a tracked entrypoint is reverted during migration. Switching a target back to shared does not delete the old local files. The opt-in `rules-export` block (`<!-- keryx:rules -->`) still writes tracked files.
+- `metaproject.json` is tracked, so the scopes and the Codex mode are a team setting. A blank-line-only edit to a tracked entrypoint is reverted during migration. Switching a target back to shared (or Codex to `mode: "skip"`) cleans up the old local file on the next `update` or `rules sync`: keryx's block (and the `@AGENTS.md` import it added) leaves `CLAUDE.local.md`, which is removed when nothing of yours is left in it, and a keryx-generated `AGENTS.override.md` is removed; an override keryx did not generate is left alone. The opt-in `rules-export` block (`<!-- keryx:rules -->`) still writes tracked files.
 - Docs: [where the block goes](docs/docs/workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
 
 ## [0.3.44] — 2026-09-30

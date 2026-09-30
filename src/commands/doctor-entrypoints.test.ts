@@ -13,7 +13,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, test } from "bun:test";
-import { CODEX_PROJECT_DOC_MAX_BYTES, renderCodexOverride } from "../rules/entrypoint-writers";
+import { syncAgentRules } from "../rules/agent-entrypoints";
+import { CODEX_PROJECT_DOC_MAX_BYTES, renderCodexOverride, resolveProjectEntrypoints } from "../rules/entrypoint-writers";
 import { buildDoctorReport, checkEntrypoints, type DoctorCheck } from "./doctor";
 
 const BLOCK = "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n";
@@ -259,6 +260,32 @@ describe("keryx doctor: entrypoints (flow 361, AC11)", () => {
       agentEntrypoints: { root: [SHARED_CLAUDE, SHARED_CODEX], claudeSettings: SHARED_SETTINGS },
     };
     await withRepo("keryx-doctor-entry-shared-", fixture, async (root) => {
+      expect((await checkEntrypoints(root)).status).toBe("ok");
+    });
+  });
+
+  test("a shared-scope runtime whose local target still holds keryx content warns before keryx update runs, and not after", async () => {
+    const shared = { root: [SHARED_CLAUDE, SHARED_CODEX], claudeSettings: LOCAL_SETTINGS };
+    await withRepo("keryx-doctor-entry-leftover-", { committed: { "AGENTS.md": AGENTS }, agentEntrypoints: shared, exclude: LOCAL_TARGETS }, async (root) => {
+      // What the local-scope run left behind, before the entries were switched to shared by hand.
+      await writeFreshLocalTargets(root);
+
+      expectWarn(await checkEntrypoints(root), "CLAUDE.local.md", "AGENTS.override.md", "shared");
+
+      const resolved = await resolveProjectEntrypoints(root, shared);
+      await syncAgentRules(root, path.join(root, ".metaproject"), { targets: resolved.targets });
+      const after = await checkEntrypoints(root);
+      expect(after.status).toBe("ok");
+      expect(after.detail).not.toContain("CLAUDE.local.md");
+      expect(after.detail).not.toContain("AGENTS.override.md");
+    });
+  });
+
+  test("an override keryx did not generate is not warned about under shared scope", async () => {
+    const shared = { root: [SHARED_CLAUDE, SHARED_CODEX], claudeSettings: LOCAL_SETTINGS };
+    const committed = { "AGENTS.md": `${AGENTS}\n${BLOCK}`, "CLAUDE.md": `# Claude\n\n${BLOCK}` };
+    await withRepo("keryx-doctor-entry-leftover-mine-", { committed, agentEntrypoints: shared }, async (root) => {
+      await writeRel(root, "AGENTS.override.md", "# My own override\n");
       expect((await checkEntrypoints(root)).status).toBe("ok");
     });
   });

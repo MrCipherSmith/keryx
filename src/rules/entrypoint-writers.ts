@@ -1,6 +1,7 @@
 // Flow 361: the writers behind the entrypoint-target model — the managed
-// `keryx:index` block goes where `agentEntrypoints.root` says, and a block
-// still sitting in a team file whose scope is local is taken back out.
+// `keryx:index` block goes where `agentEntrypoints.root` says, a block still
+// sitting in a team file whose scope is local is taken back out, and what
+// keryx wrote into a local target a runtime no longer uses is removed.
 //
 // `resolveProjectEntrypoints` turns whatever the manifest holds into the
 // entry form (legacy entries are settled against `HEAD`);
@@ -10,18 +11,21 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { writeContained } from "../lib/contained-write";
+import { removeContained, writeContained } from "../lib/contained-write";
 import { pathExists } from "../lib/fs";
-import { readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
+import { indexHoldsFile, readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
+import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import { ensureMetaprojectReference, renderManagedIndexBlock } from "./agent-entrypoints";
 import { resolveLegacyEntrypointTargets, type ResolvedLegacyEntrypointTargets } from "./entrypoint-migration";
 import {
   localRootEntry,
+  localTargetPaths,
   normalizeEntrypointTargets,
   ruleImportSources,
   type ClaudeSettingsTarget,
   type CodexLocalRootEntry,
+  type EntrypointRuntime,
   type EntrypointTargets,
   type RootEntrypointEntry,
 } from "./entrypoint-targets";
@@ -139,7 +143,9 @@ export type WriteEntrypointBlocksOptions = {
  * Claude target is written before any team file loses its block, so the block
  * is never absent everywhere, and the Codex override is generated last, from
  * the team file as it stands after that cleanup — its recorded source hash
- * would otherwise be stale the moment the team file is restored.
+ * would otherwise be stale the moment the team file is restored. A runtime
+ * switched back to shared (or Codex to `skip`) loses what keryx left in its
+ * local target (`planLocalLeftovers`), each after its shared file has the block.
  */
 export async function writeEntrypointBlocks(
   projectRoot: string,
@@ -159,6 +165,8 @@ export async function writeEntrypointBlocks(
       await writeClaudeLocalTarget(projectRoot, entry.path, options.sources, blockOptions);
     }
   }
+  // After the shared target has its block, so Claude is never left without one.
+  await removeLocalLeftovers(projectRoot, await planLocalLeftovers(projectRoot, targets, "claude"), notice);
 
   const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
   const codexSources = new Set(targets.root.flatMap((entry) => (entry.runtime === "codex" && entry.scope === "local" ? [entry.source] : [])));
@@ -182,6 +190,7 @@ export async function writeCodexLocalTargets(
   options: { enableTasks?: boolean; onNotice?: (line: string) => void },
 ): Promise<void> {
   const notice = options.onNotice ?? (() => {});
+  await removeLocalLeftovers(projectRoot, await planLocalLeftovers(projectRoot, targets, "codex"), notice);
   for (const entry of targets.root) {
     if (entry.runtime !== "codex" || entry.scope !== "local") continue;
     if (entry.mode === "skip") {
@@ -295,6 +304,163 @@ async function writeClaudeLocalTarget(
     await writeContained(projectRoot, relativePath, `# Local Claude Instructions\n${agentsImport}`);
   }
   await ensureMetaprojectReference(filePath, blockOptions);
+}
+
+const LOCAL_CLAUDE_HEADING = "# Local Claude Instructions";
+/** The comment `writeClaudeLocalTarget` puts above the `@AGENTS.md` import it adds; it is what proves keryx added the import. */
+const KERYX_AGENTS_IMPORT_COMMENT = /^<!-- keryx: this file stops Claude Code from falling back to (.+); the import keeps the team instructions loaded\. -->$/;
+
+/**
+ * What keryx left in a runtime's local target once that runtime no longer
+ * uses it — its scope went back to shared, or Codex's mode to `skip`. The one
+ * plan behind the writer, `--preview` and `keryx doctor`.
+ */
+export type LocalLeftover = {
+  runtime: EntrypointRuntime;
+  path: string;
+  /** Why the file is no longer keryx's target, for the output: `the claude entry's scope is "shared"`. */
+  because: string;
+  /** The file the runtime reads instead. */
+  instead: string;
+} & (
+  /** Nothing but keryx's content (`CLAUDE.local.md`), or a keryx-generated override: the file goes. */
+  | { action: "remove" }
+  /** `CLAUDE.local.md` also holds the developer's own lines: only keryx's part goes, `next` is what stays. */
+  | { action: "strip"; next: string }
+  /** Left in place: an override keryx did not generate, a tracked file, a symlink out of the project, a broken block. */
+  | { action: "keep"; reason: string }
+);
+
+/** The local target `entry`'s runtime no longer writes, or `undefined` when it still writes one. */
+function unusedLocalTarget(entry: RootEntrypointEntry): Pick<LocalLeftover, "runtime" | "path" | "because" | "instead"> | undefined {
+  if (entry.runtime === "codex" && entry.scope === "local") {
+    if (entry.mode !== "skip") return undefined;
+    return { runtime: "codex", path: entry.path, because: `the codex entry's mode is "skip"`, instead: entry.source };
+  }
+  if (entry.scope !== "shared") return undefined;
+  const localPath = localRootEntry(entry.runtime).path;
+  if (localPath.toLowerCase() === entry.path.toLowerCase()) return undefined;
+  return { runtime: entry.runtime, path: localPath, because: `the ${entry.runtime} entry's scope is "shared"`, instead: entry.path };
+}
+
+/**
+ * For every runtime that no longer writes a local target, what keryx left
+ * there and what a run does about it. Read-only: asks git whether the file is
+ * tracked, writes nothing.
+ *
+ * - `CLAUDE.local.md`: keryx's part is the managed block, and the `@AGENTS.md`
+ *   import when the keryx comment above it shows keryx added it. With nothing
+ *   left but blank lines and the heading keryx gave the file, the file is
+ *   removed; otherwise only keryx's part goes and every other byte stays.
+ * - `AGENTS.override.md`: removed only when it carries keryx's provenance
+ *   line. One without it is the developer's and is left alone.
+ * - A tracked file is never deleted: that would be a change for the team to
+ *   commit. A tracked `CLAUDE.local.md` still loses keryx's part.
+ */
+export async function planLocalLeftovers(
+  projectRoot: string,
+  targets: EntrypointTargets,
+  only?: EntrypointRuntime,
+): Promise<LocalLeftover[]> {
+  const inGit = (await resolveGitCommonDir(projectRoot)) !== undefined;
+  const tracked = async (relativePath: string) =>
+    inGit && ((await indexHoldsFile(projectRoot, relativePath)) || (await readHeadBlob(projectRoot, relativePath)) !== undefined);
+  const leftovers: LocalLeftover[] = [];
+  for (const entry of targets.root) {
+    if (only !== undefined && entry.runtime !== only) continue;
+    const unused = unusedLocalTarget(entry);
+    if (unused === undefined || TEAM_FILE_NAMES.includes(unused.path.toLowerCase())) continue;
+    const filePath = path.join(projectRoot, unused.path);
+    if (!(await pathExists(filePath))) continue;
+    const content = await readFile(filePath, "utf8");
+    const refusal = await refuseEscapingSymlink(projectRoot, unused.path);
+
+    if (unused.runtime === "codex") {
+      if (parseCodexOverrideProvenance(content) === undefined) {
+        leftovers.push({ ...unused, action: "keep", reason: `it was not generated by keryx, so it is left untouched — Codex reads it instead of ${unused.instead}` });
+      } else if (refusal !== undefined) {
+        leftovers.push({ ...unused, action: "keep", reason: refusal });
+      } else if (await tracked(unused.path)) {
+        leftovers.push({ ...unused, action: "keep", reason: "keryx generated it, but it is tracked in git, so removing it is the team's change to make (git rm)" });
+      } else {
+        leftovers.push({ ...unused, action: "remove" });
+      }
+      continue;
+    }
+
+    let next: string;
+    try {
+      next = removeKeryxAgentsImport(removeBlock(content, filePath, undefined));
+    } catch (error) {
+      leftovers.push({ ...unused, action: "keep", reason: error instanceof Error ? error.message : String(error) });
+      continue;
+    }
+    if (next === content) continue;
+    if (refusal !== undefined) {
+      leftovers.push({ ...unused, action: "keep", reason: refusal });
+    } else if (holdsOnlyLocalHeading(next) && !(await tracked(unused.path))) {
+      leftovers.push({ ...unused, action: "remove" });
+    } else {
+      leftovers.push({ ...unused, action: "strip", next });
+    }
+  }
+  return leftovers;
+}
+
+async function removeLocalLeftovers(projectRoot: string, leftovers: readonly LocalLeftover[], notice: (line: string) => void): Promise<void> {
+  for (const leftover of leftovers) {
+    if (leftover.action === "remove") {
+      await removeContained(projectRoot, leftover.path);
+      notice(
+        leftover.runtime === "claude"
+          ? `${leftover.path}: removed the file — it held nothing but keryx's content, and ${leftover.because}, so the managed block is in ${leftover.instead}.`
+          : `${leftover.path}: removed the keryx-generated override — ${leftover.because}, so Codex reads ${leftover.instead} again.`,
+      );
+    } else if (leftover.action === "strip") {
+      await writeContained(projectRoot, leftover.path, leftover.next);
+      notice(
+        `${leftover.path}: removed the managed keryx block (${leftover.because}, so it is in ${leftover.instead}); the rest of the file is yours and is kept as it was.`,
+      );
+    } else {
+      notice(`${leftover.path}: left in place — ${leftover.reason}.`);
+    }
+  }
+}
+
+/**
+ * The paths keryx keeps in `info/exclude`: every local target it writes
+ * (`localTargetPaths`), plus a local file a runtime no longer uses that stays
+ * on disk — a `CLAUDE.local.md` holding the developer's own lines is still a
+ * per-developer file after Claude goes back to shared, and must not surface
+ * in `git status`. A file the run removes is not listed.
+ */
+export async function ignoredLocalTargetPaths(projectRoot: string, targets: EntrypointTargets): Promise<string[]> {
+  const paths = localTargetPaths(targets);
+  const removed = new Set((await planLocalLeftovers(projectRoot, targets)).filter((leftover) => leftover.action === "remove").map((leftover) => leftover.path));
+  for (const entry of targets.root) {
+    const unused = unusedLocalTarget(entry);
+    if (unused === undefined || TEAM_FILE_NAMES.includes(unused.path.toLowerCase())) continue;
+    if (paths.includes(unused.path) || removed.has(unused.path)) continue;
+    if (await pathExists(path.join(projectRoot, unused.path))) paths.push(unused.path);
+  }
+  return paths;
+}
+
+/** `content` without the `@AGENTS.md` import keryx added under its own comment, and the blank line before that comment. */
+function removeKeryxAgentsImport(content: string): string {
+  const lines = content.split("\n");
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const match = KERYX_AGENTS_IMPORT_COMMENT.exec(lines[index] ?? "");
+    if (match === null || lines[index + 1] !== `@${match[1]}`) continue;
+    const from = index > 0 && lines[index - 1] === "" ? index - 1 : index;
+    lines.splice(from, index + 2 - from);
+    return lines.join("\n");
+  }
+  return content;
+}
+
+function holdsOnlyLocalHeading(content: string): boolean {
+  return content.split(/\r?\n/).every((line) => line.trim() === "" || line.trim() === LOCAL_CLAUDE_HEADING);
 }
 
 /**

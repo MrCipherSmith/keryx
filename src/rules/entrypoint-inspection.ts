@@ -19,8 +19,16 @@ import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { hasManagedIgnoreBlock, planMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { settingsTextHasManagedHooks } from "./entrypoint-migration";
-import { localTargetPaths, ruleImportSources, type CodexLocalRootEntry, type EntrypointTargets } from "./entrypoint-targets";
-import { codexOverrideByteSize, codexOverrideState, resolveProjectEntrypoints, type CodexOverrideState } from "./entrypoint-writers";
+import { ruleImportSources, type CodexLocalRootEntry, type EntrypointTargets } from "./entrypoint-targets";
+import {
+  codexOverrideByteSize,
+  codexOverrideState,
+  ignoredLocalTargetPaths,
+  planLocalLeftovers,
+  resolveProjectEntrypoints,
+  type CodexOverrideState,
+  type LocalLeftover,
+} from "./entrypoint-writers";
 import { hasManagedIndexBlock } from "./managed-index-block";
 
 const TEAM_FILE_NAMES = ["agents.md", "claude.md"];
@@ -65,6 +73,8 @@ export type EntrypointInspection = {
   /** The target settings file holds the managed hooks. */
   targetHoldsHooks: boolean;
   localTargets: LocalTargetState[];
+  /** What keryx left in the local target of a runtime that went back to shared (or Codex to `skip`), and what a run does about it. */
+  localLeftovers: LocalLeftover[];
   claudeLocal?: { path: string; exists: boolean; hasBlock: boolean };
   codex?:
     | { entry: CodexLocalRootEntry; mode: "skip" }
@@ -174,6 +184,7 @@ export async function inspectEntrypoints(
     duplicateHooks: targetHoldsHooks && otherHoldsHooks,
     targetHoldsHooks,
     localTargets,
+    localLeftovers: await planLocalLeftovers(projectRoot, targets),
     ...(claudeLocal === undefined ? {} : { claudeLocal }),
     ...(codex === undefined ? {} : { codex }),
   };
@@ -233,6 +244,7 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     );
   }
   lines.push(...codexPreviewLines(inspection.codex));
+  lines.push(...inspection.localLeftovers.map(leftoverPreviewLine));
 
   if (inspection.gitignoreBlock !== undefined) {
     lines.push(
@@ -245,7 +257,7 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     lines.push(`${inspection.strayHooks.path}: the keryx-managed hooks would move to ${inspection.strayHooks.to}.`);
   }
 
-  const localTargets = localTargetPaths(inspection.targets);
+  const localTargets = await ignoredLocalTargetPaths(projectRoot, inspection.targets);
   const plan = await planMetaprojectIgnoreRules(projectRoot, { localTargets });
   if (plan.status === "not-a-git-repository") {
     lines.push("info/exclude: skipped — not a git repository; the local targets would still be written.");
@@ -262,6 +274,19 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     );
   }
   return lines.map((line) => `Entrypoints: ${line}`);
+}
+
+function leftoverPreviewLine(leftover: LocalLeftover): string {
+  switch (leftover.action) {
+    case "remove":
+      return leftover.runtime === "claude"
+        ? `${leftover.path}: would be removed — it holds nothing but keryx's content, and ${leftover.because}.`
+        : `${leftover.path}: would be removed — keryx generated it, and ${leftover.because}, so Codex would read ${leftover.instead} again.`;
+    case "strip":
+      return `${leftover.path}: the managed keryx block would be taken out (${leftover.because}); the rest of the file is kept.`;
+    default:
+      return `${leftover.path}: would be left in place — ${leftover.reason}.`;
+  }
 }
 
 function codexPreviewLines(codex: EntrypointInspection["codex"]): string[] {

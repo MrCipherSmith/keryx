@@ -185,6 +185,14 @@ is not `ok`:
   (`keryx integrations doctor --runtime all`).
 - **standard** — Metaproject Standard warnings and errors
   (`keryx standard doctor`).
+- **entrypoints** — where the managed `keryx:index` block, the managed
+  ignore rules and the keryx-managed Claude hooks are, against where
+  `agentEntrypoints` says they belong: an uncommitted copy in a file whose
+  scope is local, a block still in `CLAUDE.local.md` or a keryx-generated
+  `AGENTS.override.md` after the runtime went back to `shared`, a stale or
+  oversized override, a local target missing in this checkout or not
+  ignored. Warnings only; the fix is `keryx update`. Content the team
+  committed in `HEAD` is the shared case and is not warned about.
 - **worktrees** — `.claude/worktrees/<name>` entries (the agent harness's
   own transient per-agent scratch checkouts) that git no longer recognises
   as a real worktree — reported, never deleted.

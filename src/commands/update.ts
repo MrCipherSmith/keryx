@@ -57,12 +57,12 @@ import {
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import {
   declaredImportSources,
+  ignoredLocalTargetPaths,
   manifestAgentEntrypoints,
   resolveProjectEntrypoints,
   type ProjectEntrypoints,
 } from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
-import { localTargetPaths } from "../rules/entrypoint-targets";
 import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
@@ -526,7 +526,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // an older keryx left there is moved out — and before the local targets
   // exist, so they are ignored from their first byte.
   await syncMetaprojectIgnoreRules(projectRoot, {
-    localTargets: localTargetPaths(entrypoints.targets),
+    localTargets: await ignoredLocalTargetPaths(projectRoot, entrypoints.targets),
     onNotice: (line) => {
       entrypointNotices.push(line);
     },
