@@ -77,6 +77,7 @@ import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
@@ -3750,6 +3751,7 @@ export async function launchTuiAgentShell(opts: {
   let liveSchedules: SchedulesSidebar | undefined;
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
   let liveApprovals: ApprovalsSidebar | undefined;
+  let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3846,6 +3848,7 @@ export async function launchTuiAgentShell(opts: {
         liveSchedules?.dispose();
         liveReviewsPanel?.dispose();
         liveApprovals?.dispose();
+        liveExternalDiff?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
@@ -4356,6 +4359,16 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveApprovals = approvals;
+    // Flow 370 (AC6): one row, only while a write run awaits review.
+    const externalDiff = mountExternalDiffSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+    });
+    liveExternalDiff = externalDiff;
     const fleet = new WorkerFleet();
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
@@ -7657,6 +7670,10 @@ export async function launchTuiAgentShell(opts: {
             routeApprovalsCommand(line, true, approvals);
             return;
           }
+          case "external-diff": {
+            routeExternalDiffCommand(line, externalDiff);
+            return;
+          }
           case "mcp": {
             showTools();
             return;
@@ -8063,6 +8080,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (routeExternalDiffCommand(line, externalDiff)) {
           return;
         }
         if (isMcpConsumerCommand(command.name)) {
@@ -9131,6 +9151,7 @@ export async function launchTuiAgentShell(opts: {
     liveSchedules?.dispose();
     liveReviewsPanel?.dispose();
     liveApprovals?.dispose();
+    liveExternalDiff?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);
     if (detachedNote !== undefined) process.stderr.write(`${detachedNote}\n`);

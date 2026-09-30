@@ -110,6 +110,18 @@ const SUBCOMMAND_EXCLUSIONS: ReadonlyArray<{ command: string; reason: string }> 
     command: "hooks disable",
     reason: "can switch off the agent's own security gates",
   },
+  {
+    command: "agents external apply",
+    reason: "the operator's consent decision on an external agent's diff (flow 370); it needs a human at a terminal and must never be a callable operation for an agent",
+  },
+  {
+    command: "agents external discard",
+    reason: "the operator's decision on an external agent's diff (flow 370); an agent must not be able to drop the diff it produced",
+  },
+  {
+    command: "agents external review",
+    reason: "shows the stored diff of an external agent's write run for the operator; not offered to agents, like `agents external run`",
+  },
 ];
 
 /** Verbs that carry at least one descriptor, derived from the registry. */

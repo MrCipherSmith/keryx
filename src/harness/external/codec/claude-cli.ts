@@ -27,7 +27,8 @@
 //      It is NOT `--allowed-tools`, which is a permission-rule flag that leaves
 //      the roster at 27 tools including `NotebookEdit` and `WebFetch`.
 //
-// And one flag that is deliberately ABSENT: `--permission-mode plan`. It
+// And one flag that is deliberately ABSENT (`acceptEdits` appears only on a
+// `worktree-write` run): `--permission-mode plan`. It
 // injects the vendor's plan workflow into the system prompt, so the agent
 // answers with a plan-approval request — exit 0, non-empty output, and
 // therefore indistinguishable from a successful run.
@@ -45,6 +46,25 @@ import { isTerminalEvent } from "../types";
  * deny-list's failure mode (specification §5.3).
  */
 export const CLAUDE_ALLOWED_TOOLS: readonly string[] = ["Read", "Grep", "Glob"];
+
+/**
+ * The roster for a `worktree-write` run (flow 370): read-only plus Edit and
+ * Write. Never Bash, NotebookEdit, WebFetch or an MCP server — a write run
+ * changes files in the disposable worktree and can do nothing else.
+ */
+export const CLAUDE_WRITE_TOOLS: readonly string[] = [...CLAUDE_ALLOWED_TOOLS, "Edit", "Write"];
+
+/**
+ * Verified live on 2.1.280: with the write roster, `acceptEdits` lets Edit/Write
+ * run headless inside the cwd, a write outside it is auto-denied, and
+ * `--permission-prompts none` turns any other question into a refusal.
+ */
+const CLAUDE_WRITE_PERMISSION_ARGV: readonly string[] = [
+  "--permission-mode",
+  "acceptEdits",
+  "--permission-prompts",
+  "none",
+];
 
 /**
  * MCP config passed inline with `--strict-mcp-config`, which together mean "no
@@ -92,7 +112,7 @@ const FLAG = {
  * flags. `--strict-mcp-config` is a boolean flag and is emitted here so it can
  * also serve as an emergency separator; see {@link buildClaudeArgv}.
  */
-function argvPrelude(streaming: boolean): string[] {
+function argvPrelude(streaming: boolean, writable: boolean): string[] {
   return [
     "claude",
     FLAG.print,
@@ -102,7 +122,7 @@ function argvPrelude(streaming: boolean): string[] {
     FLAG.verbose,
     FLAG.safeMode,
     FLAG.tools,
-    ...CLAUDE_ALLOWED_TOOLS,
+    ...(writable ? CLAUDE_WRITE_TOOLS : CLAUDE_ALLOWED_TOOLS),
     FLAG.strictMcp,
     FLAG.mcpConfig,
     CLAUDE_EMPTY_MCP_CONFIG,
@@ -146,12 +166,16 @@ export function encodeClaudeStdinMessage(text: string): string {
  * steerability has to be decided before the process starts.
  */
 export function buildClaudeStreamingArgv(input: ExternalRunInput): readonly string[] {
-  const argv = [...argvPrelude(true), ...argvOptions(input)];
+  const argv = [...argvPrelude(true, isWrite(input)), ...argvOptions(input)];
   const sessionId = input.sessionId;
   if (sessionId !== undefined && sessionId.length > 0) argv.push(FLAG.sessionId, sessionId);
   // No prompt element: it arrives on stdin. Nothing here can be swallowed by a
   // variadic flag because nothing positional follows.
   return argv;
+}
+
+function isWrite(input: ExternalRunInput): boolean {
+  return input.sandbox === "worktree-write";
 }
 
 /**
@@ -162,13 +186,12 @@ export function buildClaudeStreamingArgv(input: ExternalRunInput): readonly stri
  * these is single-valued except `--add-dir`, which is why the caller must keep
  * a single-valued flag between this block and the prompt.
  *
- * `input.sandbox` deliberately changes nothing here. Read-only containment is
- * the tool roster plus the disposable worktree (§7.2); `worktree-write` is
- * refused upstream in this release, so there is no second argv shape to get
- * wrong.
+ * `worktree-write` (flow 370) adds only the two single-valued permission flags
+ * here and the Edit/Write roster in the prelude; the block after them is
+ * unchanged, so the variadic-flag separation below still holds.
  */
 function argvOptions(input: ExternalRunInput): string[] {
-  const out: string[] = [];
+  const out: string[] = isWrite(input) ? [...CLAUDE_WRITE_PERMISSION_ARGV] : [];
   if (input.maxCostUnits !== undefined) out.push(FLAG.maxBudget, String(input.maxCostUnits));
   // INLINE, never a path: 2.1.278 parses this value AS JSON, so the file path
   // this used to send exits 1 with `Error: --json-schema is not valid JSON` and
@@ -211,10 +234,10 @@ export function buildClaudeArgv(input: ExternalRunInput): readonly string[] {
   if (sessionId === undefined || sessionId.length === 0) {
     // Fallback shape: no session id to separate the variadics from the prompt,
     // so the zero-valued `--strict-mcp-config` does the job instead.
-    const prelude = argvPrelude(false).filter((element) => element !== FLAG.strictMcp);
+    const prelude = argvPrelude(false, isWrite(input)).filter((element) => element !== FLAG.strictMcp);
     return [...prelude, ...argvOptions(input), FLAG.strictMcp, input.prompt];
   }
-  return [...argvPrelude(false), ...argvOptions(input), FLAG.sessionId, sessionId, input.prompt];
+  return [...argvPrelude(false, isWrite(input)), ...argvOptions(input), FLAG.sessionId, sessionId, input.prompt];
 }
 
 /**
@@ -232,7 +255,7 @@ export function buildClaudeResumeArgv(
   message: string,
   input: ExternalRunInput,
 ): readonly string[] {
-  return [...argvPrelude(false), ...argvOptions(input), FLAG.resume, sessionRef, message];
+  return [...argvPrelude(false, isWrite(input)), ...argvOptions(input), FLAG.resume, sessionRef, message];
 }
 
 // ---------------------------------------------------------------------------

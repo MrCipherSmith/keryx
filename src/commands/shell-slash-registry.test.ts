@@ -163,6 +163,13 @@ describe("AC9 — the readline agent surface derives its commands from the regis
     expect(commandsForMode("chat").map((c) => c.name)).not.toContain("/approvals");
   });
 
+  test("flow 370: /external-diff is agent-only and advertised with the registry's agent wording", () => {
+    const command = AGENT_SLASH_COMMANDS.find((c) => c.name === "/external-diff");
+    expect(command?.modes).toEqual(["agent"]);
+    expect(readlineAgentHelpText()).toContain(describeCommand(command!, "agent"));
+    expect(commandsForMode("chat").map((c) => c.name)).not.toContain("/external-diff");
+  });
+
   test("it does not advertise picker-only or agent commands it cannot run", () => {
     const help = readlineAgentHelpText();
     expect(help).not.toContain("/models");
@@ -248,6 +255,12 @@ describe("/reviews — the readline equivalent of the TUI modal", () => {
     expect(output).not.toContain("Unknown command");
   });
 
+  test("/external-diff typed in the agent REPL lists nothing to land and points at the CLI", async () => {
+    const output = await agentOutput("/external-diff");
+    expect(output).toContain("Use keryx agents external review <run-id> and keryx agents external apply <run-id> in a terminal.");
+    expect(output).not.toContain("Unknown command");
+  });
+
   test("/review is a different command and is left alone", () => {
     expect(AGENT_SLASH_COMMANDS.find((c) => c.name === "/review")).toBeDefined();
     expect(AGENT_SLASH_COMMANDS.filter((c) => c.name === "/reviews")).toHaveLength(1);
@@ -261,7 +274,7 @@ describe("/reviews — the readline equivalent of the TUI modal", () => {
 });
 
 describe("AC8 — an agent-only command typed in chat fails cleanly", () => {
-  for (const name of ["/expand", "/think", "/copy", "/resume", "/sessions", "/rewind"]) {
+  for (const name of ["/expand", "/think", "/copy", "/resume", "/sessions", "/rewind", "/external-diff"]) {
     test(`${name} explains that it is agent-mode only, and starts no turn`, async () => {
       const output = await chatOutput(name);
       expect(output).toContain(name);

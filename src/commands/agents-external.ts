@@ -4,6 +4,9 @@
 //   keryx agents external list  [--json] [--no-probe]
 //   keryx agents external probe <id> [--json]
 //   keryx agents external run <id> --task "<text>" [--unattended] [--write]   (flow 292, 357)
+//   keryx agents external review <run-id>                                      (flow 370)
+//   keryx agents external apply <run-id> [--allow-flagged]                     (flow 370)
+//   keryx agents external discard <run-id>                                     (flow 370)
 //
 // `run` is the one subcommand that starts a real agent, and it spends the
 // operator's quota; it drives EITHER transport — an ACP agent with keryx as
@@ -64,7 +67,10 @@ import { createGitWorktreePort } from "../harness/child/git-worktree-port";
 import type { WorktreePort } from "../harness/child/worktree";
 import { createBunSpawnPort } from "../harness/external/bun-spawn-port";
 import { readExternalDepth } from "../harness/external/env";
-import { runExternalChild, type ExternalChildOutcome } from "../harness/external/runtime";
+import { CODEC_WRITE_AGENT_ID } from "../harness/external/dispatch";
+import { runExternalChild, type ExternalChildOutcome, type RunExternalChildInput } from "../harness/external/runtime";
+import { runExternalWriteChild, type ExternalWriteRunResult } from "../harness/external/write-run";
+import { discardWriteRun, landWriteRun, viewWriteRun, type WriteRunView } from "../harness/external/write-land";
 import type { ExternalSpawnPort } from "../harness/external/supervise";
 import type { AcpChildOptions } from "../harness/external/acp-run";
 import { DEFAULT_MAX_EXTERNAL_DEPTH } from "../harness/run-external-factory";
@@ -102,6 +108,8 @@ export interface AgentsExternalRunSeams {
   readonly requestApproval?: AgentIO["requestApproval"];
   /** Everything ACP-specific the runtime forwards (argv override, context, data dir…). Ignored for a line-stream agent. */
   readonly acp?: AcpChildOptions;
+  /** keryx data dir for a claude write run's stored record (tests). */
+  readonly dataDir?: string;
   readonly onOutcome?: (outcome: ExternalChildOutcome) => void;
   /**
    * One-time agent consent (flow 357, AC6). Defaults to a terminal y/N prompt
@@ -110,6 +118,10 @@ export interface AgentsExternalRunSeams {
    * circuits this entirely.
    */
   readonly requestConsent?: (entry: ExternalAgentEntry) => Promise<boolean>;
+  /** Whether stdout is a terminal, for `apply`. Defaults to `process.stdout.isTTY`. `apply` needs `isTTY` (stdin) AND this. */
+  readonly stdoutIsTTY?: boolean;
+  /** How `apply` asks its one question and reads the answer. Defaults to a readline prompt on the terminal. */
+  readonly prompt?: (question: string) => Promise<string>;
 }
 
 /** One registry entry paired with what detection was allowed to learn about it. */
@@ -315,6 +327,23 @@ export async function agentsExternalCommand(args: string[], deps: AgentsExternal
     return;
   }
 
+  if (subcommand === "review" || subcommand === "apply" || subcommand === "discard") {
+    if (args.includes("--help") || args.includes("-h")) {
+      printExternalHelp();
+      return;
+    }
+    const runId = args.slice(1).find((arg) => !arg.startsWith("-"));
+    if (runId === undefined) {
+      console.error(`Provide a run id: keryx agents external ${subcommand} <run-id>${subcommand === "apply" ? " [--allow-flagged]" : ""}`);
+      process.exitCode = 1;
+      return;
+    }
+    if (subcommand === "review") await reviewCommand(runId, deps, log);
+    else if (subcommand === "apply") await applyCommand(runId, args.includes("--allow-flagged"), deps, log);
+    else discardCommand(runId, deps, log);
+    return;
+  }
+
   console.error(`Unknown agents external command: ${subcommand}`);
   printExternalHelp();
   process.exitCode = 1;
@@ -493,40 +522,76 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
   if (seams.worktree === undefined) await mkdir(worktreesDir, { recursive: true });
   const detect = seams.detect === null ? undefined : (seams.detect ?? createVersionProbe());
 
-  const outcome = await runExternalChild(
-    {
-      runtime: {
-        kind: "external",
-        agent: id,
-        sandbox: write ? "worktree-write" : "read-only",
-        model: perAgent.model,
-      },
-      allowedActions: write ? ["read-file", "write"] : ["read-file"],
-      taskTitle: task.length > 80 ? `${task.slice(0, 77)}...` : task,
-      taskDescription: task,
-      acceptanceCriteria: [],
-      worktreeId: `acp-${randomUUID()}`,
-      maxPromptBytes: gate.config.maxPromptBytes,
-      timeoutMs,
-      parentEnv: env,
-      depth: readExternalDepth(env) + 1,
-      projectRoot: cwd,
+  const runInput: RunExternalChildInput = {
+    runtime: {
+      kind: "external",
+      agent: id,
+      sandbox: write ? "worktree-write" : "read-only",
+      model: perAgent.model,
     },
-    {
-      spawn: seams.spawn ?? createBunSpawnPort(),
-      worktree,
-      capability: () => ({ enabled: true }),
-      ...(detect === undefined ? {} : { detect }),
-      maxExternalDepth: DEFAULT_MAX_EXTERNAL_DEPTH,
-      onWarning: (warning) => console.error(`warning: ${warning}`),
-      acp: {
-        ...seams.acp,
-        mode: seams.acp?.mode ?? getProjectPermissionMode(cwd) ?? "ask",
-        unattended,
-        ...(requestApproval === undefined ? {} : { requestApproval }),
-      },
+    allowedActions: write ? ["read-file", "write"] : ["read-file"],
+    taskTitle: task.length > 80 ? `${task.slice(0, 77)}...` : task,
+    taskDescription: task,
+    acceptanceCriteria: [],
+    worktreeId: `acp-${randomUUID()}`,
+    maxPromptBytes: gate.config.maxPromptBytes,
+    timeoutMs,
+    parentEnv: env,
+    depth: readExternalDepth(env) + 1,
+    projectRoot: cwd,
+  };
+  const runDeps = {
+    spawn: seams.spawn ?? createBunSpawnPort(),
+    capability: () => ({ enabled: true }),
+    ...(detect === undefined ? {} : { detect }),
+    maxExternalDepth: DEFAULT_MAX_EXTERNAL_DEPTH,
+    onWarning: (warning: string) => console.error(`warning: ${warning}`),
+  };
+
+  // A claude write run owns its worktree: the diff is captured just before the
+  // worktree is removed, and stored for `keryx agents external review`.
+  if (write && id === CODEC_WRITE_AGENT_ID) {
+    let handle: { kill(): void } | undefined;
+    const onSigint = (): void => handle?.kill();
+    process.once("SIGINT", onSigint);
+    let result: ExternalWriteRunResult;
+    try {
+      result = await runExternalWriteChild(runInput, {
+        ...runDeps,
+        onSpawned: (spawned) => {
+          handle = spawned;
+        },
+        projectRoot: cwd,
+        worktreesDir,
+        ...(seams.worktree === undefined ? {} : { worktree: seams.worktree }),
+        ...(seams.dataDir === undefined ? {} : { dataDir: seams.dataDir }),
+      });
+    } finally {
+      process.off("SIGINT", onSigint);
+    }
+    seams.onOutcome?.(result.outcome);
+    if (json) {
+      log(JSON.stringify({ ...result.outcome, write: result.run }, null, 2));
+    } else {
+      for (const line of renderRunOutcome(result.outcome)) log(line);
+      for (const line of renderWriteRun(result)) log(line);
+    }
+    if (result.outcome.status !== "Completed" || result.captureError !== undefined || result.run?.state === "refused") {
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  const outcome = await runExternalChild(runInput, {
+    ...runDeps,
+    worktree,
+    acp: {
+      ...seams.acp,
+      mode: seams.acp?.mode ?? getProjectPermissionMode(cwd) ?? "ask",
+      unattended,
+      ...(requestApproval === undefined ? {} : { requestApproval }),
     },
-  );
+  });
   seams.onOutcome?.(outcome);
 
   if (json) {
@@ -535,6 +600,172 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
     for (const line of renderRunOutcome(outcome)) log(line);
   }
   if (outcome.status !== "Completed") process.exitCode = 1;
+}
+
+/** The write-run section of the report: patch, hash, files, flagged paths and the next command. Pure. */
+export function renderWriteRun(result: ExternalWriteRunResult): string[] {
+  const lines: string[] = [""];
+  if (result.captureError !== undefined) {
+    lines.push(`warning: the worktree's changes could not be captured (${result.captureError}); nothing was stored`);
+    return lines;
+  }
+  const run = result.run;
+  if (run === undefined) {
+    lines.push(
+      result.persistError !== undefined
+        ? `warning: the write run could not be stored (${result.persistError})`
+        : "no changes: the agent left the worktree as it found it",
+    );
+    return lines;
+  }
+  if (run.state === "refused") {
+    lines.push(`refused: ${run.refusedPaths.length} changed symlink(s) point outside the worktree; no patch was kept`);
+    for (const refused of run.refusedPaths) lines.push(`  ${refused}`);
+    lines.push(`run: ${run.runId}`);
+    return lines;
+  }
+  lines.push(`patch (never applied): ${run.patchPath ?? ""}`);
+  lines.push(`patch hash: sha256:${run.patchHash ?? ""}${run.redacted ? " (redacted; may not apply byte for byte)" : ""}`);
+  lines.push(`files (${run.files.length}):`);
+  for (const file of run.files) lines.push(`  ${file.status.padEnd(12)} ${file.path}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
+  if (run.flaggedPaths.length > 0) {
+    lines.push(`flagged paths (${run.flaggedPaths.length}) — look at these first:`);
+    for (const flagged of run.flaggedPaths) lines.push(`  ${flagged}`);
+  }
+  lines.push(`review with: keryx agents external review ${run.runId}`);
+  return lines;
+}
+
+/** How many leading hex characters of the patch hash the operator types back to land a diff. */
+const CONFIRM_HASH_CHARS = 12;
+
+/** The review screen for one stored write run: identity, flagged paths first, files, then the redacted patch. Pure. */
+export function renderWriteReview(view: WriteRunView): string[] {
+  const { record } = view;
+  const lines = [
+    "# agents external review",
+    "",
+    `run: ${record.runId}`,
+    `agent: ${record.agentId}`,
+    `base commit: ${record.baseCommit}`,
+    `run status: ${record.runStatus}`,
+    `patch hash: ${record.patchHash === undefined ? "none (no patch was kept)" : `sha256:${record.patchHash}`}`,
+  ];
+  if (record.state === "refused") {
+    lines.push("", `refused: ${record.refusedPaths.length} changed symlink(s) point outside the worktree; no patch was kept`);
+    for (const refused of record.refusedPaths) lines.push(`  ! ${refused}`);
+    lines.push(`this run can only be discarded: keryx agents external discard ${record.runId}`);
+    return lines;
+  }
+  if (record.redacted) lines.push("note: the patch was redacted, so it may not apply byte for byte and cannot be applied");
+  if (record.flaggedPaths.length > 0) {
+    lines.push("", `FLAGGED PATHS (${record.flaggedPaths.length}) — repo plumbing, CI, hooks or agent config; look at these first:`);
+    for (const flagged of record.flaggedPaths) lines.push(`  ! ${flagged}`);
+  }
+  lines.push("", `files (${record.files.length}):`);
+  for (const file of record.files) lines.push(`  ${file.status.padEnd(12)} ${file.path}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
+  lines.push("");
+  if (view.patch === undefined) lines.push("patch: unavailable (missing, or changed since it was captured)");
+  else lines.push("patch:", view.patch.replace(/\n$/, ""));
+  return lines;
+}
+
+function landDepsOf(deps: AgentsExternalDeps): { dataDir?: string } {
+  return deps.run?.dataDir === undefined ? {} : { dataDir: deps.run.dataDir };
+}
+
+async function reviewCommand(runId: string, deps: AgentsExternalDeps, log: (line: string) => void): Promise<void> {
+  const view = viewWriteRun(deps.cwd ?? process.cwd(), runId, landDepsOf(deps));
+  if (view === undefined) {
+    console.error(`no external write run "${runId}" in this checkout`);
+    process.exitCode = 1;
+    return;
+  }
+  for (const line of renderWriteReview(view)) log(line);
+}
+
+/** A readline question on the terminal. Resolves to an empty answer when stdin closes first. */
+export function terminalPrompt(
+  io: { readonly input?: NodeJS.ReadableStream; readonly output?: NodeJS.WritableStream } = {},
+): (question: string) => Promise<string> {
+  return (question) =>
+    new Promise((resolve) => {
+      const rl = createInterface({ input: io.input ?? process.stdin, output: io.output ?? process.stdout });
+      let answered = false;
+      rl.on("close", () => {
+        if (!answered) resolve("");
+      });
+      rl.question(question, (answer) => {
+        answered = true;
+        rl.close();
+        resolve(answer);
+      });
+    });
+}
+
+/**
+ * `apply`: show the review, then land the diff as `external/<run-id>` only when a human types
+ * the first 12 characters of the patch hash. There is deliberately no flag or environment
+ * variable that answers for the operator; without a terminal on both ends nothing lands.
+ */
+async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsExternalDeps, log: (line: string) => void): Promise<void> {
+  const seams = deps.run ?? {};
+  const interactive = (seams.isTTY ?? process.stdin.isTTY === true) && (seams.stdoutIsTTY ?? process.stdout.isTTY === true);
+  if (!interactive) {
+    console.error("apply needs a terminal: nobody can answer for you");
+    process.exitCode = 1;
+    return;
+  }
+  const cwd = deps.cwd ?? process.cwd();
+  const landDeps = landDepsOf(deps);
+  const view = viewWriteRun(cwd, runId, landDeps);
+  if (view === undefined) {
+    console.error(`no external write run "${runId}" in this checkout`);
+    process.exitCode = 1;
+    return;
+  }
+  for (const line of renderWriteReview(view)) log(line);
+  const { record } = view;
+  if (record.state !== "pending-review" || record.patchHash === undefined || view.patch === undefined) {
+    console.error(
+      record.state === "refused"
+        ? `refused: this run can only be discarded (keryx agents external discard ${record.runId})`
+        : "refused: the stored patch is missing or changed since capture; nothing was applied",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  const expected = record.patchHash.slice(0, CONFIRM_HASH_CHARS);
+  const answer = await (seams.prompt ?? terminalPrompt())(
+    `\nType the first ${CONFIRM_HASH_CHARS} characters of the patch hash to land this diff (anything else cancels): `,
+  );
+  if (answer !== expected) {
+    log("cancelled: nothing was applied");
+    process.exitCode = 1;
+    return;
+  }
+  const result = await landWriteRun(
+    { cwd, runId: record.runId, confirmedPatchHash: record.patchHash, ...(allowFlagged ? { allowFlagged: true } : {}) },
+    landDeps,
+  );
+  if (result.kind === "refused") {
+    console.error(`refused (${result.reason}): ${result.detail}`);
+    process.exitCode = 1;
+    return;
+  }
+  log(`landed: branch ${result.branch}`);
+  log(`commit: ${result.commit}`);
+  log("nothing was applied to your current branch or working tree");
+}
+
+function discardCommand(runId: string, deps: AgentsExternalDeps, log: (line: string) => void): void {
+  const result = discardWriteRun({ cwd: deps.cwd ?? process.cwd(), runId }, landDepsOf(deps));
+  if (result.kind === "refused") {
+    console.error(`refused (${result.reason}): ${result.detail}`);
+    process.exitCode = 1;
+    return;
+  }
+  log(`discarded: ${runId}; the stored patch was deleted`);
 }
 
 /** The text report for one run. Pure. */
@@ -577,13 +808,20 @@ export function printExternalHelp(): void {
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",
     'keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]',
+    "keryx agents external review <run-id>",
+    "keryx agents external apply <run-id> [--allow-flagged]",
+    "keryx agents external discard <run-id>",
   ]);
   helpOptions([
+    { flag: "review", desc: "Show one stored write run: flagged paths first, the file list, then the redacted patch. Nothing is changed." },
+    { flag: "apply", desc: "Land a stored write run as the new local branch external/<run-id>. Needs a terminal: you type the first 12 characters of the patch hash. Your current branch and working tree are never touched." },
+    { flag: "--allow-flagged", desc: "apply: also land a diff that touches flagged paths (.git, CI, hooks, agent config). It does not skip the hash prompt." },
+    { flag: "discard", desc: "Drop a stored write run and delete its patch." },
     { flag: "--json", desc: "Emit the registry + availability document (list/probe) or the run outcome (run) as JSON." },
     { flag: "--no-probe", desc: "Skip detection entirely; every entry reports `not-probed`." },
     { flag: "--task", desc: "run: what the agent should do. It runs in a disposable worktree; your tree is never touched." },
     { flag: "--unattended", desc: "run: refuse every permission that would need a human (also implied without a TTY)." },
-    { flag: "--write", desc: "run: advertise fs.writeTextFile; writes land in the worktree and leave as a never-applied patch." },
+    { flag: "--write", desc: "run: writes land in the disposable worktree and leave as a never-applied patch. An ACP agent advertises fs.writeTextFile; for a line-stream agent only claude is supported (Edit and Write inside the worktree)." },
     { flag: "--timeout", desc: "run: wall-clock ceiling in ms (default: externalAgents.defaultTimeoutMs)." },
   ]);
 }

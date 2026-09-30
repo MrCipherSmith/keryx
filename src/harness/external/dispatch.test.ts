@@ -2,8 +2,15 @@
 // Covers package AC1 (identity/capability), AC2 (read-only vs allowed_actions)
 // and AC3 (worktree-write refused with a DISTINGUISHABLE reason).
 import { describe, expect, test } from "bun:test";
-import { READ_ONLY_FORBIDDEN_ACTIONS, readRuntimeBlock, validateRuntimeBlock } from "./dispatch";
+import {
+  READ_ONLY_FORBIDDEN_ACTIONS,
+  implementedSandboxModesFor,
+  readRuntimeBlock,
+  validateRuntimeBlock,
+} from "./dispatch";
 import type { RuntimeBlock } from "./dispatch";
+import { getExternalAgent } from "./registry";
+import type { ExternalAgentEntry } from "./types";
 
 const READ_ONLY_ACTIONS = ["read", "run-command"];
 
@@ -81,6 +88,36 @@ describe("AC3 — worktree-write is refused, distinguishably", () => {
   });
 });
 
+describe("flow 370 — worktree-write is implemented for claude-cli among the codec agents", () => {
+  test("claude-cli is accepted with worktree-write and returns the sandbox", () => {
+    const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "worktree-write" }), ["read-file", "write"]);
+    expect(result.ok).toBe(true);
+    if (result.ok && result.runtime === "external") {
+      expect(result.sandbox).toBe("worktree-write");
+      expect(result.entry.id).toBe("claude-cli");
+    }
+  });
+
+  test.each(["codex-cli", "antigravity-cli"])("%s is still refused with the release-gate code, naming claude-only", (agent) => {
+    const result = validateRuntimeBlock(external({ agent, sandbox: "worktree-write" }), ["read-file", "write"]);
+    expect(result).toMatchObject({ ok: false, code: "not-implemented" });
+    expect(result.ok === false && result.reason).toContain("not implemented in this release");
+    expect(result.ok === false && result.reason).toContain("claude-only in this release");
+  });
+
+  test("claude-cli read-only still refuses write in its allowed actions", () => {
+    const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "read-only" }), ["read", "write"]);
+    expect(result).toMatchObject({ ok: false, code: "inconsistent-actions" });
+  });
+
+  test("an ACP agent's implemented modes are unchanged", () => {
+    expect(implementedSandboxModesFor(getExternalAgent("gemini-acp") as ExternalAgentEntry)).toEqual([
+      "read-only",
+      "worktree-write",
+    ]);
+  });
+});
+
 describe("AC2 — read-only versus allowed_actions", () => {
   test.each([...READ_ONLY_FORBIDDEN_ACTIONS])("read-only contradicts %s", (action: string) => {
     const result = validateRuntimeBlock(external(), ["read", action]);
@@ -140,7 +177,7 @@ describe("flow 292 — worktree-write is implemented for an ACP agent only", () 
     if (result.ok && result.runtime === "external") expect(result.sandbox).toBe("worktree-write");
   });
 
-  test("a codec agent is still refused worktree-write with the not-implemented code", () => {
+  test("a codec agent other than claude-cli is still refused worktree-write with the not-implemented code", () => {
     const result = validateRuntimeBlock(external({ sandbox: "worktree-write" }), ["read"]);
     expect(result).toMatchObject({ ok: false, code: "not-implemented" });
   });

@@ -331,9 +331,11 @@ Three properties are structural rather than conventional:
   D-01.
 
 Execution is read-only in a disposable git worktree removed on every terminal
-path, with a restricted tool roster. `worktree-write` is schema-valid and refused
-by the runtime with a code distinguishable from "this agent cannot" — the release
-gate and the agent capability are different facts. The
+path, with a restricted tool roster. `worktree-write` is honoured for `claude-cli`
+only (a captured, redacted, hashed diff that a human reviews and that lands as a
+new local branch, never on the checkout) and refused for the other agents with a
+code distinguishable from "this agent cannot" — the release gate and the agent
+capability are different facts. The
 [harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent)
 carries the operator-facing tour, including what is not implemented.
 

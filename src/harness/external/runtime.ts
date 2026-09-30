@@ -406,6 +406,7 @@ export async function runExternalChild(
       ...(input.workingDiff === undefined ? {} : { workingDiff: input.workingDiff }),
       resultSchemaText,
       maxPromptBytes: input.maxPromptBytes,
+      writable: sandbox === "worktree-write",
     });
     if (!assembled.ok) {
       // The prompt module refuses rather than cutting the directive or the task.
