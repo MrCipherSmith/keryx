@@ -10,12 +10,12 @@
   "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
   "status": "in-progress",
   "createdAt": "2026-09-30T14:26:46.112Z",
-  "updatedAt": "2026-09-30T19:41:54.649Z",
+  "updatedAt": "2026-09-30T21:14:00.710Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:00263736cd9bce2f62dbefab6db9445e8a243ef4042c265d9a1760ea25382458",
+  "acChecksum": "sha256:fe12a1eac78b96bcd6eff871078be5642111997d3a0a96d93fa68a60f984d83d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -61,7 +61,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -75,7 +75,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -85,12 +86,17 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-30T19:10:33.124Z",
             "outcome": "failed",
             "detail": "review round 2026-09-30-ingest-feat-local-scope-entrypoints at 578a14bd: 13 retained (5 major, 4 minor, 4 info), 0 refuted; fix task T14"
+          },
+          {
+            "at": "2026-09-30T19:45:06.109Z",
+            "outcome": "started",
+            "detail": "review round 2 (narrow, owner-approved over the spend ceiling): fix diff 578a14bd..772e520c against round-1 findings"
           }
         ]
       },
@@ -325,6 +331,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T21:05:14.732Z",
+            "outcome": "started",
+            "detail": "361-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -530,6 +559,36 @@
       "at": "2026-09-30T19:41:54.649Z",
       "event": "task-done",
       "detail": "T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info"
+    },
+    {
+      "at": "2026-09-30T19:45:06.109Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 2) — review round 2 (narrow, owner-approved over the spend ceiling): fix diff 578a14bd..772e520c against round-1 findings"
+    },
+    {
+      "at": "2026-09-30T21:05:09.478Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"When `.metaproject/` is ignored as a whole, init and update write no `.metaproject` ignore entry anywhere (the only lines they may add to `info/exclude` are local targets git does not already ignore, per AC7); otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" -> \"Init and update never modify the tracked `.gitignore`; keryx's managed ignore block is written to `info/exclude` of the git common directory (also from a linked worktree) and always carries the full entry set, even when `.metaproject/` is already ignored as a whole, so the shared block is identical whichever worktree writes it.\" (Owner decision 2026-10-01 on review finding F-014: trimming the shared info/exclude block when one worktree ignores .metaproject/ as a whole un-ignores .metaproject/runtime/ and data/security/raw/ in worktrees whose .gitignore lacks that line; the owner chose to always write the full set, superseding request item 5's 'write nothing' for that case.)"
+    },
+    {
+      "at": "2026-09-30T21:05:10.509Z",
+      "event": "task-added",
+      "detail": "T15: Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow"
+    },
+    {
+      "at": "2026-09-30T21:05:14.732Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 361-T15"
+    },
+    {
+      "at": "2026-09-30T21:12:37.578Z",
+      "event": "task-done",
+      "detail": "T15: Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow"
+    },
+    {
+      "at": "2026-09-30T21:14:00.710Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ],
   "owner": {
