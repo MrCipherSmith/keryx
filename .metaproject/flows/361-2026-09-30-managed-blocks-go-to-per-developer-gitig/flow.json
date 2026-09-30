@@ -10,12 +10,12 @@
   "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
   "status": "in-progress",
   "createdAt": "2026-09-30T14:26:46.112Z",
-  "updatedAt": "2026-09-30T14:39:09.947Z",
+  "updatedAt": "2026-09-30T17:32:23.764Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:d07fb9f4f1d3d9b844c11c34fcb4552cfc2248dc5389004ec6d11a02ebd08646",
+  "acChecksum": "sha256:6721e71a32ae715923d72d0547492908ab563ac07809022165c332e606655f0d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -90,7 +90,7 @@
       "id": "T5",
       "title": "Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -104,87 +104,123 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T14:47:55.055Z",
+            "outcome": "started",
+            "detail": "361-T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T15:18:27.623Z",
+            "outcome": "started",
+            "detail": "361-T7"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T15:58:52.665Z",
+            "outcome": "started",
+            "detail": "361-T8"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:06:51.595Z",
+            "outcome": "started",
+            "detail": "361-T9"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:06:52.419Z",
+            "outcome": "started",
+            "detail": "361-T10 (parallel with T9, disjoint files)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -197,6 +233,28 @@
       "attempts": {
         "count": 0,
         "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:32:23.764Z",
+            "outcome": "started",
+            "detail": "361-T12"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -271,6 +329,76 @@
       "at": "2026-09-30T14:39:09.947Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1) — 361-T5"
+    },
+    {
+      "at": "2026-09-30T14:47:54.291Z",
+      "event": "task-done",
+      "detail": "T5: Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)"
+    },
+    {
+      "at": "2026-09-30T14:47:55.055Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 361-T6"
+    },
+    {
+      "at": "2026-09-30T15:18:26.876Z",
+      "event": "task-done",
+      "detail": "T6: Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill"
+    },
+    {
+      "at": "2026-09-30T15:18:27.623Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 361-T7"
+    },
+    {
+      "at": "2026-09-30T15:57:36.324Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"When `.metaproject/` is ignored as a whole, init and update write no ignore block anywhere; otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" -> \"When `.metaproject/` is ignored as a whole, init and update write no `.metaproject` ignore entry anywhere (the only lines they may add to `info/exclude` are local targets git does not already ignore, per AC7); otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" (AC6 said 'no ignore block anywhere', which contradicts AC7 when a local target is not yet ignored; request item 5 is about the .metaproject block, item 6 requires local targets to be ignored regardless)"
+    },
+    {
+      "at": "2026-09-30T15:58:47.066Z",
+      "event": "task-done",
+      "detail": "T7: Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored"
+    },
+    {
+      "at": "2026-09-30T15:58:52.665Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 361-T8"
+    },
+    {
+      "at": "2026-09-30T17:06:45.871Z",
+      "event": "task-done",
+      "detail": "T8: Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files"
+    },
+    {
+      "at": "2026-09-30T17:06:51.596Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 361-T9"
+    },
+    {
+      "at": "2026-09-30T17:06:52.419Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 361-T10 (parallel with T9, disjoint files)"
+    },
+    {
+      "at": "2026-09-30T17:27:24.377Z",
+      "event": "task-done",
+      "detail": "T10: Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump"
+    },
+    {
+      "at": "2026-09-30T17:27:25.952Z",
+      "event": "task-added",
+      "detail": "T12: Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped"
+    },
+    {
+      "at": "2026-09-30T17:32:20.056Z",
+      "event": "task-done",
+      "detail": "T9: Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output"
+    },
+    {
+      "at": "2026-09-30T17:32:23.764Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 361-T12"
     }
   ],
   "owner": {
