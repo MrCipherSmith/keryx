@@ -3040,6 +3040,7 @@ keryx skills doctor [--target <harness>] [--json]
 keryx skills uninstall --target <harness> [--module <module-id>] [--force] [--json]
 keryx skills create <target> --module <module> --name <skill-name>
 keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
+    [--only <glob>]... [--dry-run] [--force] [--json]
 keryx skills update [<module>/<name>|--all] [--from <origin>]
 keryx skills remove <module>/<name> [--dry-run] [--json]
 keryx skills verify <skill-or-target>
@@ -3069,7 +3070,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
 | `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
-| `import --from <src>` | `--module <m>`, `--name <n>`, `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. |
+| `import --from <src>` | `--module <m>`, `--name <n>`, `--only <glob>` (repeatable), `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. `--only` is a glob (`*`, `?`) matched against the package directory name; it is required when `--from` is a tree of several packages and the import targets module `review` — the import is refused with the candidate list until it is given. In a tree import a `deprecated: true` package is skipped. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. |
 | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. |
 | `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`: the package directory (and its `<module>/` directory when it was the last skill there), the `projectSkillRegistry` entry, the catalog row, and the verification report. Each part is listed as `removed` or `absent`; an already-missing part is not an error, so a skill half-removed by hand can be finished. `--dry-run` lists what would be removed and changes nothing. A bundled skill is refused (use `install`/`uninstall`); an unknown name exits `1`. Imported rules, runtime exports and learning proposals are left in place. |
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
@@ -4196,7 +4197,7 @@ keryx review complete <review-id-or-path>
                       [--finding <id> --disposition <state> --evidence <ref>]...
 keryx review lightweight
 keryx review reviewers [--json]
-keryx review import --from <dir> [--dry-run] [--force] [--json]
+keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
 keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
@@ -4241,8 +4242,8 @@ left off and the gate reports it as unobserved.
 | `jev-contract` | ADDITIONAL orchestrator reviewer (`engine: jev`): check a PR description's own claims, and a linked flow's frozen acceptance criteria, against the diff. See below. |
 | `jev-triage` | Advisory, annotate-only: severity calibration, duplicate-merge candidates, and verifier queue order over a review package's consolidated findings, scored by Jev. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
-| `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
-| `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
+| `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `familyFlags`, `stackRequires`, `unresolvedRules`, `shadowedRules`, `unresolvedReferences` and `drift` for the orchestrator's filters and dispatch. |
+| `import` | The review-shaped spelling of `keryx skills import --module review`: same importer, same rules, module implied (`keryx review import --from <package-dir\|tree> [--only <glob>]...`). A tree of several packages is refused, with the candidate list, until `--only <glob>` (repeatable, matched against the package directory name) says which ones: every package in module `review` is dispatched as a reviewer. A `deprecated: true` package is skipped in a tree import, a bundled name is skipped unless `--force`, and a reviewer with no path trigger is imported with a `paths: none` warning. Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/`: a rule the project lacks goes to `.metaproject/rules/core/`; one whose name collides with an existing file or with a rule keryx ships goes to `.metaproject/rules/project/` (statuses `differs`, `imported-project`), which a reviewer's reference resolves to first. Re-run it over an existing import to fetch only the rules. Undo with `keryx skills remove review/<name>`. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected

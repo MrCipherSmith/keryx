@@ -14,12 +14,14 @@ them from the reviewer's prose.
 
 | Field | Use |
 |---|---|
-| `flags` | A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
+| `flags` | The reviewer's selection flags: `metadata.flags` from its frontmatter when declared — that takes precedence — otherwise the flags its description names. A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
 | `familyFlags` | The subset of `flags` that at least one other project reviewer also carries. A passed flag listed here is a **family flag**: it selects this reviewer, and the reviewer stays path-gated. A passed flag that is in `flags` and not here is unique to this reviewer: the selection is **explicit** and never path-gated, like any flag-selected bundled reviewer. |
 | `paths` | Its path triggers for the **path gate**. No file in scope A matches → `Skipped reviewers`, reason `no-matching-paths`. |
-| `pathsSource` | `metadata` (declared `metadata.paths`) or `description` (globs read out of its description). `none` means there is nothing to gate on: **dispatch it** — ambiguity includes. |
+| `pathsSource` | `metadata` (declared `metadata.paths`) or `description` (globs and literal file paths such as `src/utils/column-zone.ts` read out of its description; a cited `.md` / `.mdc` document and a `.metaproject/` path are not triggers). `none` means there is nothing to gate on: **dispatch it** — ambiguity includes. |
 | `stackRequires` | Apply stack scoping exactly as for a bundled reviewer carrying `metadata.stack_requires`. |
-| `unresolvedRules` | Rules it cites that the project does not have. Dispatch it anyway, tell it in the prompt which rules are absent, and name them once in the report with the fix (`keryx review import --from <overlay>` copies them). Never a finding against the code. |
+| `unresolvedRules` | Rules it cites that the project does not have. Dispatch it anyway, tell it in the prompt which rules are absent, and name them once in the report with the fix (`keryx review import --from <overlay> --only '<glob>'` copies them). Never a finding against the code. |
+| `shadowedRules` | `[{ ref, resolved }]`: rules it cites by one path and must read from another. The project holds its own version of the rule at `resolved` (under `.metaproject/rules/project/`), which answers the reference before the file `ref` names. In the dispatch prompt, tell the reviewer to read `resolved` in place of `ref` — see "Dispatching a project reviewer" below. Not a defect and not reported as one. |
+| `unresolvedReferences` | `[{ ref, reason }]`: other references in its text that will not hold. `missing` — a backticked `skills/…` or `rules/…` path ending `.md` / `.json` with no file under `.metaproject/`; `non-portable` — a rule cited by an absolute or `~` path, true on one machine at most. Dispatch it anyway, tell it in the prompt which references are absent, and name them once in the report. Never a finding against the code. |
 
 A description saying another entry point dispatches it ("Dispatched by
 vantage-review …") is its author's routing note, not a restriction: this
@@ -70,6 +72,18 @@ If `<path>/SKILL.md` does not exist, the reviewer is `BLOCKED`: record the
 missing path, continue with the independent reviewers, and do not run the
 same-named agent type or any other reviewer in its place. A substituted
 reviewer reads as coverage the round did not have.
+
+**Shadowed rules go into the same prompt.** For every entry in the reviewer's
+`shadowedRules`, add one line to the dispatch: "where your text names `<ref>`,
+read `<absolute path of resolved>` instead". An import keeps an overlay's rule
+under `.metaproject/rules/project/` whenever its filename is one keryx also
+ships, because `keryx install` and `keryx update` overwrite `rules/core` with
+keryx's own rules. The reviewer's text was written against the overlay and still
+says `core/<name>.mdc`, so followed literally it reads keryx's generic rule of
+the same name and reviews against the wrong standard — silently, since both
+files exist. The inventory computes the project-first order and reports it; no
+loader applies it. This line in the dispatch is the only place it takes effect,
+and a project reviewer run outside this orchestrator reads what its text names.
 
 ### `drift` — the source moved, the reviewer did not
 

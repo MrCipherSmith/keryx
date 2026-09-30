@@ -4012,7 +4012,7 @@ Usage:
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review reviewers [--json]
-  keryx review import --from <dir> [--dry-run] [--force] [--json]
+  keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...

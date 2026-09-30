@@ -53,28 +53,28 @@ these go.
 
 ## Bulk import of overlay reviewers
 
-When the overlays already exist as `review-vantage-*` skill packages (for
-example an overlay skill tree with `review-vantage-*` packages), do not recreate them one by one.
+When the reviewers already exist as skill packages in a tree someone else maintains, import
+them instead of recreating them one by one. Dry-run first, then the same command without it:
 
 ```bash
-keryx skills import --from <overlay-home> --module review
-# alias: keryx review import --from <overlay-home>
+keryx review import --from <overlay-home> --only 'review-acme-*' --dry-run
+keryx review import --from <overlay-home> --only 'review-acme-*'
+keryx review reviewers              # every imported name must be listed here
+keryx skills remove review/<name>   # undo one
 ```
 
-That copies every `review-vantage-*` package into
-`.metaproject/project-skills/review/`, stamps Origin on each SKILL.md, and is
-the same discovery `review-orchestrator` uses. Generic copies of keryx
-reviewers (`review-logic`, `review-frontend`, …) are skipped on purpose —
-those would shadow the bundled engine.
+`keryx review import` is the review-shaped spelling of `keryx skills import --module review`:
+same importer, module implied. A tree of several packages is refused, with the candidate list,
+until `--only <glob>` names the ones you want: `review-orchestrator` dispatches every package in
+module `review`, and one with no path gate is dispatched on every round. Import reviewers only —
+an orchestrator or facade, a deprecated alias, a report generator, or anything with no review
+contract does not belong there. One package directory passed as `--from` needs no `--only`.
 
-One overlay package:
-
-```bash
-keryx review import --from <overlay-home>/skills/review-vantage-frontend
-```
-
-Then `keryx review reviewers`. Until that list shows the names, they are not
-wired.
+Read `SKILL.detail.md` beside this file before running an import. It is the worked example, with
+real output: the refusal, what each run writes, how `flags`, `paths`, `pathsSource`,
+`stackRequires`, `unresolvedRules` and `drift` are derived, rule collisions, undo with
+`keryx skills remove`, refresh, the per-clone note, and the `review-learning.config.json` shape.
+Until `keryx review reviewers` shows the names, they are not wired.
 
 ---
 
@@ -221,8 +221,8 @@ source file differs from what was imported. It does **not** mean the reviewer is
 
 Re-read the source, diff it against what the skill encodes, and then decide per
 change: fold it in, or record in the skill why this project deliberately differs.
-Re-run Step 2's command with the same `--name` to re-record the hash once the
-skill matches the source again.
+For a reviewer written here, re-run Step 2's command with the same `--name` to re-record the hash once it matches the source again.
+For an imported package, `keryx skills update review/<name>` re-reads its Origin and overwrites the SKILL.md — see `SKILL.detail.md`.
 
 A deliberate divergence that is written down is a decision. The same divergence
 undocumented is drift that will be silently "fixed" by whoever refreshes next.
@@ -239,7 +239,7 @@ undocumented is drift that will be silently "fixed" by whoever refreshes next.
 | Change a reviewer keryx ships | NO | edit `src/gdskills/bundled/skills/review/` and open a PR |
 | Update a skill from review findings | NO | `entity-skill-learner`, `keryx skills learn` |
 | Decide which reviewers a round dispatches | NO | `review-orchestrator` |
-| Import a tree of overlay reviewers | YES — `keryx skills import --from <dir> --module review` (`keryx review import` alias) | — |
+| Import a tree of overlay reviewers | YES — `keryx review import --from <dir> --only '<glob>'`, dry-run first (`SKILL.detail.md`) | — |
 | Import a non-review SKILL.md / GitHub URL | NO | `entity-skill-creator` / `keryx skills import` |
 
 ---
