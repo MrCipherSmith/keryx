@@ -14,7 +14,7 @@
     },
     "_keryxManaged": {
       "type": "object",
-      "description": "Sentinel block Keryx writes into a file it manages so `keryx hooks enable|disable` and doctor/uninstall can distinguish Keryx-owned entries from a human's own edits without deleting the latter. Present only on the merged project/user artifact `keryx hooks` itself writes, never required on a hand-authored source file. Intentionally shaped as an object here, not the string/string-array sentinel some host settings files (e.g. `.claude/settings.json`) use, because this file must record per-entry `managedHookIds` for `keryx hooks enable|disable` to target individually, which a bare marker string cannot express.",
+      "description": "Sentinel block Keryx writes into a file it manages so `keryx hooks enable|disable` and doctor/uninstall can distinguish Keryx-owned entries from a human's own edits without deleting the latter. Present only on the merged project/user artifact `keryx hooks` itself writes, never required on a hand-authored source file. Intentionally shaped as an object here, not the string/string-array sentinel some host settings files (e.g. `.claude/settings.local.json`, or `.claude/settings.json` under scope shared) use, because this file must record per-entry `managedHookIds` for `keryx hooks enable|disable` to target individually, which a bare marker string cannot express.",
       "additionalProperties": false,
       "required": ["tool", "version"],
       "properties": {

@@ -27,8 +27,10 @@ The core idea: instead of an agent re-deriving a project's structure, quality,
 tests, conventions, and history from raw files on every task, keryx materializes
 that knowledge as durable, human-editable Markdown plus machine-readable JSON
 artifacts under `.metaproject/`, and installs routing rules so any agent that
-reads the repo's `AGENTS.md`/`CLAUDE.md` is directed to consult that workspace
-first.
+reads the repo's instructions is directed to consult that workspace first. The
+routing block goes to per-developer, gitignored files by default
+(`CLAUDE.local.md`, `AGENTS.override.md`), so the team's tracked `AGENTS.md` and
+`CLAUDE.md` stay untouched.
 
 The CLI itself performs only **deterministic mechanics** — scanning, graphing,
 scoring, state transitions, checksums, template rendering. The "cognitive" work
@@ -56,7 +58,7 @@ flowchart LR
   end
 
   H -->|"CLI"| K
-  A -->|"reads AGENTS.md / CLAUDE.md<br/>→ routed to `.metaproject/index.md`"| W
+  A -->|"reads CLAUDE.local.md / AGENTS.override.md<br/>→ routed to `.metaproject/index.md`"| W
   A -->|"MCP (opt-in)"| W
   K -->|"scans, never mutates without a decision"| R
   W -.->|"committed alongside the code"| R
@@ -495,7 +497,7 @@ anyone who clones" half of the contract.
 
 **Who writes what.** Each feature module owns its `data/<module>/` subtree and writes only there at runtime. Source-of-truth trees (`wiki/`, `memory/`, `project-skills/`, `rules/`) are seeded by `init`/module `new`/`create` commands but are then "owned" by the human — the tooling guards against clobbering them (gdwiki's draft-marker guard only overwrites unmodified generated drafts; gdskills `learn` never mutates `SKILL.md` without an explicit `apply`; flow's `flow.json` is the CLI's exclusive writer, protected by an AC-checksum tamper check).
 
-**`metaproject.json` manifest.** The single authoritative runtime config. It records `schemaVersion`, project name, `paths{}`, `agentEntrypoints{root[], metaproject}`, the Metaproject-Standard fields `standardVersion` / `profiles[]` / `updatedAt`, and a `modules{}` map where each entry carries `enabled`, per-module settings (e.g. gdskills `profile` + `projectSkillRegistry[]`), `hooks{}`, and a `commands[]` list. The lifecycle commands read it to know which of the 9 optional modules are enabled; `rules`, `health`, `flow`, and gdskills read it too.
+**`metaproject.json` manifest.** The single authoritative runtime config. It records `schemaVersion`, project name, `paths{}`, `agentEntrypoints{root[], claudeSettings, metaproject}` (where the routing block and the Claude hooks go, each target `scope: "local"` — per-developer and gitignored, the default — or `"shared"`; see [where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope)), the Metaproject-Standard fields `standardVersion` / `profiles[]` / `updatedAt`, and a `modules{}` map where each entry carries `enabled`, per-module settings (e.g. gdskills `profile` + `projectSkillRegistry[]`), `hooks{}`, and a `commands[]` list. The lifecycle commands read it to know which of the 9 optional modules are enabled; `rules`, `health`, `flow`, and gdskills read it too.
 
 **`MODULE_COMMANDS` single source of truth.** `src/commands/module-commands.ts` holds one canonical subcommand list per module id. `moduleCommands(id)` returns a fresh mutable copy consumed by `init` (`buildManifest`) and `update` (`refreshServiceFiles`, recovery, tasks-backfill) — so the `commands[]` arrays in every generated `metaproject.json` come from exactly one place, enforced by `module-commands.test.ts`. Note the id/verb skew: manifest id `tasks` ↔ CLI verb `flow`; id `gdwiki` ↔ verb `wiki` (legacy `wiki` keys migrated forward).
 
@@ -611,7 +613,7 @@ The workspace is built and kept fresh by two idempotent lifecycle commands.
 
 1. Parse `--yes`/`--no-<module>`/`--gdskills-profile`/`--no-*-hook` flags into per-module enablement (9 modules default on; hooks default off). Interactive prompts when not `--yes`, with TTY-safe defaults when piped.
 2. Scaffold base dirs plus per-enabled-module dirs (`core/`, `data/`, `skills/`, and module-specific folders derived from `WIKI_PAGE_TYPES`/`MEMORY_TYPES`).
-3. Inject a managed `.gitignore` block; `syncAgentRules` seeds/updates `AGENTS.md`/`CLAUDE.md` and the routing block.
+3. Write the managed ignore block to `.git/info/exclude` (only the entries git does not already ignore; the tracked `.gitignore` is not modified); `syncAgentRules` imports `AGENTS.md`/`CLAUDE.md` as rules and writes the routing block to `CLAUDE.local.md` / `AGENTS.override.md` (the team files under shared scope), moving any uncommitted keryx block out of the tracked files.
 4. gdgraph copies vendored core scripts and renders a local `cli.ts`; gdskills runs `installGdskills(profile)`; testing runs `analyzeTestingProject` once.
 5. Install git hooks (idempotent managed blocks in `.git/hooks/*`, no-op without `.git`): gdgraph/gdskills/health post-commit reminders, a dashboard post-commit hook, and an opt-in blocking testing pre-push gate (stays OFF even under `--yes`).
 6. `buildManifest` writes `metaproject.json`, managed docs, `index.md`, SKILL.md files, and the dashboard.

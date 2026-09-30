@@ -1115,8 +1115,8 @@ After full setup, expect these key paths:
 └── data/
 ```
 
-Commit durable, agent-facing context according to the managed `.gitignore`
-policy. Do not commit local runtime clones, raw logs, raw security data, temporary
+Commit durable, agent-facing context according to keryx's managed ignore policy
+(kept in `.git/info/exclude`, not the tracked `.gitignore`). Do not commit local runtime clones, raw logs, raw security data, temporary
 locks, or reproducible storage artifacts.
 
 ## 16. Setup completion checklist

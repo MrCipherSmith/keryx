@@ -521,11 +521,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
   ]),
 
   renderedSkill("agent-entrypoint-manager", "platform", ["minimal", "recommended", "full"], "Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references.", [
-    "Find existing root agent entrypoints.",
-    "Keep managed Metaproject blocks idempotent.",
+    "Find existing root agent entrypoints and the block targets `agentEntrypoints.root` names: `CLAUDE.local.md` and `AGENTS.override.md` (scope `local`, the default; Codex mode `override` or `skip`), or `CLAUDE.md` / `AGENTS.md` (scope `shared`).",
+    "Keep managed Metaproject blocks idempotent: refresh them with `keryx update` or `keryx rules sync`, which also moves a block out of a tracked entrypoint and regenerates `AGENTS.override.md` from `AGENTS.md` — never write a bare block there.",
     "Ensure local `.metaproject/index.md` and skill catalog are first-class references.",
   ], ["agents.md", "claude.md", "entrypoint"],
-    "Use when AGENTS.md or CLAUDE.md needs its managed Metaproject block added, refreshed, or kept idempotent. NOT for: splitting an oversized entrypoint into rules and project-skills (see agent-entrypoint-distiller)."),
+    "Use when AGENTS.md or CLAUDE.md needs its managed Metaproject block added, refreshed, or kept idempotent — the block lives in CLAUDE.local.md / AGENTS.override.md unless scope is shared. NOT for: splitting an oversized entrypoint into rules and project-skills (see agent-entrypoint-distiller)."),
   skill("agent-entrypoint-distiller", "platform", ["minimal", "recommended", "full"], "Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills.", [
     "Run `keryx rules distill` when the user asks to decompose a large CLAUDE.md/AGENTS.md.",
     "Keep root entrypoints compact: non-project/highest-priority instructions plus `.metaproject/index.md` routing.",

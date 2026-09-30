@@ -1058,7 +1058,9 @@ never blocks; enforced/ci/gateway block**.
   skip if `keryx` is not on `PATH`, and is recorded in the manifest at
   `security.hooks.prePush`.
   Opt out with `--no-security-hook`.
-- **agent `.claude/settings.json` hook** — `installSecurityAgentHooks`
+- **agent Claude settings hook** (`.claude/settings.local.json` by default, the
+  tracked `.claude/settings.json` when `agentEntrypoints.claudeSettings` has scope
+  `shared`) — `installSecurityAgentHooks`
   (`src/security/agent-hooks.ts`) merges, merge-safely (a `_keryxManaged:
   "security-agent-hooks"` sentinel keeps re-install idempotent and preserves all
   existing settings/hooks), two Claude Code hooks: `UserPromptSubmit` →
@@ -1250,17 +1252,23 @@ surface.
 (`AGENTS.md`, `CLAUDE.md`, and manifest-declared variants) in sync with the generated
 `.metaproject/` workspace so agents reliably route through keryx tooling. It
 (1) **syncs** — imports each root entrypoint verbatim into `.metaproject/rules/`
-and injects/upgrades a managed "Metaproject" routing block into the root file — and
+and writes/upgrades a managed "Metaproject" routing block where
+`agentEntrypoints.root` puts it: `CLAUDE.local.md` and `AGENTS.override.md`
+(per-developer, gitignored) under the default `scope: "local"`, the root team file
+under `scope: "shared"` — and
 (2) **distills** — splits large monolithic entrypoints into typed artifacts
 (project rules, procedural skills, or root-only instructions), rewriting the root to
-keep only global/always-on instructions plus the managed block.
+keep only global/always-on instructions (plus the managed block when it is a shared
+target). Scopes, the Codex `override`/`skip` modes and the migration out of tracked
+files are described in
+[where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
 
 **CLI surface.** `rulesCommand`:
 
 | Command | Description |
 |---|---|
 | `rules` / `rules --help` / `rules -h` | usage |
-| `rules sync` | import root entrypoints into `.metaproject/rules/`, inject managed block, refresh index |
+| `rules sync` | import root entrypoints into `.metaproject/rules/`, write the managed block to its targets, refresh index |
 | `rules distill` | split large entrypoints into high-priority rules + project skills |
 | any other | "Unknown rules command" + help + exit 1 |
 
@@ -1268,12 +1276,13 @@ Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h
 
 **Key files.**
 - `src/rules/agent-entrypoints.ts` — sync engine: discover entrypoints, write import mirrors, inject/upgrade the managed `<!-- keryx:index -->` block (`syncAgentRules`, `ensureMetaprojectReference`).
+- `src/rules/entrypoint-targets.ts`, `entrypoint-migration.ts`, `entrypoint-writers.ts` — the target model (entry form, legacy array, scopes), the `HEAD`-based legacy decision, and the writers for `CLAUDE.local.md` / `AGENTS.override.md` plus the move out of tracked files.
 - `src/rules/distill.ts` — distillation engine: section split + classify + emit rules/skills/root, rewrite root, write index (`distillAgentEntrypoints`).
 - `src/commands/rules.ts` — `rules sync`/`distill` handler + help.
 
 **How it works.** Patterns: **idempotent writes** (`writeTextIfChanged`/`IfMissing`),
-a **managed marker block** (`<!-- keryx:index -->` sentinel — everything after
-is regenerated, everything before preserved), **policy migration/self-healing**
+a **managed marker block** (`<!-- keryx:index -->` … `<!-- /keryx:index -->` —
+the text between the markers is regenerated, everything outside preserved), **policy migration/self-healing**
 (`ensureMetaprojectReference` migrates old policy strings, de-duplicates, removes the
 flow policy when tasks are disabled, appends missing policies), **feature-flag
 gating** (`enableTasks` from `modules.tasks.enabled`), and **symlink de-duplication**
@@ -1290,8 +1299,10 @@ synced sources. Outputs: `.metaproject/rules/<slug>.md` (import mirrors),
 `.metaproject/rules/README.md`, `.metaproject/skills/project-rules/README.md`,
 `.metaproject/rules/entrypoints/<slug>.md` (distilled rules),
 `.metaproject/project-skills/entrypoints/<slug>/SKILL.md` (distilled skills),
-`.metaproject/rules/entrypoints/index.md`, refreshed `.metaproject/index.md`, and the
-root `AGENTS.md`/`CLAUDE.md` (created if missing, managed block injected; fully
+`.metaproject/rules/entrypoints/index.md`, refreshed `.metaproject/index.md`,
+`CLAUDE.local.md` and `AGENTS.override.md` (scope local: created when missing, the
+override regenerated from `AGENTS.md`), and the root `AGENTS.md`/`CLAUDE.md` (scope
+shared: created if missing, managed block injected; under either scope fully
 rewritten on distill). Requires `.metaproject/` to exist, else throws.
 
 **Dependencies / integrations.** Node builtins only + `lib/fs` (`pathExists`) and
@@ -1308,7 +1319,8 @@ logic are the highest-risk untested areas.
 **Purpose.** The `agents` module manages the **global agent bootstrap** — an optional
 managed routing block injected into a runtime's *global* (home-directory) agent
 entrypoint so that any project the agent opens routes through keryx tooling. Unlike
-`rules` (which manages a project's root `AGENTS.md`/`CLAUDE.md`), this operates on
+`rules` (which manages a project's entrypoints — `CLAUDE.local.md` /
+`AGENTS.override.md`, or the shared `AGENTS.md`/`CLAUDE.md`), this operates on
 per-runtime global config files under `$HOME` and is idempotent, merge-safe, and
 fully reversible.
 

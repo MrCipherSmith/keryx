@@ -1715,6 +1715,14 @@ function healthQualitySummary(health: NonNullable<MetaprojectDashboardData["heal
   return `No active findings in the latest normalized report. Keep coverage and complexity sources connected to avoid a falsely optimistic score.`;
 }
 
+/**
+ * The body of a team entrypoint (`AGENTS.md`, `CLAUDE.md`) keryx creates when
+ * it is missing. Only a runtime whose `agentEntrypoints.root` entry is
+ * `scope: "shared"` gets one (`ensureDefaultAgentEntrypoints`); under the
+ * default local scope keryx never creates a tracked entrypoint, and the block
+ * goes to `CLAUDE.local.md` / `AGENTS.override.md` instead
+ * (`src/rules/entrypoint-writers.ts`).
+ */
 export function renderAgentEntrypoint({ source }: { source: string }): string {
   return `# ${source.replace(/\.md$/i, "")} Instructions
 
@@ -1816,6 +1824,11 @@ function isHeadingOnlyBody(body: string): boolean {
   return body.replace(/^#[^\n]*\n?/, "").trim().length === 0;
 }
 
+// The imported rule mirrors a TEAM file. Under local scope that file carries
+// no managed block (keryx writes it to `CLAUDE.local.md` / `AGENTS.override.md`
+// and never imports those), so there is nothing to strip; the strip matters for
+// a `scope: "shared"` team file, which keeps the block, and for a team file
+// whose block `keryx update` has not moved out yet.
 function extractAgentRuleBody(content: string): string {
   const marker = "<!-- keryx:index -->";
   const endMarker = "<!-- /keryx:index -->";

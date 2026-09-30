@@ -46,7 +46,7 @@ store.
 **Team-scope learned patterns are currently local-only, not git-shareable.**
 `team` scope reuses the project tree, but accepted patterns for project/team
 scope are written under `.metaproject/data/learning/candidates/`, and that
-directory is gitignored by the managed `.gitignore` block (per-machine
+directory is ignored by keryx's managed ignore block in `.git/info/exclude` (per-machine
 observation evidence, not meant to be committed as-is). So today a
 "team-scope" pattern still only lives on the machine that accepted it; a
 bundle export/import is the way to move it to another machine or teammate
@@ -352,6 +352,10 @@ path + description, never rule bodies. Only that block is inserted or
 replaced; anything else in the file, including a *different* managed block
 the same file already carries (for example `GEMINI.md`'s own
 `keryx:instructions` pointer block), is left byte-for-byte untouched.
+These are the tracked team files: unlike the `keryx:index` routing block, which
+goes to `CLAUDE.local.md` / `AGENTS.override.md` by default, `rules-export`
+writes where the harness reads shared instructions, and the change is yours to
+commit.
 
 | Harness | File | Confidence |
 |---|---|---|

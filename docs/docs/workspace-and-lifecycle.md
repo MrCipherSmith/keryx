@@ -88,10 +88,27 @@ live under a flow's `reviews/` subtree.
 
 ### Versioned vs gitignored
 
-`init` injects a managed block into the repo's root `.gitignore` (delimited by
-`# keryx:begin … # keryx:end`, replacing any legacy `.metaproject/`
-lines). The policy is: **keep agent-facing context versioned, ignore
-executable/generated internals.** The current block:
+`init` and `update` keep keryx's ignore rules out of the tracked `.gitignore`.
+They ask git first (`git check-ignore`) which of the entries below the
+repository already ignores — through its own `.gitignore`, a global excludes
+file, or a blanket `.metaproject/` line — and write only the rest, as a managed
+block delimited by `# keryx:begin … # keryx:end`, to `.git/info/exclude`. That
+file is per clone and never committed; from a linked worktree keryx writes the
+clone's common `info/exclude`, which every worktree shares. When `.metaproject/`
+is ignored as a whole, no `.metaproject` entry is written at all. The same block
+lists the per-developer agent files keryx writes (`CLAUDE.local.md`,
+`AGENTS.override.md`, `.claude/settings.local.json` — see
+[where the block goes](#where-the-block-goes-local-and-shared-scope)) unless git
+already ignores them. Outside a git repository the step is skipped with a note
+and `.gitignore` is neither created nor changed.
+
+A block an older keryx left in `.gitignore` is moved out by the next `update`,
+by the same rules as the entrypoint block (see [Migration](#migration-from-the-tracked-files)):
+an uncommitted block is removed and the file restored to `HEAD`; a block the
+team committed stays where it is and its entries are not repeated.
+
+The policy is: **keep agent-facing context versioned, ignore
+executable/generated internals.** The current entries (abridged):
 
 ```gitignore
 # keryx:begin
@@ -152,8 +169,10 @@ manifest records:
   (`computeProfiles`).
 - `updatedAt` — ISO timestamp of the last lifecycle write.
 - `paths{}` — resolved workspace paths (`root`, etc.).
-- `agentEntrypoints{ root: string[], metaproject: ".metaproject/index.md" }` —
-  the discovered root entrypoint sources plus the workspace index (see below).
+- `agentEntrypoints{ root[], claudeSettings, metaproject: ".metaproject/index.md" }` —
+  where the managed block and the Claude hooks go, one `root` entry per runtime
+  with its scope, plus the workspace index (see
+  [where the block goes](#where-the-block-goes-local-and-shared-scope)).
 - `modules{}` — a map keyed by **module id**, one entry per module. Each entry
   carries:
   - `enabled` — whether the lifecycle commands scaffold/refresh it (9 modules are
@@ -161,7 +180,8 @@ manifest records:
   - per-module settings — e.g. gdskills stores `profile`, `skills`, `catalog`,
     `projectSkills`, and a `projectSkillRegistry[]`.
   - `hooks{ gitPostCommit?, prePush?, agent?, postUpdate }` — which hooks this
-    module installs (`security` also records `agent` → `.claude/settings.json`).
+    module installs (`security` also records `agent` → the Claude settings file,
+    `.claude/settings.local.json` by default).
   - `commands[]` — the module's canonical CLI subcommand list.
 
 ### `commands[]` comes from `MODULE_COMMANDS` (single source of truth)
@@ -195,16 +215,20 @@ migrated forward on read).
 
 ## Agent entrypoints and the managed routing block
 
-`AGENTS.md` / `CLAUDE.md` at the repo root are the agent's front door. The `rules`
-module keeps them in sync with the workspace so any agent that reads the root file
-is routed through keryx tooling.
+`AGENTS.md` / `CLAUDE.md` at the repo root are the team's agent instructions. The
+`rules` module imports them into the workspace and adds a managed routing block
+next to them, so any agent that reads its instructions is routed through keryx
+tooling.
 
 **Sync (`rules sync`, also run by `init`/`update`).** For each discovered root
 entrypoint, `syncAgentRules` imports the file verbatim into
-`.metaproject/rules/<slug>.md` (a high-priority "imported rule" mirror) and injects
-an idempotent managed block, delimited by the sentinel `<!-- keryx:index -->`,
-directly into the root file. Everything after the sentinel is regenerated;
-everything before it (the human's own prose) is preserved. The block adds per-skill
+`.metaproject/rules/<slug>.md` (a high-priority "imported rule" mirror). It then
+writes an idempotent managed block, delimited by `<!-- keryx:index -->` and
+`<!-- /keryx:index -->`, where `agentEntrypoints.root` says — by default the
+per-developer `CLAUDE.local.md` and `AGENTS.override.md`, not the team files (see
+[where the block goes](#where-the-block-goes-local-and-shared-scope)). The text
+between the markers is regenerated; everything outside them (the human's own
+prose) is preserved. The block adds per-skill
 routing policies (consult `.metaproject/index.md` and the module skills before
 doing raw file/code work) for gdgraph, gdwiki, gdctx, gdskills, testing, memory,
 and flow, plus a **Model choice** policy (`src/lib/model-choice.ts`) telling
@@ -217,14 +241,133 @@ the operator has approved one. Disable it with `.metaproject/tasks.config.json`
 
 The block is **self-healing**: `ensureMetaprojectReference` migrates old policy
 wording to the current phrasing, de-duplicates repeated policies, and
-adds/removes the flow policy based on `modules.tasks.enabled`. New root files get
-the full policy set written fresh from the `renderAgentEntrypoint` template.
+adds/removes the flow policy based on `modules.tasks.enabled`. A team file keryx
+creates (only under shared scope) gets the full policy set from the
+`renderAgentEntrypoint` template.
 
 Entrypoint discovery resolves `realpath` and de-duplicates symlinks (so an
 `AGENTS.md → CLAUDE.md` symlink isn't imported twice); candidate order is
-manifest-declared sources first, then `AGENTS.md`, `agents.md`, `CLAUDE.md`,
-`claude.md`. The discovered list is persisted back to
-`agentEntrypoints.root` and `index.md` is refreshed.
+`agentEntrypoints.importSources` first, then `AGENTS.md`, `agents.md`,
+`CLAUDE.md`, `claude.md`. Only team files are imported as rules: `CLAUDE.local.md`
+and `AGENTS.override.md` are per-developer and never mirrored into the tracked
+`rules/` tree. `index.md` is refreshed.
+
+### Where the block goes: local and shared scope
+
+`agentEntrypoints` in `metaproject.json` holds one `root` entry per runtime and
+one `claudeSettings` entry. A fresh `init` writes every target local:
+
+```json
+"agentEntrypoints": {
+  "root": [
+    { "runtime": "claude", "path": "CLAUDE.local.md", "scope": "local" },
+    { "runtime": "codex", "path": "AGENTS.override.md", "scope": "local",
+      "mode": "override", "source": "AGENTS.md" }
+  ],
+  "claudeSettings": { "path": ".claude/settings.local.json", "scope": "local" },
+  "metaproject": ".metaproject/index.md"
+}
+```
+
+The older form, `"root": ["AGENTS.md", "CLAUDE.md"]`, is still read, and one
+`keryx update` rewrites it to the entry form (see
+[Migration](#migration-from-the-tracked-files)).
+
+| Target | `scope: "local"` (default) | `scope: "shared"` |
+|---|---|---|
+| Claude Code block | `CLAUDE.local.md` | `CLAUDE.md` |
+| Codex block | `AGENTS.override.md` (`mode: "override"`) or nothing (`mode: "skip"`) | `AGENTS.md` |
+| keryx-managed Claude hooks | `.claude/settings.local.json` | `.claude/settings.json` |
+
+Local targets are gitignored per clone, so `init` and `update` leave `AGENTS.md`,
+`CLAUDE.md`, `.gitignore` and `.claude/settings.json` untouched and a `git pull`
+of upstream changes to them never meets a local edit. Each local target is
+checked with `git check-ignore`, and any that git does not already ignore is
+added to `.git/info/exclude`. If a `!` rule in the team's `.gitignore`
+re-includes one, keryx says so: that rule outranks `info/exclude`.
+
+**Claude Code** loads `CLAUDE.local.md` after `CLAUDE.md`. Claude Code also counts
+a `CLAUDE.local.md` as a `CLAUDE.md` when it decides whether to fall back to
+`AGENTS.md`, so in a repository that has `AGENTS.md` and no `CLAUDE.md`, the
+`CLAUDE.local.md` keryx creates starts with an `@AGENTS.md` import; without it,
+Claude would stop reading the team's instructions. A `CLAUDE.local.md` you
+already had only gets the block.
+
+**Codex** has no additive local file: it reads `AGENTS.override.md` *instead of*
+`AGENTS.md` in the same directory. So the mode is always stated, never inferred:
+
+- `override` (default) — `AGENTS.override.md` is generated as a provenance line,
+  the block, then the full content of `AGENTS.md`. A bare block is never written
+  there, because it would hide the team's `AGENTS.md` from Codex. The override is
+  regenerated by `keryx update` and `keryx rules sync`, not when `AGENTS.md`
+  changes: until then Codex reads the old copy, and `keryx doctor` reports it as
+  stale. Codex also reads at most 32 KiB of project instructions by default
+  (`project_doc_max_bytes`), and the override holds `AGENTS.md` plus the block, so
+  a large `AGENTS.md` can be cut off. An `AGENTS.override.md` keryx did not
+  generate is left alone and reported.
+- `skip` — nothing is written for Codex, and the command output says so.
+
+With no `AGENTS.md`, Codex is skipped with a message and no tracked `AGENTS.md`
+or `CLAUDE.md` is created.
+
+**Shared scope** is the explicit opt-in that keeps the block (or the hooks) in the
+committed team file, for a team that wants every clone to carry it. Set that
+runtime's entry to `{ "runtime": "claude", "path": "CLAUDE.md", "scope": "shared" }`
+(or `claudeSettings` to `{ "path": ".claude/settings.json", "scope": "shared" }`)
+and run `keryx update`; keryx creates a missing team file under shared scope only.
+A local entry that names a team file is read as "switch this runtime to local"
+and gets the local path. Switching to shared does not clean up the old local
+files: remove the block from `CLAUDE.local.md` and delete `AGENTS.override.md`
+yourself, or Claude reads the block twice and Codex keeps reading the override.
+
+### Migration from the tracked files
+
+A manifest in the legacy form is settled per target against `HEAD`, never the
+working tree, by the first `keryx update` (`keryx rules sync` settles the block
+only, not the hooks or `.gitignore`):
+
+- **Block or hooks only as uncommitted edits in the team file** — keryx wrote
+  them, so the target becomes local. The block moves to the local target and the
+  team file is restored to its `HEAD` bytes, so `git diff --quiet -- <file>`
+  passes. The same happens to a managed block in `.gitignore` (its entries move to
+  `info/exclude`) and to keryx-managed hook groups in `.claude/settings.json`
+  (every `_keryxManaged` group moves, whichever installer wrote it, and keryx's
+  install state follows them).
+- **The file has other uncommitted edits too** — only the text between the
+  markers (or keryx's own hook groups) is removed; your edits stay byte-for-byte,
+  and the output names the file.
+- **The file is untracked** — only the block goes and the file stays, unless
+  nothing but keryx's content is left in an untracked, unstaged `.gitignore` or
+  `.claude/settings.json`; that file is removed.
+- **The block or hooks are committed in `HEAD`** — the team chose them, so that
+  target is recorded as `scope: "shared"`, the file is left alone, and the output
+  prints how to switch. For the block: set the entry's scope to `"local"`, run
+  `keryx update`, and commit the removal it makes. For the hooks: commit
+  `.claude/settings.json` without keryx's hook groups first, then set
+  `claudeSettings` to local, run `keryx update`, and re-run any other hook
+  installer you use (ctx, orient, learning observer, jev edit guard). For
+  `.gitignore`: delete the block and commit that.
+
+The block and the hooks are never left in both places: Claude Code merges the two
+settings files, so a hook in both would fire twice. A managed block that stays in
+a tracked file whose scope is local is reported by `keryx doctor` with the fix
+command.
+
+### Known limits
+
+- **Local files exist per checkout.** `.git/info/exclude` is shared by every
+  worktree of a clone, but `CLAUDE.local.md`, `AGENTS.override.md` and
+  `.claude/settings.local.json` are not: a linked worktree has no block and no
+  keryx hooks until you run `keryx update` in it.
+- **Cloud and remote Claude sessions** start from a fresh clone, so they have no
+  `CLAUDE.local.md`, and they do not read `.claude/settings.local.json`. For a
+  project worked on that way, use shared scope.
+- **Scope is a team setting.** `metaproject.json` is tracked, so the scopes and
+  the Codex mode apply to everyone who pulls it.
+- **Blank-line-only edits** to a tracked entrypoint count as "equal to `HEAD`"
+  during migration, so they are reverted along with the block.
+- **The opt-in `rules-export` surface** (`<!-- keryx:rules -->` in `CLAUDE.md`,
+  `AGENTS.md` and other runtimes' files) still writes tracked files.
 
 **Distill (`rules distill`).** For large monolithic entrypoints, distill runs sync
 first, then splits each Markdown section and classifies it heuristically into:
@@ -235,7 +378,9 @@ first, then splits each Markdown section and classifies it heuristically into:
 - or **root-only** instructions that stay in the trimmed root file.
 
 The root entrypoint is then rewritten to keep only global/personal always-on
-instructions plus the managed block, and a distilled index
+instructions — plus the managed block when that file is a shared target; under
+local scope the block stays in `CLAUDE.local.md` and `AGENTS.override.md` is
+regenerated from the rewritten `AGENTS.md` — and a distilled index
 (`.metaproject/rules/entrypoints/index.md`) is written. `index.md` records
 `hasDistilledEntrypoints` so the workspace map reflects whether distillation ran.
 
@@ -249,9 +394,9 @@ share the managed-block / idempotent-writer mechanism that makes this safe:
   the freshly rendered template (no-op when identical, so no needless churn).
 - `copyFileIfChanged` — vendored runtime scripts.
 - **Sentinel-delimited managed regions** inside otherwise user-owned files —
-  `# keryx:<id>:begin … :end` (gitignore, git hooks) and
-  `<!-- keryx:index -->` (agent entrypoints) — so regeneration replaces only
-  the managed span and leaves surrounding human content intact.
+  `# keryx:<id>:begin … :end` (`.git/info/exclude`, git hooks) and
+  `<!-- keryx:index -->` (the agent entrypoint block) — so regeneration replaces
+  only the managed span and leaves surrounding human content intact.
 
 ### What `init` creates
 
@@ -269,8 +414,10 @@ share the managed-block / idempotent-writer mechanism that makes this safe:
    dirs derived from the config tables (`WIKI_PAGE_TYPES` → wiki folders,
    `MEMORY_TYPES` → memory folders, gdgraph storage/artifacts/summaries/queries,
    etc.).
-3. **Inject managed blocks** — the `.gitignore` block, and `syncAgentRules` seeds/
-   updates `AGENTS.md`/`CLAUDE.md` with the routing block.
+3. **Write managed blocks** — the ignore block to `.git/info/exclude`, and
+   `syncAgentRules` writes the routing block to `CLAUDE.local.md` /
+   `AGENTS.override.md` (or the team files under shared scope), moving any
+   uncommitted keryx block or hooks out of the tracked files.
 4. **Per-module bootstrap** — gdgraph copies vendored `build.ts`/`query.ts`/
    `types.ts` into `core/gdgraph` and renders a local `cli.ts`; gdskills runs
    `installGdskills(profile)`; testing runs `analyzeTestingProject` once (the only
@@ -305,6 +452,10 @@ errors if `.metaproject/` is missing):
    - **Tasks backfill**: if the `tasks`/flow module is disabled and `--no-tasks`
      wasn't passed, force-enable it — this upgrades pre-tasks workspaces created
      before the flow module existed.
+   - **Entrypoints**: settle `agentEntrypoints` (a legacy array is rewritten to
+     the entry form), move the ignore block and any keryx block or hooks out of
+     tracked files, and write them to the targets
+     ([migration](#migration-from-the-tracked-files)).
    - Re-run `syncAgentRules`, re-render all managed docs/manifests/SKILL.md files,
      re-copy gdgraph core scripts, re-run `installGdskills` (with
      `createDataDirs: false`), and re-write configs only via `writeTextIfMissing`
@@ -360,13 +511,17 @@ user-authored content in `.git/hooks/pre-push`. `--no-*-hook` flags force any ho
 off. On `update`, a hook is reinstalled only if the manifest already records it, so
 the workspace never silently re-adds hooks the user removed.
 
-### Agent hook (`.claude/settings.json`)
+### Agent hook (`.claude/settings.local.json`)
 
 The `security` module also offers a non-git, project-local **Claude Code agent
 hook** at `init` (opt out with `--no-security-agent-hook`). Rather than a
-`.git/hooks/*` block, `installSecurityAgentHooks` **merges** two hooks into
-`.claude/settings.json` — `UserPromptSubmit` → `security check-input --source
-untrusted-external` and `PreToolUse(Write|Edit)` → `security check-output`. The
+`.git/hooks/*` block, `installSecurityAgentHooks` **merges** two hooks —
+`UserPromptSubmit` → `security check-input --source untrusted-external` and
+`PreToolUse(Write|Edit)` → `security check-output` — into the Claude settings
+file `agentEntrypoints.claudeSettings` names: `.claude/settings.local.json` by
+default, the tracked `.claude/settings.json` under shared scope. Every other
+keryx-managed Claude hook (ctx guard, orient, learning observer, jev edit guard)
+resolves to the same file, so none is ever split across the two. The
 merge is **merge-safe**: a `_keryxManaged: "security-agent-hooks"` sentinel
 keeps re-install idempotent and preserves every pre-existing key and user hook.
 Advisory by default. It is recorded in the manifest at `security.hooks.agent` and,

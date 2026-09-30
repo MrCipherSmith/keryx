@@ -32,7 +32,7 @@ keryx rules distill
    - `.metaproject/rules/entrypoints/index.md`
    - `.metaproject/rules/entrypoints/*.md`
    - `.metaproject/project-skills/entrypoints/*/SKILL.md`
-   - compact `AGENTS.md` and `CLAUDE.md` still point to `.metaproject/index.md`
+   - the `.metaproject/index.md` block sits where `agentEntrypoints.root` says: `CLAUDE.local.md` and a regenerated `AGENTS.override.md` under scope `local` (the team files are rewritten without it), the team file itself under scope `shared`
 4. If the command changed root entrypoints, check that only global/personal or
    highest-priority always-on instructions remain there.
 5. Run focused verification:
@@ -51,7 +51,7 @@ Stop and re-read this skill if you are thinking:
 | Rationalization | Rebuttal |
 |---|---|
 | "`keryx rules distill` exited 0, so the split is correct." | Exit 0 says the command ran, not that it split well. It happily writes an empty rule, a rule titled after a heading it could not classify, and two rules holding the same paragraph. Open every file listed in step 3 before reporting anything. |
-| "The root entrypoint is short now, so the job is done." | Shortness is a side effect, not the goal. A root that no longer points at `.metaproject/index.md`, or that lost an always-on instruction into a rule nothing loads, is a regression that looks like success on a line count. |
+| "The root entrypoint is short now, so the job is done." | Shortness is a side effect, not the goal. An entrypoint set from which no file points at `.metaproject/index.md` any more, or a root that lost an always-on instruction into a rule nothing loads, is a regression that looks like success on a line count. |
 | "This section read like a project rule, so I moved it out of the root." | Global, personal and highest-priority always-on instructions stay in the root by design. If you had to guess which kind a section was, it belongs in the ambiguous list for a human — not silently in a rule file. |
 | "The project has no flow, so I can skip verification." | `keryx flow check` is not conditional either — with no flows it reports `All flows are consistent.` and exits 0. `keryx rules sync` runs every time; skipping it ships a rules tree whose index and files disagree. |
 | "`keryx rules distill` rewrote the root files, so I don't need to read them." | The rewrite is exactly what needs checking. Reading the post-distill `AGENTS.md` and `CLAUDE.md` is the only way to see what was carried out of them. |
@@ -63,7 +63,7 @@ Before reporting, all of these must hold:
 - `keryx rules sync` exits 0.
 - `.metaproject/rules/entrypoints/index.md` exists and names every file written under `.metaproject/rules/entrypoints/`.
 - Every generated rule and project-skill file is non-empty and was read, not just listed.
-- `AGENTS.md` and `CLAUDE.md` both still reference `.metaproject/index.md`.
+- Claude and Codex still reach `.metaproject/index.md`: the managed block is in `CLAUDE.local.md` and `AGENTS.override.md` (scope `local`; Codex `skip` writes none) or in the shared `CLAUDE.md` / `AGENTS.md` — never in both.
 - `keryx flow check` exits 0. It takes no id and checks every flow package in the project, so a distill that corrupted one reports here even though the distill never touched flows.
 - Every section you could not confidently classify appears in the ambiguous list of the Output Contract. An empty ambiguous list on a large entrypoint is a claim, and it must be a true one.
 

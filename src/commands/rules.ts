@@ -271,7 +271,9 @@ function printHelp(): void {
   keryx rules distill
 
 Commands:
-  sync     Import root AGENTS.md/CLAUDE.md into .metaproject/rules and refresh index
+  sync     Import root AGENTS.md/CLAUDE.md into .metaproject/rules and refresh index;
+           rewrites the managed block where agentEntrypoints.root puts it
+           (CLAUDE.local.md and AGENTS.override.md by default)
   distill  Split large AGENTS.md/CLAUDE.md into high-priority rules and project skills
 
 Options:
