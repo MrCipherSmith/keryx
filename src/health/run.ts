@@ -5,7 +5,7 @@ import { collectGitProvenance } from "../metrics/provenance";
 import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
-import { loadBaseline, writeBaseline } from "./baseline";
+import { loadBaseline, loadBaselineSources, measuredSources, writeBaseline } from "./baseline";
 import { getChurn } from "./metrics/churn";
 import { rankHotspots } from "./metrics/hotspot";
 import { readWikiFreshnessMetric } from "./metrics/wiki-freshness";
@@ -16,7 +16,7 @@ import { loadSkillOwnership } from "./skills";
 import { analyzeSourceFiles } from "./source-analysis";
 import { FINDING_ADAPTERS, NoImportError } from "./sources";
 import { makeFinding } from "./sources/helpers";
-import { OXLINT_PARSE_ERROR, oxlintMissingReason } from "./sources/oxlint";
+import { OXLINT_NO_FILES, OXLINT_PARSE_ERROR, oxlintMissingReason } from "./sources/oxlint";
 import {
   commandExists,
   dataRoot,
@@ -34,6 +34,7 @@ import type {
   HealthRunInput,
   HealthRunResult,
   RawSourceResult,
+  ScopeMetrics,
   ScopeSelector,
   SourceAdapter,
   SourceConfig,
@@ -96,7 +97,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     FINDING_ADAPTERS.map((adapter) => {
       const cfg = config.sources[adapter.id] ?? { mode: "auto", required: false };
       if (filter && !filter.has(adapter.id)) {
-        return filteredOutcome(adapter.id, cfg);
+        return filteredOutcome(adapter, cfg);
       }
       return runAdapter(adapter, ctx, cfg, stamp);
     }),
@@ -166,6 +167,15 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
 
   const churn = await getChurn(cwd, config.metrics.churnWindowDays);
   const baseline = await loadBaseline(cwd);
+  // A source measured now that the baseline never measured (e.g. oxlint, new
+  // in this release, on a project that already named it) contributes new
+  // MEASUREMENT, not new defects: its findings are kept out of the regression
+  // comparison instead of reading as a drop in unchanged code.
+  const measured = measuredSources(sourceInfos);
+  const baselineSources = await loadBaselineSources(cwd, measured);
+  const newSources = new Set(
+    baselineSources === null ? [] : measured.filter((s) => !baselineSources.has(s)),
+  );
   const metrics = await computeMetrics({
     cwd,
     config,
@@ -174,6 +184,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     coverage,
     churn,
     baseline,
+    newSources,
     ownership,
     scopeSelector: selector,
     sourceAnalysis,
@@ -218,12 +229,44 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
 
   const paths = await writeOutputs(cwd, report, config, stamp);
 
-  // Accept-current baseline on the first run (none exists yet).
+  // Accept-current baseline on the first run (none exists yet), recording
+  // which sources it measured.
   if (baseline.size === 0) {
-    await writeBaseline(cwd, metrics, report.generatedAt);
+    await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
+  } else if (
+    baselineSources !== null &&
+    newSources.size > 0 &&
+    shouldAdoptWidenedBaseline({ selector, filter, baselineSources, measured, projectMetrics, config })
+  ) {
+    // The measured set grew and nothing the baseline already measured
+    // regressed: take this run as the new baseline, so the new source's own
+    // regressions are caught from now on instead of excluded forever.
+    await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
   }
 
   return { report, markdownPath: paths.markdownPath, jsonPath: paths.jsonPath };
+}
+
+/**
+ * Re-accept the baseline only on a run that sees at least everything the old
+ * one did: the whole project, no `--sources` filter, no previously measured
+ * source lost (a missing source's absent findings would lock in a better
+ * score), and no regression among the comparable sources (re-baselining then
+ * would hide it).
+ */
+function shouldAdoptWidenedBaseline(input: {
+  selector: ScopeSelector;
+  filter: Set<string> | null;
+  baselineSources: ReadonlySet<string>;
+  measured: readonly string[];
+  projectMetrics: ScopeMetrics | undefined;
+  config: HealthConfig;
+}): boolean {
+  const { selector, filter, baselineSources, measured, projectMetrics, config } = input;
+  if (selector.kind !== "project" || filter !== null) return false;
+  const now = new Set(measured);
+  if ([...baselineSources].some((source) => !now.has(source))) return false;
+  return (projectMetrics?.regression_score ?? 0) < config.gate.warnOnRegressionDrop;
 }
 
 function filterIgnoredFindings(findings: Finding[], config: HealthConfig): Finding[] {
@@ -310,6 +353,7 @@ const KNOWN_VALIDATION_ERRORS = new Set<string>([
   "ESLint JSON format was not recognized",
   "ESLint JSON parse failed",
   OXLINT_PARSE_ERROR,
+  OXLINT_NO_FILES,
   "dependency audit JSON contains an invalid or unsupported entry",
   "dependency audit JSON parse failed",
   "dependency audit JSON format was not recognized",
@@ -497,15 +541,23 @@ export async function runAdapter(
 }
 
 function filteredOutcome(
-  source: SourceRunInfo["source"],
+  adapter: SourceAdapter,
   cfg: SourceConfig,
 ): { info: SourceRunInfo; findings: Finding[] } {
-  return { info: filteredInfo(source, cfg), findings: [] };
+  // Same capability runAdapter records, so a report says the same thing about
+  // a source whether or not a filter was used. `filtered` is what keeps a
+  // filtered-out linter from being excused by a sibling (gate.ts).
+  const info = filteredInfo(adapter.id, cfg);
+  return {
+    info: adapter.capability !== undefined ? { ...info, capability: adapter.capability } : info,
+    findings: [],
+  };
 }
 
 function filteredInfo(source: string, cfg: SourceConfig): SourceRunInfo {
   return {
     source,
+    filtered: true,
     status: "skipped",
     mode: cfg.mode,
     required: cfg.required,

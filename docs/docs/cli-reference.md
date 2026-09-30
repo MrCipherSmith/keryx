@@ -3043,6 +3043,18 @@ so a configuration that switches ESLint off and uses neither linter now reports
 `coverage: partial` (lint is genuinely unmeasured there) where it used to report
 `complete`; the gate status does not change. A linter excused because another
 one ran gets no `OPTIONAL: … skipped` line, so the reasons agree with coverage.
+A linter left out by `--sources` is never excused: a filtered run does not
+report a clean gate.
+
+**The baseline records which sources it measured.** A source that starts being
+measured after the baseline was taken — oxlint on a project that already named
+it, for example — adds findings, but they are new measurement of unchanged
+code, so they are left out of `regression_score` and cannot fail the gate as a
+regression; `health_score` still counts them. On a whole-project run where no
+previously measured source is missing and nothing comparable regressed, the
+baseline is re-accepted with the new source, and from then on its regressions
+count. A baseline written before this was recorded is taken to have measured
+what the current run measures, minus oxlint.
 
 **A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
 and `typescript` now report e.g. `tsconfig.json found, binary not found

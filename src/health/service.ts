@@ -3,7 +3,7 @@ import { isPathInside, pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadHealthConfig } from "./config";
 import { runHealth } from "./run";
-import { writeBaseline } from "./baseline";
+import { measuredSources, writeBaseline } from "./baseline";
 import { getCoverage } from "./metrics/coverage";
 import { FINDING_ADAPTERS } from "./sources";
 import { dataRoot, listSourceFiles, moduleOfFile } from "./util";
@@ -325,11 +325,14 @@ export function createCodeHealthService(): CodeHealthService {
         latest = result.report;
       }
       const generatedAt = new Date().toISOString();
+      // A whole-project re-baseline records what the report it came from
+      // measured; a scoped one keeps the file's recorded set.
       const updated = await writeBaseline(
         cwd,
         latest.metrics,
         generatedAt,
         input.scope,
+        input.scope === undefined || input.scope.kind === "project" ? measuredSources(latest.sources) : undefined,
       );
       return {
         updated,

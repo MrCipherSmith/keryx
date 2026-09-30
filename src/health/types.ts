@@ -189,6 +189,12 @@ export type SourceRunInfo = {
   error?: string;
   /** Copied from the adapter by `runAdapter`; see `SourceCapability`. */
   capability?: SourceCapability;
+  /**
+   * Set when a `--sources` filter left this source out. A filtered source was
+   * not looked at by choice of this run, so the gate never excuses it on a
+   * sibling's behalf (a source filter cannot report a clean gate).
+   */
+  filtered?: true;
 };
 
 import type { WikiFreshnessMetric } from "./metrics/wiki-freshness";

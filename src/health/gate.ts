@@ -25,6 +25,22 @@ const RANK: Record<GateStatus, number> = {
 const CONFIG_UNREADABLE_REASON =
   "CONFIG: health configuration is unreadable; gate forced to strictest thresholds";
 
+// "This source did not produce a result." One predicate for the required and
+// optional sides of the gate, and for which sources a baseline measured
+// (`baseline.ts`), so none of them can drift apart. `execution`/`parse` left
+// `undefined` are deliberately not treated as failures -- callers that
+// predate those fields assert nothing about them, and inventing a failure
+// from silence is the mirror image of the defect this file is closing.
+export function didNotProduceResult(s: SourceRunInfo): boolean {
+  return (
+    s.status !== "available" ||
+    s.execution === "failed" ||
+    s.execution === "not-run" ||
+    s.parse === "failed" ||
+    s.parse === "not-run"
+  );
+}
+
 export function computeGate(input: {
   findings: Finding[];
   projectMetrics: ScopeMetrics | undefined;
@@ -66,19 +82,6 @@ export function computeGate(input: {
     escalate("warn", `health regression ${regression} vs baseline`);
   }
 
-  // "This source did not produce a result." Extracted verbatim from the
-  // `brokenRequired` filter below so that the required and optional sides ask
-  // exactly the same question and can never drift apart. `execution`/`parse`
-  // left `undefined` are deliberately not treated as failures -- callers that
-  // predate those fields assert nothing about them, and inventing a failure
-  // from silence is the mirror image of the defect this file is closing.
-  const didNotProduceResult = (s: SourceRunInfo): boolean =>
-    s.status !== "available" ||
-    s.execution === "failed" ||
-    s.execution === "not-run" ||
-    s.parse === "failed" ||
-    s.parse === "not-run";
-
   // Flow 352 AC3: lint is a CAPABILITY, and the project chooses which tool
   // provides it. `sources.eslint.required: true` encodes "this project is
   // linted", not "it is linted by ESLint specifically" -- so a project that
@@ -98,8 +101,11 @@ export function computeGate(input: {
   // in the family by declaring it, and cannot be forgotten in this file.
   const isLinter = (s: SourceRunInfo): boolean => s.capability === "lint";
   const lintSatisfied = sources.some((s) => isLinter(s) && !didNotProduceResult(s));
+  //   * a source a `--sources` filter left out is never excused: the operator
+  //     chose not to look at it this run, and a filtered run cannot report a
+  //     clean gate (health-truthful-gate.test.ts).
   const excusedByLintFamily = (s: SourceRunInfo): boolean =>
-    lintSatisfied && isLinter(s) && s.status === "skipped";
+    lintSatisfied && isLinter(s) && s.status === "skipped" && s.filtered !== true;
 
   const brokenRequired = sources.filter(
     (s) => s.required && didNotProduceResult(s) && !excusedByLintFamily(s),

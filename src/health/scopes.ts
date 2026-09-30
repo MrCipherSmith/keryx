@@ -35,11 +35,17 @@ export async function computeMetrics(input: {
   coverage: CoverageData;
   churn: Map<string, number>;
   baseline: Map<string, BaselineEntry>;
+  /**
+   * Sources this run measured that the baseline did not. `trend` and
+   * `regression_score` compare against a health score computed WITHOUT their
+   * findings; `health_score` itself still counts every finding.
+   */
+  newSources?: ReadonlySet<string>;
   ownership?: SkillOwnership;
   scopeSelector?: ScopeSelector;
   sourceAnalysis?: Map<string, SourceFileAnalysis>;
 }): Promise<ScopeMetrics[]> {
-  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, ownership, scopeSelector } = input;
+  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, newSources, ownership, scopeSelector } = input;
   const sourceAnalysis = input.sourceAnalysis ?? await analyzeSourceFiles(cwd, sourceFiles);
 
   const build = (
@@ -74,16 +80,31 @@ export async function computeMetrics(input: {
     const bySource = tally(scopeFindings.map((f) => f.source));
 
     const risk = riskScore(byPriority, config.scoring.priorityWeights);
-    const health = healthScore(
-      {
-        risk,
-        coverage: coveragePenalty(coverageValue, config),
-        complexity: complexityPenalty(fnComplexities, config),
-        loc,
-        hotspot: hotspotPenalty(fileHotspots, config),
-      },
-      config,
-    );
+    const penalties = {
+      coverage: coveragePenalty(coverageValue, config),
+      complexity: complexityPenalty(fnComplexities, config),
+      loc,
+      hotspot: hotspotPenalty(fileHotspots, config),
+    };
+    const health = healthScore({ risk, ...penalties }, config);
+    // Findings from a source the baseline never measured are new measurement,
+    // not new defects: leave them out of the side compared with the baseline.
+    const comparableHealth = newSources && newSources.size > 0
+      ? healthScore(
+          {
+            risk: riskScore(
+              countBy(
+                scopeFindings.filter((f) => !newSources.has(f.source)),
+                (f) => f.priority,
+                PRIORITIES,
+              ),
+              config.scoring.priorityWeights,
+            ),
+            ...penalties,
+          },
+          config,
+        )
+      : health;
     const baseHealth = baseline.get(key)?.health_score ?? null;
 
     return {
@@ -101,8 +122,8 @@ export async function computeMetrics(input: {
       hotspot: fileHotspots.length > 0 ? hotspotAggregate : null,
       health_score: health,
       risk_score: risk,
-      trend: trendOf(health, baseHealth),
-      regression_score: regressionScore(health, baseHealth),
+      trend: trendOf(comparableHealth, baseHealth),
+      regression_score: regressionScore(comparableHealth, baseHealth),
     };
   };
 

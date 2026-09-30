@@ -2,7 +2,7 @@ import { chmod, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { OXLINT_MISSING_CONFIG, OXLINT_MISSING_PACKAGE, oxlintAdapter } from "./oxlint";
+import { OXLINT_MISSING_CONFIG, OXLINT_MISSING_PACKAGE, OXLINT_NO_FILES, oxlintAdapter } from "./oxlint";
 import { eslintAdapter } from "./eslint";
 import { typescriptAdapter } from "./typescript";
 import { runAdapter, runHealth } from "../run";
@@ -160,6 +160,41 @@ test("end to end: an oxlint-only project is linted by oxlint and required eslint
     expect(report.gate.coverage).toBe("complete");
     expect(report.gate.reasons).toContain("NOTE: eslint skipped; lint capability provided by oxlint");
     expect(report.findings.filter((f) => f.source === "oxlint")).toHaveLength(1);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("oxlint with no files to lint names that cause, not a format error", async () => {
+  // Real oxlint 1.81.0 in a tree with nothing to lint: this line on STDOUT,
+  // then an empty JSON run, exit 1.
+  const stdout = `No files found to lint. Please check your paths and ignore patterns.\n${realOutput([]).replace('"number_of_files":1', '"number_of_files":0')}`;
+  const { cwd } = await oxlintProject("oxlint-no-files", stdout, 1);
+  try {
+    const outcome = await runAdapter(oxlintAdapter, ctx(cwd), runCfg("oxlint"), `test-${Date.now()}`);
+    expect(outcome.info.status).toBe("configured-but-failed");
+    expect(outcome.info.error).toBe(OXLINT_NO_FILES);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("only severity \"error\" is P1: advice and a missing severity are warnings", () => {
+  const advice = { ...REAL_DIAGNOSTICS[1], severity: "advice" };
+  const { severity: _dropped, ...noSeverity } = REAL_DIAGNOSTICS[1]!;
+  const raw = { source: "oxlint", content: realOutput([advice, noSeverity]), command: "oxlint", toolVersion: null, exitCode: 0, rawPath: "", imported: false } as RawSourceResult;
+  const findings = oxlintAdapter.parse(raw, ctx("/tmp"));
+  expect(findings.map((f) => [f.severity, f.priority])).toEqual([["warning", "P2"], ["warning", "P2"]]);
+});
+
+test("end to end: --sources oxlint leaves a required eslint unexcused, with the same capability as an unfiltered run", async () => {
+  const { cwd } = await oxlintProject("oxlint-filter", realOutput([REAL_DIAGNOSTICS[0]]), 0);
+  try {
+    const { report } = await runHealth({ cwd, sources: ["oxlint"] });
+    const eslint = report.sources.find((s) => s.source === "eslint");
+    expect(eslint).toMatchObject({ status: "skipped", filtered: true, capability: "lint", error: "excluded by source filter" });
+    expect(report.gate.status).toBe("incomplete");
+    expect(report.gate.reasons.some((r) => /lint capability provided by/.test(r))).toBe(false);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

@@ -8,6 +8,13 @@ const CONFIG_FILES = [".oxlintrc.json", ".oxlintrc.jsonc"];
 
 export const OXLINT_FORMAT = "json";
 export const OXLINT_PARSE_ERROR = "oxlint JSON format was not recognized";
+export const OXLINT_NO_FILES = "oxlint found no files to lint (check its paths and ignore patterns)";
+
+// oxlint 1.x prints this on STDOUT, ahead of its JSON, and exits 1 when the
+// tree holds nothing it lints. The JSON after it is a valid empty run, but the
+// whole stdout does not parse, and "format not recognized" would send the
+// operator after a version mismatch that does not exist.
+const NO_FILES_PREAMBLE = "No files found to lint";
 
 function hasConfigFile(cwd: string): boolean {
   if (CONFIG_FILES.some((file) => existsSync(path.join(cwd, file)))) return true;
@@ -107,6 +114,7 @@ export const oxlintAdapter: SourceAdapter = {
     });
   },
   validate(raw: RawSourceResult) {
+    if (raw.content.trimStart().startsWith(NO_FILES_PREAMBLE)) return { valid: false, error: OXLINT_NO_FILES };
     return parseOxlintJson(raw.content) === null ? { valid: false, error: OXLINT_PARSE_ERROR } : { valid: true, format: "oxlint-json" };
   },
 };
