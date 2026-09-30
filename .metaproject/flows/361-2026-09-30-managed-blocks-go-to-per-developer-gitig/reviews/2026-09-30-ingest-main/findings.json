@@ -1,0 +1,470 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Entry-form local root target `path` from the tracked manifest is kept verbatim (only abs/.. /NUL rejected) and appended raw into <git-common-dir>/info/exclude by wantedIgnoreLines -> replaceLocalIgnoreBlock; leading '!', globs, '#', embedded newlines (incl. a fake '# keryx:end') are accepted. The same path is where writeClaudeLocalTarget creates/appends the block.",
+    "impact": "A cloned repo whose committed metaproject.json has root [{runtime:'claude',scope:'local',path:'!.env'}] makes `keryx update` write `!.env` into info/exclude, overriding the developer's core.excludesFile ignore of .env -> `?? .env`, staged by `git add -A`. Newlines inject extra lines and break the managed block.",
+    "suggested_fix": "Force the standard local path per runtime (as claudeSettings does), or reject control chars and leading '!'/'#' in safeRelativePath; write local-target lines as anchored literal patterns.",
+    "evidence": "Reviewer scratch scripts (scratchpad/rs-WShC/): normalizeEntrypointTargets accepts both; syncMetaprojectIgnoreRules on a throwaway repo wrote `!.env`, `!*.pem`, `# keryx:end` into info/exclude; git status showed `?? .env` after the line was added.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-targets.ts",
+    "line": 191,
+    "quote": "  if (value.split(/[\\\\/]/).includes(\"..\")) return undefined;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 191
+    },
+    "dedupe_key": "RS-1",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-targets.ts safeRelativePath",
+        "src/rules/entrypoint-targets.ts rootEntryFromRecord",
+        "src/rules/entrypoint-writers.ts ignoredLocalTargetPaths",
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines",
+        "src/lib/git-local-ignore.ts replaceLocalIgnoreBlock",
+        "src/rules/entrypoint-writers.ts writeClaudeLocalTarget"
+      ],
+      "enumeration_method": "keryx ctx rg for consumers of localTargetPaths/ignoredLocalTargetPaths (init.ts, update.ts, entrypoint-inspection.ts) plus both info/exclude writers"
+    },
+    "global_id": "2026-09-30-ingest-main#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran rs-WShC/targets.ts and rs-WShC/sync.ts against head 876d16c9, which contains fix commit e0d930f0: normalizeEntrypointTargets drops the '!.env' and newline-injected local entries (only shared CLAUDE.md/AGENTS.md remain, local target list is the standard .claude/settings.local.json); syncMetaprojectIgnoreRules returns status 'refused' (\"the ignore line \\\"!.env\\\" would re-include a path\") and does not touch info/exclude (mtime unchanged from the round-1 run).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (local entries forced to standard paths; replaceLocalIgnoreBlock refuses !/newline/marker lines)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "writeCodexLocalTargets reads the manifest's Codex `source` with readFile (follows symlinks) and copies it into AGENTS.override.md without refuseEscapingSymlink; the pre-scaffold guard only covers root-level sources found by readdir, so a subdirectory source through an escaping symlink is never checked.",
+    "impact": "A cloned repo commits `home -> /Users/<name>` and a codex entry source 'home/.aws/credentials'; `keryx update`/`rules distill` copies the out-of-repo file into AGENTS.override.md, which Codex loads as instructions and sends to the model provider.",
+    "suggested_fix": "refuseEscapingSymlink(projectRoot, entry.source) before reading (writeCodexLocalTargets, codexOverrideState, codexOverrideByteSize); or restrict source to a root-level team file.",
+    "evidence": "Reviewer scratch script on a throwaway project: with home -> ../outside, writeCodexLocalTargets produced an AGENTS.override.md containing the outside secret line.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": null,
+    "quote": "    const sourcePath = path.join(projectRoot, entry.source);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 221, 334, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "dedupe_key": "RS-2",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-writers.ts writeCodexLocalTargets",
+        "src/rules/entrypoint-writers.ts codexOverrideState",
+        "src/rules/agent-entrypoints.ts findAgentEntrypoints",
+        "src/rules/distill.ts writeCodexLocalTargets call"
+      ],
+      "enumeration_method": "keryx ctx rg for writeCodexLocalTargets / assertMetaprojectReferenceSafe / findAgentEntrypoints callers"
+    },
+    "global_id": "2026-09-30-ingest-main#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran rs-WShC/override.ts against head 876d16c9, which contains fix commit e0d930f0: notice 'Codex: skipped — home/.aws/credentials: refuses to write through a symlink at home that resolves outside the project root'; AGENTS.override.md not created (ENOENT), outside secret not copied.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (refuseEscapingSymlink on codex source and override path before read)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Paths after `--` are still pathspecs (glob/magic); a manifest path with glob chars can make worktreeFileIsClean/indexHoldsFile answer for other files.",
+    "impact": "Wrong classification/notice only; no data loss reproduced.",
+    "suggested_fix": "--literal-pathspecs or GIT_LITERAL_PATHSPECS=1 in runGit.",
+    "evidence": "Throwaway repo: `git diff --quiet -- 's*'` matched modified src.ts.",
+    "confidence": "medium",
+    "file": "src/lib/git-head.ts",
+    "line": 87,
+    "quote": "  const result = await runGit(projectRoot, [\"diff\", \"--quiet\", \"--\", relativePath]);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 87
+    },
+    "dedupe_key": "RS-3",
+    "global_id": "2026-09-30-ingest-main#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: regression test 'paths are literal: a glob or pathspec magic never answers for another file' (src/lib/git-head.test.ts:104) passes; bun test --timeout 30000 over git-head, claude-settings, entrypoint-writers, git-local-ignore, metaproject-gitignore tests: 99 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (git --literal-pathspecs in git-head runGit; git-head.test.ts 'paths are literal' passes)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "moveBlockOutOfGitignore restores HEAD only when file-minus-block equals HEAD, but origin/main's legacy writer also deleted team lines outside the block that duplicated keryx's lines (and a blanket .metaproject/ line). Those repos fall to strip-only and the team's lines stay deleted.",
+    "impact": "HEAD .gitignore `node_modules/\\n.metaproject/runtime/\\n`, working tree left by the legacy writer as node_modules/ + block: `keryx update` leaves ` M .gitignore` with `-.metaproject/runtime/` and calls it the user's edit; AC8 `git diff --quiet` fails.",
+    "suggested_fix": "Before comparing, remove from HEAD the lines the legacy writer would have removed; if equal, take the restore-from-HEAD branch.",
+    "evidence": "scratchpad/rl2-gitignore-probe.ts against a temp repo: result file `node_modules/\\n`, status ` M .gitignore`, diff `-.metaproject/runtime/`.",
+    "confidence": "high",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": null,
+    "quote": "  if (sameApartFromBlankLines(stripped, head)) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-1",
+    "class_scope": {
+      "sites": [
+        "src/lib/metaproject-gitignore.ts moveBlockOutOfGitignore"
+      ],
+      "enumeration_method": "Compared origin/main syncMetaprojectGitignore (withoutLegacyMetaprojectIgnore) with every restore-eligibility check in moveBlockOutOfGitignore"
+    },
+    "global_id": "2026-09-30-ingest-main#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran rl2-gitignore-probe.ts against head 876d16c9, which contains fix commit e0d930f0: notice '.gitignore: moved the managed keryx ignore block to info/exclude; the file is back at HEAD'; .gitignore is 'node_modules/\\n.metaproject/runtime/\\n'; git status empty; diff empty.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (legacy-writer-aware restore of .gitignore to HEAD)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "info/exclude in the common dir is shared by all worktrees and the block is keyed only by subdirectory prefix; wantedIgnoreLines trims entries against the CURRENT worktree's .gitignore, so update in a worktree whose branch already ignores them shrinks the shared block for every other worktree.",
+    "impact": "update in `feature` (no keryx lines in .gitignore) writes 36 entries; update in `main` (lines committed) shrinks the shared block to 1; in `feature` `.metaproject/runtime/` is no longer ignored and shows in git status. Flip-flops per last worktree.",
+    "suggested_fix": "Do not trim the shared block against one worktree's .gitignore; always write all entries (redundant is harmless), or key the block per worktree.",
+    "evidence": "scratchpad/rl2-worktree-probe.ts: after sync in main the notice says 1 entry; `git check-ignore --no-index .metaproject/runtime/x` in feature exits 1.",
+    "confidence": "high",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": null,
+    "quote": "    if (explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-2",
+    "class_scope": {
+      "sites": [
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines",
+        "src/lib/git-local-ignore.ts replaceLocalIgnoreBlock / blockMarkers"
+      ],
+      "enumeration_method": "Traced every input to the block content and its one writer"
+    },
+    "global_id": "2026-09-30-ingest-main#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran rl2-worktree-probe.ts against head 876d16c9, which contains fix commit e0d930f0: block holds 36 entries; after main's update, git check-ignore --no-index .metaproject/runtime/x in the feature worktree exits 0 (info/exclude:10). The blanket-.metaproject/ residual is F-014, fixed in 93200604.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (shared exclude block no longer trimmed against the worktree .gitignore)"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Moving hooks to shared deletes/rewrites .claude/settings.local.json without the HEAD/index check the toLocal branch has.",
+    "impact": "A repo that commits settings.local.json with only keryx hooks gets ` D .claude/settings.local.json` on switching to shared.",
+    "suggested_fix": "Apply the same tracked check; strip and report instead of removing.",
+    "evidence": "Code trace of moveClaudeSettingsHooks !toLocal branch.",
+    "confidence": "medium",
+    "file": "src/integrations/claude-settings-migration.ts",
+    "line": 148,
+    "quote": "    if (nothingElse) await removeContained(projectRoot, from);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 148
+    },
+    "dedupe_key": "RL2-3",
+    "global_id": "2026-09-30-ingest-main#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: the F-006 regression test in src/integrations/claude-settings.test.ts (line 504, tracked settings.local.json stripped, never removed) passes; 99 pass / 0 fail across the 5 regression test files.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (tracked settings.local.json stripped, never removed)"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "ensureLocalIgnorePatterns has no non-test caller and ignores the subdirectory prefix.",
+    "impact": "None today.",
+    "suggested_fix": "Delete it with its tests or route through blockMarkers.",
+    "evidence": "keryx ctx rg ensureLocalIgnorePatterns src excluding tests: definition only.",
+    "confidence": "high",
+    "file": "src/lib/git-local-ignore.ts",
+    "line": null,
+    "quote": "export async function ensureLocalIgnorePatterns(",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-4",
+    "global_id": "2026-09-30-ingest-main#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: keryx ctx rg ensureLocalIgnorePatterns src finds one line only, src/lib/git-local-ignore.test.ts:94 asserting the export is absent; no definition or caller remains.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (ensureLocalIgnorePatterns deleted)"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "removeBlock trims with LF-only regexes and rejoins with bare \\n, so the strip-only path leaves mixed CRLF/LF and an extra blank line in CRLF files.",
+    "impact": "CRLF AGENTS.md on a strip-only path (other uncommitted edits, untracked, no git, block in HEAD) becomes `Intro line\\r\\n\\r\\n\\n\\r\\nAfter line`; notice tells the user to commit it.",
+    "suggested_fix": "Detect EOL, trim /(\\r?\\n)+$/ and /^(\\r?\\n)+/, rejoin with the detected EOL; add a CRLF test.",
+    "evidence": "scratchpad/rl-crlf.ts on a non-git temp dir reproduced the output.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": null,
+    "quote": "  const before = content.slice(0, start).replace(/\\n+$/, \"\");",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-1",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-writers.ts removeBlock",
+        "src/rules/entrypoint-writers.ts moveBlockOutOfTeamFile",
+        "src/rules/entrypoint-writers.ts planLocalLeftovers"
+      ],
+      "enumeration_method": "Every caller of the non-exported removeBlock in entrypoint-writers.ts"
+    },
+    "global_id": "2026-09-30-ingest-main#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran rl-crlf.ts against head 876d16c9, which contains fix commit e0d930f0: output '# Team\\r\\n\\r\\nIntro line\\r\\n\\r\\nAfter line\\r\\n' — all CRLF, no stray LF blank line; the F-008 CRLF test in src/rules/entrypoint-writers.test.ts (line 406) passes.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (removeBlock keeps the file EOL; rl-crlf.ts output all CRLF)"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Strip-only paths never check whether the index still holds the block; staged-never-committed file called 'untracked'.",
+    "impact": "A previously `git add`-ed AGENTS.md keeps the block in the index silently; a plain commit commits it.",
+    "suggested_fix": "After a strip, if the index differs, print the restore --staged hint.",
+    "evidence": "Trace of moveBlockOutOfTeamFile strip branches.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": null,
+    "quote": "  await writeContained(projectRoot, relativePath, removeBlock(content, filePath, head));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 593, 608, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-2",
+    "global_id": "2026-09-30-ingest-main#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: the F-009 regression test in src/rules/entrypoint-writers.test.ts (line 449, strip notice names a staged copy carrying the block) passes; 99 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (strip notices name a staged copy carrying the block)"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "When AGENTS.md is gone, an existing keryx-generated AGENTS.override.md stays and keeps shadowing; update only says 'skipped'.",
+    "impact": "Codex keeps following stale team text after AGENTS.md is deleted/renamed; doctor reports source-missing.",
+    "suggested_fix": "Remove a provenance-carrying untracked override in this branch, or name it in the notice.",
+    "evidence": "Trace of writeCodexLocalTargets / codexOverrideState.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 222,
+    "quote": "    if (!(await pathExists(sourcePath))) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 222
+    },
+    "dedupe_key": "RL1-3",
+    "global_id": "2026-09-30-ingest-main#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: the F-010 regression test in src/rules/entrypoint-writers.test.ts (line 491, orphaned keryx-generated AGENTS.override.md removed when AGENTS.md is gone) passes; 99 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (orphaned keryx-generated AGENTS.override.md removed)"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "writeClaudeLocalTarget writes the block into CLAUDE.local.md without checking whether it is tracked.",
+    "impact": "A repo committing CLAUDE.local.md shows it dirty after every update.",
+    "suggested_fix": "Skip with a notice when tracked.",
+    "evidence": "Trace of writeEntrypointBlocks -> writeClaudeLocalTarget.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 381,
+    "quote": "  await ensureMetaprojectReference(filePath, blockOptions);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 381
+    },
+    "dedupe_key": "RL1-4",
+    "global_id": "2026-09-30-ingest-main#F-011",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At head 876d16c9, which contains fix commit e0d930f0: the F-011 regression test in src/rules/entrypoint-writers.test.ts (line 517, tracked CLAUDE.local.md skipped with a notice) passes; 99 pass / 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e0d930f0 (contained in PR head 876d16c9); round-3 review-verifier refuted by re-running the reproduction at 876d16c9 (tracked CLAUDE.local.md skipped with a notice)"
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A developer's empty or heading-only CLAUDE.local.md is deleted on local->shared switch (no provenance).",
+    "impact": "No content lost.",
+    "suggested_fix": "Require the heading keryx writes, or a marker.",
+    "evidence": "Trace of planLocalLeftovers.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 475,
+    "quote": "    } else if (holdsOnlyLocalHeading(next) && !(await tracked(unused.path))) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 475
+    },
+    "dedupe_key": "RL1-5",
+    "global_id": "2026-09-30-ingest-main#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Not fixed (deliberately, info). At head 876d16c9 planLocalLeftovers still removes an untracked file for which holdsOnlyLocalHeading is true (src/rules/entrypoint-writers.ts:475, :542).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — info severity, no data loss (only an empty or heading-only untracked CLAUDE.local.md is removed); not fixed"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "codex shared + claude local without CLAUDE.md: CLAUDE.local.md gets the block plus @AGENTS.md which also carries it.",
+    "impact": "Index block loaded twice (duplicated context).",
+    "suggested_fix": "Skip the block when the imported file is a shared target carrying it.",
+    "evidence": "Trace of writeEntrypointBlocks.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 376,
+    "quote": "      agentsFile !== undefined && !hasClaudeFile",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 325
+    },
+    "dedupe_key": "RL1-6",
+    "global_id": "2026-09-30-ingest-main#F-013",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Not fixed (deliberately, info). The branch is unchanged at head 876d16c9 (src/rules/entrypoint-writers.ts:376); the codex-shared + claude-local case was not constructed or executed in any round.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — info severity, no data loss; not reproducible (never constructed or executed in any round)"
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "F-005 residual: the shared info/exclude block is still trimmed against the current worktree's .gitignore when that worktree's branch ignores .metaproject/ as a whole (AC6). wantedIgnoreLines then drops every .metaproject entry (and any covered local target), and the block in the common dir shrinks for every other worktree.",
+    "impact": "main commits a blanket `.metaproject/` line, feature does not. update in feature writes 36 entries; update in main rewrites the shared block to 1 entry (CLAUDE.local.md); in feature `.metaproject/runtime/` (and `.metaproject/data/security/raw/`, the local HMAC key) is no longer ignored and `git add -A` stages it. Flip-flops per last worktree, as F-005 did.",
+    "suggested_fix": "Do not let a per-branch .gitignore decide the content of the per-clone block at all: always write the full .metaproject entry set (a line redundant with the blanket rule is harmless), and drop the ignoredAsWhole trim of local targets too.",
+    "evidence": "scratchpad/r2-worktree-ac6-probe.ts (throwaway repo + linked worktree): feature after its own update exit 0 (.metaproject/runtime/x ignored via info/exclude:10); main update notice 'managed block (1 entries)'; feature after main's update `git check-ignore --no-index .metaproject/runtime/x` exit 1; block now holds only CLAUDE.local.md.",
+    "confidence": "high",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": null,
+    "quote": "    ...(ignoredAsWhole ? [] : renderMetaprojectGitignoreBlock().trim().split(\"\\n\")),",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 176
+    },
+    "dedupe_key": "R2-1",
+    "class_scope": {
+      "sites": [
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines (candidates, line 176)",
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines (covered trim, line 194)"
+      ],
+      "enumeration_method": "Every input to the block content in wantedIgnoreLines that is read from the current worktree rather than the clone"
+    },
+    "global_id": "2026-09-30-ingest-main#F-014",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran r2-worktree-ac6-probe.ts against head 876d16c9, which contains fix commit 93200604: main's update writes the full 36-entry block even with its blanket .metaproject/ line; in the feature worktree git check-ignore --no-index .metaproject/runtime/x exits 0 both before and after main's update (info/exclude:10); the shared block holds all .metaproject entries plus CLAUDE.local.md.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 93200604 (contained in PR head 876d16c9): the shared info/exclude block always carries the full entry set; round-3 review-verifier refuted by re-running r2-worktree-ac6-probe.ts at 876d16c9"
+    }
+  }
+]
