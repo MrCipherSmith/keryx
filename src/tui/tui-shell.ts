@@ -139,7 +139,14 @@ import type { RoutingCategory } from "../harness/routing/table";
 // Flow 346: the EXTERNAL switch's `/external on|off` command + status line —
 // no modal (see the flow's own AC8 scope note); the sidebar row and bare
 // status text are rendered from `external-command.ts`.
-import { EXTERNAL_COMMAND, isExternalCommand, renderExternalSidebarValue, renderExternalStatusLines } from "./external-command";
+import {
+  EXTERNAL_COMMAND,
+  isExternalAgentsCommand,
+  isExternalCommand,
+  renderExternalSidebarValue,
+  renderExternalStatusLines,
+  runExternalAgentsCommand,
+} from "./external-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
 import { loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveJevApiKey } from "../harness/decision/jev-client";
@@ -8267,6 +8274,13 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showEditGuard();
+          return;
+        }
+        if (isExternalAgentsCommand(command.name)) {
+          // flow 373: the shell's one-step opt-in to the agent RUNTIME (the same
+          // enable/disable the CLI calls). Not `/external`, the privacy switch.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ");
+          void runExternalAgentsCommand(arg, opts.session?.cwd ?? process.cwd()).then((text) => io.onSystem?.(text));
           return;
         }
         if (isExternalCommand(command.name)) {

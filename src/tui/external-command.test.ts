@@ -1,9 +1,21 @@
 // Flow 346 — `/external` command matching + status rendering. Pure
 // functions, no I/O — mirrors `route-command.test.ts`'s own shape.
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, test } from "bun:test";
+import { loadExternalAgentsConfig } from "../capability/external-agents";
 import { DEFAULT_EXTERNAL_PROVIDERS_CONFIG } from "../lib/external-providers";
-import { EXTERNAL_COMMAND, isExternalCommand, renderExternalSidebarValue, renderExternalStatusLines } from "./external-command";
+import {
+  EXTERNAL_AGENTS_COMMAND,
+  EXTERNAL_COMMAND,
+  isExternalAgentsCommand,
+  isExternalCommand,
+  renderExternalSidebarValue,
+  renderExternalStatusLines,
+  runExternalAgentsCommand,
+} from "./external-command";
 
 test("EXTERNAL_COMMAND is /external", () => {
   expect(EXTERNAL_COMMAND).toBe("/external");
@@ -46,5 +58,46 @@ describe("renderExternalStatusLines", () => {
     expect(lines.some((l) => l.includes("available"))).toBe(true);
     expect(lines.some((l) => l.includes("jev"))).toBe(true);
     expect(lines.some((l) => l.includes("deepseek/*"))).toBe(true);
+  });
+});
+
+describe("/external-agents (flow 373)", () => {
+  test("is its own token and never collides with /external", () => {
+    expect(EXTERNAL_AGENTS_COMMAND).toBe("/external-agents");
+    expect(isExternalAgentsCommand("/external-agents")).toBe(true);
+    expect(isExternalAgentsCommand("  /external-agents on ")).toBe(true);
+    expect(isExternalAgentsCommand("/external")).toBe(false);
+    expect(isExternalAgentsCommand("/external on")).toBe(false);
+    expect(isExternalCommand("/external-agents on")).toBe(false);
+  });
+
+  test("on / off write the user flag through the same functions as the CLI, bare shows the state", async () => {
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-ea-cmd-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-ea-cfg-"));
+    try {
+      const off = await runExternalAgentsCommand("", root, dir);
+      expect(off).toContain("keryx agents external enable");
+
+      const on = await runExternalAgentsCommand("ON", root, dir);
+      expect(on).toContain("enabled");
+      expect(loadExternalAgentsConfig(dir).enabled).toBe(true);
+
+      const again = await runExternalAgentsCommand("on", root, dir);
+      expect(again).toContain("nothing changed");
+
+      const back = await runExternalAgentsCommand("off", root, dir);
+      expect(back).not.toContain("nothing changed");
+      expect(loadExternalAgentsConfig(dir).enabled).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an unknown argument prints the usage and says it is not /external", async () => {
+    const text = await runExternalAgentsCommand("maybe", "/nonexistent-root", "/nonexistent-cfg");
+    expect(text).toContain("Unknown /external-agents argument 'maybe'");
+    expect(text).toContain("/external-agents [on|off]");
+    expect(text).toContain("privacy switch");
   });
 });

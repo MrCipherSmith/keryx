@@ -571,6 +571,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/external-agents",
+    group: "External agents, ACP and MCP",
+    summary: "Turn the external agent runtime on or off — /external-agents [on|off]; not the /external privacy switch.",
+  },
+  {
+    kind: "slash",
     name: "/demote",
     group: "External agents, ACP and MCP",
     summary: "Move a running foreground task to the background — /demote <task_id>.",

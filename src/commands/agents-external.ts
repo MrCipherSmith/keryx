@@ -1,6 +1,7 @@
 // `keryx agents external` (flow 176, T15).
 // Package: docs/requirements/keryx-external-agent-runtime §8.1; security-policy §1.
 //
+//   keryx agents external enable | disable [--json]                            (flow 373)
 //   keryx agents external list  [--json] [--no-probe]
 //   keryx agents external probe <id> [--json]
 //   keryx agents external run <id> --task "<text>" [--unattended] [--write]   (flow 292, 357)
@@ -50,6 +51,7 @@ import { createInterface, type Interface } from "node:readline";
 import { createVersionProbe, type VersionProbe } from "../harness/external-agent-probe";
 import {
   EXTERNAL_AGENTS,
+  canonicalExternalAgentId,
   getExternalAgent,
   resolveAvailability,
   transportOf,
@@ -59,7 +61,11 @@ import type { ExternalAgentEntry } from "../harness/external/types";
 import {
   agentConfig,
   checkExternalAgentVendorGates,
+  disableExternalAgents,
+  enableExternalAgents,
+  externalAgentsToggleOk,
   recordExternalAgentConsent,
+  renderExternalAgentsToggle,
   resolveExternalAgentsCapability,
   type ExternalAgentsConfig,
 } from "../capability/external-agents";
@@ -300,12 +306,14 @@ export async function agentsExternalCommand(args: string[], deps: AgentsExternal
   }
 
   if (subcommand === "probe") {
-    const id = args.slice(1).find((arg) => !arg.startsWith("-"));
-    if (id === undefined) {
+    const typedId = args.slice(1).find((arg) => !arg.startsWith("-"));
+    if (typedId === undefined) {
       console.error("Provide an agent id: keryx agents external probe <id> [--json]");
       process.exitCode = 1;
       return;
     }
+    // A short name (`claude`, `codex`, `agy`) resolves once, before any lookup.
+    const id = canonicalExternalAgentId(typedId);
     const entry = getExternalAgent(id);
     if (entry === undefined) {
       console.error(`Unknown external agent "${id}". Known: ${EXTERNAL_AGENTS.map((e) => e.id).join(", ")}`);
@@ -325,6 +333,23 @@ export async function agentsExternalCommand(args: string[], deps: AgentsExternal
 
   if (subcommand === "run") {
     await runCommand(args.slice(1), deps, log);
+    return;
+  }
+
+  if (subcommand === "enable" || subcommand === "disable") {
+    // Flow 373: the one-step opt-in. A question, never a write: `enable --help` changes nothing.
+    if (args.includes("--help") || args.includes("-h")) {
+      printExternalHelp();
+      return;
+    }
+    const cwd = deps.cwd ?? process.cwd();
+    const result =
+      subcommand === "enable"
+        ? await enableExternalAgents(cwd, deps.configDir)
+        : await disableExternalAgents(cwd, deps.configDir);
+    if (json) log(JSON.stringify(result, null, 2));
+    else for (const line of renderExternalAgentsToggle(result)) log(line);
+    if (!externalAgentsToggleOk(result)) process.exitCode = 1;
     return;
   }
 
@@ -447,7 +472,10 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
   }
   const seams = deps.run ?? {};
   const json = args.includes("--json");
-  const id = args.find((arg, index) => !arg.startsWith("-") && !["--task", "--timeout"].includes(args[index - 1] ?? ""));
+  const typedId = args.find((arg, index) => !arg.startsWith("-") && !["--task", "--timeout"].includes(args[index - 1] ?? ""));
+  // Resolved ONCE, here: the per-agent config, the consent record and the vendor
+  // gates below all key on this string, so an alias must never reach them.
+  const id = typedId === undefined ? undefined : canonicalExternalAgentId(typedId);
   const task = optionValue(args, "--task");
   if (id === undefined || task === undefined || task.trim().length === 0) {
     console.error('Usage: keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]');
@@ -842,6 +870,8 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
 export function printExternalHelp(): void {
   helpTitle("keryx agents external", "inspect the external agent registry, or drive one ACP or line-stream agent");
   helpUsage([
+    "keryx agents external enable [--json]",
+    "keryx agents external disable [--json]",
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",
     'keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]',
@@ -850,6 +880,9 @@ export function printExternalHelp(): void {
     "keryx agents external discard <run-id>",
   ]);
   helpOptions([
+    { flag: "enable", desc: "Turn the external agent runtime on in one step: externalAgents.enabled in your user config, and the gdskills.external-agents entry in this project's manifest if there is one. Changes nothing else; a manifest that is not valid JSON is refused. In the shell: /external-agents on." },
+    { flag: "disable", desc: "Reverse exactly what enable wrote. Both print what they changed, or that nothing changed. In the shell: /external-agents off." },
+    { flag: "<id>", desc: "Wherever an agent id is taken, the short names claude, codex and agy (also antigravity) work for claude-cli, codex-cli and antigravity-cli." },
     { flag: "review", desc: "Show one stored write run: flagged paths first, the file list, then the redacted patch. Nothing is changed." },
     { flag: "apply", desc: "Land a stored write run as the new local branch external/<run-id>. Needs a terminal: you type the first 12 characters of the patch hash. Your current branch and working tree are never touched." },
     { flag: "--allow-flagged", desc: "apply: also land a diff that touches flagged paths (.git, CI, hooks, agent config). It does not skip the hash prompt." },

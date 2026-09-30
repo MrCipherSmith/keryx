@@ -221,6 +221,8 @@ function printAgentsHelp(): void {
     `keryx agents bootstrap uninstall --runtime ${RUNTIME_USAGE} [--dry-run]`,
     "keryx agents bootstrap print",
     "keryx agents monitor <events-file> [--json]",
+    "keryx agents external enable [--json]",
+    "keryx agents external disable [--json]",
     "keryx agents external list [--json] [--no-probe]",
     "keryx agents external probe <id> [--json]",
     'keryx agents external run <id> --task "<text>" [--unattended] [--write]',

@@ -572,7 +572,7 @@ describe("gatedSuperviseCodexMcpRun — capability gate (T11)", () => {
     );
 
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.reason).toContain("externalAgents.enabled");
+    expect(!result.ok && result.reason).toContain("keryx agents external enable");
     expect(harness.connectCalls).toHaveLength(0);
   });
 

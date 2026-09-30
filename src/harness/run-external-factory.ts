@@ -44,7 +44,7 @@ import type { CreatedWorktree, WorktreePort } from "./child/worktree";
 import { createBunSpawnPort } from "./external/bun-spawn-port";
 import { readRuntimeBlock, type RuntimeBlock } from "./external/dispatch";
 import { readExternalDepth } from "./external/env";
-import type { DetectionOutcome } from "./external/registry";
+import { canonicalExternalAgentId, type DetectionOutcome } from "./external/registry";
 import { runExternalChild, type ExternalChildOutcome } from "./external/runtime";
 import type { ExternalRunHandle, ExternalSpawnPort } from "./external/supervise";
 import type { ExternalEvent } from "./external/types";
@@ -371,7 +371,10 @@ export async function createRunExternal(
       return report(denied("the dispatch's runtime block is missing or is not an external runtime block"));
     }
 
-    const agentId = typeof block.agent === "string" ? block.agent : undefined;
+    // A short name (`claude`) resolves ONCE, here, before the per-agent config,
+    // the consent record and the vendor gates below read it: they all key on the
+    // canonical id, so an alias must never reach them un-resolved (flow 373, AC4).
+    const agentId = typeof block.agent === "string" ? canonicalExternalAgentId(block.agent) : undefined;
     // Announced BEFORE the gates below, so a run refused for a disabled agent or
     // a declined approval still lands in the operator's surface with the agent it
     // was refused FOR — a refusal nobody can see is the silent no-op §5 forbids.
@@ -552,8 +555,20 @@ export async function createRunExternal(
  */
 export function createLazyRunExternal(options: CreateRunExternalOptions): RunExternalFn {
   let resolved: Promise<RunExternalFn | undefined> | undefined;
+  // The gate's own named reason, kept so the refusal shown to the operator carries
+  // the fix (`keryx agents external enable` / `/external-agents on`) instead of a
+  // pointer to another command (flow 373, AC5/AC6).
+  let unavailableReason: string | undefined;
+  const resolveHook = (): Promise<RunExternalFn | undefined> =>
+    createRunExternal({
+      ...options,
+      onUnavailable: (reason) => {
+        unavailableReason = reason;
+        options.onUnavailable?.(reason);
+      },
+    });
   return async (request) => {
-    resolved ??= createRunExternal(options);
+    resolved ??= resolveHook();
     let hook: RunExternalFn | undefined;
     try {
       hook = await resolved;
@@ -567,8 +582,14 @@ export function createLazyRunExternal(options: CreateRunExternalOptions): RunExt
       return result;
     }
     if (hook === undefined) {
+      // An UNAVAILABLE answer is not cached either: the operator's next move after
+      // this refusal is to enable the capability, and that has to take effect on
+      // their next dispatch, not after a restart (this function's own promise).
+      resolved = undefined;
       const result = denied(
-        'the external agent runtime is unavailable; run `keryx agents external list` for the reason',
+        unavailableReason === undefined
+          ? 'the external agent runtime is unavailable; run `keryx agents external list` for the reason'
+          : `the external agent runtime is unavailable: ${unavailableReason}`,
       );
       options.observer?.onResult?.(request.workerId, result);
       return result;

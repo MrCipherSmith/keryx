@@ -494,8 +494,11 @@ What is in it today:
   worktree, a stripped environment, a restricted tool roster, the same budget
   ledger and depth caps, and the same completion. `keryx agents external list`
   shows the registry; `keryx agents external run <id> --task "…"` or
-  `/delegate <agent> <task>` starts a run. It takes an explicit opt-in in your
-  own user config, and is hard disabled on a remote transport and under CI.
+  `/delegate <agent> <task>` starts a run; `claude`, `codex` and `agy` are
+  accepted as short names. `keryx agents external enable` (in the shell:
+  `/external-agents on`) is the one-step opt-in: your user config and this
+  project's manifest, nothing else. It is hard disabled on a remote transport
+  and under CI.
   keryx never reads a vendor credential store — not even to check whether you
   are logged in — so it reports *"installed … login not verified — keryx
   cannot know"* rather than a tick. **No vendor sanction is claimed.**

@@ -11,6 +11,8 @@ import {
   type StructuredSubagentResult,
 } from "./spawn-subagent-tool";
 import type { NormalizedEvent, ProviderPort, StreamOptions } from "../../provider/types";
+import { EXTERNAL_AGENTS_DEFAULTS } from "../../../capability/external-agents";
+import { createRunExternal } from "../../run-external-factory";
 
 function stubProvider(text: string): ProviderPort {
   return {
@@ -289,4 +291,63 @@ test("a dispatch with a runtime block but NO hook stays unmarked — it ran nati
   for (const event of captured.events.filter((e) => e.kind === "upsert")) {
     expect((event as { runtime?: unknown }).runtime).toBeUndefined();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Short agent names (flow 373, AC3/AC4)
+// ---------------------------------------------------------------------------
+
+test("a short agent name reaches the hook and the sidebar as the canonical id", async () => {
+  const captured = captureFleet();
+  const seen: unknown[] = [];
+  const tool = makeTool(async (request) => {
+    seen.push(request.runtime);
+    return EXTERNAL_RESULT;
+  }, captured.onFleetEvent);
+  await tool.invoke({
+    task: "t",
+    mode: "read_only",
+    runtime: { kind: "external", agent: "Claude", sandbox: "read-only" },
+  });
+  expect(seen[0]).toEqual({ kind: "external", agent: "claude-cli", sandbox: "read-only" });
+  for (const event of captured.events.filter((e) => e.kind === "upsert")) {
+    expect(event).toMatchObject({ runtime: "external", agentId: "claude-cli" });
+  }
+});
+
+test("an unknown agent name is passed through untouched for the runtime validator to refuse", async () => {
+  const seen: unknown[] = [];
+  const tool = makeTool(async (request) => {
+    seen.push(request.runtime);
+    return EXTERNAL_RESULT;
+  });
+  await tool.invoke({ task: "t", mode: "read_only", runtime: { kind: "external", agent: "gemini", sandbox: "read-only" } });
+  expect(seen[0]).toEqual({ kind: "external", agent: "gemini", sandbox: "read-only" });
+});
+
+test("AC4: agent \"claude\" is refused by agents[\"claude-cli\"].enabled=false, spawning nothing", async () => {
+  let spawned = 0;
+  const hook = await createRunExternal({
+    cwd: "/nonexistent-project-root",
+    env: { PATH: "/usr/bin" },
+    config: { ...EXTERNAL_AGENTS_DEFAULTS, enabled: true, spawnDecision: "allow", agents: { "claude-cli": { enabled: false, model: null } } },
+    spawn: {
+      spawn() {
+        spawned += 1;
+        throw new Error("must not spawn");
+      },
+    },
+    readWorkingDiff: async () => undefined,
+  });
+  expect(hook).toBeDefined();
+  if (hook === undefined) return;
+  const tool = makeTool(hook);
+  const result = await tool.invoke({
+    task: "t",
+    mode: "read_only",
+    runtime: { kind: "external", agent: "claude", sandbox: "read-only" },
+  });
+  expect(result.status).toBe("Denied");
+  expect(result.output).toContain("claude-cli");
+  expect(spawned).toBe(0);
 });

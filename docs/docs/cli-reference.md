@@ -4036,6 +4036,8 @@ subscription quota: the only process either starts is the registry entry's own
 `--version`. `run` starts a real agent and spends the operator's quota.
 
 ```
+keryx agents external enable [--json]
+keryx agents external disable [--json]
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
 keryx agents external run <id> --task "<text>" [--unattended] [--write] [--timeout <ms>] [--json]
@@ -4044,8 +4046,12 @@ keryx agents external apply <run-id> [--allow-flagged]
 keryx agents external discard <run-id>
 ```
 
+Wherever an agent `<id>` is taken (and in `/delegate`, and in a `spawn_subagent` `runtime.agent`), the short names `claude`, `codex` and `agy` (also `antigravity`, any case) work for `claude-cli`, `codex-cli` and `antigravity-cli`. A short name never weakens a per-agent setting: `externalAgents.agents["claude-cli"].enabled = false` refuses `claude` too.
+
 | Subcommand | Flags / args | Description |
 |---|---|---|
+| `enable` | `--json` | Turn the external agent runtime on in one step: `externalAgents.enabled` in your user config, and, when this project has a `.metaproject/metaproject.json`, `enabled: true` on its `gdskills.external-agents` entry. Changes no other key and no other file; a manifest that is not valid JSON is refused and nothing is written. Idempotent; prints what changed or that nothing did. In the shell: `/external-agents on`. Model-initiated `spawn_subagent` calls still ask for approval (`externalAgents.spawnDecision`). |
+| `disable` | `--json` | Reverse exactly what `enable` wrote. In the shell: `/external-agents off`. |
 | `list` | `--json`, `--no-probe` | Print every registered agent with its detected availability, transport (`line-stream` or `acp`), sandbox modes, and streaming/resume/cost facts, plus the capability gate's verdict. `--no-probe` skips detection entirely and reports every entry as `not probed`. |
 | `probe` | `<id>`, `--json` | The same report for one agent id (`codex-cli`, `claude-cli`, `antigravity-cli`, `gemini-acp`). An unknown id lists the known ones and exits `1`. |
 | `run` | `<id>`, `--task`, `--unattended`, `--write`, `--timeout`, `--json` | Drive one registry agent, either transport, in a disposable git worktree: a **line-stream** (codec) agent (`codex-cli`, `claude-cli`, `antigravity-cli`) through its own argv/parse/classify codec, or an **ACP** agent (today `gemini-acp`, which starts `gemini --experimental-acp`) with keryx as its ACP **client**. Guarded by the same `externalAgents` capability (hard-disabled in CI and under a remote transport) and per-agent config as every external run, plus — for an agent the `/external` block-list or the one-time-consent set names (today `antigravity-cli`) — the block-list check and, TTY only, a one-time consent prompt (`consent-required` without a TTY and no recorded consent). Without a TTY, or with `--unattended`, every ACP permission that would need a human is refused; a line-stream agent has no permission bridge to refuse into. `--write` advertises `fs.writeTextFile` for an ACP agent, or requests `worktree-write` sandbox for a line-stream one — supported for `claude-cli` (tools `Read Grep Glob Edit Write`, no shell) and `codex-cli` (its OS sandbox: writes confined to the worktree, network closed as far as measured, read-only `.git`, but a shell that can read any file you can read; needs `codex` 0.159.2 or newer but older than 0.160.0), with the diff stored for `review`/`apply`/`discard` below, see [Let an external agent write](guides/external-agent-write.md); `antigravity-cli` refuses it with `not-implemented` (its edit tool writes outside the worktree). For an ACP run, prints the permission mode, whether keryx's MCP server was offered, the permission and fs counts, the patch path and the session id; for a line-stream run, prints the conversation/resume id, cost (if reported) and the count of unrecognised transcript lines. Exits `1` unless the run is `Completed`. See the [ACP client guide](guides/acp-client.md) and [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent). |

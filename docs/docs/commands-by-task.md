@@ -153,6 +153,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | Shell command | Summary |
 |---|---|
 | `/delegate` | Hand a task to an external agent CLI — /delegate <agent> <task>. |
+| `/external-agents` | Turn the external agent runtime on or off — /external-agents [on\|off]; not the /external privacy switch. |
 | `/demote` | Move a running foreground task to the background — /demote <task_id>. |
 | `/mcp` | MCP servers keryx is connected to — status, connect/disconnect; /mcp trust list, /mcp trust revoke <server__tool> or all (session trust). |
 | `/integrate` | Wire this project into an editor over MCP (keryx integrate; see also keryx integrations). |

@@ -137,6 +137,38 @@ describe("AC6: the /external block-list refuses antigravity-cli before anything 
   });
 });
 
+describe("flow 373 AC4: an alias meets the same vendor gates, keyed on the canonical id", () => {
+  test("`run agy` under /external off is blocked exactly like antigravity-cli", async () => {
+    mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+    writeFileSync(path.join(root, ".metaproject", "tasks.config.json"), JSON.stringify({ external: "off" }));
+    const sp = fakeSpawn(AGY_TRANSCRIPT);
+    await agentsExternalCommand(["run", "agy", "--task", "say ok"], deps({ run: { config: ENABLED, worktree: fakeWorktree().port, spawn: sp.port } }));
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("blocked by /external off");
+    expect(sp.calls).toHaveLength(0);
+  });
+
+  test("`run agy` without recorded consent is refused with consent-required naming antigravity-cli", async () => {
+    const sp = fakeSpawn(AGY_TRANSCRIPT);
+    await agentsExternalCommand(["run", "AGY", "--task", "say ok"], deps({ run: { config: ENABLED, worktree: fakeWorktree().port, spawn: sp.port, isTTY: false } }));
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("consent-required");
+    expect(errors.join("\n")).toContain('"antigravity-cli"');
+    expect(sp.calls).toHaveLength(0);
+  });
+
+  test("consent given through the alias is recorded under the canonical id, and then satisfies the canonical form", async () => {
+    const sp = fakeSpawn(AGY_TRANSCRIPT);
+    await agentsExternalCommand(
+      ["run", "agy", "--task", "say ok"],
+      deps({ run: { config: ENABLED, worktree: fakeWorktree().port, spawn: sp.port, isTTY: true, requestConsent: async () => true } }),
+    );
+    const recorded = loadExternalAgentsConfig(root);
+    expect(hasRecordedConsent(recorded, "antigravity-cli")).toBe(true);
+    expect(hasRecordedConsent(recorded, "agy")).toBe(false);
+  });
+});
+
 describe("AC6: one-time consent", () => {
   test("a non-TTY dispatch with no recorded consent is refused with consent-required, and nothing spawns", async () => {
     const wt = fakeWorktree();

@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   EXTERNAL_AGENTS,
+  canonicalExternalAgentId,
   compareVersions,
   externalAgentIds,
   getExternalAgent,
@@ -17,6 +18,34 @@ import type { ExternalAgentEntry } from "./types";
 
 const CODEX = getExternalAgent("codex-cli") as ExternalAgentEntry;
 const CLAUDE = getExternalAgent("claude-cli") as ExternalAgentEntry;
+
+describe("canonicalExternalAgentId (flow 373)", () => {
+  test("maps the short names to the registry ids", () => {
+    expect(canonicalExternalAgentId("claude")).toBe("claude-cli");
+    expect(canonicalExternalAgentId("codex")).toBe("codex-cli");
+    expect(canonicalExternalAgentId("agy")).toBe("antigravity-cli");
+    expect(canonicalExternalAgentId("antigravity")).toBe("antigravity-cli");
+  });
+
+  test("is case-insensitive and trims", () => {
+    expect(canonicalExternalAgentId("Claude")).toBe("claude-cli");
+    expect(canonicalExternalAgentId("  CODEX ")).toBe("codex-cli");
+    expect(canonicalExternalAgentId("AGY")).toBe("antigravity-cli");
+  });
+
+  test("leaves a canonical id, and an unknown name, exactly as given", () => {
+    for (const id of externalAgentIds()) expect(canonicalExternalAgentId(id)).toBe(id);
+    expect(canonicalExternalAgentId("nonexistent")).toBe("nonexistent");
+    expect(canonicalExternalAgentId("Nonexistent ")).toBe("Nonexistent ");
+    expect(canonicalExternalAgentId("")).toBe("");
+  });
+
+  test("every alias lands on a registered agent", () => {
+    for (const alias of ["claude", "codex", "agy", "antigravity"]) {
+      expect(getExternalAgent(canonicalExternalAgentId(alias))).toBeDefined();
+    }
+  });
+});
 
 describe("registry shape", () => {
   test("ships exactly the agents this release specifies: three codec agents and one ACP agent (flow 176, 292, 357)", () => {

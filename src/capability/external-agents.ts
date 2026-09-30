@@ -47,8 +47,9 @@
 // network. Availability of an individual CLI is a separate, three-state question
 // answered by `resolveAvailability` in `src/harness/external/registry.ts`.
 
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { isProviderIdExternal, loadExternalProvidersConfig } from "../lib/external-providers";
 import { ExternalBlockedError, resolveExternalSetting } from "../lib/external-switch";
@@ -288,6 +289,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * The fix every capability refusal names (flow 373, AC5/AC6): one command in a
+ * terminal, one slash command in the shell. Worded once so the two layers and
+ * the `/delegate` refusal cannot drift apart.
+ */
+export const ENABLE_HINT = "run `keryx agents external enable` (in the shell: `/external-agents on`)";
+
 /** Why {@link checkExternalAgentVendorGates} refused a dispatch. */
 export interface VendorGateRefusal {
   readonly code: "external-blocked" | "consent-required";
@@ -523,21 +531,246 @@ export async function resolveExternalAgentsCapability(
   if (!config.enabled) {
     return {
       ok: false,
-      reason:
-        "the external agent runtime is disabled; set `externalAgents.enabled` to true in the keryx " +
-        "user config to opt in",
+      reason: `the external agent runtime is disabled; ${ENABLE_HINT} to opt in`,
     };
   }
 
   // Consulted only when there IS a workspace: outside one the user-global switch
   // is the whole story (see the module header).
   const manifest = await manifestCapabilityState(input.cwd, EXTERNAL_AGENTS_CAPABILITY_ID);
-  if (manifest === "disabled" || manifest === "unlisted") {
+  if (manifest === "disabled") {
     return {
       ok: false,
-      reason: `this project has not enabled \`${EXTERNAL_AGENTS_CAPABILITY_ID}\`; run \`keryx init --${EXTERNAL_AGENTS_CAPABILITY_DESCRIPTOR.flag}\` in the project root to opt in`,
+      reason: `this project has not enabled \`${EXTERNAL_AGENTS_CAPABILITY_ID}\`; ${ENABLE_HINT} to opt in`,
+    };
+  }
+  if (manifest === "unlisted") {
+    return {
+      ok: false,
+      reason:
+        `this project has not enabled \`${EXTERNAL_AGENTS_CAPABILITY_ID}\` and its manifest does not list it yet; ` +
+        `run \`keryx update\` to register it, then ${ENABLE_HINT}`,
     };
   }
 
   return { ok: true, config };
+}
+
+// ---------------------------------------------------------------------------
+// One-step opt-in (flow 373): `keryx agents external enable|disable`, `/external-agents on|off`
+// ---------------------------------------------------------------------------
+
+/** What happened to the user-global flag. `skipped` = deliberately not touched (a refused manifest made `enable` all-or-nothing). */
+export type UserToggleOutcome = "changed" | "unchanged" | "skipped" | "failed";
+
+/** What happened to the project manifest's `gdskills.external-agents` entry. */
+export type ProjectToggleOutcome =
+  | "changed"
+  | "unchanged"
+  | "no-manifest"
+  | "entry-absent"
+  | "invalid-manifest"
+  | "write-failed";
+
+/** The structured answer both the CLI and the shell print. */
+export interface ExternalAgentsToggleResult {
+  /** The value asked for: true for enable, false for disable. */
+  readonly target: boolean;
+  readonly user: UserToggleOutcome;
+  readonly project: ProjectToggleOutcome;
+  /** Absolute path of the manifest that was looked at (present even when there was none). */
+  readonly manifestPath: string;
+}
+
+function manifestPathFor(cwd: string): string {
+  return path.join(cwd, ".metaproject", "metaproject.json");
+}
+
+/**
+ * Change ONLY the `enabled` flag of the first `gdskills.external-agents` entry
+ * (the one {@link manifestCapabilityState} reads). Read-modify-write that keeps
+ * the file's own formatting: its indent, its trailing newline, its key order
+ * and its file mode. A file that does not parse to an object is refused and never
+ * written — overwriting a hand-edited manifest to flip a flag is the wrong trade.
+ */
+async function toggleManifestEntry(cwd: string, target: boolean): Promise<ProjectToggleOutcome> {
+  const manifestPath = manifestPathFor(cwd);
+  if (!(await pathExists(manifestPath))) return "no-manifest";
+  let text: string;
+  try {
+    text = await readFile(manifestPath, "utf8");
+  } catch {
+    return "invalid-manifest";
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return "invalid-manifest";
+  }
+  if (!isPlainObject(parsed)) return "invalid-manifest";
+
+  let entry: Record<string, unknown> | undefined;
+  if (isPlainObject(parsed.modules)) {
+    for (const moduleEntry of Object.values(parsed.modules)) {
+      const capabilities = isPlainObject(moduleEntry) && Array.isArray(moduleEntry.capabilities) ? moduleEntry.capabilities : [];
+      for (const capability of capabilities) {
+        if (isPlainObject(capability) && capability.id === EXTERNAL_AGENTS_CAPABILITY_ID) {
+          entry = capability;
+          break;
+        }
+      }
+      if (entry !== undefined) break;
+    }
+  }
+  if (entry === undefined) return "entry-absent";
+  if ((entry.enabled === true) === target) return "unchanged";
+
+  entry.enabled = target;
+  const indent = /^([ \t]+)"/m.exec(text)?.[1] ?? "  ";
+  const next = `${JSON.stringify(parsed, null, indent)}${text.endsWith("\n") ? "\n" : ""}`;
+  try {
+    let mode: number | undefined;
+    try {
+      mode = (await stat(manifestPath)).mode & 0o777;
+    } catch {
+      mode = undefined;
+    }
+    await writeFileAtomic(manifestPath, next, mode === undefined ? {} : { mode });
+  } catch {
+    return "write-failed";
+  }
+  return "changed";
+}
+
+/** Set the user-global `externalAgents.enabled`, merging over the RAW block so no other field moves and no default is materialised. */
+function toggleUserFlag(target: boolean, dir?: string): UserToggleOutcome {
+  const raw = loadShellConfig(dir).externalAgents;
+  const block = isPlainObject(raw) ? raw : {};
+  if ((block.enabled === true) === target) return "unchanged";
+  saveShellConfig({ externalAgents: { ...block, enabled: target } }, dir);
+  // `saveShellConfig` is best-effort and never throws: read back rather than trust it.
+  return loadExternalAgentsConfig(dir).enabled === target ? "changed" : "failed";
+}
+
+/**
+ * Opt in: `externalAgents.enabled = true` in the user config and, when `cwd`
+ * has a manifest, `enabled: true` on its `gdskills.external-agents` entry.
+ * Touches nothing else. A manifest that is not valid JSON makes this
+ * all-or-nothing: it is refused and the user config is left alone too, so the
+ * operator is never told "on" while the project still says no.
+ */
+export async function enableExternalAgents(cwd: string, dir?: string): Promise<ExternalAgentsToggleResult> {
+  const manifestPath = manifestPathFor(cwd);
+  if ((await probeManifest(cwd)) === "invalid-manifest") {
+    return { target: true, user: "skipped", project: "invalid-manifest", manifestPath };
+  }
+  const user = toggleUserFlag(true, dir);
+  const project = await toggleManifestEntry(cwd, true);
+  return { target: true, user, project, manifestPath };
+}
+
+/**
+ * Reverse exactly what {@link enableExternalAgents} wrote. A manifest that cannot be
+ * read does not stop the user-global switch from going off — turning the
+ * capability off must never be harder than turning it on.
+ */
+export async function disableExternalAgents(cwd: string, dir?: string): Promise<ExternalAgentsToggleResult> {
+  const user = toggleUserFlag(false, dir);
+  const project = await toggleManifestEntry(cwd, false);
+  return { target: false, user, project, manifestPath: manifestPathFor(cwd) };
+}
+
+/** `invalid-manifest` when the manifest exists but is not a JSON object; otherwise `undefined`. Writes nothing. */
+async function probeManifest(cwd: string): Promise<"invalid-manifest" | undefined> {
+  const manifestPath = manifestPathFor(cwd);
+  if (!(await pathExists(manifestPath))) return undefined;
+  try {
+    return isPlainObject(JSON.parse(await readFile(manifestPath, "utf8"))) ? undefined : "invalid-manifest";
+  } catch {
+    return "invalid-manifest";
+  }
+}
+
+/** Human output for a toggle: what changed, or that nothing did. Shared by the CLI and the shell. */
+export function renderExternalAgentsToggle(result: ExternalAgentsToggleResult): string[] {
+  const word = result.target ? "on" : "off";
+  const lines: string[] = [];
+  switch (result.user) {
+    case "changed":
+      lines.push(`user config: externalAgents.enabled set to ${result.target}`);
+      break;
+    case "unchanged":
+      lines.push(`user config: externalAgents.enabled already ${result.target}`);
+      break;
+    case "skipped":
+      lines.push("user config: left as it was (the project manifest was refused, see below)");
+      break;
+    case "failed":
+      lines.push("user config: could not be written; externalAgents.enabled is unchanged");
+      break;
+  }
+  switch (result.project) {
+    case "changed":
+      lines.push(`project manifest: ${EXTERNAL_AGENTS_CAPABILITY_ID} set to enabled: ${result.target}`);
+      break;
+    case "unchanged":
+      lines.push(`project manifest: ${EXTERNAL_AGENTS_CAPABILITY_ID} already enabled: ${result.target}`);
+      break;
+    case "no-manifest":
+      lines.push("no project manifest here; only the user config applies");
+      break;
+    case "entry-absent":
+      lines.push(`project manifest has no ${EXTERNAL_AGENTS_CAPABILITY_ID} entry; run \`keryx update\` to register it`);
+      break;
+    case "invalid-manifest":
+      lines.push(`project manifest (${result.manifestPath}) is not valid JSON; refused and left untouched`);
+      break;
+    case "write-failed":
+      lines.push(`project manifest (${result.manifestPath}) could not be written; left as it was`);
+      break;
+  }
+  const changed = result.user === "changed" || result.project === "changed";
+  lines.push(changed ? `external agents: ${word}` : `nothing changed; external agents already ${word} as far as this command can tell`);
+  return lines;
+}
+
+/** Whether the toggle succeeded as asked: no refusal and no failed write. */
+export function externalAgentsToggleOk(result: ExternalAgentsToggleResult): boolean {
+  return (
+    result.user !== "failed" &&
+    result.user !== "skipped" &&
+    result.project !== "invalid-manifest" &&
+    result.project !== "write-failed"
+  );
+}
+
+/**
+ * Bare `/external-agents`: the user-global flag, the project flag, and the
+ * effective answer with its named reason when it is off.
+ */
+export async function externalAgentsStatusLines(
+  cwd: string,
+  dir?: string,
+  env?: Readonly<Record<string, string | undefined>>,
+): Promise<string[]> {
+  const config = loadExternalAgentsConfig(dir);
+  const manifest = await manifestCapabilityState(cwd, EXTERNAL_AGENTS_CAPABILITY_ID);
+  const projectWord: Record<ManifestCapabilityState, string> = {
+    enabled: "on",
+    disabled: "off",
+    unlisted: "not listed (run `keryx update`)",
+    "no-manifest": "no manifest here (the user config decides)",
+  };
+  const gate = await resolveExternalAgentsCapability({ cwd, config, ...(dir === undefined ? {} : { configDir: dir }), ...(env === undefined ? {} : { env }) });
+  const lines = [
+    `external agents: user config ${config.enabled ? "on" : "off"}, project ${projectWord[manifest]}`,
+    gate.ok ? "effective: on" : `effective: off — ${gate.reason}`,
+  ];
+  if (!gate.ok || !config.enabled || manifest === "disabled") {
+    lines.push(`to turn on: ${ENABLE_HINT.replace(/^run /, "")}`);
+  } else {
+    lines.push("to turn off: `keryx agents external disable` (in the shell: `/external-agents off`)");
+  }
+  return lines;
 }

@@ -5,7 +5,7 @@
 // assertions is one property: the surface must never render "a binary exists" or
 // "nobody asked" as though it meant "ready". A green tick that means "nobody
 // asked" costs the operator a dispatch that cannot run (security-policy §1).
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -19,6 +19,7 @@ import {
 } from "./agents-external";
 import { EXTERNAL_AGENTS, resolveAvailability } from "../harness/external/registry";
 import type { VersionProbe } from "../harness/external-agent-probe";
+import { loadExternalAgentsConfig } from "../capability/external-agents";
 
 const CODEX = EXTERNAL_AGENTS[0];
 if (CODEX === undefined) throw new Error("the external agent registry is empty");
@@ -199,6 +200,81 @@ describe("probe", () => {
     await agentsExternalCommand(["probe"], d);
     expect(process.exitCode).toBe(1);
     expect(probed).toBe(0);
+  });
+});
+
+describe("probe accepts a short name (flow 373, AC3)", () => {
+  test("`probe claude` probes claude-cli's own binary", async () => {
+    const seen: string[] = [];
+    await agentsExternalCommand(
+      ["probe", "claude"],
+      deps({
+        probe: async (binary) => {
+          seen.push(binary);
+          return { binaryFound: true };
+        },
+      }),
+    );
+    const claude = EXTERNAL_AGENTS.find((e) => e.id === "claude-cli");
+    expect(seen).toEqual([claude?.binary ?? "unreachable"]);
+    expect(process.exitCode).toBe(0);
+  });
+});
+
+describe("enable / disable (flow 373, AC1/AC2)", () => {
+  const manifestPath = (): string => path.join(configDir, ".metaproject", "metaproject.json");
+  async function writeManifest(enabled: boolean): Promise<string> {
+    const text = `${JSON.stringify({ modules: { gdskills: { enabled: true, capabilities: [{ id: "gdskills.external-agents", enabled, kind: "ceiling" }] } } }, null, 2)}\n`;
+    await mkdir(path.dirname(manifestPath()), { recursive: true });
+    await writeFile(manifestPath(), text, "utf8");
+    return text;
+  }
+
+  test("enable turns both flags on and says what it changed; disable puts the manifest back byte for byte", async () => {
+    const original = await writeManifest(false);
+    const on = deps();
+    await agentsExternalCommand(["enable"], on);
+    expect(process.exitCode).toBe(0);
+    expect(on.lines.join("\n")).toContain("externalAgents.enabled set to true");
+    expect(on.lines.join("\n")).toContain("gdskills.external-agents set to enabled: true");
+    expect(loadExternalAgentsConfig(configDir).enabled).toBe(true);
+
+    const off = deps();
+    await agentsExternalCommand(["disable"], off);
+    expect(off.lines.join("\n")).toContain("externalAgents.enabled set to false");
+    expect(await readFile(manifestPath(), "utf8")).toBe(original);
+    expect(loadExternalAgentsConfig(configDir).enabled).toBe(false);
+  });
+
+  test("a second enable prints that nothing changed", async () => {
+    await agentsExternalCommand(["enable"], deps());
+    const again = deps();
+    await agentsExternalCommand(["enable"], again);
+    expect(again.lines.join("\n")).toContain("nothing changed");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("--json carries the structured result", async () => {
+    const d = deps();
+    await agentsExternalCommand(["enable", "--json"], d);
+    const parsed = JSON.parse(d.lines.join("\n")) as { target: boolean; user: string; project: string };
+    expect(parsed).toMatchObject({ target: true, user: "changed", project: "no-manifest" });
+  });
+
+  test("a manifest that is not valid JSON is refused, exit 1, and left untouched", async () => {
+    await mkdir(path.dirname(manifestPath()), { recursive: true });
+    await writeFile(manifestPath(), "{nope", "utf8");
+    const d = deps();
+    await agentsExternalCommand(["enable"], d);
+    expect(process.exitCode).toBe(1);
+    expect(d.lines.join("\n")).toContain("not valid JSON");
+    expect(await readFile(manifestPath(), "utf8")).toBe("{nope");
+    expect(loadExternalAgentsConfig(configDir).enabled).toBe(false);
+  });
+
+  test("--help on enable changes nothing", async () => {
+    await agentsExternalCommand(["enable", "--help"], deps());
+    expect(loadExternalAgentsConfig(configDir).enabled).toBe(false);
   });
 });
 
