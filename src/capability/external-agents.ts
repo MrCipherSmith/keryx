@@ -731,7 +731,11 @@ export function renderExternalAgentsToggle(result: ExternalAgentsToggleResult): 
       break;
   }
   const changed = result.user === "changed" || result.project === "changed";
-  lines.push(changed ? `external agents: ${word}` : `nothing changed; external agents already ${word} as far as this command can tell`);
+  if (!externalAgentsToggleOk(result)) {
+    lines.push(changed ? `external agents: partly ${word}; see the lines above` : `not turned ${word}: see the lines above`);
+  } else {
+    lines.push(changed ? `external agents: ${word}` : `nothing changed; external agents already ${word} as far as this command can tell`);
+  }
   return lines;
 }
 

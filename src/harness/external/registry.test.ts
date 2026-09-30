@@ -38,6 +38,9 @@ describe("canonicalExternalAgentId (flow 373)", () => {
     expect(canonicalExternalAgentId("nonexistent")).toBe("nonexistent");
     expect(canonicalExternalAgentId("Nonexistent ")).toBe("Nonexistent ");
     expect(canonicalExternalAgentId("")).toBe("");
+    expect(canonicalExternalAgentId("constructor")).toBe("constructor");
+    expect(canonicalExternalAgentId("__proto__")).toBe("__proto__");
+    expect(canonicalExternalAgentId("toString")).toBe("toString");
   });
 
   test("every alias lands on a registered agent", () => {

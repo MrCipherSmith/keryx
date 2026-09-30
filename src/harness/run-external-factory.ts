@@ -554,7 +554,6 @@ export async function createRunExternal(
  * (security-policy §5).
  */
 export function createLazyRunExternal(options: CreateRunExternalOptions): RunExternalFn {
-  let resolved: Promise<RunExternalFn | undefined> | undefined;
   // The gate's own named reason, kept so the refusal shown to the operator carries
   // the fix (`keryx agents external enable` / `/external-agents on`) instead of a
   // pointer to another command (flow 373, AC5/AC6).
@@ -568,24 +567,20 @@ export function createLazyRunExternal(options: CreateRunExternalOptions): RunExt
       },
     });
   return async (request) => {
-    resolved ??= resolveHook();
+    // Re-evaluated on EVERY dispatch (one config read plus one manifest read): a
+    // `/external-agents off` in a live shell must revoke the next dispatch, exactly
+    // as `on` must grant it, so neither answer is cached.
     let hook: RunExternalFn | undefined;
     try {
-      hook = await resolved;
+      hook = await resolveHook();
     } catch (cause) {
-      // A gate that throws must not surface as the vendor refusing. Clearing the
-      // cache lets a transient config-read failure be retried on the next call.
-      resolved = undefined;
+      // A gate that throws must not surface as the vendor refusing.
       const message = cause instanceof Error ? cause.message : String(cause);
       const result = denied(`the external agent runtime could not be resolved: ${message}`);
       options.observer?.onResult?.(request.workerId, result);
       return result;
     }
     if (hook === undefined) {
-      // An UNAVAILABLE answer is not cached either: the operator's next move after
-      // this refusal is to enable the capability, and that has to take effect on
-      // their next dispatch, not after a restart (this function's own promise).
-      resolved = undefined;
       const result = denied(
         unavailableReason === undefined
           ? 'the external agent runtime is unavailable; run `keryx agents external list` for the reason'

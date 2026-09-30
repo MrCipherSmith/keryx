@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
-import { enableExternalAgents, EXTERNAL_AGENTS_DEFAULTS, type ExternalAgentsConfig } from "../capability/external-agents";
+import { disableExternalAgents, enableExternalAgents, EXTERNAL_AGENTS_DEFAULTS, type ExternalAgentsConfig } from "../capability/external-agents";
 import type { CreatedWorktree, WorktreeMergeResult, WorktreePort } from "./child/worktree";
 import { ENV_EXTERNAL_DEPTH } from "./external/env";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "./external/supervise";
@@ -640,6 +640,28 @@ describe("flow 373 AC5: the lazy hook names the fix and does not cache a refusal
       // gate, the shipped `spawnDecision: "ask"` with no approver wired here.
       expect(second.output).not.toContain("unavailable");
       expect(second.output).toContain("spawnDecision");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("disable revokes the next dispatch in the same live hook", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-lazy-")));
+    const configDir = path.join(root, "cfg");
+    mkdirSync(configDir, { recursive: true });
+    try {
+      const sp = fakeSpawn();
+      const { config: _config, ...rest } = options({ cwd: root, configDir, spawn: sp.port, env: { PATH: "/usr/bin", HOME: root } });
+      const hook = createLazyRunExternal({ ...rest, config: undefined } as unknown as CreateRunExternalOptions);
+      await enableExternalAgents(root, configDir);
+      const granted = await hook(request());
+      expect(granted.output).not.toContain("unavailable");
+
+      await disableExternalAgents(root, configDir);
+      const revoked = await hook(request());
+      expect(revoked.status).toBe("Denied");
+      expect(revoked.output).toContain("unavailable");
+      expect(sp.calls).toHaveLength(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

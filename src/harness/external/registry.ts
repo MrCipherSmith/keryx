@@ -152,7 +152,8 @@ const EXTERNAL_AGENT_ALIASES: Readonly<Record<string, string>> = {
  * caller's own "unknown agent" refusal still names what was typed.
  */
 export function canonicalExternalAgentId(input: string): string {
-  return EXTERNAL_AGENT_ALIASES[input.trim().toLowerCase()] ?? input;
+  const key = input.trim().toLowerCase();
+  return Object.hasOwn(EXTERNAL_AGENT_ALIASES, key) ? (EXTERNAL_AGENT_ALIASES[key] as string) : input;
 }
 
 /** Every registered agent id, in registry order. */

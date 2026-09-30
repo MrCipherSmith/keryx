@@ -489,4 +489,15 @@ describe("enable / disable (the one-step opt-in)", () => {
     const on = (await externalAgentsStatusLines(proj, cfg, {})).join("\n");
     expect(on).toContain("effective: on");
   });
+
+  test("an invalid manifest ends with a not-turned line, never 'already on'", () => {
+    const lines = renderExternalAgentsToggle({
+      target: true,
+      user: "skipped",
+      project: "invalid-manifest",
+      manifestPath: "/p/.metaproject/metaproject.json",
+    });
+    expect(lines[lines.length - 1]).toBe("not turned on: see the lines above");
+    expect(lines.join("\n")).not.toContain("already on");
+  });
 });
