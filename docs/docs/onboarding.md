@@ -452,6 +452,15 @@ keryx shell
   (`--no-tui --chat`) it instead takes an argument (`/model <name>`) and
   `/models` lists what is available as a numbered menu.
 
+For **ChatGPT / Codex**, model discovery obtains the current stable Codex
+client version from official npm metadata; installing Codex is unnecessary.
+The version is cached for one day and refreshed on demand. **Test** in
+`/connect` (or `keryx providers test openai-codex`) always checks for a newer
+version before fetching the live model catalog. There is no background npm
+polling. If npm is unavailable, Keryx reuses a previously discovered version;
+without a cached version, it reports the lookup failure. Subscription
+credentials are never sent to npm.
+
 #### Pick a theme
 
 ```

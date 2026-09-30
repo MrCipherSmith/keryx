@@ -1359,6 +1359,18 @@ Disconnect; CLI equivalents are `keryx providers test openai-codex` and
 `keryx providers remove openai-codex`. A successful model-list probe verifies
 authentication and discovery; send a short prompt to verify inference too.
 
+For ChatGPT / Codex, Keryx discovers the current stable Codex client version
+from official npm metadata and uses it to request the live subscription model
+catalog. It does not install Codex. The discovered version is cached for one
+day in `codex-catalog-version.json` in Keryx's user-global config directory.
+Normal model discovery refreshes an expired cache on demand; there is no
+background polling. **Test** in `/connect` and
+`keryx providers test openai-codex` always attempt a fresh version lookup,
+even when the cache is still fresh. Subscription credentials are never sent
+to npm. If npm is unavailable, a previously discovered version is reused;
+without a cached version, discovery reports the lookup failure. Run Test
+again once npm is reachable to refresh the catalog version.
+
 OAuth tokens stay in Keryx's owner-only credential store and are refreshed
 before use. They are never exported as `OPENAI_API_KEY`. Existing OAuth grants
 saved under the old `openai` name remain readable by `openai-codex`. Disconnecting
