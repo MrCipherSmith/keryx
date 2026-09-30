@@ -507,7 +507,9 @@ package directory, the module directory, and the registry entry last. `absent`
 means the part was already gone and is not an error.
 
 If a step fails — a read-only directory, say — the error names the part that
-failed, what is already gone and what is still in place. The registry entry is
+failed, what is already gone and what is still in place; a package directory
+whose recursive delete failed part-way is listed as `(may be partly removed)`,
+since some of its files may already be gone. The registry entry is
 still there, so running the same command again once the cause is fixed
 finishes the removal. A skill whose entry and package are already gone is
 still found by a leftover catalog row or verification report, so a removal
@@ -527,6 +529,12 @@ registry anyone can edit, so it checks where it is about to reach and refuses
 catalog and the disk as they were:
 
 - a bundled skill, or a name that is not a project skill;
+- a skill whose package directory is on disk only under another spelling
+  (`review/Alpha/` for `review/alpha`). On a filesystem that ignores case the
+  two are one directory, so removing the entry and row would leave that package
+  in place and still found as a skill. The refusal names the on-disk spelling;
+  rename the directory to `.metaproject/project-skills/<module>/<name>` and
+  retry;
 - a symlink where something would be deleted: `.metaproject/project-skills`
   itself, the module directory, the package, or the reports directory
   `.metaproject/data/gdskills/reports`. It does not delete through the link and
