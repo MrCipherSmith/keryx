@@ -487,7 +487,7 @@ What is in it today:
   bounded parallel scheduling, and an offline fleet report over a recorded event
   log (`keryx agents monitor <events-file>`).
 - **Vendor CLIs as child agents — off by default.** keryx can hand a bounded,
-  **read-only** task (or, for `claude-cli` only, a reviewed write — see below)
+  **read-only** task (or, for `claude-cli` and `codex-cli`, a reviewed write — see below)
   to a coding CLI you already have installed (`codex exec`,
   `claude -p`, or Google's Antigravity CLI, `agy -p --output-format
   stream-json`) and host it as a child of the same harness: a disposable git
@@ -510,7 +510,7 @@ What is in it today:
   `keryx agents external run claude-cli --task "…" --write` runs `claude` in a
   throwaway worktree with only `Read Grep Glob Edit Write` (no shell, no network,
   no MCP); `codex-cli --write` runs `codex` in the same kind of worktree under an
-  OS sandbox (writes outside the worktree fail, network closed, `.git` read-only)
+  OS sandbox (as measured: writes outside the worktree fail, a DNS lookup fails, `.git` read-only)
   that still leaves it a shell able to read files your account can read, so review
   its output too. Its diff is captured, secret-redacted, hashed and stored as a pending
   review — nothing reaches your checkout. `keryx agents external review <run-id>`
@@ -522,7 +522,7 @@ What is in it today:
   `claude-cli` and `codex-cli` can write (`antigravity-cli` refuses `--write`), the
   review is a human reading the diff (a model review is not built), and neither
   has a long live history (`codex` was verified in a scratch repository on
-  `codex` 0.159.0; older versions are refused). In the TUI: `/external-diff` and a
+  `codex` 0.159.2; versions outside 0.159.2 up to 0.160.0 are refused). In the TUI: `/external-diff` and a
   sidebar row while a diff waits. See the [external agent write
   guide](docs/docs/guides/external-agent-write.md).
 - **Completion you can audit.** The completion gate blocks on missing evidence: a

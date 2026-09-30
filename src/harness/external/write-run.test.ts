@@ -536,12 +536,16 @@ describe("runExternalWriteChild", () => {
     test.each([
       ["older", "codex-cli 0.158.9", "found 0.158.9"],
       ["an older major", "codex-cli 0.147.0", "found 0.147.0"],
+      ["the old floor", "codex-cli 0.159.0", "found 0.159.0"],
+      ["newer than verified", "codex-cli 0.160.1", "found 0.160.1"],
+      ["a pre-release", "codex-cli 0.159.2-rc.1", "a pre-release"],
     ])("a %s codex is refused before any spawn or worktree, naming the found and required versions", async (_name, output, found) => {
       const child = spawned();
       const result = await runExternalWriteChild(codexInput(), deps(child.port, { detect: probe(output) }));
       expect(result.outcome.status).toBe("Denied");
       expect(result.outcome.output).toContain(found);
-      expect(result.outcome.output).toContain("0.159.0");
+      expect(result.outcome.output).toContain("0.159.2");
+      expect(result.outcome.output).toContain("0.160.0");
       expect(child.argvs).toEqual([]);
       expect(result.run).toBeUndefined();
       expectNoWorktreeLeft();
@@ -556,12 +560,12 @@ describe("runExternalWriteChild", () => {
       const result = await runExternalWriteChild(codexInput(), deps(child.port, detect === undefined ? {} : { detect }));
       expect(result.outcome.status).toBe("Denied");
       expect(result.outcome.output).toContain("could not be read");
-      expect(result.outcome.output).toContain("0.159.0");
+      expect(result.outcome.output).toContain("0.159.2");
       expect(child.argvs).toEqual([]);
       expectNoWorktreeLeft();
     });
 
-    test.each(["codex-cli 0.159.0", "codex-cli 0.159.2", "codex-cli 0.160.1"])(
+    test.each(["codex-cli 0.159.2", "codex-cli 0.159.7"])(
       "%s captures the diff through the same pipeline as claude and removes the worktree",
       async (output) => {
         const child = spawned();

@@ -381,16 +381,17 @@ server. `codex` has no allow-list; keryx runs it with `-s workspace-write -c
 sandbox_workspace_write.exclude_slash_tmp=true -c
 sandbox_workspace_write.exclude_tmpdir_env_var=true -c
 sandbox_workspace_write.network_access=false --ignore-rules`. Measured live on
-`codex` 0.159.0 and 0.159.2 in a scratch repository: writes outside the worktree fail
-with "read-only file system", the network is closed and `.git` is read-only. Without
+`codex` 0.159.2 in a scratch repository: writes outside the worktree fail
+with "read-only file system", a DNS lookup fails and `.git` is read-only. Without
 the two `exclude_*` flags the default sandbox lets `codex` write to `/tmp`, and
 without `--ignore-rules` the exec-policy rules in your own `codex` configuration can
 run commands outside the sandbox, so keryx always passes all of them. The difference that remains: `codex` keeps a sandboxed shell and can read any
-file your account can read; it cannot send it anywhere, but the content can appear
-in the run's output, so review the diff and the output before applying. keryx
-refuses a `codex` write run when the installed `codex` is older than 0.159.0 or its
-version cannot be read, and a follow-up turn can never run under a weaker sandbox
-than the first. The worktree's diff is
+file your account can read; the network is closed as far as was measured, but the
+content can appear in the run's output, so review the diff and the output before
+applying. keryx refuses a `codex` write run unless the installed `codex` is 0.159.2
+or newer but older than 0.160.0 (an unknown `-c` key is ignored silently, so a newer
+release is refused until keryx has measured it), and a follow-up turn re-asserts the
+same flags. The worktree's diff is
 captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a
 pending review; nothing reaches your checkout. `keryx agents external review
 <run-id>` shows it. `apply <run-id> [--allow-flagged]` needs a real terminal, shows
@@ -415,7 +416,9 @@ The full flow, the refusals and the limits are in
   built, there is no auto-approve, and keryx never pushes or opens a pull request
   from the landed branch. Neither write path has a long live history: the
   `claude` narrow-permission flags were probed against `claude` 2.1.280, and the
-  `codex` sandbox was measured live on `codex` 0.159.0 in a scratch repository.
+  `codex` sandbox was measured live on `codex` 0.159.2 in a scratch repository.
+  A read-only `codex` child is launched without `--ignore-rules`, so an exec-policy
+  rule of yours that allows a command can still run it outside the sandbox there.
 - **No supervision triggers.** The specification describes a folded,
   trigger-driven view of a *running* child for the parent agent. None of it is
   implemented: the parent receives the child's result and nothing before it.

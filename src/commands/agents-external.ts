@@ -858,7 +858,7 @@ export function printExternalHelp(): void {
     { flag: "--no-probe", desc: "Skip detection entirely; every entry reports `not-probed`." },
     { flag: "--task", desc: "run: what the agent should do. It runs in a disposable worktree; your tree is never touched." },
     { flag: "--unattended", desc: "run: refuse every permission that would need a human (also implied without a TTY)." },
-    { flag: "--write", desc: "run: writes land in the disposable worktree and leave as a never-applied patch. An ACP agent advertises fs.writeTextFile; for a line-stream agent only claude-cli and codex-cli are supported. claude gets Edit and Write inside the worktree and no shell; codex runs under its OS sandbox (writes confined to the worktree, no network) and keeps a shell that can read any file you can read. codex needs version 0.159.0 or newer. antigravity-cli is refused: its edit tool writes outside the worktree." },
+    { flag: "--write", desc: "run: writes land in the disposable worktree and leave as a never-applied patch. An ACP agent advertises fs.writeTextFile; for a line-stream agent only claude-cli and codex-cli are supported. claude gets Edit and Write inside the worktree and no shell; codex runs under its OS sandbox (writes confined to the worktree, network closed as far as measured) and keeps a shell that can read any file you can read. codex needs version 0.159.2 or newer but older than 0.160.0. antigravity-cli is refused: its edit tool writes outside the worktree." },
     { flag: "--timeout", desc: "run: wall-clock ceiling in ms (default: externalAgents.defaultTimeoutMs)." },
   ]);
 }

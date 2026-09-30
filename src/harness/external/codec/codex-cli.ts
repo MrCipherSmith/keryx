@@ -41,15 +41,17 @@ export const CODEX_SANDBOX_MODES: Readonly<Record<ExternalSandbox, string>> = {
 };
 
 /**
- * What confines a `worktree-write` codex run to its working directory (measured live
- * on codex 0.159.0: writes to /tmp, /var/tmp, $HOME and a sibling directory all failed
- * "read-only file system"; the network is closed and `.git` is read-only).
+ * What confines a `worktree-write` codex run to its working directory. The full set was
+ * measured live on codex 0.159.2 only, in a scratch repository: writes to /tmp, /var/tmp,
+ * $HOME and a sibling directory all failed "read-only file system", DNS lookups failed and
+ * `.git` was read-only. The write gate in dispatch.ts admits only the versions measured.
  *
  * Two of these are MANDATORY and easy to lose. The `exclude_*` flags: `-s workspace-write`
  * alone leaves /tmp and $TMPDIR writable, a place to write outside the worktree.
  * `--ignore-rules`: without it the user's exec-policy rules let shell commands run OUTSIDE the
- * sandbox (measured on 0.159.2: writes to /tmp and $HOME succeeded); with it they failed
- * read-only. `danger-full-access` and the bypass flags are deliberately unreachable here.
+ * sandbox (writes to /tmp and $HOME succeeded); with it they failed read-only. codex ignores an
+ * unknown `-c` key without a word, which is why the version gate has a ceiling.
+ * `danger-full-access` and the bypass flags are deliberately unreachable here.
  */
 const CODEX_WRITE_CONFINEMENT_FLAGS: readonly string[] = [
   "--ignore-rules",

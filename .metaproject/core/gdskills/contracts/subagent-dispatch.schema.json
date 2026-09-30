@@ -165,7 +165,7 @@
           "minLength": 1
         },
         "sandbox": {
-          "description": "Permission level for the external child. `worktree-write` is schema-valid but refused at runtime in the read-only release, with a reason distinguishable from an unsupported-by-this-agent refusal.",
+          "description": "Permission level for the external child. `worktree-write` is schema-valid but refused at runtime except for an ACP agent and, through the operator's `--write` command only, `claude-cli` and `codex-cli`, with a reason distinguishable from an unsupported-by-this-agent refusal.",
           "type": "string",
           "enum": ["read-only", "worktree-write"]
         },

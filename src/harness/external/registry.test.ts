@@ -82,6 +82,10 @@ describe("parseAgentVersion", () => {
     expect(parseAgentVersion(CODEX, "codex-cli 0.147.0")).toBe("0.147.0");
   });
 
+  test("keeps a pre-release suffix on codex's version so a write gate can refuse it", () => {
+    expect(parseAgentVersion(CODEX, "codex-cli 0.159.2-alpha.3")).toBe("0.159.2-alpha.3");
+  });
+
   test("extracts claude's version from its real banner", () => {
     expect(parseAgentVersion(CLAUDE, "2.1.220 (Claude Code)")).toBe("2.1.220");
   });

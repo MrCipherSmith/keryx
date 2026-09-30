@@ -243,8 +243,11 @@ describe("flow 371 — a codex write run is gated on the version whose confineme
 
   test.each([
     ["older", "codex-cli 0.158.9", "found 0.158.9"],
+    ["the old floor", "codex-cli 0.159.0", "found 0.159.0"],
+    ["newer (unverified)", "codex-cli 0.160.0", "not yet verified"],
+    ["a pre-release of the floor", "codex-cli 0.159.2-alpha.3", "a pre-release"],
     ["unreadable", "no version here", "could not be read"],
-  ])("an %s codex is Denied before any worktree or spawn, naming found and required", async (_label, detectOutput, expectedText) => {
+  ])("a %s codex is Denied before any worktree or spawn, naming found and required", async (_label, detectOutput, expectedText) => {
     const wt = fakeWorktree();
     const sp = fakeSpawn([]);
     const result = await runExternalChild(
@@ -252,7 +255,8 @@ describe("flow 371 — a codex write run is gated on the version whose confineme
       baseDeps({ worktree: wt.port, spawn: sp.port, ownsWriteCapture: true, detect: async () => ({ binaryFound: true, detectOutput }) }),
     );
     expect(result.status).toBe("Denied");
-    expect(result.output).toContain("0.159.0");
+    expect(result.output).toContain("0.159.2");
+    expect(result.output).toContain("0.160.0");
     expect(result.output).toContain(expectedText);
     expect(sp.calls).toHaveLength(0);
     expect(wt.created).toHaveLength(0);
@@ -268,7 +272,7 @@ describe("flow 371 — a codex write run is gated on the version whose confineme
     expect(wt.created).toHaveLength(0);
   });
 
-  test.each(["codex-cli 0.159.0", "codex-cli 0.159.2", "codex-cli 0.200.0"])("%s passes the gate and spawns with the confinement argv", async (detectOutput) => {
+  test.each(["codex-cli 0.159.2", "codex-cli 0.159.9"])("%s passes the gate and spawns with the confinement argv", async (detectOutput) => {
     const wt = fakeWorktree();
     const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
     const result = await runExternalChild(

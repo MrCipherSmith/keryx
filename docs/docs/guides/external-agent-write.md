@@ -41,11 +41,12 @@ refused instead of asked.
 `-c sandbox_workspace_write.exclude_slash_tmp=true -c
 sandbox_workspace_write.exclude_tmpdir_env_var=true -c
 sandbox_workspace_write.network_access=false` and `--ignore-rules`. Measured live on
-2026-09-30 with `codex` 0.159.0 and 0.159.2, in a scratch git repository:
+2026-09-30 with `codex` 0.159.2, in a scratch git repository (not in a worktree cut
+by keryx under the system temp directory):
 
 - Writes outside the worktree (`/tmp`, `/var/tmp`, `$HOME`, a sibling directory)
   fail with "read-only file system".
-- The network is closed (DNS lookups fail).
+- The network looked closed: a DNS lookup failed. Other routes were not tried.
 - `.git` is read-only: no commit, no hook write.
 
 Without the two `exclude_*` flags the default `workspace-write` sandbox lets
@@ -56,16 +57,21 @@ configuration can let shell commands run outside the sandbox (writes to `/tmp` a
 
 !!! warning "codex keeps a sandboxed shell, so it can read what you can read"
     Unlike `claude`, `codex` still has a shell. Inside the sandbox it can **read**
-    any file your user account can read, for example keys under `$HOME`. It cannot
-    send them anywhere because the network is closed, but their content can appear
-    in the run's output. Review the diff and the run output before you apply, and do
-    not run a `codex` write task in a checkout or environment where that matters.
+    any file your user account can read, for example keys under `$HOME`. The
+    network is closed as far as was measured, but their content can appear in the
+    run's output or in the diff. Review the diff and the run output before you
+    apply, and do not run a `codex` write task in a checkout or environment where
+    that matters.
 
-keryx refuses a `codex` write run before it starts when the installed `codex` is
-older than 0.159.0 (the verified version) or its version cannot be read; the message
-names the version found and the version required. A follow-up turn of a write run
-can never run under a weaker sandbox than the first turn: either the same flags are
-re-asserted or the follow-up is refused.
+keryx refuses a `codex` write run before it starts unless the installed `codex` is
+0.159.2 or newer but older than 0.160.0. Older, newer, pre-release and unreadable
+versions are all refused, and the message names the version found and the range
+required. The ceiling is there because `codex` ignores a `-c` key it does not know
+without saying so: a release that renamed one of the confinement keys above would
+otherwise run unconfined and look fine. A newer `codex` becomes usable when a later
+keryx release has measured it. A follow-up turn of a write run re-asserts the same
+flags (the resume command line is unit-tested; write runs are started from the CLI
+only, so keryx does not resume one itself).
 
 ### Capture
 
@@ -187,6 +193,6 @@ commands above; it never lands anything.
   `codex` keeps a sandboxed shell that can read files your account can read (see
   above).
 - Little live history. The `claude` permission flags were probed against `claude`
-  2.1.280; the `codex` confinement was measured live on `codex` 0.159.0 in a
+  2.1.280; the `codex` confinement was measured live on `codex` 0.159.2 in a
   scratch git repository. Neither agent has a long record of write runs, so treat
   the first runs as unproven and read every diff.

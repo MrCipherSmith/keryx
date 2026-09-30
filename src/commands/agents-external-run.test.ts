@@ -497,7 +497,7 @@ describe("flow 370 — `run claude-cli --write` stores a patch for review", () =
       }),
     );
     expect(outcome?.status).toBe("Denied");
-    expect(outcome?.output).toContain("0.159.0");
+    expect(outcome?.output).toContain("0.159.2");
     expect(outcome?.output).not.toContain("claude-only");
     expect(sp.calls).toHaveLength(0);
     expect(process.exitCode).toBe(1);

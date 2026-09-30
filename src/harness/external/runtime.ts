@@ -27,10 +27,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
-import { CODEC_WRITE_VERIFIED_VERSIONS, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
+import { codecWriteVersionRefusal, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
-import { compareVersions, resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
+import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
 import { persistAcpRun, runAcpInWorktree, type AcpChildOptions, type AcpRunRecord } from "./acp-run";
 import { superviseExternalRun, type ExternalRunHandle, type ExternalSpawnPort } from "./supervise";
 import type { SupervisionConfig, SupervisionTrigger } from "./supervision";
@@ -394,15 +394,9 @@ export async function runExternalChild(
   }
 
   // Unlike the advisory range check above, this is a hard refusal: a write run's confinement is
-  // the CLI's own sandbox, verified only from this version, and an unreadable version proves nothing.
-  const verifiedVersion = sandbox === "worktree-write" ? CODEC_WRITE_VERIFIED_VERSIONS[entry.id] : undefined;
-  if (verifiedVersion !== undefined && (detectedVersion === undefined || compareVersions(detectedVersion, verifiedVersion) < 0)) {
-    return refuse(
-      "Denied",
-      `${entry.label} write mode needs \`${entry.binary}\` ${verifiedVersion} or newer, the version whose sandbox confinement was verified; ` +
-        (detectedVersion === undefined ? "the installed version could not be read" : `found ${detectedVersion}`),
-    );
-  }
+  // the CLI's own sandbox, measured only on the versions in the range, and an unreadable version proves nothing.
+  const versionRefusal = sandbox === "worktree-write" ? codecWriteVersionRefusal(entry, detectedVersion) : undefined;
+  if (versionRefusal !== undefined) return refuse("Denied", versionRefusal);
 
   // R22/AC13: request a structured, schema-validated final message. Loaded and
   // staged BEFORE prompt assembly so the prompt can embed it, and fail-closed —
