@@ -78,6 +78,7 @@ import type { AgentIO } from "./agent";
 import { VERSION } from "../cli-registry";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
 import { optionValue } from "../lib/args";
+import { TerminalSafeTracker, terminalSafe } from "../lib/terminal-safe";
 import { helpOptions, helpTitle, helpUsage, style } from "../lib/ui";
 
 /** Injectable seams so the whole surface is testable with no CLI on the machine. */
@@ -552,14 +553,28 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
   // worktree is removed, and stored for `keryx agents external review`.
   if (write && id === CODEC_WRITE_AGENT_ID) {
     let handle: { kill(): void } | undefined;
-    const onSigint = (): void => handle?.kill();
-    process.once("SIGINT", onSigint);
+    let interrupted = false;
+    // `on`, not `once`: a second Ctrl-C must not take the default disposition and skip the capture and cleanup.
+    const onSigint = (): void => {
+      interrupted = true;
+      handle?.kill();
+    };
+    process.on("SIGINT", onSigint);
+    const realSpawn = runDeps.spawn;
     let result: ExternalWriteRunResult;
     try {
       result = await runExternalWriteChild(runInput, {
         ...runDeps,
+        // A Ctrl-C before the child exists ends the run here, before a paid write child starts.
+        spawn: {
+          spawn: (argv, opts) => {
+            if (interrupted) throw new Error("interrupted before the agent started; no agent was run");
+            return realSpawn.spawn(argv, opts);
+          },
+        },
         onSpawned: (spawned) => {
           handle = spawned;
+          if (interrupted) spawned.kill();
         },
         projectRoot: cwd,
         worktreesDir,
@@ -602,73 +617,95 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
   if (outcome.status !== "Completed") process.exitCode = 1;
 }
 
+/** Shown when anything agent-controlled had to be escaped before printing. */
+const ESCAPED_NOTE =
+  "note: control characters in this run's paths or patch are shown as \\xNN escapes; the stored patch and its hash are unchanged";
+
 /** The write-run section of the report: patch, hash, files, flagged paths and the next command. Pure. */
 export function renderWriteRun(result: ExternalWriteRunResult): string[] {
+  const safe = new TerminalSafeTracker();
+  const lines = writeRunLines(result, safe);
+  if (safe.escaped) lines.push(ESCAPED_NOTE);
+  return lines;
+}
+
+function writeRunLines(result: ExternalWriteRunResult, safe: TerminalSafeTracker): string[] {
   const lines: string[] = [""];
   if (result.captureError !== undefined) {
-    lines.push(`warning: the worktree's changes could not be captured (${result.captureError}); nothing was stored`);
+    lines.push(`warning: the worktree's changes could not be captured (${safe.render(result.captureError)}); nothing was stored`);
     return lines;
   }
   const run = result.run;
   if (run === undefined) {
     lines.push(
       result.persistError !== undefined
-        ? `warning: the write run could not be stored (${result.persistError})`
+        ? `warning: the write run could not be stored (${safe.render(result.persistError)})`
         : "no changes: the agent left the worktree as it found it",
     );
     return lines;
   }
   if (run.state === "refused") {
     lines.push(`refused: ${run.refusedPaths.length} changed symlink(s) point outside the worktree; no patch was kept`);
-    for (const refused of run.refusedPaths) lines.push(`  ${refused}`);
-    lines.push(`run: ${run.runId}`);
+    for (const refused of run.refusedPaths) lines.push(`  ${safe.render(refused)}`);
+    lines.push(`run: ${safe.render(run.runId)}`);
     return lines;
   }
-  lines.push(`patch (never applied): ${run.patchPath ?? ""}`);
-  lines.push(`patch hash: sha256:${run.patchHash ?? ""}${run.redacted ? " (redacted; may not apply byte for byte)" : ""}`);
+  lines.push(`patch (never applied): ${safe.render(run.patchPath ?? "")}`);
+  lines.push(`patch hash (sha256): ${run.patchHash ?? ""}${run.redacted ? " (redacted; may not apply byte for byte)" : ""}`);
   lines.push(`files (${run.files.length}):`);
-  for (const file of run.files) lines.push(`  ${file.status.padEnd(12)} ${file.path}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
+  for (const file of run.files) lines.push(`  ${file.status.padEnd(12)} ${safe.render(file.path)}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
   if (run.flaggedPaths.length > 0) {
     lines.push(`flagged paths (${run.flaggedPaths.length}) — look at these first:`);
-    for (const flagged of run.flaggedPaths) lines.push(`  ${flagged}`);
+    for (const flagged of run.flaggedPaths) lines.push(`  ${safe.render(flagged)}`);
   }
-  lines.push(`review with: keryx agents external review ${run.runId}`);
+  lines.push(`review with: keryx agents external review ${safe.render(run.runId)}`);
   return lines;
 }
 
 /** How many leading hex characters of the patch hash the operator types back to land a diff. */
 const CONFIRM_HASH_CHARS = 12;
 
-/** The review screen for one stored write run: identity, flagged paths first, files, then the redacted patch. Pure. */
+/**
+ * The review screen for one stored write run: identity, flagged paths first, files, then the redacted patch.
+ * Everything the agent controls is printed through the terminal-safe filter (\n and \t stay in the patch). Pure.
+ */
 export function renderWriteReview(view: WriteRunView): string[] {
   const { record } = view;
+  const safe = new TerminalSafeTracker();
   const lines = [
     "# agents external review",
     "",
-    `run: ${record.runId}`,
-    `agent: ${record.agentId}`,
-    `base commit: ${record.baseCommit}`,
-    `run status: ${record.runStatus}`,
-    `patch hash: ${record.patchHash === undefined ? "none (no patch was kept)" : `sha256:${record.patchHash}`}`,
+    `run: ${safe.render(record.runId)}`,
+    `agent: ${safe.render(record.agentId)}`,
+    `base commit: ${safe.render(record.baseCommit)}`,
+    `run status: ${safe.render(record.runStatus)}`,
+    `patch hash (sha256): ${record.patchHash === undefined ? "none (no patch was kept)" : record.patchHash}`,
   ];
+  const finish = (): string[] => {
+    if (safe.escaped) lines.splice(2, 0, ESCAPED_NOTE);
+    return lines;
+  };
   if (record.state === "refused") {
     lines.push("", `refused: ${record.refusedPaths.length} changed symlink(s) point outside the worktree; no patch was kept`);
-    for (const refused of record.refusedPaths) lines.push(`  ! ${refused}`);
-    lines.push(`this run can only be discarded: keryx agents external discard ${record.runId}`);
-    return lines;
+    for (const refused of record.refusedPaths) lines.push(`  ! ${safe.render(refused)}`);
+    lines.push(`this run can only be discarded: keryx agents external discard ${safe.render(record.runId)}`);
+    return finish();
   }
   if (record.redacted) lines.push("note: the patch was redacted, so it may not apply byte for byte and cannot be applied");
   if (record.flaggedPaths.length > 0) {
     lines.push("", `FLAGGED PATHS (${record.flaggedPaths.length}) — repo plumbing, CI, hooks or agent config; look at these first:`);
-    for (const flagged of record.flaggedPaths) lines.push(`  ! ${flagged}`);
+    for (const flagged of record.flaggedPaths) lines.push(`  ! ${safe.render(flagged)}`);
   }
   lines.push("", `files (${record.files.length}):`);
-  for (const file of record.files) lines.push(`  ${file.status.padEnd(12)} ${file.path}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
+  for (const file of record.files) lines.push(`  ${file.status.padEnd(12)} ${safe.render(file.path)}${file.binary === true ? " (binary: noted, not carried)" : ""}`);
   lines.push("");
   if (view.patch === undefined) lines.push("patch: unavailable (missing, or changed since it was captured)");
-  else lines.push("patch:", view.patch.replace(/\n$/, ""));
-  return lines;
+  else lines.push("patch:", safe.renderBlock(view.patch.replace(/\n$/, "")));
+  return finish();
 }
+
+/** One agent- or user-derived string made safe to print. */
+const plain = (value: string): string => terminalSafe(value).text;
 
 function landDepsOf(deps: AgentsExternalDeps): { dataDir?: string } {
   return deps.run?.dataDir === undefined ? {} : { dataDir: deps.run.dataDir };
@@ -677,7 +714,7 @@ function landDepsOf(deps: AgentsExternalDeps): { dataDir?: string } {
 async function reviewCommand(runId: string, deps: AgentsExternalDeps, log: (line: string) => void): Promise<void> {
   const view = viewWriteRun(deps.cwd ?? process.cwd(), runId, landDepsOf(deps));
   if (view === undefined) {
-    console.error(`no external write run "${runId}" in this checkout`);
+    console.error(`no external write run "${plain(runId)}" in this checkout`);
     process.exitCode = 1;
     return;
   }
@@ -705,7 +742,7 @@ export function terminalPrompt(
 
 /**
  * `apply`: show the review, then land the diff as `external/<run-id>` only when a human types
- * the first 12 characters of the patch hash. There is deliberately no flag or environment
+ * the first 12 hex digits of the patch hash. There is deliberately no flag or environment
  * variable that answers for the operator; without a terminal on both ends nothing lands.
  */
 async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsExternalDeps, log: (line: string) => void): Promise<void> {
@@ -720,7 +757,7 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
   const landDeps = landDepsOf(deps);
   const view = viewWriteRun(cwd, runId, landDeps);
   if (view === undefined) {
-    console.error(`no external write run "${runId}" in this checkout`);
+    console.error(`no external write run "${plain(runId)}" in this checkout`);
     process.exitCode = 1;
     return;
   }
@@ -729,7 +766,7 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
   if (record.state !== "pending-review" || record.patchHash === undefined || view.patch === undefined) {
     console.error(
       record.state === "refused"
-        ? `refused: this run can only be discarded (keryx agents external discard ${record.runId})`
+        ? `refused: this run can only be discarded (keryx agents external discard ${plain(record.runId)})`
         : "refused: the stored patch is missing or changed since capture; nothing was applied",
     );
     process.exitCode = 1;
@@ -737,7 +774,7 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
   }
   const expected = record.patchHash.slice(0, CONFIRM_HASH_CHARS);
   const answer = await (seams.prompt ?? terminalPrompt())(
-    `\nType the first ${CONFIRM_HASH_CHARS} characters of the patch hash to land this diff (anything else cancels): `,
+    `\nType the first ${CONFIRM_HASH_CHARS} hex digits of the patch hash (without any sha256: prefix) to land this diff (anything else cancels): `,
   );
   if (answer !== expected) {
     log("cancelled: nothing was applied");
@@ -749,23 +786,23 @@ async function applyCommand(runId: string, allowFlagged: boolean, deps: AgentsEx
     landDeps,
   );
   if (result.kind === "refused") {
-    console.error(`refused (${result.reason}): ${result.detail}`);
+    console.error(`refused (${plain(result.reason)}): ${plain(result.detail)}`);
     process.exitCode = 1;
     return;
   }
-  log(`landed: branch ${result.branch}`);
-  log(`commit: ${result.commit}`);
+  log(`landed: branch ${plain(result.branch)}`);
+  log(`commit: ${plain(result.commit)}`);
   log("nothing was applied to your current branch or working tree");
 }
 
 function discardCommand(runId: string, deps: AgentsExternalDeps, log: (line: string) => void): void {
   const result = discardWriteRun({ cwd: deps.cwd ?? process.cwd(), runId }, landDepsOf(deps));
   if (result.kind === "refused") {
-    console.error(`refused (${result.reason}): ${result.detail}`);
+    console.error(`refused (${plain(result.reason)}): ${plain(result.detail)}`);
     process.exitCode = 1;
     return;
   }
-  log(`discarded: ${runId}; the stored patch was deleted`);
+  log(`discarded: ${plain(runId)}; the stored patch was deleted`);
 }
 
 /** The text report for one run. Pure. */

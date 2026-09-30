@@ -218,6 +218,23 @@ describe("flaggedPathsOf", () => {
   });
 });
 
+describe("flaggedPathsOf, case and agent-config files", () => {
+  test("matches every rule without regard to case", () => {
+    expect(
+      flaggedPathsOf([".Claude/settings.json", ".GitHub/workflows/x.yml", "pkg/.HUSKY/pre-push", "JENKINSFILE", ".Git/config", ".VSCode/Tasks.json", "src/a.ts"]),
+    ).toEqual([".Claude/settings.json", ".GitHub/workflows/x.yml", "pkg/.HUSKY/pre-push", "JENKINSFILE", ".Git/config", ".VSCode/Tasks.json"]);
+  });
+
+  test("flags config that executes or changes tool behaviour", () => {
+    const paths = [".mcp.json", "pkg/.envrc", ".gitattributes", ".gitmodules", ".vscode/tasks.json", ".vscode/settings.json", "app/.vscode/launch.json", ".githooks/pre-commit", ".gitlab-ci.yml"];
+    expect(flaggedPathsOf(paths)).toEqual(paths);
+  });
+
+  test("leaves ordinary files and harmless editor files alone", () => {
+    expect(flaggedPathsOf([".vscode/extensions.json", "Makefile", "docs/gitattributes.md", "src/envrc.ts", ".gitignore"])).toEqual([]);
+  });
+});
+
 describe("runExternalWriteChild", () => {
   test("stores a pending-review record with a hash of the stored patch and leaves the operator's tree untouched", async () => {
     const result = await runExternalWriteChild(

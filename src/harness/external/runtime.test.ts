@@ -159,6 +159,19 @@ describe("gates run before anything is created", () => {
     expect(result.output).toContain("not implemented in this release");
   });
 
+  test("claude-cli worktree-write through the model-initiated path is refused: nothing would capture the edits", async () => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn([]);
+    const result = await runExternalChild(
+      baseInput({ runtime: { kind: "external", agent: "claude-cli", sandbox: "worktree-write" }, allowedActions: ["read-file", "write"] }),
+      baseDeps({ worktree: wt.port, spawn: sp.port }),
+    );
+    expect(result.status).toBe("Denied");
+    expect(result.output).toContain("claude-only in this release");
+    expect(sp.calls).toHaveLength(0);
+    expect(wt.created).toHaveLength(0);
+  });
+
   test("a native dispatch handed to this runtime is refused, never run in-process", async () => {
     // Silently running it would report an external agent's status for work keryx
     // did itself.

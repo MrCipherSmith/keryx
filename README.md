@@ -505,7 +505,7 @@ What is in it today:
   no MCP). Its diff is captured, secret-redacted, hashed and stored as a pending
   review — nothing reaches your checkout. `keryx agents external review <run-id>`
   shows it; `apply <run-id>` needs a real terminal, shows the diff and asks you to
-  type the first 12 characters of the patch hash, then creates a NEW local branch
+  type the first 12 hex digits of the patch hash, then creates a NEW local branch
   `external/<run-id>` with one commit. Your current branch and working tree are
   never touched, nothing is pushed and no pull request is opened;
   `discard <run-id>` drops it. There is no flag that skips the confirmation. Only

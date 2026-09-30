@@ -89,8 +89,17 @@ describe("AC3 — worktree-write is refused, distinguishably", () => {
 });
 
 describe("flow 370 — worktree-write is implemented for claude-cli among the codec agents", () => {
-  test("claude-cli is accepted with worktree-write and returns the sandbox", () => {
+  test("claude-cli is refused worktree-write for a caller that does not own the capture (the model-initiated path)", () => {
     const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "worktree-write" }), ["read-file", "write"]);
+    expect(result).toMatchObject({ ok: false, code: "not-implemented" });
+    expect(result.ok === false && result.reason).toContain("claude-only in this release");
+    expect(implementedSandboxModesFor(getExternalAgent("claude-cli") as ExternalAgentEntry)).toEqual(["read-only"]);
+  });
+
+  test("claude-cli is accepted with worktree-write for the caller that owns the capture, and returns the sandbox", () => {
+    const result = validateRuntimeBlock(external({ agent: "claude-cli", sandbox: "worktree-write" }), ["read-file", "write"], {
+      ownsWriteCapture: true,
+    });
     expect(result.ok).toBe(true);
     if (result.ok && result.runtime === "external") {
       expect(result.sandbox).toBe("worktree-write");

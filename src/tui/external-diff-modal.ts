@@ -1,6 +1,6 @@
 // Flow 370 (AC6): the `/external-diff` modal — claude write runs whose patch waits for a
 // human decision. Review is read-only. Apply never lands on a single key: `a` asks for the
-// first 12 characters of the patch hash typed back, and only an exact match calls
+// first 12 hex digits of the patch hash typed back, and only an exact match calls
 // `landWriteRun` with the FULL hash; a run with flagged paths also needs `f` first. Discard
 // needs `y`. The stores behind `write-land.ts` are the only source of truth.
 
@@ -14,6 +14,7 @@ import {
   type WriteRunView,
 } from "../harness/external/write-land";
 import type { ExternalWriteRunRecord, WriteRunFile } from "../harness/external/write-run";
+import { terminalSafe } from "../lib/terminal-safe";
 import { clampScroll, windowLines, wrapLines } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -59,12 +60,9 @@ export function defaultExternalDiffDeps(cwd: string): ExternalDiffDeps {
   };
 }
 
-// eslint-disable-next-line no-control-regex -- strips terminal control bytes from agent-controlled text
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
-
 /** Paths and patch lines come from an agent's worktree: never let them drive the terminal. */
 function clean(text: string): string {
-  return text.replace(/\r/g, "").replace(/\t/g, "  ").replace(CONTROL_CHARACTERS, "?");
+  return terminalSafe(text.replace(/\r/g, "").replace(/\t/g, "  ")).text;
 }
 
 const shortId = (runId: string): string => clean(runId).slice(0, 8);
@@ -130,7 +128,8 @@ export interface ExternalDiffKey {
   sequence: string;
 }
 
-type Mode = { kind: "browse" } | { kind: "apply"; typed: string } | { kind: "discard" } | { kind: "busy" };
+/** An armed prompt carries the run it was armed for, so a refresh that moves the list cannot redirect it. */
+type Mode = { kind: "browse" } | { kind: "apply"; typed: string; runId: string } | { kind: "discard"; runId: string } | { kind: "busy" };
 
 export interface ExternalDiffControllerOptions {
   deps: ExternalDiffDeps;
@@ -152,7 +151,7 @@ export interface ExternalDiffController {
 export function createExternalDiffController(options: ExternalDiffControllerOptions): ExternalDiffController {
   const { deps } = options;
   let runs: readonly ExternalWriteRunRecord[] = [];
-  let selectedIndex = 0;
+  let selectedRunId: string | undefined;
   let scroll = 0;
   let pageRows = 10;
   let mode: Mode = { kind: "browse" };
@@ -164,6 +163,7 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
   const changed = (): void => options.onChange?.();
 
   function refreshRuns(): void {
+    const previousIndex = selectedIndex();
     try {
       runs = deps.list();
     } catch (error) {
@@ -174,11 +174,20 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
     for (const id of [...views.keys()]) {
       if (!ids.has(id)) views.delete(id);
     }
-    selectedIndex = Math.min(Math.max(0, runs.length - 1), Math.max(0, selectedIndex));
-    if ((mode.kind === "apply" || mode.kind === "discard") && runs[selectedIndex] === undefined) mode = { kind: "browse" };
+    if (selectedRunId === undefined || !ids.has(selectedRunId)) {
+      const fallback = runs[Math.min(Math.max(0, previousIndex), runs.length - 1)];
+      selectedRunId = fallback?.runId;
+      scroll = 0;
+    }
+    if ((mode.kind === "apply" || mode.kind === "discard") && mode.runId !== selectedRunId) {
+      mode = { kind: "browse" };
+      notice = `Prompt cancelled: the run it was for is no longer selected. ${NOTHING_APPLIED}`;
+    }
+    if (allowFlaggedRun !== undefined && !ids.has(allowFlaggedRun)) allowFlaggedRun = undefined;
   }
 
-  const selectedRun = (): ExternalWriteRunRecord | undefined => runs[selectedIndex];
+  const selectedIndex = (): number => (selectedRunId === undefined ? -1 : runs.findIndex((run) => run.runId === selectedRunId));
+  const selectedRun = (): ExternalWriteRunRecord | undefined => runs[selectedIndex()];
 
   function viewOf(run: ExternalWriteRunRecord): { view?: WriteRunView; error?: string } {
     const cached = views.get(run.runId);
@@ -201,9 +210,9 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
   function bodyLines(): string[] {
     if (runs.length === 0) return ["No write runs are waiting for review."];
     const lines = [`Write runs awaiting review (${runs.length}):`];
-    runs.forEach((run, index) => {
-      lines.push(`${index === selectedIndex ? ">" : " "} ${shortId(run.runId)}  ${clean(run.agentId)}  ${run.files.length} file(s)  ${run.flaggedPaths.length} flagged`);
-    });
+    for (const run of runs) {
+      lines.push(`${run.runId === selectedRunId ? ">" : " "} ${shortId(run.runId)}  ${clean(run.agentId)}  ${run.files.length} file(s)  ${run.flaggedPaths.length} flagged`);
+    }
     const run = selectedRun();
     if (run === undefined) return lines;
     const entry = viewOf(run);
@@ -244,12 +253,12 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
 
   function statusLine(): string {
     const run = selectedRun();
-    if (mode.kind === "apply" && run !== undefined) {
+    if (mode.kind === "apply" && run !== undefined && mode.runId === run.runId) {
       const prefix = (hashOf(run) ?? "").slice(0, HASH_PREFIX_LENGTH);
       const flagged = flaggedAllowed(run) ? " Flagged paths: ALLOWED." : "";
-      return `Apply run ${shortId(run.runId)}? Type the first ${HASH_PREFIX_LENGTH} characters of the patch hash (${prefix}) and press Enter; anything else cancels.${flagged} > ${clean(mode.typed)}`;
+      return `Apply run ${shortId(run.runId)}? Type the first ${HASH_PREFIX_LENGTH} hex digits of the patch hash, without any sha256: prefix (${prefix}), and press Enter; anything else cancels.${flagged} > ${clean(mode.typed)}`;
     }
-    if (mode.kind === "discard" && run !== undefined) {
+    if (mode.kind === "discard" && run !== undefined && mode.runId === run.runId) {
       return `Discard run ${shortId(run.runId)}? Its stored patch is deleted for good. Press y to confirm; any other key cancels.`;
     }
     return notice ?? "";
@@ -271,15 +280,19 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
       return;
     }
     notice = undefined;
-    mode = { kind: "apply", typed: "" };
+    mode = { kind: "apply", typed: "", runId: run.runId };
   }
 
-  function submitApply(typed: string): void {
+  function submitApply(typed: string, armedRunId: string): void {
     const run = selectedRun();
     const hash = run === undefined ? undefined : hashOf(run);
     mode = { kind: "browse" };
-    if (run === undefined || hash === undefined || typed !== hash.slice(0, HASH_PREFIX_LENGTH)) {
-      notice = `Apply cancelled: what you typed is not the first ${HASH_PREFIX_LENGTH} characters of the patch hash. ${NOTHING_APPLIED}`;
+    if (run === undefined || run.runId !== armedRunId) {
+      notice = `Apply cancelled: the run it was armed for is no longer selected. ${NOTHING_APPLIED}`;
+      return;
+    }
+    if (hash === undefined || typed !== hash.slice(0, HASH_PREFIX_LENGTH)) {
+      notice = `Apply cancelled: what you typed is not the first ${HASH_PREFIX_LENGTH} hex digits of the patch hash. ${NOTHING_APPLIED}`;
       return;
     }
     const runId = run.runId;
@@ -303,11 +316,11 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
     })();
   }
 
-  function discardSelected(): void {
+  function discardSelected(armedRunId: string): void {
     const run = selectedRun();
     mode = { kind: "browse" };
-    if (run === undefined) {
-      notice = "Nothing to discard.";
+    if (run === undefined || run.runId !== armedRunId) {
+      notice = "Discard cancelled: the run it was armed for is no longer selected.";
       return;
     }
     try {
@@ -321,13 +334,13 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
     options.onActed?.();
   }
 
-  function applyKey(key: ExternalDiffKey, typed: string): void {
+  function applyKey(key: ExternalDiffKey, typed: string, runId: string): void {
     if (key.name === "return" || key.name === "enter") {
-      submitApply(typed);
+      submitApply(typed, runId);
     } else if (key.name === "backspace") {
-      mode = { kind: "apply", typed: typed.slice(0, -1) };
+      mode = { kind: "apply", typed: typed.slice(0, -1), runId };
     } else if (key.sequence.length === 1 && key.sequence >= " " && key.sequence !== "\u007f") {
-      mode = { kind: "apply", typed: `${typed}${key.sequence}`.slice(0, 64) };
+      mode = { kind: "apply", typed: `${typed}${key.sequence}`.slice(0, 64), runId };
     } else {
       mode = { kind: "browse" };
       notice = `Apply cancelled. ${NOTHING_APPLIED}`;
@@ -338,18 +351,19 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
     if (mode.kind === "busy") return;
     const token = key.name || key.sequence;
     if (mode.kind === "apply") {
-      applyKey(key, mode.typed);
+      applyKey(key, mode.typed, mode.runId);
     } else if (mode.kind === "discard") {
       if (token === "y") {
-        discardSelected();
+        discardSelected(mode.runId);
       } else {
         mode = { kind: "browse" };
         notice = "Discard cancelled.";
       }
     } else if (token === "up" || token === "down") {
-      const next = Math.min(Math.max(0, runs.length - 1), Math.max(0, selectedIndex + (token === "down" ? 1 : -1)));
-      if (next !== selectedIndex) scroll = 0;
-      selectedIndex = next;
+      const current = Math.max(0, selectedIndex());
+      const next = Math.min(Math.max(0, runs.length - 1), Math.max(0, current + (token === "down" ? 1 : -1)));
+      if (next !== current) scroll = 0;
+      selectedRunId = runs[next]?.runId;
       notice = undefined;
     } else if (token === "j" || token === "k") {
       scroll = Math.max(0, scroll + (token === "j" ? 1 : -1));
@@ -365,16 +379,17 @@ export function createExternalDiffController(options: ExternalDiffControllerOpti
         notice = "Flagged paths are blocked again.";
       } else {
         allowFlaggedRun = run.runId;
-        notice = `Flagged paths allowed for this apply. You still have to type the first ${HASH_PREFIX_LENGTH} characters of the patch hash.`;
+        notice = `Flagged paths allowed for this apply. You still have to type the first ${HASH_PREFIX_LENGTH} hex digits of the patch hash.`;
       }
     } else if (token === "a") {
       startApply();
     } else if (token === "d") {
-      if (selectedRun() === undefined) {
+      const armed = selectedRun();
+      if (armed === undefined) {
         notice = "Nothing to discard.";
       } else {
         notice = undefined;
-        mode = { kind: "discard" };
+        mode = { kind: "discard", runId: armed.runId };
       }
     } else {
       return;

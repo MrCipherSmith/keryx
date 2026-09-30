@@ -131,12 +131,52 @@ describe("agents external review", () => {
     expect(text).toContain("agent: claude-cli");
     expect(text).toContain(`base commit: ${baseCommit}`);
     expect(text).toContain("run status: Completed");
-    expect(text).toContain(`patch hash: sha256:${record.patchHash}`);
+    expect(text).toContain(`patch hash (sha256): ${record.patchHash}`);
     expect(text).toContain("logo.png (binary: noted, not carried)");
     expect(text).toContain("+TWO");
     expect(text.indexOf("FLAGGED PATHS")).toBeGreaterThan(-1);
     expect(text.indexOf("FLAGGED PATHS")).toBeLessThan(text.indexOf("files (3)"));
     expect(text.indexOf("! .github/workflows/ci.yml")).toBeLessThan(text.indexOf("files (3)"));
+  });
+
+  test("agent-controlled text is printed with control characters escaped, and the stored patch and hash stay byte-exact", async () => {
+    const forged = "+ok\n+\x1b[2J\x1b[Hforged\r+tab\there\n";
+    const patch = `${makePatch()}${forged}`;
+    const evil = "src/\x1b[2Jevil.txt";
+    const record = seed(patch, {
+      files: [{ path: evil, status: "added" }],
+      flaggedPaths: [evil],
+      agentId: "claude-cli\x1b[31m",
+    });
+    await agentsExternalCommand(["review", record.runId], deps());
+    const text = out.join("\n");
+    expect(text).not.toContain("\x1b");
+    expect(text).not.toContain("\r");
+    expect(text).toContain("\\x1b[2Jevil.txt");
+    expect(text).toContain("agent: claude-cli\\x1b[31m");
+    expect(text).toContain("+\\x1b[2J\\x1b[Hforged\\x0d+tab\there");
+    expect(text).toContain("shown as \\xNN escapes");
+    expect(text).toContain(`patch hash (sha256): ${sha256(patch)}`);
+    const stored = JSON.parse(readFileSync(path.join(path.dirname(record.patchPath as string), EXTERNAL_WRITE_RUN_FILE), "utf8")) as ExternalWriteRunRecord;
+    expect(readFileSync(record.patchPath as string, "utf8")).toBe(patch);
+    expect(stored.patchHash).toBe(sha256(patch));
+  });
+
+  test("a clean run carries no escape note", async () => {
+    const record = seed(makePatch());
+    await agentsExternalCommand(["review", record.runId], deps());
+    expect(out.join("\n")).not.toContain("escapes");
+  });
+
+  test("apply prints the same escaped review before it asks", async () => {
+    const patch = `${makePatch()}+\x1b[2Jhidden\n`;
+    const record = seed(patch);
+    const t = terminal("no");
+    await agentsExternalCommand(["apply", record.runId], deps(t.run));
+    const text = out.join("\n");
+    expect(text).not.toContain("\x1b");
+    expect(text).toContain("+\\x1b[2Jhidden");
+    expect(text).toContain("shown as \\xNN escapes");
   });
 
   test("an unknown run exits 1", async () => {
@@ -179,12 +219,12 @@ describe("agents external apply", () => {
   test("a wrong answer cancels; so does the full hash or an empty answer", async () => {
     const record = seed(makePatch());
     const hash = record.patchHash as string;
-    for (const answer of ["yes", "", hash, hash.slice(0, 11), `${hash.slice(0, 12)} `, hash.slice(0, 12).toUpperCase()]) {
+    for (const answer of ["yes", "", hash, `sha256:${hash.slice(0, 12)}`, hash.slice(0, 11), `${hash.slice(0, 12)} `, hash.slice(0, 12).toUpperCase()]) {
       process.exitCode = 0;
       const t = terminal(answer);
       await agentsExternalCommand(["apply", record.runId], deps(t.run));
       expect(process.exitCode).toBe(1);
-      expect(t.questions).toEqual([`\nType the first 12 characters of the patch hash to land this diff (anything else cancels): `]);
+      expect(t.questions).toEqual([`\nType the first 12 hex digits of the patch hash (without any sha256: prefix) to land this diff (anything else cancels): `]);
     }
     expect(out.join("\n")).toContain("cancelled: nothing was applied");
     expect(branches()).toEqual(["main"]);

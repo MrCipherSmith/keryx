@@ -377,7 +377,7 @@ Glob Edit Write` — no shell, no network, no MCP server. The worktree's diff is
 captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a
 pending review; nothing reaches your checkout. `keryx agents external review
 <run-id>` shows it. `apply <run-id> [--allow-flagged]` needs a real terminal, shows
-the diff and asks you to type the first 12 characters of the patch hash, then
+the diff and asks you to type the first 12 hex digits of the patch hash, then
 creates a NEW local branch `external/<run-id>` with one commit, cut from the
 recorded base commit in a second throwaway worktree. Your current branch, index and
 working tree are never touched, a run lands at most once, and nothing is pushed and

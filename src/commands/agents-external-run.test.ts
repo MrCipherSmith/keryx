@@ -18,7 +18,7 @@ import { PassThrough } from "node:stream";
 import type { Interface } from "node:readline";
 import { answerAcpPermission, clampForeignMode } from "../harness/external/acp-permission";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "../harness/external/supervise";
-import { agentsExternalCommand, terminalApprover, type AgentsExternalDeps } from "./agents-external";
+import { agentsExternalCommand, renderWriteRun, terminalApprover, type AgentsExternalDeps } from "./agents-external";
 
 const FAKE_AGENT = fileURLToPath(new URL("../../fixtures/external/acp/fake-acp-agent.ts", import.meta.url));
 const ENABLED: ExternalAgentsConfig = { ...EXTERNAL_AGENTS_DEFAULTS, enabled: true };
@@ -397,7 +397,7 @@ describe("flow 370 — `run claude-cli --write` stores a patch for review", () =
     await agentsExternalCommand(["run", "claude-cli", "--task", "edit the readme", "--write"], d);
     const text = d.lines.join("\n");
     expect(text).toMatch(/patch \(never applied\): .*acp-worktree\.patch/);
-    expect(text).toMatch(/patch hash: sha256:[0-9a-f]{64}/);
+    expect(text).toMatch(/patch hash \(sha256\): [0-9a-f]{64}/);
     expect(text).toContain("modified     README.md");
     expect(text).toContain("added        .github/ci.yml");
     expect(text).toContain("flagged paths (1)");
@@ -415,6 +415,65 @@ describe("flow 370 — `run claude-cli --write` stores a patch for review", () =
     const text = d.lines.join("\n");
     expect(text).toContain("no changes");
     expect(text).not.toContain("review with:");
+  });
+
+  test("a SIGINT before the child spawns aborts the run: no child, no leftover worktree, handler removed", async () => {
+    const project = gitProject();
+    const sp = fakeSpawn([]);
+    const listenersBefore = process.listenerCount("SIGINT");
+    let outcome: ExternalChildOutcome | undefined;
+    await agentsExternalCommand(
+      ["run", "claude-cli", "--task", "edit", "--write"],
+      deps({
+        cwd: project,
+        run: {
+          config: ENABLED,
+          isTTY: false,
+          dataDir: path.join(root, "data"),
+          spawn: sp.port,
+          detect: async () => {
+            process.emit("SIGINT");
+            process.emit("SIGINT");
+            return { binaryFound: true };
+          },
+          onOutcome: (o) => {
+            outcome = o;
+          },
+        },
+      }),
+    );
+    expect(sp.calls).toHaveLength(0);
+    expect(outcome?.status).not.toBe("Completed");
+    expect(process.exitCode).toBe(1);
+    expect(process.listenerCount("SIGINT")).toBe(listenersBefore);
+    const worktrees = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: project, env: withoutGitDiscoveryOverrides(process.env), encoding: "utf8" });
+    expect(worktrees.match(/^worktree /gm)).toHaveLength(1);
+  });
+
+  test("renderWriteRun prints agent-controlled paths with control characters escaped and says so", () => {
+    const lines = renderWriteRun({
+      outcome: { status: "Completed" } as ExternalChildOutcome,
+      run: {
+        runId: "r1",
+        agentId: "claude-cli",
+        baseCommit: "abc",
+        patchPath: "/tmp/p.patch",
+        patchHash: "f".repeat(64),
+        files: [{ path: "a\x1b[2Jb.txt", status: "added" }],
+        flaggedPaths: [".github/x\x1b[H"],
+        refusedPaths: [],
+        state: "pending-review",
+        redacted: false,
+        runStatus: "Completed",
+        projectRoot: "/tmp",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    const text = lines.join("\n");
+    expect(text).not.toContain("\x1b");
+    expect(text).toContain("a\\x1b[2Jb.txt");
+    expect(text).toContain(`patch hash (sha256): ${"f".repeat(64)}`);
+    expect(text).toContain("shown as \\xNN escapes");
   });
 
   test("codex-cli --write is still refused, naming claude-only", async () => {

@@ -153,6 +153,19 @@ describe("list and detail", () => {
     expect(text(createExternalDiffController({ deps: fake([run]).deps }))).not.toContain("\u001b");
   });
 
+  test("the apply prompt asks for hex digits without the sha256: prefix", () => {
+    const controller = createExternalDiffController({ deps: fake([record("run-1")]).deps });
+    press(controller, "a");
+    expect(text(controller)).toContain("first 12 hex digits of the patch hash, without any sha256: prefix");
+  });
+
+  test("control bytes in the patch and the agent id are shown as escapes", () => {
+    const run = record("run-1", { agentId: "cl\u001b[31maude" });
+    const out = text(createExternalDiffController({ deps: fake([run], { "run-1": "+a\u001b[2Jb\n" }).deps }));
+    expect(out).not.toContain("\u001b");
+    expect(out).toContain("+a\\x1b[2Jb");
+  });
+
   test("up and down change the selected run", () => {
     const controller = createExternalDiffController({ deps: fake([record("run-1"), record("run-2")]).deps });
     expect(controller.selected()?.runId).toBe("run-1");
@@ -367,6 +380,72 @@ describe("discard", () => {
     const controller = createExternalDiffController({ deps: f.deps });
     press(controller, "d", "y");
     expect(f.discards).toEqual(["run-1"]);
+  });
+});
+
+describe("the selected run is tracked by id, not by position", () => {
+  test("a discard armed on run-2 stays on run-2 when a new run appears above it", () => {
+    const f = fake([record("run-1"), record("run-2")]);
+    const controller = createExternalDiffController({ deps: f.deps });
+    press(controller, "down", "d");
+    f.state.runs = [record("run-0"), ...f.state.runs];
+    controller.reload();
+    expect(controller.selected()?.runId).toBe("run-2");
+    press(controller, "y");
+    expect(f.discards).toEqual(["run-2"]);
+  });
+
+  test("a discard armed on a run that leaves the list is cancelled and discards nothing", () => {
+    const f = fake([record("run-1"), record("run-2")]);
+    const controller = createExternalDiffController({ deps: f.deps });
+    press(controller, "d");
+    f.state.runs = [record("run-2")];
+    controller.reload();
+    expect(controller.selected()?.runId).toBe("run-2");
+    expect(text(controller)).toContain("Prompt cancelled");
+    press(controller, "y");
+    expect(f.discards).toEqual([]);
+  });
+
+  test("an apply armed on a run that leaves the list is cancelled: the typed prefix lands nothing on the run that took its place", async () => {
+    const f = fake([record("run-1"), record("run-2")]);
+    const controller = createExternalDiffController({ deps: f.deps });
+    press(controller, "a");
+    type(controller, PREFIX);
+    f.state.runs = [record("run-2")];
+    controller.reload();
+    press(controller, "enter");
+    await controller.idle();
+    expect(f.lands).toEqual([]);
+    expect(text(controller)).toContain("Nothing was applied to your current branch or working tree.");
+  });
+
+  test("an apply armed before a list change keeps its own run", async () => {
+    const f = fake([record("run-1"), record("run-2")]);
+    const controller = createExternalDiffController({ deps: f.deps });
+    press(controller, "down", "a");
+    type(controller, PREFIX);
+    f.state.runs = [record("run-0"), ...f.state.runs];
+    controller.reload();
+    press(controller, "enter");
+    await controller.idle();
+    expect(f.lands).toEqual([{ runId: "run-2", confirmedPatchHash: HASH, allowFlagged: false }]);
+  });
+
+  test("allowing flagged paths is forgotten when that run leaves the list, and is never inherited by another run", () => {
+    const flagged = (id: string): ExternalWriteRunRecord => record(id, { flaggedPaths: ["x"] });
+    const f = fake([flagged("run-1"), flagged("run-2")]);
+    const controller = createExternalDiffController({ deps: f.deps });
+    press(controller, "f");
+    press(controller, "down", "a");
+    expect(text(controller)).toContain("Press f to allow applying them");
+    press(controller, "up");
+    f.state.runs = [flagged("run-2")];
+    controller.reload();
+    f.state.runs = [flagged("run-1"), flagged("run-2")];
+    controller.reload();
+    press(controller, "a");
+    expect(text(controller)).toContain("Press f to allow applying them");
   });
 });
 

@@ -90,10 +90,19 @@ export const IMPLEMENTED_ACP_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-
  */
 export const CODEC_WRITE_AGENT_ID = "claude-cli";
 
-/** The sandbox levels keryx implements for this entry's transport. */
-export function implementedSandboxModesFor(entry: ExternalAgentEntry): readonly ExternalSandbox[] {
+/** Who is asking: `ownsWriteCapture` is true only for the caller that captures and stores the worktree diff (`runExternalWriteChild`). */
+export interface ValidateRuntimeOptions {
+  readonly ownsWriteCapture?: boolean;
+}
+
+/**
+ * The sandbox levels keryx implements for this entry's transport. A line-stream agent's
+ * `worktree-write` needs a caller that captures the diff; the model-initiated path has none,
+ * so its edits would be thrown away with the worktree.
+ */
+export function implementedSandboxModesFor(entry: ExternalAgentEntry, options: ValidateRuntimeOptions = {}): readonly ExternalSandbox[] {
   if (transportOf(entry) === "acp") return IMPLEMENTED_ACP_SANDBOX_MODES;
-  return entry.id === CODEC_WRITE_AGENT_ID ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
+  return entry.id === CODEC_WRITE_AGENT_ID && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
 }
 
 /**
@@ -111,6 +120,7 @@ export function implementedSandboxModesFor(entry: ExternalAgentEntry): readonly 
 export function validateRuntimeBlock(
   runtime: RuntimeBlock | undefined,
   allowedActions: readonly string[],
+  options: ValidateRuntimeOptions = {},
 ): ValidateRuntimeResult {
   if (runtime === undefined || runtime.kind === "keryx") {
     return { ok: true, runtime: "keryx" };
@@ -151,7 +161,7 @@ export function validateRuntimeBlock(
     };
   }
 
-  const implemented = implementedSandboxModesFor(entry);
+  const implemented = implementedSandboxModesFor(entry, options);
   if (!implemented.includes(sandbox)) {
     return {
       ok: false,

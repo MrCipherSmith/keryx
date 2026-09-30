@@ -17,9 +17,9 @@ import path from "node:path";
 import { createOwnerOnlyFileExclusive, readTranscriptFile } from "../../lib/config-dir";
 import { withoutGitDiscoveryOverrides } from "../../lib/git-env";
 import { sessionDir } from "../../session/paths";
-import { EXTERNAL_RUN_PROVIDER_PREFIX, findSession, listSessions } from "../../session/store";
+import { EXTERNAL_RUN_PROVIDER_PREFIX, findSession, listSessions, type SessionSummary } from "../../session/store";
 import { createGitWorktreePort } from "../child/git-worktree-port";
-import { EXTERNAL_WRITE_PATCH_FILE, loadExternalWriteRun, type ExternalWriteRunRecord } from "./write-run";
+import { EXTERNAL_WRITE_PATCH_FILE, loadExternalWriteRunOf, type ExternalWriteRunRecord } from "./write-run";
 
 export type LandRefusal =
   | "not-found"
@@ -95,21 +95,25 @@ interface LocatedRun {
   readonly decided: boolean;
 }
 
-function locate(cwd: string, runIdOrPrefix: string, dataDir?: string): LocatedRun | undefined {
-  const summary = findSession(cwd, runIdOrPrefix, dataDir);
-  if (summary === undefined) return undefined;
-  const record = loadExternalWriteRun(cwd, summary.id, dataDir);
+function locateSummary(summary: SessionSummary, dataDir?: string): LocatedRun | undefined {
+  const record = loadExternalWriteRunOf(summary, dataDir);
   if (record === undefined) return undefined;
   const dir = sessionDir(summary.projectPath, summary.id, dataDir);
   return { record, dir, decided: existsSync(path.join(dir, EXTERNAL_WRITE_DECISION_FILE)) };
 }
 
+function locate(cwd: string, runIdOrPrefix: string, dataDir?: string): LocatedRun | undefined {
+  const summary = findSession(cwd, runIdOrPrefix, dataDir);
+  return summary === undefined ? undefined : locateSummary(summary, dataDir);
+}
+
 /** Runs still waiting for a human decision in this checkout: state `pending-review` and no decision file. Newest first. */
 export function listPendingWriteRuns(cwd: string, deps: WriteLandDeps = {}): ExternalWriteRunRecord[] {
   const pending: ExternalWriteRunRecord[] = [];
+  // One session scan, then a direct read per external run: the sidebar polls this.
   for (const summary of listSessions(cwd, deps.dataDir)) {
     if (summary.provider?.startsWith(EXTERNAL_RUN_PROVIDER_PREFIX) !== true) continue;
-    const located = locate(cwd, summary.id, deps.dataDir);
+    const located = locateSummary(summary, deps.dataDir);
     if (located === undefined || located.decided || located.record.state !== "pending-review") continue;
     pending.push(located.record);
   }

@@ -7,9 +7,10 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, wr
 import { mkdtemp, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { withoutGitDiscoveryOverrides } from "../../lib/git-env";
 import { sessionDir } from "../../session/paths";
+import * as sessionStore from "../../session/store";
 import { createSession, EXTERNAL_RUN_PROVIDER_PREFIX } from "../../session/store";
 import {
   EXTERNAL_WRITE_DECISION_FILE,
@@ -338,6 +339,28 @@ describe("listPendingWriteRuns and viewWriteRun", () => {
     discardWriteRun({ cwd: repo, runId: decided.runId }, deps());
     createSession({ cwd: repo, dataDir, provider: "anthropic", title: "chat" });
     expect(listPendingWriteRuns(repo, deps()).map((r) => r.runId)).toEqual([newer.runId, older.runId]);
+  });
+
+  test("listing is linear: it never rescans the session store once per session", () => {
+    const { patch } = makePatch();
+    const ids: string[] = [];
+    for (let i = 0; i < 150; i += 1) ids.push(seed(patch, { createdAt: `2026-03-01T00:00:${String(i % 60).padStart(2, "0")}.000Z` }).runId);
+    for (let i = 0; i < 150; i += 1) createSession({ cwd: repo, dataDir, provider: "anthropic", title: `chat ${i}` });
+    const findSpy = spyOn(sessionStore, "findSession");
+    try {
+      // The spy must actually see calls made by write-land, or the assertion below proves nothing.
+      viewWriteRun(repo, ids[0] as string, deps());
+      expect(findSpy).toHaveBeenCalledTimes(1);
+      findSpy.mockClear();
+      const started = performance.now();
+      expect(listPendingWriteRuns(repo, deps())).toHaveLength(150);
+      const elapsed = performance.now() - started;
+      expect(findSpy).toHaveBeenCalledTimes(0);
+      // The quadratic version took ~0.5s for a third of this; the margin is wide on purpose.
+      expect(elapsed).toBeLessThan(2000);
+    } finally {
+      findSpy.mockRestore();
+    }
   });
 
   test("view returns the patch only while its hash matches", () => {

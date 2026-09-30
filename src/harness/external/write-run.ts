@@ -26,7 +26,7 @@ import { readConfigFile, writeOwnerOnlyFile } from "../../lib/config-dir";
 import { withoutGitDiscoveryOverrides } from "../../lib/git-env";
 import { redactSensitiveText } from "../../security/service";
 import { sessionDir } from "../../session/paths";
-import { EXTERNAL_RUN_PROVIDER_PREFIX, createSession, findSession, persistHistory } from "../../session/store";
+import { EXTERNAL_RUN_PROVIDER_PREFIX, createSession, findSession, persistHistory, type SessionSummary } from "../../session/store";
 import { createGitWorktreePort } from "../child/git-worktree-port";
 import type { CreatedWorktree, WorktreePort } from "../child/worktree";
 import { ACP_PATCH_FILE } from "./acp-run";
@@ -90,6 +90,8 @@ export interface CapturedWriteDiff {
   readonly refusedPaths: readonly string[];
 }
 
+// All entries are lower case: paths are compared lower-cased, because a case-insensitive
+// checkout (macOS, Windows) treats `.Claude/` and `.claude/` as the same directory.
 const FLAGGED_PREFIXES: readonly string[] = [
   ".git/",
   ".github/",
@@ -104,21 +106,29 @@ const FLAGGED_BASENAMES: ReadonlySet<string> = new Set([
   ".git",
   ".gitlab-ci.yml",
   ".travis.yml",
-  "Jenkinsfile",
+  "jenkinsfile",
   "azure-pipelines.yml",
   "bitbucket-pipelines.yml",
   "lefthook.yml",
   "lefthook.yaml",
   ".pre-commit-config.yaml",
+  ".mcp.json",
+  ".envrc",
+  ".gitattributes",
+  ".gitmodules",
 ]);
 
-/** Changed paths a reviewer must look at first: repo plumbing, CI, hooks and agent config. */
+/** Editor config that runs tasks or changes tool behaviour; the rest of `.vscode/` is not flagged. */
+const FLAGGED_SUFFIXES: readonly string[] = [".vscode/tasks.json", ".vscode/settings.json", ".vscode/launch.json"];
+
+/** Changed paths a reviewer must look at first: repo plumbing, CI, hooks and agent config. Case-insensitive. */
 export function flaggedPathsOf(paths: readonly string[]): string[] {
   return paths.filter((p) => {
-    const normalized = p.replace(/^\.\//, "");
+    const normalized = p.replace(/^\.\//, "").toLowerCase();
     if (FLAGGED_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;
     // Nested copies count too: packages/x/.github/workflows/ci.yml is still CI.
     if (FLAGGED_PREFIXES.some((prefix) => normalized.includes(`/${prefix}`))) return true;
+    if (FLAGGED_SUFFIXES.some((suffix) => normalized === suffix || normalized.endsWith(`/${suffix}`))) return true;
     return FLAGGED_BASENAMES.has(path.posix.basename(normalized));
   });
 }
@@ -354,7 +364,7 @@ export async function runExternalWriteChild(
 
   let outcome: ExternalChildOutcome;
   try {
-    outcome = await runExternalChild(input, { ...deps, worktree: wrapped });
+    outcome = await runExternalChild(input, { ...deps, worktree: wrapped, ownsWriteCapture: true });
   } catch (error) {
     outcome = { status: "Error", output: `the external run failed: ${errorMessage(error)}`, isError: true };
   } finally {
@@ -447,6 +457,11 @@ function persistWriteRun(args: {
 export function loadExternalWriteRun(cwd: string, runIdOrPrefix: string, dataDir?: string): ExternalWriteRunRecord | undefined {
   const summary = findSession(cwd, runIdOrPrefix, dataDir);
   if (summary === undefined) return undefined;
+  return loadExternalWriteRunOf(summary, dataDir);
+}
+
+/** The record stored in one already-resolved session; no session scan. Undefined when it has none or it is unreadable. */
+export function loadExternalWriteRunOf(summary: Pick<SessionSummary, "id" | "projectPath">, dataDir?: string): ExternalWriteRunRecord | undefined {
   const file = path.join(sessionDir(summary.projectPath, summary.id, dataDir), EXTERNAL_WRITE_RUN_FILE);
   const read = readConfigFile(file);
   if (!read.ok) return undefined;

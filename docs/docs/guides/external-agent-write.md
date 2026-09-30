@@ -49,9 +49,16 @@ flagged paths first, the file list, and the redacted patch. It changes nothing.
 The run id is the session id of the run; a unique prefix works.
 
 Flagged paths are changes under `.git`, `.github`, `.claude`, `.metaproject`,
-hook directories (`.husky`, `.githooks`) or CI configuration (for example
-`.circleci`, `.gitlab-ci.yml`, `Jenkinsfile`, `lefthook.yml`). They are the files
-that can run code later, so read them first.
+hook directories (`.husky`, `.githooks`), CI configuration (for example
+`.circleci`, `.gitlab-ci.yml`, `Jenkinsfile`, `lefthook.yml`), or files that change
+what tools run or how they behave (`.mcp.json`, `.envrc`, `.gitattributes`,
+`.gitmodules`, and `.vscode/tasks.json`, `settings.json` and `launch.json`). They
+are matched without regard to case, so `.Claude/settings.json` is flagged too. They
+are the files that can run code later, so read them first.
+
+The review prints the patch and every path with control characters (escape
+sequences, a bare carriage return, and so on) shown as visible `\xNN` escapes, and
+says so when it did that. The stored patch and its hash are not changed.
 
 ## Apply it
 
@@ -61,7 +68,8 @@ keryx agents external apply <run-id> --allow-flagged   # only when you mean it
 ```
 
 `apply` needs a real terminal on both stdin and stdout. It shows the same review,
-then asks you to type the first 12 characters of the patch hash. Anything else
+then asks you to type the first 12 hex digits of the patch hash (the digits after
+`sha256:`, without that prefix). Anything else
 cancels and nothing is applied. On a match keryx:
 
 1. creates a second throwaway worktree cut from the run's recorded base commit,
@@ -113,7 +121,7 @@ it opens the same modal. The row is absent when nothing is pending.
 | Up / Down | Select a run |
 | `j` / `k`, PageUp / PageDown | Scroll the diff |
 | `f` | Allow (or block again) flagged paths for the selected run |
-| `a` | Apply: type the first 12 characters of the patch hash, then Enter; anything else cancels |
+| `a` | Apply: type the first 12 hex digits of the patch hash, then Enter; anything else cancels |
 | `d`, then `y` | Discard the selected run |
 | Esc | Close |
 
