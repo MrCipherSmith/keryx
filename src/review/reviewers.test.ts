@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createProjectSkill } from "../gdskills/project-skills";
+import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import {
   collectReviewers,
   descriptionFlags,
@@ -267,6 +268,56 @@ describe("project reviewer triggers", () => {
     expect(reviewer?.stackRequires).toEqual(["react"]);
   });
 
+  test("metadata.flags wins over flags named in the description", async () => {
+    await writeProjectReviewer(
+      "review-house-ui",
+      'description: Dispatched for --house-ui, --house, --all, or src/ui/** changes.\nmetadata:\n  flags: "--ui, --all, --house"\n',
+    );
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    // Declared, so the description is not consulted: `--house-ui` is gone.
+    // `--all` stays excluded whichever source the list came from.
+    expect(reviewer?.flags).toEqual(["--ui", "--house"]);
+    // The path gate is a separate field and still falls back to the description.
+    expect(reviewer).toMatchObject({ paths: ["src/ui/**"], pathsSource: "description" });
+  });
+
+  test("a literal file in the description gates the reviewer; a cited document does not", async () => {
+    await writeProjectReviewer("review-house-zone", "description: Rules from docs/zones.md, for src/utils/column-zone.ts changes.\n");
+    await writeProjectReviewer("review-house-docs", "description: Rules from src/core/flow/CLAUDE.md and core/reviewing.mdc.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.paths, reviewer.pathsSource])).toEqual([
+      ["review-house-docs", [], "none"],
+      ["review-house-zone", ["src/utils/column-zone.ts"], "description"],
+    ]);
+  });
+
+  test("a flag more than one project reviewer carries is a family flag; a unique one is not", async () => {
+    await writeProjectReviewer(
+      "review-house-core",
+      "description: Dispatched for --house, --house-core, --all, or src/core/** changes.\n",
+    );
+    await writeProjectReviewer(
+      "review-house-styling",
+      'description: Dispatched for src/**/*.css changes.\nmetadata:\n  flags: "--house-styling, --house"\n',
+    );
+    await writeProjectReviewer("review-solo", "description: Dispatched for --solo or src/solo/** changes.\n");
+    await writeProjectReviewer("review-plain", "description: Reviews things.\n");
+
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.flags, reviewer.familyFlags])).toEqual([
+      ["review-house-core", ["--house", "--house-core"], ["--house"]],
+      // Always present, and empty rather than absent when nothing is shared.
+      ["review-plain", [], []],
+      ["review-solo", ["--solo"], []],
+      ["review-house-styling", ["--house-styling", "--house"], ["--house"]],
+    ].sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("  - flags: --house, --house-core\n  - family flags: --house — shared with another project reviewer: selects it, stays path-gated");
+    // A reviewer with no shared flag gets no family line.
+    expect(rendered.match(/family flags:/g)).toHaveLength(2);
+  });
+
   test("a description with no glob gates on nothing, and says so", async () => {
     await writeProjectReviewer("review-house-dates", "description: Reviews date utils and formatters.\n");
     const inventory = await collectReviewers(cwd);
@@ -375,6 +426,76 @@ describe("descriptionPathTriggers", () => {
 
   test("prose paths without a glob are not triggers", () => {
     expect(descriptionPathTriggers("rules from src/core/flow/CLAUDE.md and test/e2e changes")).toEqual([]);
+  });
+
+  test("a literal file path listed beside globs is a trigger", () => {
+    // The real description that lost `column-zone.ts`: a reviewer gated on a
+    // list where one entry happens to be a single file.
+    expect(
+      descriptionPathTriggers(
+        "Dispatched by vantage-review for --vantage, --vantage-temporal, --all, or changes under " +
+          "src/utils/date-*.ts, src/utils/temporal-*.ts, src/utils/column-zone.ts, src/core/formatters/**, " +
+          "src/core/view-zone/**, or src/wrappers/ag-grid/**.",
+      ),
+    ).toEqual([
+      "src/utils/date-*.ts",
+      "src/utils/temporal-*.ts",
+      "src/utils/column-zone.ts",
+      "src/core/formatters/**",
+      "src/core/view-zone/**",
+      "src/wrappers/ag-grid/**",
+    ]);
+  });
+
+  test("a cited document is not a trigger", () => {
+    expect(
+      descriptionPathTriggers(
+        "performance rules from src/core/flow/CLAUDE.md. Dispatched by vantage-review for --vantage-flow, --all, or src/core/flow/** changes.",
+      ),
+    ).toEqual(["src/core/flow/**"]);
+    expect(descriptionPathTriggers("Reviews stores. Standards: core/reviewing.mdc, `core/mobx-store-template.mdc`.")).toEqual([]);
+  });
+
+  test("a literal path takes the same optional suffix and wrapping punctuation as a glob", () => {
+    expect(descriptionPathTriggers("changes to (`src/app/routes.ts(x)`), or `.github/workflows/ci.yml`.")).toEqual([
+      "src/app/routes.ts",
+      "src/app/routes.tsx",
+      ".github/workflows/ci.yml",
+    ]);
+  });
+
+  test("prose that merely contains a slash and a dot is not a trigger", () => {
+    for (const prose of [
+      "See https://example.com/docs/page.html and http://example.com/a/b.json for details.",
+      "Mirrors github.com/acme/overlay.git and www.example.com/guide.html.",
+      "Uses acme/overlay and MrCipherSmith/keryx as sources.",
+      "Since 0.3.40/0.3.41, v1.2/v1.3 and 2026/09.30.",
+      "Names (e.g./i.e. aliases), e.g/i.e, and/or. read/write. client/server.",
+      "An absolute /opt/overlay/rules/x.json or ~/.vantage/config.json is not repo-relative.",
+      "a=b/c.ts, src//x.ts, ./src/x.ts, ../x.ts",
+      // The bundled review-jev-* descriptions: keryx's own config, cited as a precondition.
+      "Runs when `review.jev.docs: true` in .metaproject/tasks.config.json and a credential is resolvable.",
+      "React/MobX, NestJS/TypeORM, TS/JS, input/output",
+    ]) {
+      expect({ prose, triggers: descriptionPathTriggers(prose) }).toEqual({ prose, triggers: [] });
+    }
+  });
+
+  test("the descriptions of the bundled review skills yield no literal-path trigger", async () => {
+    const reviewRoot = path.join(import.meta.dir, "..", "gdskills", "bundled", "skills", "review");
+    const literal: Record<string, string[]> = {};
+    let read = 0;
+    for (const entry of await readdir(reviewRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const content = await readFile(path.join(reviewRoot, entry.name, "SKILL.md"), "utf8").catch(() => undefined);
+      if (content === undefined) continue;
+      read += 1;
+      const description = parseSkillFrontmatter(content).description ?? "";
+      const found = descriptionPathTriggers(description).filter((trigger) => !trigger.includes("*"));
+      if (found.length > 0) literal[entry.name] = found;
+    }
+    expect(read).toBeGreaterThan(10);
+    expect(literal).toEqual({});
   });
 
   test("descriptionFlags ignores --all", () => {

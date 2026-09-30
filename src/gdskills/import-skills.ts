@@ -13,7 +13,7 @@ import {
   type CreateProjectSkillResult,
 } from "./project-skills";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
-import { descriptionPathTriggers, type PathTriggerSource } from "../review/reviewers";
+import { reviewerPathGate, type PathTriggerSource } from "../review/reviewers";
 
 const BUNDLED_NAMES = new Set(BUNDLED_GDSKILLS.map((entry) => entry.name));
 
@@ -394,19 +394,11 @@ function skippedAsDeprecated(source: ImportSource): boolean {
  * the description, then nothing.
  *
  * Computed from the source text, not read back from the inventory, so a dry
- * run can say it too. The description half is the inventory's own extractor;
- * the `metadata.paths` half is restated here because that reader is private to
- * `review/reviewers.ts`.
+ * run can say it too — through the inventory's own reader, so the warning
+ * below and `keryx review reviewers` cannot disagree about a package.
  */
 function pathTriggerSource(content: string): PathTriggerSource {
-  const declared = (frontmatterScalar(content, "paths", "metadata") ?? "")
-    .replace(/^["'[]|["'\]]$/g, "")
-    .split(",")
-    .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
-    .filter(Boolean);
-  if (declared.length > 0) return "metadata";
-  const description = parseSkillFrontmatter(content).description;
-  return description && descriptionPathTriggers(description).length > 0 ? "description" : "none";
+  return reviewerPathGate(content).pathsSource;
 }
 
 /** What the operator should read about a package that is, or would be, written. */

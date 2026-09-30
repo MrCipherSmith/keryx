@@ -274,6 +274,35 @@ describe("tree import selection", () => {
     expect(result.imported.every((row) => row.warnings === undefined)).toBe(true);
   });
 
+  test("the import warning and the reviewer inventory agree on what gates a package", async () => {
+    const skills = path.join(source, "skills");
+    const packages: Record<string, string> = {
+      // A single literal file is a gate; a cited document is not.
+      "review-literal": 'description: "Dispatched for src/utils/column-zone.ts changes."\nmetadata:\n  category: review\n',
+      "review-cites-doc": 'description: "Rules from src/core/flow/CLAUDE.md and core/reviewing.mdc."\nmetadata:\n  category: review\n',
+      "review-bracketed": 'description: "House styles."\nmetadata:\n  category: review\n  paths: ["src/**/*.css", "src/theme/**"]\n',
+    };
+    for (const [name, frontmatter] of Object.entries(packages)) {
+      await mkdir(path.join(skills, name), { recursive: true });
+      await writeFile(path.join(skills, name, "SKILL.md"), `---\nname: ${name}\n${frontmatter}---\n\nbody\n`, "utf8");
+    }
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-*"] });
+    const imported = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+    expect(imported["review-literal"]?.pathsSource).toBe("description");
+    expect(imported["review-literal"]?.warnings).toBeUndefined();
+    expect(imported["review-cites-doc"]?.pathsSource).toBe("none");
+    expect(imported["review-cites-doc"]?.warnings).toEqual([PATHS_NONE_WARNING]);
+    expect(imported["review-bracketed"]?.pathsSource).toBe("metadata");
+
+    // One reader: what import said is what `keryx review reviewers` reports.
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.pathsSource])).toEqual(
+      Object.keys(packages)
+        .sort()
+        .map((name) => [name, imported[name]?.pathsSource ?? "absent"]),
+    );
+  });
+
   test("the path warning is a review concern: another module gets none, and a skipped package gets none", async () => {
     const skills = await writeOverlayTree();
     const job = await importProjectSkills({ projectRoot: cwd, from: path.join(skills, "house-job") });
