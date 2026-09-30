@@ -546,7 +546,7 @@ async function runCommand(args: string[], deps: AgentsExternalDeps, log: (line: 
     capability: () => ({ enabled: true }),
     ...(detect === undefined ? {} : { detect }),
     maxExternalDepth: DEFAULT_MAX_EXTERNAL_DEPTH,
-    onWarning: (warning: string) => console.error(`warning: ${warning}`),
+    onWarning: (warning: string) => console.error(`warning: ${plain(warning)}`),
   };
 
   // A claude write run owns its worktree: the diff is captured just before the
@@ -810,8 +810,8 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
   const lines = [`# agents external run`, "", `status: ${outcome.status}`];
   const record = outcome.acp;
   if (record !== undefined) {
-    const info = record.agentInfo === "unreported" ? "unreported" : `${record.agentInfo.name} ${record.agentInfo.version}`;
-    lines.push(`agent: ${record.agentId} (${info})`);
+    const info = record.agentInfo === "unreported" ? "unreported" : plain(`${record.agentInfo.name} ${record.agentInfo.version}`);
+    lines.push(`agent: ${plain(record.agentId)} (${info})`);
     lines.push(
       `mode: ${record.mode.effective}${record.mode.clamped ? ` (lowered from ${record.mode.requested}: a foreign agent's tool calls are self-described)` : ""}` +
         `${record.unattended ? ", unattended — every permission that needs a human is refused" : ""}`,
@@ -822,12 +822,12 @@ export function renderRunOutcome(outcome: ExternalChildOutcome): string[] {
     lines.push(`fs/terminal requests: ${record.fsRequests.length} (${record.fsRequests.filter((r) => r.outcome === "refused").length} refused)`);
     lines.push(`cost: ${record.cost === "missing" ? "missing (not reported by the agent)" : `${record.cost.amount} ${record.cost.currency}`}`);
     if (record.patchArtifact !== undefined) lines.push(`patch (never applied): ${record.patchArtifact}`);
-    if (record.sessionId !== undefined) lines.push(`session: ${record.sessionId}`);
+    if (record.sessionId !== undefined) lines.push(`session: ${plain(record.sessionId)}`);
   } else {
     // Line-stream transport (flow 357): no ACP record, but the codec still
     // reports what it can — the resume handle, usage and the version-drift
     // signal.
-    if (outcome.sessionRef !== undefined) lines.push(`conversation: ${outcome.sessionRef}`);
+    if (outcome.sessionRef !== undefined) lines.push(`conversation: ${plain(outcome.sessionRef)}`);
     if (outcome.costUnits !== undefined) lines.push(`cost: ${outcome.costUnits}`);
     if (outcome.skippedLines !== undefined && outcome.skippedLines > 0) {
       lines.push(`unrecognised lines: ${outcome.skippedLines} (possible version drift)`);

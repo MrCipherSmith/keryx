@@ -163,10 +163,11 @@ describe("agents external review", () => {
   });
 
   test("the run report escapes the agent's output and partial output but keeps its line breaks", () => {
-    const outcome = { status: "completed", output: "line one\n\x1b[2Jline two", partial: "half\x1b[31m" } as unknown as Parameters<typeof renderRunOutcome>[0];
+    const outcome = { status: "completed", output: "line one\n\x1b[2Jline two", partial: "half\x1b[31m", sessionRef: "ref\x1b[H" } as unknown as Parameters<typeof renderRunOutcome>[0];
     const text = renderRunOutcome(outcome).join("\n");
     expect(text).not.toContain("\x1b");
     expect(text).toContain("partial output: half\\x1b[31m");
+    expect(text).toContain("conversation: ref\\x1b[H");
     expect(text).toContain("line one\n\\x1b[2Jline two");
   });
 
