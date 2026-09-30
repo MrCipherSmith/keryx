@@ -62,6 +62,7 @@ import type { ChildModelRequest } from "../../child/model";
 import { categoryAssignmentToChildModelRequest } from "../../routing/child-model-request";
 import { loadRoutingConfig } from "../../routing/config";
 import { connectedPredicateFrom, describeFallbackNotice, resolveCategoryDetailed } from "../../routing/table";
+import { canonicalExternalAgentId } from "../../external/registry";
 import { resolveExternalSetting } from "../../../lib/external-switch";
 import { externalAllowedConnectedPredicate, loadExternalProvidersConfig } from "../../../lib/external-providers";
 
@@ -432,8 +433,9 @@ export interface SpawnSubagentToolDeps {
    * so an external child is governed by exactly the same gates as a native one
    * and no second spawn path exists — which is the substance of that package's
    * AC17. The type is deliberately structural (`unknown` runtime block, a
-   * `StructuredSubagentResult` back) so this module needs no import from
-   * `src/harness/external/`, and the two stay independently testable.
+   * `StructuredSubagentResult` back) so this module needs no runtime import
+   * from `src/harness/external/` (only the pure agent-name alias lookup), and
+   * the two stay independently testable.
    */
   runExternal?: (request: {
     readonly runtime: unknown;
@@ -483,7 +485,15 @@ export interface SpawnSubagentToolDeps {
 function readExternalRuntimeRequest(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const raw = input.runtime;
   if (typeof raw !== "object" || raw === null) return undefined;
-  return (raw as { kind?: unknown }).kind === "external" ? (raw as Record<string, unknown>) : undefined;
+  if ((raw as { kind?: unknown }).kind !== "external") return undefined;
+  const block = raw as Record<string, unknown>;
+  // A short name (`claude`, `codex`, `agy`) is canonicalised here, once, so the
+  // fleet row and the runtime hook both see the real id. Only the pure alias
+  // lookup is imported (the registry has no runtime imports of its own); the
+  // validation itself stays in the external runtime.
+  if (typeof block.agent !== "string") return block;
+  const agent = canonicalExternalAgentId(block.agent);
+  return agent === block.agent ? block : { ...block, agent };
 }
 
 function sha256(text: string): string {

@@ -14,11 +14,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "bun:test";
-import { EXTERNAL_AGENTS_DEFAULTS, type ExternalAgentsConfig } from "../capability/external-agents";
+import { disableExternalAgents, enableExternalAgents, EXTERNAL_AGENTS_DEFAULTS, type ExternalAgentsConfig } from "../capability/external-agents";
 import type { CreatedWorktree, WorktreeMergeResult, WorktreePort } from "./child/worktree";
 import { ENV_EXTERNAL_DEPTH } from "./external/env";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "./external/supervise";
 import {
+  createLazyRunExternal,
   createRunExternal,
   type CreateRunExternalOptions,
   type RunExternalRequest,
@@ -127,7 +128,7 @@ describe("the factory returns no hook at all when the capability is unavailable"
     );
     expect(hook).toBeUndefined();
     expect(reasons).toHaveLength(1);
-    expect(reasons[0]).toContain("externalAgents.enabled");
+    expect(reasons[0]).toContain("keryx agents external enable");
   });
 
   test("a remote transport yields undefined even with an enabled config", async () => {
@@ -531,6 +532,136 @@ describe("flow 357 AC6: a model-initiated dispatch carries the same vendor gates
       expect(result?.output).toContain("consent-required");
       expect(sp.calls).toHaveLength(0);
       expect(wt.created).toHaveLength(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("flow 373: short agent names resolve to the canonical id before any keyed lookup", () => {
+  function tempRoot(): string {
+    return realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-factory-alias-")));
+  }
+  const alias = (agent: string): RunExternalRequest =>
+    request({ runtime: { kind: "external", agent, sandbox: "read-only" } });
+
+  test("AC4: `claude` is refused by agents[\"claude-cli\"].enabled=false exactly as `claude-cli` is", async () => {
+    for (const typed of ["claude-cli", "claude", "Claude"]) {
+      const sp = fakeSpawn();
+      const wt = fakeWorktree();
+      const hook = await createRunExternal(
+        options({
+          spawn: sp.port,
+          worktree: wt.port,
+          config: { ...ENABLED, agents: { "claude-cli": { enabled: false, model: null } } },
+        }),
+      );
+      const result = await hook?.(alias(typed));
+      expect(result?.status).toBe("Denied");
+      expect(result?.output).toContain("claude-cli");
+      expect(sp.calls).toHaveLength(0);
+      expect(wt.created).toHaveLength(0);
+    }
+  });
+
+  test("`codex` runs as codex-cli for a normal dispatch", async () => {
+    const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
+    let argv: readonly string[] | undefined;
+    const hook = await createRunExternal(options({ spawn: sp.port, onOutcome: (outcome) => (argv = outcome.argv) }));
+    await hook?.(alias("codex"));
+    expect(sp.calls).toHaveLength(1);
+    expect(argv?.[0]).toBe("codex");
+  });
+
+  test("an unknown name is still refused by the validator and names the typed value", async () => {
+    const sp = fakeSpawn();
+    const hook = await createRunExternal(options({ spawn: sp.port }));
+    const result = await hook?.(alias("gemini"));
+    expect(result?.status).toBe("Denied");
+    expect(result?.output).toContain("gemini");
+    expect(sp.calls).toHaveLength(0);
+  });
+
+  test("AC4: the vendor gates (/external off, consent) key on the canonical id for `agy`", async () => {
+    const root = tempRoot();
+    try {
+      const sp = fakeSpawn();
+      const wt = fakeWorktree();
+      const noConsent = await createRunExternal(options({ cwd: root, configDir: root, spawn: sp.port, worktree: wt.port }));
+      const consent = await noConsent?.(alias("agy"));
+      expect(consent?.status).toBe("Denied");
+      expect(consent?.output).toContain("consent-required");
+
+      mkdirSync(path.join(root, ".metaproject"), { recursive: true });
+      writeFileSync(path.join(root, ".metaproject", "tasks.config.json"), JSON.stringify({ external: "off" }));
+      const off = await createRunExternal(options({ cwd: root, configDir: root, spawn: sp.port, worktree: wt.port }));
+      const blocked = await off?.(alias("AGY"));
+      expect(blocked?.status).toBe("Denied");
+      expect(blocked?.output).toContain("blocked by /external off");
+      expect(sp.calls).toHaveLength(0);
+      expect(wt.created).toHaveLength(0);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("flow 373 AC5: the lazy hook names the fix and does not cache a refusal", () => {
+  test("the Denied text carries `keryx agents external enable`", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-lazy-")));
+    try {
+      const { config: _config, ...rest } = options({ cwd: root, configDir: root });
+      const hook = createLazyRunExternal(rest);
+      const result = await hook(request());
+      expect(result.status).toBe("Denied");
+      expect(result.output).toContain("keryx agents external enable");
+      expect(result.output).toContain("/external-agents on");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a refusal followed by enable takes effect on the next dispatch, without a restart", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-lazy-")));
+    const configDir = path.join(root, "cfg");
+    mkdirSync(configDir, { recursive: true });
+    try {
+      const sp = fakeSpawn();
+      const { config: _config, ...rest } = options({ cwd: root, configDir, spawn: sp.port, env: { PATH: "/usr/bin", HOME: root } });
+      const hook = createLazyRunExternal({ ...rest, config: undefined } as unknown as CreateRunExternalOptions);
+      const first = await hook(request());
+      expect(first.status).toBe("Denied");
+      expect(sp.calls).toHaveLength(0);
+
+      const toggled = await enableExternalAgents(root, configDir);
+      expect(toggled.user).toBe("changed");
+      const second = await hook(request());
+      // The capability gate now passes (no "unavailable"); what answers is the NEXT
+      // gate, the shipped `spawnDecision: "ask"` with no approver wired here.
+      expect(second.output).not.toContain("unavailable");
+      expect(second.output).toContain("spawnDecision");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("disable revokes the next dispatch in the same live hook", async () => {
+    const root = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-lazy-")));
+    const configDir = path.join(root, "cfg");
+    mkdirSync(configDir, { recursive: true });
+    try {
+      const sp = fakeSpawn();
+      const { config: _config, ...rest } = options({ cwd: root, configDir, spawn: sp.port, env: { PATH: "/usr/bin", HOME: root } });
+      const hook = createLazyRunExternal({ ...rest, config: undefined } as unknown as CreateRunExternalOptions);
+      await enableExternalAgents(root, configDir);
+      const granted = await hook(request());
+      expect(granted.output).not.toContain("unavailable");
+
+      await disableExternalAgents(root, configDir);
+      const revoked = await hook(request());
+      expect(revoked.status).toBe("Denied");
+      expect(revoked.output).toContain("unavailable");
+      expect(sp.calls).toHaveLength(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

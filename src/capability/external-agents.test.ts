@@ -5,7 +5,7 @@
 // started. The one thing these tests are really about is that a refusal is never
 // silent and never accidental — a malformed config must land on the safe default
 // and a hard disable must win over an enabled config, in that order.
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -21,15 +21,19 @@ import {
   agentRequiresConsent,
   detectCi,
   detectTransport,
+  disableExternalAgents,
+  enableExternalAgents,
+  externalAgentsStatusLines,
   hasRecordedConsent,
   loadExternalAgentsConfig,
   manifestCapabilityState,
   parseExternalAgentsConfig,
   recordExternalAgentConsent,
+  renderExternalAgentsToggle,
   resolveExternalAgentsCapability,
   type ExternalAgentsConfig,
 } from "./external-agents";
-import { loadShellConfig } from "../lib/shell-config";
+import { loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { CAPABILITY_REGISTRY } from "./registry";
 
 let root: string;
@@ -216,7 +220,7 @@ describe("the gate", () => {
   test("is off by default: an enabled-nowhere config refuses with a named reason", async () => {
     const gate = await resolveExternalAgentsCapability({ cwd: root, env: {}, config: EXTERNAL_AGENTS_DEFAULTS });
     expect(gate.ok).toBe(false);
-    if (!gate.ok) expect(gate.reason).toContain("externalAgents.enabled");
+    if (!gate.ok) expect(gate.reason).toContain("keryx agents external enable");
   });
 
   test("a remote transport wins over an enabled config, and names the compliance reason", async () => {
@@ -258,7 +262,7 @@ describe("the gate", () => {
       config: ENABLED,
     });
     expect(gate.ok).toBe(false);
-    if (!gate.ok) expect(gate.reason).not.toContain("externalAgents.enabled");
+    if (!gate.ok) expect(gate.reason).not.toContain("keryx agents external enable");
   });
 
   test("outside a Metaproject workspace the user-global switch is the whole story", async () => {
@@ -277,7 +281,10 @@ describe("the gate", () => {
     await writeManifest(root, [{ id: EXTERNAL_AGENTS_CAPABILITY_ID, enabled: false, kind: "ceiling" }]);
     const gate = await resolveExternalAgentsCapability({ cwd: root, env: {}, config: ENABLED });
     expect(gate.ok).toBe(false);
-    if (!gate.ok) expect(gate.reason).toContain("keryx init --external-agents");
+    if (!gate.ok) {
+      expect(gate.reason).toContain("keryx agents external enable");
+      expect(gate.reason).toContain("/external-agents on");
+    }
   });
 
   test("a workspace that never listed the capability refuses the same way", async () => {
@@ -343,5 +350,154 @@ describe("one-time agent consent (flow 357, AC6)", () => {
     recordExternalAgentConsent("antigravity-cli", "0.3.25", root);
     const raw = loadShellConfig(root).externalAgents as Record<string, unknown>;
     expect(Object.keys(raw)).toEqual(["consent"]);
+  });
+});
+
+describe("enable / disable (the one-step opt-in)", () => {
+  let cfg: string;
+  let proj: string;
+  const manifestPath = (): string => path.join(proj, ".metaproject", "metaproject.json");
+
+  /** A manifest with neighbours around the capability entry, to prove nothing else moves. */
+  const fixtureManifest = (enabled: boolean | undefined): Record<string, unknown> => ({
+    version: 1,
+    modules: {
+      gdgraph: { enabled: true, capabilities: ["gdgraph.cycles", { id: "gdgraph.other", enabled: true, kind: "floor" }] },
+      gdskills: {
+        enabled: true,
+        hooks: { gitPostCommit: ".git/hooks/post-commit" },
+        capabilities:
+          enabled === undefined
+            ? []
+            : [{ id: EXTERNAL_AGENTS_CAPABILITY_ID, enabled, kind: "ceiling" }],
+      },
+    },
+    other: { keep: [1, 2, 3] },
+  });
+
+  async function writeRaw(text: string): Promise<void> {
+    await mkdir(path.join(proj, ".metaproject"), { recursive: true });
+    await writeFile(manifestPath(), text, "utf8");
+  }
+
+  beforeEach(async () => {
+    cfg = path.join(root, "cfg");
+    proj = path.join(root, "proj");
+    await mkdir(proj, { recursive: true });
+  });
+
+  test("enable sets the user flag and the manifest flag, and nothing else in either file", async () => {
+    saveShellConfig({ defaultProvider: "keep-me", externalAgents: { spawnDecision: "allow", agents: { "codex-cli": { enabled: false } } } } as never, cfg);
+    await writeRaw(`${JSON.stringify(fixtureManifest(false), null, 2)}\n`);
+    const userBefore = loadShellConfig(cfg) as Record<string, unknown>;
+
+    const result = await enableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ target: true, user: "changed", project: "changed" });
+
+    const userAfter = loadShellConfig(cfg) as Record<string, unknown>;
+    expect(userAfter).toEqual({
+      ...userBefore,
+      externalAgents: { spawnDecision: "allow", agents: { "codex-cli": { enabled: false } }, enabled: true },
+    });
+    expect(JSON.parse(await readFile(manifestPath(), "utf8"))).toEqual(fixtureManifest(true));
+    // Formatting matches the file's own: 2-space indent and a trailing newline.
+    expect(await readFile(manifestPath(), "utf8")).toBe(`${JSON.stringify(fixtureManifest(true), null, 2)}\n`);
+  });
+
+  test("enable materialises no default into the user config", async () => {
+    await enableExternalAgents(proj, cfg);
+    expect(loadShellConfig(cfg).externalAgents).toEqual({ enabled: true });
+  });
+
+  test("a second enable is a no-op that says so", async () => {
+    await writeRaw(`${JSON.stringify(fixtureManifest(false), null, 2)}\n`);
+    await enableExternalAgents(proj, cfg);
+    const manifestAfterFirst = await readFile(manifestPath(), "utf8");
+    const second = await enableExternalAgents(proj, cfg);
+    expect(second).toMatchObject({ target: true, user: "unchanged", project: "unchanged" });
+    expect(await readFile(manifestPath(), "utf8")).toBe(manifestAfterFirst);
+    expect(renderExternalAgentsToggle(second).join("\n")).toContain("nothing changed");
+  });
+
+  test("disable reverses exactly what enable wrote", async () => {
+    const original = `${JSON.stringify(fixtureManifest(false), null, 2)}\n`;
+    await writeRaw(original);
+    await enableExternalAgents(proj, cfg);
+    const result = await disableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ target: false, user: "changed", project: "changed" });
+    expect(await readFile(manifestPath(), "utf8")).toBe(original);
+    expect(loadExternalAgentsConfig(cfg).enabled).toBe(false);
+  });
+
+  test("a second disable is a no-op, and disable never invents the user block", async () => {
+    const result = await disableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ target: false, user: "unchanged", project: "no-manifest" });
+    expect(loadShellConfig(cfg).externalAgents).toBeUndefined();
+  });
+
+  test("with no manifest only the user config changes, and the output says so", async () => {
+    const result = await enableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ user: "changed", project: "no-manifest" });
+    expect(renderExternalAgentsToggle(result).join("\n")).toContain("no project manifest");
+    expect(loadExternalAgentsConfig(cfg).enabled).toBe(true);
+  });
+
+  test("a manifest without the capability entry is reported, not invented, and does not fail the user part", async () => {
+    const text = `${JSON.stringify(fixtureManifest(undefined), null, 2)}\n`;
+    await writeRaw(text);
+    const result = await enableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ user: "changed", project: "entry-absent" });
+    expect(renderExternalAgentsToggle(result).join("\n")).toContain("keryx update");
+    expect(await readFile(manifestPath(), "utf8")).toBe(text);
+  });
+
+  test("a manifest that is not valid JSON is refused and left byte-for-byte alone (enable writes nothing at all)", async () => {
+    await writeRaw("{not json");
+    const result = await enableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ user: "skipped", project: "invalid-manifest" });
+    expect(await readFile(manifestPath(), "utf8")).toBe("{not json");
+    expect(loadShellConfig(cfg).externalAgents).toBeUndefined();
+    expect(renderExternalAgentsToggle(result).join("\n")).toContain("not valid JSON");
+  });
+
+  test("disable still switches the user-global flag off when the manifest is unreadable", async () => {
+    saveShellConfig({ externalAgents: { enabled: true } } as never, cfg);
+    await writeRaw("[1,2");
+    const result = await disableExternalAgents(proj, cfg);
+    expect(result).toMatchObject({ user: "changed", project: "invalid-manifest" });
+    expect(loadExternalAgentsConfig(cfg).enabled).toBe(false);
+    expect(await readFile(manifestPath(), "utf8")).toBe("[1,2");
+  });
+
+  test("a manifest whose root is not an object is refused like invalid JSON", async () => {
+    await writeRaw("[]\n");
+    expect(await enableExternalAgents(proj, cfg)).toMatchObject({ project: "invalid-manifest" });
+  });
+
+  test("a manifest with no trailing newline keeps having none", async () => {
+    await writeRaw(JSON.stringify(fixtureManifest(false), null, 2));
+    await enableExternalAgents(proj, cfg);
+    expect(await readFile(manifestPath(), "utf8")).toBe(JSON.stringify(fixtureManifest(true), null, 2));
+  });
+
+  test("the status lines give the user flag, the project flag and the effective answer", async () => {
+    await writeRaw(`${JSON.stringify(fixtureManifest(false), null, 2)}\n`);
+    const off = (await externalAgentsStatusLines(proj, cfg)).join("\n");
+    expect(off).toContain("keryx agents external enable");
+    expect(off).toContain("/external-agents on");
+    await enableExternalAgents(proj, cfg);
+    const on = (await externalAgentsStatusLines(proj, cfg, {})).join("\n");
+    expect(on).toContain("effective: on");
+  });
+
+  test("an invalid manifest ends with a not-turned line, never 'already on'", () => {
+    const lines = renderExternalAgentsToggle({
+      target: true,
+      user: "skipped",
+      project: "invalid-manifest",
+      manifestPath: "/p/.metaproject/metaproject.json",
+    });
+    expect(lines[lines.length - 1]).toBe("not turned on: see the lines above");
+    expect(lines.join("\n")).not.toContain("already on");
   });
 });

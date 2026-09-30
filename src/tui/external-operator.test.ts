@@ -308,6 +308,22 @@ describe("/delegate", () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.reason).toContain("keryx agents external list");
+    expect(outcome.reason).toContain("/external-agents on");
+    expect(outcome.reason).toContain("keryx agents external enable");
+  });
+
+  test("a short agent name starts the canonical agent (flow 373)", async () => {
+    const seen: unknown[] = [];
+    const op = new ExternalOperator({
+      idSeq: () => "abc",
+      runExternal: async (request) => {
+        seen.push(request);
+        return OK;
+      },
+    });
+    const outcome = await op.delegate({ agentId: "Codex", task: "t" });
+    expect(outcome.ok).toBe(true);
+    expect(seen[0]).toMatchObject({ runtime: { kind: "external", agent: "codex-cli" } });
   });
 
   test("the run appears in the subagent sidebar marked as external (§8.2)", async () => {

@@ -96,7 +96,8 @@ describe("AC8 — named refusals before anything runs", () => {
     await agentsExternalCommand(["run", "gemini-acp", "--task", "look"], deps({ run: { worktree: wt.port } }));
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain("refused:");
-    expect(errors.join("\n")).toContain("externalAgents.enabled");
+    expect(errors.join("\n")).toContain("keryx agents external enable");
+    expect(errors.join("\n")).toContain("/external-agents on");
     expect(wt.created).toEqual([]);
   });
 
@@ -118,6 +119,43 @@ describe("AC8 — named refusals before anything runs", () => {
     );
     expect(process.exitCode).toBe(1);
     expect(errors.join("\n")).toContain('external agent "gemini-acp" is disabled');
+  });
+
+  test("an alias never weakens a per-agent setting: `run claude` is refused exactly as `run claude-cli` (flow 373, AC4)", async () => {
+    const config: ExternalAgentsConfig = { ...ENABLED, agents: { "claude-cli": { enabled: false, model: null } } };
+    for (const name of ["claude-cli", "claude", "Claude"]) {
+      errors = [];
+      process.exitCode = 0;
+      const wt = fakeWorktree();
+      const sp = fakeSpawn([]);
+      await agentsExternalCommand(["run", name, "--task", "look"], deps({ run: { config, worktree: wt.port, spawn: sp.port } }));
+      expect(process.exitCode).toBe(1);
+      expect(errors.join("\n")).toContain('external agent "claude-cli" is disabled');
+      expect(wt.created).toEqual([]);
+      expect(sp.calls).toHaveLength(0);
+    }
+  });
+
+  test("an alias resolves for a normal run: `run codex` spawns codex-cli (flow 373, AC3)", async () => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn([
+      JSON.stringify({ type: "thread.started", thread_id: "t-1" }),
+      JSON.stringify({ type: "item.completed", item: { id: "item_0", type: "agent_message", text: "ok" } }),
+      JSON.stringify({ type: "turn.completed", usage: { input_tokens: 1, output_tokens: 1 } }),
+    ]);
+    await agentsExternalCommand(
+      ["run", "codex", "--task", "look"],
+      deps({ run: { config: ENABLED, worktree: wt.port, spawn: sp.port, detect: async () => ({ binaryFound: true }) } }),
+    );
+    expect(sp.calls).toHaveLength(1);
+    expect(sp.calls[0]?.argv[0]).toBe("codex");
+  });
+
+  test("an unknown name is still refused with the known agents", async () => {
+    await agentsExternalCommand(["run", "nonexistent", "--task", "look"], deps({ run: { config: ENABLED } }));
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain('Unknown external agent "nonexistent"');
+    expect(errors.join("\n")).toContain("claude-cli");
   });
 
   test("a line-stream agent IS driven by `run` (flow 357 widened this from ACP-only)", async () => {

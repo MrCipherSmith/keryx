@@ -40,7 +40,7 @@
 // property of the launcher, not of this module, and it flips the day a run is
 // spawned steerable.
 
-import { getExternalAgent } from "../harness/external/registry";
+import { canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
 import type { ExternalRunHandle } from "../harness/external/supervise";
 import type { ExternalRunInput, ExternalSandbox } from "../harness/external/types";
 import { createLazyRunExternal } from "../harness/run-external-factory";
@@ -424,11 +424,12 @@ export class ExternalOperator {
       return {
         ok: false,
         reason:
-          "this keryx session has no external agent runtime wired; run `keryx agents external list` " +
-          "to see whether the capability is enabled here",
+          "this keryx session has no external agent runtime wired; run `/external-agents on` (or " +
+          "`keryx agents external enable`) to opt in, or `keryx agents external list` to see the state here",
       };
     }
-    const entry = getExternalAgent(input.agentId);
+    // A short name (`claude`) is resolved once, here, before anything keyed on the id.
+    const entry = getExternalAgent(canonicalExternalAgentId(input.agentId));
     if (entry === undefined) {
       return {
         ok: false,

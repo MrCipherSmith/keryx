@@ -3,6 +3,18 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.44] — 2026-09-30
+### Added
+- **`keryx agents external enable` and `disable`** — one command turns the external agent runtime on (or off) for this machine and this project: `externalAgents.enabled` in the user config and, when the project has a manifest, `enabled` on its `gdskills.external-agents` entry. No other key or file changes, and a manifest that is not valid JSON is refused. Before this, the project half needed `keryx init --external-agents`, which rewrites many unrelated tracked files, and the user half had no command at all.
+- **`/external-agents on|off` in the shell** — the same action from the composer; bare `/external-agents` shows the state and why. It is not `/external` (the privacy switch for external providers).
+- **Short agent names** — `claude`, `codex` and `agy` (also `antigravity`, any case) work for `claude-cli`, `codex-cli` and `antigravity-cli` in `/delegate`, in every `keryx agents external <subcommand> <id>` and in a `spawn_subagent` `runtime.agent`. Names are resolved once at each entry point, so a short name never bypasses `externalAgents.agents[<id>].enabled`, the consent record or the vendor gates.
+### Changed
+- Every refusal of the external agent capability, and the `/delegate` refusal in the shell, now names `keryx agents external enable` (`/external-agents on` in the shell) as the fix.
+### Fixed
+- After a refusal, enabling the capability took effect only after a restart of the shell; an unavailable answer is no longer cached.
+### Notes
+- `enable` does not change `externalAgents.spawnDecision`: a model-initiated `spawn_subagent` call still asks for approval, and is denied where no approver is wired.
+
 ## [0.3.43] — 2026-09-30
 ### Fixed
 - **Every `codex-cli` run failed with `invalid_json_schema`** (0.3.42, read-only and `--write`). `codex exec --output-schema` forwards to OpenAI structured output, which refuses the subagent-result schema as written (objects must list every property in `required`, and `allOf`, `if`/`then`, `pattern`, bounds and `default` are rejected). `codex` now receives a strict copy of that schema; keryx removes the nulls the copy forces on optional fields and validates the answer against the full, unchanged contract, so a null on a required field still fails.

@@ -13,7 +13,7 @@
 // registry keeps the definition mode-aware and only ever flattens THROUGH a mode
 // (see {@link describeCommand} / {@link commandsForMode}).
 
-import { EXTERNAL_AGENTS, getExternalAgent } from "../harness/external/registry";
+import { EXTERNAL_AGENTS, canonicalExternalAgentId, getExternalAgent } from "../harness/external/registry";
 
 /** The two shell modes. `agent` has tools; `chat` is a plain conversation. */
 export type ShellMode = "chat" | "agent";
@@ -353,6 +353,15 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 373: the one-step opt-in for the external agent RUNTIME (bare = status,
+    // `on`/`off` = the same enable/disable as `keryx agents external enable|disable`).
+    // Not `/external` — that is the privacy switch for sending work to listed
+    // providers; this one decides whether a vendor coding CLI may be spawned at all.
+    name: "/external-agents",
+    description: "Turn the external agent runtime (claude/codex/agy CLIs) on or off — /external-agents [on|off]; not /external (the privacy switch)",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 370 (AC6): claude and codex write runs whose patch waits for a human decision. Apply needs
     // the patch hash typed back; the readline fallback only lists and points at the CLI.
     name: "/external-diff",
@@ -478,7 +487,8 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
 ];
 
 /** Usage line for `/delegate`, shown on every parse refusal so the fix is one read away. */
-export const DELEGATE_USAGE = "/delegate <agent> <task>  (agents: `keryx agents external list`)";
+export const DELEGATE_USAGE =
+  "/delegate <agent> <task>  (e.g. `/delegate claude <task>`; agents: claude, codex, agy, see `keryx agents external list`; not enabled yet? `/external-agents on`)";
 
 /** A parsed `/delegate` invocation, or the named reason it could not be parsed. */
 export type ParsedDelegateCommand =
@@ -512,7 +522,11 @@ export function parseDelegateCommand(args: string): ParsedDelegateCommand {
     // dispatch a one-word task to a CLI that costs real money to run.
     return { ok: false, reason: `\`/delegate\` needs both an agent and a task — usage: ${DELEGATE_USAGE}` };
   }
-  const agentId = match[1] ?? "";
+  // Short names (`claude`, `codex`, `agy`) resolve here, ONCE, so everything
+  // downstream — the per-agent config, consent and vendor gates — sees the
+  // canonical id and an alias can never step round a per-agent setting.
+  const typedAgent = match[1] ?? "";
+  const agentId = canonicalExternalAgentId(typedAgent);
   const task = (match[2] ?? "").trim();
   if (task.length === 0) {
     return { ok: false, reason: `\`/delegate\` needs a task — usage: ${DELEGATE_USAGE}` };
@@ -521,7 +535,7 @@ export function parseDelegateCommand(args: string): ParsedDelegateCommand {
     return {
       ok: false,
       reason:
-        `unknown external agent "${agentId}"; keryx drives ${EXTERNAL_AGENTS.map((e) => e.id).join(", ")}. ` +
+        `unknown external agent "${typedAgent}"; keryx drives ${EXTERNAL_AGENTS.map((e) => e.id).join(", ")}. ` +
         "Run `keryx agents external list` to see which of them are installed and enabled here.",
     };
   }

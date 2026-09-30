@@ -129,6 +129,33 @@ export function getExternalAgent(id: string): ExternalAgentEntry | undefined {
   return EXTERNAL_AGENTS.find((entry) => entry.id === id);
 }
 
+/**
+ * Short names an operator types, mapped to the registry id (flow 373, AC3).
+ * Keyed lowercase; `antigravity` is the product name and `agy` its binary.
+ */
+const EXTERNAL_AGENT_ALIASES: Readonly<Record<string, string>> = {
+  claude: "claude-cli",
+  codex: "codex-cli",
+  agy: "antigravity-cli",
+  antigravity: "antigravity-cli",
+};
+
+/**
+ * Resolve a short name to its registry id; anything else comes back unchanged.
+ *
+ * This is deliberately NOT applied inside {@link getExternalAgent}: the per-agent
+ * config (`agentConfig`), the recorded consent and the vendor gates all key on the
+ * string the caller holds, so an alias that reached them un-resolved would read
+ * the default ("enabled") instead of the operator's `agents["claude-cli"].enabled
+ * = false`. Every entry point resolves ONCE, before any lookup, and passes the
+ * canonical id downstream. Pure; an unknown name is passed through so the
+ * caller's own "unknown agent" refusal still names what was typed.
+ */
+export function canonicalExternalAgentId(input: string): string {
+  const key = input.trim().toLowerCase();
+  return Object.hasOwn(EXTERNAL_AGENT_ALIASES, key) ? (EXTERNAL_AGENT_ALIASES[key] as string) : input;
+}
+
 /** Every registered agent id, in registry order. */
 export function externalAgentIds(): string[] {
   return EXTERNAL_AGENTS.map((entry) => entry.id);

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   AGENT_SLASH_COMMANDS,
+  DELEGATE_USAGE,
   SHELL_MODES,
   commandsForMode,
   describeCommand,
@@ -64,6 +65,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-agents",
     "/external-diff",
     "/jevprofile",
     "/mcp",
@@ -181,6 +183,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-agents",
     "/external-diff",
     "/jevprofile",
     "/mcp",
@@ -330,6 +333,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/route",
     "/editguard",
     "/external",
+    "/external-agents",
     "/external-diff",
     "/jevprofile",
     "/mcp",
@@ -378,7 +382,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
     "/clear",
   ]);
-  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/external", "/external-diff", "/exit"]);
+  expect(filterCommands("/e", "agent").map((c) => c.name)).toEqual(["/expand", "/editguard", "/external", "/external-agents", "/external-diff", "/exit"]);
   expect(filterCommands("/co", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",
@@ -563,6 +567,38 @@ test("parseDelegateCommand: an unknown agent points at `keryx agents external li
   if (parsed.ok) return;
   expect(parsed.reason).toContain('unknown external agent "gpt-cli"');
   expect(parsed.reason).toContain("keryx agents external list");
+});
+
+test("parseDelegateCommand: a short name resolves to the registry id (flow 373)", () => {
+  expect(parseDelegateCommand("claude do x")).toEqual({ ok: true, agentId: "claude-cli", task: "do x" });
+  expect(parseDelegateCommand("Codex do x")).toEqual({ ok: true, agentId: "codex-cli", task: "do x" });
+  expect(parseDelegateCommand("agy do x")).toEqual({ ok: true, agentId: "antigravity-cli", task: "do x" });
+  expect(parseDelegateCommand("antigravity do x")).toEqual({ ok: true, agentId: "antigravity-cli", task: "do x" });
+});
+
+test("parseDelegateCommand: an unknown name is still refused with the list of known agents, naming what was typed", () => {
+  const parsed = parseDelegateCommand("nonexistent x");
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok) {
+    expect(parsed.reason).toContain('"nonexistent"');
+    expect(parsed.reason).toContain("claude-cli");
+    expect(parsed.reason).toContain("codex-cli");
+  }
+});
+
+test("the /delegate usage names the short forms and the enable command (flow 373, AC6)", () => {
+  expect(DELEGATE_USAGE).toContain("/delegate claude");
+  expect(DELEGATE_USAGE).toContain("/external-agents on");
+});
+
+test("/external-agents is agent-mode only and its description says it is not /external (flow 373, AC6)", () => {
+  const entry = AGENT_SLASH_COMMANDS.find((c) => c.name === "/external-agents");
+  expect(entry).toBeDefined();
+  expect(findAgentCommand("/external-agents on", "agent")?.name).toBe("/external-agents");
+  expect(findAgentCommand("/external-agents on", "chat")).toBeUndefined();
+  expect(describeCommand(entry!, "agent")).toContain("not /external");
+  // The prefix match must not steal `/external on` from `/external`.
+  expect(findAgentCommand("/external on", "agent")?.name).toBe("/external");
 });
 
 test("/delegate is agent-mode only and its help text names both arguments", () => {
