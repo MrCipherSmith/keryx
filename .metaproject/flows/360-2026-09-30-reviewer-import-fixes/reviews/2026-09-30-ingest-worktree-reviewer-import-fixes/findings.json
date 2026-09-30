@@ -1,0 +1,491 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "skills remove deletes outside the project through a symlinked project-skills component, then fails half-way.",
+    "impact": "A symlinked .metaproject/project-skills/<module> makes the real run delete <link target>/<name>; the run then throws ENOTDIR, leaving the registry entry and catalog row removed and the report in place, and a second run reports not found.",
+    "suggested_fix": "Realpath the package parent and the project-skills root and require containment before any mutation; use removeContained / rmdirIfEmptyContained.",
+    "evidence": "Reproduced by the security and architecture probes and by review-verifier f001.ts with a symlinked module directory, a symlinked project-skills root and an unregistered module/name.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 130,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/remove-skill.ts:130",
+        "src/gdskills/remove-skill.ts:148",
+        "src/gdskills/remove-skill.ts:210",
+        "src/gdskills/remove-skill.ts:221"
+      ],
+      "enumeration_method": "every rm/rmdir call and every containment check in remove-skill.ts, read in full; no other module removes project-skill paths"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f001.ts: project-skills/review symlinked outside the project, registry entry review/victim. Dry run listed in-project spellings only. Real run threw ENOTDIR on rmdir of the link; outside/victim ENOENT, registry [], catalog row gone, report still present; second run: project skill not found.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "A registry path is not bound to its own module/name.",
+    "impact": "Entry review/alpha with path .metaproject/project-skills/review deletes every skill in the module; a path naming another skill deletes that skill while the named one stays on disk.",
+    "suggested_fix": "Accept a registered path only when it equals .metaproject/project-skills/<entry.module>/<entry.name>.",
+    "evidence": "Reproduced by the security probe and review-verifier f002.ts for both scenarios.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 125,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/remove-skill.ts:125",
+        "src/gdskills/remove-skill.ts:242"
+      ],
+      "enumeration_method": "every read of a registry entry's path in remove-skill.ts (resolveTarget and isTargetEntry)"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f002.ts: scenario A (path = module dir) removed the whole module, registry still holds review/beta; scenario B (path = quality/gamma) removed gamma and its entry, review/alpha still on disk.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Import guards test the raw package name while the writer uses the slug.",
+    "impact": "A tree with review_logic and review_house_api imported with --only 'review*' overwrites an existing review/review-house-api and registers a project reviewer named review-logic without --force; the dry run says would-import.",
+    "suggested_fix": "Slugify once when the source is built and use that value for the guards, the destination and the reported row.",
+    "evidence": "Reproduced by the security probe and review-verifier f003.ts on HEAD; base review import refused the tree.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 621,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/import-skills.ts:176",
+        "src/gdskills/import-skills.ts:435",
+        "src/gdskills/import-skills.ts:568",
+        "src/gdskills/import-skills.ts:621"
+      ],
+      "enumeration_method": "every comparison of a source package name against BUNDLED_NAMES or an existing destination in import-skills.ts"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f003.ts on HEAD and on base 838e5263: HEAD imports review_house_api onto review/review-house-api (marker lost) and registers review-logic without --force; base skills import identical, base review import refused (prefix filter).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "rules/project is keyed on the rule basename.",
+    "impact": "An import citing core/x.mdc and house/x.mdc with different contents installs only the first; the second is reported differs against the just-written file, shadowedRules points both refs at one file, and the dry run promised a different destination.",
+    "suggested_fix": "Key the project slot on the full reference: rules/project/<dir>/<name>.",
+    "evidence": "Reproduced by the logic and architecture probes and review-verifier f004.ts.",
+    "confidence": "high",
+    "file": "src/gdskills/rule-references.ts",
+    "line": 36,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/rule-references.ts:36",
+        "src/gdskills/rule-references.ts:61",
+        "src/gdskills/import-skills.ts:904",
+        "src/gdskills/import-skills.ts:950"
+      ],
+      "enumeration_method": "every caller of projectRulePath and every place that builds a rules/project path, found by searching src for projectRulePath and PROJECT_RULES_DIR"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f004.ts: core ref imported-project, house ref differs/written=false against the just-written file, rules/house ENOENT, both refs shadowed to one file; --force flips content to B while core reads present.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "Technology-pair prose becomes a path trigger and gates the reviewer off every round.",
+    "impact": "A description 'React/Next.js conventions reviewer.' with no glob yields paths [React/Next.js] and pathsSource description; on base it was none (dispatched every round), and the paths-none warning is suppressed.",
+    "suggested_fix": "Accept a literal path only when the description also yields at least one glob.",
+    "evidence": "Reproduced by the logic probe and review-verifier f005.ts on HEAD and base.",
+    "confidence": "high",
+    "file": "src/review/reviewers.ts",
+    "line": 272,
+    "class_scope": {
+      "sites": [
+        "src/review/reviewers.ts:272",
+        "src/review/reviewers.ts:295",
+        "src/review/reviewers.ts:325"
+      ],
+      "enumeration_method": "isLiteralFilePath and its two callers (descriptionPathTriggers, reviewerPathGate); the import warning reads the same gate"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f005.ts on HEAD and base: HEAD paths [React/Next.js] pathsSource description, no warning; base paths [] pathsSource none.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "metadata.flags entries are taken verbatim.",
+    "impact": "flags: [vantage], ['--Vantage '] and 'flags: --vantage --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
+    "suggested_fix": "Normalise entries and drop those not matching ^--[a-z][a-z0-9-]*$ with a visible warning.",
+    "evidence": "Reproduced by the logic probe and review-verifier f006.ts with a control case.",
+    "confidence": "high",
+    "file": "src/review/reviewers.ts",
+    "line": 338,
+    "class_scope": {
+      "sites": [
+        "src/review/reviewers.ts:215",
+        "src/review/reviewers.ts:338",
+        "src/review/reviewers.ts:501"
+      ],
+      "enumeration_method": "metadataList, reviewerFlags and the familyFlags computation — every reader of metadata.flags in src"
+    },
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run scratchpad/r360/review-verifier/f006.ts: verbatim entries kept; three spellings give familyFlags [] for all; control with one spelling gives familyFlags [--vantage].",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Registry module and name are interpolated unvalidated into the report path.",
+    "impact": "A crafted registry entry makes skills remove delete <outside>/a-b-verification.json.",
+    "suggested_fix": "Apply the SEGMENT check to registered entries.",
+    "evidence": "Security probe with module ../../../../../outside/a and name b.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 319,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-007"
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "An imported package that declares another reviewer's unique flag turns it into a family flag for both.",
+    "impact": "The existing reviewer silently becomes path-gated under its own explicit flag.",
+    "suggested_fix": "Warn at import on a flag collision with an existing project reviewer.",
+    "evidence": "Logic probe with two reviewers sharing one previously unique flag.",
+    "confidence": "high",
+    "file": "src/review/reviewers.ts",
+    "line": 501,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-008"
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "An empty --only value is dropped.",
+    "impact": "--only \"\" with --module quality imports the whole tree.",
+    "suggested_fix": "Error on an empty value.",
+    "evidence": "Logic probe through optionValues.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 67,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-009"
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The SEGMENT check and the root-equality clause of resolveTarget have no failing test.",
+    "impact": "Under the mutants skills remove ../skills deletes .metaproject/skills and a registry path equal to the root deletes every project skill, with the suite green.",
+    "suggested_fix": "Add the two cases.",
+    "evidence": "Mutation pass: both mutants survived.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.test.ts",
+    "line": 1,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-010"
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "No test drives --only through either command.",
+    "impact": "The three wiring sites (import-skills.ts, import-reviewers.ts:55, review.ts:498) can be removed with the suite green.",
+    "suggested_fix": "One test per command through skillsCommand / reviewCommand.",
+    "evidence": "Mutation pass: all three wiring mutants survived.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1118,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-011"
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The AC4 fixture only collides on a keryx-shipped rule name.",
+    "impact": "The collides clause at import-skills.ts:950 never decides; under the mutant a project-owned rules/house/own.mdc is overwritten in place.",
+    "suggested_fix": "Add a collision under a non-shipped name.",
+    "evidence": "Mutation pass: mutant survived.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.test.ts",
+    "line": 1,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-012"
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "--only anchoring, ? and literal escaping are unpinned.",
+    "impact": "A glob matcher that matches prefixes or treats dots as wildcards passes the suite.",
+    "suggested_fix": "Add a prefix-sharing sibling, a ? case and a dotted name.",
+    "evidence": "Mutation pass on import-skills.ts:422-424.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.test.ts",
+    "line": 1,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-013"
+  },
+  {
+    "id": "F-014",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The report lookup by body and by conventional name mask each other.",
+    "impact": "Either branch can be removed with the suite green.",
+    "suggested_fix": "One non-conventional filename with a matching skillPath and one conventional name with an unrelated body.",
+    "evidence": "Mutation pass; behaviour correct on an eight-file probe.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.test.ts",
+    "line": 1,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-014"
+  },
+  {
+    "id": "F-015",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Rule-import branches have no fixture.",
+    "impact": "Rules for deprecated- or bundled-skipped sources, the post-gate present re-check, a gate-blocked rule and a direct project/x.mdc citation are unpinned.",
+    "suggested_fix": "Add fixtures for each branch.",
+    "evidence": "Mutation pass: surviving mutants in those branches.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 885,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-015"
+  },
+  {
+    "id": "F-016",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The catalog-row module cell, the installed-tree half of the bundled refusal and the path clause of isTargetEntry are unpinned.",
+    "impact": "Removing the wrong module's catalog row passes the suite.",
+    "suggested_fix": "A fixture with one name in two modules.",
+    "evidence": "Mutation pass: three mutants survived.",
+    "confidence": "high",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 242,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-016"
+  },
+  {
+    "id": "F-017",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Small parse clauses are unpinned.",
+    "impact": "metadata-level deprecated, flag de-duplication, .MD case-folding, the .. exclusion and the packaged-first order in defaultBundledSourceRoot can regress unnoticed.",
+    "suggested_fix": "Pin each with one assertion.",
+    "evidence": "Mutation pass: mutants survived.",
+    "confidence": "medium",
+    "file": "src/review/reviewers.ts",
+    "line": 215,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-017"
+  },
+  {
+    "id": "F-018",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "First production gdskills to review import.",
+    "impact": "The two directories are now mutually dependent.",
+    "suggested_fix": "Move reviewerPathGate and its pure helpers into gdskills and re-export.",
+    "evidence": "Import graph traced; no file-level cycle, three import orders run.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 16,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-018"
+  },
+  {
+    "id": "F-019",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "remove-skill hand-copies the on-disk format project-skills.ts writes.",
+    "impact": "Lock path, catalog markers, empty row and report name can drift between writer and remover.",
+    "suggested_fix": "Export and share them.",
+    "evidence": "Traced, not run.",
+    "confidence": "medium",
+    "file": "src/gdskills/remove-skill.ts",
+    "line": 63,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-019"
+  },
+  {
+    "id": "F-020",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "A skills subcommand needs four registrations with no parity test.",
+    "impact": "A routed subcommand can be unreachable or undocumented with the suite green.",
+    "suggested_fix": "Add the source-derived parity test the review group has.",
+    "evidence": "Compared with the review drift guard in cli.test.ts.",
+    "confidence": "high",
+    "file": "src/commands/skills.ts",
+    "line": 1758,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-020"
+  },
+  {
+    "id": "F-021",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The import re-implements the resolution order resolveRuleReference owns.",
+    "impact": "Two copies of the project-first order can diverge.",
+    "suggested_fix": "Call resolveRuleReference.",
+    "evidence": "Traced, not run.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 903,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-021"
+  },
+  {
+    "id": "F-022",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "frontmatterCategory matches category: anywhere in the file.",
+    "impact": "A two-package non-review tree with a fenced category: review example in one body is refused as targeting module review.",
+    "suggested_fix": "One frontmatter-bounded reader for category, name and deprecated.",
+    "evidence": "Architecture probe.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 1043,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-022"
+  },
+  {
+    "id": "F-023",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "importReferencedRules outgrew one responsibility.",
+    "impact": "About 130 lines interleave citation collection, status decision and gated writing; F-004 lives in that interleaving.",
+    "suggested_fix": "Split along those seams.",
+    "evidence": "Read, not run.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 885,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-023"
+  },
+  {
+    "id": "F-024",
+    "reviewer": "review-clean-code",
+    "severity": "minor",
+    "problem": "The generic optionValues argv helper lives in the importer.",
+    "impact": "A third argv tokenizer outside src/lib/args.ts.",
+    "suggested_fix": "Move it to src/lib/args.ts.",
+    "evidence": "Read, not run.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 67,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-024"
+  },
+  {
+    "id": "F-025",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The new text names a keryx install command that does not exist.",
+    "impact": "An agent following the text runs a command that exits 1 with Unknown command: install. Also at SKILL.detail.md:205 and :434, review-orchestrator/SKILL.detail.md:80, import-skills.ts:276 and :926, reviewers.ts:600.",
+    "suggested_fix": "Name keryx skills install / init / update.",
+    "evidence": "Ran keryx install: Unknown command, exit 1.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.detail.md",
+    "line": 139,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-025"
+  },
+  {
+    "id": "F-026",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "AC13 says SKILL.md contains the end-to-end example; it lives in SKILL.detail.md.",
+    "impact": "The criterion cannot be confirmed as written.",
+    "suggested_fix": "Amend AC13 through keryx flow ac update.",
+    "evidence": "SKILL.md is pinned at 280 lines; the example is in the companion file.",
+    "confidence": "high",
+    "file": ".metaproject/flows/360-2026-09-30-reviewer-import-fixes/acceptance-criteria.md",
+    "line": 26,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-026"
+  },
+  {
+    "id": "F-027",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "'In the bundled half means installed' is false when bundledSource is package.",
+    "impact": "A project with no installed review tree lists all 28 bundled reviewers, so not-installed is never recorded. Also SKILL.detail.md:177 and SKILL.md:1088.",
+    "suggested_fix": "Qualify with bundledSource: project.",
+    "evidence": "Ran review reviewers in a project without an installed review tree.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "line": 121,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-027"
+  },
+  {
+    "id": "F-028",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Rule import follows a symlinked source rule and searches rules/ up to three levels above the package.",
+    "impact": "Pre-existing; a source tree can point the import at a file outside the overlay.",
+    "suggested_fix": "Track separately.",
+    "evidence": "Read; predates the range.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 860,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-028"
+  },
+  {
+    "id": "F-029",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "--only compiles to a backtracking regex.",
+    "impact": "A thirteen-star pattern takes 35 s; the pattern is operator-typed.",
+    "suggested_fix": "None required.",
+    "evidence": "Timed probe.",
+    "confidence": "high",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 422,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-029"
+  },
+  {
+    "id": "F-030",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The handler-level --help guards in runComments / runLearn are unreachable from any test.",
+    "impact": "None at the CLI: the upstream interception is pinned.",
+    "suggested_fix": "None required.",
+    "evidence": "Coverage trace.",
+    "confidence": "medium",
+    "file": "src/commands/review.ts",
+    "line": 1138,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-030"
+  },
+  {
+    "id": "F-031",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "skill_path means two things in the orchestrator skill.",
+    "impact": "Project-only in the input schema, required in the prompt for a bundled fallback; no wrong dispatch follows.",
+    "suggested_fix": "Reconcile the wording.",
+    "evidence": "Read.",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 1299,
+    "global_id": "2026-09-30-ingest-worktree-reviewer-import-fixes#F-031"
+  }
+]

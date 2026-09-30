@@ -1,0 +1,162 @@
+# Flow Journal
+
+- 2026-09-30T09:17:35.740Z - flow created
+- 2026-09-30T09:19:53.530Z - task-added: T5: Import selection: --only, tree-import refusal, deprecated skip, dry-run list, paths-none warning (D1, D2, D6 warning)
+- 2026-09-30T09:19:58.574Z - task-added: T6: skills remove command (D3)
+- 2026-09-30T09:20:00.650Z - task-added: T7: Rule collisions: differs status, rules/project home, shadowedRules, unresolvedReferences (D4, D5)
+- 2026-09-30T09:20:05.762Z - task-added: T8: Path gate: metadata.flags, literal path triggers, familyFlags in the inventory (D6, D7 code)
+- 2026-09-30T09:20:10.381Z - task-added: T9: Manifest path from flat dist and real subcommand help for review/skills (D10 code)
+- 2026-09-30T09:20:15.032Z - task-added: T10: Bundled skill text: family flags, dispatch by package path, lifecycle bridge, optional-skill wording (D7, D8, D9, D10 text)
+- 2026-09-30T09:20:19.226Z - task-added: T11: Worked import example in reviewer-skill-creator (item 9)
+- 2026-09-30T09:20:23.671Z - task-added: T12: End-to-end: fixture overlay imported into a temp project from the source CLI (dry-run, import, reviewers, remove)
+- 2026-09-30T09:20:28.187Z - task-added: T13: Built-package check: skills install --profile full --dry-run, --with one skill, and subcommand help from dist/
+- 2026-09-30T09:20:32.630Z - task-added: T14: Repository gates: lint, typecheck, focused and bundled-skill tests, keryx health run
+- 2026-09-30T09:20:37.756Z - task-done: T1: Collect remaining context
+- 2026-09-30T09:20:42.697Z - task-done: T2: Implement per plan
+- 2026-09-30T09:20:47.519Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-30T09:20:51.853Z - frozen: 14 criteria; checksum recorded
+- 2026-09-30T09:20:55.820Z - started
+- 2026-09-30T09:21:11.297Z - task-attempt: T5: started (attempt 1) — 360-T5
+- 2026-09-30T09:21:15.481Z - task-attempt: T9: started (attempt 1) — 360-T9
+- 2026-09-30T09:21:19.765Z - task-attempt: T10: started (attempt 1) — 360-T10
+- T10 DONE_WITH_CONCERNS, committed 9fc03091. Concerns and decisions:
+  - The manifest installer has no single-skill form: `--with` takes a component id, and
+    `review-core-skills` (review-pr-feedback, code-ai/learned/style-review) belongs to no
+    component. The text documents `--profile full`, `--profile core --target keryx-shell`,
+    and `--with capability:mobx`. Decision: accept; T13 must run these from the built package.
+  - Found, out of scope, NOT fixed (report to the user): `skills install --with <module-id>`
+    for a module outside the profile is a silent no-op (exit 0); the dry-run "Apply this
+    plan" hint drops `--with`.
+  - Worker-chosen wording to confirm in review: an absent legacy reviewer is skipped with
+    reason `not-installed` (prose only); an inventory without `familyFlags` is treated as
+    all-explicit. Decision: keep both, T8 must ship `familyFlags` so the fallback is for
+    older keryx only.
+  - orchestrator SKILL.md is pinned at exactly 1723 lines by the parity test; later edits
+    to it must hold the count.
+- 2026-09-30T09:31:58.191Z - task-done: T10: Bundled skill text: family flags, dispatch by package path, lifecycle bridge, optional-skill wording (D7, D8, D9, D10 text)
+- 2026-09-30T09:45:04.813Z - ac-updated: AC3: "`keryx skills remove <module>/<name>` removes the package directory, the `projectSkillRegistry` entry, the catalog row and the verification report, supports `--dry-run` and `--json`, refuses a bundled skill and an unknown name, and is listed by `keryx commands --json`. Covered by tests." -> "`keryx skills remove <module>/<name>` removes the package directory, the `projectSkillRegistry` entry, the catalog row and the verification report, supports `--dry-run` and `--json`, refuses a bundled skill and an unknown name, and answers its own `--help`. Covered by tests." (the skills verb is deliberately excluded from the command descriptor registry (command-registry.coverage.test.ts EXCLUSIONS); a descriptor for skills remove would fail 'an excluded verb is never also described'. The keryx commands --json clause was a planning error, replaced by own --help.)
+- 2026-09-30T09:45:15.778Z - task-done: T9: Manifest path from flat dist and real subcommand help for review/skills (D10 code)
+- 2026-09-30T09:45:20.517Z - task-done: T5: Import selection: --only, tree-import refusal, deprecated skip, dry-run list, paths-none warning (D1, D2, D6 warning)
+- 2026-09-30T09:45:25.381Z - task-attempt: T6: started (attempt 1) — 360-T6
+- 2026-09-30T09:45:30.013Z - task-attempt: T7: started (attempt 1) — 360-T7 (then T8 by the same worker lane)
+- T9 DONE_WITH_CONCERNS, committed 7e8c0cc2 (typecheck clean and 188 focused tests green once T5 landed). Carried forward:
+  - T13 must also check `defaultBundledRoot` in `src/gdskills/bundled-eval.ts` from the flat dist layout.
+  - `review comments` / `review learn` help reuses a paragraph of the group help by its header; renaming the header empties it (tests pin one phrase each).
+- T5 DONE_WITH_CONCERNS, committed b8f115a1. Carried forward:
+  - Wider than D1's wording, accepted: the refusal also applies when `--module` is omitted and a package's own category resolves to review.
+  - Deprecated packages are skipped in a tree import even with `--force`.
+  - `import-skills.ts` restates the private `metadata.paths` parse from `reviewers.ts` → T8 unifies.
+  - Stale text for T11: `reviewer-skill-creator/SKILL.md` (prefix at 56/57/64/73, "alias" at 61/242), `docs/docs/cli-reference.md` (~4197, ~4243), the `review import` usage line in the review group help (no `--only`). `reviewers.ts:463` hint → given to T7.
+  - `src/lib/git-worktrees.test.ts` "from a linked worktree…" fails on /var vs /private/var; to be checked against a clean tree in T14.
+  - Plan error corrected: `skills`/`review` verbs are excluded from the command descriptor registry; AC3 rewritten via `flow ac update`.
+- 2026-09-30T09:54:56.839Z - task-done: T7: Rule collisions: differs status, rules/project home, shadowedRules, unresolvedReferences (D4, D5)
+- 2026-09-30T09:55:01.731Z - task-attempt: T8: started (attempt 1) — 360-T8
+- T7 DONE_WITH_CONCERNS, committed 8a956d12 (70 focused tests green, lint clean; typecheck errors at that moment were T6's in-flight files). Verified in source: only `installBundledRules` writes rules, into `rules/core`; `rules/project/` is neither written nor pruned by install/update. Decisions on its concerns:
+  - existing-file-with-different-content is always `differs`; `imported-project` is for a keryx-shipped name absent on disk. Accepted.
+  - a differing `rules/project/` copy is not overwritten without `--force`. Accepted (import never overwrites a project's own rule).
+  - `unresolvedReferences` shape `[{ ref, reason: missing|non-portable }]`; non-portable covers `.mdc` only. Accepted.
+  - REQUIRED follow-up for T11: the orchestrator dispatch text must tell a project reviewer to read `resolved` for every `shadowedRules` entry — that is the only place the project-first order is enforced — and `SKILL.detail.md` needs rows for `shadowedRules` / `unresolvedReferences`. SKILL.md line count stays 1723.
+  - dry-run does not run the security gate, so a would-be status can be optimistic. Noted for the doc.
+- 2026-09-30T09:59:37.904Z - task-done: T6: skills remove command (D3)
+- 2026-09-30T10:01:39.267Z - task-done: T8: Path gate: metadata.flags, literal path triggers, familyFlags in the inventory (D6, D7 code)
+- 2026-09-30T10:01:43.882Z - task-attempt: T11: started (attempt 1) — 360-T11
+- 2026-09-30T10:01:50.835Z - task-attempt: T12: started (attempt 1) — 360-T12+T13 (one verifier)
+- 2026-09-30T10:01:55.447Z - task-attempt: T13: started (attempt 1) — 360-T12+T13 (one verifier)
+- T6 DONE_WITH_CONCERNS, committed 25c8bbc3 (19 new tests, typecheck + lint clean). Accepted beyond the literal criterion: half-cleaned states are removable; a registry path outside project-skills is refused; bare `<name>` is not accepted; imported rules, runtime exports and learning proposals are left in place (help says so). `src/lib/group-subcommands.ts` had to gain `remove` (typo guard runs before the router). Unverified by a dedicated test: report lookup by file body when the filename is non-conventional → review should look at it.
+- T8 DONE_WITH_CONCERNS, committed c30515c2 (69 focused tests, typecheck + lint clean). Literal-path rule was tightened beyond D6 because six bundled `review-jev-*` descriptions cite `.metaproject/tasks.config.json`: paths under `.metaproject/` and slash-bearing prose (URLs, owner/repo, versions) are not triggers. Residual: a cited non-document file (`config/review.json`, `vercel/next.js`) still becomes a trigger; remedy `metadata.paths` — goes into the doc (T11) and the PR. `metadata.flags` replaces description flags, entries taken verbatim. Third copy of the `metadata.paths` parse remains in `src/commands/review-jev-rules.ts:133` (documented duplicate, out of scope).
+- 2026-09-30T10:24:56.483Z - task-done: T11: Worked import example in reviewer-skill-creator (item 9)
+- 2026-09-30T10:25:01.725Z - task-added: T15: Fix: bundled-eval treats rules/project/ as a generated path; refresh reviewer-skill-creator projection
+- 2026-09-30T10:25:06.628Z - task-attempt: T15: started (attempt 1) — 360-T15
+- T11 DONE_WITH_CONCERNS, committed 20f4f720. One check red at commit time: `skills verify --bundled` reports 18 `xref:path` findings (all `rules/project`), failing `bundled-eval.test.ts` AC7 — the sweep does not know `rules/project/` is generated by import. Decision: fix task T15 (`GENERATED_PATH_ROOTS` entry + test), not a respelling of the docs. Other notes:
+  - Long example lives in a new `reviewer-skill-creator/SKILL.detail.md`; SKILL.md is pinned at 280 lines.
+  - Described from code only, not demonstrated by a run: `imported-project`, `non-portable`, a gate block on a real run, `skills update --from` → T12 verifier covers the first two.
+  - CLI surprises, out of scope, report to the user: `skills update` prints the import renderer's header ("# skills import", "would import"); `skills update` does not re-resolve rules (doc says so); a fresh `keryx init` does not git-ignore `.metaproject/` (per-clone note written as conditional).
+  - Left in place: frontmatter trigger "import vantage reviewers" in reviewer-skill-creator (a routing trigger; removing it moves routing scores) — ask the user.
+- 2026-09-30T11:01:52.538Z - task-done: T15: Fix: bundled-eval treats rules/project/ as a generated path; refresh reviewer-skill-creator projection
+- 2026-09-30T11:02:00.779Z - task-attempt: T14: started (attempt 1) — 360-T14 gates run by the orchestrator
+- 2026-09-30T11:10:35.580Z - task-done: T12: End-to-end: fixture overlay imported into a temp project from the source CLI (dry-run, import, reviewers, remove)
+- 2026-09-30T11:11:06.706Z - task-done: T13: Built-package check: skills install --profile full --dry-run, --with one skill, and subcommand help from dist/
+- 2026-09-30T11:11:16.558Z - task-added: T16: Fix: orchestrator doc states that the manifest install exits 1 with a skip list on an init-installed project though the skill is written
+- 2026-09-30T11:11:21.396Z - task-attempt: T16: started (attempt 1) — 360-T16
+- 2026-09-30T12:53:42.610Z - task-done: T16: Fix: orchestrator doc states that the manifest install exits 1 with a skip list on an init-installed project though the skill is written
+- 2026-09-30T13:21:37.276Z - task-done: T14: Repository gates: lint, typecheck, focused and bundled-skill tests, keryx health run
+- T15 DONE, committed 19ca9503: `skills verify --bundled` 18 → 0 findings; `src/gdskills` 7538 pass.
+- T12/T13 verifier DONE_WITH_CONCERNS (first run died on API 529, resumed). Every expected outcome held from source and from a real `npm pack` tarball (0.3.40). Deviation → T16: `skills install --profile core --target keryx-shell` writes the missing skills but exits 1 on an init-installed project. Out of scope, not fixed: dry-run hint drops `--with`; `review --help` and `review comments --help` list different flags for `comments reply`.
+- T16 DONE, committed 43e803be (doc only; legacy `--profile full` overwrites, confirmed from source).
+- Extra runs by the orchestrator in the verifier's temp project (scratchpad v360/extra.sh): plain `update` leaves rules/project and rules/core hashes unchanged (no managed runtime on this machine, so the fetch/checkout step did not run); `skills remove` removes an existing verification report; `would-import-project` / `imported-project` demonstrated; `skills update --from` works.
+- FINDING, out of scope, to the user: importing a rule with prompt-injection text and AWS keys redacts the keys and writes the injection text verbatim; the row says `imported` with no note that content was rewritten. Not checked against main.
+- T14 gates: lint clean, typecheck clean, `keryx health run` PASS (score 94). Full `bun test --timeout 30000`: 25714 pass / 17 fail / 2 errors. Baseline on clean origin/main (838e5263) in a separate worktree: 17 fail. 15 failures are common to both (7× flow 305 in review.test.ts, git-worktrees, doctor worktrees, R1-F1 codex, AC8 all-projects, pinned wrapper, AC3 granted tools, F5c, sandbox T14). Branch-only: fs.lock-reclaim "two reclaimers racing", safe-exec.hostile-cwd e2e, and the gdgraph "Cannot find module './target'" unhandled error — all three files pass in isolation (36 pass, the gdgraph error line is printed but no test fails) → load flakes. Baseline-only: 2× "scripts TypeScript target" (the base worktree had no node_modules of its own). No failure is attributable to this flow.
+- 2026-09-30T13:22:02.924Z - task-attempt: T4: started (attempt 1) — 360-T4 review round 1
+- 2026-09-30T14:02:08.812Z - ac-updated: AC13: "`reviewer-skill-creator/SKILL.md` contains an end-to-end import example consistent with the implemented CLI: dry-run first with real output, what each run writes, how `flags` / `paths` / `pathsSource` / `stackRequires` / `unresolvedRules` / `drift` are derived, what is not a reviewer, how to undo with `skills remove`, the refresh path, the per-clone note, and the `review-learning.config.json` shape. It no longer calls `keryx review import` an alias." -> "The `reviewer-skill-creator` bundled skill (its `SKILL.md` plus the `SKILL.detail.md` it points at) contains an end-to-end import example consistent with the implemented CLI: dry-run first with real output, what each run writes, how `flags` / `paths` / `pathsSource` / `stackRequires` / `unresolvedRules` / `drift` are derived, what is not a reviewer, how to undo with `skills remove`, the refresh path, the per-clone note, and the `review-learning.config.json` shape. It no longer calls `keryx review import` an alias." (review round 1 F-026: SKILL.md is pinned at 280 lines by skill-length-ceilings, so the example lives in the companion SKILL.detail.md; the criterion named the wrong file.)
+- 2026-09-30T14:02:14.519Z - task-added: T17: Review fixes A: skills remove containment and registry binding (F-001, F-002, F-007) with tests (F-010, F-014, F-016, F-019, F-020)
+- 2026-09-30T14:02:19.820Z - task-added: T18: Review fixes B: import slug guards, rules/project keyed by full ref, --only edge cases (F-003, F-004, F-009, F-022) with tests and cleanup (F-011, F-012, F-013, F-015, F-021, F-023, F-024)
+- 2026-09-30T14:02:25.293Z - task-added: T19: Review fixes C: literal triggers only beside a glob, metadata.flags normalised and validated, flag-collision warning, path gate moved into gdskills (F-005, F-006, F-008, F-017, F-018)
+- 2026-09-30T14:02:31.043Z - task-added: T20: Review fixes D: docs true of the code (F-025 keryx install, F-027 bundledSource, F-031 skill_path, refreshed example output after B and C)
+- 2026-09-30T14:02:36.349Z - task-attempt: T17: started (attempt 1) — 360-T17
+- 2026-09-30T14:02:42.224Z - task-attempt: T18: started (attempt 1) — 360-T18
+- 2026-09-30T14:06:18.041Z - task-attempt: T4: failed (attempt 2) — round 1: 0 blocker, 6 major, 21 minor, 4 info; ingested as reviews/2026-09-30-ingest-worktree-reviewer-import-fixes; fix tasks T17-T20
+- 2026-09-30T14:15:58.702Z - task-done: T17: Review fixes A: skills remove containment and registry binding (F-001, F-002, F-007) with tests (F-010, F-014, F-016, F-019, F-020)
+- 2026-09-30T14:46:47.213Z - task-done: T18: Review fixes B: import slug guards, rules/project keyed by full ref, --only edge cases (F-003, F-004, F-009, F-022) with tests and cleanup (F-011, F-012, F-013, F-015, F-021, F-023, F-024)
+- 2026-09-30T14:46:52.135Z - task-attempt: T19: started (attempt 1) — 360-T19
+- 2026-09-30T15:45:51.477Z - task-done: T19: Review fixes C: literal triggers only beside a glob, metadata.flags normalised and validated, flag-collision warning, path gate moved into gdskills (F-005, F-006, F-008, F-017, F-018)
+- 2026-09-30T15:45:57.798Z - task-attempt: T20: started (attempt 1) — 360-T20
+- 2026-09-30T16:15:31.922Z - task-done: T20: Review fixes D: docs true of the code (F-025 keryx install, F-027 bundledSource, F-031 skill_path, refreshed example output after B and C)
+- 2026-09-30T16:15:44.035Z - task-added: T21: Fix: no family-flag collision warning when a --force overwrite replaces a package that already carried the flag
+- 2026-09-30T16:15:55.313Z - task-attempt: T21: started (attempt 1) — 360-T21
+- 2026-09-30T16:22:19.617Z - task-done: T21: Fix: no family-flag collision warning when a --force overwrite replaces a package that already carried the flag
+- 2026-09-30T16:22:40.844Z - task-attempt: T4: started (attempt 3) — 360-T4 review round 2 over 43e803be..016f06be
+- 2026-09-30T16:45:29.754Z - owner-set: not set -> MrCipherSmith (named by the user when asked who owns the flow (2026-09-30))
+- 2026-09-30T16:45:48.141Z - ac-updated: AC15: "(new)" -> "The `reviewer-skill-creator` frontmatter no longer carries a trigger naming one overlay ("import vantage reviewers"); a neutral trigger ("import overlay reviewers") routes the same intent, and the trigger-collision and catalog checks pass." (scope extension chosen by the user on 2026-09-30: replace the overlay-specific trigger with a neutral one)
+- 2026-09-30T16:46:06.196Z - ac-updated: AC16: "(new)" -> "When the security gate changes or refuses imported content, the import says so: a rule or SKILL.md whose content the gate rewrote (for example a redacted secret) is reported on its row as rewritten by the gate, in text and in `--json`; content the gate's prompt-injection detection flags is not written and the row gives the reason. Covered by tests with a rule carrying a secret and a rule carrying instruction-override text." (scope extension chosen by the user on 2026-09-30: the import wrote prompt-injection text verbatim and reported a silently redacted rule as plain 'imported')
+- 2026-09-30T16:46:29.442Z - ac-updated: AC17: "(new)" -> "`keryx skills install --with <id>` (and `--without <id>`) naming an id that is not a known component, or that cannot change the plan for the chosen profile, exits non-zero with a message listing the valid ids instead of succeeding silently; the dry-run `Apply this plan` hint reproduces every plan-shaping flag that was passed. Covered by tests." (scope extension chosen by the user on 2026-09-30: installer defects found during flow 360 verification)
+- 2026-09-30T16:46:52.527Z - ac-updated: AC18: "(new)" -> "`keryx skills update` prints its own heading and wording (not the import renderer's `# skills import` / `would import`), and a refreshed review package gets the same `paths: none`, `flagWarnings` and family-flag warnings an import of it would print. `keryx review --help` and `keryx review comments --help` list the same flags for `comments reply`, pinned by a test. Covered by tests." (scope extension chosen by the user on 2026-09-30: CLI inconsistencies found during flow 360 verification)
+- 2026-09-30T16:47:06.359Z - task-added: T22: Scope extension: neutral trigger in reviewer-skill-creator (AC15)
+- 2026-09-30T16:47:24.797Z - task-added: T23: Scope extension: import reports gate rewrites and refuses injection-flagged content (AC16)
+- 2026-09-30T16:47:36.560Z - task-added: T24: Scope extension: installer --with validation and dry-run hint (AC17)
+- 2026-09-30T16:47:50.622Z - task-added: T25: Scope extension: skills update output and warnings; comments reply help parity (AC18)
+- 2026-09-30T16:48:27.989Z - task-added: T26: Review of the scope extension (T22-T25) and docs follow-up
+- Review round 1 (T4): 0 blocker / 6 major / 21 minor / 4 info, all majors verifier-confirmed. Findings and per-finding decisions: `review-round-1.md`; ingested report: `review-round-1-report.md` → `reviews/2026-09-30-ingest-worktree-reviewer-import-fixes`. The reviewer's harness refused its report write, so the orchestrator wrote the report from its reply.
+- Fix commits: T17 2abe5c2e (remove containment; 17 mutations killed), T18 1ff78608 (slug guards, rules/project keyed by full ref — this supersedes D4's `rules/project/<basename>`), T19 7d639d09 (literal triggers only beside a glob; flags normalised, `flagWarnings`; helpers moved to `src/gdskills/reviewer-triggers.ts`), T20 56d39e0f (docs re-captured), T21 016f06be (false family-flag warning on --force overwrite, found by T20's re-capture).
+- Accepted worker decisions: a symlinked package is refused, not unlinked; a report whose body names another package is left alone; `metadata.flags` with no valid entry means no flags (no fallback to the description), which also makes `flags: "--all"` alone an empty list; `--only`/`--name` match the directory name, guards and destination use the slug.
+- T4 attempt budget: the persisted count is 3 after two rounds (the round-1 outcome was recorded as its own attempt line). Round 2 is the last attempt on T4 under the current approach.
+- USER DECISIONS 2026-09-30 (asked with options): owner = MrCipherSmith; replace the overlay-specific trigger with a neutral one; bring the security-gate reporting and the four CLI defects INTO this flow (the user was told this grows the PR and needs another review round). Re-plan: the extension is new work, not another attempt at the same fix, so it gets its own tasks T22–T25 and its own review task T26 rather than a fourth round on T4. T22–T25 are dispatched after round 2 returns, so reviewers do not read a tree that is being edited.
+- 2026-09-30T17:15:23.248Z - task-attempt: T4: failed (attempt 4) — round 2: 0 blocker, 7 major, 11 minor, 12 info; round-1 22 fixed / 6 partly / 0 not-fixed; 4 of 7 majors introduced by the fixes; ingested as reviews/...-r02. Budget reached: re-plan, no fourth round of the same approach.
+- 2026-09-30T17:47:27.924Z - ac-updated: user decision 2026-09-30 after review round 2: the scope extension (former AC15-AC18) moves to flow 362 to keep this PR reviewable; the criteria are carried there verbatim as AC1-AC4
+- 2026-09-30T17:47:34.347Z - task-done: T22: Scope extension: neutral trigger in reviewer-skill-creator (AC15)
+- 2026-09-30T17:47:36.186Z - task-done: T23: Scope extension: import reports gate rewrites and refuses injection-flagged content (AC16)
+- 2026-09-30T17:47:38.059Z - task-done: T24: Scope extension: installer --with validation and dry-run hint (AC17)
+- 2026-09-30T17:47:40.039Z - task-done: T25: Scope extension: skills update output and warnings; comments reply help parity (AC18)
+- 2026-09-30T17:47:41.787Z - task-done: T26: Review of the scope extension (T22-T25) and docs follow-up
+- 2026-09-30T17:47:43.637Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-30T17:47:49.391Z - task-added: T27: Consolidation A: one frontmatter reader (BOM, CRLF, comments, nesting, lists) for import, inventory, jev-rules and skill-frontmatter (G-002, G-003, G-004, G-011)
+- 2026-09-30T17:47:51.288Z - task-added: T28: Consolidation B: skills remove identity by exact on-disk name, report first, surviving mutants pinned (G-006, G-007, G-013, G-014)
+- 2026-09-30T17:47:56.878Z - task-added: T29: Consolidation C: every import write contained, ratchet and policy tightened, slug/flag duplication removed, gaps pinned (G-001, G-005, G-008, G-009, G-010, G-012, G-015, G-016, G-017)
+- 2026-09-30T17:48:03.330Z - task-added: T30: Consolidation D: docs true of the consolidated code (G-018, G-025, G-026, G-027, G-028)
+- 2026-09-30T17:48:09.047Z - task-added: T31: Final review round over the whole branch after consolidation, then full suite and health
+- Review round 2 (T4): 0 blocker / 7 major / 11 minor / 12 info over 43e803be..016f06be; round-1 verdicts 22 fixed, 6 partly, 0 not-fixed, F-028..F-030 accepted. Report `review-round-2-report.md` → `reviews/…-r02` (the ingest cap truncated 4 info items G-026..G-029 from review-logic; they are in the report file).
+- RE-PLAN (T4 attempt budget reached). Cycle cause, from the findings: every round-2 major traces to one of two patterns the round-1 fixes multiplied — hand-rolled frontmatter parsing repeated per call site (G-002 CRLF/BOM, G-003 comments, G-004 two parsers of metadata.paths, G-011 nesting) and filesystem writes that bypass the contained-write helpers (G-001 rule writer; G-006/G-007 identity and ordering in remove). Fixing each finding at its site is what introduced four of the seven. Materially different strategy: consolidate — one frontmatter reader used by every consumer (T27), one write path through contained helpers with the ratchet covering both commands (T29), remove identity from an exact on-disk listing with the report first (T28) — then pin the reviewers' surviving mutants as tests and re-run one final review over the whole branch (T31), not another fix round.
+- USER DECISIONS after round 2 (asked with options): consolidation, as recommended; the scope extension (T22–T25, former AC15–AC18) moves to a separate flow — created as flow 362 (backlog, branch from main after 360 merges; its AC1–AC4 carry the four criteria verbatim). T4 closed as skipped with the re-plan reason; T31 is the final review.
+- 2026-09-30T17:48:34.831Z - task-attempt: T27: started (attempt 1) — 360-T27
+- 2026-09-30T17:48:36.624Z - task-attempt: T28: started (attempt 1) — 360-T28
+- 2026-09-30T18:14:43.028Z - task-done: T28: Consolidation B: skills remove identity by exact on-disk name, report first, surviving mutants pinned (G-006, G-007, G-013, G-014)
+- 2026-09-30T18:31:47.362Z - task-done: T27: Consolidation A: one frontmatter reader (BOM, CRLF, comments, nesting, lists) for import, inventory, jev-rules and skill-frontmatter (G-002, G-003, G-004, G-011)
+- 2026-09-30T18:31:48.934Z - task-attempt: T29: started (attempt 1) — 360-T29
+- 2026-09-30T19:20:18.928Z - task-done: T29: Consolidation C: every import write contained, ratchet and policy tightened, slug/flag duplication removed, gaps pinned (G-001, G-005, G-008, G-009, G-010, G-012, G-015, G-016, G-017)
+- 2026-09-30T19:20:22.119Z - task-attempt: T30: started (attempt 1) — 360-T30
+- 2026-09-30T20:00:45.526Z - task-done: T30: Consolidation D: docs true of the consolidated code (G-018, G-025, G-026, G-027, G-028)
+- 2026-09-30T20:01:07.059Z - task-attempt: T31: started (attempt 1) — 360-T31 final review over 838e5263..454ed007
+- 2026-09-30T21:46:47.838Z - task-attempt: T31: failed (attempt 2) — final review round 3: 0 blocker, 4 major (H-001..H-004), 8 minor, 8 info; round-2 majors all fixed; AC1-AC14 met; fix tasks T32-T34, then a targeted verification round
+- 2026-09-30T21:46:49.476Z - task-added: T32: Round 3 fixes A: skills remove refuses a case-variant package dir, surviving mutants and vacuous tests, G-008 residue (H-001, H-007, H-010, H-011, H-013)
+- 2026-09-30T21:46:51.039Z - task-added: T33: Round 3 fixes B: case-insensitive core/ guard, non-file rule path, review import advice, containment preflight pinned, G-009 residue (H-002, H-003, H-004, H-005, H-012)
+- 2026-09-30T21:46:52.729Z - task-added: T34: Round 3 fixes C: frontmatter reader and trigger mutants pinned, ratchet spellings, header claim (H-006, H-008, H-009, H-010, H-020)
+- 2026-09-30T21:47:22.573Z - task-attempt: T32: started (attempt 1) — 360-T32
+- 2026-09-30T21:47:24.326Z - task-attempt: T33: started (attempt 1) — 360-T33
+- 2026-09-30T21:47:26.108Z - task-attempt: T34: started (attempt 1) — 360-T34
+- Consolidation commits: T27 d6ffff97 (one frontmatter reader; parseSkillFrontmatter identical to main over 389 real SKILL.md files per round 3), T28 bb3a68ff (remove: exact names, registry last, re-run recovers), T29 379f814d (every import write contained, preflight before first write incl. dry run), T30 454ed007 (docs).
+- Final review round 3 (T31 attempt): 0 blocker / 4 major / 8 minor / 8 info. Every round-2 major fixed (G-008 partly → H-011). AC1–AC14 met at HEAD with evidence (in the reviewer's reply; to be re-checked before `ac confirm`). No regression of existing callers; majors are edge cases in the new code (H-001 case-variant package dir in remove, H-002 case-variant `Core/` rule ref, H-003 non-file rule path aborts with EISDIR — the only regression from main, H-004 two containment preflights unpinned). Report `review-round-3-report.md` → `reviews/…-r03`. Trend 6 → 7 → 4 majors, and round 3's are narrower; fixing within T31's budget (attempt 2 of 3) as T32–T34, then a targeted verification of H-001…H-012 rather than another whole-branch round.
+- USER DIRECTION 2026-10-01: do not run tests locally — use CI. Applied: workers run only the test files they touch (test-first red→green and single-file mutation checks); no full-suite or directory sweeps locally. CI runs only on pull_request, so the user chose (asked with options): after T32–T34, push as MrCipherSmith and open a DRAFT PR into main; no merge without the user's decision.
+- 2026-09-30T21:57:22.097Z - task-done: T34: Round 3 fixes C: frontmatter reader and trigger mutants pinned, ratchet spellings, header claim (H-006, H-008, H-009, H-010, H-020)
+- 2026-09-30T21:58:05.706Z - task-done: T32: Round 3 fixes A: skills remove refuses a case-variant package dir, surviving mutants and vacuous tests, G-008 residue (H-001, H-007, H-010, H-011, H-013)
+- 2026-09-30T21:59:37.350Z - task-done: T33: Round 3 fixes B: case-insensitive core/ guard, non-file rule path, review import advice, containment preflight pinned, G-009 residue (H-002, H-003, H-004, H-005, H-012)
+- 2026-09-30T21:59:38.978Z - task-added: T35: Docs for round-3 messages: case-variant package refusal and partial-removal wording in Undo and cli-reference
+- 2026-09-30T21:59:45.796Z - task-attempt: T35: started (attempt 1) — 360-T35
