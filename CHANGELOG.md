@@ -3,6 +3,32 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.41] — 2026-09-30
+
+### Fixed
+
+- **ChatGPT / Codex model discovery** now discovers the current stable Codex
+  client version from official npm metadata instead of pinning a compatibility
+  version in Keryx. Newly available models can appear without a Keryx release
+  or a local Codex installation. ([#806](https://github.com/MrCipherSmith/keryx/pull/806))
+- **Connection tests refresh discovery**: **Test** in `/connect` and
+  `keryx providers test openai-codex` check npm for the current version before
+  fetching the live subscription model catalog. Normal discovery reuses the
+  version cache for one day; there is no background polling.
+
+### Notes
+
+- If npm is unavailable, discovery reuses a previously discovered version.
+  Without a cached version, it reports the lookup failure instead of guessing.
+  Credentials are sent only to the subscription service, never to npm.
+
+### Docs
+
+- Documented catalog refresh, caching, and outage behavior in the CLI reference
+  and onboarding guide.
+
+[Changes since 0.3.40](https://github.com/MrCipherSmith/keryx/compare/v0.3.40...v0.3.41)
+
 ## [0.3.40] — 2026-09-30
 ### Added
 - **Write mode for the external agent `claude-cli`** — `keryx agents external run claude-cli --task "..." --write` runs `claude` in a throwaway git worktree cut from the current commit with only the tools `Read Grep Glob Edit Write`: no shell, no network, no MCP server (`--tools Read Grep Glob Edit Write --permission-mode acceptEdits --permission-prompts none`). The worktree's diff is captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a pending review; nothing reaches your checkout. Nothing is stored when the run changed nothing, and a changed symlink that points outside the worktree refuses the run at capture (it can only be discarded).
