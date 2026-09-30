@@ -140,12 +140,6 @@ export type ScopeMetrics = {
   risk_score: number;
   trend: "improved" | "stable" | "regressed" | "unknown";
   regression_score: number;
-  /**
-   * Health points this scope loses to sources the baseline has not measured
-   * yet, computed from the raw penalties (unrounded, unclamped). Present only
-   * when there are such sources; the baseline folds it in once.
-   */
-  new_source_effect?: number;
 };
 
 export type GateStatus = "pass" | "warn" | "incomplete" | "fail";
@@ -223,6 +217,13 @@ export type HealthReport = {
   // this field existed loads and renders unchanged. Absent means NOT MEASURED
   // — never "nothing is stale".
   wikiFreshness?: WikiFreshnessMetric;
+  /**
+   * The sources whose output shaped this report's scores: sources that
+   * produced a result, plus coverage whenever its data was applied. The one
+   * definition a baseline records, whether written by `health run` or
+   * `health baseline update`. Absent in reports written before it existed.
+   */
+  scoredSources?: string[];
   runId?: string;
   provenance?: {
     commit: string | null;

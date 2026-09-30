@@ -18,7 +18,7 @@
 // technique `security-gate-exit.test.ts` uses for `SecurityGate`.
 
 import { describe, expect, test } from "bun:test";
-import { reportBaselineUpdate, runExitCode } from "./health";
+import { reportBaselineUpdate, runBaseline, runExitCode } from "./health";
 
 describe("reportBaselineUpdate — a refusal is never reported as success", () => {
   function capture() {
@@ -33,6 +33,26 @@ describe("reportBaselineUpdate — a refusal is never reported as success", () =
     expect(exit).toBe(1);
     expect(err.join("\n")).toContain("Baseline not updated: came from a --sources run");
     expect(out.join("\n")).not.toContain("Updated baseline");
+  });
+
+  test("runBaseline turns a refusal into process exit code 1", async () => {
+    const previous = process.exitCode;
+    const error = console.error;
+    const log = console.log;
+    const lines: string[] = [];
+    console.error = (line: string) => lines.push(line);
+    console.log = (line: string) => lines.push(line);
+    try {
+      process.exitCode = 0;
+      const service = { updateBaseline: async () => ({ updated: [], path: "scores.json", refused: "came from a --sources run" }) };
+      await runBaseline(["update"], { service, cwd: "/nonexistent" });
+      expect(process.exitCode).toBe(1);
+      expect(lines.join("\n")).not.toContain("Updated baseline");
+    } finally {
+      process.exitCode = previous ?? 0;
+      console.error = error;
+      console.log = log;
+    }
   });
 
   test("a written update exits 0 and names the scopes", () => {

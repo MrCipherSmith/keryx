@@ -2,8 +2,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
-import { foldNewSources, LEGACY_BASELINE_SOURCES, measuredSources } from "./baseline";
-import type { ScopeMetrics } from "./types";
+import { foldNewSources, LEGACY_BASELINE_SOURCES, measuredSources, scoredSourcesOfReport } from "./baseline";
 import { DEFAULT_HEALTH_CONFIG } from "./config";
 import { computeMetrics } from "./scopes";
 import { runHealth } from "./run";
@@ -96,6 +95,133 @@ test("a coverage report applied while coverage was disabled is recorded, so enab
   }
 });
 
+test("`health baseline update` records applied coverage too, so enabling coverage later hides no drift", async () => {
+  // Review r5 (R5-A01/R5-B01): the re-baseline command used a narrower
+  // definition than `health run`, dropping coverage applied while disabled.
+  const p = await project(); // coverage disabled in the helper's config
+  try {
+    await mkdir(path.join(p.root, "coverage"), { recursive: true });
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ total: { lines: { pct: 50 } } }));
+    await run(p.root);
+    const update = await createCodeHealthService().updateBaseline({ cwd: p.root });
+    expect(update.refused).toBeUndefined();
+    expect((await baselineFile(p.root)).sources).toContain("coverage");
+
+    const config = path.join(p.root, ".metaproject", "health.config.json");
+    const parsed = JSON.parse(await readFile(config, "utf8")) as { sources: Record<string, unknown> };
+    parsed.sources.coverage = { mode: "import", required: false };
+    await writeFile(config, JSON.stringify(parsed));
+    const before = await baselineFile(p.root);
+    expect((await run(p.root)).project?.regression_score).toBe(0);
+    expect((await baselineFile(p.root)).scopes).toEqual(before.scopes);
+
+    await p.setEslint(1);
+    const { gate, project: metrics } = await run(p.root);
+    expect(metrics?.regression_score).toBe(10);
+    expect(gate.status).toBe("fail");
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("a coverage report that appears on a baselined project is folded, so the next run is steady", async () => {
+  const p = await project();
+  try {
+    const config = path.join(p.root, ".metaproject", "health.config.json");
+    const parsed = JSON.parse(await readFile(config, "utf8")) as { sources: Record<string, unknown> };
+    parsed.sources.coverage = { mode: "import", required: false };
+    await writeFile(config, JSON.stringify(parsed));
+    await run(p.root); // baseline without any coverage report
+    expect((await baselineFile(p.root)).scopes.project?.health_score).toBe(100);
+
+    await mkdir(path.join(p.root, "coverage"), { recursive: true });
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ total: { lines: { pct: 50 } } }));
+    const first = await run(p.root);
+    expect(first.project?.regression_score).toBe(0);
+    // The coverage penalty (50 points below target, over 2000 LOC) is folded in.
+    expect((await baselineFile(p.root)).scopes.project?.health_score).toBe(first.project?.health_score);
+    const second = await run(p.root);
+    expect(second.project?.regression_score).toBe(0);
+    expect(second.gate.status).not.toBe("fail");
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("a module re-baseline is refused while applied coverage is unrecorded, and the report persists its scored set", async () => {
+  const p = await project(); // coverage disabled
+  try {
+    await run(p.root); // baseline [eslint], no coverage report yet
+    await mkdir(path.join(p.root, "coverage"), { recursive: true });
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ total: { lines: { pct: 50 } } }));
+    const { report } = await runHealth({ cwd: p.root, scope: { kind: "module", name: "src" } });
+    expect(report.scoredSources).toEqual(["coverage", "eslint"]);
+
+    const before = await baselineFile(p.root);
+    const result = await createCodeHealthService().updateBaseline({ cwd: p.root, scope: { kind: "module", name: "src" } });
+    expect(result.refused).toContain("coverage");
+    expect(await baselineFile(p.root)).toEqual(before);
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("a coverage file with no line data is not recorded, so a later real report is folded, not a regression", async () => {
+  const p = await project();
+  try {
+    const config = path.join(p.root, ".metaproject", "health.config.json");
+    const parsed = JSON.parse(await readFile(config, "utf8")) as { sources: Record<string, unknown> };
+    parsed.sources.coverage = { mode: "import", required: false };
+    await writeFile(config, JSON.stringify(parsed));
+    // What `getCoverage` reads as `available` but with no percentages: nothing applied.
+    await mkdir(path.join(p.root, "coverage"), { recursive: true });
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ "src/a.ts": { statements: {} } }));
+    await run(p.root);
+    expect((await baselineFile(p.root)).sources).not.toContain("coverage");
+
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ total: { lines: { pct: 50 } } }));
+    const { gate, project: metrics } = await run(p.root);
+    expect(metrics?.regression_score).toBe(0);
+    expect(gate.status).not.toBe("fail");
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("per-file coverage with no `total` still counts as applied coverage", async () => {
+  const p = await project(); // coverage disabled
+  try {
+    await mkdir(path.join(p.root, "coverage"), { recursive: true });
+    await writeFile(path.join(p.root, "coverage", "coverage-summary.json"), JSON.stringify({ "src/a.ts": { lines: { pct: 50 } } }));
+    await run(p.root);
+    expect((await baselineFile(p.root)).sources).toContain("coverage");
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("a damaged scores.json is re-taken from the current run, not a crash", async () => {
+  const p = await project();
+  try {
+    await mkdir(path.join(p.root, ".metaproject", "health", "baselines"), { recursive: true });
+    await writeFile(path.join(p.root, ".metaproject", "health", "baselines", "scores.json"), "{");
+    const { gate } = await run(p.root);
+    expect(gate.status).toBe("pass");
+    const file = await baselineFile(p.root);
+    expect(file.scopes.project?.health_score).toBe(100);
+    expect(file.sources).toEqual(["eslint"]);
+  } finally {
+    await rm(p.root, { recursive: true, force: true });
+  }
+});
+
+test("a stored report without scoredSources falls back to the same rule", () => {
+  const eslint = { source: "eslint", status: "available", execution: "completed", parse: "parsed" };
+  expect(scoredSourcesOfReport({ sources: [eslint], metrics: [{ coverage: 40 }] })).toEqual(["coverage", "eslint"]);
+  expect(scoredSourcesOfReport({ sources: [eslint], metrics: [{ coverage: null }, null] })).toEqual(["eslint"]);
+  expect(scoredSourcesOfReport({ sources: [], metrics: [], scoredSources: ["oxlint", "eslint"] })).toEqual(["eslint", "oxlint"]);
+});
+
 test("a new source's effect is folded in full even on a scope already clamped at 0", async () => {
   const p = await project();
   try {
@@ -147,8 +273,7 @@ test("a fold never stores a score below 0", async () => {
       path.join(cwd, ".metaproject", "health", "baselines", "scores.json"),
       JSON.stringify({ generatedAt: "2026-01-01T00:00:00.000Z", scopes: { project: { health_score: 20, risk_score: 0 } }, sources: ["eslint"] }),
     );
-    const metric = { key: "project", health_score: 0, regression_score: 0, new_source_effect: 35 } as ScopeMetrics;
-    await foldNewSources(cwd, [metric], new Set(["eslint"]), ["oxlint"]);
+    await foldNewSources(cwd, new Map([["project", 35]]), new Set(["eslint"]), ["oxlint"]);
     expect((await baselineFile(cwd)).scopes.project?.health_score).toBe(0);
   } finally {
     await rm(cwd, { recursive: true, force: true });

@@ -235,15 +235,19 @@ async function runExplain(args: string[]): Promise<void> {
   }
 }
 
-async function runBaseline(args: string[]): Promise<void> {
+/** Exported with injectable deps so the exit-code wiring itself is tested. */
+export async function runBaseline(
+  args: string[],
+  deps: { service?: Pick<ReturnType<typeof createCodeHealthService>, "updateBaseline">; cwd?: string } = {},
+): Promise<void> {
   if (args[0] !== "update") {
     console.error("Usage: keryx health baseline update [--scope ...]");
     process.exitCode = 1;
     return;
   }
   const scope = parseScope(args.slice(1));
-  const result = await getService().updateBaseline({
-    cwd: process.cwd(),
+  const result = await (deps.service ?? getService()).updateBaseline({
+    cwd: deps.cwd ?? process.cwd(),
     ...(scope ? { scope } : {}),
   });
   const exit = reportBaselineUpdate(result, console);

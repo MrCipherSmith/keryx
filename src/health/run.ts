@@ -9,7 +9,7 @@ import {
   foldNewSources,
   loadBaseline,
   loadBaselineSources,
-  measuredSources,
+  scoredSources,
   recordBaselineSources,
   writeBaseline,
 } from "./baseline";
@@ -177,17 +177,15 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // in this release, on a project that already named it) contributes new
   // MEASUREMENT, not new defects: its findings are kept out of the regression
   // comparison instead of reading as a drop in unchanged code.
-  // Coverage data is applied to the scores whenever a report is on disk,
-  // whatever the source's mode or a --sources filter says. The recorded set
-  // must name what shaped the scores, or a baseline would carry a coverage
-  // penalty while claiming coverage unmeasured, and enabling coverage later
-  // would subtract that penalty a second time.
-  const coverageApplied = coverage.total !== null || coverage.byFile.size > 0;
-  const measured = [...new Set([...measuredSources(sourceInfos), ...(coverageApplied ? ["coverage"] : [])])].sort();
+  // The recorded set must name what shaped the scores (see `scoredSources`),
+  // or a baseline would carry a coverage penalty while claiming coverage
+  // unmeasured, and enabling coverage later would subtract it a second time.
+  const measured = scoredSources(sourceInfos, coverage.total !== null || coverage.byFile.size > 0);
   const baselineSources = await loadBaselineSources(cwd);
   const newSources = new Set(
     baselineSources === null ? [] : measured.filter((s) => !baselineSources.sources.has(s)),
   );
+  const newSourceEffects = new Map<string, number>();
   const metrics = await computeMetrics({
     cwd,
     config,
@@ -197,6 +195,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     churn,
     baseline,
     newSources,
+    newSourceEffects,
     ownership,
     scopeSelector: selector,
     sourceAnalysis,
@@ -231,6 +230,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     findings,
     hotspots,
     wikiFreshness,
+    scoredSources: measured,
     ...(input.runId
       ? {
           runId: input.runId,
@@ -251,7 +251,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     // `foldNewSources`); a legacy baseline gets its resolved set written down,
     // so nothing is ever resolved through `LEGACY_BASELINE_SOURCES` again.
     if (newSources.size > 0) {
-      await foldNewSources(cwd, metrics, baselineSources.sources, [...newSources]);
+      await foldNewSources(cwd, newSourceEffects, baselineSources.sources, [...newSources]);
     } else if (!baselineSources.recorded) {
       await recordBaselineSources(cwd, baselineSources.sources);
     }

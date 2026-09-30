@@ -68,10 +68,16 @@ export function healthScore(
     penalties.coverage +
     penalties.complexity +
     (penalties.hotspot ?? 0);
-  const normalized =
-    (total * config.scoring.normalizePerLoc) /
-    Math.max(penalties.loc, config.scoring.normalizePerLoc);
-  return clamp(Math.round(100 - normalized), 0, 100);
+  return clamp(Math.round(100 - normalizedPenalty(total, penalties.loc, config)), 0, 100);
+}
+
+/**
+ * Penalty points as health points: the per-LOC normalization healthScore
+ * applies, unrounded and unclamped. The one copy of that formula, so a
+ * partial effect (e.g. one source's share) is measured exactly as the score is.
+ */
+export function normalizedPenalty(points: number, loc: number, config: HealthConfig): number {
+  return (points * config.scoring.normalizePerLoc) / Math.max(loc, config.scoring.normalizePerLoc);
 }
 
 export function trendOf(

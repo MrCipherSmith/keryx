@@ -39,7 +39,36 @@ export const LEGACY_BASELINE_SOURCES: readonly string[] = Object.freeze([
   "typescript",
 ]);
 
-/** The sources of a run that produced a result: the set a baseline records. */
+/**
+ * The sources whose output shaped a run's scores -- the set a baseline
+ * records. Coverage data is applied to the scores whenever a report is on
+ * disk, whatever the coverage source's mode or a --sources filter says, so it
+ * counts whenever it was applied. Computed here and nowhere else.
+ */
+export function scoredSources(sources: readonly unknown[], coverageApplied: boolean): string[] {
+  // Coverage is decided by applied data alone: an `available` report with no
+  // line percentages (e.g. coverage-final.json only) shaped nothing, and
+  // recording it would make a later real report read as a regression.
+  const others = measuredSources(sources).filter((source) => source !== "coverage");
+  return [...others, ...(coverageApplied ? ["coverage"] : [])].sort();
+}
+
+/**
+ * The scored set of a stored report: its recorded `scoredSources`, or, for a
+ * report written before that field existed, the same rule applied to what it
+ * holds (a scope with a coverage value means coverage was applied).
+ */
+export function scoredSourcesOfReport(report: { sources: readonly unknown[]; metrics: readonly unknown[]; scoredSources?: unknown }): string[] {
+  if (Array.isArray(report.scoredSources)) {
+    return report.scoredSources.filter((s): s is string => typeof s === "string").sort();
+  }
+  const coverageApplied = report.metrics.some(
+    (m) => m !== null && typeof m === "object" && typeof (m as { coverage?: unknown }).coverage === "number",
+  );
+  return scoredSources(report.sources, coverageApplied);
+}
+
+/** The sources of a run that produced a result. */
 export function measuredSources(sources: readonly unknown[]): string[] {
   return sources
     // A hand-edited or damaged report can hold non-objects; they measured nothing.
@@ -87,30 +116,27 @@ export async function recordBaselineSources(cwd: string, sources: Iterable<strin
 /**
  * A source measured for the first time adds its OWN effect to the baseline,
  * and nothing else. For every scope the baseline already holds, the new value
- * is the score without the new sources' findings (what `regression_score`
- * compared against) plus their current effect -- i.e. `health_score +
- * regression_score`. Drift in sources the baseline already measured is not
- * absorbed (it stays a regression), and from the next run the new source is
- * compared like any other, so its own growth counts. Folded on its first
- * whole-project run, whether or not anything else regressed.
+ * is the previous one minus the health points that scope loses to the new
+ * sources (`effects`, from `computeMetrics`'s raw penalties -- a scope
+ * clamped at 0 still records the full effect). Drift in sources the baseline
+ * already measured is not absorbed (it stays a regression), and from the next
+ * run the new source is compared like any other, so its own growth counts.
+ * Folded on its first whole-project run, whether or not anything else
+ * regressed. No scope is added.
  */
 export async function foldNewSources(
   cwd: string,
-  metrics: readonly ScopeMetrics[],
+  effects: ReadonlyMap<string, number>,
   recorded: ReadonlySet<string>,
   newSources: readonly string[],
 ): Promise<void> {
   const data = await readBaselineFile(cwd);
   if (data === null) return;
   const scopes = { ...data.scopes };
-  for (const metric of metrics) {
-    const entry = scopes[metric.key];
+  for (const [key, effect] of effects) {
+    const entry = scopes[key];
     if (entry === undefined) continue;
-    // The previous value minus the new sources' own effect, from raw penalties
-    // (a scope clamped at 0 still records the full effect).
-    const effect = metric.new_source_effect ?? 0;
-    const folded = Math.min(100, Math.max(0, Math.round(entry.health_score - effect)));
-    scopes[metric.key] = { ...entry, health_score: folded };
+    scopes[key] = { ...entry, health_score: Math.min(100, Math.max(0, Math.round(entry.health_score - effect))) };
   }
   await writeBaselineFile(cwd, { ...data, scopes, sources: [...new Set([...recorded, ...newSources])].sort() });
 }

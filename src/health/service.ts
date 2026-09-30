@@ -3,7 +3,7 @@ import { isPathInside, pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadHealthConfig } from "./config";
 import { runHealth } from "./run";
-import { loadBaselineSources, measuredSources, writeBaseline } from "./baseline";
+import { loadBaselineSources, scoredSourcesOfReport, writeBaseline } from "./baseline";
 import { getCoverage } from "./metrics/coverage";
 import { FINDING_ADAPTERS } from "./sources";
 import { dataRoot, listSourceFiles, moduleOfFile } from "./util";
@@ -350,7 +350,7 @@ export function createCodeHealthService(): CodeHealthService {
         const recorded = await loadBaselineSources(cwd);
         const unrecorded = recorded === null
           ? []
-          : measuredSources(latest.sources).filter((source) => !recorded.sources.has(source));
+          : scoredSourcesOfReport(latest).filter((source) => !recorded.sources.has(source));
         if (unrecorded.length > 0) {
           return {
             updated: [],
@@ -364,7 +364,7 @@ export function createCodeHealthService(): CodeHealthService {
         latest.metrics,
         generatedAt,
         input.scope,
-        rewritesAll ? measuredSources(latest.sources) : undefined,
+        rewritesAll ? scoredSourcesOfReport(latest) : undefined,
       );
       return { updated, path: baselinePathLabel };
     },

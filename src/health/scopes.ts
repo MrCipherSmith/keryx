@@ -5,6 +5,7 @@ import {
   coveragePenalty,
   healthScore,
   hotspotPenalty,
+  normalizedPenalty,
   regressionScore,
   riskScore,
   trendOf,
@@ -41,11 +42,18 @@ export async function computeMetrics(input: {
    * findings; `health_score` itself still counts every finding.
    */
   newSources?: ReadonlySet<string>;
+  /**
+   * Filled per scope key with the health points that scope loses to
+   * `newSources` (raw penalties, unrounded, unclamped). Internal accounting
+   * for the baseline fold; deliberately not part of the persisted report,
+   * because the value is relative to the baseline as it stood for this run.
+   */
+  newSourceEffects?: Map<string, number>;
   ownership?: SkillOwnership;
   scopeSelector?: ScopeSelector;
   sourceAnalysis?: Map<string, SourceFileAnalysis>;
 }): Promise<ScopeMetrics[]> {
-  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, newSources, ownership, scopeSelector } = input;
+  const { cwd, config, findings, sourceFiles, coverage, churn, baseline, newSources, newSourceEffects, ownership, scopeSelector } = input;
   const sourceAnalysis = input.sourceAnalysis ?? await analyzeSourceFiles(cwd, sourceFiles);
 
   const build = (
@@ -110,10 +118,9 @@ export async function computeMetrics(input: {
     // difference of two rounded, clamped scores, which reads 0 for a scope
     // already clamped at 0 and would leave the new source's findings to be
     // reported later as a regression of unchanged code.
-    const newSourceEffect = hasNewSources
-      ? ((newRisk + newCoveragePenalty) * config.scoring.normalizePerLoc) /
-        Math.max(loc, config.scoring.normalizePerLoc)
-      : undefined;
+    if (hasNewSources) {
+      newSourceEffects?.set(key, normalizedPenalty(newRisk + newCoveragePenalty, loc, config));
+    }
     const baseHealth = baseline.get(key)?.health_score ?? null;
 
     return {
@@ -133,7 +140,6 @@ export async function computeMetrics(input: {
       risk_score: risk,
       trend: trendOf(comparableHealth, baseHealth),
       regression_score: regressionScore(comparableHealth, baseHealth),
-      ...(newSourceEffect !== undefined ? { new_source_effect: newSourceEffect } : {}),
     };
   };
 
