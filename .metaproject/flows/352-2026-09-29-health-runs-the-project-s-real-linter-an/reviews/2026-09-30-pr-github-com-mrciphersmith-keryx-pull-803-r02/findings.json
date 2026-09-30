@@ -29,6 +29,10 @@
       "method": "execution",
       "evidence": "probe.test.ts -t S5a retargeted to the copy: legacy {project:100}, eslint bin removed + oxlint named -> baseline sources [oxlint] (adopted, gate incomplete); eslint restored with 5 errors -> gate pass, health 50, reg 0, baseline health 50.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: frozen LEGACY_BASELINE_SOURCES; round 4 S5a FAIL reg 50"
     }
   },
   {
@@ -61,6 +65,10 @@
       "method": "execution",
       "evidence": "probe.test.ts -t S8: r2 gate fail (health 80, reg 10, sources stay [eslint]); r3 eslint 0, oxlint 8 -> gate pass, health 20, reg 0, baseline rewritten to 20 with [eslint,oxlint].",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: fold on first sighting; round 4 S8 FAIL reg 70"
     }
   },
   {
@@ -94,6 +102,10 @@
       "method": "execution",
       "evidence": "probe-adopt-module.ts on the copy: run2 module:src/alpha 95/reg5/regressed; run3 oxlint named (0 diagnostics) rewrote all scopes; run4 same tree module:src/alpha 95/reg0/stable.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: per-source fold; round 4 probe-adopt-module keeps reg5/regressed"
     }
   },
   {
@@ -125,6 +137,10 @@
       "method": "execution",
       "evidence": "Mutant removing the lost-source clause in the copy's run.ts: bun test --timeout 30000 src/health 175 pass, 0 fail (twice). Restored identical.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed shouldAdoptWidenedBaseline; replacement covered (round 4 Q07c/Q08 red)"
     }
   },
   {
@@ -156,6 +172,10 @@
       "method": "execution",
       "evidence": "Mutant removing 'newSources.size > 0 &&': bun test src/health 175 pass, 0 fail. Restored identical.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed the guard; round 4 Q17 equivalent"
     }
   },
   {
@@ -175,7 +195,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-06"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: frozen set written into legacy files; d3d9e7c9 pins it literally"
+    }
   },
   {
     "id": "R3-07",
@@ -194,7 +218,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-07"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: changed scope records sources"
+    }
   },
   {
     "id": "R3-08",
@@ -213,7 +241,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-08"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329: filtered report refused"
+    }
   },
   {
     "id": "R3-09",
@@ -232,7 +264,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-09"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 removed the clauses; round 4 Q03/Q04/Q08 red"
+    }
   },
   {
     "id": "R3-10",
@@ -243,7 +279,11 @@
     "suggested_fix": "Add a baseline section and update counts.",
     "evidence": "keryx ctx rg 'baseline' over the PR body: no match.",
     "confidence": "high",
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-10"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #803 body edit 2026-09-30 (baseline section)"
+    }
   },
   {
     "id": "R3-11",
@@ -262,7 +302,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-11"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 coverage zeroing; its double-count (R4-01) fixed in d3d9e7c9"
+    }
   },
   {
     "id": "R3-12",
@@ -281,7 +325,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-12"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-12",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "round 4 review-architecture: acyclic, accepted as is"
+    }
   },
   {
     "id": "R3-13",
@@ -300,6 +348,10 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-13"
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r02#R3-13",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c173d329 guard; tested in d3d9e7c9"
+    }
   }
 ]
