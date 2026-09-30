@@ -585,6 +585,48 @@ test("flow 361: init then update keep the block in CLAUDE.local.md and out of tr
   }
 }, 120_000);
 
+test("flow 361: init says under Agent entrypoints that it created CLAUDE.local.md and AGENTS.override.md; the update after it does not", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-entrypoints-created-"));
+  try {
+    gitInEntrypointRepo(root, ["init", "-q"]);
+    gitInEntrypointRepo(root, ["config", "user.email", "test@test.com"]);
+    gitInEntrypointRepo(root, ["config", "user.name", "test"]);
+    await writeFile(path.join(root, "AGENTS.md"), "# Team\n", "utf8");
+    gitInEntrypointRepo(root, ["add", "--", "AGENTS.md"]);
+    gitInEntrypointRepo(root, ["commit", "-q", "-m", "fixture"]);
+    const created = (logs: string[]) =>
+      logs.filter((line) => /CLAUDE\.local\.md: created with|AGENTS\.override\.md: generated from/.test(line));
+
+    const init = captureInitConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(ENTRYPOINT_INIT_ARGS);
+      });
+    } finally {
+      init.restore();
+    }
+    const heading = init.logs.findIndex((line) => line.includes("Agent entrypoints"));
+    expect(heading).toBeGreaterThanOrEqual(0);
+    expect(created(init.logs.slice(heading))).toHaveLength(2);
+    const claudeLocal = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+
+    const update = captureInitConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+    } finally {
+      update.restore();
+    }
+    expect(created(update.logs)).toEqual([]);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toBe(claudeLocal);
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toBe(override);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
 test("flow 361: init in a repository with no entrypoints creates no tracked AGENTS.md or CLAUDE.md and says Codex was skipped", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-init-entrypoints-empty-"));
   try {

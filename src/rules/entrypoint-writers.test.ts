@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
+import { syncMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { uniqueTestRoot } from "../lib/test-tmp";
 import { ensureMetaprojectReference, syncAgentRules } from "./agent-entrypoints";
 import { defaultEntrypointTargets } from "./entrypoint-targets";
@@ -203,6 +204,76 @@ test("a block committed in HEAD is stripped, not restored, once the manifest say
     expect(await readFile(path.join(root, "TEAM.md"), "utf8")).toBe(committed);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 361 T13 (T11 finding): creating a per-developer file used to be
+// silent. One line each, on creation only — a refresh prints nothing.
+test("creating CLAUDE.local.md and generating AGENTS.override.md each print one line, and only the first time", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-entry-writers-created");
+  try {
+    await initRepo(root, { "AGENTS.md": "# Team\n", "CLAUDE.md": "# Claude\n" });
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    // What `init`/`update` do before the block writers run.
+    await syncMetaprojectIgnoreRules(root, { localTargets: ["CLAUDE.local.md", "AGENTS.override.md"] });
+    const run = async (): Promise<string[]> => {
+      const notices: string[] = [];
+      await syncAgentRules(root, path.join(root, ".metaproject"), {
+        targets: defaultEntrypointTargets(),
+        onNotice: (line) => notices.push(line),
+      });
+      return notices;
+    };
+
+    const first = await run();
+    expect(first).toEqual([
+      "CLAUDE.local.md: created with the keryx block (gitignored, per checkout).",
+      "AGENTS.override.md: generated from AGENTS.md with the keryx block (gitignored, per checkout); Codex reads it instead of AGENTS.md.",
+    ]);
+    const claudeLocal = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+
+    expect(await run()).toEqual([]);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toBe(claudeLocal);
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toBe(override);
+
+    // Regenerating an override whose source changed is a refresh, not a creation.
+    await writeFile(path.join(root, "AGENTS.md"), "# Team\n\nRevised.\n");
+    expect(await run()).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the creation lines claim gitignored only when git ignores the file: no repository, and a repository with no ignore rules yet", async () => {
+  const noGit = uniqueTestRoot(tmpdir(), "keryx-entry-writers-created-nogit");
+  const unignored = uniqueTestRoot(tmpdir(), "keryx-entry-writers-created-unignored");
+  try {
+    await mkdir(noGit, { recursive: true });
+    await writeFile(path.join(noGit, "AGENTS.md"), "# Team\n");
+    // `rules sync` writes no ignore rules; a fresh repository has none.
+    await initRepo(unignored, { "AGENTS.md": "# Team\n" });
+    await git(unignored, ["config", "core.excludesFile", path.join(unignored, ".git", "no-global-excludes")]);
+    const expected = {
+      [noGit]: "(a per-developer file",
+      [unignored]: "(per checkout, but git does not ignore it yet — `keryx update` adds it to info/exclude",
+    };
+    for (const [root, note] of Object.entries(expected)) {
+      await mkdir(path.join(root, ".metaproject"), { recursive: true });
+      const notices: string[] = [];
+      await syncAgentRules(root, path.join(root, ".metaproject"), {
+        targets: defaultEntrypointTargets(),
+        onNotice: (line) => notices.push(line),
+      });
+      const created = notices.filter((line) => line.includes("created with") || line.includes("generated from"));
+      expect(created).toHaveLength(2);
+      for (const line of created) {
+        expect(line).toContain(note);
+        expect(line).not.toContain("gitignored");
+      }
+    }
+  } finally {
+    for (const root of [noGit, unignored]) await rm(root, { recursive: true, force: true });
   }
 });
 

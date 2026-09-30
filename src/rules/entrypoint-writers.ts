@@ -14,6 +14,7 @@ import path from "node:path";
 import { removeContained, writeContained } from "../lib/contained-write";
 import { pathExists } from "../lib/fs";
 import { indexHoldsFile, readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "../lib/git-head";
+import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import { ensureMetaprojectReference, renderManagedIndexBlock } from "./agent-entrypoints";
@@ -162,7 +163,9 @@ export async function writeEntrypointBlocks(
       const filePath = path.join(projectRoot, entry.path);
       if (await pathExists(filePath)) await ensureMetaprojectReference(filePath, blockOptions);
     } else if (entry.runtime === "claude") {
-      await writeClaudeLocalTarget(projectRoot, entry.path, options.sources, blockOptions);
+      if (await writeClaudeLocalTarget(projectRoot, entry.path, options.sources, blockOptions)) {
+        notice(`${entry.path}: created with the keryx block (${await localFileNote(projectRoot, entry.path)}).`);
+      }
     }
   }
   // After the shared target has its block, so Claude is never left without one.
@@ -217,8 +220,28 @@ export async function writeCodexLocalTargets(
       block: await renderManagedIndexBlock({ ...(options.enableTasks === undefined ? {} : { enableTasks: options.enableTasks }), root: projectRoot }),
       sourcePath,
     });
-    if (next !== existing) await writeContained(projectRoot, entry.path, next);
+    if (next === existing) continue;
+    await writeContained(projectRoot, entry.path, next);
+    // Said once, when the file first appears; regenerating it is routine.
+    if (existing === undefined) {
+      notice(
+        `${entry.path}: generated from ${entry.source} with the keryx block (${await localFileNote(projectRoot, entry.path)}); Codex reads it instead of ${entry.source}.`,
+      );
+    }
   }
+}
+
+/**
+ * How a creation notice describes a local target. Asked of git rather than
+ * assumed: `init`/`update` write the ignore rules first, but `rules sync` does
+ * not write them at all.
+ */
+async function localFileNote(projectRoot: string, relativePath: string): Promise<string> {
+  const [explanation] = (await explainIgnoredPaths(projectRoot, [relativePath])) ?? [];
+  if (explanation === undefined) return "a per-developer file";
+  return explanation.ignored
+    ? "gitignored, per checkout"
+    : "per checkout, but git does not ignore it yet — `keryx update` adds it to info/exclude";
 }
 
 const OVERRIDE_PROVENANCE = /^<!-- keryx:override source="([^"\n]+)" sha256=([0-9a-f]{64}) /;
@@ -283,16 +306,17 @@ export async function codexOverrideByteSize(projectRoot: string, entry: Pick<Cod
  * instructions; the generated file imports them instead
  * (code.claude.com/docs/en/memory, "When Claude Code reads AGENTS.md"). A
  * file the developer already had is only given the block: its effect on the
- * fallback predates keryx.
+ * fallback predates keryx. Returns true when this call created the file.
  */
 async function writeClaudeLocalTarget(
   projectRoot: string,
   relativePath: string,
   sources: readonly string[],
   blockOptions: { enableTasks?: boolean; root: string },
-): Promise<void> {
+): Promise<boolean> {
   const filePath = path.join(projectRoot, relativePath);
-  if (!(await pathExists(filePath))) {
+  const created = !(await pathExists(filePath));
+  if (created) {
     const agentsFile = sources.find((source) => source.toLowerCase() === "agents.md");
     const hasClaudeFile =
       sources.some((source) => source.toLowerCase() === "claude.md") ||
@@ -304,6 +328,7 @@ async function writeClaudeLocalTarget(
     await writeContained(projectRoot, relativePath, `# Local Claude Instructions\n${agentsImport}`);
   }
   await ensureMetaprojectReference(filePath, blockOptions);
+  return created;
 }
 
 const LOCAL_CLAUDE_HEADING = "# Local Claude Instructions";

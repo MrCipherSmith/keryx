@@ -327,6 +327,37 @@ describe("syncMetaprojectIgnoreRules", () => {
     });
   }
 
+  // Flow 361 T13 (T11 finding): the run that moves the block used to print
+  // "moved … the file is back at HEAD" and then ".gitignore is not modified" —
+  // two lines about the same file that read as a contradiction.
+  test("the run that moves the block out of .gitignore does not also say .gitignore is not modified", async () => {
+    const root = await repo({ ".gitignore": "node_modules/\n" });
+    try {
+      await writeFile(path.join(root, ".gitignore"), `node_modules/\n\n${LEGACY_BLOCK}\n`);
+      const { notices } = await sync(root);
+
+      expect(notices.some((line) => line.startsWith(".gitignore: moved the managed keryx ignore block"))).toBe(true);
+      expect(notices.some((line) => line.includes(".gitignore is not modified"))).toBe(false);
+      const summary = notices.find((line) => line.startsWith("Ignore rules: .git/info/exclude now holds"));
+      expect(summary).toBeDefined();
+      expect(summary).toContain("no keryx lines remain in .gitignore");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a run with no block in .gitignore still says .gitignore is not modified", async () => {
+    const root = await repo({ ".gitignore": "node_modules/\n" });
+    try {
+      const { notices } = await sync(root);
+      expect(notices).toEqual([
+        expect.stringMatching(/^Ignore rules: \.git\/info\/exclude now holds keryx's managed block \(\d+ entries\); \.gitignore is not modified\.$/),
+      ]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   // R700-10 carried over: the markers, not the comment text inside, are what
   // identify the block — an OLD block with retired comments is moved out whole.
   test("an old managed block with retired comment text is moved out by its markers", async () => {

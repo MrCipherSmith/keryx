@@ -79,7 +79,7 @@ it, so they are routed to the right module automatically. It imports your
 Claude hooks to per-developer, gitignored files (`CLAUDE.local.md`,
 `AGENTS.override.md`, `.claude/settings.local.json`, ignore rules in
 `.git/info/exclude`), so the files your team tracks stay untouched and
-`git pull` never meets a keryx edit. A team that wants the block committed opts
+`git pull` never meets an edit made by keryx. A team that wants the block committed opts
 into `scope: "shared"`; see
 [where the block goes](docs/docs/workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
 

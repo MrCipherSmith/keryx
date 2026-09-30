@@ -75,7 +75,7 @@ export async function syncMetaprojectIgnoreRules(
     return { status: "not-a-git-repository", entries: [] };
   }
 
-  await moveBlockOutOfGitignore(projectRoot, notice);
+  const movedOutOfGitignore = await moveBlockOutOfGitignore(projectRoot, notice);
 
   const wanted = await wantedIgnoreLines(projectRoot, localTargets, undefined);
   if (wanted === undefined) {
@@ -89,9 +89,12 @@ export async function syncMetaprojectIgnoreRules(
   if (result.status === "refused") {
     notice(`Ignore rules: not written — ${result.detail}`);
   } else if (result.status === "written") {
+    // The run that just took the block out of `.gitignore` has said so on its
+    // own line; "not modified" would contradict it.
+    const gitignoreState = movedOutOfGitignore ? "no keryx lines remain in .gitignore" : ".gitignore is not modified";
     notice(
       entries.length > 0
-        ? `Ignore rules: ${shown} now holds keryx's managed block (${entries.length} entries); .gitignore is not modified.`
+        ? `Ignore rules: ${shown} now holds keryx's managed block (${entries.length} entries); ${gitignoreState}.`
         : `Ignore rules: removed keryx's managed block from ${shown} — the repository's own rules already ignore every entry.`,
     );
   }
@@ -216,12 +219,14 @@ export function hasManagedIgnoreBlock(content: string): boolean {
  *   every byte of it was keryx's, and it is removed: an empty untracked
  *   `.gitignore` is the only other way to end, and it would stay in
  *   `git status` for good.
+ *
+ * Returns true when it took the block out (the file was changed or removed).
  */
-async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: string) => void): Promise<void> {
+async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: string) => void): Promise<boolean> {
   const gitignorePath = path.join(projectRoot, GITIGNORE);
-  if (!(await pathExists(gitignorePath))) return;
+  if (!(await pathExists(gitignorePath))) return false;
   const content = await readFile(gitignorePath, "utf8");
-  if (!managedBlockPattern().test(content)) return;
+  if (!managedBlockPattern().test(content)) return false;
 
   const head = await readHeadBlob(projectRoot, GITIGNORE);
   if (head !== undefined && managedBlockPattern().test(head)) {
@@ -229,7 +234,7 @@ async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: strin
       `${GITIGNORE}: the managed keryx ignore block is committed in HEAD, so it stays there and its entries are not repeated in info/exclude. ` +
         `To move it, delete the block from ${GITIGNORE} and commit that; the next \`keryx update\` writes the entries to info/exclude.`,
     );
-    return;
+    return false;
   }
 
   const stripped = stripManagedBlock(content);
@@ -239,14 +244,14 @@ async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: strin
       notice(
         `${GITIGNORE}: removed the file — it was untracked and held nothing but the managed keryx ignore block. keryx now keeps its ignore rules in info/exclude.`,
       );
-      return;
+      return true;
     }
     await writeContained(projectRoot, GITIGNORE, stripped);
     notice(
       `${GITIGNORE}: removed the managed keryx ignore block (keryx now keeps its ignore rules in info/exclude). ` +
         "The file is untracked, so the rest of it is left in place.",
     );
-    return;
+    return true;
   }
   if (sameApartFromBlankLines(stripped, head)) {
     if (!(await restoreWorktreeFileFromHead(projectRoot, GITIGNORE))) {
@@ -257,13 +262,14 @@ async function moveBlockOutOfGitignore(projectRoot: string, notice: (line: strin
         ? `${GITIGNORE}: moved the managed keryx ignore block to info/exclude; the file is back at HEAD.`
         : `${GITIGNORE}: restored from HEAD, but git still reports a difference — a staged copy may still carry the keryx block (\`git restore --staged ${GITIGNORE}\`).`,
     );
-    return;
+    return true;
   }
   await writeContained(projectRoot, GITIGNORE, stripped);
   notice(
     `${GITIGNORE}: removed the managed keryx ignore block (keryx now keeps its ignore rules in info/exclude); ` +
       `your other uncommitted edits in ${GITIGNORE} are kept as they were.`,
   );
+  return true;
 }
 
 /** Whole marker lines, so a line that merely mentions a marker is not taken for one. A fresh regex per use: it is global. */

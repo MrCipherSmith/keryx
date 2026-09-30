@@ -276,7 +276,7 @@ The older form, `"root": ["AGENTS.md", "CLAUDE.md"]`, is still read, and one
 | Target | `scope: "local"` (default) | `scope: "shared"` |
 |---|---|---|
 | Claude Code block | `CLAUDE.local.md` | `CLAUDE.md` |
-| Codex block | `AGENTS.override.md` (`mode: "override"`) or nothing (`mode: "skip"`) | `AGENTS.md` |
+| Codex block | `AGENTS.override.md` (`mode: "override"`) or nothing (`mode: "skip"`, which only removes an override keryx generated) | `AGENTS.md` |
 | keryx-managed Claude hooks | `.claude/settings.local.json` | `.claude/settings.json` |
 
 Local targets are gitignored per clone, so `init` and `update` leave `AGENTS.md`,
@@ -305,7 +305,12 @@ already had only gets the block.
   (`project_doc_max_bytes`), and the override holds `AGENTS.md` plus the block, so
   a large `AGENTS.md` can be cut off. An `AGENTS.override.md` keryx did not
   generate is left alone and reported.
-- `skip` — nothing is written for Codex, and the command output says so.
+- `skip` — nothing is written for Codex, and the command output says so. The
+  one change a `skip` run makes to a Codex file is removing an
+  `AGENTS.override.md` that keryx generated earlier (its first line is keryx's
+  provenance line), so a leftover copy cannot keep hiding `AGENTS.md` from
+  Codex. An `AGENTS.override.md` without that line is yours and is never
+  touched.
 
 With no `AGENTS.md`, Codex is skipped with a message and no tracked `AGENTS.md`
 or `CLAUDE.md` is created.

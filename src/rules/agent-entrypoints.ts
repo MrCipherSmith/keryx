@@ -11,6 +11,7 @@ import {
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
 import { computeFencedRanges, hasMarkerLine, indexOfMarkerLine } from "./marker-matching";
+import { UnterminatedMetaprojectReferenceError } from "./managed-index-block";
 import { ruleImportSources, sharedEntrypointTargets, type EntrypointTargets } from "./entrypoint-targets";
 import { writeEntrypointBlocks } from "./entrypoint-writers";
 
@@ -21,21 +22,13 @@ import { writeEntrypointBlocks } from "./entrypoint-writers";
 // same class.
 export { SymlinkRefusedError };
 
-/**
- * Review round 1, F7: thrown by `ensureMetaprojectReference` (via
- * `replaceManagedBlock`) when `filePath` carries a `<!-- keryx:index -->`
- * start marker with no matching `<!-- /keryx:index -->` end marker — the
- * file is left COMPLETELY UNTOUCHED (never guessed at, never truncated).
- * Before this fix the missing-end-marker case truncated the file from the
- * start marker to EOF, which is exactly what a forged start marker (e.g. a
- * canonical rule file literally named `<!-- keryx:index -->.md`, imported
- * verbatim by `syncAgentRules`) could trigger, deleting every human line
- * after it. Mirrors `markdown-block.ts`'s `UnterminatedInstructionsBlockError`
- * — same "refuse hard" idiom, a distinct class because this module's marker
- * pair (`keryx:index`) and callers (`syncAgentRules`/`distillAgentEntrypoints`,
- * `keryx init`/`update`) are independent of that one.
- */
-export class UnterminatedMetaprojectReferenceError extends Error {}
+// Defined in `./managed-index-block` (flow 361 T13) and re-exported here, its
+// long-standing public home. The class used to live in this module, which made
+// `managed-index-block.ts` import it — and through it the block renderer's
+// routing-table read (`../lib/model-choice` → `src/harness/routing/*`) — into
+// every graph that only needed to DETECT a block, the core entry's included
+// (AFC-19, `src/core-package.test.ts`).
+export { UnterminatedMetaprojectReferenceError };
 
 export type SyncedAgentRule = {
   source: string;

@@ -7,8 +7,32 @@
 // and leave every other byte where it was, so the file can be compared with —
 // and keep its unrelated edits against — `HEAD`.
 
-import { UnterminatedMetaprojectReferenceError } from "./agent-entrypoints";
+//
+// This module must stay free of the block RENDERER (`./agent-entrypoints`):
+// detection is imported by modules on the core entry's graph
+// (`src/integrations/claude-settings.ts` → `./entrypoint-migration`), and the
+// renderer reads the project's routing table (`../lib/model-choice` →
+// `src/harness/routing/*`), which AFC-19 keeps out of core
+// (`src/core-package.test.ts`). So the error class lives here and
+// `./agent-entrypoints` re-exports it.
+
 import { computeFencedRanges, hasMarkerLine, indexOfMarkerLine } from "./marker-matching";
+
+/**
+ * Review round 1, F7: thrown by `ensureMetaprojectReference` (via
+ * `replaceManagedBlock`) when `filePath` carries a `<!-- keryx:index -->`
+ * start marker with no matching `<!-- /keryx:index -->` end marker — the
+ * file is left COMPLETELY UNTOUCHED (never guessed at, never truncated).
+ * Before this fix the missing-end-marker case truncated the file from the
+ * start marker to EOF, which is exactly what a forged start marker (e.g. a
+ * canonical rule file literally named `<!-- keryx:index -->.md`, imported
+ * verbatim by `syncAgentRules`) could trigger, deleting every human line
+ * after it. Mirrors `markdown-block.ts`'s `UnterminatedInstructionsBlockError`
+ * — same "refuse hard" idiom, a distinct class because this module's marker
+ * pair (`keryx:index`) and callers (`syncAgentRules`/`distillAgentEntrypoints`,
+ * `keryx init`/`update`) are independent of that one.
+ */
+export class UnterminatedMetaprojectReferenceError extends Error {}
 
 export const MANAGED_INDEX_BLOCK_START = "<!-- keryx:index -->";
 export const MANAGED_INDEX_BLOCK_END = "<!-- /keryx:index -->";
