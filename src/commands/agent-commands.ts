@@ -353,6 +353,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 370 (AC6): claude write runs whose patch waits for a human decision. Apply needs
+    // the patch hash typed back; the readline fallback only lists and points at the CLI.
+    name: "/external-diff",
+    description: "External agent write runs awaiting review: patch, flagged paths — apply (typed hash prefix) or discard",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 344: every `review.jev.*` key next to its measured verdict
     // (CI triage proven; risk/contract measured weaker than a strong model;
     // rules not useful on top of one; scenarios/docs/comments experimental;

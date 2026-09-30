@@ -132,6 +132,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
 | `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
+| `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Show the last governance report, or run one in the background. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |

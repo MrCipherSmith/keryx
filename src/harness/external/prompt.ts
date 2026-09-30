@@ -52,6 +52,23 @@ export const EXTERNAL_RUNTIME_DIRECTIVE = [
 ].join("\n");
 
 /**
+ * The directive for a `worktree-write` run (flow 370). Same contract as
+ * {@link EXTERNAL_RUNTIME_DIRECTIVE} except that files may be changed — inside
+ * the disposable worktree only, which is what the human reviews before anything lands.
+ */
+export const EXTERNAL_WRITE_RUNTIME_DIRECTIVE = [
+  "# Runtime directive",
+  "",
+  "You are running non-interactively as a bounded child agent. Produce the work itself as " +
+    "your final message, in the requested output schema. Do not ask questions, do not offer a " +
+    "choice of modes, do not route to another skill, orchestrator, or flow, do not delegate to " +
+    "another agent. You may create and modify files, only inside your current working " +
+    "directory, using the Read, Grep, Glob, Edit and Write tools; no shell is available. Do not " +
+    "touch .git, .github, .claude or .metaproject. Your changes are captured as a patch that a " +
+    "human reviews before anything lands, so summarise what you changed in the final message.",
+].join("\n");
+
+/**
  * Marker opening every in-prompt statement that the diff was cut.
  *
  * A stable, greppable prefix rather than free prose: the run records a truncation
@@ -94,6 +111,8 @@ export interface ExternalPromptInput {
   readonly resultSchemaText?: string;
   /** Byte ceiling for the whole argv element (`maxPromptBytes`, specification §3). */
   readonly maxPromptBytes: number;
+  /** A `worktree-write` run: opens with the write directive instead of the read-only one. */
+  readonly writable?: boolean;
 }
 
 /**
@@ -208,7 +227,7 @@ function renderDiffNoticeOnly(intro: string): string {
 
 /** Directive plus task, plus the required-output-schema section when requested. Never cut. */
 function renderHead(input: ExternalPromptInput): string {
-  const lines: string[] = [EXTERNAL_RUNTIME_DIRECTIVE, ""];
+  const lines: string[] = [input.writable === true ? EXTERNAL_WRITE_RUNTIME_DIRECTIVE : EXTERNAL_RUNTIME_DIRECTIVE, ""];
 
   if (input.resultSchemaText !== undefined) {
     lines.push(RESULT_SCHEMA_HEADING, "", RESULT_SCHEMA_INTRO, "", input.resultSchemaText, "");

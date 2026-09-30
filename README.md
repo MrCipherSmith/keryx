@@ -480,7 +480,8 @@ What is in it today:
   bounded parallel scheduling, and an offline fleet report over a recorded event
   log (`keryx agents monitor <events-file>`).
 - **Vendor CLIs as child agents — off by default.** keryx can hand a bounded,
-  **read-only** task to a coding CLI you already have installed (`codex exec`,
+  **read-only** task (or, for `claude-cli` only, a reviewed write — see below)
+  to a coding CLI you already have installed (`codex exec`,
   `claude -p`, or Google's Antigravity CLI, `agy -p --output-format
   stream-json`) and host it as a child of the same harness: a disposable git
   worktree, a stripped environment, a restricted tool roster, the same budget
@@ -498,6 +499,21 @@ What is in it today:
   `fixtures/external/live/antigravity-cli/2026-09-28/`, produced through
   keryx's own `agents external run`. `codex-cli`/`claude-cli` remain verified
   offline against recorded transcripts.
+- **A write from an external agent you review before it lands.**
+  `keryx agents external run claude-cli --task "…" --write` runs `claude` in a
+  throwaway worktree with only `Read Grep Glob Edit Write` (no shell, no network,
+  no MCP). Its diff is captured, secret-redacted, hashed and stored as a pending
+  review — nothing reaches your checkout. `keryx agents external review <run-id>`
+  shows it; `apply <run-id>` needs a real terminal, shows the diff and asks you to
+  type the first 12 hex digits of the patch hash, then creates a NEW local branch
+  `external/<run-id>` with one commit. Your current branch and working tree are
+  never touched, nothing is pushed and no pull request is opened;
+  `discard <run-id>` drops it. There is no flag that skips the confirmation. Only
+  `claude-cli` can write (`codex-cli` and `antigravity-cli` refuse `--write`), the
+  review is a human reading the diff (a model review is not built), and a full run
+  through the installed CLI is not recorded yet. In the TUI: `/external-diff` and a
+  sidebar row while a diff waits. See the [external agent write
+  guide](docs/docs/guides/external-agent-write.md).
 - **Completion you can audit.** The completion gate blocks on missing evidence: a
   run that cannot produce the evidence its flow requires does not get to claim
   it finished.
@@ -925,7 +941,7 @@ untouched.
 | No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
 | ripgrep is external | `keryx ctx rg` needs `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
 | Model commands need a credential | Four of the five commands above exit non-zero without one; `wiki enrich` exits `0` and marks the affected pages skipped | Everything else runs deterministically offline |
-| External agents are read-only, and unproven against a live vendor process | A delegated CLI can read and search but never write; `worktree-write` is refused with a named reason. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. Everything is verified offline against recorded transcripts | Use keryx's own child agents for work that must mutate the tree |
+| External agents are read-only, except `claude-cli` write mode, which has no full live run recorded | A delegated CLI can read and search; only `claude-cli` can write, and only as a stored diff a human reviews (`keryx agents external review\|apply\|discard`) that lands as a new local branch — never on your checkout, never pushed. `codex-cli` and `antigravity-cli` refuse `--write` ("write mode is claude-only in this release"). A model review is not built. The parent gets the child's result and nothing before it — supervision of a running external child is not implemented. `claude` and `agy` read-only runs are live-verified; a write run through the installed CLI is not yet | Use keryx's own child agents for work that must mutate the tree, or the [external agent write guide](docs/docs/guides/external-agent-write.md) for a reviewed `claude-cli` diff |
 | A dispatched `flow-next` task is "done" by checks, not review | `task done` means normal end + a commit on the trigger branch + `keryx health gate` passing in the worktree; nobody has read the diff | Review and merge the `trigger/<flow>-<task>` branch yourself |
 | `trust` dispatch needs Linux + a working bubblewrap | The hardened unattended sandbox (network off, home hidden, allow-listed env) is bwrap-only; without it — or on macOS — a `trust` dispatch refuses before starting | Use `permissionMode: "ask"` (read-only), or run triggers on a Linux host with bwrap |
 | `dispatch.network: true` is the host's full network | The agent's commands then reach the internet and every host loopback service; the model call never needs it (it is made outside the sandbox) | Leave `network` off; review the `trigger/*` branch before installing or building it |

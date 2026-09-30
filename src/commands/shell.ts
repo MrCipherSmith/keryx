@@ -103,6 +103,7 @@ import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import { approvalsSlashText } from "./approvals";
+import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
@@ -257,6 +258,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/status",
   "/flows",
   "/approvals",
+  "/external-diff",
   "/doctor",
   "/setup",
   "/reviews",
@@ -2688,6 +2690,8 @@ export async function runAgentRepl(
         );
       } else if (command === "/approvals") {
         agentIo.onSystem?.(approvalsSlashText(rest));
+      } else if (command === "/external-diff") {
+        agentIo.onSystem?.(externalDiffSlashText(defaultExternalDiffDeps(sessionCwd)));
       } else if (isFlowsCommand(command)) {
         const items = await loadInspectorFlows(sessionCwd);
         if (rest.length > 0) {

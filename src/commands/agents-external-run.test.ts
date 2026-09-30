@@ -6,7 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ import { PassThrough } from "node:stream";
 import type { Interface } from "node:readline";
 import { answerAcpPermission, clampForeignMode } from "../harness/external/acp-permission";
 import type { ExternalSpawnOptions, ExternalSpawnPort, SpawnedProcess } from "../harness/external/supervise";
-import { agentsExternalCommand, terminalApprover, type AgentsExternalDeps } from "./agents-external";
+import { agentsExternalCommand, renderWriteRun, terminalApprover, type AgentsExternalDeps } from "./agents-external";
 
 const FAKE_AGENT = fileURLToPath(new URL("../../fixtures/external/acp/fake-acp-agent.ts", import.meta.url));
 const ENABLED: ExternalAgentsConfig = { ...EXTERNAL_AGENTS_DEFAULTS, enabled: true };
@@ -349,5 +349,156 @@ describe("flow 292 T13 — the terminal approver never leaks its readline", () =
     const answer = await t.approver("acp:x", "{}", { fingerprint: "fp", destructive: false, signal: controller.signal });
     expect(answer).toEqual({ approved: false, fingerprint: "fp" });
     expect(t.closed()).toBe(1);
+  });
+});
+
+describe("flow 370 — `run claude-cli --write` stores a patch for review", () => {
+  function gitProject(): string {
+    const project = path.join(root, "project");
+    mkdirSync(project, { recursive: true });
+    writeFileSync(path.join(project, "README.md"), "hello\n");
+    const git = (args: string[]): void => {
+      execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args], {
+        cwd: project,
+        env: withoutGitDiscoveryOverrides(process.env),
+      });
+    };
+    git(["init", "-q"]);
+    git(["add", "-A"]);
+    git(["commit", "-q", "-m", "init"]);
+    return project;
+  }
+
+  function editingSpawn(edit: (cwd: string) => void): ExternalSpawnPort {
+    return {
+      spawn(_argv, opts): SpawnedProcess {
+        edit(opts.cwd);
+        return { stdout: toLines([]), stderr: toLines([]), writeStdin: () => undefined, kill: () => undefined, exited: Promise.resolve(0) };
+      },
+    };
+  }
+
+  test("prints the patch path, hash, files, flagged paths and the review line, and leaves the checkout untouched", async () => {
+    const project = gitProject();
+    const d = deps({
+      cwd: project,
+      run: {
+        config: ENABLED,
+        detect: null,
+        isTTY: false,
+        dataDir: path.join(root, "data"),
+        spawn: editingSpawn((cwd) => {
+          writeFileSync(path.join(cwd, "README.md"), "hello\nworld\n");
+          mkdirSync(path.join(cwd, ".github"), { recursive: true });
+          writeFileSync(path.join(cwd, ".github", "ci.yml"), "name: x\n");
+        }),
+      },
+    });
+    await agentsExternalCommand(["run", "claude-cli", "--task", "edit the readme", "--write"], d);
+    const text = d.lines.join("\n");
+    expect(text).toMatch(/patch \(never applied\): .*acp-worktree\.patch/);
+    expect(text).toMatch(/patch hash \(sha256\): [0-9a-f]{64}/);
+    expect(text).toContain("modified     README.md");
+    expect(text).toContain("added        .github/ci.yml");
+    expect(text).toContain("flagged paths (1)");
+    expect(text).toMatch(/review with: keryx agents external review [0-9a-f-]{36}/);
+    expect(readFileSync(path.join(project, "README.md"), "utf8")).toBe("hello\n");
+  });
+
+  test("a run that changes nothing says so and prints no review line", async () => {
+    const project = gitProject();
+    const d = deps({
+      cwd: project,
+      run: { config: ENABLED, detect: null, isTTY: false, dataDir: path.join(root, "data"), spawn: editingSpawn(() => undefined) },
+    });
+    await agentsExternalCommand(["run", "claude-cli", "--task", "look", "--write"], d);
+    const text = d.lines.join("\n");
+    expect(text).toContain("no changes");
+    expect(text).not.toContain("review with:");
+  });
+
+  test("a SIGINT before the child spawns aborts the run: no child, no leftover worktree, handler removed", async () => {
+    const project = gitProject();
+    const sp = fakeSpawn([]);
+    const listenersBefore = process.listenerCount("SIGINT");
+    let outcome: ExternalChildOutcome | undefined;
+    await agentsExternalCommand(
+      ["run", "claude-cli", "--task", "edit", "--write"],
+      deps({
+        cwd: project,
+        run: {
+          config: ENABLED,
+          isTTY: false,
+          dataDir: path.join(root, "data"),
+          spawn: sp.port,
+          detect: async () => {
+            process.emit("SIGINT");
+            process.emit("SIGINT");
+            return { binaryFound: true };
+          },
+          onOutcome: (o) => {
+            outcome = o;
+          },
+        },
+      }),
+    );
+    expect(sp.calls).toHaveLength(0);
+    expect(outcome?.status).not.toBe("Completed");
+    expect(process.exitCode).toBe(1);
+    expect(process.listenerCount("SIGINT")).toBe(listenersBefore);
+    const worktrees = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd: project, env: withoutGitDiscoveryOverrides(process.env), encoding: "utf8" });
+    expect(worktrees.match(/^worktree /gm)).toHaveLength(1);
+  });
+
+  test("renderWriteRun prints agent-controlled paths with control characters escaped and says so", () => {
+    const lines = renderWriteRun({
+      outcome: { status: "Completed" } as ExternalChildOutcome,
+      run: {
+        runId: "r1",
+        agentId: "claude-cli",
+        baseCommit: "abc",
+        patchPath: "/tmp/p.patch",
+        patchHash: "f".repeat(64),
+        files: [{ path: "a\x1b[2Jb.txt", status: "added" }],
+        flaggedPaths: [".github/x\x1b[H"],
+        refusedPaths: [],
+        state: "pending-review",
+        redacted: false,
+        runStatus: "Completed",
+        projectRoot: "/tmp",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+    const text = lines.join("\n");
+    expect(text).not.toContain("\x1b");
+    expect(text).toContain("a\\x1b[2Jb.txt");
+    expect(text).toContain(`patch hash (sha256): ${"f".repeat(64)}`);
+    expect(text).toContain("shown as \\xNN escapes");
+  });
+
+  test("codex-cli --write is still refused, naming claude-only", async () => {
+    const agent = "codex-cli";
+    const project = gitProject();
+    let outcome: ExternalChildOutcome | undefined;
+    const sp = fakeSpawn([]);
+    await agentsExternalCommand(
+      ["run", agent, "--task", "edit", "--write"],
+      deps({
+        cwd: project,
+        run: {
+          config: { ...ENABLED, agents: { [agent]: { enabled: true, model: null } } },
+          detect: null,
+          isTTY: false,
+          spawn: sp.port,
+          onOutcome: (o) => {
+            outcome = o;
+          },
+        },
+      }),
+    );
+    expect(outcome?.status).toBe("Denied");
+    expect(outcome?.output).toContain("claude-only in this release");
+    expect(sp.calls).toHaveLength(0);
+    expect(process.exitCode).toBe(1);
   });
 });

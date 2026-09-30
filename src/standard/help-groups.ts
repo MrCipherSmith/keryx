@@ -491,6 +491,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/external-diff",
+    group: "Automation",
+    summary: "External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard.",
+  },
+  {
+    kind: "slash",
     name: "/governance",
     group: "Automation",
     summary: "Show the last governance report, or run one in the background.",

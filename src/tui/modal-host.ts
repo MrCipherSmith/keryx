@@ -561,7 +561,9 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     // than a descendant of `state.body`, the two checks disagreed: x-close
     // correctly treated it as "in body" but this one didn't, so a stray
     // digit keypress jumped tabs instead of being absorbed by the scroll box.
-    if (inBody) {
+    // A single tab has nothing to jump to, so digits stay with the body: the external-diff
+    // apply prompt needs every hex digit of the hash prefix, "1" included.
+    if (inBody || state.tabs.length < 2) {
       return;
     }
     const digit = key.sequence.length === 1 ? key.sequence : key.name;

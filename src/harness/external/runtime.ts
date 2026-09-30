@@ -159,6 +159,12 @@ export interface RunExternalChildDeps {
   readonly maxExternalDepth: number;
   readonly onEvent?: (event: ExternalEvent) => void;
   readonly onSpawned?: (handle: ExternalRunHandle) => void;
+  /**
+   * Set only by `runExternalWriteChild`, which captures the worktree diff before removing it.
+   * Without it a line-stream agent's `worktree-write` is refused: the model-initiated path
+   * would run a write child whose edits nobody keeps.
+   */
+  readonly ownsWriteCapture?: boolean;
   /** Recorded, not thrown: an out-of-range CLI version is a warning (registry `judgeVersion`). */
   readonly onWarning?: (warning: string) => void;
   /**
@@ -350,7 +356,9 @@ export async function runExternalChild(
   const nesting = canNestExternalChild(input.parentEnv, deps.maxExternalDepth);
   if (!nesting.ok) return refuse("Denied", nesting.reason);
 
-  const validated = validateRuntimeBlock(input.runtime, input.allowedActions);
+  const validated = validateRuntimeBlock(input.runtime, input.allowedActions, {
+    ...(deps.ownsWriteCapture === true ? { ownsWriteCapture: true } : {}),
+  });
   if (!validated.ok) return refuse("Denied", validated.reason);
   if (validated.runtime !== "external") {
     // The caller asked the external runtime to run a native dispatch. Refusing is
@@ -406,6 +414,7 @@ export async function runExternalChild(
       ...(input.workingDiff === undefined ? {} : { workingDiff: input.workingDiff }),
       resultSchemaText,
       maxPromptBytes: input.maxPromptBytes,
+      writable: sandbox === "worktree-write",
     });
     if (!assembled.ok) {
       // The prompt module refuses rather than cutting the directive or the task.

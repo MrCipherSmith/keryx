@@ -1,6 +1,6 @@
 // Tests for terminalSafe (R1-02, flow 319 review round 1).
 import { describe, expect, test } from "bun:test";
-import { TerminalSafeTracker, terminalSafe } from "./terminal-safe";
+import { TerminalSafeTracker, terminalSafe, terminalSafeBlock } from "./terminal-safe";
 
 describe("terminalSafe", () => {
   test("passes plain ASCII through unchanged, unescaped", () => {
@@ -151,6 +151,27 @@ describe("TerminalSafeTracker", () => {
     expect(tracker.escaped).toBe(true);
     // Stays true once tripped, even if later renders are clean.
     tracker.render("clean again");
+    expect(tracker.escaped).toBe(true);
+  });
+});
+
+describe("terminalSafeBlock", () => {
+  test("keeps newlines and tabs, escapes ESC and a bare carriage return", () => {
+    const result = terminalSafeBlock("a\tb\n\x1b[2Jc\rd\r\n");
+    expect(result.text).toBe("a\tb\n\\x1b[2Jc\\x0dd\\x0d\n");
+    expect(result.escaped).toBe(true);
+  });
+
+  test("plain multi-line text is returned unchanged and not flagged", () => {
+    const result = terminalSafeBlock("+one\n\t-two\n");
+    expect(result).toEqual({ text: "+one\n\t-two\n", escaped: false });
+  });
+
+  test("the tracker records a block that needed escaping", () => {
+    const tracker = new TerminalSafeTracker();
+    tracker.renderBlock("fine\n");
+    expect(tracker.escaped).toBe(false);
+    tracker.renderBlock("x\x1b[H\n");
     expect(tracker.escaped).toBe(true);
   });
 });

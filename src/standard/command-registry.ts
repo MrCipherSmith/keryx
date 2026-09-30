@@ -918,6 +918,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   // command-registry.coverage.test.ts): a descriptor is a query with no cost
   // or an action the operator explicitly approves in the moment, never a
   // model-spending action offered up for silent or remote discovery.
+  // `agents external review|apply|discard` (flow 370) are absent for the same
+  // reason: apply/discard are the human's consent decision on an agent's diff and
+  // must never be a callable operation for an agent; review shows that diff.
   // ---- maintenance ------------------------------------------------------
   // The "bring a project up" commands. They were absent while the registry
   // covered only query surfaces, which left an agent no machine-readable way to

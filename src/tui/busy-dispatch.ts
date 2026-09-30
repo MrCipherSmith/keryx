@@ -79,6 +79,11 @@ export type BusyDispatchTarget =
    * answer is one call, once, in the store; neither touches the main turn.
    */
   | "approvals"
+  /**
+   * `/external-diff` (flow 370): claude write runs awaiting review. Landing cuts a new local
+   * branch in a throwaway worktree, so it never touches the main turn's checkout.
+   */
+  | "external-diff"
   | "deferred"
   | "not-a-command";
 
@@ -119,6 +124,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
+  if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";
