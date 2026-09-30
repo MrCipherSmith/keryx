@@ -147,7 +147,7 @@ describe("R3-F2: installRuntimeHooks/uninstallRuntimeHooks/installRuntimeHook/un
 
   test("uninstallRuntimeHooks (security) returns {ok:false, errors:[...]} and leaves the file unchanged", async () => {
     await withTempDir(async (root) => {
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       // Install for real first (no override — the registry's own owner), so
       // there is real, previously-valid content on disk.
       const installed = await installRuntimeHooks(root, SECURITY_CLAUDE_RUNTIME);
@@ -221,7 +221,7 @@ describe("R3-F2: installRuntimeHooks/uninstallRuntimeHooks/installRuntimeHook/un
 
   test("uninstallOrientRuntime throws with the owner's message and leaves the file unchanged", async () => {
     await withTempDir(async (root) => {
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       const installErrors = await installOrientRuntime(root, "claude");
       expect(installErrors).toEqual([]);
       const before = readFileSync(file, "utf8");

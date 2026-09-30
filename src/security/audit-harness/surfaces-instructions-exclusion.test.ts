@@ -61,3 +61,19 @@ test("surfaces with only SUBSYSTEM_INSTRUCTIONS files do not report as hook arti
     "GEMINI.md",
   ]);
 });
+
+// Flow 361 T9: the managed block now lives in per-developer files. Claude Code
+// reads CLAUDE.local.md and Codex reads AGENTS.override.md INSTEAD of
+// AGENTS.md, so both are agent instructions the audit must scan.
+test("the per-developer entrypoints CLAUDE.local.md and AGENTS.override.md are scanned as instructions", async () => {
+  await writeFile(path.join(tmp, "CLAUDE.local.md"), "# Local Claude Instructions\n");
+  await writeFile(path.join(tmp, "AGENTS.override.md"), "# Team\n");
+
+  expect(await discoverInstructions(tmp)).toEqual(["AGENTS.override.md", "CLAUDE.local.md"]);
+  expect(await discoverHookSurfaceFiles(tmp)).toEqual([]);
+
+  const report = await runHarnessAudit(tmp);
+  const instructionsSurface = report.surfaces.find((s) => s.surface === "instructions");
+  expect(instructionsSurface?.status).toBe("scanned");
+  expect(instructionsSurface?.pathsScanned).toEqual(["AGENTS.override.md", "CLAUDE.local.md"]);
+});

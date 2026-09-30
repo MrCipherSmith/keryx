@@ -19,7 +19,7 @@
 // (`install-state.ts`); a satisfied-by-runtime surface never does.
 
 import path from "node:path";
-import { getHarnessAdapter, harnessAdapterIds, settingsFileOwnerFor } from "./registry";
+import { getHarnessAdapter, harnessAdapterIds, settingsFileOwnerFor, surfaceRelativePath } from "./registry";
 import { installSurfaces, uninstallSurfaces } from "./settings-file";
 import { arrayAt, isManagedBy, readSettingsFile } from "./settings-json";
 import {
@@ -315,8 +315,13 @@ async function customInstallDryRun(root: string, surface: SurfaceAdapter): Promi
   return { status: "would-install", errors: [], warnings };
 }
 
-/** Partition a resolved surface list into JSON-owned (grouped by file), custom-install, and satisfied-by-runtime. */
-function partitionSurfaces(surfaces: readonly SurfaceAdapter[]): {
+/**
+ * Partition a resolved surface list into JSON-owned (grouped by file),
+ * custom-install, and satisfied-by-runtime. The file is the one this PROJECT
+ * uses (`surfaceRelativePath`, flow 361): Claude's settings surfaces resolve
+ * theirs from the manifest, every other surface has one fixed path.
+ */
+function partitionSurfaces(root: string, surfaces: readonly SurfaceAdapter[]): {
   jsonByPath: Map<string, SurfaceAdapter[]>;
   custom: SurfaceAdapter[];
   satisfied: SurfaceAdapter[];
@@ -325,10 +330,11 @@ function partitionSurfaces(surfaces: readonly SurfaceAdapter[]): {
   const custom: SurfaceAdapter[] = [];
   const satisfied: SurfaceAdapter[] = [];
   for (const surface of surfaces) {
-    if (surface.relativePath && surface.merge && surface.strip) {
-      const list = jsonByPath.get(surface.relativePath) ?? [];
+    const relativePath = surfaceRelativePath(surface, root);
+    if (relativePath && surface.merge && surface.strip) {
+      const list = jsonByPath.get(relativePath) ?? [];
       list.push(surface);
-      jsonByPath.set(surface.relativePath, list);
+      jsonByPath.set(relativePath, list);
     } else if (surface.customInstall || surface.customUninstall) {
       custom.push(surface);
     } else {
@@ -350,7 +356,7 @@ type ResolvedSurfaces =
   | { readonly kind: "adapter-error"; readonly errors: string[] }
   | { readonly kind: "no-match" };
 
-function resolveAndPartitionSurfaces(runtimeId: string, opts: InstallOptions): ResolvedSurfaces {
+function resolveAndPartitionSurfaces(root: string, runtimeId: string, opts: InstallOptions): ResolvedSurfaces {
   const resolvedAdapter = resolveAdapterOrError(runtimeId);
   if ("errors" in resolvedAdapter) return { kind: "adapter-error", errors: resolvedAdapter.errors };
   const { adapter } = resolvedAdapter;
@@ -369,7 +375,7 @@ function resolveAndPartitionSurfaces(runtimeId: string, opts: InstallOptions): R
     }
   }
 
-  return { kind: "ok", ...partitionSurfaces(surfaces) };
+  return { kind: "ok", ...partitionSurfaces(root, surfaces) };
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +387,7 @@ export async function installIntegration(
   runtimeId: string,
   opts: InstallOptions = {},
 ): Promise<InstallIntegrationResult> {
-  const resolved = resolveAndPartitionSurfaces(runtimeId, opts);
+  const resolved = resolveAndPartitionSurfaces(root, runtimeId, opts);
   if (resolved.kind === "adapter-error") return { runtimeId, results: [], errors: resolved.errors };
   if (resolved.kind === "no-match") return { runtimeId, results: [], errors: [], noMatchingSurface: true };
 
@@ -581,7 +587,7 @@ export async function uninstallIntegration(
   runtimeId: string,
   opts: InstallOptions = {},
 ): Promise<UninstallIntegrationResult> {
-  const resolved = resolveAndPartitionSurfaces(runtimeId, opts);
+  const resolved = resolveAndPartitionSurfaces(root, runtimeId, opts);
   if (resolved.kind === "adapter-error") return { runtimeId, results: [], errors: resolved.errors };
   if (resolved.kind === "no-match") return { runtimeId, results: [], errors: [], noMatchingSurface: true };
 
@@ -736,10 +742,11 @@ async function liveStatusOf(
   root: string,
   surface: SurfaceAdapter,
 ): Promise<{ live: "valid" | "missing" | "invalid" | "not-applicable"; problems: string[] }> {
-  if (surface.relativePath && surface.validate) {
-    const file = surface.settingsFile ? surface.settingsFile(root) : fileFor(root, surface.relativePath);
+  const relativePath = surfaceRelativePath(surface, root);
+  if (relativePath && surface.validate) {
+    const file = surface.settingsFile ? surface.settingsFile(root) : fileFor(root, relativePath);
     if (!(await pathExists(file))) {
-      return { live: "missing", problems: [`${surface.relativePath}: file is missing`] };
+      return { live: "missing", problems: [`${relativePath}: file is missing`] };
     }
     // review round 3, M3: `readSettingsFile` throws on invalid JSON —
     // uncaught, that escaped `doctorIntegration` entirely and aborted

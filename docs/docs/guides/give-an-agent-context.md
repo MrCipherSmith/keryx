@@ -16,8 +16,10 @@ $ keryx init --yes
 ```
 
 `init` scaffolds `.metaproject/`, enables nine modules, installs git hooks, and
-wires your existing `AGENTS.md` / `CLAUDE.md` so an agent reading them is routed
-to `.metaproject/index.md`.
+writes a routing block to `CLAUDE.local.md` and `AGENTS.override.md` —
+per-developer, gitignored files Claude Code and Codex read alongside or instead
+of your `CLAUDE.md` / `AGENTS.md` — so an agent is routed to
+`.metaproject/index.md` without keryx editing a file your team tracks.
 
 It is an **idempotent reconciler**: re-running it refreshes managed files and
 never clobbers your edits or anything under `.metaproject/data/`.

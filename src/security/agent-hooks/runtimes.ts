@@ -8,6 +8,7 @@ import {
   checkInputCommand,
   checkOutputCommand,
   isManagedBy,
+  surfaceRelativePath,
   surfacesOf,
   type Settings as IntegrationSettings,
   type SurfaceAdapter,
@@ -30,7 +31,7 @@ import {
 // Every runtime shares the sentinel discipline (`_keryxManaged`): managed
 // entries are tagged so a targeted uninstall removes ONLY this installer's
 // entries and a re-install never duplicates them. Claude Code keeps its shipped
-// event-keyed `.claude/settings.json` schema; the other runtimes use a flat
+// event-keyed settings schema; the other runtimes use a flat
 // managed-groups array so their (still-evolving, OQ-3) schemas stay simple and
 // validator-checked.
 
@@ -45,8 +46,14 @@ export interface RuntimeHook {
   readonly id: string;
   // Absolute settings-file path for this runtime under a project root.
   settingsPath(projectRoot: string): string;
-  /** Path relative to the project root, for `SettingsFileOwner` lookup. */
+  /**
+   * The runtime's settings path relative to a project root — its default.
+   * Claude Code's depends on the project (flow 361); ask `relativePathFor`
+   * whenever a project root is at hand.
+   */
   readonly relativePath: string;
+  /** Path relative to `projectRoot`, for `SettingsFileOwner` lookup. */
+  relativePathFor(projectRoot: string): string;
   // Merge the managed entries into `settings`, preserving user content and
   // staying idempotent. Returns the settings object to write.
   merge(settings: Settings): Settings;
@@ -62,10 +69,12 @@ export function isManagedGroup(value: unknown): boolean {
 
 /** Compose two independently-installable surfaces into one legacy RuntimeHook. */
 function composed(id: string, relativePath: string, input: SurfaceAdapter, output: SurfaceAdapter): RuntimeHook {
+  const relativePathFor = (root: string): string => surfaceRelativePath(input, root) ?? relativePath;
   return {
     id,
     relativePath,
-    settingsPath: (root) => path.join(root, ...relativePath.split("/")),
+    relativePathFor,
+    settingsPath: (root) => path.join(root, ...relativePathFor(root).split("/")),
     merge: (s) => output.merge!(input.merge!(s)),
     strip: (s) => output.strip!(input.strip!(s)),
     validate: (s) => [...input.validate!(s), ...output.validate!(s)],

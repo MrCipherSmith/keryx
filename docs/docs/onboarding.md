@@ -334,7 +334,7 @@ It scaffolds `.metaproject/` with:
   hooks/post-update.d/
 ```
 
-It also connects your repo's agent entrypoints — importing an existing `AGENTS.md`/`CLAUDE.md` into `.metaproject/rules/` (or creating `AGENTS.md` if none exists) and injecting a managed routing block that points agents at `.metaproject/index.md` first. Each enabled module adds its own `core/`, `data/`, and `skills/` subtrees. On a project with `.git`, opt-in git hooks (post-commit graph/skills/health reminders, dashboard rebuild) can be installed.
+It also connects your repo's agent entrypoints — importing an existing `AGENTS.md`/`CLAUDE.md` into `.metaproject/rules/` and writing a managed routing block that points agents at `.metaproject/index.md` first. The block goes to per-developer, gitignored files — `CLAUDE.local.md`, and `AGENTS.override.md` generated from your `AGENTS.md` (Codex is skipped with a message when there is none) — so your tracked `AGENTS.md`, `CLAUDE.md` and `.gitignore` stay unmodified; see [where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope). Each enabled module adds its own `core/`, `data/`, and `skills/` subtrees. On a project with `.git`, opt-in git hooks (post-commit graph/skills/health reminders, dashboard rebuild) can be installed.
 
 `init` is idempotent — re-running it refreshes managed files but never clobbers your hand-edited files or anything under `.metaproject/data/`.
 
@@ -393,7 +393,7 @@ routing guard keeps broad raw shell/search output out of the agent context.
 Managed review packages preserve coverage, findings, decisions, and learning
 candidates for standalone or flow-attached reviews.
 
-The `security` module is enabled by default, so `init` asks whether to enable it (and, on a git repo, whether to install a pre-push guard and project-local `.claude/settings.json` agent hooks). Once the workspace exists, check its state with `keryx security status` and scan a path for secrets/policy findings with `keryx security scan <path>`. Disable the module entirely with `keryx init --no-security`.
+The `security` module is enabled by default, so `init` asks whether to enable it (and, on a git repo, whether to install a pre-push guard and project-local Claude Code agent hooks in the gitignored `.claude/settings.local.json`). Once the workspace exists, check its state with `keryx security status` and scan a path for secrets/policy findings with `keryx security scan <path>`. Disable the module entirely with `keryx init --no-security`.
 
 Every command exposes more subcommands and flags — run `keryx <command> --help`, or `keryx` with no arguments for the full usage block.
 

@@ -240,6 +240,11 @@ describe("flaggedPathsOf, case and agent-config files", () => {
     expect(flaggedPathsOf(paths)).toEqual(paths);
   });
 
+  test("flags the per-developer entrypoints keryx writes the managed block to (flow 361)", () => {
+    const paths = ["CLAUDE.local.md", "AGENTS.override.md", "pkg/Claude.Local.md", ".claude/settings.local.json"];
+    expect(flaggedPathsOf(paths)).toEqual(paths);
+  });
+
   test("leaves ordinary files and harmless editor files alone", () => {
     expect(flaggedPathsOf([".vscode/extensions.json", "Makefile", "docs/gitattributes.md", "src/envrc.ts", ".gitignore"])).toEqual([]);
   });

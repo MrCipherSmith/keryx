@@ -14,6 +14,12 @@ import {
   type DivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import {
+  declaredImportSources,
+  manifestAgentEntrypoints,
+  resolveProjectEntrypoints,
+  type ProjectEntrypoints,
+} from "../rules/entrypoint-writers";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import {
   distillAgentEntrypoints,
@@ -33,10 +39,9 @@ type ManifestModule = {
 
 type MetaprojectManifest = {
   modules?: Record<string, ManifestModule>;
-  agentEntrypoints?: {
-    root?: string[];
-    metaproject?: string;
-  };
+  // Read as whatever is on disk (the legacy string array included) and only
+  // ever through `resolveProjectEntrypoints` / `declaredImportSources`.
+  agentEntrypoints?: unknown;
 };
 
 export async function rulesCommand(args: string[] = [], projectRoot: string = process.cwd()): Promise<void> {
@@ -84,7 +89,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
         enableMemory: moduleEnabled(manifest, "memory"),
         enableTasks,
         enableSecurity: moduleEnabled(manifest, "security"),
-        ruleSources: await listRootEntrypoints(projectRoot, manifest.agentEntrypoints?.root ?? []),
+        ruleSources: await listRootEntrypoints(projectRoot, declaredImportSources(manifest.agentEntrypoints)),
         hasDistilledEntrypoints:
           subcommand === "distill" ? true : await hasDistilledEntrypoints(metaprojectRoot),
       },
@@ -103,16 +108,26 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
     return;
   }
 
+  // Flow 361: the manifest says where the managed block goes; a legacy or
+  // missing `agentEntrypoints` is settled against HEAD before anything is written.
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, manifest.agentEntrypoints);
+  const entrypointNotices = [...entrypoints.notices];
+  const onNotice = (line: string): void => {
+    entrypointNotices.push(line);
+  };
+
   if (subcommand === "distill") {
     const result = await distillAgentEntrypoints(projectRoot, metaprojectRoot, {
       enableTasks,
-      manifestSources: manifest.agentEntrypoints?.root ?? [],
+      targets: entrypoints.targets,
+      manifestSources: entrypoints.importSources,
+      onNotice,
     });
     await refreshRoutingEntrypoints(metaprojectRoot, manifest, result.sources, true, {
       intent: "rules distill",
       resolution: options.resolution,
     });
-    await persistManifestEntrypoints(projectRoot, manifestPath, manifest, result.sources);
+    await persistManifestEntrypoints(projectRoot, manifestPath, manifest, entrypoints);
 
     console.log(`# rules distill`);
     console.log("");
@@ -121,13 +136,16 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
     console.log(`skills: ${result.skills.length}`);
     console.log(`kept_root_sections: ${result.keptRootSections.length}`);
     console.log(`index: .metaproject/rules/entrypoints/index.md`);
+    printEntrypointNotices(entrypointNotices);
     return;
   }
 
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
-    manifestSources: manifest.agentEntrypoints?.root ?? [],
+    targets: entrypoints.targets,
+    manifestSources: entrypoints.importSources,
     createDefault: true,
+    onNotice,
   });
   const ruleSources = syncedRules.map((rule) => rule.source);
 
@@ -135,7 +153,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   // `metaprojectRoot` — see `agent-entrypoints.ts#syncAgentRules`.
   await mkdirContained(projectRoot, `${path.relative(projectRoot, metaprojectRoot).split(path.sep).join("/")}/rules`);
 
-  await persistManifestEntrypoints(projectRoot, manifestPath, manifest, ruleSources);
+  await persistManifestEntrypoints(projectRoot, manifestPath, manifest, entrypoints);
   await refreshRoutingEntrypoints(
     metaprojectRoot,
     manifest,
@@ -151,6 +169,15 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
     console.log(`- ${rule.source} -> .metaproject/rules/${rule.ruleFile} (${rule.priority})`);
   }
   console.log(await describeModelChoiceStatus(projectRoot));
+  printEntrypointNotices(entrypointNotices);
+}
+
+function printEntrypointNotices(notices: readonly string[]): void {
+  if (notices.length === 0) return;
+  console.log("");
+  for (const line of notices) {
+    console.log(`- ${line}`);
+  }
 }
 
 function parseRulesOptions(args: string[]): RulesOptions {
@@ -195,13 +222,11 @@ async function persistManifestEntrypoints(
   projectRoot: string,
   manifestPath: string,
   manifest: MetaprojectManifest,
-  ruleSources: string[],
+  entrypoints: ProjectEntrypoints,
 ): Promise<void> {
-  manifest.agentEntrypoints = {
-    ...manifest.agentEntrypoints,
-    root: ruleSources,
+  manifest.agentEntrypoints = manifestAgentEntrypoints(manifest.agentEntrypoints, entrypoints, {
     metaproject: ".metaproject/index.md",
-  };
+  });
   await writeJsonIfChanged(projectRoot, manifestPath, manifest);
 }
 
@@ -246,7 +271,9 @@ function printHelp(): void {
   keryx rules distill
 
 Commands:
-  sync     Import root AGENTS.md/CLAUDE.md into .metaproject/rules and refresh index
+  sync     Import root AGENTS.md/CLAUDE.md into .metaproject/rules and refresh index;
+           rewrites the managed block where agentEntrypoints.root puts it
+           (CLAUDE.local.md and AGENTS.override.md by default)
   distill  Split large AGENTS.md/CLAUDE.md into high-priority rules and project skills
 
 Options:

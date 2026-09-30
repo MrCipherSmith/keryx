@@ -1,0 +1,640 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "361",
+  "slug": "managed-blocks-go-to-per-developer-gitig",
+  "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
+  "status": "in-progress",
+  "createdAt": "2026-09-30T14:26:46.112Z",
+  "updatedAt": "2026-09-30T21:14:00.710Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:fe12a1eac78b96bcd6eff871078be5642111997d3a0a96d93fa68a60f984d83d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9, which split the implementation by writer"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:50:06.241Z",
+            "outcome": "started",
+            "detail": "orchestrator runs lint, typecheck, doc links and the full suite on the rebased branch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-30T19:10:33.124Z",
+            "outcome": "failed",
+            "detail": "review round 2026-09-30-ingest-feat-local-scope-entrypoints at 578a14bd: 13 retained (5 major, 4 minor, 4 info), 0 refuted; fix task T14"
+          },
+          {
+            "at": "2026-09-30T19:45:06.109Z",
+            "outcome": "started",
+            "detail": "review round 2 (narrow, owner-approved over the spend ceiling): fix diff 578a14bd..772e520c against round-1 findings"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T14:39:09.947Z",
+            "outcome": "started",
+            "detail": "361-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T14:47:55.055Z",
+            "outcome": "started",
+            "detail": "361-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T15:18:27.623Z",
+            "outcome": "started",
+            "detail": "361-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T15:58:52.665Z",
+            "outcome": "started",
+            "detail": "361-T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:06:51.595Z",
+            "outcome": "started",
+            "detail": "361-T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:06:52.419Z",
+            "outcome": "started",
+            "detail": "361-T10 (parallel with T9, disjoint files)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:50:05.473Z",
+            "outcome": "started",
+            "detail": "361-T11 (on rebased branch)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:32:23.764Z",
+            "outcome": "started",
+            "detail": "361-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T18:34:27.023Z",
+            "outcome": "started",
+            "detail": "361-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T19:10:48.394Z",
+            "outcome": "started",
+            "detail": "361-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T21:05:14.732Z",
+            "outcome": "started",
+            "detail": "361-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T14:26:46.112Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T14:36:33.228Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (named by the user when asked at flow initialization)"
+    },
+    {
+      "at": "2026-09-30T14:38:03.479Z",
+      "event": "task-added",
+      "detail": "T5: Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)"
+    },
+    {
+      "at": "2026-09-30T14:38:07.118Z",
+      "event": "task-added",
+      "detail": "T6: Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill"
+    },
+    {
+      "at": "2026-09-30T14:38:10.804Z",
+      "event": "task-added",
+      "detail": "T7: Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored"
+    },
+    {
+      "at": "2026-09-30T14:38:14.494Z",
+      "event": "task-added",
+      "detail": "T8: Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files"
+    },
+    {
+      "at": "2026-09-30T14:38:18.262Z",
+      "event": "task-added",
+      "detail": "T9: Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output"
+    },
+    {
+      "at": "2026-09-30T14:38:21.809Z",
+      "event": "task-added",
+      "detail": "T10: Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump"
+    },
+    {
+      "at": "2026-09-30T14:38:25.773Z",
+      "event": "task-added",
+      "detail": "T11: End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence"
+    },
+    {
+      "at": "2026-09-30T14:38:52.951Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T14:38:56.516Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T14:39:00.410Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T14:39:03.724Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T14:39:09.947Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 361-T5"
+    },
+    {
+      "at": "2026-09-30T14:47:54.291Z",
+      "event": "task-done",
+      "detail": "T5: Entrypoint-target model: manifest normalizer, legacy-array migration decision, local-ignore library (unit-tested, no command wiring)"
+    },
+    {
+      "at": "2026-09-30T14:47:55.055Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 361-T6"
+    },
+    {
+      "at": "2026-09-30T15:18:26.876Z",
+      "event": "task-done",
+      "detail": "T6: Index-block writers: CLAUDE.local.md, AGENTS.override.md (override/skip), no tracked defaults, block migration wired into init/update/rules sync/distill"
+    },
+    {
+      "at": "2026-09-30T15:18:27.623Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 361-T7"
+    },
+    {
+      "at": "2026-09-30T15:57:36.324Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"When `.metaproject/` is ignored as a whole, init and update write no ignore block anywhere; otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" -> \"When `.metaproject/` is ignored as a whole, init and update write no `.metaproject` ignore entry anywhere (the only lines they may add to `info/exclude` are local targets git does not already ignore, per AC7); otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" (AC6 said 'no ignore block anywhere', which contradicts AC7 when a local target is not yet ignored; request item 5 is about the .metaproject block, item 6 requires local targets to be ignored regardless)"
+    },
+    {
+      "at": "2026-09-30T15:58:47.066Z",
+      "event": "task-done",
+      "detail": "T7: Ignore rules: git check-ignore first, managed block to .git/info/exclude, tracked .gitignore migration, local targets ignored"
+    },
+    {
+      "at": "2026-09-30T15:58:52.665Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 361-T8"
+    },
+    {
+      "at": "2026-09-30T17:06:45.871Z",
+      "event": "task-done",
+      "detail": "T8: Claude hooks resolve through claudeSettings to .claude/settings.local.json; hook migration out of tracked settings.json; never in both files"
+    },
+    {
+      "at": "2026-09-30T17:06:51.596Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 361-T9"
+    },
+    {
+      "at": "2026-09-30T17:06:52.419Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 361-T10 (parallel with T9, disjoint files)"
+    },
+    {
+      "at": "2026-09-30T17:27:24.377Z",
+      "event": "task-done",
+      "detail": "T10: Docs, skills, templates and index-block wording name the local targets; CHANGELOG and version bump"
+    },
+    {
+      "at": "2026-09-30T17:27:25.952Z",
+      "event": "task-added",
+      "detail": "T12: Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped"
+    },
+    {
+      "at": "2026-09-30T17:32:20.056Z",
+      "event": "task-done",
+      "detail": "T9: Readers learn local targets: standard validate/profiles, doctor warnings with fix command, audit surfaces, worktree prune, preview output"
+    },
+    {
+      "at": "2026-09-30T17:32:23.764Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 361-T12"
+    },
+    {
+      "at": "2026-09-30T17:46:48.867Z",
+      "event": "task-done",
+      "detail": "T12: Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped"
+    },
+    {
+      "at": "2026-09-30T17:50:05.473Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 361-T11 (on rebased branch)"
+    },
+    {
+      "at": "2026-09-30T17:50:06.241Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — orchestrator runs lint, typecheck, doc links and the full suite on the rebased branch"
+    },
+    {
+      "at": "2026-09-30T18:33:04.653Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"With Codex mode `skip`, no Codex file is written or modified and the command output says Codex was skipped.\" -> \"With Codex mode `skip`, no Codex file is written and the command output says Codex was skipped; the only change to a Codex file is removing an `AGENTS.override.md` that keryx itself generated (it carries keryx's provenance line), so a leftover cannot keep hiding `AGENTS.md`.\" (T12 removes a keryx-generated override in skip mode so it stops replacing AGENTS.md for Codex; the old wording forbade that removal, which would defeat skip (request item 7: nothing left in two places). T11 flagged the conflict.)"
+    },
+    {
+      "at": "2026-09-30T18:33:06.658Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"After init and after update, `git check-ignore` reports `CLAUDE.local.md`, `AGENTS.override.md` and `.claude/settings.local.json` as ignored, with missing ones added to `info/exclude`.\" -> \"After init and after update, `git check-ignore` reports every local target the manifest uses (by default `CLAUDE.local.md`, `AGENTS.override.md` and `.claude/settings.local.json`) as ignored, with missing ones added to `info/exclude`.\" (Under shared scope or Codex skip a file is not a local target and is not written, so requiring it to be ignored was unconditional where the request (item 6) scopes it to local targets. T11 flagged it.)"
+    },
+    {
+      "at": "2026-09-30T18:34:07.104Z",
+      "event": "task-done",
+      "detail": "T11: End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence"
+    },
+    {
+      "at": "2026-09-30T18:34:08.026Z",
+      "event": "task-added",
+      "detail": "T13: Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files"
+    },
+    {
+      "at": "2026-09-30T18:34:27.023Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 361-T13"
+    },
+    {
+      "at": "2026-09-30T18:50:25.284Z",
+      "event": "task-done",
+      "detail": "T13: Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files"
+    },
+    {
+      "at": "2026-09-30T19:10:33.124Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 1) — review round 2026-09-30-ingest-feat-local-scope-entrypoints at 578a14bd: 13 retained (5 major, 4 minor, 4 info), 0 refuted; fix task T14"
+    },
+    {
+      "at": "2026-09-30T19:10:35.174Z",
+      "event": "task-added",
+      "detail": "T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info"
+    },
+    {
+      "at": "2026-09-30T19:10:48.394Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 361-T14"
+    },
+    {
+      "at": "2026-09-30T19:41:54.649Z",
+      "event": "task-done",
+      "detail": "T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info"
+    },
+    {
+      "at": "2026-09-30T19:45:06.109Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 2) — review round 2 (narrow, owner-approved over the spend ceiling): fix diff 578a14bd..772e520c against round-1 findings"
+    },
+    {
+      "at": "2026-09-30T21:05:09.478Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"When `.metaproject/` is ignored as a whole, init and update write no `.metaproject` ignore entry anywhere (the only lines they may add to `info/exclude` are local targets git does not already ignore, per AC7); otherwise the managed block is written to `info/exclude` of the git common directory (also from a linked worktree) and the tracked `.gitignore` is not modified.\" -> \"Init and update never modify the tracked `.gitignore`; keryx's managed ignore block is written to `info/exclude` of the git common directory (also from a linked worktree) and always carries the full entry set, even when `.metaproject/` is already ignored as a whole, so the shared block is identical whichever worktree writes it.\" (Owner decision 2026-10-01 on review finding F-014: trimming the shared info/exclude block when one worktree ignores .metaproject/ as a whole un-ignores .metaproject/runtime/ and data/security/raw/ in worktrees whose .gitignore lacks that line; the owner chose to always write the full set, superseding request item 5's 'write nothing' for that case.)"
+    },
+    {
+      "at": "2026-09-30T21:05:10.509Z",
+      "event": "task-added",
+      "detail": "T15: Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow"
+    },
+    {
+      "at": "2026-09-30T21:05:14.732Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 361-T15"
+    },
+    {
+      "at": "2026-09-30T21:12:37.578Z",
+      "event": "task-done",
+      "detail": "T15: Fix review round 2 F-014: the shared info/exclude block always carries the full entry set, including when .metaproject/ is ignored as a whole (owner decision); docs and CHANGELOG follow"
+    },
+    {
+      "at": "2026-09-30T21:14:00.710Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    }
+  ],
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    },
+    "AC13": {
+      "kind": "unclassified"
+    }
+  }
+}

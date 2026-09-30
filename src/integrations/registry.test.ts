@@ -186,7 +186,7 @@ describe("AC2: CTX_RUNTIMES is derived, with parity against the pre-refactor val
   test("locate() paths are byte-identical to the pre-refactor literals", () => {
     const root = "/proj";
     const expected: Record<string, string> = {
-      claude: path.join(root, ".claude", "settings.json"),
+      claude: path.join(root, ".claude", "settings.local.json"),
       codex: path.join(root, ".codex", "hooks.json"),
       cursor: path.join(root, ".cursor", "hooks.json"),
       windsurf: path.join(root, ".windsurf", "hooks.json"),
@@ -248,7 +248,7 @@ describe("AC2: RUNTIME_HOOKS is derived, with parity against the pre-refactor va
   test("ids and settings paths, in order", () => {
     const root = "/proj";
     expect(RUNTIME_HOOKS.map((r) => ({ id: r.id, path: r.settingsPath(root) }))).toEqual([
-      { id: "claude", path: path.join(root, ".claude", "settings.json") },
+      { id: "claude", path: path.join(root, ".claude", "settings.local.json") },
       { id: "cursor", path: path.join(root, ".cursor", "hooks.json") },
       { id: "windsurf", path: path.join(root, ".windsurf", "hooks.json") },
       { id: "generic-mcp", path: path.join(root, ".mcp", "security-hooks.json") },
@@ -318,9 +318,13 @@ describe("AC3: every settings file targeted by 2+ surfaces has exactly one Setti
     for (const adapter of HARNESS_ADAPTERS) {
       for (const surface of adapter.surfaces) {
         if (!surface.relativePath || !surface.merge || !surface.strip) continue;
-        const set = byPath.get(surface.relativePath) ?? new Set<string>();
-        set.add(surface.id);
-        byPath.set(surface.relativePath, set);
+        // Flow 361: a Claude settings surface is owned at every file the
+        // project's `claudeSettings` scope can select, not only its default.
+        for (const relativePath of surface.relativePathCandidates ?? [surface.relativePath]) {
+          const set = byPath.get(relativePath) ?? new Set<string>();
+          set.add(surface.id);
+          byPath.set(relativePath, set);
+        }
       }
     }
 
@@ -331,7 +335,13 @@ describe("AC3: every settings file targeted by 2+ surfaces has exactly one Setti
     const multiTarget = [...byPath.entries()].filter(([, ids]) => ids.size >= 2);
     expect(multiTarget.length).toBeGreaterThan(0);
 
-    const atLeastFour = [".claude/settings.json", ".cursor/hooks.json", ".windsurf/hooks.json", ".codex/hooks.json"];
+    const atLeastFour = [
+      ".claude/settings.local.json",
+      ".claude/settings.json",
+      ".cursor/hooks.json",
+      ".windsurf/hooks.json",
+      ".codex/hooks.json",
+    ];
     for (const file of atLeastFour) {
       const owners = SETTINGS_FILE_OWNERS.filter((o) => o.relativePath === file);
       expect({ file, ownerCount: owners.length }).toEqual({ file, ownerCount: 1 });

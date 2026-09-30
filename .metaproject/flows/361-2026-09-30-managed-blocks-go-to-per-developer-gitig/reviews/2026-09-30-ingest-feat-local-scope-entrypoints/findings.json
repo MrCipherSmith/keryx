@@ -1,0 +1,381 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "Entry-form local root target `path` from the tracked manifest is kept verbatim (only abs/.. /NUL rejected) and appended raw into <git-common-dir>/info/exclude by wantedIgnoreLines -> replaceLocalIgnoreBlock; leading '!', globs, '#', embedded newlines (incl. a fake '# keryx:end') are accepted. The same path is where writeClaudeLocalTarget creates/appends the block.",
+    "impact": "A cloned repo whose committed metaproject.json has root [{runtime:'claude',scope:'local',path:'!.env'}] makes `keryx update` write `!.env` into info/exclude, overriding the developer's core.excludesFile ignore of .env -> `?? .env`, staged by `git add -A`. Newlines inject extra lines and break the managed block.",
+    "suggested_fix": "Force the standard local path per runtime (as claudeSettings does), or reject control chars and leading '!'/'#' in safeRelativePath; write local-target lines as anchored literal patterns.",
+    "evidence": "Reviewer scratch scripts (scratchpad/rs-WShC/): normalizeEntrypointTargets accepts both; syncMetaprojectIgnoreRules on a throwaway repo wrote `!.env`, `!*.pem`, `# keryx:end` into info/exclude; git status showed `?? .env` after the line was added.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-targets.ts",
+    "line": 185,
+    "quote": "  if (value.split(/[\\\\/]/).includes(\"..\")) return undefined;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RS-1",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-targets.ts safeRelativePath",
+        "src/rules/entrypoint-targets.ts rootEntryFromRecord",
+        "src/rules/entrypoint-writers.ts ignoredLocalTargetPaths",
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines",
+        "src/lib/git-local-ignore.ts replaceLocalIgnoreBlock",
+        "src/rules/entrypoint-writers.ts writeClaudeLocalTarget"
+      ],
+      "enumeration_method": "keryx ctx rg for consumers of localTargetPaths/ignoredLocalTargetPaths (init.ts, update.ts, entrypoint-inspection.ts) plus both info/exclude writers"
+    },
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun rs-WShC/targets.ts: normalizeEntrypointTargets kept '!.env' and a newline-injected path; bun rs-WShC/sync.ts on a throwaway repo: syncMetaprojectIgnoreRules wrote '!.env', '!*.pem' and extra '# keryx:end' lines into .git/info/exclude.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "writeCodexLocalTargets reads the manifest's Codex `source` with readFile (follows symlinks) and copies it into AGENTS.override.md without refuseEscapingSymlink; the pre-scaffold guard only covers root-level sources found by readdir, so a subdirectory source through an escaping symlink is never checked.",
+    "impact": "A cloned repo commits `home -> /Users/<name>` and a codex entry source 'home/.aws/credentials'; `keryx update`/`rules distill` copies the out-of-repo file into AGENTS.override.md, which Codex loads as instructions and sends to the model provider.",
+    "suggested_fix": "refuseEscapingSymlink(projectRoot, entry.source) before reading (writeCodexLocalTargets, codexOverrideState, codexOverrideByteSize); or restrict source to a root-level team file.",
+    "evidence": "Reviewer scratch script on a throwaway project: with home -> ../outside, writeCodexLocalTargets produced an AGENTS.override.md containing the outside secret line.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": null,
+    "quote": "    const sourcePath = path.join(projectRoot, entry.source);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 203, 283, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "dedupe_key": "RS-2",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-writers.ts writeCodexLocalTargets",
+        "src/rules/entrypoint-writers.ts codexOverrideState",
+        "src/rules/agent-entrypoints.ts findAgentEntrypoints",
+        "src/rules/distill.ts writeCodexLocalTargets call"
+      ],
+      "enumeration_method": "keryx ctx rg for writeCodexLocalTargets / assertMetaprojectReferenceSafe / findAgentEntrypoints callers"
+    },
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun rs-WShC/override.ts (throwaway project, home -> outside symlink, source home/.aws/credentials): AGENTS.override.md contained the outside secret line; entrypoint-writers.ts path.join + readFile with no refuseEscapingSymlink.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Paths after `--` are still pathspecs (glob/magic); a manifest path with glob chars can make worktreeFileIsClean/indexHoldsFile answer for other files.",
+    "impact": "Wrong classification/notice only; no data loss reproduced.",
+    "suggested_fix": "--literal-pathspecs or GIT_LITERAL_PATHSPECS=1 in runGit.",
+    "evidence": "Throwaway repo: `git diff --quiet -- 's*'` matched modified src.ts.",
+    "confidence": "medium",
+    "file": "src/lib/git-head.ts",
+    "line": 72,
+    "quote": "  const result = await runGit(projectRoot, [\"diff\", \"--quiet\", \"--\", relativePath]);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RS-3",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "git-head.ts runGit([diff,--quiet,--,relativePath]) with no literal-pathspecs flag or env.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "moveBlockOutOfGitignore restores HEAD only when file-minus-block equals HEAD, but origin/main's legacy writer also deleted team lines outside the block that duplicated keryx's lines (and a blanket .metaproject/ line). Those repos fall to strip-only and the team's lines stay deleted.",
+    "impact": "HEAD .gitignore `node_modules/\\n.metaproject/runtime/\\n`, working tree left by the legacy writer as node_modules/ + block: `keryx update` leaves ` M .gitignore` with `-.metaproject/runtime/` and calls it the user's edit; AC8 `git diff --quiet` fails.",
+    "suggested_fix": "Before comparing, remove from HEAD the lines the legacy writer would have removed; if equal, take the restore-from-HEAD branch.",
+    "evidence": "scratchpad/rl2-gitignore-probe.ts against a temp repo: result file `node_modules/\\n`, status ` M .gitignore`, diff `-.metaproject/runtime/`.",
+    "confidence": "high",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": 256,
+    "quote": "  if (sameApartFromBlankLines(stripped, head)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-1",
+    "class_scope": {
+      "sites": [
+        "src/lib/metaproject-gitignore.ts moveBlockOutOfGitignore"
+      ],
+      "enumeration_method": "Compared origin/main syncMetaprojectGitignore (withoutLegacyMetaprojectIgnore) with every restore-eligibility check in moveBlockOutOfGitignore"
+    },
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun rl2-gitignore-probe.ts: .gitignore ends 'node_modules/\\n', status ' M .gitignore', diff '-.metaproject/runtime/'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "info/exclude in the common dir is shared by all worktrees and the block is keyed only by subdirectory prefix; wantedIgnoreLines trims entries against the CURRENT worktree's .gitignore, so update in a worktree whose branch already ignores them shrinks the shared block for every other worktree.",
+    "impact": "update in `feature` (no keryx lines in .gitignore) writes 36 entries; update in `main` (lines committed) shrinks the shared block to 1; in `feature` `.metaproject/runtime/` is no longer ignored and shows in git status. Flip-flops per last worktree.",
+    "suggested_fix": "Do not trim the shared block against one worktree's .gitignore; always write all entries (redundant is harmless), or key the block per worktree.",
+    "evidence": "scratchpad/rl2-worktree-probe.ts: after sync in main the notice says 1 entry; `git check-ignore --no-index .metaproject/runtime/x` in feature exits 1.",
+    "confidence": "high",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": 189,
+    "quote": "    if (explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-2",
+    "class_scope": {
+      "sites": [
+        "src/lib/metaproject-gitignore.ts wantedIgnoreLines",
+        "src/lib/git-local-ignore.ts replaceLocalIgnoreBlock / blockMarkers"
+      ],
+      "enumeration_method": "Traced every input to the block content and its one writer"
+    },
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun rl2-worktree-probe.ts: feature update writes 36 entries; main update rewrites shared block to 1 entry; git check-ignore --no-index .metaproject/runtime/x in feature exits 1.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Moving hooks to shared deletes/rewrites .claude/settings.local.json without the HEAD/index check the toLocal branch has.",
+    "impact": "A repo that commits settings.local.json with only keryx hooks gets ` D .claude/settings.local.json` on switching to shared.",
+    "suggested_fix": "Apply the same tracked check; strip and report instead of removing.",
+    "evidence": "Code trace of moveClaudeSettingsHooks !toLocal branch.",
+    "confidence": "medium",
+    "file": "src/integrations/claude-settings-migration.ts",
+    "line": 132,
+    "quote": "    if (nothingElse) await removeContained(projectRoot, from);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-3",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "claude-settings-migration.ts !toLocal branch calls removeContained with no readHeadBlob/indexHoldsFile check; only toLocal branch consults HEAD.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "ensureLocalIgnorePatterns has no non-test caller and ignores the subdirectory prefix.",
+    "impact": "None today.",
+    "suggested_fix": "Delete it with its tests or route through blockMarkers.",
+    "evidence": "keryx ctx rg ensureLocalIgnorePatterns src excluding tests: definition only.",
+    "confidence": "high",
+    "file": "src/lib/git-local-ignore.ts",
+    "line": 79,
+    "quote": "export async function ensureLocalIgnorePatterns(",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL2-4",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg ensureLocalIgnorePatterns src: definition, a comment, tests and ratchet reason string only.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "removeBlock trims with LF-only regexes and rejoins with bare \\n, so the strip-only path leaves mixed CRLF/LF and an extra blank line in CRLF files.",
+    "impact": "CRLF AGENTS.md on a strip-only path (other uncommitted edits, untracked, no git, block in HEAD) becomes `Intro line\\r\\n\\r\\n\\n\\r\\nAfter line`; notice tells the user to commit it.",
+    "suggested_fix": "Detect EOL, trim /(\\r?\\n)+$/ and /^(\\r?\\n)+/, rejoin with the detected EOL; add a CRLF test.",
+    "evidence": "scratchpad/rl-crlf.ts on a non-git temp dir reproduced the output.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 556,
+    "quote": "  const before = content.slice(0, start).replace(/\\n+$/, \"\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-1",
+    "class_scope": {
+      "sites": [
+        "src/rules/entrypoint-writers.ts removeBlock",
+        "src/rules/entrypoint-writers.ts moveBlockOutOfTeamFile",
+        "src/rules/entrypoint-writers.ts planLocalLeftovers"
+      ],
+      "enumeration_method": "Every caller of the non-exported removeBlock in entrypoint-writers.ts"
+    },
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun rl-crlf.ts on a non-git temp dir: output '# Team\\r\\n\\r\\nIntro line\\r\\n\\r\\n\\n\\r\\nAfter line\\r\\n'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Strip-only paths never check whether the index still holds the block; staged-never-committed file called 'untracked'.",
+    "impact": "A previously `git add`-ed AGENTS.md keeps the block in the index silently; a plain commit commits it.",
+    "suggested_fix": "After a strip, if the index differs, print the restore --staged hint.",
+    "evidence": "Trace of moveBlockOutOfTeamFile strip branches.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": null,
+    "quote": "  await writeContained(projectRoot, relativePath, removeBlock(content, filePath, head));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 526, 541, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-2",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "moveBlockOutOfTeamFile strip-only writes have no indexHoldsFile check or restore --staged hint (hint only in restore branch); staged-never-committed file called 'untracked'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "When AGENTS.md is gone, an existing keryx-generated AGENTS.override.md stays and keeps shadowing; update only says 'skipped'.",
+    "impact": "Codex keeps following stale team text after AGENTS.md is deleted/renamed; doctor reports source-missing.",
+    "suggested_fix": "Remove a provenance-carrying untracked override in this branch, or name it in the notice.",
+    "evidence": "Trace of writeCodexLocalTargets / codexOverrideState.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 204,
+    "quote": "    if (!(await pathExists(sourcePath))) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-3",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "writeCodexLocalTargets missing-source branch emits 'skipped' and continues without inspecting the existing override; codexOverrideState returns source-missing.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "writeClaudeLocalTarget writes the block into CLAUDE.local.md without checking whether it is tracked.",
+    "impact": "A repo committing CLAUDE.local.md shows it dirty after every update.",
+    "suggested_fix": "Skip with a notice when tracked.",
+    "evidence": "Trace of writeEntrypointBlocks -> writeClaudeLocalTarget.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 330,
+    "quote": "  await ensureMetaprojectReference(filePath, blockOptions);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-4",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-011",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "writeClaudeLocalTarget calls ensureMetaprojectReference with no tracked/HEAD check; tracked() used only in planLocalLeftovers.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "A developer's empty or heading-only CLAUDE.local.md is deleted on local->shared switch (no provenance).",
+    "impact": "No content lost.",
+    "suggested_fix": "Require the heading keryx writes, or a marker.",
+    "evidence": "Trace of planLocalLeftovers.",
+    "confidence": "high",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 426,
+    "quote": "    } else if (holdsOnlyLocalHeading(next) && !(await tracked(unused.path))) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-5",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "holdsOnlyLocalHeading returns true for empty/whitespace content; planLocalLeftovers then marks an untracked file 'remove'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "codex shared + claude local without CLAUDE.md: CLAUDE.local.md gets the block plus @AGENTS.md which also carries it.",
+    "impact": "Index block loaded twice (duplicated context).",
+    "suggested_fix": "Skip the block when the imported file is a shared target carrying it.",
+    "evidence": "Trace of writeEntrypointBlocks.",
+    "confidence": "medium",
+    "file": "src/rules/entrypoint-writers.ts",
+    "line": 325,
+    "quote": "      agentsFile !== undefined && !hasClaudeFile",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "RL1-6",
+    "global_id": "2026-09-30-ingest-feat-local-scope-entrypoints#F-013",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Block written unconditionally and @AGENTS.md import added when no CLAUDE.md; whether AGENTS.md carries the block in the codex-shared case was not constructed or executed.",
+      "verifier": "review-verifier"
+    }
+  }
+]

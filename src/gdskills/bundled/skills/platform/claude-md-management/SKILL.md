@@ -85,7 +85,7 @@ Present diff preview:
 - NEVER remove existing entries without explanation
 - NEVER add entries that duplicate what's already there
 - Keep CLAUDE.md files under 100 lines
-- Prefer project-level for project-specific things
+- Prefer project-level for project-specific things; never write inside the `<!-- keryx:index -->` markers (in `CLAUDE.local.md` by default, `CLAUDE.md` under shared scope) — keryx regenerates that block
 
 ## Red Flags
 

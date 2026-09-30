@@ -12,22 +12,22 @@
         {
           "surface": "block",
           "state": "native",
-          "settingsFile": ".claude/settings.json"
+          "settingsFile": ".claude/settings.local.json"
         },
         {
           "surface": "prompt-gate",
           "state": "native",
-          "settingsFile": ".claude/settings.json"
+          "settingsFile": ".claude/settings.local.json"
         },
         {
           "surface": "inject-context",
           "state": "native",
-          "settingsFile": ".claude/settings.json"
+          "settingsFile": ".claude/settings.local.json"
         },
         {
           "surface": "observe",
           "state": "native",
-          "settingsFile": ".claude/settings.json"
+          "settingsFile": ".claude/settings.local.json"
         },
         {
           "surface": "agents",

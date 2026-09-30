@@ -9,6 +9,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { renderCodexOverride } from "../rules/entrypoint-writers";
 import {
   claudeWorktreesDir,
   commitsAheadOfMain,
@@ -206,6 +207,72 @@ describe("review round 1, REG-2: a gitignored file is NOT invisible to hasUncomm
     await ageDir(worktreePath, 30);
 
     expect(await hasUncommittedChanges(worktreePath)).toBe(false);
+  });
+});
+
+// Flow 361 T9: `keryx update` writes CLAUDE.local.md, AGENTS.override.md and
+// .claude/settings.local.json into every checkout it runs in, gitignored
+// through info/exclude. Content keryx generated is regenerable and must not by
+// itself keep a stale worktree alive; a developer's own words in the same
+// files, and any other ignored or untracked file, still must.
+describe("flow 361: keryx's own gitignored local targets do not block a prune", () => {
+  const BLOCK = "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n";
+  const GENERATED: Record<string, string> = {
+    "CLAUDE.local.md":
+      "# Local Claude Instructions\n\n<!-- keryx: this file stops Claude Code from falling back to AGENTS.md; the import keeps the team instructions loaded. -->\n@AGENTS.md\n\n" +
+      BLOCK,
+    "AGENTS.override.md": renderCodexOverride({ source: "AGENTS.md", sourceContent: "# Team\n", block: BLOCK }),
+    ".claude/settings.local.json": `${JSON.stringify(
+      { hooks: { PreToolUse: [{ _keryxManaged: "security-agent-hooks", matcher: "*", hooks: [{ type: "command", command: "keryx security check-output --runtime claude" }] }] }, _keryxManaged: ["security-agent-hooks"] },
+      null,
+      2,
+    )}\n`,
+  };
+
+  /** A worktree of a main that ignores the three local targets the way `keryx update` does: through info/exclude. */
+  async function worktreeWithLocalTargets(name: string, files: Record<string, string>): Promise<string> {
+    await git(mainRoot, ["config", "core.excludesFile", path.join(mainRoot, ".git", "no-global-excludes")]);
+    await mkdir(path.join(mainRoot, ".git", "info"), { recursive: true });
+    await writeFile(path.join(mainRoot, ".git", "info", "exclude"), `# keryx:begin\n${Object.keys(GENERATED).join("\n")}\n# keryx:end\n`, "utf8");
+    const worktreePath = await addWorktree(name, `agent/${name}`);
+    for (const [rel, content] of Object.entries(files)) {
+      await mkdir(path.dirname(path.join(worktreePath, rel)), { recursive: true });
+      await writeFile(path.join(worktreePath, rel), content, "utf8");
+    }
+    await ageDir(worktreePath, 30);
+    return worktreePath;
+  }
+
+  test("a worktree whose only ignored content is keryx's generated local targets IS prunable", async () => {
+    const worktreePath = await worktreeWithLocalTargets("local-targets", GENERATED);
+    expect(await hasUncommittedChanges(worktreePath)).toBe(false);
+    const stale = await findStaleWorktrees(path.join(mainRoot, ".claude", "worktrees"), { maxAgeDays: 7 });
+    expect(stale.map((s) => s.name)).toContain("local-targets");
+  });
+
+  test("any other ignored file beside them still blocks the prune", async () => {
+    const worktreePath = await worktreeWithLocalTargets("local-targets-env", GENERATED);
+    await writeFile(path.join(mainRoot, ".git", "info", "exclude"), `.env\n# keryx:begin\n${Object.keys(GENERATED).join("\n")}\n# keryx:end\n`, "utf8");
+    await writeFile(path.join(worktreePath, ".env"), "TOKEN=not-a-real-secret\n", "utf8");
+    expect(await hasUncommittedChanges(worktreePath)).toBe(true);
+  });
+
+  test("a local target git does not ignore is an untracked change and blocks the prune", async () => {
+    const worktreePath = await worktreeWithLocalTargets("local-targets-unignored", {});
+    await writeFile(path.join(mainRoot, ".git", "info", "exclude"), "", "utf8");
+    await writeFile(path.join(worktreePath, "CLAUDE.local.md"), GENERATED["CLAUDE.local.md"] ?? "", "utf8");
+    expect(await hasUncommittedChanges(worktreePath)).toBe(true);
+  });
+
+  test("a developer's own words in a local target block the prune", async () => {
+    for (const [name, files] of [
+      ["own-claude-notes", { "CLAUDE.local.md": `${GENERATED["CLAUDE.local.md"]}\nMy sandbox URLs: http://localhost:3000\n` }],
+      ["own-override", { "AGENTS.override.md": "# Hand-written override\n" }],
+      ["own-permissions", { ".claude/settings.local.json": `${JSON.stringify({ permissions: { allow: ["Bash(make test)"] } }, null, 2)}\n` }],
+    ] as const) {
+      const worktreePath = await worktreeWithLocalTargets(name, files);
+      expect(await hasUncommittedChanges(worktreePath)).toBe(true);
+    }
   });
 });
 

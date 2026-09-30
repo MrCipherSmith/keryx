@@ -52,12 +52,11 @@ import {
   securityCapabilities,
 } from "../security/templates";
 import {
+  agentSettingsHasSecuritySentinel,
   installSecurityAgentHooks,
   uninstallSecurityAgentHooks,
-  agentSettingsPath,
-  AGENT_HOOKS_SENTINEL,
-  AGENT_SETTINGS_RELATIVE_PATH,
 } from "../security/agent-hooks";
+import { decideClaudeSettingsTarget, moveClaudeSettingsHooks } from "../integrations/service";
 import { renderMemoryConfig } from "../memory/config";
 import { MEMORY_TYPES } from "../memory/types";
 import {
@@ -119,11 +118,20 @@ import {
   parseDivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import {
+  declaredImportSources,
+  ignoredLocalTargetPaths,
+  manifestAgentEntrypoints,
+  resolveProjectEntrypoints,
+  type AgentEntrypointsManifest,
+  type ProjectEntrypoints,
+} from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
+import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
-  syncMetaprojectGitignore,
+  syncMetaprojectIgnoreRules,
 } from "../lib/metaproject-gitignore";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { registerCapabilitiesFromArgs } from "../capability/registry";
@@ -233,11 +241,7 @@ type MetaprojectManifest = {
   };
   modules: Record<string, ModuleConfig>;
   updatedAt: string;
-  agentEntrypoints: {
-    index: string;
-    readme: string;
-    root: string[];
-  };
+  agentEntrypoints: AgentEntrypointsManifest;
 };
 
 export async function initCommand(args: string[]): Promise<void> {
@@ -511,7 +515,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableSecurityAgentHook = true;
     } else {
       enableSecurityAgentHook = await confirm(
-        "Install project-local .claude/settings.json security hooks (guard agent input/output)? Recommended",
+        "Install Claude Code security hooks in .claude/settings.local.json (guard agent input/output)? Recommended",
         true,
       );
     }
@@ -550,7 +554,7 @@ export async function initCommand(args: string[]): Promise<void> {
   if (options.preview) {
     const previewRuleSources = await listRootEntrypoints(
       projectRoot,
-      existingManifest?.agentEntrypoints?.root ?? [],
+      declaredImportSources(existingManifest?.agentEntrypoints),
     );
     const plan = await planRoutingEntrypointPair(
       metaprojectRoot,
@@ -565,33 +569,66 @@ export async function initCommand(args: string[]): Promise<void> {
       formatInstallPlan(plan, {
         ...(divergenceResolution === undefined ? {} : { resolution: divergenceResolution }),
         relativeTo: projectRoot,
-        notes: initPreviewNotes({
-          alreadyExists,
-          ruleSources: previewRuleSources,
-          hooks: {
-            gdgraph: enableGdgraph && enableGdgraphHook,
-            gdskills: enableGdskills && enableGdskillsHook,
-            health: enableHealth && enableHealthHook,
-            testingPostCommit: enableTesting && enableTestingPostCommitHook,
-            testingPrePush: enableTesting && enableTestingPrePushHook,
-            securityPrePush: enableSecurity && enableSecurityPrePushHook,
-            securityAgent: enableSecurity && enableSecurityAgentHook,
-          },
-        }),
+        notes: [
+          ...initPreviewNotes({
+            alreadyExists,
+            ruleSources: previewRuleSources,
+            hooks: {
+              gdgraph: enableGdgraph && enableGdgraphHook,
+              gdskills: enableGdskills && enableGdskillsHook,
+              health: enableHealth && enableHealthHook,
+              testingPostCommit: enableTesting && enableTestingPostCommitHook,
+              testingPrePush: enableTesting && enableTestingPrePushHook,
+              securityPrePush: enableSecurity && enableSecurityPrePushHook,
+              securityAgent: enableSecurity && enableSecurityAgentHook,
+            },
+          }),
+          // Flow 361: where the managed block, the ignore block and the
+          // Claude hooks would go, and what info/exclude would hold — read-only.
+          ...(await previewEntrypointLines(projectRoot, existingManifest?.agentEntrypoints)),
+        ],
       }),
     );
     return;
   }
 
   await createBaseStructure(metaprojectRoot);
-  await syncMetaprojectGitignore(projectRoot);
   const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
   }
+  // Flow 361: a fresh project gets every target local (`defaultEntrypointTargets`).
+  // It is reached through the same HEAD decision a legacy manifest takes, so
+  // a block the team already committed to AGENTS.md/CLAUDE.md stays shared
+  // instead of being stripped out of a tracked file by a re-init.
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints);
+  const entrypointNotices = [...entrypoints.notices];
+  // The Claude hooks target is settled from the settings files themselves:
+  // managed hooks the team committed keep it shared, anything else is local.
+  const claudeSettings = await decideClaudeSettingsTarget(projectRoot);
+  entrypoints.targets.claudeSettings = claudeSettings.target;
+  entrypointNotices.push(...claudeSettings.notices);
+  // Ignore rules go to info/exclude, never to the tracked .gitignore, and
+  // before the local targets exist — so they are ignored from their first byte.
+  await syncMetaprojectIgnoreRules(projectRoot, {
+    localTargets: ignoredLocalTargetPaths(entrypoints.targets),
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
+  });
+  // Every managed Claude hook in one file only: hooks an older keryx left in
+  // the other one are moved before the security installer below runs.
+  await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
+    entrypointNotices.push(line);
+  });
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
+    targets: entrypoints.targets,
+    manifestSources: entrypoints.importSources,
     createDefault: true,
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
   });
   const agentRuleSources = syncedAgentRules.map((rule) => rule.source);
 
@@ -720,7 +757,7 @@ export async function initCommand(args: string[]): Promise<void> {
     enableSecurityPrePushHook,
     enableSecurityAgentHook,
     enableSac,
-    agentRuleSources,
+    entrypoints,
     existingManifest,
   });
 
@@ -1137,6 +1174,12 @@ export async function initCommand(args: string[]): Promise<void> {
   if (enableSac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
   }
+  if (entrypointNotices.length > 0) {
+    heading("Agent entrypoints");
+    for (const notice of entrypointNotices) {
+      note(notice);
+    }
+  }
   // Successful cleanups (see `InstallGdskillsResult.notices`) get their own
   // heading; "Warnings" stays the list of things that still need a human.
   if (gdskillsNotices.length > 0) {
@@ -1160,7 +1203,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // happened: run `keryx init` before `git init` and every hook reads installed
   // while nothing was written and nothing would ever fire. Ask git first, and
   // say "skipped" when the answer is no. The agent hook is not a git hook — it
-  // lands in .claude/settings.json and works without a repository.
+  // lands in the Claude settings file and works without a repository.
   const gitHooksRoot = await resolveGitHooksRoot(projectRoot);
   const hookLines: Array<[string, boolean]> = [];
   if (enableGdgraph) {
@@ -1293,10 +1336,13 @@ function initPreviewNotes(input: {
       "metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
       "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
   );
+  // Flow 361: whether a real run creates a team file depends on the scope —
+  // under local scope it never does. The "Entrypoints:" lines below say, per
+  // runtime, what it would write instead.
   notes.push(
     input.ruleSources.length > 0
       ? `Root rule sources that would be imported: ${input.ruleSources.join(", ")}.`
-      : "No root AGENTS.md/CLAUDE.md found; a real run would create a default one.",
+      : "No root AGENTS.md/CLAUDE.md found, so no team file would be imported; the Entrypoints lines say what a real run would write for each runtime.",
   );
   const intended = Object.entries(input.hooks)
     .filter(([, on]) => on)
@@ -1334,7 +1380,7 @@ function printInitHelp(): void {
     { flag: "--no-testing-post-commit-hook", desc: "Do not install the testing post-commit refresh hook." },
     { flag: "--no-testing-pre-push-hook", desc: "Do not install the testing pre-push gate hook." },
     { flag: "--no-security-hook", desc: "Do not install the security pre-push gate hook." },
-    { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
+    { flag: "--no-security-agent-hook", desc: "Do not install the Claude Code security agent hooks (.claude/settings.local.json)." },
     { flag: "--mcp", desc: "Enable the opt-in MCP server module (default off)." },
     { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
     { flag: "--sac", desc: "Enable the opt-in SAC (shared agent context) module (default off)." },
@@ -1628,18 +1674,6 @@ async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
   );
 }
 
-// True when .claude/settings.json still carries the managed security agent-hook
-// sentinel (i.e. the agent hooks were previously installed there).
-async function agentSettingsHasSecuritySentinel(
-  projectRoot: string,
-): Promise<boolean> {
-  const file = agentSettingsPath(projectRoot);
-  if (!(await pathExists(file))) {
-    return false;
-  }
-  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
-}
-
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
   const projectRoot = projectRootOf(root);
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
@@ -1720,7 +1754,7 @@ function buildManifest({
   enableSecurityPrePushHook,
   enableSecurityAgentHook,
   enableSac,
-  agentRuleSources,
+  entrypoints,
   existingManifest,
 }: {
   projectName: string;
@@ -1742,7 +1776,7 @@ function buildManifest({
   enableSecurityPrePushHook: boolean;
   enableSecurityAgentHook: boolean;
   enableSac: boolean;
-  agentRuleSources: string[];
+  entrypoints: ProjectEntrypoints;
   existingManifest?: MetaprojectManifest | undefined;
 }): MetaprojectManifest {
   const existingProjectSkillRegistry =
@@ -1916,7 +1950,7 @@ function buildManifest({
                       ? { prePush: ".git/hooks/pre-push" }
                       : {}),
                     ...(enableSecurityAgentHook
-                      ? { agent: AGENT_SETTINGS_RELATIVE_PATH }
+                      ? { agent: entrypoints.targets.claudeSettings.path }
                       : {}),
                   },
                 }
@@ -1943,11 +1977,10 @@ function buildManifest({
           },
     },
     updatedAt: new Date().toISOString(),
-    agentEntrypoints: {
+    agentEntrypoints: manifestAgentEntrypoints(existingManifest?.agentEntrypoints, entrypoints, {
       index: ".metaproject/index.md",
       readme: ".metaproject/README.md",
-      root: agentRuleSources,
-    },
+    }),
   };
 }
 

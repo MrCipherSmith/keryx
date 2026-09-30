@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
+import { isCodexOverrideStale } from "../rules/entrypoint-writers";
 import { rulesCommand } from "./rules";
 
 // R1-F20 (round 4 fix): the reviewer's cloned-repo reproduction —
@@ -84,7 +85,7 @@ test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => 
     const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
     const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
     const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
-      agentEntrypoints: { root: string[] };
+      agentEntrypoints: { root: unknown[] };
     };
 
     expect(agents).toContain("type: agent-entrypoint-rule");
@@ -98,21 +99,34 @@ test("rules sync imports AGENTS and CLAUDE as high-priority rules", async () => 
     expect(index).not.toContain("| AGENTS.md | high |");
     expect(routing).toContain("| AGENTS.md | high |");
     expect(routing).toContain("| CLAUDE.md | high |");
-    const rootAgents = await readFile(path.join(root, "AGENTS.md"), "utf8");
-    expect(rootAgents).toContain("**HARD GATE:**");
-    expect(rootAgents).toContain("explicitly read `.metaproject/index.md`");
-    expect(rootAgents).toContain("If you create or switch to a git worktree");
-    expect(rootAgents).toContain("Give every subagent prompt the exact project/worktree root");
-    expect(rootAgents).toContain("only when it will navigate the codebase itself");
-    expect(rootAgents).toContain("This Metaproject block is optional project-local routing.");
-    expect(rootAgents.indexOf("<!-- keryx:index -->")).toBeLessThan(rootAgents.indexOf("Use local conventions."));
-    expect(manifest.agentEntrypoints.root).toEqual(["AGENTS.md", "CLAUDE.md"]);
+    // Flow 361: the block goes to the local targets, not into the team files;
+    // the Codex override carries it ahead of the AGENTS.md content it copies.
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe("# Agent Rules\n\nUse local conventions.\n");
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe("# Claude Rules\n\nPrefer compact context.\n");
+    const localClaude = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    expect(localClaude).toContain("**HARD GATE:**");
+    expect(localClaude).toContain("explicitly read `.metaproject/index.md`");
+    expect(localClaude).toContain("If you create or switch to a git worktree");
+    expect(localClaude).toContain("Give every subagent prompt the exact project/worktree root");
+    expect(localClaude).toContain("only when it will navigate the codebase itself");
+    expect(localClaude).toContain("This Metaproject block is optional project-local routing.");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(override).toContain("**HARD GATE:**");
+    expect(override.indexOf("<!-- keryx:index -->")).toBeLessThan(override.indexOf("Use local conventions."));
+    // The legacy string array is read, and rewritten to the entry form.
+    expect(manifest.agentEntrypoints.root).toEqual([
+      { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" },
+      { runtime: "claude", path: "CLAUDE.local.md", scope: "local" },
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("rules sync creates default AGENTS and CLAUDE entrypoints when none exist", async () => {
+// Flow 361 (H6): this used to pin "creates default AGENTS and CLAUDE
+// entrypoints when none exist". Under local scope keryx no longer creates a
+// tracked team file; the block goes to CLAUDE.local.md and Codex is skipped.
+test("rules sync creates no tracked AGENTS or CLAUDE entrypoint when none exist", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-rules-empty-"));
 
   try {
@@ -134,18 +148,31 @@ test("rules sync creates default AGENTS and CLAUDE entrypoints when none exist",
       "utf8",
     );
 
-    await rulesCommand(["sync"], root);
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (...values: unknown[]) => {
+      logs.push(values.map(String).join(" "));
+    };
+    try {
+      await rulesCommand(["sync"], root);
+    } finally {
+      console.log = originalLog;
+    }
 
-    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toContain(".metaproject/index.md");
-    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain(".metaproject/index.md");
-    expect(await readFile(path.join(root, ".metaproject", "rules", "agents-md.md"), "utf8")).toContain("priority: high");
-    expect(await readFile(path.join(root, ".metaproject", "rules", "claude-md.md"), "utf8")).toContain("priority: high");
+    const entries = await readdir(root);
+    expect(entries).not.toContain("AGENTS.md");
+    expect(entries).not.toContain("CLAUDE.md");
+    expect(entries).not.toContain("AGENTS.override.md");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(".metaproject/index.md");
+    expect(logs.some((line) => line.includes("Codex: skipped") && line.includes("AGENTS.md does not exist"))).toBe(true);
+    // Nothing to import, and a local target is never mirrored into tracked rules.
+    const ruleFiles = await readdir(path.join(root, ".metaproject", "rules"));
+    expect(ruleFiles.filter((name) => name.endsWith(".md") && name !== "README.md")).toEqual([]);
     const index = await readFile(path.join(root, ".metaproject", "index.md"), "utf8");
     const routing = await readFile(path.join(root, ".metaproject", "routing.md"), "utf8");
     expect(index).toContain("routing.md");
-    expect(index).not.toContain("| AGENTS.md | high |");
-    expect(routing).toContain("| AGENTS.md | high |");
-    expect(routing).toContain("| CLAUDE.md | high |");
+    expect(routing).not.toContain("| AGENTS.md | high |");
+    expect(routing).not.toContain("| CLAUDE.md | high |");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -191,18 +218,28 @@ Use local conventions.
 
     await rulesCommand(["sync"], root);
 
+    // Flow 361: outside a git repository the legacy entry migrates to local,
+    // so the old block is taken out of AGENTS.md (strip-only: no HEAD to
+    // restore to) and the current one is written to the local targets.
     const rootAgents = await readFile(path.join(root, "AGENTS.md"), "utf8");
-    expect(rootAgents).toContain("**HARD GATE:**");
-    expect(rootAgents).toContain("explicitly read `.metaproject/index.md`");
-    expect(rootAgents).toContain("Do not dispatch subagents until the Metaproject hard gate is complete.");
-    expect(rootAgents).not.toContain("Read [.metaproject/index.md](.metaproject/index.md)");
-    expect(rootAgents).toContain("Use local conventions.");
+    expect(rootAgents).toBe("# Agent Rules\n\nUse local conventions.\n");
+    for (const localTarget of ["CLAUDE.local.md", "AGENTS.override.md"]) {
+      const upgraded = await readFile(path.join(root, localTarget), "utf8");
+      expect(upgraded).toContain("**HARD GATE:**");
+      expect(upgraded).toContain("explicitly read `.metaproject/index.md`");
+      expect(upgraded).toContain("Do not dispatch subagents until the Metaproject hard gate is complete.");
+      expect(upgraded).not.toContain("Read [.metaproject/index.md](.metaproject/index.md)");
+    }
+    expect(await readFile(path.join(root, "AGENTS.override.md"), "utf8")).toContain("Use local conventions.");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("rules sync creates CLAUDE when only AGENTS exists", async () => {
+// Flow 361 (H6, H1): this used to pin "creates CLAUDE when only AGENTS
+// exists". No tracked CLAUDE.md is created any more; CLAUDE.local.md is, and
+// because that file stops Claude Code's AGENTS.md fallback it imports AGENTS.md.
+test("rules sync creates CLAUDE.local.md, not CLAUDE.md, when only AGENTS exists", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-rules-claude-"));
 
   try {
@@ -228,12 +265,20 @@ test("rules sync creates CLAUDE when only AGENTS exists", async () => {
 
     await rulesCommand(["sync"], root);
 
-    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain(".metaproject/index.md");
-    expect(await readFile(path.join(root, ".metaproject", "rules", "claude-md.md"), "utf8")).toContain('source: "CLAUDE.md"');
+    const entries = await readdir(root);
+    expect(entries).not.toContain("CLAUDE.md");
+    const localClaude = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    expect(localClaude).toContain(".metaproject/index.md");
+    expect(localClaude.split("\n")).toContain("@AGENTS.md");
+    expect(await readdir(path.join(root, ".metaproject", "rules"))).not.toContain("claude-local-md.md");
+    expect(await readdir(path.join(root, ".metaproject", "rules"))).not.toContain("agents-override-md.md");
     const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
-      agentEntrypoints: { root: string[] };
+      agentEntrypoints: { root: unknown[] };
     };
-    expect(manifest.agentEntrypoints.root).toEqual(["AGENTS.md", "CLAUDE.md"]);
+    expect(manifest.agentEntrypoints.root).toEqual([
+      { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" },
+      { runtime: "claude", path: "CLAUDE.local.md", scope: "local" },
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -298,7 +343,15 @@ When reviewing or implementing pipeline changes, use the review orchestrator wor
     );
 
     expect(claude).toContain("Answer in Russian");
-    expect(claude).toContain(".metaproject/index.md");
+    // Flow 361: distill rewrites the team file, and under local scope it does
+    // not put the managed block back into it — the block is in the local targets.
+    expect(claude).not.toContain("<!-- keryx:index -->");
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(".metaproject/index.md");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(override).toContain("<!-- keryx:index -->");
+    // The override is regenerated AFTER the rewrite, so it is not born stale.
+    expect(await isCodexOverrideStale(root, { path: "AGENTS.override.md", source: "AGENTS.md" })).toBe(false);
+    expect(override).toContain(await readFile(path.join(root, "AGENTS.md"), "utf8"));
     expect(claude).not.toContain("src/pipelines modules");
     expect(index).toContain("routing.md");
     expect(index).not.toContain("distilled-entrypoints");

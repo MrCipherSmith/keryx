@@ -30,6 +30,20 @@ validate path per physical settings file — so two surfaces that target the
 same file (say, the ctx guard and a security check) can never destroy each
 other's entries again.
 
+**Claude Code's settings file.** Every Claude surface (ctx guard, orient, both
+security checks, the learning observer, and the standalone jev edit guard)
+resolves its file through one resolver, so they always land in the same one:
+`.claude/settings.local.json` — per developer and gitignored — by default, or
+the tracked `.claude/settings.json` when `agentEntrypoints.claudeSettings` in
+`metaproject.json` has scope `shared`. Claude Code merges the two files, so a
+hook present in both would fire twice; keryx keeps each managed group in one of
+them. While the tracked file still holds keryx-managed groups (committed by the
+team, or waiting for `keryx update` to move them), installers keep writing
+there rather than start a second copy. Cloud and remote Claude sessions do not
+read `settings.local.json`; use shared scope for them. See
+[where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
+Other runtimes' settings files are unchanged.
+
 ## Command family
 
 ```text
@@ -206,6 +220,10 @@ unverified against a live install.
   even when `AGENTS.md` itself carries Keryx's block correctly — so a repo
   with, say, a stray `.cursorrules` file can silently keep Zed from ever
   reading Keryx's instructions.
+- **Caveat (local scope):** under the default `scope: "local"` for Codex, the
+  block goes to `AGENTS.override.md`, not `AGENTS.md`, and Zed's list does not
+  include `AGENTS.override.md` or `CLAUDE.local.md`. For Zed to see the block,
+  set the codex entry of `agentEntrypoints.root` to scope `shared`.
 
 ### keryx-shell (placeholder)
 
@@ -245,13 +263,15 @@ also reaches the other. Registered for
 front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
 `alwaysApply: true` front matter), `kiro` (`.kiro/steering/keryx-rules.md`,
 `inclusion: always`), and `windsurf` (`.windsurf/rules/keryx-rules.md`,
-`trigger: always_on`).
+`trigger: always_on`). Unlike the `keryx:index` block, which goes to
+per-developer files by default, this block is always written to those tracked
+files: installing it is an explicit edit to the team's instructions.
 
 The block is written through the same `markdown-block.ts` contract every
 `instructions` surface above uses — install only ever touches its OWN
 `<!-- keryx:rules -->`/`<!-- /keryx:rules -->` span, so a file already
-carrying a `keryx:index` or `keryx:instructions` block (CLAUDE.md/AGENTS.md's
-Metaproject bootstrap, or GEMINI.md/`.github/copilot-instructions.md`'s
+carrying a `keryx:index` or `keryx:instructions` block (the Metaproject block of a
+shared-scope CLAUDE.md/AGENTS.md, or GEMINI.md/`.github/copilot-instructions.md`'s
 pointer block) keeps that other block byte-for-byte. Re-running install after
 a rule changes updates only the block; `keryx integrations uninstall
 --runtime <id> --surface rules-export` removes it and restores the
@@ -340,7 +360,7 @@ No existing script or CI job that calls the old commands needs to change.
 
 **Not aliased:** `keryx ctx hook <runtime>` is the runtime guard *handler*
 itself — the command a host settings file's `PreToolUse` entry invokes
-directly (e.g. `.claude/settings.json`, and now also `.gemini/settings.json`,
+directly (e.g. `.claude/settings.local.json`, and now also `.gemini/settings.json`,
 `.kiro/hooks/keryx-ctx-guard.json`, `.github/hooks/keryx-ctx-guard.json`).
 It is not an installer, so it has no `keryx integrations` equivalent and its
 behavior is unchanged by this registry.

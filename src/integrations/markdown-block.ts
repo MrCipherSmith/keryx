@@ -6,7 +6,9 @@
 // The block is a SHORT pointer, distinct from (and using a different marker
 // than) `src/lib/agent-entrypoint-blocks.ts`'s `renderProjectMetaprojectReferenceBlock`
 // (marker `<!-- keryx:index -->`), which writes the full Metaproject bootstrap
-// into AGENTS.md/CLAUDE.md. That block is long by design — it is the primary
+// into the Claude/Codex entrypoints (CLAUDE.local.md and AGENTS.override.md by
+// default, the shared CLAUDE.md/AGENTS.md under scope "shared" — flow 361).
+// That block is long by design — it is the primary
 // entrypoint file's own routing table. This one is a one-paragraph nudge
 // written into a SECONDARY instructions file a new, experimental harness may
 // or may not actually read, so the two deliberately share phrasing (the hard

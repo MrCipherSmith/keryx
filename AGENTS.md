@@ -5,7 +5,7 @@
 
 **HARD GATE:** Before the first shell command, search, grep, file read, code navigation, planning step, implementation, review, analysis, or subagent dispatch in this repository, explicitly read `.metaproject/index.md`. Do not treat it as a referenced/on-demand file; load it immediately when present.
 
-This Metaproject block is optional project-local routing. If `.metaproject/index.md` or referenced Metaproject files are absent, state `metaproject: unavailable` and continue with the main contents of this AGENTS.md/CLAUDE.md file.
+This Metaproject block is optional project-local routing. If `.metaproject/index.md` or referenced Metaproject files are absent, state `metaproject: unavailable` and continue with the rest of the project's agent instructions.
 
 If you create or switch to a git worktree, repeat the hard gate in that worktree root before any repository action there.
 

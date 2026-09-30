@@ -73,9 +73,15 @@ keryx health run --changed   # normalized health report
 keryx dash                   # human admin dashboard
 ```
 
-`keryx init` creates the `.metaproject/` workspace and connects your existing
-`AGENTS.md` / `CLAUDE.md` entrypoints to it, so agents are routed to the right
-module automatically.
+`keryx init` creates the `.metaproject/` workspace and connects your agents to
+it, so they are routed to the right module automatically. It imports your
+`AGENTS.md` / `CLAUDE.md` as project rules and writes its routing block and
+Claude hooks to per-developer, gitignored files (`CLAUDE.local.md`,
+`AGENTS.override.md`, `.claude/settings.local.json`, ignore rules in
+`.git/info/exclude`), so the files your team tracks stay untouched and
+`git pull` never meets an edit made by keryx. A team that wants the block committed opts
+into `scope: "shared"`; see
+[where the block goes](docs/docs/workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
 
 ### Connect a model provider
 
@@ -736,13 +742,16 @@ enabled. Nine modules are on after `init`; `mcp` is opt-in.
 
 | Runtime | Integration |
 |---------|-------------|
-| Claude Code | `CLAUDE.md` routing, orientation hook, security hooks, MCP server |
-| Codex | `AGENTS.md` routing and orientation hook |
+| Claude Code | `CLAUDE.local.md` routing, orientation hook, security hooks, MCP server |
+| Codex | `AGENTS.override.md` routing and orientation hook |
 | Cursor | Rules/orientation, security hooks, MCP server |
 | Any other agent | Repository-local Markdown/JSON artifacts under `.metaproject/` |
 
-After `init`, agents follow the root `AGENTS.md`/`CLAUDE.md` pointer to
-`.metaproject/index.md`, which routes them to the right capability. Two commands
+After `init`, agents follow the routing block — in `CLAUDE.local.md` and
+`AGENTS.override.md` by default, in the shared `CLAUDE.md`/`AGENTS.md` under
+`scope: "shared"` — to `.metaproject/index.md`, which routes them to the right
+capability. Those local files exist per checkout: run `keryx update` in a new
+worktree to give it the block and hooks. Two commands
 sharpen that routing:
 
 `keryx orient` emits a bounded excerpt of the launch project's own
@@ -930,7 +939,7 @@ flags too much for your rule set; lower it only if you have evidence the
 agent is actually acting on the extra flags.
 
 ```bash
-keryx review jev-edit-guard install   # merge-safe: writes .claude/settings.json
+keryx review jev-edit-guard install   # merge-safe: writes .claude/settings.local.json
 ```
 
 Then opt in per project — the hook is installed but stays silent until this is set:

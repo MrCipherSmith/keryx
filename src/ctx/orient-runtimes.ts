@@ -29,7 +29,7 @@ const ORIENT_SURFACE_ID = "orient";
 // walker logic lives once, in `src/integrations/settings-json.ts`.
 //
 // Verified against current official docs:
-//   claude — UserPromptSubmit, stdout added as context (.claude/settings.json)
+//   claude — UserPromptSubmit, stdout added as context (the Claude settings file)
 //   codex  — UserPromptSubmit, stdout added as context (.codex/hooks.json)
 //   cursor — sessionStart, stdout JSON { additional_context } (.cursor/hooks.json)
 

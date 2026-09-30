@@ -54,7 +54,7 @@ export function renderProjectMetaprojectReferenceBlock({
 
   const policies = [
     "**HARD GATE:** Before the first shell command, search, grep, file read, code navigation, planning step, implementation, review, analysis, or subagent dispatch in this repository, explicitly read `.metaproject/index.md`. Do not treat it as a referenced/on-demand file; load it immediately when present.",
-    "This Metaproject block is optional project-local routing. If `.metaproject/index.md` or referenced Metaproject files are absent, state `metaproject: unavailable` and continue with the main contents of this AGENTS.md/CLAUDE.md file.",
+    "This Metaproject block is optional project-local routing. If `.metaproject/index.md` or referenced Metaproject files are absent, state `metaproject: unavailable` and continue with the rest of the project's agent instructions.",
     "If you create or switch to a git worktree, repeat the hard gate in that worktree root before any repository action there.",
     "The user does not need to know Metaproject command names. Treat natural-language requests as intents, route through `.metaproject/index.md`, then choose the right skill, rule, MCP tool/resource, or `keryx` CLI command yourself.",
     "Do not dispatch subagents until the Metaproject hard gate is complete. Give every subagent prompt the exact project/worktree root, and inline the few routing pointers that subagent actually needs. Require it to read `<project-root>/.metaproject/index.md` only when it will navigate the codebase itself — a subagent doing narrow, bounded work would otherwise load the whole routing index and then re-read it on every one of its own turns, which is the cost the subagent was dispatched to avoid.",

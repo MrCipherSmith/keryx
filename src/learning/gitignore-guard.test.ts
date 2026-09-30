@@ -1,12 +1,14 @@
 // AC10 (W3-AC9) guard: `git check-ignore` matches the two per-machine W3
 // learning paths after `keryx init`'s managed ignore block is applied
-// (`syncMetaprojectGitignore`, the same function `commands/init.ts` calls),
-// and this worktree's own root `.gitignore` carries the same coverage.
+// (`syncMetaprojectIgnoreRules`, the same function `commands/init.ts` calls —
+// since flow 361 it writes `info/exclude`, not `.gitignore`), and this
+// worktree's own root `.gitignore` carries the same coverage.
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { syncMetaprojectGitignore } from "../lib/metaproject-gitignore";
+import { syncMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 
 const OBSERVATION_PATH = ".metaproject/data/learning/observations/2026-09-24.jsonl";
 const CANDIDATE_PATH = ".metaproject/data/learning/candidates/workflow.x-12345678.json";
@@ -21,10 +23,11 @@ test("keryx init's managed ignore block ignores the W3 observation/candidate pat
   try {
     Bun.spawnSync(["git", "init", "-q"], { cwd: root, stdout: "ignore", stderr: "ignore" });
 
-    await syncMetaprojectGitignore(root);
+    await syncMetaprojectIgnoreRules(root);
 
     expect(gitCheckIgnoreExitCode(root, OBSERVATION_PATH)).toBe(0);
     expect(gitCheckIgnoreExitCode(root, CANDIDATE_PATH)).toBe(0);
+    expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

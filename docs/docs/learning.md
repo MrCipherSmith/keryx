@@ -146,8 +146,9 @@ What this rules out by construction:
   30-day TTL: `keryx learn prune` deletes an observation file 30 days after
   its date.
 - **Gitignored.** `.metaproject/data/learning/observations/` and
-  `.metaproject/data/learning/candidates/` are in `.gitignore` and in
-  `keryx init`'s managed ignore block — neither ships in your repository.
+  `.metaproject/data/learning/candidates/` are in the managed ignore block
+  `keryx init` and `keryx update` write to `.git/info/exclude` (unless your own
+  ignore rules already cover them) — neither ships in your repository.
 - **Off switch.** `KERYX_LEARNING=off` makes both the manual `keryx learn
   observe` path and the host-hook `--hook claude` path no-ops; nothing is
   appended. The comparison is an exact, case-sensitive match against the
@@ -176,8 +177,9 @@ keryx integrations install --runtime claude --surface learning-observer
 
 It is opt-in by design (plan decision D5): installing the `claude` runtime
 with no `--surface` never installs this observer, the same way the `agents`
-surface is opt-in — only naming its flag or id does. It shares
-`.claude/settings.json` with the ctx-guard/orient/security-check surfaces,
+surface is opt-in — only naming its flag or id does. It shares the Claude
+settings file (`.claude/settings.local.json` by default, `.claude/settings.json`
+under shared scope) with the ctx-guard/orient/security-check surfaces,
 composing by sentinel so none of them clobber each other's hook entries. The
 command it installs, `keryx learn observe --hook claude`, always exits `0`
 and prints nothing to stdout, so it never affects Claude's own control flow —

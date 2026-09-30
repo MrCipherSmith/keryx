@@ -27,6 +27,7 @@ import {
   parseToolInputCommand,
   parseWindsurfCommand,
 } from "./codecs";
+import { CLAUDE_LOCAL_SETTINGS_PATH, claudeSettingsLocation } from "./claude-settings";
 import type { Settings, SurfaceAdapter } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -138,14 +139,21 @@ function flatCtxValidate(id: string, key: string, missingMessage: string) {
       : [];
 }
 
-export const CTX_GUARD_CLAUDE: SurfaceAdapter = nestedCtxSurface({
-  id: "claude",
-  relativePath: ".claude/settings.json",
-  confidence: "verified",
-  nativeSearchTools: ["Grep"],
-  key: "PreToolUse",
-  sourceDocs: ["src/ctx/runtimes.ts"],
-});
+// Flow 361: the five Claude settings surfaces in this registry (this one,
+// orient, both security checks, the learning observer) all take their file
+// from `claudeSettingsLocation()` — never a literal — so they move together
+// between `.claude/settings.local.json` and `.claude/settings.json`.
+export const CTX_GUARD_CLAUDE: SurfaceAdapter = {
+  ...nestedCtxSurface({
+    id: "claude",
+    relativePath: CLAUDE_LOCAL_SETTINGS_PATH,
+    confidence: "verified",
+    nativeSearchTools: ["Grep"],
+    key: "PreToolUse",
+    sourceDocs: ["src/ctx/runtimes.ts"],
+  }),
+  ...claudeSettingsLocation(),
+};
 
 export const CTX_GUARD_CODEX: SurfaceAdapter = nestedCtxSurface({
   id: "codex",
@@ -393,8 +401,7 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
   sentinel: ORIENT_SENTINEL,
   confidence: "verified",
   sourceDocs: ["src/ctx/orient-runtimes.ts"],
-  settingsFile: (root) => path.join(root, ".claude", "settings.json"),
-  relativePath: ".claude/settings.json",
+  ...claudeSettingsLocation(),
   slots: [
     { key: "hooks", type: "object", access: "owns" },
     { key: "_keryxManaged", type: "array", access: "owns" },
@@ -409,7 +416,7 @@ export const ORIENT_CLAUDE: SurfaceAdapter = {
     ),
   strip: (s) => stripFromHookArray(s, "UserPromptSubmit", ORIENT_SENTINEL),
   validate: orientValidate("claude", "UserPromptSubmit", "claude: missing UserPromptSubmit orientation hook"),
-  label: ".claude/settings.json (UserPromptSubmit)",
+  label: `${CLAUDE_LOCAL_SETTINGS_PATH} (UserPromptSubmit)`,
   groupKey: "UserPromptSubmit",
   groupContainer: "hooks",
 };
@@ -512,8 +519,7 @@ export const SECURITY_CHECK_INPUT_CLAUDE: SurfaceAdapter = {
   sentinel: AGENT_HOOKS_SENTINEL,
   confidence: "verified",
   sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
-  settingsFile: (root) => path.join(root, ".claude", "settings.json"),
-  relativePath: ".claude/settings.json",
+  ...claudeSettingsLocation(),
   slots: [
     { key: "hooks", type: "object", access: "owns" },
     { key: "_keryxManaged", type: "array", access: "owns" },
@@ -542,8 +548,7 @@ export const SECURITY_CHECK_OUTPUT_CLAUDE: SurfaceAdapter = {
   sentinel: AGENT_HOOKS_SENTINEL,
   confidence: "verified",
   sourceDocs: ["src/security/agent-hooks/runtimes.ts"],
-  settingsFile: (root) => path.join(root, ".claude", "settings.json"),
-  relativePath: ".claude/settings.json",
+  ...claudeSettingsLocation(),
   slots: [
     { key: "hooks", type: "object", access: "owns" },
     { key: "_keryxManaged", type: "array", access: "owns" },

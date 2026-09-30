@@ -70,9 +70,17 @@ async function existingFiles(root: string, relativePaths: readonly string[]): Pr
 // and `.kiro/steering/keryx.md` were already covered by the pre-existing list
 // (the latter via `INSTRUCTIONS_KIRO`'s markdown-block target) — kept
 // deduplicated below rather than listed twice.
+//
+// Flow 361: `CLAUDE.local.md` and `AGENTS.override.md` are where keryx now
+// writes its managed block by default — per developer, gitignored, and read by
+// Claude Code (alongside CLAUDE.md) and Codex (INSTEAD of AGENTS.md). Being
+// untracked makes them no less an instruction surface, and a harder one to
+// review, so they are scanned like the team files.
 const INSTRUCTION_FILENAMES = [
   "AGENTS.md",
+  "AGENTS.override.md",
   "CLAUDE.md",
+  "CLAUDE.local.md",
   "GEMINI.md",
   ".github/copilot-instructions.md",
   ".cursor/rules/keryx-rules.mdc",

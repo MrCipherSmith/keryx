@@ -20,7 +20,7 @@
 //     and a 24h success cache (`lib/version-check.ts`).
 
 import packageJson from "../../package.json" with { type: "json" };
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -36,6 +36,8 @@ import { checkGraphStaleness } from "../gdgraph/service";
 import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitToplevel } from "../lib/clone-scope";
+import { claudeHooksExpected, inspectEntrypoints, type EntrypointInspection } from "../rules/entrypoint-inspection";
+import { CODEX_PROJECT_DOC_MAX_BYTES } from "../rules/entrypoint-writers";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
 
@@ -302,6 +304,153 @@ async function checkStandard(cwd: string): Promise<DoctorCheck> {
   return { id: "standard", status: "ok", detail: "workspace is Metaproject Standard compliant" };
 }
 
+const UPDATE_FIX = "keryx update";
+
+/**
+ * Flow 361 (AC11): where keryx's managed content is, against where
+ * `agentEntrypoints` says it belongs — the index block, the ignore block and
+ * the managed Claude hooks, the `AGENTS.override.md` Codex reads, and the
+ * per-developer files this checkout should have. Warnings only: nothing here
+ * breaks keryx, and `keryx update` repairs every one except the two that need
+ * a person (an override keryx did not write, one Codex would cut short).
+ *
+ * Content the team COMMITTED in `HEAD` is the owner-approved shared case — the
+ * writers leave it where it is — so it is named in an `ok` line, never warned
+ * about. Read-only: every question goes to git or the filesystem, nothing is
+ * written (`inspectEntrypoints`).
+ */
+export async function checkEntrypoints(cwd: string): Promise<DoctorCheck> {
+  const projectRoot = resolveProjectRoot(cwd);
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(await readFile(path.join(projectRoot, ".metaproject", "metaproject.json"), "utf8"));
+  } catch {
+    manifest = undefined;
+  }
+  const agentEntrypoints = typeof manifest === "object" && manifest !== null ? (manifest as { agentEntrypoints?: unknown }).agentEntrypoints : undefined;
+  let inspection: EntrypointInspection;
+  try {
+    inspection = await inspectEntrypoints(projectRoot, agentEntrypoints, { hooksExpected: await claudeHooksExpected(projectRoot, manifest) });
+  } catch (error) {
+    return {
+      id: "entrypoints",
+      status: "warn",
+      detail: `could not inspect the agent entrypoints: ${error instanceof Error ? error.message : String(error)}`,
+      fix: UPDATE_FIX,
+    };
+  }
+
+  const warnings: Array<{ detail: string; fix: string }> = [];
+  const localPaths = inspection.targets.root.filter((entry) => entry.scope === "local").map((entry) => entry.path);
+  for (const stray of inspection.strayIndexBlocks) {
+    if (!stray.tracked || stray.committed) continue;
+    warnings.push({
+      detail: `${stray.path} carries the managed keryx:index block as an uncommitted edit, but its scope is local — the block belongs in ${localPaths.join(" / ")}`,
+      fix: UPDATE_FIX,
+    });
+  }
+  const { gitignoreBlock, strayHooks } = inspection;
+  if (gitignoreBlock !== undefined && gitignoreBlock.tracked && !gitignoreBlock.committed) {
+    warnings.push({ detail: ".gitignore carries keryx's managed ignore block as an uncommitted edit — it belongs in info/exclude", fix: UPDATE_FIX });
+  }
+  if (inspection.duplicateHooks && strayHooks !== undefined) {
+    warnings.push({
+      detail: `keryx-managed hooks are in both ${strayHooks.path} and ${strayHooks.to} — Claude Code merges the two files and would run each hook twice`,
+      fix: UPDATE_FIX,
+    });
+  } else if (strayHooks !== undefined && strayHooks.tracked && !strayHooks.committed) {
+    warnings.push({
+      detail: `${strayHooks.path} holds keryx-managed hooks as an uncommitted edit, but claudeSettings scope is ${inspection.targets.claudeSettings.scope} — they belong in ${strayHooks.to}`,
+      fix: UPDATE_FIX,
+    });
+  }
+
+  const codex = inspection.codex;
+  if (codex?.mode === "override") {
+    const overridePath = codex.entry.path;
+    if (codex.state === "stale") {
+      warnings.push({ detail: `${overridePath} is stale — ${codex.entry.source} changed since it was generated, and Codex reads the override instead`, fix: UPDATE_FIX });
+    } else if (codex.state === "source-missing") {
+      warnings.push({ detail: `${overridePath} is stale — its source ${codex.entry.source} no longer exists`, fix: UPDATE_FIX });
+    } else if (codex.state === "source-refused") {
+      warnings.push({
+        detail: `${overridePath} names ${codex.entry.source} as its source, which is reached through a symlink leaving the project — keryx does not read it, so the override is not regenerated`,
+        fix: `point the codex entry's source at a file inside the project in .metaproject/metaproject.json, then keryx update`,
+      });
+    } else if (codex.state === "unmanaged") {
+      warnings.push({
+        detail: `${overridePath} was not generated by keryx, so Codex reads it instead of ${codex.entry.source} and without the managed block`,
+        fix: `remove ${overridePath} and run keryx update, or set the codex entry's mode to "skip"`,
+      });
+    }
+    if (codex.bytes !== undefined && codex.bytes > CODEX_PROJECT_DOC_MAX_BYTES) {
+      warnings.push({
+        detail: `${overridePath} is ${codex.bytes} bytes; Codex reads at most ${CODEX_PROJECT_DOC_MAX_BYTES} bytes of project instructions (project_doc_max_bytes) and truncates the rest`,
+        fix: `shorten ${codex.entry.source} (keryx rules distill splits a large one), then keryx update — or raise project_doc_max_bytes in the Codex config`,
+      });
+    }
+  }
+
+  // A runtime back on shared (or Codex on `skip`) whose local target keryx
+  // has not cleaned yet: Claude reads the block twice, or Codex keeps reading
+  // an old copy of the team file. A file keryx leaves alone is not warned about.
+  for (const leftover of inspection.localLeftovers) {
+    if (leftover.action === "keep") continue;
+    warnings.push({
+      detail:
+        leftover.runtime === "claude"
+          ? `${leftover.path} still carries the managed keryx:index block, but ${leftover.because} — Claude Code reads the block from both ${leftover.path} and ${leftover.instead}`
+          : `${leftover.path} is a keryx-generated override, but ${leftover.because} — Codex reads it instead of ${leftover.instead}`,
+      fix: UPDATE_FIX,
+    });
+  }
+
+  // Hooks still sitting in the other file are what `update` moves in; the
+  // local file being absent meanwhile is the same finding, not a second one.
+  const missing = inspection.localTargets.filter(
+    (target) => target.expected && !target.exists && !(target.kind === "claudeSettings" && strayHooks !== undefined),
+  );
+  if (missing.length > 0) {
+    warnings.push({
+      detail: `${missing.map((target) => target.path).join(", ")} missing in this checkout — local targets are gitignored and per checkout, so a fresh clone or a linked worktree starts without them`,
+      fix: UPDATE_FIX,
+    });
+  }
+  const unignored = inspection.localTargets.filter((target) => target.exists && target.ignored === false);
+  if (unignored.length > 0) {
+    warnings.push({
+      detail: `${unignored.map((target) => target.path).join(", ")} not ignored by git — a per-developer file that would show up in git status`,
+      fix: UPDATE_FIX,
+    });
+  }
+
+  if (warnings.length > 0) {
+    return {
+      id: "entrypoints",
+      status: "warn",
+      detail: warnings.map((warning) => warning.detail).join("; "),
+      fix: [...new Set(warnings.map((warning) => warning.fix))].join("; "),
+    };
+  }
+  return { id: "entrypoints", status: "ok", detail: describeEntrypoints(inspection) };
+}
+
+/** The `ok` line: where the block and the hooks are, with their scope — shared content committed in `HEAD` named as such. */
+function describeEntrypoints(inspection: EntrypointInspection): string {
+  const parts: string[] = [];
+  const local = inspection.localTargets.filter((target) => target.kind !== "claudeSettings" && target.exists).map((target) => target.path);
+  if (local.length > 0) parts.push(`managed block in ${local.join(", ")} (local)`);
+  const committed = inspection.sharedIndexBlocks.filter((entry) => entry.committed).map((entry) => entry.path);
+  const uncommitted = inspection.sharedIndexBlocks.filter((entry) => !entry.committed).map((entry) => entry.path);
+  if (committed.length > 0) parts.push(`managed block in ${committed.join(", ")} (shared, committed in HEAD)`);
+  if (uncommitted.length > 0) parts.push(`managed block in ${uncommitted.join(", ")} (shared)`);
+  if (inspection.codex?.mode === "skip") parts.push("Codex skipped (mode \"skip\")");
+  if (inspection.targetHoldsHooks) {
+    parts.push(`hooks in ${inspection.targets.claudeSettings.path} (${inspection.targets.claudeSettings.scope})`);
+  }
+  return parts.length > 0 ? parts.join("; ") : "no managed entrypoint content to check";
+}
+
 async function checkGraphFreshness(cwd: string): Promise<DoctorCheck> {
   const result = await checkGraphStaleness(cwd);
   if (result.status === "fresh") {
@@ -448,9 +597,9 @@ const NOT_A_KERYX_PROJECT_CHECK: DoctorCheck = {
  * result — a broken MCP config must never hide a stale graph. Order here
  * is the order AC1 lists them in, which is also render/JSON order.
  *
- * Project-scoped checks (mcp, integrations, standard, worktrees, graph/wiki
- * freshness) are skipped entirely outside a keryx project (backlog item 12)
- * — {@link NOT_A_KERYX_PROJECT_CHECK} stands in for all six.
+ * Project-scoped checks (mcp, integrations, standard, entrypoints, worktrees,
+ * graph/wiki freshness) are skipped entirely outside a keryx project (backlog
+ * item 12) — {@link NOT_A_KERYX_PROJECT_CHECK} stands in for all seven.
  */
 export async function buildDoctorReport(
   cwd: string,
@@ -473,6 +622,7 @@ export async function buildDoctorReport(
     Promise.resolve(checkMcp(cwd)),
     checkIntegrations(cwd),
     checkStandard(cwd),
+    checkEntrypoints(cwd),
     checkWorktrees(cwd),
     checkGraphFreshness(cwd),
     checkWikiFreshness(cwd),
@@ -508,8 +658,10 @@ export async function doctorCommand(
 One page: keryx's own version and update availability, the Bun floor,
 ripgrep on PATH, the OS sandbox launcher, providers with a credential
 present (names only), MCP servers and their trust state, integrations
-drift, Metaproject Standard warnings, stale .claude/worktrees entries, and
-graph/wiki freshness. Exits 0 unless something is a "fail".`);
+drift, Metaproject Standard warnings, stale .claude/worktrees entries,
+graph/wiki freshness, and entrypoints: the managed block, ignore rules and
+Claude hooks against where agentEntrypoints says they belong. Exits 0
+unless something is a "fail".`);
     return;
   }
   const report = await buildDoctorReport(cwd, process.env, overrides);

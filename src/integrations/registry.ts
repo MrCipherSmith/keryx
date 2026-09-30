@@ -304,21 +304,36 @@ export function surfacesOf(
   );
 }
 
+/** Every relative path a surface can be installed at: its one `relativePath`, or each project-dependent candidate (flow 361). */
+function surfacePaths(surface: SurfaceAdapter): readonly string[] {
+  return surface.relativePathCandidates ?? (surface.relativePath ? [surface.relativePath] : []);
+}
+
+/** The relative path `surface` installs at in THIS project — `relativePath`, unless the surface resolves it per project. */
+export function surfaceRelativePath(surface: SurfaceAdapter, projectRoot: string): string | undefined {
+  return surface.relativePathFor ? surface.relativePathFor(projectRoot) : surface.relativePath;
+}
+
 /**
  * One `SettingsFileOwner` per distinct relative settings path, aggregating
  * every surface (across every adapter) that targets it. This is what makes
- * `.claude/settings.json` (ctx-guard + orient + both security surfaces) and
- * `.cursor/hooks.json` / `.windsurf/hooks.json` (ctx-guard + both security
- * surfaces) single-owner files instead of two installers racing.
+ * Claude's settings file (ctx-guard + orient + both security surfaces + the
+ * learning observer) and `.cursor/hooks.json` / `.windsurf/hooks.json`
+ * (ctx-guard + both security surfaces) single-owner files instead of two
+ * installers racing. Claude's surfaces are owned at BOTH of its settings
+ * paths (`surfacePaths`): which one a project uses is decided per project,
+ * and `keryx update` needs an owner for the file it moves hooks out of.
  */
 export const SETTINGS_FILE_OWNERS: readonly SettingsFileOwner[] = (() => {
   const byPath = new Map<string, SurfaceAdapter[]>();
   for (const adapter of HARNESS_ADAPTERS) {
     for (const surface of adapter.surfaces) {
-      if (!surface.relativePath || !surface.merge || !surface.strip) continue; // non-JSON artifacts own themselves
-      const list = byPath.get(surface.relativePath) ?? [];
-      list.push(surface);
-      byPath.set(surface.relativePath, list);
+      if (!surface.merge || !surface.strip) continue; // non-JSON artifacts own themselves
+      for (const relativePath of surfacePaths(surface)) {
+        const list = byPath.get(relativePath) ?? [];
+        list.push(surface);
+        byPath.set(relativePath, list);
+      }
     }
   }
   return [...byPath.entries()].map(([relativePath, surfaces]) => createSettingsFileOwner(relativePath, surfaces));
@@ -367,39 +382,44 @@ export function assertRegistryCoherent(adapters: readonly HarnessAdapter[] = HAR
       seenIds.add(surface.id);
     }
   }
+  // Flow 361: both checks below run per path a surface CAN be installed at
+  // (`surfacePaths`), not only its default — a surface that resolves its file
+  // per project shares each of those files with its siblings.
   const surfaceOwnerByFile = new Map<string, Map<string, string>>();
   for (const adapter of adapters) {
     for (const surface of adapter.surfaces) {
-      if (!surface.relativePath) continue;
-      let owningAdapterById = surfaceOwnerByFile.get(surface.relativePath);
-      if (!owningAdapterById) {
-        owningAdapterById = new Map();
-        surfaceOwnerByFile.set(surface.relativePath, owningAdapterById);
+      for (const relativePath of surfacePaths(surface)) {
+        let owningAdapterById = surfaceOwnerByFile.get(relativePath);
+        if (!owningAdapterById) {
+          owningAdapterById = new Map();
+          surfaceOwnerByFile.set(relativePath, owningAdapterById);
+        }
+        const existingOwner = owningAdapterById.get(surface.id);
+        if (existingOwner !== undefined && existingOwner !== adapter.id) {
+          throw new Error(
+            `integrations registry: "${relativePath}" has surface id "${surface.id}" registered by both ` +
+              `"${existingOwner}" and "${adapter.id}" — a SettingsFileOwner keys its surfaces by id per file, so this ` +
+              `would clobber one adapter's surface with the other's`,
+          );
+        }
+        owningAdapterById.set(surface.id, adapter.id);
       }
-      const existingOwner = owningAdapterById.get(surface.id);
-      if (existingOwner !== undefined && existingOwner !== adapter.id) {
-        throw new Error(
-          `integrations registry: "${surface.relativePath}" has surface id "${surface.id}" registered by both ` +
-            `"${existingOwner}" and "${adapter.id}" — a SettingsFileOwner keys its surfaces by id per file, so this ` +
-            `would clobber one adapter's surface with the other's`,
-        );
-      }
-      owningAdapterById.set(surface.id, adapter.id);
     }
   }
   const slotsByFile = new Map<string, Map<string, SlotRecord[]>>();
   for (const adapter of adapters) {
     for (const surface of adapter.surfaces) {
-      if (!surface.relativePath) continue;
-      let byKey = slotsByFile.get(surface.relativePath);
-      if (!byKey) {
-        byKey = new Map();
-        slotsByFile.set(surface.relativePath, byKey);
-      }
-      for (const slot of surface.slots) {
-        const records = byKey.get(slot.key) ?? [];
-        records.push({ owner: `${adapter.id}/${surface.id}`, type: slot.type, access: slot.access });
-        byKey.set(slot.key, records);
+      for (const relativePath of surfacePaths(surface)) {
+        let byKey = slotsByFile.get(relativePath);
+        if (!byKey) {
+          byKey = new Map();
+          slotsByFile.set(relativePath, byKey);
+        }
+        for (const slot of surface.slots) {
+          const records = byKey.get(slot.key) ?? [];
+          records.push({ owner: `${adapter.id}/${surface.id}`, type: slot.type, access: slot.access });
+          byKey.set(slot.key, records);
+        }
       }
     }
   }

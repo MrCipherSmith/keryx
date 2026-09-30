@@ -17,7 +17,7 @@ bun install -g github:MrCipherSmith/keryx
 keryx init
 ```
 
-`init` is interactive by default (pass `--yes` to accept defaults). It scaffolds `.metaproject/`, enables the nine default modules, wires your `AGENTS.md`/`CLAUDE.md` routing, and writes the `metaproject.json` manifest. See [onboarding.md](./onboarding.md) for project-local installs, the local-dev workflow, and the full first-run walkthrough.
+`init` is interactive by default (pass `--yes` to accept defaults). It scaffolds `.metaproject/`, enables the nine default modules, wires agent routing (a block in the gitignored `CLAUDE.local.md` / `AGENTS.override.md`, leaving your tracked `AGENTS.md`/`CLAUDE.md` alone), and writes the `metaproject.json` manifest. See [onboarding.md](./onboarding.md) for project-local installs, the local-dev workflow, and the full first-run walkthrough.
 
 ## Documentation map
 

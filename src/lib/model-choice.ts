@@ -4,8 +4,10 @@
 //
 // WHY THIS FILE EXISTS SEPARATELY
 //
-// The managed `<!-- keryx:index -->` block in root AGENTS.md/CLAUDE.md
-// (`src/lib/agent-entrypoint-blocks.ts`) is read on EVERY turn by every host
+// The managed `<!-- keryx:index -->` block (`src/lib/agent-entrypoint-blocks.ts`),
+// written where `agentEntrypoints.root` says — `CLAUDE.local.md` and
+// `AGENTS.override.md` by default, the team's `CLAUDE.md`/`AGENTS.md` under
+// `scope: "shared"` (`src/rules/entrypoint-writers.ts`) — is read on EVERY turn by every host
 // that reads it — including every subagent dispatch — so its content is
 // hand-picked and small (see the "index gate stays small" test in
 // `templates.test.ts`, and the known-mistake this mirrors: a mandatory
@@ -25,13 +27,16 @@
 // (`keryx routing trust`) — the same trust gate `keryx routing list` already
 // enforces (`src/harness/routing/trust.ts`). It never reads the operator's
 // personal (`user`) routing layer: that layer is the operator's own global
-// config, not a project fact, and this module's output gets committed to the
-// repository and read by everyone who clones it.
+// config, not a project fact. The output must be the same for every developer
+// of the project: under `scope: "shared"` it is committed and read by everyone
+// who clones the repository, and under `scope: "local"` each developer's own
+// `keryx update` renders it from the same tracked `routing.config.json`.
 //
-// It never touches anything outside the project. Codex CLI reads `AGENTS.md`
-// the same way Claude Code reads `CLAUDE.md`/`AGENTS.md` — the SAME managed
-// block reaches both hosts, so there is no separate write to
-// `~/.codex/config.toml` or any other path outside `projectRoot`.
+// It never touches anything outside the project. Codex CLI reads
+// `AGENTS.override.md` (or `AGENTS.md` under shared scope) the same way Claude
+// Code reads `CLAUDE.local.md` (or `CLAUDE.md`) — the SAME managed block
+// reaches both hosts, so there is no separate write to `~/.codex/config.toml`
+// or any other path outside `projectRoot`.
 import path from "node:path";
 import { pathExists } from "./fs";
 import { readJsonObjectFile } from "./json";

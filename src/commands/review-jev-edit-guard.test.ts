@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readEditGuardLogRecords } from "../review/jev-edit-guard-log";
@@ -355,7 +355,7 @@ describe("defaultEditGuardFileDiff: real git, no network", () => {
 
 describe("install / uninstall: merge-safe, idempotent, no network", () => {
   function settingsFile(): string {
-    return path.join(dir, ".claude", "settings.json");
+    return path.join(dir, ".claude", "settings.local.json");
   }
 
   test("install writes the PostToolUse hook, preserving unrelated settings", async () => {
@@ -390,6 +390,21 @@ describe("install / uninstall: merge-safe, idempotent, no network", () => {
   test("uninstall without a prior install is a no-op, not an error", async () => {
     await handleUninstall(dir);
     expect(errorLines).toHaveLength(0);
+  });
+
+  // Flow 361: the guard follows the same Claude settings target as every other surface.
+  test("under claudeSettings scope shared, install and uninstall use .claude/settings.json", async () => {
+    mkdirSync(path.join(dir, ".metaproject"), { recursive: true });
+    writeFileSync(
+      path.join(dir, ".metaproject", "metaproject.json"),
+      JSON.stringify({ agentEntrypoints: { root: [], claudeSettings: { path: ".claude/settings.json", scope: "shared" } } }),
+    );
+    const shared = path.join(dir, ".claude", "settings.json");
+    await handleInstall(dir);
+    expect(JSON.parse(readFileSync(shared, "utf8")).hooks.PostToolUse).toHaveLength(1);
+    expect(existsSync(settingsFile())).toBe(false);
+    await handleUninstall(dir);
+    expect(JSON.parse(readFileSync(shared, "utf8")).hooks).toBeUndefined();
   });
 });
 

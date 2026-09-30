@@ -185,6 +185,14 @@ is not `ok`:
   (`keryx integrations doctor --runtime all`).
 - **standard** — Metaproject Standard warnings and errors
   (`keryx standard doctor`).
+- **entrypoints** — where the managed `keryx:index` block, the managed
+  ignore rules and the keryx-managed Claude hooks are, against where
+  `agentEntrypoints` says they belong: an uncommitted copy in a file whose
+  scope is local, a block still in `CLAUDE.local.md` or a keryx-generated
+  `AGENTS.override.md` after the runtime went back to `shared`, a stale or
+  oversized override, a local target missing in this checkout or not
+  ignored. Warnings only; the fix is `keryx update`. Content the team
+  committed in `HEAD` is the shared case and is not warned about.
 - **worktrees** — `.claude/worktrees/<name>` entries (the agent harness's
   own transient per-agent scratch checkouts) that git no longer recognises
   as a real worktree — reported, never deleted.
@@ -1224,7 +1232,7 @@ Pass the matching `--no-*-hook` flag to force a hook off:
 | `--no-testing-post-commit-hook` | testing post-commit (refresh) hook. |
 | `--no-testing-pre-push-hook` | testing pre-push (gate) hook. |
 | `--no-security-hook` | security **pre-push** gate hook. |
-| `--no-security-agent-hook` | security **`.claude/settings.json`** agent hook. |
+| `--no-security-agent-hook` | security Claude Code agent hook (**`.claude/settings.local.json`**). |
 
 **Capability flags** — opt-in ceilings that are **off by default**. Each has a
 matching `--no-<capability>` form (the default) that keeps the generated
@@ -1243,9 +1251,20 @@ managed block to `.git/hooks/pre-push` that scans changed files with
 `keryx security scan` before a push — it warns in `advisory` (the default)
 and blocks the push in `enforced`/`ci`/`gateway` mode; it coexists with the testing
 pre-push hook and any user content. The **agent** hook merges (merge-safe, never
-clobbering existing settings) two Claude Code hooks into `.claude/settings.json`:
+clobbering existing settings) two Claude Code hooks into
+`.claude/settings.local.json` (the tracked `.claude/settings.json` when
+`agentEntrypoints.claudeSettings` has scope `shared`):
 `UserPromptSubmit` → `security check-input` and `PreToolUse(Write|Edit)` →
 `security check-output`, advisory by default.
+
+**Agent entrypoints and ignore rules.** By default `init` puts none of these
+in a file the repository tracks: the routing block goes to `CLAUDE.local.md` and
+`AGENTS.override.md` (generated from `AGENTS.md`; skipped with a message when
+there is no `AGENTS.md`), Claude hooks to `.claude/settings.local.json`, and the
+ignore rules to `.git/info/exclude`. `AGENTS.md`, `CLAUDE.md`, `.gitignore` and
+`.claude/settings.json` are left alone. See
+[where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope)
+for the scopes, the Codex `override`/`skip` modes, and the known limits.
 
 ---
 
@@ -1848,6 +1867,17 @@ keryx update [--skip-runtime] [--hooks] [--no-tasks]
 | `--hooks` | After refreshing, run every executable in `.metaproject/hooks/post-update.d`. Without it, a hint is printed instead. |
 | `--no-tasks` | Do not auto-enable (backfill) the tasks/flow module on pre-tasks workspaces. |
 | `--help`, `-h` | Print `update` usage and exit. |
+
+`update` also moves keryx's own edits out of tracked files. A legacy
+`agentEntrypoints.root` string array is rewritten to the entry form; a managed
+block or keryx-managed hooks that exist only as uncommitted edits in `AGENTS.md`,
+`CLAUDE.md`, `.gitignore` or `.claude/settings.json` move to `CLAUDE.local.md`,
+`AGENTS.override.md`, `.git/info/exclude` and `.claude/settings.local.json`, and
+each file is restored to `HEAD` (or, when it has other uncommitted edits, only
+keryx's part is removed). One that is committed in `HEAD` stays shared, and the
+output prints how to switch it. Each move prints one line naming the file. A
+second run changes nothing. Details:
+[migration](workspace-and-lifecycle.md#migration-from-the-tracked-files).
 
 ---
 
@@ -2715,8 +2745,8 @@ registrations: **built-in < user (`~/.keryx/hooks.json`) < project
 so a later call — or a person reading the file — can tell a Keryx-written
 entry from a hand-authored one and never silently overwrites the latter. This
 is the same discipline as the host-config installers `keryx orient
-install-hook`/`keryx security hooks install` already use for `.claude/settings.json`
-and friends, applied to Keryx's own two files.
+install-hook`/`keryx security hooks install` already use for the Claude settings
+file (`.claude/settings.local.json` by default) and friends, applied to Keryx's own two files.
 
 ---
 
@@ -3819,7 +3849,11 @@ affects), not as a special case for this one array.
 
 Keep the root agent entrypoints (`AGENTS.md`, `CLAUDE.md`) in sync with the
 `.metaproject/` workspace by importing them as high-priority project rules and
-injecting a managed routing block. Requires an initialized workspace.
+writing a managed routing block where `agentEntrypoints.root` puts it —
+`CLAUDE.local.md` and `AGENTS.override.md` by default, the team files under
+`scope: "shared"` (see
+[where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope)).
+Requires an initialized workspace.
 
 ```
 keryx rules sync
@@ -3828,7 +3862,7 @@ keryx rules distill
 
 | Subcommand | Description |
 |---|---|
-| `sync` | Import each root entrypoint into `.metaproject/rules/<slug>.md`, inject/upgrade the managed Metaproject routing block, and refresh the index. |
+| `sync` | Import each root entrypoint into `.metaproject/rules/<slug>.md`, write/upgrade the managed routing block in its targets (regenerating `AGENTS.override.md`, moving an uncommitted block out of a team file), and refresh the index. |
 | `distill` | Superset of `sync`: additionally split large entrypoints into typed artifacts (project rules, project skills, root-only sections) and rewrite the trimmed root file. |
 
 Only `sync` and `distill` are accepted; the only recognized flag is `--help`/`-h`.
@@ -3852,10 +3886,10 @@ The text always states tiers by word — never a hard-coded model id. A concrete
 provider/model id is added for a category only when this project's
 `routing.config.json` resolves one for it **and** the operator has approved
 that file's current content (`keryx routing trust`); an unset, unapproved, or
-absent routing table leaves every category on tier words alone. Both
-`AGENTS.md` (Codex CLI's entrypoint) and `CLAUDE.md` (Claude Code's) carry the
-same block — nothing is written outside the project (no
-`~/.codex/config.toml` edit).
+absent routing table leaves every category on tier words alone. Codex CLI's
+entrypoint (`AGENTS.override.md`, or `AGENTS.md` under shared scope) and Claude
+Code's (`CLAUDE.local.md`, or `CLAUDE.md`) carry the same block — nothing is
+written outside the project (no `~/.codex/config.toml` edit).
 
 #### How a tier becomes a model
 
@@ -5554,7 +5588,7 @@ running that one changed region through it, and turning the result into the
 hook's own feedback text.
 
 ```bash
-keryx review jev-edit-guard install            # merge-safe .claude/settings.json write
+keryx review jev-edit-guard install            # merge-safe .claude/settings.local.json write
 keryx review jev-edit-guard status [--json]     # on/off, threshold, today's calls/flags/cost
 keryx review jev-edit-guard uninstall           # removes only this hook's entry
 keryx review jev-edit-guard --hook claude       # what the installed hook itself runs; reads the PostToolUse payload from stdin
@@ -5562,7 +5596,7 @@ keryx review jev-edit-guard --hook claude       # what the installed hook itself
 
 | Flag/subcommand | Description |
 |---|---|
-| `install` | Merge-safe, idempotent (same primitives `keryx security hooks install` uses — a standalone `SurfaceAdapter`, `src/integrations/jev-edit-guard-surface.ts`): writes a `PostToolUse` group matching `Edit\|Write\|MultiEdit` into `.claude/settings.json`, preserving every other hook entry. Running it twice never duplicates the group. |
+| `install` | Merge-safe, idempotent (same primitives `keryx security hooks install` uses — a standalone `SurfaceAdapter`, `src/integrations/jev-edit-guard-surface.ts`): writes a `PostToolUse` group matching `Edit\|Write\|MultiEdit` into the Claude settings file the other keryx hooks use (`.claude/settings.local.json` by default, `.claude/settings.json` under shared scope), preserving every other hook entry. Running it twice never duplicates the group. |
 | `uninstall` | Removes only the entry this installer wrote (tagged with its own sentinel), leaving every other hook untouched. |
 | `status [--json]` | Whether `review.jev.edit_guard` is on, the effective threshold and per-run call cap, and today's Jev calls/flags/cost from `.metaproject/data/jev/edit-guard.jsonl`. |
 | `--hook claude` | What the installed hook actually invokes. Reads the `PostToolUse` payload from stdin, diffs the named file against `HEAD`, and prints a `{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "..."}}` line ONLY when something is flagged — otherwise it prints nothing. Any other `--hook` runtime is a no-op (no codec exists yet), exiting `0`. |

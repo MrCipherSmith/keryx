@@ -55,7 +55,15 @@ import {
   type GdskillsProfile,
 } from "../gdskills/catalog";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import {
+  declaredImportSources,
+  ignoredLocalTargetPaths,
+  manifestAgentEntrypoints,
+  resolveProjectEntrypoints,
+  type ProjectEntrypoints,
+} from "../rules/entrypoint-writers";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
+import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import { describeModelChoiceStatus } from "../lib/model-choice";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { reconcileCapabilitiesOnUpdate } from "../capability/registry";
@@ -72,11 +80,11 @@ import {
   securityCapabilities,
 } from "../security/templates";
 import {
+  agentSettingsHasSecuritySentinel,
   installSecurityAgentHooks,
   uninstallSecurityAgentHooks,
-  agentSettingsPath,
-  AGENT_HOOKS_SENTINEL,
 } from "../security/agent-hooks";
+import { decideClaudeSettingsTarget, moveClaudeSettingsHooks } from "../integrations/service";
 import { renderMemoryConfig } from "../memory/config";
 import {
   renderMemoryCoreReadme,
@@ -103,7 +111,7 @@ import { resolveGitHooksRoot } from "../lib/git-hooks";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
-  syncMetaprojectGitignore,
+  syncMetaprojectIgnoreRules,
 } from "../lib/metaproject-gitignore";
 import { seedAssetsLock } from "../assets/seed";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
@@ -182,9 +190,9 @@ type MetaprojectManifest = {
   profiles?: string[];
   updatedAt?: string;
   modules?: Record<string, ManifestModule>;
-  agentEntrypoints?: {
-    root?: string[];
-  };
+  // Read as whatever is on disk (the legacy string array included) and only
+  // ever through `resolveProjectEntrypoints` / `declaredImportSources`.
+  agentEntrypoints?: unknown;
 };
 
 type ManifestReadResult = {
@@ -241,7 +249,6 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     await updateRuntime(projectRoot);
   }
 
-  await syncMetaprojectGitignore(projectRoot);
   const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
@@ -284,6 +291,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   statusLine("security", summary.modules.security);
   if (summary.modules.sac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
+  if (summary.entrypointNotices.length > 0) {
+    heading("Agent entrypoints");
+    for (const notice of summary.entrypointNotices) {
+      note(notice);
+    }
   }
   if (summary.gdskillsNotices.length > 0) {
     heading("Notices");
@@ -344,11 +357,12 @@ async function offerStaleWorktreePrune(projectRoot: string, options: UpdateOptio
   // guarantee. "No blocking changes" covers what's actually checked: zero
   // commits ahead of main, no tracked/untracked change, and no gitignored
   // file present other than the allowlisted carry-overs (node_modules,
-  // .metaproject/data, dist) `hasUncommittedChanges` exempts.
+  // .metaproject/data, dist) and keryx's own generated local targets that
+  // `hasUncommittedChanges` exempts.
   note(
     `${stale.length} worktree(s) under .claude/worktrees/ are 7+ days old, merged into main, and have ` +
       "no blocking changes (no commits ahead, no tracked/untracked edits, no gitignored file besides " +
-      "node_modules/.metaproject/data/dist):",
+      "node_modules/.metaproject/data/dist and keryx-generated CLAUDE.local.md/AGENTS.override.md/.claude/settings.local.json):",
   );
   for (const candidate of stale) {
     console.log(`  ${style.dim(symbols.bullet)} ${candidate.name} ${style.dim(`(${Math.floor(candidate.ageDays)}d old)`)}`);
@@ -410,6 +424,8 @@ type RefreshSummary = {
    * "Warnings" heading as gdskillsWarnings instead of aborting the update.
    */
   hookWarnings: string[];
+  /** Flow 361: what the entrypoint writers did or skipped — a migrated team file, a skipped Codex, an entry kept shared. */
+  entrypointNotices: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -425,7 +441,7 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
   const manifestState = await readManifest(metaprojectRoot);
   const manifest = manifestState.manifest;
   const enableTasks = moduleEnabled(manifest, "tasks") || !options.noTasks;
-  const ruleSources = await listRootEntrypoints(projectRoot, manifest.agentEntrypoints?.root ?? []);
+  const ruleSources = await listRootEntrypoints(projectRoot, declaredImportSources(manifest.agentEntrypoints));
   const plan = await planRoutingEntrypointPair(
     metaprojectRoot,
     {
@@ -456,6 +472,9 @@ async function previewServiceFiles(projectRoot: string, options: UpdateOptions):
         "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
       "Hooks are merged into existing files by their own installers and are not digest-planned; " +
         "a real run reports which of them it touched.",
+      // Flow 361: where the managed block, the ignore block and the Claude
+      // hooks would move, and what info/exclude would hold — read-only.
+      ...(await previewEntrypointLines(projectRoot, manifest.agentEntrypoints)),
     ],
   });
 }
@@ -492,10 +511,40 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   const gdskillsProfile = normalizeGdskillsProfile(manifest.modules?.gdskills?.profile);
+  // Flow 361: a legacy string-array `root`, a missing field and a recovered
+  // manifest are all settled against HEAD here, before anything is written —
+  // the normalizer alone would leave a legacy entry provisionally shared.
+  const entrypoints = await resolveProjectEntrypoints(projectRoot, manifest.agentEntrypoints);
+  const entrypointNotices = [...entrypoints.notices];
+  // The Claude hooks target is settled from the settings files themselves,
+  // entry-form manifest or not: managed hooks the team committed keep it
+  // shared, anything else is local.
+  const claudeSettings = await decideClaudeSettingsTarget(projectRoot);
+  entrypoints.targets.claudeSettings = claudeSettings.target;
+  entrypointNotices.push(...claudeSettings.notices);
+  // Ignore rules go to info/exclude, never to the tracked .gitignore — a block
+  // an older keryx left there is moved out — and before the local targets
+  // exist, so they are ignored from their first byte.
+  await syncMetaprojectIgnoreRules(projectRoot, {
+    localTargets: ignoredLocalTargetPaths(entrypoints.targets),
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
+  });
+  // Every managed Claude hook in one file only: hooks an older keryx merged
+  // into the other one — all surfaces, not just the security pair refreshed
+  // below — are moved before any installer runs.
+  await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
+    entrypointNotices.push(line);
+  });
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
-    manifestSources: manifest.agentEntrypoints?.root ?? [],
+    targets: entrypoints.targets,
+    manifestSources: entrypoints.importSources,
     createDefault: true,
+    onNotice: (line) => {
+      entrypointNotices.push(line);
+    },
   });
   const ruleSources = syncedRules.map((rule) => rule.source);
   const dashboardData = await collectDashboardData(metaprojectRoot);
@@ -738,12 +787,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableTasks,
       enableSecurity,
       enableSac,
-    });
+    }, entrypoints);
   } else if (backfillTasks) {
     await enableTasksInManifest(metaprojectRoot);
   }
 
-  await updateManifestAgentEntrypoints(metaprojectRoot, ruleSources);
+  await updateManifestAgentEntrypoints(metaprojectRoot, entrypoints);
 
   // Reconcile registered opt-in capabilities into the manifest without changing
   // their enabled state or disabling any module. No-op with the empty Block 0
@@ -767,6 +816,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     gdskillsWarnings,
     gdskillsNotices,
     hookWarnings,
+    entrypointNotices,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };
@@ -1298,6 +1348,7 @@ async function writeRecoveredManifest(
     enableSecurity: boolean;
     enableSac: boolean;
   },
+  entrypoints: ProjectEntrypoints,
 ): Promise<void> {
   const enabledModuleKeys = Object.entries(modules)
     .filter(([, enabled]) => enabled === true)
@@ -1412,10 +1463,7 @@ async function writeRecoveredManifest(
           }
         : { enabled: false },
     },
-    agentEntrypoints: {
-      root: ["AGENTS.md", "CLAUDE.md"],
-      metaproject: ".metaproject/index.md",
-    },
+    agentEntrypoints: manifestAgentEntrypoints(undefined, entrypoints, { metaproject: ".metaproject/index.md" }),
   };
 
   {
@@ -1451,7 +1499,7 @@ async function enableTasksInManifest(metaprojectRoot: string): Promise<void> {
   }
 }
 
-async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSources: string[]): Promise<void> {
+async function updateManifestAgentEntrypoints(metaprojectRoot: string, entrypoints: ProjectEntrypoints): Promise<void> {
   const manifestPath = path.join(metaprojectRoot, "metaproject.json");
   if (!(await pathExists(manifestPath))) {
     return;
@@ -1465,10 +1513,17 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, ruleSourc
   } catch {
     return;
   }
-  const agentEntrypoints = (raw.agentEntrypoints ?? {}) as Record<string, unknown>;
-  agentEntrypoints.root = ruleSources;
-  agentEntrypoints.metaproject = ".metaproject/index.md";
-  raw.agentEntrypoints = agentEntrypoints;
+  // Rewrites a legacy string-array `root` to the entry form; on a manifest
+  // already in that form this reproduces what is on disk, key order included.
+  raw.agentEntrypoints = manifestAgentEntrypoints(raw.agentEntrypoints, entrypoints, {
+    metaproject: ".metaproject/index.md",
+  });
+  // `modules.security.hooks.agent` names the file the agent hooks live in; it
+  // follows the Claude settings target instead of keeping the path `init` saw.
+  const securityHooks = (raw.modules as Record<string, { hooks?: { agent?: unknown } } | undefined> | undefined)?.security?.hooks;
+  if (securityHooks && typeof securityHooks.agent === "string" && securityHooks.agent !== entrypoints.targets.claudeSettings.path) {
+    securityHooks.agent = entrypoints.targets.claudeSettings.path;
+  }
   applyStandardManifestFields(raw);
   // R700-06: `applyStandardManifestFields` always stamps a fresh `updatedAt`,
   // but on a repo where nothing else changed that turns `keryx update` into
@@ -1670,18 +1725,6 @@ async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
   }
   const hook = await readFile(hookPath, "utf8");
   return hook.includes("# keryx:security-pre-push:begin");
-}
-
-// True when .claude/settings.json still carries the managed security agent-hook
-// sentinel (i.e. the agent hooks were previously installed there).
-async function agentSettingsHasSecuritySentinel(
-  projectRoot: string,
-): Promise<boolean> {
-  const file = agentSettingsPath(projectRoot);
-  if (!(await pathExists(file))) {
-    return false;
-  }
-  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
 }
 
 async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult> {
@@ -1889,7 +1932,7 @@ function printHelp(): void {
     "updates managed runtime when present;",
     "refreshes service files, core scripts, managed skills, manifests, dashboard, hooks;",
     "backfills the Task Manager (tasks) module for projects initialized before it existed;",
-    "migrates agent entrypoint policies (AGENTS.md/CLAUDE.md);",
+    "writes the managed index block to CLAUDE.local.md / AGENTS.override.md, Claude hooks to .claude/settings.local.json and ignore rules to .git/info/exclude (scope local, the default), and moves uncommitted keryx edits out of the tracked AGENTS.md, CLAUDE.md, .claude/settings.json and .gitignore;",
     "does not write .metaproject/data artifacts.",
   ]) {
     console.log(`  ${style.dim(symbols.bullet)} ${style.dim(line)}`);

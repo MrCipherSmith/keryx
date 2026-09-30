@@ -20,20 +20,20 @@
 // claude` with no `--surface` never installs this — only naming its flag
 // (`--surface observe`) or its id (`--surface learning-observer`) does,
 // exactly like the `agents` surfaces (`surfaces-agents.ts`). It shares
-// `.claude/settings.json` with ctx-guard/orient/security through the same
+// Claude's settings file with ctx-guard/orient/security through the same
 // `SettingsFileOwner` (`registry.ts`'s `SETTINGS_FILE_OWNERS`), composing by
 // sentinel the same way those three already coexist on `PreToolUse`/
 // `UserPromptSubmit`: `mergeIntoHookArray`/`stripFromHookArray` only ever
 // touch the group carrying THIS surface's own sentinel, so three (or four)
 // surfaces sharing one hook key never clobber each other's entries.
 
-import path from "node:path";
 import {
   MANAGED_KEY,
   managedGroups,
   mergeIntoHookArray,
   stripFromHookArray,
 } from "./settings-json";
+import { CLAUDE_LOCAL_SETTINGS_PATH, claudeSettingsLocation } from "./claude-settings";
 import { SUBSYSTEM_LEARNING, type Settings, type SurfaceAdapter } from "./types";
 
 export const LEARNING_OBSERVER_SENTINEL = "learning-observer-hooks";
@@ -127,10 +127,9 @@ export const LEARNING_OBSERVER_CLAUDE: SurfaceAdapter = {
     "docs/requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md",
     "src/learning/observe.ts",
   ],
-  settingsFile: (root) => path.join(root, ".claude", "settings.json"),
-  relativePath: ".claude/settings.json",
+  ...claudeSettingsLocation(),
   // Same `hooks: object` / `_keryxManaged: array` / `unmigratedHooks: array`
-  // slots every other `.claude/settings.json` surface declares (`surfaces.ts`)
+  // slots every other Claude settings surface declares (`surfaces.ts`)
   // — same types, so `assertRegistryCoherent` sees no collision; this surface
   // only ever ADDS its own sentinel-tagged group to each event's array, it
   // never owns a key any sibling surface doesn't already share.
@@ -154,7 +153,7 @@ export const LEARNING_OBSERVER_CLAUDE: SurfaceAdapter = {
     return next;
   },
   validate: learningObserverValidate,
-  label: ".claude/settings.json (learning observer)",
+  label: `${CLAUDE_LOCAL_SETTINGS_PATH} (learning observer)`,
   groupShape: "nested",
   // Deterministic single-key presence check for `installer.ts`'s
   // `wasSurfaceInstalled` fallback (used only when `validate` reports a
