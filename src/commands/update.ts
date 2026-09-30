@@ -62,6 +62,7 @@ import {
   resolveProjectEntrypoints,
   type ProjectEntrypoints,
 } from "../rules/entrypoint-writers";
+import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport } from "../rules/rules-export-migration";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import { describeModelChoiceStatus } from "../lib/model-choice";
@@ -537,6 +538,13 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
     entrypointNotices.push(line);
   });
+  // Flow 363: a rules-export `keryx:rules` block left as an uncommitted edit in
+  // a tracked team file whose scope is local leaves it before the local
+  // targets are written; it is installed again once the manifest below names
+  // them (`reinstallRulesExport`).
+  const movedRulesBlocks = await moveRulesBlocksOutOfTeamFiles(projectRoot, entrypoints.targets, (line) => {
+    entrypointNotices.push(line);
+  });
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,
@@ -793,6 +801,9 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   await updateManifestAgentEntrypoints(metaprojectRoot, entrypoints);
+  await reinstallRulesExport(projectRoot, movedRulesBlocks, (line) => {
+    entrypointNotices.push(line);
+  });
 
   // Reconcile registered opt-in capabilities into the manifest without changing
   // their enabled state or disabling any module. No-op with the empty Block 0

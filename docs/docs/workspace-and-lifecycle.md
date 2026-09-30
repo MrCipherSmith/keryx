@@ -288,6 +288,16 @@ The older form, `"root": ["AGENTS.md", "CLAUDE.md"]`, is still read, and one
 | Claude Code block | `CLAUDE.local.md` | `CLAUDE.md` |
 | Codex block | `AGENTS.override.md` (`mode: "override"`) or nothing (`mode: "skip"`, which only removes an override keryx generated) | `AGENTS.md` |
 | keryx-managed Claude hooks | `.claude/settings.local.json` | `.claude/settings.json` |
+| Opt-in `rules-export` block (`<!-- keryx:rules -->`), Claude Code | `CLAUDE.local.md` | `CLAUDE.md` |
+| Opt-in `rules-export` block, Codex | the keryx-generated `AGENTS.override.md`, after its index block; nothing with `mode: "skip"`, no `AGENTS.md`, or an override keryx did not generate | `AGENTS.md` |
+
+The `rules-export` block is written only by `keryx integrations install
+--surface rules` and `keryx bundle import --render-for`, never by `init` or
+`update` on their own; see
+[Integrations: rules-export surface](integrations.md#rules-export-surface). A
+regenerated `AGENTS.override.md` keeps it. A team file whose `rules-export`
+block is committed in `HEAD` keeps receiving it: that is the team's shared
+choice.
 
 Local targets are gitignored per clone, so `init` and `update` leave `AGENTS.md`,
 `CLAUDE.md`, `.gitignore` and `.claude/settings.json` untouched and a `git pull`
@@ -350,7 +360,8 @@ old copy of `AGENTS.md`:
   in `info/exclude`, and is named in the output.
 - `AGENTS.override.md` is removed when its first line is keryx's provenance
   line; one keryx did not generate is left alone and reported. The same
-  happens when the Codex mode is set to `skip`.
+  happens when the Codex mode is set to `skip`. A `rules-export` block in it
+  goes with it: install the surface again to write it to `AGENTS.md`.
 - A tracked copy of either file is not deleted: that would be a change for the
   team to commit, so the output names it instead. The same holds for a tracked
   `.claude/settings.local.json` when the hooks move back to
@@ -392,6 +403,19 @@ settings files, so a hook in both would fire twice. A managed block that stays i
 a tracked file whose scope is local is reported by `keryx doctor` with the fix
 command.
 
+**The `rules-export` block** (0.3.46) follows the same cases in `keryx update`
+and in `keryx init` over an existing project. A `<!-- keryx:rules -->` block a
+keryx before 0.3.46 left as an uncommitted edit in `CLAUDE.md` or `AGENTS.md`,
+whose runtime's scope is local, moves to `CLAUDE.local.md` or
+`AGENTS.override.md`, re-rendered there from the current `.metaproject/rules/`;
+the team file goes back to its `HEAD` bytes, or loses only the block when it
+has other uncommitted edits (a CRLF file stays CRLF). A block committed in
+`HEAD` is left where it is and no local copy is written. Codex with
+`mode: "skip"`, or an `AGENTS.override.md` keryx did not generate, has no local
+target, so the block stays in `AGENTS.md`. `keryx doctor` warns about an
+uncommitted `rules-export` block in a tracked file whose scope is local, with
+`keryx update` as the fix.
+
 ### Known limits
 
 - **Local files exist per checkout.** `.git/info/exclude` is shared by every
@@ -405,8 +429,11 @@ command.
   the Codex mode apply to everyone who pulls it.
 - **Blank-line-only edits** to a tracked entrypoint count as "equal to `HEAD`"
   during migration, so they are reverted along with the block.
-- **The opt-in `rules-export` surface** (`<!-- keryx:rules -->` in `CLAUDE.md`,
-  `AGENTS.md` and other runtimes' files) still writes tracked files.
+- **Other harnesses' `rules-export` files** (`GEMINI.md`,
+  `.github/copilot-instructions.md`, and the keryx-owned files under
+  `.cursor/rules/`, `.kiro/steering/` and `.windsurf/rules/`) are tracked: none
+  has a per-developer counterpart its tool reads. Installing the surface there
+  is an explicit edit to the team's files.
 
 **Distill (`rules distill`).** For large monolithic entrypoints, distill runs sync
 first, then splits each Markdown section and classifies it heuristically into:

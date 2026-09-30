@@ -37,7 +37,7 @@
         {
           "surface": "rules",
           "state": "native",
-          "settingsFile": "CLAUDE.md"
+          "settingsFile": "CLAUDE.local.md"
         }
       ],
       "surfaces_unsupported": [],
@@ -82,7 +82,7 @@
         {
           "surface": "rules",
           "state": "native",
-          "settingsFile": "AGENTS.md"
+          "settingsFile": "AGENTS.override.md"
         }
       ],
       "surfaces_unsupported": [],

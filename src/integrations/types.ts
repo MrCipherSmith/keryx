@@ -225,8 +225,11 @@ export interface SurfaceAdapter {
    * (`./claude-settings.ts`). `relativePath` is then only the default, and a
    * caller that has a project root asks `surfaceRelativePath` (`registry.ts`)
    * instead of reading the field. `settingsFile` answers per project already.
+   * Flow 363: the Claude and Codex `rules-export` surfaces resolve theirs the
+   * same way (`./rules-export-target.ts`), and answer `undefined` when the
+   * project gives them no file to write (Codex with mode `skip`, say).
    */
-  relativePathFor?(projectRoot: string): string;
+  relativePathFor?(projectRoot: string): string | undefined;
   /**
    * Every path `relativePathFor` can answer with. The registry builds one
    * `SettingsFileOwner` per candidate and runs its coherence checks against

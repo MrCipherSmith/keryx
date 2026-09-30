@@ -258,14 +258,47 @@ rules-export` (its id) or `--surface rules` (its flag), kept deliberately
 independent of `--surface instructions` (the pre-existing `keryx:instructions`
 pointer surfaces on gemini-cli/kiro/github-copilot-agent): naming one never
 also reaches the other. Registered for
-`claude` (`CLAUDE.md`), `codex` (`AGENTS.md`), `gemini-cli` (`GEMINI.md`),
+`claude`, `codex`, `gemini-cli` (`GEMINI.md`),
 `github-copilot-agent` (`.github/copilot-instructions.md`, appended with no
 front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
 `alwaysApply: true` front matter), `kiro` (`.kiro/steering/keryx-rules.md`,
 `inclusion: always`), and `windsurf` (`.windsurf/rules/keryx-rules.md`,
-`trigger: always_on`). Unlike the `keryx:index` block, which goes to
-per-developer files by default, this block is always written to those tracked
-files: installing it is an explicit edit to the team's instructions.
+`trigger: always_on`).
+
+For `claude` and `codex` the file follows `agentEntrypoints.root` in
+`.metaproject/metaproject.json`, the way the `keryx:index` block does
+([Where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope)),
+since 0.3.46:
+
+| Runtime | Scope `local` (the default) | Scope `shared` |
+|---|---|---|
+| `claude` | `CLAUDE.local.md` | `CLAUDE.md` |
+| `codex` | `AGENTS.override.md` | `AGENTS.md` |
+
+- A local file is made git-ignored before the block is written: when this
+  checkout's ignore rules do not cover it yet (a fresh clone before
+  `keryx update`), the install writes keryx's managed block in
+  `.git/info/exclude`, the same one `keryx update` writes.
+- For Codex the block goes into the `AGENTS.override.md` keryx generated,
+  right after its `keryx:index` block, and every regeneration of that file
+  (`keryx update`, `keryx rules sync`, `keryx rules distill`) carries it over.
+  The override's staleness hash stays the hash of `AGENTS.md` alone.
+- Codex with `mode: "skip"`, no `AGENTS.md`, no override generated yet in this
+  checkout, or an `AGENTS.override.md` keryx did not generate: nothing is
+  written for Codex, and the install succeeds with a warning saying which.
+- A team file that already carries a `keryx:rules` block keeps getting it:
+  committed in `HEAD`, it is the team's shared choice; as an uncommitted edit
+  (what a keryx before 0.3.46 left), `keryx update` moves it to the local file.
+  Until then every command keeps writing where the block is, so it is never in
+  two files. Switching a runtime to shared and installing again moves the block
+  from the local file to the team file.
+- A manifest that does not state the runtime in entry form (not yet migrated
+  by `keryx update`) still gets the team file, as before 0.3.46.
+
+Install, uninstall, `keryx integrations doctor`, `--dry-run`, install-state
+and `keryx bundle import --render-for` all read the same resolved file. The
+other harnesses' files have no per-developer counterpart their tool reads, so
+installing into them stays an explicit edit to the team's instructions.
 
 The block is written through the same `markdown-block.ts` contract every
 `instructions` surface above uses — install only ever touches its OWN

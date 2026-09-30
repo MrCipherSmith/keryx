@@ -430,7 +430,7 @@ export async function installIntegration(
         }
       }
       for (const surface of custom) {
-        results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
+        results.push({ ...baseResult(surface, surfaceRelativePath(surface, root)), status: "failed", errors: preflightErrors, warnings: warningsFor(surface) });
       }
       return { runtimeId, results, errors: preflightErrors };
     }
@@ -492,6 +492,9 @@ export async function installIntegration(
   }
 
   for (const surface of custom) {
+    // Flow 363: the file this project resolves the surface to — the rules-export
+    // surfaces follow `agentEntrypoints` — and `undefined` when it writes none.
+    const customPath = surfaceRelativePath(surface, root);
     if (opts.dryRun) {
       // F4: judge off the surface's own structured `inspect` (falling back to
       // "would-install") instead of always reporting "would-install"
@@ -499,7 +502,7 @@ export async function installIntegration(
       const dryRun = await customInstallDryRun(root, surface);
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
       results.push({
-        ...baseResult(surface, surface.relativePath),
+        ...baseResult(surface, customPath),
         status: dryRun.status,
         errors: dryRun.errors,
         warnings: [...warningsFor(surface), ...dryRun.warnings],
@@ -533,7 +536,7 @@ export async function installIntegration(
     if (customErrors.length > 0) {
       errors.push(...customErrors);
       results.push({
-        ...baseResult(surface, surface.relativePath),
+        ...baseResult(surface, customPath),
         status: "failed",
         errors: customErrors,
         warnings: [...warningsFor(surface), ...customWarnings],
@@ -541,18 +544,22 @@ export async function installIntegration(
       continue;
     }
     results.push({
-      ...baseResult(surface, surface.relativePath),
+      ...baseResult(surface, customPath),
       status: "installed",
       errors: [],
       warnings: [...warningsFor(surface), ...customWarnings],
     });
-    if (surface.relativePath) {
+    if (customPath) {
       await recordSurfaceInstalled(root, runtimeId, {
         moduleId: surface.id,
         surface: surface.flag,
-        writtenPaths: [surface.relativePath],
+        writtenPaths: [customPath],
         managedSentinel: true,
       });
+    } else if (surface.relativePathFor) {
+      // The project gives this surface no file (Codex with mode `skip`): it
+      // wrote nothing, so no record says it is installed.
+      await recordSurfaceUninstalled(root, runtimeId, surface.id);
     }
   }
 
@@ -663,7 +670,8 @@ export async function uninstallIntegration(
   }
 
   for (const surface of custom) {
-    const file = surface.relativePath ? fileFor(root, surface.relativePath) : undefined;
+    const customPath = surfaceRelativePath(surface, root);
+    const file = customPath ? fileFor(root, customPath) : undefined;
     if (opts.dryRun) {
       // F4: dry-run parity — use the surface's own structured `inspect` (or
       // plain file existence, when it has none) instead of string-matching a
@@ -672,7 +680,7 @@ export async function uninstallIntegration(
       // `failed` here exactly as the real run would.
       const dryRun = await customUninstallDryRun(root, surface, file);
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
-      results.push({ ...baseResult(surface, surface.relativePath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
+      results.push({ ...baseResult(surface, customPath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
       continue;
     }
     // N1: a thrown error from `customUninstall` (markdown-block surfaces
@@ -703,11 +711,11 @@ export async function uninstallIntegration(
     }
     if (customError !== undefined) {
       errors.push(customError);
-      results.push({ ...baseResult(surface, surface.relativePath), status: "failed", errors: [customError], warnings: warningsFor(surface) });
+      results.push({ ...baseResult(surface, customPath), status: "failed", errors: [customError], warnings: warningsFor(surface) });
       continue;
     }
     results.push({
-      ...baseResult(surface, surface.relativePath),
+      ...baseResult(surface, customPath),
       status: removed ? "removed" : "nothing-to-remove",
       errors: [],
       warnings: [...warningsFor(surface), ...customUninstallWarnings],

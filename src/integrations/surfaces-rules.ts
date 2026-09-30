@@ -20,7 +20,16 @@
 // its flag) reaches these, same discipline `surfaces-agents.ts`'s `agents`
 // surfaces already use.
 
+import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeContained } from "../lib/contained-write";
+import { isPathIgnored } from "../lib/git-local-ignore";
+import { syncMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
+import { refuseEscapingSymlink } from "../lib/symlink-safety";
+import { insertRulesBlockAfterIndex } from "../rules/codex-override";
+import { hasManagedRulesBlock } from "../rules/managed-index-block";
+import { ignoredLocalTargetPaths, localRootEntry, normalizeEntrypointTargets, type EntrypointRuntime } from "../rules/entrypoint-targets";
 import {
   collectCanonicalRules,
   renderRulesBlockBody,
@@ -28,6 +37,8 @@ import {
   RULES_BLOCK_START_MARKER,
   type SkippedCanonicalRule,
 } from "../rules/export-render";
+import { resolveClaudeSettingsTarget } from "./claude-settings";
+import { resolveRulesExportTarget, rulesExportCandidates, rulesExportRelativePath } from "./rules-export-target";
 import {
   inspectMarkdownBlock,
   installMarkdownBlock,
@@ -141,6 +152,25 @@ interface RulesExportParams {
 function rulesExportSurface(params: RulesExportParams): SurfaceAdapter {
   const { relativePath, frontMatter, confidence, sourceDocs, riskNotes } = params;
   return {
+    ...rulesExportIdentity(confidence, sourceDocs, riskNotes),
+    settingsFile: (root) => path.join(root, ...relativePath.split("/")),
+    relativePath,
+    label: relativePath,
+    customInstall: (root) => installRulesExport(root, relativePath, frontMatter),
+    customUninstall: (root) => uninstallRulesExport(root, relativePath, frontMatter),
+    probe: (root) => probeRulesExport(root, relativePath),
+    inspect: (root) => inspectRulesExport(root, relativePath),
+    dryRunWarnings: (root) => dryRunRulesExportWarnings(root),
+  };
+}
+
+/** What every rules-export surface shares, whatever file it writes. */
+function rulesExportIdentity(
+  confidence: Confidence,
+  sourceDocs: readonly string[],
+  riskNotes: readonly string[] | undefined,
+): Pick<SurfaceAdapter, "id" | "flag" | "subsystem" | "sentinel" | "confidence" | "riskNotes" | "sourceDocs" | "optIn" | "slots"> {
+  return {
     id: "rules-export",
     // Review round 1, F19: this surface used to share the `instructions`
     // flag with `markdown-block.ts`'s pointer-block surfaces (gemini-cli's
@@ -156,37 +186,165 @@ function rulesExportSurface(params: RulesExportParams): SurfaceAdapter {
     ...(riskNotes !== undefined ? { riskNotes } : {}),
     sourceDocs,
     optIn: true,
-    settingsFile: (root) => path.join(root, ...relativePath.split("/")),
-    relativePath,
-    label: relativePath,
     slots: [],
-    customInstall: (root) => installRulesExport(root, relativePath, frontMatter),
-    customUninstall: (root) => uninstallRulesExport(root, relativePath, frontMatter),
-    probe: (root) => probeRulesExport(root, relativePath),
-    inspect: (root) => inspectRulesExport(root, relativePath),
-    dryRunWarnings: (root) => dryRunRulesExportWarnings(root),
   };
 }
 
 /**
- * Claude Code — CLAUDE.md is Keryx's own primary entrypoint file (this very
- * repository's own `CLAUDE.md` bootstrap block, `agent-entrypoint-blocks.ts`)
- * — VERIFIED that Claude Code reads it end-to-end, not merely third-party
- * reported.
+ * Flow 363: a rules-export surface whose file follows `agentEntrypoints.root`
+ * (`resolveRulesExportTarget`) — `CLAUDE.local.md` / `AGENTS.override.md`
+ * under scope local, the team file under scope shared. Every entry point
+ * resolves the target afresh, so install, uninstall, probe, inspect, dry-run
+ * and install-state (via `relativePathFor`) cannot name different files.
+ * `relativePath` is only the default the capability matrix shows.
  */
-export const RULES_EXPORT_CLAUDE: SurfaceAdapter = rulesExportSurface({
-  relativePath: "CLAUDE.md",
+function entrypointRulesExportSurface(
+  runtime: EntrypointRuntime,
+  params: Omit<RulesExportParams, "relativePath" | "frontMatter">,
+): SurfaceAdapter {
+  const [teamFile, localFile] = rulesExportCandidates(runtime) as [string, string];
+  const fileFor = (root: string) => path.join(root, ...(rulesExportRelativePath(root, runtime) ?? localFile).split("/"));
+  return {
+    ...rulesExportIdentity(params.confidence, params.sourceDocs, params.riskNotes),
+    relativePath: localFile,
+    relativePathCandidates: [localFile, teamFile],
+    relativePathFor: (root) => rulesExportRelativePath(root, runtime),
+    settingsFile: fileFor,
+    label: localFile,
+    customInstall: (root) => installEntrypointRulesExport(root, runtime),
+    customUninstall: (root) => uninstallEntrypointRulesExport(root, runtime),
+    probe: async (root) => {
+      const target = resolveRulesExportTarget(root, runtime);
+      return target.kind === "file" ? probeRulesExport(root, target.path) : [];
+    },
+    inspect: async (root) => {
+      const target = resolveRulesExportTarget(root, runtime);
+      return target.kind === "file" ? inspectRulesExport(root, target.path) : { state: "absent-file", message: target.reason };
+    },
+    dryRunWarnings: async (root) => {
+      const target = resolveRulesExportTarget(root, runtime);
+      return [...(target.kind === "none" ? [target.reason] : []), ...(await dryRunRulesExportWarnings(root))];
+    },
+  };
+}
+
+/**
+ * Install into the resolved file. A local file is made git-ignored first,
+ * through flow 361's one ignore writer, when this checkout's rules do not
+ * ignore it yet (a fresh clone before `keryx update`); a block the same
+ * runtime left in its local file before switching to shared is removed, so
+ * the block is never in both. With no target the install writes nothing and
+ * succeeds with the reason as its warning.
+ */
+async function installEntrypointRulesExport(root: string, runtime: EntrypointRuntime): Promise<CustomInstallResult> {
+  const target = resolveRulesExportTarget(root, runtime);
+  if (target.kind === "none") {
+    const { skipped } = await rulesSpec(root);
+    return { errors: [], warnings: [target.reason, ...skippedMessages(skipped)] };
+  }
+  const ignoreNotices = target.scope === "local" ? await ignoreLocalTarget(root, target.path) : [];
+  const result =
+    runtime === "codex" && target.scope === "local" ? await installIntoOverride(root, target.path) : await installRulesExport(root, target.path);
+  if (result.errors.length > 0) return { errors: result.errors, warnings: [...ignoreNotices, ...(result.warnings ?? [])] };
+  const cleanup = await removeFromOtherCandidate(root, runtime, target.path);
+  return { errors: [], warnings: [...ignoreNotices, ...cleanup, ...(result.warnings ?? [])] };
+}
+
+/**
+ * The first install into a keryx-generated `AGENTS.override.md` puts the
+ * block right after the index block — where every regeneration carries it
+ * (`renderCodexOverride`) — instead of appending it after the team text, so
+ * the next `keryx update` does not rewrite the file only to move it. An
+ * override that already has the block is refreshed in place like any file.
+ */
+async function installIntoOverride(root: string, relativePath: string): Promise<CustomInstallResult> {
+  const { spec, skipped } = await rulesSpec(root);
+  if ((await refuseEscapingSymlink(root, relativePath)) === undefined) {
+    const content = await readFile(path.join(root, ...relativePath.split("/")), "utf8");
+    const placed = hasManagedRulesBlock(content) ? undefined : insertRulesBlockAfterIndex(content, spec.render());
+    if (placed !== undefined) {
+      await writeContained(root, relativePath, placed);
+      return { errors: [], warnings: skippedMessages(skipped) };
+    }
+  }
+  return installRulesExport(root, relativePath);
+}
+
+async function uninstallEntrypointRulesExport(root: string, runtime: EntrypointRuntime): Promise<boolean | CustomUninstallResult> {
+  const target = resolveRulesExportTarget(root, runtime);
+  if (target.kind === "none") return { removed: false, warnings: [target.reason] };
+  const outcome = await uninstallRulesExport(root, target.path);
+  const cleanup = await removeFromOtherCandidate(root, runtime, target.path);
+  const removed = typeof outcome === "boolean" ? outcome : outcome.removed;
+  const warnings = [...cleanup, ...(typeof outcome === "boolean" ? [] : (outcome.warnings ?? []))];
+  return warnings.length === 0 ? removed || cleanup.length > 0 : { removed: removed || cleanup.length > 0, warnings };
+}
+
+/**
+ * When the block goes to the team file, a copy left in the runtime's local
+ * file (installed while its scope was local) is taken out. Never the other
+ * way round: a block in the team file is the team's, or `keryx update`'s to
+ * move. Returns a line for the output when something was removed.
+ */
+async function removeFromOtherCandidate(root: string, runtime: EntrypointRuntime, written: string): Promise<string[]> {
+  const localFile = localRootEntry(runtime).path;
+  if (written === localFile) return [];
+  const inspection = await inspectRulesExport(root, localFile);
+  if (inspection.state !== "present" && inspection.state !== "stale") return [];
+  const { spec } = await rulesSpec(root);
+  if (!(await uninstallMarkdownBlock(root, localFile, undefined, spec))) return [];
+  return [`${localFile}: removed the keryx:rules block left there — the block is in ${written} now.`];
+}
+
+/**
+ * Flow 361's ignore writer, run for a local target git does not ignore yet.
+ * The managed `info/exclude` block always lists both local root targets, so
+ * this runs only where no such block exists — a fresh clone, or a project
+ * `keryx update` has not reached since 0.3.45 — and writes the full set
+ * `keryx update` would (`ignoredLocalTargetPaths`).
+ */
+async function ignoreLocalTarget(root: string, relativePath: string): Promise<string[]> {
+  const check = await isPathIgnored(root, relativePath);
+  if (!check.git || check.ignored) return [];
+  const agentEntrypoints = readAgentEntrypoints(root);
+  const targets = normalizeEntrypointTargets(agentEntrypoints).targets;
+  const notices: string[] = [];
+  await syncMetaprojectIgnoreRules(root, {
+    localTargets: ignoredLocalTargetPaths({ root: targets.root, claudeSettings: resolveClaudeSettingsTarget(root) }),
+    onNotice: (line) => notices.push(line),
+  });
+  return notices;
+}
+
+function readAgentEntrypoints(root: string): unknown {
+  try {
+    const manifest: unknown = JSON.parse(readFileSync(path.join(root, ".metaproject", "metaproject.json"), "utf8"));
+    return typeof manifest === "object" && manifest !== null ? (manifest as { agentEntrypoints?: unknown }).agentEntrypoints : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Claude Code — keryx's primary entrypoint (the `keryx:index` block): VERIFIED
+ * that Claude Code reads `CLAUDE.md` and `CLAUDE.local.md` end-to-end
+ * (https://code.claude.com/docs/en/memory — `CLAUDE.local.md` is the
+ * per-project, per-developer file, loaded alongside `CLAUDE.md`). Flow 363:
+ * the block goes where the index block goes (`resolveRulesExportTarget`).
+ */
+export const RULES_EXPORT_CLAUDE: SurfaceAdapter = entrypointRulesExportSurface("claude", {
   confidence: "verified",
   sourceDocs: ["https://code.claude.com/docs/en/memory"],
 });
 
 /**
  * Codex — AGENTS.md is the cross-tool convention Codex documents reading
- * (https://agents.md/) and this repo's own `AGENTS.md` entrypoint already
- * relies on — VERIFIED.
+ * (https://agents.md/), and `AGENTS.override.md` is the file Codex reads
+ * INSTEAD of it in the same directory — VERIFIED. Flow 363: under scope
+ * local the block goes into the keryx-generated override, which carries it
+ * across every regeneration (`renderCodexOverride`).
  */
-export const RULES_EXPORT_CODEX: SurfaceAdapter = rulesExportSurface({
-  relativePath: "AGENTS.md",
+export const RULES_EXPORT_CODEX: SurfaceAdapter = entrypointRulesExportSurface("codex", {
   confidence: "verified",
   sourceDocs: ["https://agents.md/", "https://developers.openai.com/codex/"],
 });

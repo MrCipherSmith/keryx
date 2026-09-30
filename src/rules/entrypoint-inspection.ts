@@ -19,7 +19,7 @@ import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { hasManagedIgnoreBlock, planMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { settingsTextHasManagedHooks } from "./entrypoint-migration";
-import { ruleImportSources, type CodexLocalRootEntry, type EntrypointTargets } from "./entrypoint-targets";
+import { ruleImportSources, rulesExportTeamFile, type CodexLocalRootEntry, type EntrypointTargets } from "./entrypoint-targets";
 import {
   codexOverrideByteSize,
   codexOverrideState,
@@ -29,7 +29,7 @@ import {
   type CodexOverrideState,
   type LocalLeftover,
 } from "./entrypoint-writers";
-import { hasManagedIndexBlock } from "./managed-index-block";
+import { hasManagedIndexBlock, hasManagedRulesBlock } from "./managed-index-block";
 
 const TEAM_FILE_NAMES = ["agents.md", "claude.md"];
 
@@ -60,6 +60,12 @@ export type EntrypointInspection = {
   notices: string[];
   /** Team files (and custom import sources) holding the block while no shared entry names them. */
   strayIndexBlocks: MisplacedContent[];
+  /**
+   * Flow 363: tracked team files holding the rules-export `keryx:rules` block
+   * while their runtime's scope is local and it has a local target to move to
+   * (`moveRulesBlocksOutOfTeamFiles`'s set; Codex `skip` has none).
+   */
+  strayRulesBlocks: MisplacedContent[];
   /** Shared targets that hold the block, with whether `HEAD` has it. */
   sharedIndexBlocks: Array<{ path: string; committed: boolean }>;
   /** Shared targets with no file: a real run creates the team file (the only case keryx creates one). */
@@ -120,6 +126,14 @@ export async function inspectEntrypoints(
     if (found.committed && !TEAM_FILE_NAMES.includes(key)) continue;
     strayIndexBlocks.push(found);
   }
+  const strayRulesBlocks: MisplacedContent[] = [];
+  for (const entry of targets.root) {
+    if (entry.scope !== "local" || (entry.runtime === "codex" && entry.mode === "skip")) continue;
+    const teamFile = rulesExportTeamFile(entry);
+    const text = await readText(projectRoot, teamFile);
+    if (text === undefined || !hasManagedRulesBlock(text)) continue;
+    strayRulesBlocks.push(await placement(teamFile, hasManagedRulesBlock));
+  }
   const sharedIndexBlocks: EntrypointInspection["sharedIndexBlocks"] = [];
   const missingSharedTargets: string[] = [];
   for (const entry of targets.root) {
@@ -177,6 +191,7 @@ export async function inspectEntrypoints(
     targets,
     notices: [...resolved.notices, ...claudeSettings.notices],
     strayIndexBlocks,
+    strayRulesBlocks,
     sharedIndexBlocks,
     missingSharedTargets,
     ...(gitignoreBlock === undefined ? {} : { gitignoreBlock }),
@@ -228,6 +243,14 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
       stray.committed
         ? `${stray.path}: the managed keryx block is committed in HEAD; it would be removed, and the removal left for you to commit.`
         : `${stray.path}: the managed keryx block would be taken out; it lives in ${localBlockTargets.join(" and ") || "the local targets"} instead.`,
+    );
+  }
+  for (const stray of inspection.strayRulesBlocks) {
+    if (!stray.tracked) continue;
+    lines.push(
+      stray.committed
+        ? `${stray.path}: the keryx:rules block is committed in HEAD, so it would stay there.`
+        : `${stray.path}: the keryx:rules block would move to the local target and be rendered again there.`,
     );
   }
   for (const missing of inspection.missingSharedTargets) {

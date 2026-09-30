@@ -19,6 +19,7 @@ import { buildDoctorReport, checkEntrypoints, type DoctorCheck } from "./doctor"
 
 const BLOCK = "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n";
 const AGENTS = "# Team\n\nUse the team rules.\n";
+const RULES_BLOCK = "<!-- keryx:rules -->\n## Project rules (Keryx)\n<!-- /keryx:rules -->\n";
 const LOCAL_CLAUDE = { runtime: "claude", path: "CLAUDE.local.md", scope: "local" };
 const LOCAL_CODEX = { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" };
 const SHARED_CLAUDE = { runtime: "claude", path: "CLAUDE.md", scope: "shared" };
@@ -138,6 +139,41 @@ describe("keryx doctor: entrypoints (flow 361, AC11)", () => {
       await writeRel(root, "CLAUDE.md", `# Claude\n\n${BLOCK}`);
       expectWarn(await checkEntrypoints(root), "CLAUDE.md");
     });
+  });
+
+  // Flow 363 AC7: the rules-export block, where a keryx before 0.3.46 left it.
+  test("an uncommitted keryx:rules block in a tracked CLAUDE.md or AGENTS.md whose scope is local warns, with keryx update as the fix", async () => {
+    const committed = { "AGENTS.md": AGENTS, "CLAUDE.md": "# Claude\n" };
+    for (const file of ["CLAUDE.md", "AGENTS.md"]) {
+      await withRepo("keryx-doctor-entry-rules-", { ...MIGRATED, committed }, async (root) => {
+        await writeFreshLocalTargets(root);
+        await writeRel(root, file, `${committed[file as keyof typeof committed]}\n${RULES_BLOCK}`);
+        const before = await snapshot(root);
+        expectWarn(await checkEntrypoints(root), file, "keryx:rules", "uncommitted");
+        expect(await snapshot(root)).toEqual(before);
+      });
+    }
+  });
+
+  test("a keryx:rules block committed in HEAD, or one in a file whose scope is shared, is not warned about", async () => {
+    await withRepo(
+      "keryx-doctor-entry-rules-head-",
+      { ...MIGRATED, committed: { "AGENTS.md": AGENTS, "CLAUDE.md": `# Claude\n\n${RULES_BLOCK}` } },
+      async (root) => {
+        await writeFreshLocalTargets(root);
+        expect(await checkEntrypoints(root)).toMatchObject({ id: "entrypoints", status: "ok" });
+      },
+    );
+    await withRepo(
+      "keryx-doctor-entry-rules-shared-",
+      { committed: { "AGENTS.md": AGENTS, "CLAUDE.md": `# Claude\n\n${BLOCK}` }, agentEntrypoints: { root: [SHARED_CLAUDE, LOCAL_CODEX], claudeSettings: LOCAL_SETTINGS }, exclude: LOCAL_TARGETS },
+      async (root) => {
+        await writeRel(root, "AGENTS.override.md", renderCodexOverride({ source: "AGENTS.md", sourceContent: AGENTS, block: BLOCK }));
+        await writeRel(root, "CLAUDE.md", `# Claude\n\n${BLOCK}\n${RULES_BLOCK}`);
+        const check = await checkEntrypoints(root);
+        expect(check.detail).not.toContain("keryx:rules");
+      },
+    );
   });
 
   test("a block committed in HEAD is the team's shared choice: no warning, the scope is named", async () => {

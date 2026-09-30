@@ -349,6 +349,15 @@ export async function checkEntrypoints(cwd: string): Promise<DoctorCheck> {
       fix: UPDATE_FIX,
     });
   }
+  // Flow 363: the opt-in rules-export block, left in a tracked team file by a
+  // keryx before 0.3.46. Committed in HEAD, it is the team's shared choice.
+  for (const stray of inspection.strayRulesBlocks) {
+    if (!stray.tracked || stray.committed) continue;
+    warnings.push({
+      detail: `${stray.path} carries the rules-export keryx:rules block as an uncommitted edit, but its scope is local — the block belongs in ${localPaths.join(" / ")}`,
+      fix: UPDATE_FIX,
+    });
+  }
   const { gitignoreBlock, strayHooks } = inspection;
   if (gitignoreBlock !== undefined && gitignoreBlock.tracked && !gitignoreBlock.committed) {
     warnings.push({ detail: ".gitignore carries keryx's managed ignore block as an uncommitted edit — it belongs in info/exclude", fix: UPDATE_FIX });
