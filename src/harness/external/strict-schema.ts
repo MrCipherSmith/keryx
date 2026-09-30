@@ -120,7 +120,7 @@ function dropNulls(value: unknown, node: unknown, root: Schema): unknown {
   const required = new Set(Array.isArray(schema.required) ? (schema.required as string[]) : []);
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
-    if (child === null && !required.has(key)) continue;
+    if (child === null && !required.has(key) && key in schema.properties) continue;
     out[key] = dropNulls(child, schema.properties[key], root);
   }
   return out;

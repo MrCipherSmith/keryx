@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { loadSchema, validateJson } from "../../gdskills/contracts.ts";
-import { dropOptionalNulls, toStrictOutputSchema } from "./strict-schema.ts";
+import { loadSchema, validateJson } from "../../gdskills/contracts";
+import { dropOptionalNulls, toStrictOutputSchema } from "./strict-schema";
 
 type Schema = Record<string, unknown>;
 
@@ -90,6 +90,10 @@ describe("dropOptionalNulls", () => {
     expect(out).toEqual({ id: null, note: null });
   });
 
+  test("keeps a null on a key the schema does not declare, so the full schema can still reject it", () => {
+    expect(dropOptionalNulls({ id: "a", note: null, bogus: null }, ORIGINAL)).toEqual({ id: "a", note: null, bogus: null });
+  });
+
   test("never mutates its input", () => {
     const input = { id: "a", note: null, kind: null };
     dropOptionalNulls(input, ORIGINAL);
@@ -136,5 +140,41 @@ describe("the real subagent-result schema", () => {
     const cleaned = dropOptionalNulls(strictDoc, bundled);
     expect(await validateJson(cleaned, await loadSchema("subagent-result"))).toEqual([]);
     expect(await validateJson({ ...(cleaned as object), run_id: null }, await loadSchema("subagent-result"))).not.toEqual([]);
+  });
+
+  test("a populated minor finding with every optional field null validates; an undeclared null key does not", async () => {
+    const finding = {
+      id: "F-001",
+      reviewer: "r",
+      severity: "minor",
+      problem: "p",
+      impact: "i",
+      suggested_fix: "f",
+      evidence: "e",
+      confidence: "high",
+      file: "a.ts",
+      line: 1,
+      quote: "q",
+      class_scope: null,
+    };
+    const doc = {
+      contract_version: "1.0.0",
+      run_id: "r",
+      dispatch_id: "d",
+      status: "DONE",
+      summary: "s",
+      acceptance: [],
+      artifacts: [],
+      changed_files: [],
+      findings: [finding],
+      questions: [],
+      errors: [],
+      metrics: {},
+      timestamp_utc: "2026-09-30T00:00:00Z",
+    };
+    const schema = await loadSchema("subagent-result");
+    const cleaned = dropOptionalNulls(doc, bundled);
+    expect(await validateJson(cleaned, schema)).toEqual([]);
+    expect(await validateJson(dropOptionalNulls({ ...doc, bogus: null }, bundled), schema)).not.toEqual([]);
   });
 });

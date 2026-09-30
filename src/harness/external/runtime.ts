@@ -33,7 +33,12 @@ import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
 import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
 import { persistAcpRun, runAcpInWorktree, type AcpChildOptions, type AcpRunRecord } from "./acp-run";
-import { superviseExternalRun, type ExternalRunHandle, type ExternalSpawnPort } from "./supervise";
+import {
+  CODEX_TERMINAL_SETTLE_MS,
+  superviseExternalRun,
+  type ExternalRunHandle,
+  type ExternalSpawnPort,
+} from "./supervise";
 import type { SupervisionConfig, SupervisionTrigger } from "./supervision";
 import { getExternalCodec } from "./codec";
 import type { ExternalAgentEntry, ExternalEvent } from "./types";
@@ -533,6 +538,7 @@ export async function runExternalChild(
           // `"ignore"` otherwise, never inherited: a CLI that inherits an open
           // stdin announces it is reading from it and waits forever.
           stdin: streaming ? "pipe" : "ignore",
+          ...(entry.id === "codex-cli" ? { terminalSettleMs: CODEX_TERMINAL_SETTLE_MS } : {}),
           ...(streaming
             ? {
                 initialStdin: [
