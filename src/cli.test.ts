@@ -702,8 +702,13 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
 
   /** Every `command === "x"` the `reviewCommand` router compares against — read from SOURCE, not a second list. */
   function reviewRouterSubcommands(): string[] {
-    const source = readFileSync(path.join(import.meta.dir, "commands/review.ts"), "utf8");
-    const headerAt = source.indexOf("export async function reviewCommand(");
+    return routerSubcommands("commands/review.ts", "reviewCommand");
+  }
+
+  /** The same, for any group router written as a chain of `command === "x"` comparisons. */
+  function routerSubcommands(file: string, routerFunction: string): string[] {
+    const source = readFileSync(path.join(import.meta.dir, file), "utf8");
+    const headerAt = source.indexOf(`export async function ${routerFunction}(`);
     expect(headerAt).toBeGreaterThan(-1);
     let depth = 0;
     let i = source.indexOf("{", headerAt);
@@ -743,6 +748,54 @@ describe("flow 360 AC11: --help reaches a review/skills subcommand's own usage, 
     // first tokens are refused as typos BEFORE the router runs — a subcommand
     // added to the router but not there is unreachable, however well documented.
     expect([...(knownSubcommandsFor("review") ?? [])].sort()).toEqual(reviewRouterSubcommands());
+  });
+
+  // Flow 360 review F-020: a `skills` subcommand is registered in four places —
+  // the router, the known-subcommand table, the group help and (when it has
+  // help of its own) `SKILLS_SUBCOMMAND_HELP`. The router is the source; the
+  // other three are checked against it, so one cannot be forgotten.
+  describe("skills parity", () => {
+    const skillsRouterSubcommands = (): string[] => routerSubcommands("commands/skills.ts", "skillsCommand");
+
+    /** The keys of `SKILLS_SUBCOMMAND_HELP`, read from source: the table is module-private. */
+    function skillsOwnHelpSubcommands(): string[] {
+      const source = readFileSync(path.join(import.meta.dir, "commands/skills.ts"), "utf8");
+      const tableAt = source.indexOf("const SKILLS_SUBCOMMAND_HELP");
+      expect(tableAt).toBeGreaterThan(-1);
+      const table = source.slice(tableAt, source.indexOf("]);", tableAt));
+      return [...table.matchAll(/^\s*\["([a-z][a-z0-9-]*)",/gm)].map((match) => match[1] as string).sort();
+    }
+
+    test("skills parity: the router and the known-subcommand table name the same subcommands", () => {
+      const names = skillsRouterSubcommands();
+      expect(names.length).toBeGreaterThan(15);
+      expect([...(knownSubcommandsFor("skills") ?? [])].sort()).toEqual(names);
+    });
+
+    test("skills parity: `keryx skills --help` has a usage line for every subcommand the router handles", async () => {
+      const output = await captureLog(() => printCommandHelp("skills"));
+      const missing = skillsRouterSubcommands().filter((name) => !new RegExp(`^\\s+keryx skills ${name}(?:\\s|$)`, "m").test(output));
+      expect(missing).toEqual([]);
+    });
+
+    test("skills parity: every routed subcommand has help of its own, or is pinned here as answered by the group help", () => {
+      const ownHelp = skillsOwnHelpSubcommands();
+      const routed = skillsRouterSubcommands();
+      // A help-table key the router does not dispatch documents a command that does not exist.
+      expect(ownHelp.filter((name) => !routed.includes(name))).toEqual([]);
+      // A new subcommand lands in this list unless it is given a printer in
+      // `SKILLS_SUBCOMMAND_HELP` — adding it here is then a decision, not an omission.
+      expect(routed.filter((name) => !ownHelp.includes(name))).toEqual([
+        "catalog",
+        "eval",
+        "install",
+        "judge-check",
+        "list",
+        "scout",
+        "status",
+        "stocktake",
+      ]);
+    });
   });
 
   const OWN_HELP: ReadonlyArray<{ argv: string[]; has: string[]; lacks: string }> = [

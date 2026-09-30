@@ -85,6 +85,26 @@ type Evidence = {
 
 const VERSION = "0.1.0";
 
+// The on-disk format a project skill is written in — project-relative, posix.
+// Exported so `keryx skills remove` (remove-skill.ts) undoes exactly what is
+// written here instead of keeping its own copy of each literal.
+export const PROJECT_SKILLS_DIR = ".metaproject/project-skills";
+export const PROJECT_SKILLS_MANIFEST_PATH = ".metaproject/metaproject.json";
+export const PROJECT_SKILLS_CATALOG_PATH = ".metaproject/skills/catalog.md";
+/** Held by every writer of the three paths above. */
+export const PROJECT_SKILLS_LOCK_PATH = ".metaproject/data/gdskills/project-skills.lock";
+export const PROJECT_SKILLS_CATALOG_START = "<!-- gdskills:project-skills:start -->";
+export const PROJECT_SKILLS_CATALOG_END = "<!-- gdskills:project-skills:end -->";
+/** The one row the catalog section carries when the registry is empty. */
+export const PROJECT_SKILLS_CATALOG_EMPTY_ROW = "| _none_ | _none_ | _none_ | - |";
+export const PROJECT_SKILL_REPORTS_DIR = ".metaproject/data/gdskills/reports";
+export const PROJECT_SKILL_REPORT_SUFFIX = "-verification.json";
+
+/** The file name `keryx skills verify` gives a skill's report (verify.ts writes it under {@link PROJECT_SKILL_REPORTS_DIR}). */
+export function projectSkillReportFileName(moduleName: string, skillName: string): string {
+  return `${moduleName}-${skillName}${PROJECT_SKILL_REPORT_SUFFIX}`;
+}
+
 export async function createProjectSkill(
   projectRoot: string,
   options: CreateProjectSkillOptions,
@@ -131,7 +151,7 @@ export async function createProjectSkill(
   const files = filesForPackage(packageRoot, format);
 
   if (!options.dryRun) {
-    await withFileLock(path.join(metaprojectRoot, "data", "gdskills", "project-skills.lock"), async () => {
+    await withFileLock(path.join(projectRoot, PROJECT_SKILLS_LOCK_PATH), async () => {
       await writeProjectSkillPackage({
         projectRoot,
         packageRoot,
@@ -680,7 +700,7 @@ async function updateManifest(
   projectRoot: string,
   entry: ProjectSkillRegistryEntry,
 ): Promise<void> {
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
   const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   manifest.modules ??= {};
   manifest.modules.gdskills ??= {};
@@ -696,29 +716,29 @@ async function updateManifest(
 }
 
 async function updateSkillsCatalog(projectRoot: string): Promise<void> {
-  const manifestPath = path.join(projectRoot, ".metaproject", "metaproject.json");
-  const catalogPath = path.join(projectRoot, ".metaproject", "skills", "catalog.md");
+  const manifestPath = path.join(projectRoot, PROJECT_SKILLS_MANIFEST_PATH);
+  const catalogPath = path.join(projectRoot, PROJECT_SKILLS_CATALOG_PATH);
   const manifest = await readJsonFileOr<MetaprojectManifest>(manifestPath, {});
   const registry = manifest.modules?.gdskills?.projectSkillRegistry ?? [];
   const rows = registry.length > 0
     ? registry
         .map((entry) => `| ${entry.module} | ${entry.name} | \`${entry.target}\` | ${entry.path}/SKILL.md |`)
         .join("\n")
-    : "| _none_ | _none_ | _none_ | - |";
-  const section = `<!-- gdskills:project-skills:start -->
+    : PROJECT_SKILLS_CATALOG_EMPTY_ROW;
+  const section = `${PROJECT_SKILLS_CATALOG_START}
 ## Project Skills
 
 | Module | Skill | Target | Entry |
 |---|---|---|---|
 ${rows}
-<!-- gdskills:project-skills:end -->`;
+${PROJECT_SKILLS_CATALOG_END}`;
 
   const current = (await pathExists(catalogPath))
     ? await readFile(catalogPath, "utf8")
     : "# Metaproject Skills Catalog\n";
 
-  const start = "<!-- gdskills:project-skills:start -->";
-  const end = "<!-- gdskills:project-skills:end -->";
+  const start = PROJECT_SKILLS_CATALOG_START;
+  const end = PROJECT_SKILLS_CATALOG_END;
   const startIndex = current.indexOf(start);
   const endIndex = current.indexOf(end);
   const next = startIndex >= 0 && endIndex > startIndex

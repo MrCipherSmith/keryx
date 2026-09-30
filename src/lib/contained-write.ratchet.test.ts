@@ -58,6 +58,10 @@ const COVERED_FILES = [
   "src/assets/seed.ts",
   "src/gdskills/install.ts",
   "src/gdskills/guarded-fs-ops.ts",
+  // Flow 360 review F-001: `keryx skills remove` deletes recursively; its
+  // removals and rewrites go through removeContained/rmdirIfEmptyContained/
+  // writeContained, and a raw `rm`/`rmdir`/`writeFileAtomic` must not come back.
+  "src/gdskills/remove-skill.ts",
   "src/lib/routing-entrypoint.ts",
   "src/mcp/client-config.ts",
   "src/capability/registry.ts",
