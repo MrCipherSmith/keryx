@@ -2,7 +2,13 @@ import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { BUNDLED_GDSKILLS, bundledSkillMarkdownPath, packageRelativePath } from "../gdskills/catalog";
 import { hashOriginContent, resolveOriginPath } from "../gdskills/project-skills";
-import { unresolvedRuleReferences } from "../gdskills/rule-references";
+import {
+  shadowedRuleReferences,
+  unresolvedReferences,
+  unresolvedRuleReferences,
+  type ShadowedRule,
+  type UnresolvedReference,
+} from "../gdskills/rule-references";
 import { parseSkillFrontmatter } from "../gdskills/skill-frontmatter";
 import { extractStackRequiresField, parseStackRequires, type StackTag } from "./stack";
 
@@ -83,8 +89,23 @@ export type ProjectReviewer = {
   flags: string[];
   /** `metadata.stack_requires`, for `keryx review stack`-style scoping. */
   stackRequires: StackTag[];
-  /** Rules it cites that `.metaproject/rules/` does not have. */
+  /**
+   * Rules it cites that resolve to no file — neither
+   * `.metaproject/rules/project/<name>` nor `.metaproject/rules/<ref>`.
+   */
   unresolvedRules: string[];
+  /**
+   * Rules it cites by one path and reads from another: a
+   * `.metaproject/rules/project/<name>` copy answers the reference before the
+   * file the text names (`core/<name>.mdc`). `resolved` is project-relative.
+   */
+  shadowedRules: ShadowedRule[];
+  /**
+   * Other references that will not hold: a backticked `skills/...` or
+   * `rules/...` `.md` / `.json` path absent under `.metaproject/` (`missing`),
+   * and a rule cited by an absolute or `~` path (`non-portable`).
+   */
+  unresolvedReferences: UnresolvedReference[];
   /** Verbatim origin reference, when the skill was imported from a file. */
   origin?: string;
   originHash?: string;
@@ -384,6 +405,8 @@ export async function collectReviewers(projectRoot: string, deps: CollectReviewe
       flags: description ? descriptionFlags(description) : [],
       stackRequires: parseStackRequires(extractStackRequiresField(content)),
       unresolvedRules: await unresolvedRuleReferences(projectRoot, content),
+      shadowedRules: await shadowedRuleReferences(projectRoot, content),
+      unresolvedReferences: await unresolvedReferences(projectRoot, content),
       ...(origin ? { origin } : {}),
       ...(originHash ? { originHash } : {}),
       ...(importedAt ? { importedAt } : {}),
@@ -460,7 +483,46 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
     lines.push(
       "",
       "The reviewer names these as its standard and the project does not have them. Re-run",
-      "`keryx review import --from <overlay>` to copy them from the overlay, or add them by hand.",
+      "`keryx review import --from <overlay> --only '<glob>'` (a tree import needs --only) to copy",
+      "them from the overlay, or add them by hand.",
+    );
+  }
+
+  const shadowed = inventory.project.filter((reviewer) => reviewer.shadowedRules.length > 0);
+  if (shadowed.length > 0) {
+    lines.push("", "## rules read from .metaproject/rules/project", "");
+    for (const reviewer of shadowed) {
+      for (const rule of reviewer.shadowedRules) {
+        lines.push(`- ${reviewer.name}: \`${rule.ref}\` → ${rule.resolved}`);
+      }
+    }
+    lines.push(
+      "",
+      "The reviewer's text names the path on the left; the file it must read is the one on the",
+      "right. `.metaproject/rules/project/<name>` is resolved before `.metaproject/rules/core/<name>`:",
+      "`keryx install` and `keryx update` overwrite rules/core with keryx's own rules, so a rule an",
+      "overlay provides under a name keryx also ships is kept in rules/project.",
+    );
+  }
+
+  const dangling = inventory.project.filter((reviewer) => reviewer.unresolvedReferences.length > 0);
+  if (dangling.length > 0) {
+    lines.push("", "## references that do not resolve", "");
+    for (const reviewer of dangling) {
+      for (const reference of reviewer.unresolvedReferences) {
+        lines.push(
+          reference.reason === "missing"
+            ? `- ${reviewer.name}: \`${reference.ref}\` — missing (.metaproject/${reference.ref})`
+            : `- ${reviewer.name}: \`${reference.ref}\` — non-portable`,
+        );
+      }
+    }
+    lines.push(
+      "",
+      "missing: the reviewer points at a file the import did not bring — it copies SKILL.md and the",
+      "rules it cites, nothing else. Copy the file to the path shown, or edit the reference out.",
+      "non-portable: a rule cited by an absolute or ~ path exists on one machine at most. Cite it as",
+      "`core/<name>.mdc` and keep the file under .metaproject/rules/.",
     );
   }
 

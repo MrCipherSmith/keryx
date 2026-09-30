@@ -5,7 +5,7 @@ import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
-import { ruleReferences } from "./rule-references";
+import { literalRulePath, PROJECT_RULES_DIR, projectRulePath, ruleReferences } from "./rule-references";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   createProjectSkill,
@@ -84,19 +84,45 @@ export function optionValues(args: readonly string[], name: string): string[] {
 /**
  * A rule an imported skill names as its standard.
  *
- * - `present` — `.metaproject/rules/<ref>` already exists.
+ * A reference resolves to `.metaproject/rules/project/<name>` first, then to
+ * `.metaproject/rules/<ref>` — the order `keryx review reviewers` reports.
+ *
+ * - `present` — the project already has it, and it is the overlay's version
+ *   byte for byte (or the overlay has no version to compare with).
+ * - `differs` — the project has a file under that name with other content than
+ *   the overlay's. Never reported as `present`: keryx ships generic rules under
+ *   common filenames, and a reviewer reading one of those in place of its
+ *   overlay's rule is reviewing against the wrong standard. The overlay's
+ *   version goes to `.metaproject/rules/project/<name>` (`target`); `written`
+ *   says whether it did.
  * - `imported` / `would-import` — found beside the skill's source tree
- *   (`<overlay>/rules/<ref>`) and copied in.
+ *   (`<overlay>/rules/<ref>`) and copied to `.metaproject/rules/<ref>`.
+ * - `imported-project` / `would-import-project` — the same, for a name keryx
+ *   itself ships under `rules/core/`: copied to `.metaproject/rules/project/`,
+ *   because `keryx install` overwrites `rules/core/<name>`.
  * - `unresolved` — nowhere to take it from; the skill will cite a rule the
  *   project does not have, and `keryx review reviewers` keeps saying so.
  */
 export type ImportedRule = {
   ref: string;
-  status: "present" | "imported" | "would-import" | "unresolved";
+  status:
+    | "present"
+    | "differs"
+    | "imported"
+    | "would-import"
+    | "imported-project"
+    | "would-import-project"
+    | "unresolved";
   /** The skills that cite it. */
   citedBy: string[];
   origin?: string;
   reason?: string;
+  /** Project-relative path of the file the project already had for this reference. */
+  existing?: string;
+  /** Project-relative path the overlay's version was, or would be, written to. */
+  target?: string;
+  /** For `differs`: whether the overlay's version is now at `target`. */
+  written?: boolean;
 };
 
 export type ImportProjectSkillsResult = {
@@ -238,10 +264,20 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
   if (result.rules.length > 0) {
     lines.push("## rules the skills cite", "");
     for (const rule of result.rules) {
-      const detail = [rule.origin ? `from ${rule.origin}` : undefined, rule.reason].filter(Boolean).join(" — ");
+      const detail = [ruleOutcomeNote(rule, result.dryRun), rule.origin ? `from ${rule.origin}` : undefined, rule.reason]
+        .filter(Boolean)
+        .join(" — ");
       lines.push(`- ${rule.ref}: ${rule.status}${detail ? ` — ${detail}` : ""} (cited by ${rule.citedBy.join(", ")})`);
     }
     lines.push("");
+    if (result.rules.some((rule) => rule.target?.startsWith(PROJECT_RULES_PREFIX))) {
+      lines.push(
+        "A reviewer that cites `core/<name>.mdc` reads `.metaproject/rules/project/<name>.mdc` when that file exists, and",
+        "`.metaproject/rules/core/<name>.mdc` otherwise. `keryx install` and `keryx update` overwrite rules/core with keryx's",
+        "own rules and leave rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.",
+        "",
+      );
+    }
   }
   if (result.imported.some((row) => row.module === "review" && row.status !== "skipped")) {
     lines.push("Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.");
@@ -252,6 +288,37 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
     );
   }
   return `${lines.join("\n")}\n`;
+}
+
+const PROJECT_RULES_PREFIX = `.metaproject/rules/${PROJECT_RULES_DIR}/`;
+
+/** Which file the reviewer ends up reading, for the rows where that is not obvious from the status. */
+function ruleOutcomeNote(rule: ImportedRule, dryRun: boolean): string | undefined {
+  if (rule.status === "differs") {
+    const where =
+      rule.existing !== undefined && rule.existing !== rule.target
+        ? `${rule.existing} is not the overlay's version`
+        : `${rule.target} is not the overlay's version`;
+    if (rule.written === true) {
+      return rule.existing === rule.target
+        ? `${where}; replaced with the overlay's (--force) — that is the file the reviewer reads`
+        : `${where}; the overlay's was written to ${rule.target}, which is the file the reviewer reads`;
+    }
+    if (dryRun && rule.existing !== rule.target) {
+      return `${where}; the overlay's would be written to ${rule.target}, which is the file the reviewer would read`;
+    }
+    return `${where}; the reviewer reads ${rule.existing ?? rule.target}`;
+  }
+  if (rule.status === "imported-project") {
+    return `keryx ships a rule under this name; the overlay's was written to ${rule.target}, which is the file the reviewer reads`;
+  }
+  if (rule.status === "would-import-project") {
+    return `keryx ships a rule under this name; the overlay's would be written to ${rule.target}, which is the file the reviewer would read`;
+  }
+  if (rule.status === "present" && rule.existing?.startsWith(PROJECT_RULES_PREFIX) && !rule.ref.startsWith(`${PROJECT_RULES_DIR}/`)) {
+    return `the reviewer reads ${rule.existing}`;
+  }
+  return undefined;
 }
 
 export function githubBlobToRaw(url: string): string {
@@ -841,53 +908,116 @@ async function importReferencedRules(
   const rules: ImportedRule[] = [];
   for (const [ref, cited] of [...citedBy.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const base = { ref, citedBy: cited.names.sort() };
-    const target = path.join(options.projectRoot, ".metaproject", "rules", ref);
-    if (await pathExists(target)) {
-      rules.push({ ...base, status: "present" });
-      continue;
-    }
+    const literal = literalRulePath(ref);
+    const project = projectRulePath(ref);
+    // The order a reviewer's reference resolves in: rules/project first.
+    const existing = (await pathExists(path.join(options.projectRoot, project)))
+      ? project
+      : (await pathExists(path.join(options.projectRoot, literal)))
+        ? literal
+        : undefined;
     // A name keryx itself ships under rules/core is installed — and overwritten
-    // on every install — by `keryx install`. Copying an overlay's file there
+    // on every install — by `keryx install`. An overlay's file copied there
     // would be silently replaced by a different file of the same name.
-    if (ref.startsWith("core/") && (await pathExists(path.join(bundledRules, path.basename(ref))))) {
-      rules.push({ ...base, status: "unresolved", reason: "ships with keryx — run `keryx install` to restore it" });
-      continue;
-    }
+    const shipsWithKeryx = ref.startsWith("core/") && (await pathExists(path.join(bundledRules, path.basename(ref))));
+
     let found: string | undefined;
     for (const sourcePath of cited.sourcePaths) {
       found = await findOverlayRule(sourcePath, ref);
       if (found) break;
     }
     if (!found) {
+      if (existing !== undefined) {
+        // Nothing to compare it with: the project's file is the only version.
+        rules.push({ ...base, status: "present", existing });
+      } else if (shipsWithKeryx) {
+        rules.push({ ...base, status: "unresolved", reason: "ships with keryx — run `keryx install` to restore it" });
+      } else {
+        rules.push({
+          ...base,
+          status: "unresolved",
+          reason: cited.sourcePaths.length > 0 ? "no rules/ directory beside the source has it" : "remote source; rules are not fetched",
+        });
+      }
+      continue;
+    }
+
+    const origin = portableOriginRef(found, options.projectRoot);
+    const content = await readFile(found, "utf8");
+    const existingContent =
+      existing !== undefined ? await readFile(path.join(options.projectRoot, existing), "utf8") : undefined;
+    if (existing !== undefined && existingContent === content) {
+      rules.push({ ...base, status: "present", origin, existing });
+      continue;
+    }
+
+    // Where the overlay's version goes. A colliding name never lands on the
+    // file it collides with: rules/core belongs to `keryx install`, and any
+    // other existing file is the project's own.
+    const collides = existing !== undefined;
+    const target = collides || shipsWithKeryx ? project : literal;
+    // The rules/project copy itself differs: it may be a hand edit, and an
+    // import never overwrote a project's rule. `--force` is the operator asking.
+    const replacesProjectCopy = existing === project;
+    if (replacesProjectCopy && options.force !== true) {
       rules.push({
         ...base,
-        status: "unresolved",
-        reason: cited.sourcePaths.length > 0 ? "no rules/ directory beside the source has it" : "remote source; rules are not fetched",
+        status: "differs",
+        origin,
+        existing,
+        target,
+        written: false,
+        reason: "left as it is; pass --force to replace it with the overlay's",
       });
       continue;
     }
-    const origin = portableOriginRef(found, options.projectRoot);
     if (options.dryRun) {
-      rules.push({ ...base, status: "would-import", origin });
+      rules.push(
+        collides
+          ? {
+              ...base,
+              status: "differs",
+              origin,
+              existing,
+              target,
+              written: false,
+              ...(replacesProjectCopy ? { reason: "would be replaced with the overlay's (--force)" } : {}),
+            }
+          : { ...base, status: target === project ? "would-import-project" : "would-import", origin, target },
+      );
       continue;
     }
-    const content = await readFile(found, "utf8");
-    const relative = toPosix(path.relative(options.projectRoot, target));
+
     const guard = await guardOutput({
       cwd: options.projectRoot,
       content,
       target: "skill",
       source: "untrusted-external",
-      path: relative,
+      path: target,
     });
     const output = prepareOutputForPersistence(guard, content);
     if (!output.allowed) {
-      rules.push({ ...base, status: "unresolved", origin, reason: `blocked by the security gate: ${output.reason}` });
+      const reason = `blocked by the security gate: ${output.reason}`;
+      rules.push(
+        collides
+          ? { ...base, status: "differs", origin, existing, target, written: false, reason }
+          : { ...base, status: "unresolved", origin, reason },
+      );
       continue;
     }
-    await mkdir(path.dirname(target), { recursive: true });
-    await writeFileAtomic(target, output.content);
-    rules.push({ ...base, status: "imported", origin });
+    if (existing !== undefined && existingContent === output.content) {
+      // The gate rewrote the overlay's text and the project already holds that result.
+      rules.push({ ...base, status: "present", origin, existing });
+      continue;
+    }
+    const targetAbs = path.join(options.projectRoot, target);
+    await mkdir(path.dirname(targetAbs), { recursive: true });
+    await writeFileAtomic(targetAbs, output.content);
+    rules.push(
+      collides
+        ? { ...base, status: "differs", origin, existing, target, written: true }
+        : { ...base, status: target === project ? "imported-project" : "imported", origin, target },
+    );
   }
   return rules;
 }

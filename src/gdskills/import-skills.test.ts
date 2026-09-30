@@ -13,6 +13,7 @@ import {
   updateProjectSkills,
 } from "./import-skills";
 import { verifyProjectSkill } from "./verify";
+import { collectReviewers } from "../review/reviewers";
 
 let cwd: string;
 let source: string;
@@ -440,15 +441,118 @@ describe("rules the imported skills cite", () => {
     expect(rerun.rules[0]?.status).toBe("imported");
   });
 
-  test("a rule name keryx ships is never copied from an overlay", async () => {
+  test("a rule name keryx ships that the overlay does not provide stays unresolved", async () => {
+    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "unresolved" });
+    expect(result.rules[0]?.reason).toContain("keryx install");
+  });
+
+  test("a rule name keryx ships that the overlay provides lands in rules/project, never rules/core", async () => {
     await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
     await mkdir(path.join(source, "rules", "core"), { recursive: true });
     await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
+    const projectCopy = path.join(cwd, ".metaproject", "rules", "project", "git-rules.mdc");
+
+    const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
+    expect(dry.rules[0]).toMatchObject({
+      ref: "core/git-rules.mdc",
+      status: "would-import-project",
+      target: ".metaproject/rules/project/git-rules.mdc",
+    });
+    await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
 
     const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
     // `keryx install` rewrites rules/core/<bundled name> on every run; an
     // overlay copy there would be silently replaced by a different file.
-    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "unresolved" });
-    expect(result.rules[0]?.reason).toContain("keryx install");
+    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "imported-project" });
+    expect(await readFile(projectCopy, "utf8")).toBe("# overlay git rules\n");
+    await expect(readFile(path.join(cwd, ".metaproject", "rules", "core", "git-rules.mdc"), "utf8")).rejects.toThrow();
+    expect(renderImportProjectSkillsMarkdown(result)).toContain(".metaproject/rules/project/git-rules.mdc");
+  });
+
+  describe("a cited rule that collides by filename with one the project already has", () => {
+    const GENERIC = "# keryx generic store template\n";
+    const OVERLAY = "# overlay store template\n";
+    let coreCopy: string;
+    let projectCopy: string;
+
+    beforeEach(async () => {
+      await writeOverlaySkill("review-house", "Stores: `core/mobx-store-template.mdc`.");
+      await mkdir(path.join(source, "rules", "core"), { recursive: true });
+      await writeFile(path.join(source, "rules", "core", "mobx-store-template.mdc"), OVERLAY, "utf8");
+      coreCopy = path.join(cwd, ".metaproject", "rules", "core", "mobx-store-template.mdc");
+      projectCopy = path.join(cwd, ".metaproject", "rules", "project", "mobx-store-template.mdc");
+      await mkdir(path.dirname(coreCopy), { recursive: true });
+      await writeFile(coreCopy, GENERIC, "utf8");
+    });
+
+    test("different content is `differs`, and the overlay's version is written to rules/project", async () => {
+      const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+      expect(result.rules).toHaveLength(1);
+      expect(result.rules[0]).toMatchObject({
+        ref: "core/mobx-store-template.mdc",
+        status: "differs",
+        existing: ".metaproject/rules/core/mobx-store-template.mdc",
+        target: ".metaproject/rules/project/mobx-store-template.mdc",
+        written: true,
+      });
+      expect(await readFile(projectCopy, "utf8")).toBe(OVERLAY);
+      // The file `keryx install` owns is not touched.
+      expect(await readFile(coreCopy, "utf8")).toBe(GENERIC);
+
+      const markdown = renderImportProjectSkillsMarkdown(result);
+      expect(markdown).toContain("core/mobx-store-template.mdc: differs");
+      expect(markdown).toContain(".metaproject/rules/project/mobx-store-template.mdc");
+      expect(markdown).toContain(".metaproject/rules/core/mobx-store-template.mdc");
+
+      const [reviewer] = (await collectReviewers(cwd)).project;
+      expect(reviewer?.shadowedRules).toEqual([
+        { ref: "core/mobx-store-template.mdc", resolved: ".metaproject/rules/project/mobx-store-template.mdc" },
+      ]);
+      expect(reviewer?.unresolvedRules).toEqual([]);
+    });
+
+    test("identical content is `present`, and nothing is written", async () => {
+      await writeFile(coreCopy, OVERLAY, "utf8");
+      const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+      expect(result.rules[0]).toMatchObject({ ref: "core/mobx-store-template.mdc", status: "present" });
+      await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
+    });
+
+    test("dry-run reports `differs` without writing", async () => {
+      const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
+      expect(dry.rules[0]).toMatchObject({
+        status: "differs",
+        target: ".metaproject/rules/project/mobx-store-template.mdc",
+        written: false,
+      });
+      await expect(readFile(projectCopy, "utf8")).rejects.toThrow();
+      expect(renderImportProjectSkillsMarkdown(dry)).toContain("would be written to");
+    });
+
+    test("a re-run finds the rules/project copy and reports `present`", async () => {
+      await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+      const rerun = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+      expect(rerun.rules[0]).toMatchObject({
+        status: "present",
+        existing: ".metaproject/rules/project/mobx-store-template.mdc",
+      });
+    });
+
+    test("a rules/project copy that differs from the overlay is kept unless --force", async () => {
+      await mkdir(path.dirname(projectCopy), { recursive: true });
+      await writeFile(projectCopy, "# hand-edited\n", "utf8");
+
+      const kept = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+      expect(kept.rules[0]).toMatchObject({ status: "differs", written: false });
+      expect(kept.rules[0]?.reason).toContain("--force");
+      expect(await readFile(projectCopy, "utf8")).toBe("# hand-edited\n");
+
+      const forced = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", force: true });
+      expect(forced.rules[0]).toMatchObject({ status: "differs", written: true });
+      expect(await readFile(projectCopy, "utf8")).toBe(OVERLAY);
+    });
   });
 });

@@ -24,13 +24,99 @@ export function ruleReferences(content: string): string[] {
   return [...refs].sort();
 }
 
-/** The subset of {@link ruleReferences} with no file under `.metaproject/rules/`. */
+/**
+ * The directory under `.metaproject/rules/` that holds a project's own version
+ * of a rule. `keryx install` / `keryx update` force-copy the bundled rules over
+ * `rules/core/` and touch nothing else under `rules/`, so an overlay's rule
+ * that shares a filename with one keryx ships survives only outside `core/`.
+ */
+export const PROJECT_RULES_DIR = "project";
+
+/** Project-relative posix path of the `rules/project/` copy a reference resolves to first. */
+export function projectRulePath(ref: string): string {
+  return path.posix.join(".metaproject", "rules", PROJECT_RULES_DIR, path.posix.basename(ref));
+}
+
+/** Project-relative posix path of the file a reference names literally. */
+export function literalRulePath(ref: string): string {
+  return path.posix.join(".metaproject", "rules", ref);
+}
+
+export type RuleResolution = {
+  ref: string;
+  /** Project-relative posix path of the file the reference resolves to; absent when neither candidate exists. */
+  resolved?: string;
+  /**
+   * True when the reference resolves to `rules/project/<name>` although it
+   * names another directory — the reviewer reads a different file than the one
+   * its text spells out.
+   */
+  shadowed: boolean;
+};
+
+/**
+ * Where a rule reference resolves in this project:
+ * `.metaproject/rules/project/<name>` first, then `.metaproject/rules/<ref>`.
+ */
+export async function resolveRuleReference(projectRoot: string, ref: string): Promise<RuleResolution> {
+  const project = projectRulePath(ref);
+  const literal = literalRulePath(ref);
+  if (await pathExists(path.join(projectRoot, project))) {
+    return { ref, resolved: project, shadowed: project !== literal };
+  }
+  if (await pathExists(path.join(projectRoot, literal))) {
+    return { ref, resolved: literal, shadowed: false };
+  }
+  return { ref, shadowed: false };
+}
+
+/** The subset of {@link ruleReferences} that resolves to no file, in either location. */
 export async function unresolvedRuleReferences(projectRoot: string, content: string): Promise<string[]> {
   const missing: string[] = [];
   for (const ref of ruleReferences(content)) {
-    if (!(await pathExists(path.join(projectRoot, ".metaproject", "rules", ref)))) {
+    if ((await resolveRuleReference(projectRoot, ref)).resolved === undefined) {
       missing.push(ref);
     }
   }
   return missing;
+}
+
+export type ShadowedRule = { ref: string; resolved: string };
+
+/** The subset of {@link ruleReferences} that a `rules/project/` copy answers instead of the named file. */
+export async function shadowedRuleReferences(projectRoot: string, content: string): Promise<ShadowedRule[]> {
+  const shadowed: ShadowedRule[] = [];
+  for (const ref of ruleReferences(content)) {
+    const resolution = await resolveRuleReference(projectRoot, ref);
+    if (resolution.shadowed && resolution.resolved !== undefined) {
+      shadowed.push({ ref, resolved: resolution.resolved });
+    }
+  }
+  return shadowed;
+}
+
+/**
+ * A reference a skill makes that {@link ruleReferences} does not cover.
+ *
+ * - `missing` — a backticked `skills/...` or `rules/...` path ending `.md` or
+ *   `.json` with no file at `.metaproject/<path>`.
+ * - `non-portable` — a rule cited by an absolute or `~` path. It may well exist
+ *   on this machine; it is reported because it is true on exactly one.
+ */
+export type UnresolvedReference = { ref: string; reason: "missing" | "non-portable" };
+
+export async function unresolvedReferences(projectRoot: string, content: string): Promise<UnresolvedReference[]> {
+  const found = new Map<string, UnresolvedReference>();
+  for (const match of content.matchAll(/`(?:\.metaproject\/)?((?:skills|rules)\/[^`\s]+\.(?:md|json))`/gi)) {
+    const ref = match[1];
+    if (!ref || found.has(ref) || ref.split("/").includes("..")) continue;
+    if (!(await pathExists(path.join(projectRoot, ".metaproject", ref)))) {
+      found.set(ref, { ref, reason: "missing" });
+    }
+  }
+  for (const match of content.matchAll(/`((?:~\/|\/)[^`\s]+\.mdc)`/gi)) {
+    const ref = match[1];
+    if (ref && !found.has(ref)) found.set(ref, { ref, reason: "non-portable" });
+  }
+  return [...found.values()].sort((a, b) => (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
 }

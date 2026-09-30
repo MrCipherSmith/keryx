@@ -286,6 +286,81 @@ describe("project reviewer triggers", () => {
     expect(inventory.project[0]?.unresolvedRules).toEqual(["core/absent.mdc"]);
     expect(renderReviewerInventoryMarkdown(inventory)).toContain("- review-house-rules: core/absent.mdc");
   });
+
+  test("the unresolved-rules hint names a command a tree import accepts", async () => {
+    await writeProjectReviewer("review-house-rules", "description: Reviews things.\n", "Standard: `core/absent.mdc`.\n");
+    const rendered = renderReviewerInventoryMarkdown(await collectReviewers(cwd));
+    expect(rendered).toContain("keryx review import --from <overlay> --only");
+  });
+
+  test("a rule in rules/project shadows the same name in rules/core, and is reported as such", async () => {
+    await mkdir(path.join(cwd, ".metaproject", "rules", "core"), { recursive: true });
+    await mkdir(path.join(cwd, ".metaproject", "rules", "project"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "store.mdc"), "generic", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "store.mdc"), "overlay", "utf8");
+    // Only in rules/project: keryx ships the name but the project's install lacks it.
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "only-project.mdc"), "overlay", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "plain.mdc"), "x", "utf8");
+    await writeProjectReviewer(
+      "review-house-rules",
+      "description: Reviews things.\n",
+      "Standards: `core/store.mdc`, `core/only-project.mdc`, `core/plain.mdc`, `core/absent.mdc`.\n",
+    );
+
+    const inventory = await collectReviewers(cwd);
+    const [reviewer] = inventory.project;
+    expect(reviewer?.shadowedRules).toEqual([
+      { ref: "core/only-project.mdc", resolved: ".metaproject/rules/project/only-project.mdc" },
+      { ref: "core/store.mdc", resolved: ".metaproject/rules/project/store.mdc" },
+    ]);
+    expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("## rules read from .metaproject/rules/project");
+    expect(rendered).toContain("- review-house-rules: `core/store.mdc` → .metaproject/rules/project/store.mdc");
+  });
+
+  test("a reviewer with nothing shadowed or dangling carries empty lists and no extra sections", async () => {
+    await writeProjectReviewer("review-house-plain", "description: Reviews things.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project[0]).toMatchObject({ shadowedRules: [], unresolvedReferences: [] });
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).not.toContain("## rules read from");
+    expect(rendered).not.toContain("## references that do not resolve");
+  });
+
+  test("missing skills/ and rules/ files and non-portable rule paths are unresolved references", async () => {
+    await mkdir(path.join(cwd, ".metaproject", "skills", "shared"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "skills", "shared", "here.md"), "x", "utf8");
+    await writeProjectReviewer(
+      "review-house-refs",
+      "description: Reviews things.\n",
+      [
+        "Graph: `skills/shared/graphify-lookup.md`. Present: `skills/shared/here.md`.",
+        "Schema: `skills/vantage-review/reviewer-finding.schema.json`. Index: `.metaproject/rules/README.md`.",
+        "Rule: `~/.vantage-frontend/rules/core/x.mdc` and `/opt/overlay/rules/core/y.mdc`.",
+        "Prose path `src/core/flow/CLAUDE.md` and a rule `core/absent.mdc` are not this list's business.",
+        "",
+      ].join("\n"),
+    );
+
+    const inventory = await collectReviewers(cwd);
+    const [reviewer] = inventory.project;
+    expect(reviewer?.unresolvedReferences).toEqual([
+      { ref: "/opt/overlay/rules/core/y.mdc", reason: "non-portable" },
+      { ref: "rules/README.md", reason: "missing" },
+      { ref: "skills/shared/graphify-lookup.md", reason: "missing" },
+      { ref: "skills/vantage-review/reviewer-finding.schema.json", reason: "missing" },
+      { ref: "~/.vantage-frontend/rules/core/x.mdc", reason: "non-portable" },
+    ]);
+    // An absolute rule path is not a `dir/name.mdc` reference, so it never was in here.
+    expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
+
+    const rendered = renderReviewerInventoryMarkdown(inventory);
+    expect(rendered).toContain("## references that do not resolve");
+    expect(rendered).toContain("- review-house-refs: `skills/shared/graphify-lookup.md` — missing (.metaproject/skills/shared/graphify-lookup.md)");
+    expect(rendered).toContain("- review-house-refs: `~/.vantage-frontend/rules/core/x.mdc` — non-portable");
+  });
 });
 
 describe("descriptionPathTriggers", () => {
