@@ -678,10 +678,12 @@ Removes, in this order, and lists each as removed or absent:
     (and the <module>/ directory when this was the last skill in it)
   - the projectSkillRegistry entry in .metaproject/metaproject.json
 
-A part that is already gone is reported as absent, not as an error, so a skill
-half-removed by hand can be finished with this command. The registry entry goes
-last: if a step fails (a read-only directory, say), the error lists what is
-already gone, and running the same command again once the cause is fixed
+A part that is already gone is reported as absent, not as an error. A skill
+whose entry and package are gone is still found by a leftover catalog row or
+verification report, so one half-removed by hand can be finished with this
+command. The registry entry goes last: if a step fails (a read-only directory,
+say), the error names that part and lists what is already gone and what is
+still in place, and running the same command again once the cause is fixed
 finishes the removal.
 
 --dry-run:
@@ -698,7 +700,8 @@ Refused, always before anything is changed:
     (\`import --force\`) is a project skill and is removable.
   - a name that is not a project skill. Names are listed by \`keryx skills list\`
     and are case-sensitive: Review/Alpha does not name review/alpha, even on a
-    filesystem that does not tell the two apart.
+    filesystem that does not tell the two apart, and the refusal names the
+    registered spelling.
   - a registry entry whose "path" is not its own
     .metaproject/project-skills/<module>/<name>, or whose module or name is not
     a plain path segment. Fix the entry in .metaproject/metaproject.json.

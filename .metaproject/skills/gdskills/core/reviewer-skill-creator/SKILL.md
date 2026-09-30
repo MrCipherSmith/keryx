@@ -71,7 +71,7 @@ an orchestrator or facade, a deprecated alias, a report generator, or anything w
 contract does not belong there. One package directory passed as `--from` needs no `--only`.
 
 Read `SKILL.detail.md` beside this file before running an import. It is the worked example, with
-real output: the refusal, what each run writes, how `flags`, `paths`, `pathsSource`,
+real output: the refusals, what each run writes, how `flags`, `paths`, `pathsSource`,
 `stackRequires`, `unresolvedRules` and `drift` are derived, rule collisions, undo with
 `keryx skills remove`, refresh, the per-clone note, and the `review-learning.config.json` shape.
 Until `keryx review reviewers` shows the names, they are not wired.

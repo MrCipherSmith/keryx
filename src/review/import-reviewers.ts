@@ -102,10 +102,28 @@ A reviewer is imported with a warning for each of:
   - neither \`metadata.paths\` nor a glob in its description (a file path named
     without a glob is not a trigger): it is dispatched on every round.
   - a \`metadata.flags\` entry that is not a flag after normalising (lower-case,
-    \`--\` prefixed): it is dropped. When metadata.flags is declared, the flags
-    in the description are not used.
+    \`--\` prefixed): it is dropped. When metadata.flags has at least one
+    entry, the flags in the description are not used — even when none of its
+    entries is a flag, or it holds only --all. An empty list ([] or '') leaves
+    the description's flags in force.
   - a flag that exactly one existing project reviewer carries: it becomes a
     family flag for both, so that reviewer is path-gated under it from now on.
+  - with --force, a family flag the new version drops that leaves exactly one
+    other reviewer carrying it: that reviewer is dispatched outright under it
+    from now on.
+
+Frontmatter is read as a YAML subset: BOM and CRLF accepted, trailing
+# comments dropped, metadata.paths and metadata.flags as a flow, block or
+comma-separated list, only keys directly under metadata:. A shape outside the
+subset reads as not declared.
+
+A package directory with no letter or digit is refused: it has no name to be
+written under.
+
+Before anything is written, every destination — the package, the registry in
+.metaproject/metaproject.json, the catalog and each rule — is checked for a
+symlink on the way that resolves outside the project. One is refused, and the
+import writes nothing; --dry-run refuses it the same way.
 
 Rules the reviewers cite (\`<dir>/<name>.mdc\`) are copied from the overlay's
 rules/ to .metaproject/rules/<dir>/<name>.mdc. When a file already answers the

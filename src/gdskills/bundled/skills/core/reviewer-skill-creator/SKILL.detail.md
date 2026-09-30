@@ -83,6 +83,26 @@ $ keryx review import --from ./dup --only 'review*' --dry-run
 keryx review import: review-dup and review_dup both import as review/review-dup. Narrow --only to one of them, or rename one directory.
 ```
 
+A directory name with no letter or digit has no slug to be written under, and
+is refused the same way:
+
+```
+$ keryx review import --from ./vendor/odd/___ --dry-run
+keryx review import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md with --name <name>.
+```
+
+Before the first write, every destination the import would touch — the
+package, the registry in `.metaproject/metaproject.json`, the catalog, each
+rule — is checked for a symlink on the way that resolves outside the project.
+One is refused, nothing is written, and a dry run refuses it with the same
+message. `keryx skills update` checks the same way. Here the package directory
+had been replaced by a link to a directory outside the project:
+
+```
+$ keryx review import --from ./vendor/acme-overlay/skills/review-acme-naming --dry-run
+keryx review import: .metaproject/project-skills/review/review-acme-naming/SKILL.md: refuses to write through a symlink at .metaproject/project-skills/review/review-acme-naming that resolves outside the project root. Nothing was written.
+```
+
 ### 2. Dry-run first
 
 ```
@@ -132,7 +152,9 @@ Read three things off it before running for real:
     touches. The remedy is `metadata.paths` in the overlay's frontmatter
     (section 4).
   - `metadata.flags: … dropped` — an entry of the declared list is not a flag
-    and will not select the reviewer. Fix the spelling in the overlay.
+    and will not select the reviewer. Fix the spelling in the overlay. When no
+    entry survives, a second line, `metadata.flags: no entry is a flag`, says
+    the reviewer now has no selection flags at all (section 4, `flags`).
   - `flag … is carried by one existing project reviewer` — the import changes
     how a reviewer the project **already has** is dispatched. Until now `--api`
     dispatched `review-house-api` outright; once a second reviewer carries it,
@@ -141,6 +163,10 @@ Read three things off it before running for real:
     The warning is about reviewers that were on disk before the import and are
     not replaced by it; packages arriving together that share a flag (`--acme`)
     are the overlay's own family and get no warning.
+
+  A fourth kind appears only on a `--force` overwrite: `flag … is dropped by
+  this version of …, which leaves … its only carrier` — the reverse change,
+  shown under "Refresh when the origin moves".
 - **Every rule row that is not `would-import` or `present`.** `unresolved` means
   the reviewer will cite a rule the project will not have. `differs` means a
   file already answers that reference with other content.
@@ -181,6 +207,15 @@ under `shadowedRules`.
 
 Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.
 ```
+
+The note's "`keryx skills install` overwrite rules/core" is true of one of its
+two forms. **`keryx init`, `keryx update` and the legacy-profile form of
+`keryx skills install`** (`--profile minimal|recommended|full|custom` with no
+manifest flag) copy keryx's rules over `rules/core`. The manifest form with
+`--target keryx-shell` also writes `rules/core`, but skips an existing file its
+install-state did not record (or that drifted from it) unless `--force`;
+`--target claude` writes `.claude/rules/` and leaves `rules/core` alone. None
+of them writes or cleans `rules/project`. The other mentions below mean this.
 
 Per imported package, four things now exist:
 
@@ -244,8 +279,8 @@ reports one status:
 - `imported-project` — a `core/<name>.mdc` that keryx ships under the same name
   and the project has no file for yet; the overlay's goes to
   `.metaproject/rules/project/core/<name>.mdc` rather than to `rules/core`,
-  because `keryx init`, `keryx update` and `keryx skills install` overwrite
-  `rules/core` with keryx's own rules.
+  because `keryx init`, `keryx update` and the legacy-profile
+  `keryx skills install` overwrite `rules/core` with keryx's own rules.
 - `unresolved` — no `rules/` directory beside the source has it. Add the file by
   hand, or the reviewer keeps citing a rule the project lacks.
 
@@ -332,22 +367,41 @@ description: |
   --acme-naming or --all. The pattern to follow is in src/app/names.ts.
 ```
 
+The frontmatter is read by one reader, shared by the import, this inventory,
+`keryx review jev-rules` and the stack gate. It reads a subset of YAML, and a
+shape outside the subset reads as not declared — the same as an absent key:
+
+- the block opens with `---` on the first line; a leading BOM is ignored and
+  CRLF line endings read as LF;
+- a `# comment` after whitespace, outside quotes, is dropped;
+- `metadata.paths` and `metadata.flags` may be a comma-separated string, a flow
+  list (`[a, b]`) or a block list of `- item` lines; empty items are skipped.
+  `metadata.stack_requires` is read as a string only;
+- only keys directly under `metadata:` are its fields — a `paths:` nested a
+  level deeper is not `metadata.paths`;
+- a flow mapping, an anchor, a nested list or a multi-line quoted scalar is
+  outside the subset;
+- `deprecated: true` and `category` count at the top level or under
+  `metadata:`.
+
 How each field of a `project` entry in `--json` is derived:
 
-- **`flags`** — `metadata.flags` when it has entries; otherwise every `--flag`
-  the description names. `--all` is excluded either way: it selects every
-  reviewer already. `metadata.flags` and `metadata.paths` take the same three
-  spellings: a comma-separated string, a flow list (`[a, b]`) or a YAML block
-  list as above. A declared flag entry is normalised before anything compares
-  it: split on commas and whitespace, trimmed, lower-cased, and given `--` when
-  it has no leading dash — so `acme` and `--Acme-Styling` above became `--acme`
-  and `--acme-styling`.
+- **`flags`** — `metadata.flags` when it has at least one non-empty entry;
+  otherwise every `--flag` the description names. So `flags: []` and
+  `flags: ''` leave the description's flags in force — they do not switch them
+  off. A declared flag entry is normalised before anything compares it: split
+  on commas and whitespace, trimmed, lower-cased, and given `--` when it has no
+  leading dash — so `acme` and `--Acme-Styling` above became `--acme` and
+  `--acme-styling`. `--all` is excluded either way: it selects every reviewer
+  already. A list with entries replaces the description even when none of them
+  survives: a list of only non-flags (`[--acme_css]`) and a list of only
+  `--all` both leave the reviewer with no flags, selected by its paths or by
+  `--all`.
 - **`flagWarnings`** — one line per `metadata.flags` entry that is still not
   `--` plus a lower-case name after normalising (`--acme_css` above). The entry
   is dropped from `flags`, and the line is printed as a `warning:` row here and
-  on the import row. A declared list replaces the description even when nothing
-  in it survives: the reviewer then has no flags, a second line says so, and it
-  is selected by its paths or by `--all`. Empty when there is nothing to say.
+  on the import row. When dropping left no flag, a second line says so. A list
+  of only `--all` gets no warning. Empty when there is nothing to say.
 - **`familyFlags`** — the subset of `flags` that at least one other project
   reviewer also carries (`--acme` and `--api` above). A passed family flag
   selects the reviewer and leaves it path-gated; a passed flag only this
@@ -373,7 +427,7 @@ How each field of a `project` entry in `--json` is derived:
   yields nothing. When the printed `paths` are not what the reviewer should be
   gated on, declare `metadata.paths` in the overlay's frontmatter and refresh
   the import — do not reword the description until the guess comes out right.
-- **`stackRequires`** — `metadata.stack_requires`, a comma-separated list of the
+- **`stackRequires`** — `metadata.stack_requires`, a comma-separated string of the
   tags `keryx review stack` knows (`nestjs`, `react`, `mobx`, `prisma`,
   `playwright`, `sql`, `http-server`). An unknown tag is dropped, which leaves
   the reviewer unscoped rather than excluded.
@@ -394,8 +448,10 @@ How each field of a `project` entry in `--json` is derived:
   reference out. `non-portable`: a rule cited by an absolute or `~` path, which
   exists on one machine at most; cite it as `core/<name>.mdc` instead.
 - **`drift`** — `clean`, `changed` or `missing`, from re-hashing the file
-  `Origin` names against `Origin Hash`; `none` when no origin was recorded. It
-  is the word after the dash on the reviewer's row. A remote (`https://`) origin
+  `Origin` names against `Origin Hash`. It is the word after the dash on the
+  reviewer's row. `none` means no origin was recorded — a reviewer made with
+  `keryx skills create` and no `--origin` — and its row reads
+  `- <name> (no recorded origin)`, with no dash. A remote (`https://`) origin
   always lists as `clean`: listing opens no connection, and `keryx skills
   update` is what re-reads it.
 
@@ -430,24 +486,40 @@ registered for `keryx skills route` and is not dispatched by review rounds.
 ```
 $ keryx skills remove review/review-acme-naming --dry-run
 Would remove project skill: review/review-acme-naming
-- would remove: registry entry — .metaproject/metaproject.json
+- absent: verification report — .metaproject/data/gdskills/reports/review-review-acme-naming-verification.json
 - would remove: catalog row — .metaproject/skills/catalog.md
 - would remove: package directory — .metaproject/project-skills/review/review-acme-naming
-- absent: verification report — .metaproject/data/gdskills/reports/review-review-acme-naming-verification.json
+- would remove: registry entry — .metaproject/metaproject.json
 Dry run: nothing was changed.
 
 $ keryx skills remove review/review-acme-naming
 Removed project skill: review/review-acme-naming
-- removed: registry entry — .metaproject/metaproject.json
+- absent: verification report — .metaproject/data/gdskills/reports/review-review-acme-naming-verification.json
 - removed: catalog row — .metaproject/skills/catalog.md
 - removed: package directory — .metaproject/project-skills/review/review-acme-naming
-- absent: verification report — .metaproject/data/gdskills/reports/review-review-acme-naming-verification.json
+- removed: registry entry — .metaproject/metaproject.json
 ```
 
-One skill per call. It removes the four things an import registered, plus the
-`review/` directory when that was the last skill in it; `absent` means the part
-was already gone and is not an error, so a removal interrupted half-way is
-finished by running it again.
+One skill per call, named exactly as registered. It removes the four things an
+import registered, plus the `review/` directory when that was the last skill in
+it, in the order printed: the verification report, the catalog row, the
+package directory, the module directory, and the registry entry last. `absent`
+means the part was already gone and is not an error.
+
+If a step fails — a read-only directory, say — the error names the part that
+failed, what is already gone and what is still in place. The registry entry is
+still there, so running the same command again once the cause is fixed
+finishes the removal. A skill whose entry and package are already gone is
+still found by a leftover catalog row or verification report, so a removal
+half-done by hand is finished the same way.
+
+Names are case-sensitive, on every filesystem. A spelling that differs from the
+registered one only in case is refused and names the registered spelling:
+
+```
+$ keryx skills remove Review/review-acme-naming --dry-run
+keryx skills remove: Review/review-acme-naming is not registered under that spelling; the registered spelling is review/review-acme-naming. Skill names are case-sensitive: run `keryx skills remove review/review-acme-naming`. Nothing was changed.
+```
 
 The command deletes a directory recursively and takes its target from a
 registry anyone can edit, so it checks where it is about to reach and refuses
@@ -456,8 +528,12 @@ catalog and the disk as they were:
 
 - a bundled skill, or a name that is not a project skill;
 - a symlink where something would be deleted: `.metaproject/project-skills`
-  itself, the module directory, or the package. It does not delete through the
-  link and does not unlink it; remove the link by hand if that is the intent;
+  itself, the module directory, the package, or the reports directory
+  `.metaproject/data/gdskills/reports`. It does not delete through the link and
+  does not unlink it; remove the link by hand if that is the intent;
+- a `.metaproject/metaproject.json` or `.metaproject/skills/catalog.md` that
+  resolves outside the project. One reached through a symlink to a file inside
+  the project is rewritten in place, and the row names where the write lands;
 - a registry entry whose `path` is not its own
   `.metaproject/project-skills/<module>/<name>` — an entry pointing at the
   module directory or at another skill's package would otherwise delete that;
@@ -518,6 +594,19 @@ $ keryx review import --from ./vendor/acme-overlay/skills/review-acme-styling --
 …
 ```
 
+An overwrite can also change how a reviewer it leaves alone is dispatched.
+When the new version drops a family flag and one other project reviewer is left
+carrying it, that flag becomes the other reviewer's own and dispatches it past
+its path gate — here the overlay dropped `--api` from `review-acme-api`:
+
+```
+$ keryx review import --from ./vendor/acme-overlay/skills/review-acme-api --force --dry-run
+…
+- review/review-acme-api: would-overwrite — review-orchestrator will dispatch this after `keryx review reviewers` lists it
+  - warning: flag --api is dropped by this version of review-acme-api, which leaves review-house-api its only carrier: --api now dispatches review-house-api outright instead of selecting it path-gated.
+…
+```
+
 An origin that reads `missing` cannot be updated from: pass the new location
 with `keryx skills update <module>/<name> --from <new-origin>`.
 
@@ -533,7 +622,7 @@ Where `.metaproject/` is tracked, commit what the import wrote:
 `.metaproject/project-skills/review/`, the registry entry in
 `.metaproject/metaproject.json`, the catalog row, and the rules — including
 `.metaproject/rules/project/`, which `keryx init`, `keryx update` and
-`keryx skills install` neither write nor clean, so a clone that lacks it
+`keryx skills install` (either form) never write or clean, so a clone that lacks it
 silently reads keryx's generic rule under the same name. Keep the overlay at a path that resolves for everyone
 (inside the repository, or the same `~/…` location), or `drift` reads `missing`
 on every machine but the importer's.

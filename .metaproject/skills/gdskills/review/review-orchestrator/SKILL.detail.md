@@ -14,8 +14,8 @@ them from the reviewer's prose.
 
 | Field | Use |
 |---|---|
-| `flags` | The reviewer's selection flags: `metadata.flags` from its frontmatter when declared — that takes precedence, even when none of its entries turns out to be a flag — otherwise the flags its description names. Already normalised (lower-case, `--` prefixed), so compare a passed flag with them as they are. A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
-| `flagWarnings` | One line per `metadata.flags` entry that was dropped because it is not a flag after normalising, plus one more when that left the reviewer with no flags. Empty in the ordinary case. A dropped entry selects nothing: do not match a passed flag against the raw spelling in the reviewer's frontmatter. Dispatch the reviewer as its other fields say, and name the warnings once in the report — a reviewer its author meant to be flag-selectable is not. Never a finding against the code. |
+| `flags` | The reviewer's selection flags: `metadata.flags` from its frontmatter when it has at least one non-empty entry — then it takes precedence, even when none of its entries turns out to be a flag or it holds only `--all`, and the reviewer has no flags — otherwise the flags its description names. An empty `metadata.flags` (`[]`, `''`) leaves the description's flags in force. Already normalised (lower-case, `--` prefixed), so compare a passed flag with them as they are. A flag the user passed that is in this list selects the reviewer. Whether that selection is also exempt from the path gate depends on `familyFlags`. `--all` selects every project reviewer. |
+| `flagWarnings` | One line per `metadata.flags` entry that was dropped because it is not a flag after normalising, plus one more when that left the reviewer with no flags. A list of only `--all` leaves no flags and no warning. Empty in the ordinary case. A dropped entry selects nothing: do not match a passed flag against the raw spelling in the reviewer's frontmatter. Dispatch the reviewer as its other fields say, and name the warnings once in the report — a reviewer its author meant to be flag-selectable is not. Never a finding against the code. |
 | `familyFlags` | The subset of `flags` that at least one other project reviewer also carries. A passed flag listed here is a **family flag**: it selects this reviewer, and the reviewer stays path-gated. A passed flag that is in `flags` and not here is unique to this reviewer: the selection is **explicit** and never path-gated, like any flag-selected bundled reviewer. |
 | `paths` | Its path triggers for the **path gate**. No file in scope A matches → `Skipped reviewers`, reason `no-matching-paths`. |
 | `pathsSource` | `metadata` (declared `metadata.paths`) or `description` (globs read out of its description, and the literal file paths such as `src/utils/column-zone.ts` listed beside them; a cited `.md` / `.mdc` document and a `.metaproject/` path are not triggers). A description with no glob gives `none` even when it names a file: a literal path counts only beside a glob. `none` means there is nothing to gate on: **dispatch it** — ambiguity includes. |
@@ -23,6 +23,14 @@ them from the reviewer's prose.
 | `unresolvedRules` | Rules it cites that the project does not have. Dispatch it anyway, tell it in the prompt which rules are absent, and name them once in the report with the fix (`keryx review import --from <overlay> --only '<glob>'` copies them). Never a finding against the code. |
 | `shadowedRules` | `[{ ref, resolved }]`: rules it cites by one path and must read from another. The project holds its own version of the rule at `resolved` — the reference's slot under `.metaproject/rules/project/`, the whole reference kept (`core/x.mdc` → `.metaproject/rules/project/core/x.mdc`) — which answers the reference before the file `ref` names. In the dispatch prompt, tell the reviewer to read `resolved` in place of `ref` — see "Dispatching a project reviewer" below. Not a defect and not reported as one. |
 | `unresolvedReferences` | `[{ ref, reason }]`: other references in its text that will not hold. `missing` — a backticked `skills/…` or `rules/…` path ending `.md` / `.json` with no file under `.metaproject/`; `non-portable` — a rule cited by an absolute or `~` path, true on one machine at most. Dispatch it anyway, tell it in the prompt which references are absent, and name them once in the report. Never a finding against the code. |
+
+`metadata.paths`, `metadata.flags` and `metadata.stack_requires` are read by
+one frontmatter reader that supports a YAML subset (BOM and CRLF accepted,
+trailing `# comments` dropped, `paths` and `flags` as a flow, block or
+comma-separated list, `stack_requires` as a string, only keys directly under
+`metadata:`); a shape outside it reads as not declared.
+`reviewer-skill-creator`'s `SKILL.detail.md` lists the subset. The inventory
+has already applied it — use the fields, not the raw frontmatter.
 
 A description saying another entry point dispatches it ("Dispatched by
 vantage-review …") is its author's routing note, not a restriction: this
@@ -88,8 +96,10 @@ keeps the reference's directory and a file lying directly in `rules/project/`
 answers only a literal `project/<name>.mdc` citation. An import keeps an
 overlay's rule in that slot whenever a file already answers the reference with
 other content, or the name is one keryx also ships under `rules/core`, because
-`keryx init`, `keryx update` and `keryx skills install` overwrite `rules/core`
-with keryx's own rules. The reviewer's text was written against the overlay and
+`keryx init`, `keryx update` and the legacy-profile `keryx skills install`
+overwrite `rules/core` with keryx's own rules (the manifest form with
+`--target keryx-shell` skips an existing file it did not record unless
+`--force`; see "Skills present only when installed"). The reviewer's text was written against the overlay and
 still says `core/<name>.mdc`, so followed literally it reads keryx's generic
 rule of the same name and reviews against the wrong standard — silently, since
 both files exist. The inventory computes the project-first order and reports
@@ -105,7 +115,7 @@ import. `keryx review reviewers` re-reads the source and reports:
 
 | `drift` | Meaning | What to do this round |
 |---|---|---|
-| `none` | No external source; written here | Nothing |
+| `none` | No origin recorded; written here. The text row reads `(no recorded origin)` | Nothing |
 | `clean` | Source matches the import | Nothing |
 | `changed` | Source has moved on since import | Dispatch it, and say so in the report |
 | `missing` | Source can no longer be read | Dispatch it, and say so in the report |

@@ -1497,13 +1497,20 @@ A package landing in module \`review\` is imported with a warning for each of:
   - neither \`metadata.paths\` nor a glob in its description (a file path named
     without a glob is not a trigger): it is dispatched on every round.
   - a \`metadata.flags\` entry that is not a flag after normalising (lower-case,
-    \`--\` prefixed): it is dropped. When metadata.flags is declared, the flags
-    in the description are not used.
+    \`--\` prefixed): it is dropped. When metadata.flags has at least one
+    entry, the flags in the description are not used — even when none of its
+    entries is a flag, or it holds only --all. An empty list ([] or '') leaves
+    the description's flags in force.
   - a flag that exactly one existing project reviewer carries: it becomes a
     family flag for both, so that reviewer is path-gated under it from now on.
   - with --force, a family flag the new version drops that leaves exactly one
     other reviewer carrying it: that reviewer is dispatched outright under it
     from now on.
+
+Frontmatter is read as a YAML subset: BOM and CRLF accepted, trailing
+# comments dropped, metadata.paths and metadata.flags as a flow, block or
+comma-separated list, only keys directly under metadata:. A shape outside the
+subset reads as not declared.
 
 A package directory, or a SKILL.md or URL name, with no letter or digit is
 refused: it has no name to be written under.
@@ -1536,6 +1543,10 @@ Re-read a project-skill's Origin and overwrite SKILL.md when the source moved on
 Usage:
   keryx skills update <module>/<name> [--from <new-origin>] [--dry-run] [--json]
   keryx skills update --all [--dry-run] [--json]
+
+Before anything is written, every destination is checked for a symlink on the
+way that resolves outside the project, as \`keryx skills import\` does. One is
+refused and nothing is written; --dry-run refuses it the same way.
 
 Examples:
   keryx skills update review/local-review-skill --from ./skill-supper.md

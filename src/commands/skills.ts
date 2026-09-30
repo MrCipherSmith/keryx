@@ -1796,7 +1796,8 @@ Usage:
   keryx skills create <target> --module <module> --name <skill-name>
   keryx skills generate <target> --module <module> --name <skill-name>
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
-  keryx skills update [<module>/<name>|--all] [--from <origin>]
+      [--only <glob>]... [--dry-run] [--force] [--json]
+  keryx skills update [<module>/<name>|--all] [--from <origin>] [--dry-run] [--json]
   keryx skills remove <module>/<name> [--dry-run] [--json]
   keryx skills verify <skill-or-target>
   keryx skills verify --all
