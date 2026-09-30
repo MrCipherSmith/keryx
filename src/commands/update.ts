@@ -526,7 +526,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // an older keryx left there is moved out — and before the local targets
   // exist, so they are ignored from their first byte.
   await syncMetaprojectIgnoreRules(projectRoot, {
-    localTargets: await ignoredLocalTargetPaths(projectRoot, entrypoints.targets),
+    localTargets: ignoredLocalTargetPaths(entrypoints.targets),
     onNotice: (line) => {
       entrypointNotices.push(line);
     },

@@ -503,19 +503,19 @@ async function removeLocalLeftovers(projectRoot: string, leftovers: readonly Loc
 
 /**
  * The paths keryx keeps in `info/exclude`: every local target it writes
- * (`localTargetPaths`), plus a local file a runtime no longer uses that stays
- * on disk — a `CLAUDE.local.md` holding the developer's own lines is still a
+ * (`localTargetPaths`), plus the local file of a runtime that no longer uses
+ * one — a `CLAUDE.local.md` holding the developer's own lines is still a
  * per-developer file after Claude goes back to shared, and must not surface
- * in `git status`. A file the run removes is not listed.
+ * in `git status`. That file is listed whether or not it exists in this
+ * checkout: `info/exclude` is shared by every worktree, and its block must not
+ * depend on which one runs (flow 361 AC6, review round 2, F-014).
  */
-export async function ignoredLocalTargetPaths(projectRoot: string, targets: EntrypointTargets): Promise<string[]> {
+export function ignoredLocalTargetPaths(targets: EntrypointTargets): string[] {
   const paths = localTargetPaths(targets);
-  const removed = new Set((await planLocalLeftovers(projectRoot, targets)).filter((leftover) => leftover.action === "remove").map((leftover) => leftover.path));
   for (const entry of targets.root) {
     const unused = unusedLocalTarget(entry);
     if (unused === undefined || TEAM_FILE_NAMES.includes(unused.path.toLowerCase())) continue;
-    if (paths.includes(unused.path) || removed.has(unused.path)) continue;
-    if (await pathExists(path.join(projectRoot, unused.path))) paths.push(unused.path);
+    if (!paths.includes(unused.path)) paths.push(unused.path);
   }
   return paths;
 }

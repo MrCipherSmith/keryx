@@ -1501,17 +1501,25 @@ describe("flow 361: ignore rules go to info/exclude", () => {
     }
   }, 120_000);
 
-  test("update writes no ignore block anywhere when .metaproject/ is ignored as a whole (AC6)", async () => {
+  // AC6 (owner decision 2026-10-01, review round 2, F-014): the blanket line
+  // is one branch's rule and info/exclude is every worktree's, so the block
+  // keeps the full set; a second update leaves it byte-identical.
+  test("update writes the full ignore block to info/exclude even when .metaproject/ is ignored as a whole (AC6)", async () => {
     const gitignore = `.metaproject/\n${LOCAL_TARGETS.join("\n")}\n`;
     const root = await ignoreFixture("keryx-update-ignore-whole-", { "AGENTS.md": AGENTS, ".gitignore": gitignore });
     try {
-      const excludeBefore = await readExclude(root);
       await runEntrypointUpdate(root);
 
-      expect(await readExclude(root)).toBe(excludeBefore);
-      expect(excludeBefore).not.toContain("# keryx:begin");
+      const exclude = await readExclude(root);
+      const lines = managedLines(exclude);
+      expect(lines).toContain(".metaproject/runtime/");
+      expect(lines).toContain(".metaproject/data/security/raw/");
+      expect(lines.slice(-LOCAL_TARGETS.length)).toEqual(LOCAL_TARGETS);
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
       expect(gitForUpdateIdempotency(root, ["status", "--porcelain"])).toBe("");
+
+      await runEntrypointUpdate(root);
+      expect(await readExclude(root)).toBe(exclude);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

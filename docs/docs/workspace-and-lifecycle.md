@@ -99,10 +99,13 @@ covers it: a redundant line is harmless, and the block comes out the same
 whichever worktree runs `update`. The same block lists the per-developer agent
 files keryx writes (`CLAUDE.local.md`, `AGENTS.override.md`,
 `.claude/settings.local.json` — see
-[where the block goes](#where-the-block-goes-local-and-shared-scope)). The one
-exception is `.metaproject/` ignored as a whole (`git check-ignore` says so):
-then no `.metaproject` entry is written at all, and a per-developer file git
-already ignores is not repeated. keryx refuses to write a line that starts
+[where the block goes](#where-the-block-goes-local-and-shared-scope)), and a
+`CLAUDE.local.md` left over after Claude went back to shared is listed whether
+or not this checkout has one. `.metaproject/` ignored as a whole is no
+exception: a blanket `.metaproject/` line in `.gitignore` is one branch's rule,
+so the block still carries every entry, and a worktree whose branch lacks that
+line keeps `.metaproject/runtime/` and `.metaproject/data/security/raw/`
+ignored. The blanket line itself is read, never edited. keryx refuses to write a line that starts
 with `!` (it would re-include a path) or holds a line break. Outside a git
 repository the step is skipped with a note and `.gitignore` is neither created
 nor changed.

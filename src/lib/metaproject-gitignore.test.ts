@@ -74,8 +74,8 @@ test("the managed block carries no internal program labels", () => {
 
 // Flow 361 T7: `keryx init` / `keryx update` no longer write the tracked
 // `.gitignore`. The managed block lives in `<git-common-dir>/info/exclude`,
-// holds only what the repository does not already ignore, and a block an
-// older keryx left in `.gitignore` is moved out.
+// always holds the full entry set, and a block an older keryx left in
+// `.gitignore` is moved out.
 describe("syncMetaprojectIgnoreRules", () => {
   const LOCAL_TARGETS = ["CLAUDE.local.md", "AGENTS.override.md", ".claude/settings.local.json"];
   /** The block exactly as the pre-361 writer appended it to `.gitignore`. */
@@ -169,19 +169,27 @@ describe("syncMetaprojectIgnoreRules", () => {
     }
   });
 
-  test("with .metaproject/ ignored as a whole and the local targets already ignored, nothing is written anywhere (AC6)", async () => {
+  // AC6 (owner decision 2026-10-01, review round 2, F-014): the blanket line
+  // is one branch's rule, and `info/exclude` is every worktree's, so the block
+  // still carries the full set; a second run changes nothing.
+  test("with .metaproject/ and the local targets ignored by .gitignore, the full block is still written and .gitignore is untouched (AC6)", async () => {
     const gitignore = `node_modules/\n.metaproject/\n${LOCAL_TARGETS.join("\n")}\n`;
     const root = await repo({ ".gitignore": gitignore });
     try {
-      const excludeBefore = await readExclude(root);
-      const { result, notices } = await sync(root);
-
-      expect(result.status).toBe("unchanged");
-      expect(notices).toEqual([]);
-      expect(await readExclude(root)).toBe(excludeBefore);
-      expect(excludeBefore).not.toContain("# keryx:begin");
+      const { result } = await sync(root);
+      expect(result.status).toBe("written");
+      const written = await readExclude(root);
+      expect(managedLines(written)).toEqual(renderMetaprojectGitignoreBlock().trim().split("\n").concat(
+        "# Per-developer agent files keryx writes; they are never committed.",
+        ...LOCAL_TARGETS,
+      ));
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
       expect(mustGit(root, ["status", "--porcelain"])).toBe("");
+
+      const second = await sync(root);
+      expect(second.result.status).toBe("unchanged");
+      expect(second.notices).toEqual([]);
+      expect(await readExclude(root)).toBe(written);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -190,14 +198,16 @@ describe("syncMetaprojectIgnoreRules", () => {
   // The blanket line is the team's own rule in the team's own file: it is
   // honoured, not edited — also where `.metaproject` is tracked, which the
   // pre-361 writer answered by deleting the line from `.gitignore`.
-  test("with .metaproject/ ignored as a whole, no .metaproject entry is written — only local targets git does not ignore yet", async () => {
+  test("with .metaproject/ ignored as a whole and tracked, the .metaproject entries are written all the same and the blanket line stays", async () => {
     const gitignore = "node_modules/\n.metaproject/\n";
     const root = await repo({ ".gitignore": gitignore, ".metaproject/index.md": "# index\n" });
     try {
       await sync(root);
 
       const lines = managedLines(await readExclude(root));
-      expect(lines.filter((line) => !line.startsWith("#"))).toEqual(LOCAL_TARGETS);
+      expect(lines).toContain(".metaproject/runtime/");
+      expect(lines).toContain(".metaproject/data/security/raw/");
+      expect(lines.filter((line) => LOCAL_TARGETS.includes(line))).toEqual(LOCAL_TARGETS);
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
       expect(mustGit(root, ["status", "--porcelain"])).toBe("");
     } finally {
@@ -251,6 +261,39 @@ describe("syncMetaprojectIgnoreRules", () => {
       expect(await readExclude(main)).toBe(fromFeature);
       expect(git(feature, ["check-ignore", "-q", "--no-index", "--", ".metaproject/runtime/x"]).code).toBe(0);
       expect((await sync(feature)).result.status).toBe("unchanged");
+    } finally {
+      await rm(feature, { recursive: true, force: true });
+      await rm(main, { recursive: true, force: true });
+    }
+  });
+
+  // Flow 361 review round 2, F-014: a blanket `.metaproject/` line is one
+  // branch's rule too. main commits it and feature does not; whichever of the
+  // two runs last, the shared block is the full set, so feature keeps its
+  // runtime state and the local HMAC key ignored (AC6).
+  test("two worktrees whose .gitignore disagree about a blanket .metaproject/ line write the same block, and both keep .metaproject/runtime/ ignored (F-014)", async () => {
+    const main = await repo();
+    const feature = `${main}-feature`;
+    const ignoredIn = (cwd: string, probe: string) => git(cwd, ["check-ignore", "-q", "--no-index", "--", probe]).code;
+    try {
+      mustGit(main, ["worktree", "add", "-q", feature, "-b", "feature"]);
+      await writeFile(path.join(main, ".gitignore"), ".metaproject/\n");
+      mustGit(main, ["add", "--", ".gitignore"]);
+      mustGit(main, ["commit", "-q", "-m", "blanket"]);
+
+      await sync(feature);
+      const fromFeature = await readExclude(main);
+      expect(managedLines(fromFeature)).toContain(".metaproject/runtime/");
+
+      const fromMain = await sync(main);
+      expect(fromMain.result.status).toBe("unchanged");
+      expect(await readExclude(main)).toBe(fromFeature);
+      for (const cwd of [main, feature]) {
+        expect(ignoredIn(cwd, ".metaproject/runtime/x")).toBe(0);
+        expect(ignoredIn(cwd, ".metaproject/data/security/raw/hmac.key")).toBe(0);
+      }
+      expect((await sync(feature)).result.status).toBe("unchanged");
+      expect(await readFile(path.join(main, ".gitignore"), "utf8")).toBe(".metaproject/\n");
     } finally {
       await rm(feature, { recursive: true, force: true });
       await rm(main, { recursive: true, force: true });

@@ -611,7 +611,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // Ignore rules go to info/exclude, never to the tracked .gitignore, and
   // before the local targets exist — so they are ignored from their first byte.
   await syncMetaprojectIgnoreRules(projectRoot, {
-    localTargets: await ignoredLocalTargetPaths(projectRoot, entrypoints.targets),
+    localTargets: ignoredLocalTargetPaths(entrypoints.targets),
     onNotice: (line) => {
       entrypointNotices.push(line);
     },

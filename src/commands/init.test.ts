@@ -742,17 +742,22 @@ describe("flow 361: ignore rules go to info/exclude", () => {
     }
   }, 120_000);
 
-  test("init writes no ignore block anywhere when .metaproject/ is ignored as a whole (AC6)", async () => {
+  // AC6 (owner decision 2026-10-01, review round 2, F-014): info/exclude is
+  // shared by every worktree, so the blanket line in one branch's .gitignore
+  // does not shrink the block.
+  test("init writes the full ignore block to info/exclude even when .metaproject/ is ignored as a whole, and leaves .gitignore alone (AC6)", async () => {
     const gitignore = `.metaproject/\n${LOCAL_TARGETS.join("\n")}\n`;
     const root = await committedRepo("keryx-init-ignore-whole-", { ".gitignore": gitignore });
     try {
-      const excludeBefore = await readExclude(root);
       await withCwd(root, async () => {
         await initCommand(ENTRYPOINT_INIT_ARGS);
       });
 
-      expect(await readExclude(root)).toBe(excludeBefore);
-      expect(excludeBefore).not.toContain("# keryx:begin");
+      const exclude = await readExclude(root);
+      expect(exclude).toContain("# keryx:begin\n");
+      expect(exclude).toContain("\n.metaproject/runtime/\n");
+      expect(exclude).toContain("\n.metaproject/data/security/raw/\n");
+      for (const target of LOCAL_TARGETS) expect(exclude).toContain(`\n${target}\n`);
       expect(await readFile(path.join(root, ".gitignore"), "utf8")).toBe(gitignore);
       // `.keryx/sandbox-policy.json` is a project file init creates; nothing else shows up.
       expect(gitInEntrypointRepo(root, ["status", "--porcelain"])).toBe("?? .keryx/\n");

@@ -257,7 +257,7 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     lines.push(`${inspection.strayHooks.path}: the keryx-managed hooks would move to ${inspection.strayHooks.to}.`);
   }
 
-  const localTargets = await ignoredLocalTargetPaths(projectRoot, inspection.targets);
+  const localTargets = ignoredLocalTargetPaths(inspection.targets);
   const plan = await planMetaprojectIgnoreRules(projectRoot, { localTargets });
   if (plan.status === "not-a-git-repository") {
     lines.push("info/exclude: skipped — not a git repository; the local targets would still be written.");

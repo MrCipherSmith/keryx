@@ -321,7 +321,7 @@ test("a cloned manifest's local paths never reach info/exclude or a write: the s
       ],
       claudeSettings: { scope: "local", path: "!secrets.json" },
     });
-    expect(await ignoredLocalTargetPaths(root, resolved.targets)).toEqual([
+    expect(ignoredLocalTargetPaths(resolved.targets)).toEqual([
       "CLAUDE.local.md",
       "AGENTS.override.md",
       ".claude/settings.local.json",
@@ -330,6 +330,28 @@ test("a cloned manifest's local paths never reach info/exclude or a write: the s
     await syncAgentRules(root, path.join(root, ".metaproject"), { targets: resolved.targets });
     expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(true);
     expect(existsSync(path.join(root, "!.env"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Flow 361 review round 2, F-014: `info/exclude` is shared by every worktree,
+// so the leftover `CLAUDE.local.md` of a Claude entry switched back to shared
+// is listed whether or not this checkout has the file.
+test("the leftover CLAUDE.local.md is ignored whether or not the checkout has it", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-entry-writers-leftover-ignore");
+  try {
+    await initRepo(root, { "AGENTS.md": "# Team\n", "CLAUDE.md": "# Claude\n" });
+    const resolved = await resolveProjectEntrypoints(root, {
+      root: [
+        { runtime: "claude", scope: "shared", path: "CLAUDE.md" },
+        { runtime: "codex", scope: "shared", path: "AGENTS.md" },
+      ],
+    });
+    const withoutFile = ignoredLocalTargetPaths(resolved.targets);
+    expect(withoutFile).toContain("CLAUDE.local.md");
+    await writeFile(path.join(root, "CLAUDE.local.md"), "# Mine\n");
+    expect(ignoredLocalTargetPaths(resolved.targets)).toEqual(withoutFile);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -1,11 +1,10 @@
-import { readFile, realpath } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "./fs";
 import { removeContained, writeContained } from "./contained-write";
 import { indexHoldsFile, readHeadBlob, restoreWorktreeFileFromHead, worktreeFileIsClean } from "./git-head";
 import {
   explainIgnoredPaths,
-  isMetaprojectIgnoredAsWhole,
   planLocalIgnoreBlock,
   replaceLocalIgnoreBlock,
   resolveLocalExcludePath,
@@ -52,10 +51,10 @@ export type SyncIgnoreRulesResult = {
  * redundant line is harmless; the block comes out the same whichever
  * worktree runs this.
  *
- * The one exception is a blanket `.metaproject/` rule (AC6): the team keeps
- * the workspace out of git, so no `.metaproject` entry is written, and a
- * local target git already ignores is not repeated either. That rule is read,
- * never edited — it used to be dropped where `.metaproject` was tracked.
+ * That holds for a blanket `.metaproject/` rule too (AC6, review round 2,
+ * F-014): it is one branch's line like any other, so the full set is written
+ * even where it is present. The rule itself is read, never edited — it used
+ * to be dropped where `.metaproject` was tracked.
  *
  * A managed block an older keryx left in `.gitignore` is moved out first —
  * see `moveBlockOutOfGitignore`. Outside a git repository there is no exclude
@@ -79,7 +78,7 @@ export async function syncMetaprojectIgnoreRules(
 
   const movedOutOfGitignore = await moveBlockOutOfGitignore(projectRoot, notice);
 
-  const wanted = await wantedIgnoreLines(projectRoot, localTargets, undefined);
+  const wanted = await wantedIgnoreLines(projectRoot, localTargets);
   if (wanted === undefined) {
     notice("Ignore rules: skipped — git could not evaluate ignore rules here (no working tree); nothing was written.");
     return { status: "not-a-git-repository", entries: [] };
@@ -94,11 +93,7 @@ export async function syncMetaprojectIgnoreRules(
     // The run that just took the block out of `.gitignore` has said so on its
     // own line; "not modified" would contradict it.
     const gitignoreState = movedOutOfGitignore ? "no keryx lines remain in .gitignore" : ".gitignore is not modified";
-    notice(
-      entries.length > 0
-        ? `Ignore rules: ${shown} now holds keryx's managed block (${entries.length} entries); ${gitignoreState}.`
-        : `Ignore rules: removed keryx's managed block from ${shown} — the repository's own rules already ignore every entry.`,
-    );
+    notice(`Ignore rules: ${shown} now holds keryx's managed block (${entries.length} entries); ${gitignoreState}.`);
   }
   if (reincluded.length > 0) {
     notice(
@@ -123,9 +118,7 @@ export type IgnoreRulesPlan =
 
 /**
  * What `syncMetaprojectIgnoreRules` would do, without writing anything — the
- * read-only twin `init --preview` and `update --preview` print. A managed
- * block `.gitignore` still carries as an uncommitted edit is about to move, so
- * the entries it covers today count as not yet ignored.
+ * read-only twin `init --preview` and `update --preview` print.
  */
 export async function planMetaprojectIgnoreRules(
   projectRoot: string,
@@ -135,72 +128,42 @@ export async function planMetaprojectIgnoreRules(
   const gitignorePath = path.join(projectRoot, GITIGNORE);
   const content = (await pathExists(gitignorePath)) ? await readFile(gitignorePath, "utf8") : "";
   let gitignoreBlock: "none" | "committed" | "moves" = "none";
-  let pending: PendingGitignoreBlock | undefined;
-  const match = managedBlockPattern().exec(content);
-  if (match !== null) {
+  if (managedBlockPattern().test(content)) {
     const head = await readHeadBlob(projectRoot, GITIGNORE);
     gitignoreBlock = head !== undefined && managedBlockPattern().test(head) ? "committed" : "moves";
-    if (gitignoreBlock === "moves") {
-      const firstLine = content.slice(0, match.index).split("\n").length;
-      pending = {
-        sourcePath: await realpath(gitignorePath).catch(() => gitignorePath),
-        firstLine,
-        lastLine: firstLine + match[0].split("\n").length - 1,
-      };
-    }
   }
-  const wanted = await wantedIgnoreLines(projectRoot, [...new Set(options.localTargets ?? [])], pending);
+  const wanted = await wantedIgnoreLines(projectRoot, [...new Set(options.localTargets ?? [])]);
   if (wanted === undefined) return { status: "not-a-git-repository" };
   return { status: "planned", gitignoreBlock, exclude: await planLocalIgnoreBlock(projectRoot, wanted.lines), entries: wanted.entries };
 }
 
-/** A managed block still in `.gitignore` that is about to move: its lines do not count as already ignoring anything. */
-type PendingGitignoreBlock = { sourcePath: string; firstLine: number; lastLine: number };
-
 /**
- * The lines the managed block in `info/exclude` should hold: keryx's
- * `.metaproject` entries and the local targets. When the workspace is ignored
- * as a whole (AC6) there are no `.metaproject` entries, and a local target a
- * rule outside keryx's own block already ignores is left out too; otherwise
- * nothing is left out (see `syncMetaprojectIgnoreRules`). `undefined` when git
- * cannot evaluate ignore rules here.
+ * The lines the managed block in `info/exclude` should hold: every one of
+ * keryx's `.metaproject` entries and every local target, always. The block
+ * depends on nothing this checkout's ignore rules say (see
+ * `syncMetaprojectIgnoreRules`); git is asked only which local target a `!`
+ * rule re-includes, so the run can say so. `undefined` when git cannot
+ * evaluate ignore rules here.
  */
 async function wantedIgnoreLines(
   projectRoot: string,
   localTargets: readonly string[],
-  pending: PendingGitignoreBlock | undefined,
 ): Promise<{ lines: string[]; entries: string[]; reincluded: string[] } | undefined> {
-  const wholeWorkspace = await isMetaprojectIgnoredAsWhole(projectRoot);
-  const ignoredAsWhole = wholeWorkspace.git && wholeWorkspace.ignored;
-  const candidates = [
-    ...(ignoredAsWhole ? [] : renderMetaprojectGitignoreBlock().trim().split("\n")),
+  const lines = [
+    ...renderMetaprojectGitignoreBlock().trim().split("\n"),
     ...(localTargets.length > 0 ? [LOCAL_TARGETS_COMMENT, ...localTargets] : []),
   ];
-  const patterns = candidates.filter((line) => !line.startsWith("#"));
-  const explanations = await explainIgnoredPaths(projectRoot, patterns.map(probePathFor));
+  const entries = lines.filter((line) => !line.startsWith("#"));
+  const explanations = await explainIgnoredPaths(projectRoot, entries.map(probePathFor));
   if (explanations === undefined) return undefined;
 
-  const covered = new Set<string>();
   const reincluded: string[] = [];
-  for (const [index, pattern] of patterns.entries()) {
+  for (const [index, pattern] of entries.entries()) {
     const explanation = explanations[index];
-    if (explanation === undefined) continue;
-    const fromPendingBlock =
-      pending !== undefined &&
-      explanation.sourcePath === pending.sourcePath &&
-      explanation.line !== undefined &&
-      explanation.line > pending.firstLine &&
-      explanation.line < pending.lastLine;
-    if (ignoredAsWhole && explanation.ignored && !explanation.managed && !fromPendingBlock) covered.add(pattern);
-    if (!explanation.ignored && explanation.rule !== undefined && localTargets.includes(pattern)) {
-      reincluded.push(`${pattern} (${explanation.rule})`);
-    }
+    if (explanation === undefined || !localTargets.includes(pattern)) continue;
+    if (!explanation.ignored && explanation.rule !== undefined) reincluded.push(`${pattern} (${explanation.rule})`);
   }
-  return {
-    lines: dropCoveredEntries(candidates, covered),
-    entries: patterns.filter((pattern) => !covered.has(pattern)),
-    reincluded,
-  };
+  return { lines, entries, reincluded };
 }
 
 /** True when `content` (a `.gitignore`) carries keryx's managed `# keryx:begin … # keryx:end` block. */
@@ -296,30 +259,6 @@ function stripManagedBlock(content: string): string {
     result = `${before}${after}`;
   }
   return result;
-}
-
-/**
- * `candidates` without the covered patterns, and without a comment run whose
- * patterns are all gone — a comment explains the entries under it and means
- * nothing on its own.
- */
-function dropCoveredEntries(candidates: readonly string[], covered: ReadonlySet<string>): string[] {
-  const kept: string[] = [];
-  let comments: string[] = [];
-  let sawEntry = false;
-  for (const line of candidates) {
-    if (line.startsWith("#")) {
-      if (sawEntry) comments = [];
-      sawEntry = false;
-      comments.push(line);
-      continue;
-    }
-    sawEntry = true;
-    if (covered.has(line)) continue;
-    kept.push(...comments, line);
-    comments = [];
-  }
-  return kept;
 }
 
 /** A path the ignore pattern matches, to ask `git check-ignore` about: wildcards become a fixed name. */
