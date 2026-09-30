@@ -39,7 +39,7 @@ async function withTempDir<T>(run: (root: string) => Promise<T>): Promise<T> {
 }
 
 async function settingsOf(root: string): Promise<Settings> {
-  return readSettingsFile(path.join(root, ".claude", "settings.json"));
+  return readSettingsFile(path.join(root, ".claude", "settings.local.json"));
 }
 
 function groupsFor(settings: Settings, event: string): Array<Record<string, unknown>> {

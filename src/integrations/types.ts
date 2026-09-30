@@ -218,6 +218,21 @@ export interface SurfaceAdapter {
    * builder.
    */
   readonly relativePath?: string;
+  /**
+   * Flow 361: set when the file depends on the PROJECT, not on the harness
+   * alone — Claude Code's settings, which are `.claude/settings.local.json`
+   * or `.claude/settings.json` by `agentEntrypoints.claudeSettings`
+   * (`./claude-settings.ts`). `relativePath` is then only the default, and a
+   * caller that has a project root asks `surfaceRelativePath` (`registry.ts`)
+   * instead of reading the field. `settingsFile` answers per project already.
+   */
+  relativePathFor?(projectRoot: string): string;
+  /**
+   * Every path `relativePathFor` can answer with. The registry builds one
+   * `SettingsFileOwner` per candidate and runs its coherence checks against
+   * each, so a surface cannot be left behind on one of the files alone.
+   */
+  readonly relativePathCandidates?: readonly string[];
   readonly slots: readonly SurfaceSlot[];
   /**
    * True when `relativePath` is a file Keryx itself creates and is the ONLY

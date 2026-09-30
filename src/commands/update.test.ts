@@ -10,6 +10,16 @@ import { renderMetaprojectGitignoreBlock } from "../lib/metaproject-gitignore";
 import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { RETIRED_RULES } from "../gdskills/retired-rules";
+import {
+  CTX_GUARD_CLAUDE,
+  JEV_EDIT_GUARD_SURFACE,
+  LEARNING_OBSERVER_CLAUDE,
+  ORIENT_CLAUDE,
+  SECURITY_CHECK_INPUT_CLAUDE,
+  SECURITY_CHECK_OUTPUT_CLAUDE,
+  readInstallState,
+  recordSurfaceInstalled,
+} from "../integrations/service";
 import { ensureMetaprojectReference } from "../rules/agent-entrypoints";
 import { defaultEntrypointTargets } from "../rules/entrypoint-targets";
 import { isCodexOverrideStale } from "../rules/entrypoint-writers";
@@ -709,6 +719,10 @@ test("update removes security hooks that drifted out of the manifest, keeping us
     expect(settings).not.toContain("security-agent-hooks");
     expect(settings).not.toContain("keryx security check-input");
     expect(settings).toContain("user-logger");
+    // Flow 361: the hooks were moved to the local file first, and the drift
+    // reconcile removed them there too — not left live in the other file.
+    const local = await readFile(path.join(root, ".claude", "settings.local.json"), "utf8").catch(() => "");
+    expect(local).not.toContain("security-agent-hooks");
     });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -1429,6 +1443,277 @@ describe("flow 361: ignore rules go to info/exclude", () => {
       expect(existsSync(path.join(root, ".gitignore"))).toBe(false);
       expect(output.split("Ignore rules: skipped").length - 1).toBe(1);
       expect(output).toContain("not a git repository");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+});
+
+// Flow 361 T8: keryx-managed Claude Code hooks live in the file
+// `agentEntrypoints.claudeSettings` names. `keryx update` moves the ones an
+// older keryx merged into the tracked `.claude/settings.json` — every surface,
+// not only the security pair update itself refreshes.
+describe("flow 361: Claude hooks follow agentEntrypoints.claudeSettings", () => {
+  const SHARED_SETTINGS = ".claude/settings.json";
+  const LOCAL_SETTINGS = ".claude/settings.local.json";
+  // Hand formatting a JSON re-serialisation would not reproduce.
+  const TEAM_SETTINGS = '{\n    "model": "sonnet",\n    "hooks": { "PreToolUse": [ { "matcher": "Bash", "hooks": [ { "type": "command", "command": "team-audit" } ] } ] }\n}\n';
+  const AGENTS = "# Team\n\nUse metaproject rules.\n";
+  // Security last: `keryx update` re-merges it on every run, which is where an
+  // updated repository's file has settled.
+  const EVERY_SURFACE = [
+    CTX_GUARD_CLAUDE,
+    ORIENT_CLAUDE,
+    LEARNING_OBSERVER_CLAUDE,
+    JEV_EDIT_GUARD_SURFACE,
+    SECURITY_CHECK_INPUT_CLAUDE,
+    SECURITY_CHECK_OUTPUT_CLAUDE,
+  ];
+
+  /** `base` with every Claude surface merged in, the way an older keryx left them in one tracked file. */
+  function withEverySurface(base: string): string {
+    let settings = JSON.parse(base) as Record<string, unknown>;
+    for (const surface of EVERY_SURFACE) settings = surface.merge!(settings);
+    return `${JSON.stringify(settings, null, 2)}\n`;
+  }
+
+  /** A committed repository with the security module's agent hook recorded, and `settings` (when given) committed as `.claude/settings.json`. */
+  async function hooksFixture(prefix: string, settings: string | undefined, agentEntrypoints: unknown, options: { git?: boolean } = {}): Promise<string> {
+    const root = await mkdtemp(path.join(tmpdir(), prefix));
+    await mkdir(path.join(root, ".metaproject"), { recursive: true });
+    await mkdir(path.join(root, ".claude"), { recursive: true });
+    await writeFile(path.join(root, "AGENTS.md"), AGENTS, "utf8");
+    if (settings !== undefined) await writeFile(path.join(root, SHARED_SETTINGS), settings, "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      `${JSON.stringify({ modules: { security: { enabled: true, hooks: { agent: SHARED_SETTINGS } } }, agentEntrypoints }, null, 2)}\n`,
+      "utf8",
+    );
+    if (options.git !== false) {
+      gitForUpdateIdempotency(root, ["init", "-q"]);
+      gitForUpdateIdempotency(root, ["config", "user.email", "test@test.com"]);
+      gitForUpdateIdempotency(root, ["config", "user.name", "test"]);
+      gitForUpdateIdempotency(root, ["config", "core.excludesFile", path.join(root, ".git", "no-global-excludes")]);
+      gitForUpdateIdempotency(root, ["add", "-A"]);
+      gitForUpdateIdempotency(root, ["commit", "-q", "-m", "fixture"]);
+    }
+    return root;
+  }
+
+  /**
+   * What an older keryx left behind: service files generated, the manifest
+   * still legacy and naming the tracked file, install-state naming it too,
+   * and every managed hook merged into `.claude/settings.json` as an
+   * uncommitted edit on top of `base`.
+   */
+  async function settleWithLegacyHooks(root: string, base: string): Promise<void> {
+    await settleAsLegacyRepository(root, ["AGENTS.md"]);
+    await rm(path.join(root, LOCAL_SETTINGS), { force: true });
+    await rm(path.join(root, ".metaproject", "data", "integrations"), { recursive: true, force: true });
+    for (const [moduleId, surface] of [["ctx-guard", "block"], ["security-check-input", "prompt-gate"], ["security-check-output", "block"]] as const) {
+      await recordSurfaceInstalled(root, "claude", { moduleId, surface, writtenPaths: [SHARED_SETTINGS], managedSentinel: true, hashPaths: [] });
+    }
+    const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { modules: { security: { hooks: { agent: string } } } };
+    manifest.modules.security.hooks.agent = SHARED_SETTINGS;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await writeFile(path.join(root, SHARED_SETTINGS), withEverySurface(base), "utf8");
+  }
+
+  type ManagedGroup = { _keryxManaged?: string; hooks?: Array<{ command?: string }> };
+
+  /** `event → command → number of managed groups running it`, over both Claude settings files. */
+  async function managedCommandCounts(root: string): Promise<Record<string, Record<string, number>>> {
+    const counts: Record<string, Record<string, number>> = {};
+    for (const rel of [SHARED_SETTINGS, LOCAL_SETTINGS]) {
+      if (!existsSync(path.join(root, rel))) continue;
+      const settings = JSON.parse(await readFile(path.join(root, rel), "utf8")) as { hooks?: Record<string, ManagedGroup[]> };
+      for (const [event, groups] of Object.entries(settings.hooks ?? {})) {
+        for (const group of groups) {
+          if (typeof group._keryxManaged !== "string") continue;
+          for (const hook of group.hooks ?? []) {
+            const byCommand = (counts[event] ??= {});
+            byCommand[hook.command ?? ""] = (byCommand[hook.command ?? ""] ?? 0) + 1;
+          }
+        }
+      }
+    }
+    return counts;
+  }
+
+  const EVERY_SURFACE_ONCE = {
+    PreToolUse: {
+      "keryx ctx hook claude": 1,
+      "keryx security check-output --runtime claude": 1,
+      "keryx learn observe --hook claude": 1,
+    },
+    UserPromptSubmit: {
+      "keryx orient claude": 1,
+      "keryx security check-input --source untrusted-external --runtime claude": 1,
+      "keryx learn observe --hook claude": 1,
+    },
+    PostToolUse: { "keryx learn observe --hook claude": 1, "keryx review jev-edit-guard --hook claude": 1 },
+    PostToolUseFailure: { "keryx learn observe --hook claude": 1 },
+    SessionStart: { "keryx learn observe --hook claude": 1 },
+    Stop: { "keryx learn observe --hook claude": 1 },
+    SessionEnd: { "keryx learn observe --hook claude": 1 },
+  };
+
+  async function readHookManifest(root: string): Promise<{ agent: unknown; claudeSettings: unknown }> {
+    const manifest = JSON.parse(await readFile(path.join(root, ".metaproject", "metaproject.json"), "utf8")) as {
+      modules: { security: { hooks?: { agent?: unknown } } };
+      agentEntrypoints: { claudeSettings?: unknown };
+    };
+    return { agent: manifest.modules.security.hooks?.agent, claudeSettings: manifest.agentEntrypoints.claudeSettings };
+  }
+
+  test("one update moves uncommitted managed hooks of every surface to settings.local.json, and a second changes no file (AC5, AC8)", async () => {
+    const root = await hooksFixture("keryx-update-hooks-migrate-", TEAM_SETTINGS, { root: ["AGENTS.md"] });
+    try {
+      await settleWithLegacyHooks(root, TEAM_SETTINGS);
+      // A built-in hook the user disabled through `keryx hooks` is recorded in .metaproject/hooks.json.
+      const hooksDoc = `${JSON.stringify({ schemaVersion: "1.0.0", _keryxManaged: { tool: "keryx", version: "0.3.40", managedHookIds: ["keryx.learning-observer"] }, hooks: { PostToolUse: [{ id: "keryx.learning-observer", enabled: false }] } }, null, 2)}\n`;
+      await writeFile(path.join(root, ".metaproject", "hooks.json"), hooksDoc, "utf8");
+      expect(diffIsQuiet(root, SHARED_SETTINGS)).toBe(false);
+
+      const output = await runEntrypointUpdate(root);
+
+      expect(diffIsQuiet(root, SHARED_SETTINGS)).toBe(true);
+      expect(await readFile(path.join(root, SHARED_SETTINGS), "utf8")).toBe(TEAM_SETTINGS);
+      const status = gitForUpdateIdempotency(root, ["status", "--porcelain"]);
+      expect(status).not.toContain(".claude/");
+      expect(await managedCommandCounts(root)).toEqual(EVERY_SURFACE_ONCE);
+      expect(output).toContain(`${SHARED_SETTINGS}: moved the keryx-managed hooks to ${LOCAL_SETTINGS}; the file is back at HEAD.`);
+
+      // The tracked records name the resolved path.
+      expect(await readHookManifest(root)).toEqual({ agent: LOCAL_SETTINGS, claudeSettings: { path: LOCAL_SETTINGS, scope: "local" } });
+      const state = await readInstallState(root, "claude");
+      expect(state?.installedModules.map((record) => record.writtenPaths)).toEqual([[LOCAL_SETTINGS], [LOCAL_SETTINGS], [LOCAL_SETTINGS]]);
+      // The disabled built-in stays disabled: that file is not part of the move.
+      expect(await readFile(path.join(root, ".metaproject", "hooks.json"), "utf8")).toBe(hooksDoc);
+
+      const afterFirst = await snapshotTree(root);
+      const second = await runEntrypointUpdate(root);
+      expect(await snapshotTree(root)).toEqual(afterFirst);
+      expect(second).not.toContain("settings.json:");
+      expect(await managedCommandCounts(root)).toEqual(EVERY_SURFACE_ONCE);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("managed hooks committed in HEAD keep claudeSettings shared, the file untouched, and update says how to switch", async () => {
+    const committed = withEverySurface(TEAM_SETTINGS);
+    const root = await hooksFixture("keryx-update-hooks-head-", committed, { root: ["AGENTS.md"] });
+    try {
+      await settleAsLegacyRepository(root, ["AGENTS.md"]);
+      expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
+
+      const output = await runEntrypointUpdate(root);
+
+      expect(await readFile(path.join(root, SHARED_SETTINGS), "utf8")).toBe(committed);
+      expect(diffIsQuiet(root, SHARED_SETTINGS)).toBe(true);
+      expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
+      expect(await readHookManifest(root)).toEqual({ agent: SHARED_SETTINGS, claudeSettings: { path: SHARED_SETTINGS, scope: "shared" } });
+      expect(await managedCommandCounts(root)).toEqual(EVERY_SURFACE_ONCE);
+
+      // An entry-form manifest that says local does not override what the team committed.
+      const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { agentEntrypoints: Record<string, unknown> };
+      manifest.agentEntrypoints.claudeSettings = { path: LOCAL_SETTINGS, scope: "local" };
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+      const switched = await runEntrypointUpdate(root);
+      expect(switched).toContain(`${SHARED_SETTINGS}: keryx-managed hooks are committed in HEAD`);
+      expect(switched).toContain("keryx update");
+      expect(await readFile(path.join(root, SHARED_SETTINGS), "utf8")).toBe(committed);
+      expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
+      expect((await readHookManifest(root)).claudeSettings).toEqual({ path: SHARED_SETTINGS, scope: "shared" });
+      expect(output).not.toContain("moved the keryx-managed hooks");
+
+      const afterFirst = await snapshotTree(root);
+      const second = await runEntrypointUpdate(root);
+      expect(await snapshotTree(root)).toEqual(afterFirst);
+      expect(second).not.toContain("committed in HEAD");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("unrelated uncommitted keys and hooks in settings.json survive, and the file is named", async () => {
+    const root = await hooksFixture("keryx-update-hooks-edits-", TEAM_SETTINGS, { root: ["AGENTS.md"] });
+    try {
+      const edited = JSON.parse(TEAM_SETTINGS) as { env?: unknown; hooks: Record<string, unknown[]> };
+      edited.env = { MY_FLAG: "1" };
+      edited.hooks.Stop = [{ hooks: [{ type: "command", command: "my-uncommitted-hook" }] }];
+      await settleWithLegacyHooks(root, JSON.stringify(edited));
+
+      const output = await runEntrypointUpdate(root);
+
+      expect(JSON.parse(await readFile(path.join(root, SHARED_SETTINGS), "utf8"))).toEqual(edited);
+      expect(await managedCommandCounts(root)).toEqual(EVERY_SURFACE_ONCE);
+      expect(output).toContain(`${SHARED_SETTINGS}: removed the keryx-managed hooks`);
+      expect(output).toContain(`your other uncommitted edits in ${SHARED_SETTINGS} are kept`);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("scope shared keeps writing .claude/settings.json", async () => {
+    const root = await hooksFixture("keryx-update-hooks-shared-", TEAM_SETTINGS, {
+      root: defaultEntrypointTargets().root,
+      claudeSettings: { path: SHARED_SETTINGS, scope: "shared" },
+    });
+    try {
+      await runEntrypointUpdate(root);
+
+      expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
+      const counts = await managedCommandCounts(root);
+      expect(counts.UserPromptSubmit).toEqual({ "keryx security check-input --source untrusted-external --runtime claude": 1 });
+      expect(counts.PreToolUse).toEqual({ "keryx security check-output --runtime claude": 1 });
+      expect(await readHookManifest(root)).toEqual({ agent: SHARED_SETTINGS, claudeSettings: { path: SHARED_SETTINGS, scope: "shared" } });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("outside a git repository the hooks move to settings.local.json, settings.json is cleaned, and update says so", async () => {
+    const root = await hooksFixture("keryx-update-hooks-nogit-", undefined, { root: ["AGENTS.md"] }, { git: false });
+    try {
+      await settleWithLegacyHooks(root, '{ "model": "sonnet" }');
+
+      const output = await runEntrypointUpdate(root);
+
+      expect(JSON.parse(await readFile(path.join(root, SHARED_SETTINGS), "utf8"))).toEqual({ model: "sonnet" });
+      expect(await managedCommandCounts(root)).toEqual(EVERY_SURFACE_ONCE);
+      expect(output).toContain(`${SHARED_SETTINGS}: removed the keryx-managed hooks`);
+      expect(output).toContain("Not a git repository");
+
+      const afterFirst = await snapshotTree(root);
+      await runEntrypointUpdate(root);
+      expect(await snapshotTree(root)).toEqual(afterFirst);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 120_000);
+
+  test("update --preview moves no hook", async () => {
+    const root = await hooksFixture("keryx-update-hooks-preview-", TEAM_SETTINGS, { root: ["AGENTS.md"] });
+    try {
+      await settleWithLegacyHooks(root, TEAM_SETTINGS);
+      const working = await readFile(path.join(root, SHARED_SETTINGS), "utf8");
+      const before = await snapshotTree(root);
+      const { restore } = captureUpdateConsoleLog();
+      try {
+        await withCwd(root, async () => {
+          await updateCommand(["--skip-runtime", "--no-tasks", "--preview"]);
+        });
+      } finally {
+        restore();
+      }
+
+      expect(await readFile(path.join(root, SHARED_SETTINGS), "utf8")).toBe(working);
+      expect(existsSync(path.join(root, LOCAL_SETTINGS))).toBe(false);
+      expect(await snapshotTree(root)).toEqual(before);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

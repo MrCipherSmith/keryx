@@ -313,6 +313,24 @@ export async function recordSurfaceInstalled(
 }
 
 /**
+ * Flow 361: rewrite every record that names `from` to name `to` — the
+ * surfaces themselves were moved between two settings files, and this file is
+ * tracked, so it must say where they are now. A hash recorded for `from` is
+ * dropped with it (it described the other file). A no-op, with no write, when
+ * no record names `from`; `installedAt` is kept, since nothing was reinstalled.
+ */
+export async function retargetInstallStatePath(root: string, runtimeId: string, from: string, to: string): Promise<void> {
+  const existing = await readInstallState(root, runtimeId);
+  if (!existing || !existing.installedModules.some((record) => record.writtenPaths.includes(from))) return;
+  const installedModules = existing.installedModules.map((record) => {
+    if (!record.writtenPaths.includes(from)) return record;
+    const { [from]: _dropped, ...sha256 } = record.sha256;
+    return { ...record, writtenPaths: [...new Set(record.writtenPaths.map((written) => (written === from ? to : written)))], sha256 };
+  });
+  await writeInstallState(root, runtimeId, { ...existing, installedModules, recordedAt: new Date().toISOString() });
+}
+
+/**
  * Remove one surface's install-state record. Deletes the state file entirely
  * once no records remain. A no-op when there is nothing recorded for
  * `moduleId` (including when there is no state file at all).

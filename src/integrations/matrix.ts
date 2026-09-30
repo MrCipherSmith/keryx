@@ -157,7 +157,7 @@ function betterState(a: MatrixSurfaceState, b: MatrixSurfaceState): MatrixSurfac
  * `surfaces_supported`: one item per DISTINCT flag the adapter's surfaces
  * carry, sorted by the schema's flag enum order. When several surfaces share
  * a flag (Claude's ctx-guard `block` and its security check-output `block`,
- * both in `.claude/settings.json`), the BEST state wins and its settingsFile
+ * both in Claude's settings file), the BEST state wins and its settingsFile
  * is the one reported — ties keep the first surface in registry order, which
  * is deterministic and (for Claude) points at the same file either way.
  */

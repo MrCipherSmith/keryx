@@ -92,12 +92,12 @@ describe("keryx integrations install/doctor/uninstall — claude and gemini-cli"
 });
 
 describe("--surface ctx-guard installs only the ctx guard", () => {
-  test("claude: .claude/settings.json carries the ctx-guard hook but not the security check-output one", async () => {
+  test("claude: .claude/settings.local.json carries the ctx-guard hook but not the security check-output one", async () => {
     await withMetaproject(async (root) => {
       await integrationsCommand(["install", "--runtime", "claude", "--surface", "ctx-guard"], root);
       expect(process.exitCode).toBe(0);
 
-      const settings = JSON.parse(await readFile(path.join(root, ".claude", "settings.json"), "utf8")) as Record<
+      const settings = JSON.parse(await readFile(path.join(root, ".claude", "settings.local.json"), "utf8")) as Record<
         string,
         unknown
       >;
@@ -129,7 +129,7 @@ describe("doctor exit code", () => {
   test("exits 1 after the managed entry is removed from the settings file", async () => {
     await withMetaproject(async (root) => {
       await integrationsCommand(["install", "--runtime", "claude", "--surface", "ctx-guard"], root);
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       await writeFile(file, `${JSON.stringify({}, null, 2)}\n`, "utf8");
 
       captured = [];
@@ -437,7 +437,7 @@ describe("matrix --json", () => {
 });
 
 describe("ctx install-hook vs integrations install --surface ctx-guard", () => {
-  test("produce byte-identical .claude/settings.json", async () => {
+  test("produce byte-identical .claude/settings.local.json", async () => {
     const viaCtx = await withMetaproject(async (root) => {
       const originalCwd = process.cwd();
       process.chdir(root);
@@ -446,12 +446,12 @@ describe("ctx install-hook vs integrations install --surface ctx-guard", () => {
       } finally {
         process.chdir(originalCwd);
       }
-      return readFile(path.join(root, ".claude", "settings.json"), "utf8");
+      return readFile(path.join(root, ".claude", "settings.local.json"), "utf8");
     });
 
     const viaIntegrations = await withMetaproject(async (root) => {
       await integrationsCommand(["install", "--runtime", "claude", "--surface", "ctx-guard"], root);
-      return readFile(path.join(root, ".claude", "settings.json"), "utf8");
+      return readFile(path.join(root, ".claude", "settings.local.json"), "utf8");
     });
 
     expect(viaIntegrations).toBe(viaCtx);

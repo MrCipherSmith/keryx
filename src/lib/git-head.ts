@@ -61,6 +61,12 @@ export async function restoreWorktreeFileFromHead(projectRoot: string, relativeP
   return result !== undefined && result.code === 0;
 }
 
+/** True when the index holds `relativePath` — staged, even if never committed. No git counts as not staged. */
+export async function indexHoldsFile(projectRoot: string, relativePath: string): Promise<boolean> {
+  const result = await runGit(projectRoot, ["ls-files", "--error-unmatch", "--", relativePath]);
+  return result !== undefined && result.code === 0;
+}
+
 /** `git diff --quiet -- <file>`: true when the working tree copy shows no unstaged change. */
 export async function worktreeFileIsClean(projectRoot: string, relativePath: string): Promise<boolean> {
   const result = await runGit(projectRoot, ["diff", "--quiet", "--", relativePath]);

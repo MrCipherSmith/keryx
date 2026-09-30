@@ -54,7 +54,12 @@ export type ProjectEntrypoints = {
   /** Entry form throughout — safe to write from and to persist. */
   targets: EntrypointTargets;
   importSources: string[];
-  /** How each legacy entry was settled; empty for an entry-form manifest. T8 reads the `claudeSettings` one. */
+  /**
+   * How each legacy entry was settled; empty for an entry-form manifest. The
+   * `claudeSettings` target is settled again by `init`/`update` from the
+   * settings files themselves (`decideClaudeSettingsTarget`), which also
+   * covers a manifest that is already in entry form.
+   */
   decisions: ResolvedLegacyEntrypointTargets["decisions"];
   /** Lines for the command output: a legacy entry that stays shared, and how to switch it. */
   notices: string[];

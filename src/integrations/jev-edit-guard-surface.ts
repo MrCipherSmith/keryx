@@ -13,12 +13,21 @@
 // directory's own surfaces... a caller outside this directory should never
 // reach for directly".
 
+import { claudeSettingsLocation, claudeSettingsRelativePath } from "./claude-settings";
 import { MANAGED_KEY, managedGroups, mergeIntoHookArray, stripFromHookArray } from "./settings-json";
 import type { Settings, SurfaceAdapter } from "./types";
 
 export const EDIT_GUARD_HOOK_SENTINEL = "jev-edit-guard-hooks";
 export const EDIT_GUARD_HOOK_MATCHER = "Edit|Write|MultiEdit";
-export const EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH = ".claude/settings.json";
+
+/**
+ * The Claude settings file this project's edit guard is installed in — the
+ * same file every other Claude surface uses (flow 361, `./claude-settings.ts`),
+ * so the guard is never the one hook left behind in the tracked file.
+ */
+export function editGuardSettingsRelativePath(projectRoot: string): string {
+  return claudeSettingsRelativePath(projectRoot);
+}
 
 export function editGuardHookCommand(): string {
   return "keryx review jev-edit-guard --hook claude";
@@ -65,8 +74,7 @@ export const JEV_EDIT_GUARD_SURFACE: SurfaceAdapter = {
   sentinel: EDIT_GUARD_HOOK_SENTINEL,
   confidence: "verified",
   sourceDocs: ["src/commands/review-jev-edit-guard.ts"],
-  settingsFile: (root) => `${root}/${EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH}`,
-  relativePath: EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH,
+  ...claudeSettingsLocation(),
   slots: [
     { key: "hooks", type: "object", access: "owns" },
     { key: "_keryxManaged", type: "array", access: "owns" },

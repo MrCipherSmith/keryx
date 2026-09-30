@@ -43,6 +43,7 @@ export {
   harnessAdapterIds,
   refusalAction,
   settingsFileOwnerFor,
+  surfaceRelativePath,
   surfacesOf,
 } from "./registry";
 
@@ -122,12 +123,22 @@ export {
 // `./jev-edit-guard-surface.ts`'s header for why it is exported here rather
 // than added to `HARNESS_ADAPTERS`.
 export {
-  EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH,
   EDIT_GUARD_HOOK_MATCHER,
   EDIT_GUARD_HOOK_SENTINEL,
   JEV_EDIT_GUARD_SURFACE,
   editGuardHookCommand,
+  editGuardSettingsRelativePath,
 } from "./jev-edit-guard-surface";
+
+// Flow 361: where this project's managed Claude Code hooks live, and the
+// `keryx update` / `keryx init` step that moves them out of the other file.
+export {
+  CLAUDE_LOCAL_SETTINGS_PATH,
+  CLAUDE_SHARED_SETTINGS_PATH,
+  claudeSettingsRelativePath,
+  resolveClaudeSettingsTarget,
+} from "./claude-settings";
+export { decideClaudeSettingsTarget, moveClaudeSettingsHooks } from "./claude-settings-migration";
 
 export {
   ACP_PERMISSION_ZED,

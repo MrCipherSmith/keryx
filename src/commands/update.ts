@@ -79,11 +79,11 @@ import {
   securityCapabilities,
 } from "../security/templates";
 import {
+  agentSettingsHasSecuritySentinel,
   installSecurityAgentHooks,
   uninstallSecurityAgentHooks,
-  agentSettingsPath,
-  AGENT_HOOKS_SENTINEL,
 } from "../security/agent-hooks";
+import { decideClaudeSettingsTarget, moveClaudeSettingsHooks } from "../integrations/service";
 import { renderMemoryConfig } from "../memory/config";
 import {
   renderMemoryCoreReadme,
@@ -511,6 +511,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // the normalizer alone would leave a legacy entry provisionally shared.
   const entrypoints = await resolveProjectEntrypoints(projectRoot, manifest.agentEntrypoints);
   const entrypointNotices = [...entrypoints.notices];
+  // The Claude hooks target is settled from the settings files themselves,
+  // entry-form manifest or not: managed hooks the team committed keep it
+  // shared, anything else is local.
+  const claudeSettings = await decideClaudeSettingsTarget(projectRoot);
+  entrypoints.targets.claudeSettings = claudeSettings.target;
+  entrypointNotices.push(...claudeSettings.notices);
   // Ignore rules go to info/exclude, never to the tracked .gitignore — a block
   // an older keryx left there is moved out — and before the local targets
   // exist, so they are ignored from their first byte.
@@ -519,6 +525,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     onNotice: (line) => {
       entrypointNotices.push(line);
     },
+  });
+  // Every managed Claude hook in one file only: hooks an older keryx merged
+  // into the other one — all surfaces, not just the security pair refreshed
+  // below — are moved before any installer runs.
+  await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
+    entrypointNotices.push(line);
   });
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
@@ -1501,6 +1513,12 @@ async function updateManifestAgentEntrypoints(metaprojectRoot: string, entrypoin
   raw.agentEntrypoints = manifestAgentEntrypoints(raw.agentEntrypoints, entrypoints, {
     metaproject: ".metaproject/index.md",
   });
+  // `modules.security.hooks.agent` names the file the agent hooks live in; it
+  // follows the Claude settings target instead of keeping the path `init` saw.
+  const securityHooks = (raw.modules as Record<string, { hooks?: { agent?: unknown } } | undefined> | undefined)?.security?.hooks;
+  if (securityHooks && typeof securityHooks.agent === "string" && securityHooks.agent !== entrypoints.targets.claudeSettings.path) {
+    securityHooks.agent = entrypoints.targets.claudeSettings.path;
+  }
   applyStandardManifestFields(raw);
   // R700-06: `applyStandardManifestFields` always stamps a fresh `updatedAt`,
   // but on a repo where nothing else changed that turns `keryx update` into
@@ -1702,18 +1720,6 @@ async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
   }
   const hook = await readFile(hookPath, "utf8");
   return hook.includes("# keryx:security-pre-push:begin");
-}
-
-// True when .claude/settings.json still carries the managed security agent-hook
-// sentinel (i.e. the agent hooks were previously installed there).
-async function agentSettingsHasSecuritySentinel(
-  projectRoot: string,
-): Promise<boolean> {
-  const file = agentSettingsPath(projectRoot);
-  if (!(await pathExists(file))) {
-    return false;
-  }
-  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
 }
 
 async function readManifest(metaprojectRoot: string): Promise<ManifestReadResult> {

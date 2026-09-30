@@ -1,5 +1,7 @@
+import { readFile } from "node:fs/promises";
 import { installIntegration, settingsFileOwnerFor, uninstallIntegration, type SettingsFileOwner } from "../integrations/service";
 import {
+  AGENT_HOOKS_SENTINEL,
   CLAUDE_RUNTIME,
   MANAGED_KEY,
   getRuntime,
@@ -30,10 +32,31 @@ export {
 } from "./agent-hooks/runtimes";
 export type { RuntimeHook } from "./agent-hooks/runtimes";
 
-export const AGENT_SETTINGS_RELATIVE_PATH = ".claude/settings.json";
+/**
+ * The Claude settings file this project's security agent hooks live in,
+ * relative to the project root — what `modules.security.hooks.agent` records.
+ * Resolved per project (flow 361): `.claude/settings.local.json` unless the
+ * manifest's `agentEntrypoints.claudeSettings` is shared.
+ */
+export function agentSettingsRelativePath(projectRoot: string): string {
+  return CLAUDE_RUNTIME.relativePathFor(projectRoot);
+}
 
 export function agentSettingsPath(projectRoot: string): string {
   return CLAUDE_RUNTIME.settingsPath(projectRoot);
+}
+
+/**
+ * True when the project's Claude settings file still carries the managed
+ * security agent-hook sentinel, i.e. the agent hooks are installed there.
+ * The one probe `init` and `update` reconcile a disabled hook against.
+ */
+export async function agentSettingsHasSecuritySentinel(projectRoot: string): Promise<boolean> {
+  try {
+    return (await readFile(agentSettingsPath(projectRoot), "utf8")).includes(AGENT_HOOKS_SENTINEL);
+  } catch {
+    return false;
+  }
 }
 
 // Backwards-compatible accessor for the managed Claude hook groups.
@@ -62,12 +85,12 @@ export function securityAgentHookEntries(): {
 export async function installRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
-  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePathFor(projectRoot)),
 ): Promise<{ ok: boolean; errors: string[] }> {
   if (!owner) {
     // Every registered runtime's file has an owner (derived from the same
     // registry these surfaces come from) — unreachable in practice.
-    throw new Error(`${runtime.id}: no settings-file owner registered for ${runtime.relativePath}`);
+    throw new Error(`${runtime.id}: no settings-file owner registered for ${runtime.relativePathFor(projectRoot)}`);
   }
   const { errors } = await installIntegration(projectRoot, runtime.id, {
     surfaces: [...SECURITY_SURFACE_IDS],
@@ -81,7 +104,7 @@ export async function installRuntimeHooks(
 export async function uninstallRuntimeHooks(
   projectRoot: string,
   runtime: RuntimeHook,
-  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePath),
+  owner: SettingsFileOwner | undefined = settingsFileOwnerFor(runtime.relativePathFor(projectRoot)),
 ): Promise<{ ok: boolean; errors: string[] }> {
   if (!owner) {
     return { ok: false, errors: [] };

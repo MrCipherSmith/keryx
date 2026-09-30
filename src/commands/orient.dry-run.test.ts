@@ -16,8 +16,8 @@ let captured: string[] = [];
 let originalLog: typeof console.log;
 let originalCwd = "";
 
-// `.claude/settings.json` is where the claude runtime's hook lands.
-const CLAUDE_SETTINGS = path.join(".claude", "settings.json");
+// `.claude/settings.local.json` is where the claude runtime's hook lands by default (flow 361).
+const CLAUDE_SETTINGS = path.join(".claude", "settings.local.json");
 
 beforeEach(() => {
   base = mkdtempSync(path.join(tmpdir(), "keryx-orient-dry-"));

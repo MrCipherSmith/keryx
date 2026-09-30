@@ -52,18 +52,22 @@ import {
 } from "../review/jev-edit-guard-log";
 import { computeJevRulesResult, type JevRulesComputedResult } from "./review-jev-rules";
 import {
-  EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH,
   EDIT_GUARD_HOOK_MATCHER,
   JEV_EDIT_GUARD_SURFACE,
   createSettingsFileOwner,
   editGuardHookCommand,
+  editGuardSettingsRelativePath,
   installSurfaces,
   uninstallSurfaces,
 } from "../integrations/service";
 
-export { EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH, EDIT_GUARD_HOOK_MATCHER, editGuardHookCommand };
+export { EDIT_GUARD_HOOK_MATCHER, editGuardHookCommand, editGuardSettingsRelativePath };
 
-const EDIT_GUARD_SETTINGS_OWNER = createSettingsFileOwner(EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH, [JEV_EDIT_GUARD_SURFACE]);
+/** The guard's own single-surface owner, at the Claude settings file `root` resolves to (flow 361). */
+function editGuardSettingsTarget(root: string) {
+  const relativePath = editGuardSettingsRelativePath(root);
+  return { relativePath, owner: createSettingsFileOwner(relativePath, [JEV_EDIT_GUARD_SURFACE]) };
+}
 
 /**
  * `PostToolUse` stdin, read once. Same shape `src/commands/security-
@@ -331,13 +335,14 @@ export async function runJevEditGuardHook(cwd: string, deps: EditGuardCliDeps = 
 
 export async function handleInstall(cwd: string): Promise<void> {
   const root = resolveProjectRoot(cwd);
-  const { errors } = await installSurfaces(root, EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH, ["jev-edit-guard"], EDIT_GUARD_SETTINGS_OWNER);
+  const { relativePath, owner } = editGuardSettingsTarget(root);
+  const { errors } = await installSurfaces(root, relativePath, ["jev-edit-guard"], owner);
   if (errors.length > 0) {
     for (const error of errors) console.error(error);
     process.exitCode = 1;
     return;
   }
-  console.log(`✓ installed: ${EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH} — PostToolUse(${EDIT_GUARD_HOOK_MATCHER}) → \`${editGuardHookCommand()}\``);
+  console.log(`✓ installed: ${relativePath} — PostToolUse(${EDIT_GUARD_HOOK_MATCHER}) → \`${editGuardHookCommand()}\``);
   if (!(await readJevEditGuardEnabled(root))) {
     console.log(
       `  note: review.jev.edit_guard is not set in .metaproject/tasks.config.json — the hook is installed but will stay ` +
@@ -348,13 +353,14 @@ export async function handleInstall(cwd: string): Promise<void> {
 
 export async function handleUninstall(cwd: string): Promise<void> {
   const root = resolveProjectRoot(cwd);
-  const { errors } = await uninstallSurfaces(root, EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH, ["jev-edit-guard"], EDIT_GUARD_SETTINGS_OWNER);
+  const { relativePath, owner } = editGuardSettingsTarget(root);
+  const { errors } = await uninstallSurfaces(root, relativePath, ["jev-edit-guard"], owner);
   if (errors.length > 0) {
     for (const error of errors) console.error(error);
     process.exitCode = 1;
     return;
   }
-  console.log(`✓ removed the jev-edit-guard PostToolUse hook from ${EDIT_GUARD_CLAUDE_SETTINGS_RELATIVE_PATH} (other hooks untouched).`);
+  console.log(`✓ removed the jev-edit-guard PostToolUse hook from ${relativePath} (other hooks untouched).`);
 }
 
 export async function handleStatus(cwd: string, args: string[]): Promise<void> {

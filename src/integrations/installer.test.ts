@@ -256,7 +256,7 @@ describe("installIntegration: targeted --surfaces selection installs only that c
       const result = await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
       expect(result.errors).toEqual([]);
       expect(result.results.map((r) => r.surfaceId)).toEqual(["ctx-guard"]);
-      const settings = JSON.parse(await readFile(path.join(root, ".claude", "settings.json"), "utf8")) as Record<string, unknown>;
+      const settings = JSON.parse(await readFile(path.join(root, ".claude", "settings.local.json"), "utf8")) as Record<string, unknown>;
       const flat = JSON.stringify(settings);
       expect(flat).toContain("keryx ctx hook claude");
       expect(flat).not.toContain(checkOutputCommand("claude"));
@@ -312,7 +312,7 @@ describe("doctor: drift reporting for a recorded surface that is now missing or 
   test("JSON surface: managed entry stripped out of an otherwise-present file -> invalid, drift, ok:false", async () => {
     await withMetaproject(async (root) => {
       await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       await writeFile(file, `${JSON.stringify({}, null, 2)}\n`, "utf8");
 
       const doctor = await doctorIntegration(root, "claude");
@@ -738,7 +738,7 @@ describe("N2 (round 2): uninstall presence is judged PER SURFACE, not by a senti
 describe("M2 (round 3): presence is judged by validate/sentinel-group, never by strip's own empty-container cleanup", () => {
   test("claude: an UNRELATED empty hooks.PreToolUse array (never touched by ctx-guard) reports nothing-to-remove, not removed", async () => {
     await withMetaproject(async (root) => {
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       await mkdir(path.dirname(file), { recursive: true });
       // The round-3 repro: `strip`'s own empty-container cleanup used to make
       // the OLD strip-diff presence check ("did strip change anything?")
@@ -761,7 +761,7 @@ describe("M2 (round 3): presence is judged by validate/sentinel-group, never by 
   test("claude: a genuinely installed ctx-guard, even with a STALE matcher, still reports removed", async () => {
     await withMetaproject(async (root) => {
       await installIntegration(root, "claude", { surfaces: ["ctx-guard"] });
-      const file = path.join(root, ".claude", "settings.json");
+      const file = path.join(root, ".claude", "settings.local.json");
       const settings = JSON.parse(await readFile(file, "utf8")) as {
         hooks: { PreToolUse: Array<Record<string, unknown>> };
       };

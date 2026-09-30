@@ -52,12 +52,11 @@ import {
   securityCapabilities,
 } from "../security/templates";
 import {
+  agentSettingsHasSecuritySentinel,
   installSecurityAgentHooks,
   uninstallSecurityAgentHooks,
-  agentSettingsPath,
-  AGENT_HOOKS_SENTINEL,
-  AGENT_SETTINGS_RELATIVE_PATH,
 } from "../security/agent-hooks";
+import { decideClaudeSettingsTarget, moveClaudeSettingsHooks } from "../integrations/service";
 import { renderMemoryConfig } from "../memory/config";
 import { MEMORY_TYPES } from "../memory/types";
 import {
@@ -515,7 +514,7 @@ export async function initCommand(args: string[]): Promise<void> {
       enableSecurityAgentHook = true;
     } else {
       enableSecurityAgentHook = await confirm(
-        "Install project-local .claude/settings.json security hooks (guard agent input/output)? Recommended",
+        "Install Claude Code security hooks in .claude/settings.local.json (guard agent input/output)? Recommended",
         true,
       );
     }
@@ -598,6 +597,11 @@ export async function initCommand(args: string[]): Promise<void> {
   // instead of being stripped out of a tracked file by a re-init.
   const entrypoints = await resolveProjectEntrypoints(projectRoot, existingManifest?.agentEntrypoints);
   const entrypointNotices = [...entrypoints.notices];
+  // The Claude hooks target is settled from the settings files themselves:
+  // managed hooks the team committed keep it shared, anything else is local.
+  const claudeSettings = await decideClaudeSettingsTarget(projectRoot);
+  entrypoints.targets.claudeSettings = claudeSettings.target;
+  entrypointNotices.push(...claudeSettings.notices);
   // Ignore rules go to info/exclude, never to the tracked .gitignore, and
   // before the local targets exist — so they are ignored from their first byte.
   await syncMetaprojectIgnoreRules(projectRoot, {
@@ -605,6 +609,11 @@ export async function initCommand(args: string[]): Promise<void> {
     onNotice: (line) => {
       entrypointNotices.push(line);
     },
+  });
+  // Every managed Claude hook in one file only: hooks an older keryx left in
+  // the other one are moved before the security installer below runs.
+  await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
+    entrypointNotices.push(line);
   });
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
@@ -1188,7 +1197,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // happened: run `keryx init` before `git init` and every hook reads installed
   // while nothing was written and nothing would ever fire. Ask git first, and
   // say "skipped" when the answer is no. The agent hook is not a git hook — it
-  // lands in .claude/settings.json and works without a repository.
+  // lands in the Claude settings file and works without a repository.
   const gitHooksRoot = await resolveGitHooksRoot(projectRoot);
   const hookLines: Array<[string, boolean]> = [];
   if (enableGdgraph) {
@@ -1362,7 +1371,7 @@ function printInitHelp(): void {
     { flag: "--no-testing-post-commit-hook", desc: "Do not install the testing post-commit refresh hook." },
     { flag: "--no-testing-pre-push-hook", desc: "Do not install the testing pre-push gate hook." },
     { flag: "--no-security-hook", desc: "Do not install the security pre-push gate hook." },
-    { flag: "--no-security-agent-hook", desc: "Do not install the .claude/settings.json security agent hooks." },
+    { flag: "--no-security-agent-hook", desc: "Do not install the Claude Code security agent hooks (.claude/settings.local.json)." },
     { flag: "--mcp", desc: "Enable the opt-in MCP server module (default off)." },
     { flag: "--no-mcp", desc: "Do not enable the MCP server module (default)." },
     { flag: "--sac", desc: "Enable the opt-in SAC (shared agent context) module (default off)." },
@@ -1656,18 +1665,6 @@ async function prePushHasSecurityBlock(projectRoot: string): Promise<boolean> {
   );
 }
 
-// True when .claude/settings.json still carries the managed security agent-hook
-// sentinel (i.e. the agent hooks were previously installed there).
-async function agentSettingsHasSecuritySentinel(
-  projectRoot: string,
-): Promise<boolean> {
-  const file = agentSettingsPath(projectRoot);
-  if (!(await pathExists(file))) {
-    return false;
-  }
-  return (await readFile(file, "utf8")).includes(AGENT_HOOKS_SENTINEL);
-}
-
 async function removeLegacyGdgraphSkillReadme(root: string): Promise<void> {
   const projectRoot = projectRootOf(root);
   const legacyReadmePath = path.join(root, "skills", "gdgraph", "README.md");
@@ -1944,7 +1941,7 @@ function buildManifest({
                       ? { prePush: ".git/hooks/pre-push" }
                       : {}),
                     ...(enableSecurityAgentHook
-                      ? { agent: AGENT_SETTINGS_RELATIVE_PATH }
+                      ? { agent: entrypoints.targets.claudeSettings.path }
                       : {}),
                   },
                 }
