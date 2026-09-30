@@ -62,6 +62,7 @@ const COVERED_FILES = [
   "src/mcp/client-config.ts",
   "src/capability/registry.ts",
   "src/lib/managed-git-hook.ts",
+  "src/lib/git-local-ignore.ts",
 ];
 
 /** Every write/remove/rename/mkdir-shaped `node:fs`/`node:fs/promises` export the review's 13 shapes exercise. */
@@ -134,6 +135,10 @@ const ALLOWLIST: ReadonlyArray<{ readonly file: string; readonly reason: string 
   {
     file: "src/lib/managed-git-hook.ts",
     reason: "installManagedHook/removeManagedHook write into .git/hooks by design (a managed git hook) — contained-write.ts categorically refuses any .git path segment, so this module keeps raw mkdir/writeFile/chmod. R1-F3/R1-F6 fix: this is now the ONE shared copy (deduplicated out of init.ts and update.ts, which no longer contain raw hook writes and carry no allowlist entry of their own), and unlike the old per-command comment this module actually verifies containment itself before writing — it lstat/realpath-checks that both the hooks directory and the target hook file resolve inside the git common dir resolveGitHooksRoot derived from, refusing (not silently writing through) a hooks dir or hook file symlinked elsewhere (flow 315 T12 allowlist).",
+  },
+  {
+    file: "src/lib/git-local-ignore.ts",
+    reason: "ensureLocalIgnorePatterns writes the managed ignore block into <git-common-dir>/info/exclude by design — contained-write.ts refuses any .git path segment, and from a linked worktree the common dir lies outside the project root altogether, so this module keeps one raw mkdir (info/) and one raw writeFile (info/exclude). It verifies containment itself first, the managed-git-hook.ts way: info/ and info/exclude are lstat'ed and, where either is a symlink, must resolve inside the realpath'd git common dir, otherwise the write is refused with a status instead of followed (flow 361 T5 allowlist).",
   },
 ];
 
