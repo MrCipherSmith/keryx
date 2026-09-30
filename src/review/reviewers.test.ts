@@ -346,11 +346,12 @@ describe("project reviewer triggers", () => {
 
   test("a rule in rules/project shadows the same name in rules/core, and is reported as such", async () => {
     await mkdir(path.join(cwd, ".metaproject", "rules", "core"), { recursive: true });
-    await mkdir(path.join(cwd, ".metaproject", "rules", "project"), { recursive: true });
+    // The project slot is keyed on the whole reference: rules/project/core/<name>.
+    await mkdir(path.join(cwd, ".metaproject", "rules", "project", "core"), { recursive: true });
     await writeFile(path.join(cwd, ".metaproject", "rules", "core", "store.mdc"), "generic", "utf8");
-    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "store.mdc"), "overlay", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "core", "store.mdc"), "overlay", "utf8");
     // Only in rules/project: keryx ships the name but the project's install lacks it.
-    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "only-project.mdc"), "overlay", "utf8");
+    await writeFile(path.join(cwd, ".metaproject", "rules", "project", "core", "only-project.mdc"), "overlay", "utf8");
     await writeFile(path.join(cwd, ".metaproject", "rules", "core", "plain.mdc"), "x", "utf8");
     await writeProjectReviewer(
       "review-house-rules",
@@ -361,14 +362,15 @@ describe("project reviewer triggers", () => {
     const inventory = await collectReviewers(cwd);
     const [reviewer] = inventory.project;
     expect(reviewer?.shadowedRules).toEqual([
-      { ref: "core/only-project.mdc", resolved: ".metaproject/rules/project/only-project.mdc" },
-      { ref: "core/store.mdc", resolved: ".metaproject/rules/project/store.mdc" },
+      { ref: "core/only-project.mdc", resolved: ".metaproject/rules/project/core/only-project.mdc" },
+      { ref: "core/store.mdc", resolved: ".metaproject/rules/project/core/store.mdc" },
     ]);
     expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
 
     const rendered = renderReviewerInventoryMarkdown(inventory);
     expect(rendered).toContain("## rules read from .metaproject/rules/project");
-    expect(rendered).toContain("- review-house-rules: `core/store.mdc` → .metaproject/rules/project/store.mdc");
+    expect(rendered).toContain("- review-house-rules: `core/store.mdc` → .metaproject/rules/project/core/store.mdc");
+    expect(rendered).toContain("`.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`");
   });
 
   test("a reviewer with nothing shadowed or dangling carries empty lists and no extra sections", async () => {

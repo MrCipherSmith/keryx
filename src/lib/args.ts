@@ -27,6 +27,33 @@ export function optionValue(args: string[], name: string): string | undefined {
   return prefixed?.slice(name.length + 1);
 }
 
+/**
+ * Every value of a repeatable `--name`, in both spellings and in argv order.
+ *
+ * The same two rules as {@link optionValue}: an occurrence with nothing after
+ * it (or with a flag after it) contributes no value and does not consume that
+ * flag, and an explicit empty value (`--name=`, `--name ""`) is kept as `""`
+ * so a caller can tell it from absence. It used to be filtered out, which made
+ * `--only ""` read as "no --only": the selection it was meant to narrow was
+ * dropped without a word.
+ */
+export function optionValues(args: readonly string[], name: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+    if (argument === name) {
+      const next = args[index + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        values.push(next);
+        index += 1;
+      }
+    } else if (argument.startsWith(`${name}=`)) {
+      values.push(argument.slice(name.length + 1));
+    }
+  }
+  return values;
+}
+
 export function parseBooleanFlags<const T extends readonly string[]>(
   args: string[],
   flags: T,

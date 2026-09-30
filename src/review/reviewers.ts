@@ -103,13 +103,13 @@ export type ProjectReviewer = {
   stackRequires: StackTag[];
   /**
    * Rules it cites that resolve to no file — neither
-   * `.metaproject/rules/project/<name>` nor `.metaproject/rules/<ref>`.
+   * `.metaproject/rules/project/<ref>` nor `.metaproject/rules/<ref>`.
    */
   unresolvedRules: string[];
   /**
    * Rules it cites by one path and reads from another: a
-   * `.metaproject/rules/project/<name>` copy answers the reference before the
-   * file the text names (`core/<name>.mdc`). `resolved` is project-relative.
+   * `.metaproject/rules/project/<ref>` copy answers the reference before the
+   * file the text names (`<dir>/<name>.mdc`). `resolved` is project-relative.
    */
   shadowedRules: ShadowedRule[];
   /**
@@ -596,7 +596,7 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
     lines.push(
       "",
       "The reviewer's text names the path on the left; the file it must read is the one on the",
-      "right. `.metaproject/rules/project/<name>` is resolved before `.metaproject/rules/core/<name>`:",
+      "right. `.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`:",
       "`keryx install` and `keryx update` overwrite rules/core with keryx's own rules, so a rule an",
       "overlay provides under a name keryx also ships is kept in rules/project.",
     );

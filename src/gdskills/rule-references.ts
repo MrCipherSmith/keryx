@@ -26,15 +26,26 @@ export function ruleReferences(content: string): string[] {
 
 /**
  * The directory under `.metaproject/rules/` that holds a project's own version
- * of a rule. `keryx install` / `keryx update` force-copy the bundled rules over
- * `rules/core/` and touch nothing else under `rules/`, so an overlay's rule
- * that shares a filename with one keryx ships survives only outside `core/`.
+ * of a rule. `keryx init`, `keryx update` and `keryx skills install` force-copy
+ * the bundled rules over `rules/core/` and touch nothing else under `rules/`,
+ * so an overlay's rule that shares a name with one keryx ships survives only
+ * outside `core/`.
  */
 export const PROJECT_RULES_DIR = "project";
 
-/** Project-relative posix path of the `rules/project/` copy a reference resolves to first. */
+/**
+ * Project-relative posix path of the project's own slot for a reference:
+ * `.metaproject/rules/project/<ref>`, the whole reference kept —
+ * `core/x.mdc` → `.metaproject/rules/project/core/x.mdc`.
+ *
+ * The slot used to be keyed on the basename, so `core/x.mdc` and `house/x.mdc`
+ * shared one file: the second rule an import met was reported as differing
+ * from the first and installed nowhere. A file lying directly in
+ * `rules/project/` is nobody's slot now; it answers only a reference that
+ * names it, `project/<name>.mdc`, as the literal file it is.
+ */
 export function projectRulePath(ref: string): string {
-  return path.posix.join(".metaproject", "rules", PROJECT_RULES_DIR, path.posix.basename(ref));
+  return path.posix.join(".metaproject", "rules", PROJECT_RULES_DIR, ref);
 }
 
 /** Project-relative posix path of the file a reference names literally. */
@@ -44,30 +55,38 @@ export function literalRulePath(ref: string): string {
 
 export type RuleResolution = {
   ref: string;
-  /** Project-relative posix path of the file the reference resolves to; absent when neither candidate exists. */
+  /** The project slot, {@link projectRulePath}: the first candidate. */
+  project: string;
+  /** The file the reference spells out, {@link literalRulePath}: the second candidate. */
+  literal: string;
+  /** Whichever candidate exists, the project slot first; absent when neither does. */
   resolved?: string;
   /**
-   * True when the reference resolves to `rules/project/<name>` although it
-   * names another directory — the reviewer reads a different file than the one
-   * its text spells out.
+   * True when the reference resolves to its project slot — the reviewer reads a
+   * different file than the one its text spells out.
    */
   shadowed: boolean;
 };
 
 /**
  * Where a rule reference resolves in this project:
- * `.metaproject/rules/project/<name>` first, then `.metaproject/rules/<ref>`.
+ * `.metaproject/rules/project/<ref>` first, then `.metaproject/rules/<ref>`.
+ *
+ * The one owner of that order. `keryx review reviewers` reports through it and
+ * `keryx skills import` decides through it, so the two cannot disagree about
+ * which file a reviewer reads.
  */
 export async function resolveRuleReference(projectRoot: string, ref: string): Promise<RuleResolution> {
   const project = projectRulePath(ref);
   const literal = literalRulePath(ref);
+  const candidates = { ref, project, literal };
   if (await pathExists(path.join(projectRoot, project))) {
-    return { ref, resolved: project, shadowed: project !== literal };
+    return { ...candidates, resolved: project, shadowed: true };
   }
   if (await pathExists(path.join(projectRoot, literal))) {
-    return { ref, resolved: literal, shadowed: false };
+    return { ...candidates, resolved: literal, shadowed: false };
   }
-  return { ref, shadowed: false };
+  return { ...candidates, shadowed: false };
 }
 
 /** The subset of {@link ruleReferences} that resolves to no file, in either location. */
@@ -83,7 +102,7 @@ export async function unresolvedRuleReferences(projectRoot: string, content: str
 
 export type ShadowedRule = { ref: string; resolved: string };
 
-/** The subset of {@link ruleReferences} that a `rules/project/` copy answers instead of the named file. */
+/** The subset of {@link ruleReferences} that a `rules/project/<ref>` copy answers instead of the named file. */
 export async function shadowedRuleReferences(projectRoot: string, content: string): Promise<ShadowedRule[]> {
   const shadowed: ShadowedRule[] = [];
   for (const ref of ruleReferences(content)) {

@@ -1033,6 +1033,9 @@ description: Fixture rule proving rules/project/ is a generated root and nothing
 
 An overlay's colliding rule lands in \`.metaproject/rules/project/error-handling.mdc\`.
 
+The slot is keyed on the whole reference, so it nests: \`.metaproject/rules/project/core/error-handling.mdc\`,
+or bare, \`rules/project/house/naming.mdc\`.
+
 The directory itself, \`.metaproject/rules/project\`, and its bare spelling \`rules/project\` are fine too.
 
 VIOLATION xref:path — \`rules/projects-archive/error-handling.mdc\` is not under the generated root.

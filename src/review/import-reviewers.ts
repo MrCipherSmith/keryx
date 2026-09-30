@@ -1,11 +1,14 @@
 import { optionValue } from "../lib/args";
 import {
   importProjectSkills,
-  optionValues,
+  onlyOption,
   renderImportProjectSkillsMarkdown,
   type ImportProjectSkillsResult,
 } from "../gdskills/import-skills";
 import { collectReviewers, PROJECT_REVIEWER_MODULE } from "./reviewers";
+
+/** How this command spells itself in a refusal. */
+const REVIEW_IMPORT_LABEL = "keryx review import";
 
 export type ImportReviewersOptions = {
   projectRoot: string;
@@ -32,7 +35,7 @@ export async function importOverlayReviewers(options: ImportReviewersOptions): P
     projectRoot: options.projectRoot,
     from: options.from,
     module: PROJECT_REVIEWER_MODULE,
-    commandLabel: "keryx review import",
+    commandLabel: REVIEW_IMPORT_LABEL,
     ...(options.only !== undefined ? { only: options.only } : {}),
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
     ...(options.force !== undefined ? { force: options.force } : {}),
@@ -52,7 +55,7 @@ export async function runImportReviewers(args: string[]): Promise<void> {
   const result = await importOverlayReviewers({
     projectRoot: process.cwd(),
     from,
-    only: optionValues(args, "--only"),
+    only: onlyOption(args, REVIEW_IMPORT_LABEL),
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force"),
   });
