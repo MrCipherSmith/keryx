@@ -10,7 +10,7 @@
   "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
   "status": "in-progress",
   "createdAt": "2026-09-30T14:26:46.112Z",
-  "updatedAt": "2026-09-30T19:10:35.174Z",
+  "updatedAt": "2026-09-30T19:41:54.649Z",
   "source": {
     "type": "description",
     "ref": null
@@ -307,17 +307,24 @@
       "id": "T14",
       "title": "Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T19:10:48.394Z",
+            "outcome": "started",
+            "detail": "361-T14"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -512,6 +519,16 @@
     {
       "at": "2026-09-30T19:10:35.174Z",
       "event": "task-added",
+      "detail": "T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info"
+    },
+    {
+      "at": "2026-09-30T19:10:48.394Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 361-T14"
+    },
+    {
+      "at": "2026-09-30T19:41:54.649Z",
+      "event": "task-done",
       "detail": "T14: Fix review round 1: F-001 manifest path injection into info/exclude, F-002 override source symlink escape, F-004 legacy .gitignore restore, F-005 shared exclude block flips per worktree, F-008 CRLF strip, F-006/F-009/F-010/F-011 minors, F-003/F-007 info"
     }
   ],
