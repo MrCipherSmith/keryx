@@ -1396,7 +1396,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |
 | `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
 | `agents external list [--json] [--no-probe]` / `probe <id> [--json]` | inspect the external agent registry and its three-state availability; read-only, spends no quota (`src/commands/agents-external.ts`) |
-| `agents external review <run-id>` / `apply <run-id> [--allow-flagged]` / `discard <run-id>` | review, land (as a new local branch `external/<run-id>`, after you type the patch hash prefix at a terminal) or drop a stored `claude-cli --write` diff ([guide](guides/external-agent-write.md)) |
+| `agents external review <run-id>` / `apply <run-id> [--allow-flagged]` / `discard <run-id>` | review, land (as a new local branch `external/<run-id>`, after you type the patch hash prefix at a terminal) or drop a stored `claude-cli --write` or `codex-cli --write` diff ([guide](guides/external-agent-write.md)) |
 | `agents external run <id> --task "<text>" [--unattended] [--write]` | drive one ACP agent (`transport: acp`) with keryx as its client, in a disposable worktree, under keryx's approval gate with the mode lowered to `ask`; spends the operator's quota ([ACP client guide](guides/acp-client.md)) |
 
 **Key files.**
@@ -1417,8 +1417,9 @@ The hook runs *after* admission, so the budget ledger and the depth/child caps
 have already applied and no second spawn path exists. Execution is read-only in a
 disposable git worktree with a stripped environment and a restricted tool roster;
 `worktree-write` is a valid contract value the runtime honours for `claude-cli`
-only (a stored, reviewed diff that lands as a new local branch; see
-[Let an external agent write](guides/external-agent-write.md)) and refuses for
+(tool allow-list) and `codex-cli` (operating-system sandbox) only — a stored,
+reviewed diff that lands as a new local branch; see
+[Let an external agent write](guides/external-agent-write.md) — and refuses for
 the other agents with its own named reason. The capability is **off by default**, opt-in through the user-global
 `externalAgents` config (plus `keryx init --external-agents` inside a workspace),
 and hard disabled on a remote transport or under CI. keryx never reads a vendor

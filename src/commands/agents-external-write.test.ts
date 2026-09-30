@@ -327,3 +327,34 @@ describe("agents external discard", () => {
     expect(errors.join("\n")).toContain("refused (not-found)");
   });
 });
+
+describe("flow 371 — a codex-cli write run goes through the same review, apply and discard path", () => {
+  test("review names the agent, and apply needs the typed hash and lands a branch", async () => {
+    const record = seed(makePatch(), { agentId: "codex-cli" });
+    await agentsExternalCommand(["review", record.runId], deps());
+    expect(process.exitCode).toBe(0);
+    expect(out.join("\n")).toContain("agent: codex-cli");
+
+    const wrong = terminal("no");
+    await agentsExternalCommand(["apply", record.runId], deps(wrong.run));
+    expect(wrong.questions).toHaveLength(1);
+    expect(branches()).toEqual(["main"]);
+
+    process.exitCode = 0;
+    await agentsExternalCommand(["apply", record.runId], deps(terminal((record.patchHash as string).slice(0, 12)).run));
+    expect(process.exitCode).toBe(0);
+    expect(branches()).toContain(`external/${record.runId}`);
+  });
+
+  test("a flagged codex run is refused without --allow-flagged, and discard drops it", async () => {
+    const record = seed(makePatch(), { agentId: "codex-cli", flaggedPaths: [".codex/config.toml"] });
+    await agentsExternalCommand(["apply", record.runId], deps(terminal((record.patchHash as string).slice(0, 12)).run));
+    expect(process.exitCode).toBe(1);
+    expect(errors.join("\n")).toContain("refused (flagged)");
+
+    process.exitCode = 0;
+    await agentsExternalCommand(["discard", record.runId], deps());
+    expect(process.exitCode).toBe(0);
+    expect(existsSync(record.patchPath as string)).toBe(false);
+  });
+});

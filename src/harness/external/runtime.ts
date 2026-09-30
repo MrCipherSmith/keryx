@@ -27,10 +27,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadSchema, normalizeContractName, validateJson } from "../../gdskills/contracts";
 import type { WorktreePort } from "../child/worktree";
-import { validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
+import { CODEC_WRITE_VERIFIED_VERSIONS, validateRuntimeBlock, type RuntimeBlock } from "./dispatch";
 import { buildExternalChildEnv, canNestExternalChild } from "./env";
 import { buildExternalPrompt } from "./prompt";
-import { resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
+import { compareVersions, resolveAvailability, transportOf, type DetectionOutcome } from "./registry";
 import { persistAcpRun, runAcpInWorktree, type AcpChildOptions, type AcpRunRecord } from "./acp-run";
 import { superviseExternalRun, type ExternalRunHandle, type ExternalSpawnPort } from "./supervise";
 import type { SupervisionConfig, SupervisionTrigger } from "./supervision";
@@ -376,11 +376,13 @@ export async function runExternalChild(
     return refuse("Error", `no codec is registered for external agent "${entry.id}"`);
   }
 
+  let detectedVersion: string | undefined;
   if (deps.detect !== undefined) {
     const availability = resolveAvailability(entry, await deps.detect(entry.binary, entry.detect));
     if (availability.state === "binary-missing") {
       return refuse("Denied", `${entry.label} is not installed (\`${entry.binary}\` not on PATH)`);
     }
+    if (availability.state === "available") detectedVersion = availability.version;
     if (availability.state === "available" && availability.verdict.state !== "in-range") {
       // Advisory by design: neither CLI publishes a stable event schema, so
       // hard-failing outside the recorded range would break the feature on the
@@ -389,6 +391,17 @@ export async function runExternalChild(
         `${entry.label} version ${availability.version ?? "unknown"} is outside the range this build's fixtures were recorded against`,
       );
     }
+  }
+
+  // Unlike the advisory range check above, this is a hard refusal: a write run's confinement is
+  // the CLI's own sandbox, verified only from this version, and an unreadable version proves nothing.
+  const verifiedVersion = sandbox === "worktree-write" ? CODEC_WRITE_VERIFIED_VERSIONS[entry.id] : undefined;
+  if (verifiedVersion !== undefined && (detectedVersion === undefined || compareVersions(detectedVersion, verifiedVersion) < 0)) {
+    return refuse(
+      "Denied",
+      `${entry.label} write mode needs \`${entry.binary}\` ${verifiedVersion} or newer, the version whose sandbox confinement was verified; ` +
+        (detectedVersion === undefined ? "the installed version could not be read" : `found ${detectedVersion}`),
+    );
   }
 
   // R22/AC13: request a structured, schema-validated final message. Loaded and

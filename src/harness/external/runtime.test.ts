@@ -167,9 +167,20 @@ describe("gates run before anything is created", () => {
       baseDeps({ worktree: wt.port, spawn: sp.port }),
     );
     expect(result.status).toBe("Denied");
-    expect(result.output).toContain("claude-only in this release");
+    expect(result.output).toContain("write mode is available for claude-cli, codex-cli only");
     expect(sp.calls).toHaveLength(0);
     expect(wt.created).toHaveLength(0);
+  });
+
+  test("antigravity-cli worktree-write is refused even for the capture owner, naming why", async () => {
+    const sp = fakeSpawn([]);
+    const result = await runExternalChild(
+      baseInput({ runtime: { kind: "external", agent: "antigravity-cli", sandbox: "worktree-write" }, allowedActions: ["read-file", "write"] }),
+      baseDeps({ spawn: sp.port, ownsWriteCapture: true }),
+    );
+    expect(result.status).toBe("Denied");
+    expect(result.output).toContain("edit tool writes outside the worktree");
+    expect(sp.calls).toHaveLength(0);
   });
 
   test("a native dispatch handed to this runtime is refused, never run in-process", async () => {
@@ -223,6 +234,63 @@ describe("detection", () => {
     // fails AC13's structured-result validation (proven elsewhere below).
     expect(result.status).not.toBe("Denied");
     expect(result.partial).toBe("ok");
+  });
+});
+
+describe("flow 371 — a codex write run is gated on the version whose confinement was verified", () => {
+  const WRITE_INPUT = (): RunExternalChildInput =>
+    baseInput({ runtime: { kind: "external", agent: "codex-cli", sandbox: "worktree-write" }, allowedActions: ["read-file", "write"] });
+
+  test.each([
+    ["older", "codex-cli 0.158.9", "found 0.158.9"],
+    ["unreadable", "no version here", "could not be read"],
+  ])("an %s codex is Denied before any worktree or spawn, naming found and required", async (_label, detectOutput, expectedText) => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn([]);
+    const result = await runExternalChild(
+      WRITE_INPUT(),
+      baseDeps({ worktree: wt.port, spawn: sp.port, ownsWriteCapture: true, detect: async () => ({ binaryFound: true, detectOutput }) }),
+    );
+    expect(result.status).toBe("Denied");
+    expect(result.output).toContain("0.159.0");
+    expect(result.output).toContain(expectedText);
+    expect(sp.calls).toHaveLength(0);
+    expect(wt.created).toHaveLength(0);
+  });
+
+  test("a missing probe is treated as unreadable: fail closed", async () => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn([]);
+    const result = await runExternalChild(WRITE_INPUT(), baseDeps({ worktree: wt.port, spawn: sp.port, ownsWriteCapture: true }));
+    expect(result.status).toBe("Denied");
+    expect(result.output).toContain("could not be read");
+    expect(sp.calls).toHaveLength(0);
+    expect(wt.created).toHaveLength(0);
+  });
+
+  test.each(["codex-cli 0.159.0", "codex-cli 0.159.2", "codex-cli 0.200.0"])("%s passes the gate and spawns with the confinement argv", async (detectOutput) => {
+    const wt = fakeWorktree();
+    const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
+    const result = await runExternalChild(
+      WRITE_INPUT(),
+      baseDeps({ worktree: wt.port, spawn: sp.port, ownsWriteCapture: true, detect: async () => ({ binaryFound: true, detectOutput }) }),
+    );
+    expect(result.status).not.toBe("Denied");
+    expect(sp.calls).toHaveLength(1);
+    expect(sp.calls[0]?.argv).toContain("workspace-write");
+    expect(sp.calls[0]?.argv).toContain("--ignore-rules");
+    expect(wt.created).toHaveLength(1);
+    expect(wt.removed).toEqual(wt.created);
+  });
+
+  test("a read-only codex run is not version-gated", async () => {
+    const sp = fakeSpawn(transcript("codex-cli", "success.stdout.jsonl"));
+    const result = await runExternalChild(
+      baseInput(),
+      baseDeps({ spawn: sp.port, detect: async () => ({ binaryFound: true, detectOutput: "codex-cli 0.100.0" }) }),
+    );
+    expect(result.status).not.toBe("Denied");
+    expect(sp.calls).toHaveLength(1);
   });
 });
 

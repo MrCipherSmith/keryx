@@ -1,32 +1,73 @@
 # Let an external agent write
 
-`claude-cli` can change files for you, but not in your checkout. The run happens
-in a throwaway git worktree, its diff is stored as a pending review, and a change
-reaches your repository only as a new local branch that you approved by reading the
-diff and typing back part of its hash.
+`claude-cli` and `codex-cli` can change files for you, but not in your checkout.
+The run happens in a throwaway git worktree, its diff is stored as a pending
+review, and a change reaches your repository only as a new local branch that you
+approved by reading the diff and typing back part of its hash.
 
-This is the only write path for an external agent that keryx applies itself.
-`codex-cli` and `antigravity-cli` refuse `--write` with the reason "write mode is
-claude-only in this release". `gemini-acp --write` is a different mechanism whose
-patch keryx never applies; see the [ACP client guide](acp-client.md).
+These are the only write paths for an external agent that keryx applies itself.
+`antigravity-cli` refuses `--write` (see [below](#what-this-does-not-do)).
+`gemini-acp --write` is a different mechanism whose patch keryx never applies; see
+the [ACP client guide](acp-client.md).
 
 Everything on this page needs the external agent capability to be on, as for any
 [external child](../harness.md#external-children-a-vendor-cli-as-a-child-agent):
-`externalAgents.enabled: true` in your user config, and `claude` installed and
-logged in.
+`externalAgents.enabled: true` in your user config, and the agent's CLI (`claude`
+or `codex`) installed and logged in.
 
 ## Run it
 
 ```bash
 keryx agents external run claude-cli --task "Add a --json flag to the status command" --write
+keryx agents external run codex-cli  --task "Add a --json flag to the status command" --write
 ```
 
 keryx cuts a worktree from the current commit (it needs a git checkout with at
-least one commit; uncommitted changes are not in it) and starts `claude` there with
-only the tools `Read Grep Glob Edit Write`: no shell, no network, no MCP server. The
-launch flags are `--tools Read Grep Glob Edit Write --permission-mode acceptEdits
---permission-prompts none`, so an edit inside the worktree goes through, a write
-outside it is denied, and any other question is refused instead of asked.
+least one commit; uncommitted changes are not in it) and starts the agent there.
+The capture, review, flagged-path gate and landing below are identical for both
+agents. What confines the agent while it runs is different in kind.
+
+### `claude-cli`: a tool allow-list
+
+`claude` runs with only the tools `Read Grep Glob Edit Write`: no shell, no
+network, no MCP server. The launch flags are `--tools Read Grep Glob Edit Write
+--permission-mode acceptEdits --permission-prompts none`, so an edit inside the
+worktree goes through, a write outside it is denied, and any other question is
+refused instead of asked.
+
+### `codex-cli`: an operating-system sandbox
+
+`codex` has no tool allow-list. keryx runs it with `-s workspace-write` plus
+`-c sandbox_workspace_write.exclude_slash_tmp=true -c
+sandbox_workspace_write.exclude_tmpdir_env_var=true -c
+sandbox_workspace_write.network_access=false` and `--ignore-rules`. Measured live on
+2026-09-30 with `codex` 0.159.0 and 0.159.2, in a scratch git repository:
+
+- Writes outside the worktree (`/tmp`, `/var/tmp`, `$HOME`, a sibling directory)
+  fail with "read-only file system".
+- The network is closed (DNS lookups fail).
+- `.git` is read-only: no commit, no hook write.
+
+Without the two `exclude_*` flags the default `workspace-write` sandbox lets
+`codex` write to `/tmp`, which is why keryx always passes them. `--ignore-rules` is
+just as mandatory: without it, the exec-policy rules in your own `codex`
+configuration can let shell commands run outside the sandbox (writes to `/tmp` and
+`$HOME` succeeded in the test); with it they were refused.
+
+!!! warning "codex keeps a sandboxed shell, so it can read what you can read"
+    Unlike `claude`, `codex` still has a shell. Inside the sandbox it can **read**
+    any file your user account can read, for example keys under `$HOME`. It cannot
+    send them anywhere because the network is closed, but their content can appear
+    in the run's output. Review the diff and the run output before you apply, and do
+    not run a `codex` write task in a checkout or environment where that matters.
+
+keryx refuses a `codex` write run before it starts when the installed `codex` is
+older than 0.159.0 (the verified version) or its version cannot be read; the message
+names the version found and the version required. A follow-up turn of a write run
+can never run under a weaker sandbox than the first turn: either the same flags are
+re-asserted or the follow-up is refused.
+
+### Capture
 
 When the run ends, however it ends (finished, timed out, crashed or interrupted
 with Ctrl+C), keryx captures the worktree's changes before removing it. The diff
@@ -134,11 +175,18 @@ commands above; it never lands anything.
 
 ## What this does not do
 
-- No write for `codex-cli` or `antigravity-cli`.
+- No write for `antigravity-cli` (`agy`). A live test showed its file-edit tool
+  writes outside the working directory (to `/tmp` and into `.git/hooks`), and its
+  headless shell is auto-denied only for commands, not for file edits, so keryx
+  keeps refusing `--write` for it. Write for Gemini is not planned.
 - No model review of the diff. The mandatory review is you, on the diff that is
   shown.
-- No auto-approve, no unattended landing, no push and no pull request.
-- No shell, network or MCP for the writing agent.
-- Not yet verified end to end. The permission flags were probed against `claude`
-  2.1.280; a full write run through the installed CLI has not been recorded, so
-  treat the first runs as unproven and read every diff.
+- No auto-approve, no unattended landing, no push and no pull request from the
+  landed branch.
+- No network and no MCP for the writing agent. `claude` also gets no shell;
+  `codex` keeps a sandboxed shell that can read files your account can read (see
+  above).
+- Little live history. The `claude` permission flags were probed against `claude`
+  2.1.280; the `codex` confinement was measured live on `codex` 0.159.0 in a
+  scratch git repository. Neither agent has a long record of write runs, so treat
+  the first runs as unproven and read every diff.

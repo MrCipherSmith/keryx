@@ -487,13 +487,13 @@ describe("runExternalWriteChild", () => {
   });
 
   describe("refusals happen before any worktree exists", () => {
-    test.each(["codex-cli", "antigravity-cli"])("%s is refused worktree-write as claude-only and creates nothing", async (agent) => {
+    test("antigravity-cli is refused worktree-write, naming why, and creates nothing", async () => {
       const result = await runExternalWriteChild(
-        writeInput({ runtime: { kind: "external", agent, sandbox: "worktree-write" } }),
+        writeInput({ runtime: { kind: "external", agent: "antigravity-cli", sandbox: "worktree-write" } }),
         deps(scriptedChild(() => undefined)),
       );
       expect(result.outcome.status).toBe("Denied");
-      expect(result.outcome.output).toContain("claude-only in this release");
+      expect(result.outcome.output).toContain("edit tool writes outside the worktree");
       expect(result.run).toBeUndefined();
       expectNoWorktreeLeft();
     });
@@ -513,6 +513,95 @@ describe("runExternalWriteChild", () => {
       const result = await runExternalWriteChild(writeInput(), deps(scriptedChild(() => undefined), { projectRoot: plain }));
       expect(result.outcome.status).toBe("Error");
       expect(result.outcome.output).toContain("git checkout");
+    });
+  });
+
+  describe("codex-cli write run (flow 371)", () => {
+    const codexInput = (): RunExternalChildInput => writeInput({ runtime: { kind: "external", agent: "codex-cli", sandbox: "worktree-write" } });
+    const probe = (output: string | undefined) => async () => ({ binaryFound: true, ...(output === undefined ? {} : { detectOutput: output }) });
+    const spawned = (): { port: ExternalSpawnPort; argvs: string[][] } => {
+      const argvs: string[][] = [];
+      const inner = scriptedChild((cwd) => writeFileSync(path.join(cwd, "a.txt"), "edited by codex\n"));
+      return {
+        argvs,
+        port: {
+          spawn(argv, opts) {
+            argvs.push([...argv]);
+            return inner.spawn(argv, opts);
+          },
+        },
+      };
+    };
+
+    test.each([
+      ["older", "codex-cli 0.158.9", "found 0.158.9"],
+      ["an older major", "codex-cli 0.147.0", "found 0.147.0"],
+    ])("a %s codex is refused before any spawn or worktree, naming the found and required versions", async (_name, output, found) => {
+      const child = spawned();
+      const result = await runExternalWriteChild(codexInput(), deps(child.port, { detect: probe(output) }));
+      expect(result.outcome.status).toBe("Denied");
+      expect(result.outcome.output).toContain(found);
+      expect(result.outcome.output).toContain("0.159.0");
+      expect(child.argvs).toEqual([]);
+      expect(result.run).toBeUndefined();
+      expectNoWorktreeLeft();
+    });
+
+    test.each([
+      ["no version in the banner", probe("codex is great")],
+      ["no detect output at all", probe(undefined)],
+      ["no probe supplied", undefined],
+    ])("a codex whose version cannot be read (%s) is refused before any spawn or worktree", async (_name, detect) => {
+      const child = spawned();
+      const result = await runExternalWriteChild(codexInput(), deps(child.port, detect === undefined ? {} : { detect }));
+      expect(result.outcome.status).toBe("Denied");
+      expect(result.outcome.output).toContain("could not be read");
+      expect(result.outcome.output).toContain("0.159.0");
+      expect(child.argvs).toEqual([]);
+      expectNoWorktreeLeft();
+    });
+
+    test.each(["codex-cli 0.159.0", "codex-cli 0.159.2", "codex-cli 0.160.1"])(
+      "%s captures the diff through the same pipeline as claude and removes the worktree",
+      async (output) => {
+        const child = spawned();
+        const result = await runExternalWriteChild(codexInput(), deps(child.port, { detect: probe(output) }));
+        expect(child.argvs).toHaveLength(1);
+        expect(child.argvs[0]).toContain("workspace-write");
+        expect(child.argvs[0]).toContain("--ignore-rules");
+        const run = result.run;
+        expect(run?.agentId).toBe("codex-cli");
+        expect(run?.state).toBe("pending-review");
+        expect(run?.files).toEqual([{ path: "a.txt", status: "modified" }]);
+        const stored = readFileSync(run?.patchPath as string, "utf8");
+        expect(stored).toContain("+edited by codex");
+        expect(run?.patchHash).toBe(createHash("sha256").update(stored, "utf8").digest("hex"));
+        expect(loadExternalWriteRun(repo, run?.runId as string, dataDir)).toEqual(run);
+        expectNoWorktreeLeft();
+      },
+    );
+
+    test("the worktree is removed when the codex spawn throws", async () => {
+      const result = await runExternalWriteChild(
+        codexInput(),
+        deps(
+          {
+            spawn() {
+              throw new Error("spawn failed");
+            },
+          },
+          { detect: probe("codex-cli 0.159.2") },
+        ),
+      );
+      expect(result.outcome.isError).toBe(true);
+      expectNoWorktreeLeft();
+    });
+
+    test("the verified-version gate does not apply to claude", async () => {
+      const child = spawned();
+      const result = await runExternalWriteChild(writeInput(), deps(child.port));
+      expect(child.argvs).toHaveLength(1);
+      expect(result.run?.agentId).toBe("claude-cli");
     });
   });
 });

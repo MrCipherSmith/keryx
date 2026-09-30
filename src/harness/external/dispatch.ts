@@ -83,12 +83,19 @@ export const IMPLEMENTED_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only
 export const IMPLEMENTED_ACP_SANDBOX_MODES: readonly ExternalSandbox[] = ["read-only", "worktree-write"];
 
 /**
- * The one line-stream agent whose `worktree-write` is implemented (flow 370):
- * its Edit/Write roster and headless permission mode were verified live, and the
- * write run captures the worktree diff for review. codex and antigravity have no
- * verified narrow write mode yet.
+ * The line-stream agents whose `worktree-write` is implemented; the write run captures
+ * the worktree diff for review. claude (flow 370) is confined by a verified tool
+ * allow-list; codex (flow 371) by its OS sandbox, whose flags were measured live. antigravity
+ * stays out: its edit tool writes outside the worktree.
  */
-export const CODEC_WRITE_AGENT_ID = "claude-cli";
+export const CODEC_WRITE_AGENT_IDS: readonly string[] = ["claude-cli", "codex-cli"];
+
+/**
+ * The oldest CLI version whose write confinement was measured, for a write agent whose
+ * confinement is the CLI's own sandbox rather than a tool allow-list. An older or
+ * unreadable version is refused before anything spawns (flow 371).
+ */
+export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, string>> = { "codex-cli": "0.159.0" };
 
 /** Who is asking: `ownsWriteCapture` is true only for the caller that captures and stores the worktree diff (`runExternalWriteChild`). */
 export interface ValidateRuntimeOptions {
@@ -102,7 +109,7 @@ export interface ValidateRuntimeOptions {
  */
 export function implementedSandboxModesFor(entry: ExternalAgentEntry, options: ValidateRuntimeOptions = {}): readonly ExternalSandbox[] {
   if (transportOf(entry) === "acp") return IMPLEMENTED_ACP_SANDBOX_MODES;
-  return entry.id === CODEC_WRITE_AGENT_ID && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
+  return CODEC_WRITE_AGENT_IDS.includes(entry.id) && options.ownsWriteCapture === true ? IMPLEMENTED_ACP_SANDBOX_MODES : IMPLEMENTED_SANDBOX_MODES;
 }
 
 /**
@@ -169,7 +176,8 @@ export function validateRuntimeBlock(
       reason:
         `sandbox "${sandbox}" is not implemented in this release; only ${implemented.join(", ")} is available` +
         (sandbox === "worktree-write" && transportOf(entry) !== "acp"
-          ? `; write mode is claude-only in this release (${CODEC_WRITE_AGENT_ID})`
+          ? `; write mode is available for ${CODEC_WRITE_AGENT_IDS.join(", ")} only` +
+            (entry.id === "antigravity-cli" ? ": antigravity-cli's edit tool writes outside the worktree" : "")
           : ""),
     };
   }

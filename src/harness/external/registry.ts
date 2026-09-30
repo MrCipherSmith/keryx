@@ -41,8 +41,9 @@ export const EXTERNAL_AGENTS: readonly ExternalAgentEntry[] = [
     notes:
       "Resume requires NOT passing `--ephemeral`: an ephemeral thread fails resume with " +
       "`no rollout found for thread id … (code -32600)`. `codex exec resume` also takes a " +
-      "narrower flag set than `codex exec` — no `-s`, no `-C` — so its sandbox level cannot " +
-      "be re-asserted and it must be spawned with cwd already set to the worktree.",
+      "narrower flag set than `codex exec` — no `-s`, no `-C` — so a read-only resume inherits " +
+      "its sandbox, a write run re-asserts its confinement as `-c` overrides, and it must be " +
+      "spawned with cwd already set to the worktree. Write mode needs codex 0.159.0 or newer.",
   },
   {
     id: "claude-cli",

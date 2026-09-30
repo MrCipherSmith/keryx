@@ -173,7 +173,7 @@ keryx agents monitor <events-file>    # offline fleet report over a recorded log
 
 ## External children: a vendor CLI as a child agent
 
-keryx can hand a bounded, **read-only** piece of work (or, for `claude-cli` only, a
+keryx can hand a bounded, **read-only** piece of work (or, for `claude-cli` and `codex-cli`, a
 [reviewed write](guides/external-agent-write.md)) to a coding CLI you already
 have installed — `codex exec`, `claude -p`, or Google's Antigravity CLI (`agy -p
 --output-format stream-json`) — as a child of this same harness. The vendor's own
@@ -226,11 +226,12 @@ naming each denied action. To let a tool through, add a
 `--dangerously-skip-permissions`, even though `agy` suggests it.
 
 **Read-only only.** `worktree-write` is a registry-valid contract value `agy`
-itself supports, and this release refuses it with `not-implemented` and the reason
-"write mode is claude-only in this release". `codex-cli` refuses it the same way;
-of the line-stream agents only `claude-cli` can write (see
-[Write mode for `claude-cli`](#write-mode-for-claude-cli)), plus the ACP agent
-below.
+itself supports, and keryx refuses it with `not-implemented`. A live test showed
+that `agy`'s file-edit tool writes outside the working directory (to `/tmp` and
+into `.git/hooks`), and that its headless shell is auto-denied only for commands,
+not for file edits. Of the line-stream agents only `claude-cli` and `codex-cli`
+can write (see [Write mode for `claude-cli` and
+`codex-cli`](#write-mode-for-claude-cli-and-codex-cli)), plus the ACP agent below.
 
 ### Off by default, hard disabled where it matters
 
@@ -294,7 +295,9 @@ afterwards and honoured **on entry**, so a keryx started from inside an external
 child refuses to start another. The tool roster is restricted: `claude` runs with
 `--tools Read Grep Glob`, an allow-list over the built-in roster rather than a
 permission rule, and an empty strict MCP config. (A `--write` run of `claude-cli`
-adds `Edit` and `Write` to that roster and nothing else.)
+adds `Edit` and `Write` to that roster and nothing else. `codex` has no roster; a
+`--write` run of `codex-cli` is confined by an operating-system sandbox instead,
+described under [Write mode](#write-mode-for-claude-cli-and-codex-cli).)
 
 `ANTHROPIC_API_KEY` is stripped to make the subscription *work*, not for secrecy:
 with a key present the CLI initialises normally, retries, and then fails in a way
@@ -369,11 +372,25 @@ message was not delivered.
 the agent's own codec and shows it in the Command tab; running it in a real
 terminal is yours to do. The worktree is gone by then, and the tab says so.
 
-### Write mode for `claude-cli`
+### Write mode for `claude-cli` and `codex-cli`
 
-`keryx agents external run claude-cli --task "<text>" --write` runs `claude` in a
-throwaway git worktree cut from the current commit with only the tools `Read Grep
-Glob Edit Write` — no shell, no network, no MCP server. The worktree's diff is
+`keryx agents external run claude-cli --task "<text>" --write` (or `codex-cli`)
+runs the agent in a throwaway git worktree cut from the current commit. `claude`
+gets only the tools `Read Grep Glob Edit Write` — no shell, no network, no MCP
+server. `codex` has no allow-list; keryx runs it with `-s workspace-write -c
+sandbox_workspace_write.exclude_slash_tmp=true -c
+sandbox_workspace_write.exclude_tmpdir_env_var=true -c
+sandbox_workspace_write.network_access=false --ignore-rules`. Measured live on
+`codex` 0.159.0 and 0.159.2 in a scratch repository: writes outside the worktree fail
+with "read-only file system", the network is closed and `.git` is read-only. Without
+the two `exclude_*` flags the default sandbox lets `codex` write to `/tmp`, and
+without `--ignore-rules` the exec-policy rules in your own `codex` configuration can
+run commands outside the sandbox, so keryx always passes all of them. The difference that remains: `codex` keeps a sandboxed shell and can read any
+file your account can read; it cannot send it anywhere, but the content can appear
+in the run's output, so review the diff and the output before applying. keryx
+refuses a `codex` write run when the installed `codex` is older than 0.159.0 or its
+version cannot be read, and a follow-up turn can never run under a weaker sandbox
+than the first. The worktree's diff is
 captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a
 pending review; nothing reaches your checkout. `keryx agents external review
 <run-id>` shows it. `apply <run-id> [--allow-flagged]` needs a real terminal, shows
@@ -391,13 +408,14 @@ The full flow, the refusals and the limits are in
 
 ### What this deliberately does not do
 
-- **Write mode is `claude-cli` only, and a human is the only review.**
-  `codex-cli` and `antigravity-cli` still refuse `worktree-write` with their own
-  named reason ("write mode is claude-only in this release") — distinguishable
-  from an agent that cannot do it. A model review of the diff is not built, there
-  is no auto-approve, and keryx never pushes or opens a pull request. A full write
-  run through the installed `claude` CLI is not yet recorded; only its
-  narrow-permission flags were probed against `claude` 2.1.280.
+- **Write mode is `claude-cli` and `codex-cli` only, and a human is the only
+  review.** `antigravity-cli` still refuses `worktree-write` (its file-edit tool
+  was seen writing outside the working directory) — distinguishable from an agent
+  that cannot do it; Gemini write is not planned. A model review of the diff is not
+  built, there is no auto-approve, and keryx never pushes or opens a pull request
+  from the landed branch. Neither write path has a long live history: the
+  `claude` narrow-permission flags were probed against `claude` 2.1.280, and the
+  `codex` sandbox was measured live on `codex` 0.159.0 in a scratch repository.
 - **No supervision triggers.** The specification describes a folded,
   trigger-driven view of a *running* child for the parent agent. None of it is
   implemented: the parent receives the child's result and nothing before it.
@@ -462,8 +480,9 @@ Stated here rather than left to be discovered:
 - **No real replay.** See above — `validate-log` only.
 - **No branch merge.** Reconcile by forking again from a shared ancestor.
 - **Limited mutating external children, and no supervision of a running one.** The
-  external runtime is read-only except `claude-cli --write` (reviewed by a human,
-  landed only as a new local branch; no full live write run recorded yet), off by
+  external runtime is read-only except `claude-cli --write` and `codex-cli --write`
+  (reviewed by a human, landed only as a new local branch; little live write
+  history), off by
   default, and live-verified only for
   `claude` 2.1.280 and `agy` 1.2.12 (codex-cli: failure path only; Gemini: not at
   all) — see

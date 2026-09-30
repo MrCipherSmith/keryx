@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.42] — 2026-09-30
+### Added
+- **Write mode for the external agent `codex-cli`** — `keryx agents external run codex-cli --task "..." --write` works the same way as for `claude-cli`: a throwaway git worktree at the base commit, a secret-redacted, hashed patch that is never applied automatically, human review, and landing only as a NEW local branch `external/<run-id>` after you type the first 12 hex digits of the patch hash. The same flagged-path gate applies, there is no auto-approve, and nothing is pushed and no pull request is opened from the landed branch.
+- **A different kind of confinement** — `claude` has a tool allow-list (`Read Grep Glob Edit Write`; no shell, no network, no MCP). `codex` has no allow-list, so keryx runs it with `-s workspace-write -c sandbox_workspace_write.exclude_slash_tmp=true -c sandbox_workspace_write.exclude_tmpdir_env_var=true -c sandbox_workspace_write.network_access=false --ignore-rules`. Measured live on 2026-09-30 with `codex` 0.159.0 and 0.159.2 in a scratch git repository: writes outside the worktree (`/tmp`, `/var/tmp`, `$HOME`, a sibling directory) fail with "read-only file system", the network is closed (DNS fails), and `.git` is read-only (no commit, no hook write). Without the two `exclude_*` flags the default `workspace-write` sandbox lets `codex` write to `/tmp`, which is why keryx always passes them. `--ignore-rules` is equally mandatory: without it, the exec-policy rules in the user's own `codex` configuration can let shell commands run outside the sandbox (writes to `/tmp` and `$HOME` succeeded in the test); with it they were refused.
+- **A version floor** — keryx refuses a `codex` write run before it starts when the installed `codex` is older than 0.159.0 (the verified version) or its version cannot be read; the message names the version found and the version required. A follow-up turn of a write run can never run under a weaker sandbox than the first turn: the same flags are re-asserted or the follow-up is refused.
+### Notes
+- `codex` keeps a sandboxed shell, so it can READ any file your user account can read (for example keys under `$HOME`). It cannot send them anywhere because the network is closed, but their content can appear in the run's output. Review the diff and the run output before applying, and do not run a `codex` write task in a checkout or environment where that matters.
+- `antigravity-cli` (`agy`) still refuses `--write`: a live test showed its file-edit tool writes outside the working directory (to `/tmp` and into `.git/hooks`), and its headless shell is auto-denied only for commands, not for file edits. Write for Gemini is not planned; `gemini-acp --write` is unchanged (its patch is still never applied by keryx).
+- Neither `claude-cli` nor `codex-cli` write mode has a long live history; the `codex` confinement was verified in a scratch repository on `codex` 0.159.0.
+
+### Docs
+- [Let an external agent write](docs/docs/guides/external-agent-write.md), the harness page, the architecture and modules pages and the README now cover `codex-cli` write mode and how its confinement differs from `claude-cli`.
+
 ## [0.3.41] — 2026-09-30
 
 ### Fixed

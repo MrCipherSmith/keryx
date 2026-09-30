@@ -57,7 +57,7 @@ export interface WriteRunFile {
  */
 export type ExternalWriteRunState = "pending-review" | "refused";
 
-/** Everything a claude write run leaves on record, at `<session dir>/external-write-run.json`. */
+/** Everything a claude or codex write run leaves on record, at `<session dir>/external-write-run.json`. */
 export interface ExternalWriteRunRecord {
   /** The keryx session id this record lives in; what `keryx agents external review <run-id>` takes. */
   readonly runId: string;
@@ -316,7 +316,7 @@ function sha256Hex(text: string): string {
 }
 
 /**
- * Run one claude agent in `worktree-write` mode and store its diff for review.
+ * Run one claude or codex agent in `worktree-write` mode and store its diff for review.
  *
  * The worktree is created at the recorded base commit, the child runs with it as
  * cwd, and the diff is captured and the worktree removed on every exit path. A

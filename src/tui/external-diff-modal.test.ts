@@ -112,6 +112,14 @@ describe("list and detail", () => {
     expect(out).toContain("  bbbbbbbb  claude-2  1 file(s)  0 flagged");
   });
 
+  test("a codex-cli run reads the same as a claude run: the agent id in the list and in the detail", () => {
+    const { deps } = fake([record("cccccccc-5555-6666", { agentId: "codex-cli" }), record("dddddddd-7777-8888", { agentId: "claude-cli" })]);
+    const out = text(createExternalDiffController({ deps }));
+    expect(out).toContain("> cccccccc  codex-cli  1 file(s)  0 flagged");
+    expect(out).toContain("  dddddddd  claude-cli  1 file(s)  0 flagged");
+    expect(out).toContain("Agent: codex-cli");
+  });
+
   test("says so when nothing is waiting", () => {
     expect(text(createExternalDiffController({ deps: fake([]).deps }))).toContain("No write runs are waiting for review.");
   });
