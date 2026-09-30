@@ -56,8 +56,11 @@ keryx rules sync
 ```
 
 This imports the root `AGENTS.md`/`CLAUDE.md` into `.metaproject/rules/` and
-refreshes the routing index. It is also project-local and writes no
-home-directory (`~`) path.
+refreshes the routing index. It also rewrites the managed `keryx:index` block
+where `agentEntrypoints.root` puts it — `CLAUDE.local.md` and
+`AGENTS.override.md` by default — and regenerates `AGENTS.override.md` from the
+edited `AGENTS.md`, which Codex otherwise keeps reading in its old form. It is
+also project-local and writes no home-directory (`~`) path.
 
 ## Rule File Standard
 Every core rule MUST include:
