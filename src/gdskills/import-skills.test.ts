@@ -1093,6 +1093,89 @@ describe("rules the imported skills cite", () => {
     expect(markdown).not.toContain("`keryx install`");
   });
 
+  test("a shipped rule cited with its directory in another case still lands in rules/project, never rules/core", async () => {
+    // `Core/` is `core/` on a case-insensitive filesystem — the directory
+    // `keryx init`, `update` and `skills install` overwrite.
+    await writeOverlaySkill("review-house", "Git: `Core/git-rules.mdc`.");
+    await mkdir(path.join(source, "rules", "core"), { recursive: true });
+    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
+    const slot = ".metaproject/rules/project/core/git-rules.mdc";
+
+    const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
+    expect(dry.rules).toEqual([expect.objectContaining({ ref: "core/git-rules.mdc", status: "would-import-project", target: slot })]);
+
+    const real = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(real.rules).toEqual([expect.objectContaining({ ref: "core/git-rules.mdc", status: "imported-project", target: slot })]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# overlay git rules\n");
+    // Nothing under rules/ but the project slot, in any spelling of core/.
+    expect(await readdir(path.join(cwd, ".metaproject", "rules"))).toEqual(["project"]);
+    expect(await readdir(path.join(cwd, ".metaproject", "rules", "project"))).toEqual(["core"]);
+
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    expect(reviewer?.shadowedRules).toEqual([{ ref: "core/git-rules.mdc", resolved: slot }]);
+    expect(reviewer?.unresolvedRules).toEqual([]);
+  });
+
+  test("a cited rule path that is a directory is reported unresolved by path, and the rest of the import goes on", async () => {
+    // It used to reach readFile and abort the whole import, dry and real, with
+    // a bare EISDIR that named no path.
+    await writeOverlaySkill("review-house", "House: `house/x.mdc`. Overlay: `house/y.mdc`. Kept: `house/z.mdc`.");
+    await mkdir(path.join(source, "rules", "house", "y.mdc"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "x.mdc"), "# overlay x\n", "utf8");
+    await writeFile(path.join(source, "rules", "house", "z.mdc"), "# overlay z\n", "utf8");
+    await mkdir(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), { recursive: true });
+
+    const expected = (dryRun: boolean) => [
+      expect.objectContaining({
+        ref: "house/x.mdc",
+        status: "unresolved",
+        reason: ".metaproject/rules/house/x.mdc is not a regular file; nothing was written there",
+      }),
+      expect.objectContaining({
+        ref: "house/y.mdc",
+        status: "unresolved",
+        reason: `${portableOriginRef(path.join(source, "rules", "house", "y.mdc"), cwd)} is not a regular file`,
+      }),
+      expect.objectContaining({ ref: "house/z.mdc", status: dryRun ? "would-import" : "imported" }),
+    ];
+    const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
+    expect(dry.rules).toEqual(expected(true));
+    expect(dry.imported.map((row) => row.status)).toEqual(["would-import"]);
+
+    const real = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(real.rules).toEqual(expected(false));
+    expect(real.imported.map((row) => row.status)).toEqual(["imported"]);
+    expect(await readFile(path.join(cwd, ".metaproject", "rules", "house", "z.mdc"), "utf8")).toBe("# overlay z\n");
+    expect(await readdir(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"))).toEqual([]);
+    expect(renderImportProjectSkillsMarkdown(real)).toContain(
+      `- house/x.mdc: unresolved — from ${portableOriginRef(path.join(source, "rules", "house", "x.mdc"), cwd)} — .metaproject/rules/house/x.mdc is not a regular file; nothing was written there (cited by review-house)`,
+    );
+  });
+
+  test("a dry run with --force says a differing project-slot copy would be replaced, and replaces nothing", async () => {
+    await writeOverlaySkill("review-house", "House: `house/x.mdc`.");
+    await mkdir(path.join(source, "rules", "house"), { recursive: true });
+    await writeFile(path.join(source, "rules", "house", "x.mdc"), "# overlay x\n", "utf8");
+    const slot = ".metaproject/rules/project/house/x.mdc";
+    await mkdir(path.dirname(path.join(cwd, slot)), { recursive: true });
+    await writeFile(path.join(cwd, slot), "# hand edit\n", "utf8");
+
+    const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true, force: true });
+    expect(dry.rules).toEqual([
+      {
+        ref: "house/x.mdc",
+        citedBy: ["review-house"],
+        status: "differs",
+        origin: portableOriginRef(path.join(source, "rules", "house", "x.mdc"), cwd),
+        existing: slot,
+        target: slot,
+        written: false,
+        reason: "would be replaced with the overlay's (--force)",
+      },
+    ]);
+    expect(await readFile(path.join(cwd, slot), "utf8")).toBe("# hand edit\n");
+  });
+
   test("two cited rules that share a filename each get their own file, and a dry run names the same destinations", async () => {
     // The project slot was keyed on the basename: `core/git-rules.mdc` took
     // `rules/project/git-rules.mdc`, `house/git-rules.mdc` was then reported as
@@ -1449,6 +1532,17 @@ describe("a symlinked directory on a destination", () => {
       await expect(readFile(path.join(cwd, ".metaproject", "rules", "house", "x.mdc"), "utf8")).rejects.toThrow();
     });
   }
+
+  test("a registry lock under a .metaproject/data symlinked out of the project is refused", async () => {
+    // The lock is the only destination under data/: every other path this
+    // import writes stays inside, so only the lock's own preflight refuses it.
+    // Without it the import exited 0 and created <outside>/gdskills.
+    const dir = await writeReviewer("review-house", "house/x.mdc");
+    await rm(path.join(cwd, ".metaproject", "data"), { recursive: true, force: true });
+    await symlink(outside, path.join(cwd, ".metaproject", "data"));
+    await expectRefused(dir, ".metaproject/data");
+    expect(await readdir(outside)).toEqual(["keep.txt"]);
+  });
 
   test("a symlinked catalog directory is refused before the package is written", async () => {
     const dir = await writeReviewer("review-house", "house/x.mdc");

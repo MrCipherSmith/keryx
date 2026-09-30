@@ -6,7 +6,14 @@ import { ContainedWriteError, writeContained } from "../lib/contained-write";
 import { pathExists, toPosix } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { bundledRulesSourcePath } from "./install";
-import { literalRulePath, projectRulePath, resolveRuleReference, ruleReferences } from "./rule-references";
+import {
+  isRegularFile,
+  KERYX_RULES_DIR,
+  literalRulePath,
+  projectRulePath,
+  resolveRuleReference,
+  ruleReferences,
+} from "./rule-references";
 import { frontmatterScalar, parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   assertProjectWritesContained,
@@ -364,10 +371,12 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
       );
     }
   }
-  if (result.imported.some((row) => row.module === "review" && row.status !== "skipped")) {
-    lines.push("Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.");
+  if (result.imported.some((row) => row.module === PROJECT_REVIEWER_MODULE && row.status !== "skipped")) {
+    lines.push(
+      `Reviewers: \`keryx review reviewers\` must list every imported ${PROJECT_REVIEWER_MODULE}/* name. That is the same call review-orchestrator makes.`,
+    );
   }
-  if (result.imported.some((row) => row.module !== "review" && row.status !== "skipped")) {
+  if (result.imported.some((row) => row.module !== PROJECT_REVIEWER_MODULE && row.status !== "skipped")) {
     lines.push(
       "Non-review modules are registered for `keryx skills route`. They are NOT injected into flow-orchestrator's fixed pipeline — name the skill in a dispatch if you want it there.",
     );
@@ -734,6 +743,21 @@ function sourceName(options: ImportProjectSkillsOptions, inferred: string): stri
   return projectSkillSlug(raw);
 }
 
+/**
+ * What to do about a single package directory with no name of its own, in
+ * words that work under the command that printed them. `--name` belongs to
+ * `keryx skills import`; a command that imports under another label (`keryx
+ * review import`) rejects it as an unknown option, so it is pointed at the
+ * `keryx skills import` form that takes one.
+ */
+function renameOrNameAdvice(options: ImportProjectSkillsOptions): string {
+  if (options.commandLabel === undefined) {
+    return "Rename the directory, or import its SKILL.md with --name <name>.";
+  }
+  const skillMd = `${options.from.replace(/[\\/]+$/, "")}/SKILL.md`;
+  return `Rename the directory, or import its SKILL.md under a name you choose: keryx skills import --from ${skillMd} --module ${options.module ?? "<module>"} --name <name>`;
+}
+
 async function sourceFromFile(
   options: ImportProjectSkillsOptions,
   absolute: string,
@@ -773,7 +797,7 @@ async function sourceFromDirectory(
     tree &&
     !options.name &&
     candidates.length > 1 &&
-    candidates.some((candidate) => moduleOrUndefined(options, candidate) === "review")
+    candidates.some((candidate) => moduleOrUndefined(options, candidate) === PROJECT_REVIEWER_MODULE)
   ) {
     // Everything in module `review` is dispatched by review-orchestrator. A
     // tree imported whole brings its deprecated aliases, its non-reviewers and
@@ -785,7 +809,7 @@ async function sourceFromDirectory(
     // Prefer a package that is a reviewer by its own account over one that
     // only lands in review because --module says so.
     const example =
-      importable.find((candidate) => ownModule(candidate) === "review") ??
+      importable.find((candidate) => ownModule(candidate) === PROJECT_REVIEWER_MODULE) ??
       importable[0] ??
       candidates[0];
     const moduleFlag = options.commandLabel === undefined && options.module ? ` --module ${options.module}` : "";
@@ -809,7 +833,7 @@ async function sourceFromDirectory(
     if (!skipped(candidate) && !hasProjectSkillSlug(candidate.name)) {
       throw new Error(
         `${label}: package directory ${candidate.name} has no letter or digit to name it by. ${
-          tree ? "Rename the directory, or leave it out with --only." : "Rename the directory, or import its SKILL.md with --name <name>."
+          tree ? "Rename the directory, or leave it out with --only." : renameOrNameAdvice(options)
         }`,
       );
     }
@@ -1136,17 +1160,23 @@ function versionOption(content: string): { version?: string } {
  * the skill's own directory or up to three levels above it. That covers the
  * layouts `--from` accepts — `<home>/skills/<name>/SKILL.md` finds
  * `<home>/rules/`.
+ *
+ * Only a regular file is the overlay's rule. `notRegular` is the first
+ * candidate something else sits at, so a lookup that finds no file can say
+ * which path was passed over.
  */
-async function findOverlayRule(sourcePath: string, ref: string): Promise<string | undefined> {
+async function findOverlayRule(sourcePath: string, ref: string): Promise<{ found?: string; notRegular?: string }> {
   let dir = path.dirname(sourcePath);
+  let notRegular: string | undefined;
   for (let depth = 0; depth <= 3; depth += 1) {
     const candidate = path.join(dir, "rules", ref);
-    if (await pathExists(candidate)) return candidate;
+    if (await isRegularFile(candidate)) return { found: candidate };
+    if (notRegular === undefined && (await pathExists(candidate))) notRegular = candidate;
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return undefined;
+  return notRegular !== undefined ? { notRegular } : {};
 }
 
 type RuleCitation = {
@@ -1238,12 +1268,24 @@ async function decideRule(
   // on every run — by `keryx init`, `keryx update` and `keryx skills install`.
   // An overlay's file copied there would be silently replaced by a different
   // file of the same name.
+  // `ruleReferences` already spelled a case variant of the directory as
+  // KERYX_RULES_DIR, so this comparison is exact.
   const shipsWithKeryx =
-    citation.ref.startsWith("core/") && (await pathExists(path.join(bundledRules, path.basename(citation.ref))));
+    citation.ref.startsWith(`${KERYX_RULES_DIR}/`) &&
+    (await pathExists(path.join(bundledRules, path.basename(citation.ref))));
+  // Something at a candidate that is not a regular file (a directory, say) is
+  // neither read nor written over: the reference stays unresolved, named by
+  // path, as `keryx review reviewers` reports it, and the rest of the import
+  // goes on.
+  const notRegularFiles = resolution.notRegularFiles ?? [];
+  const notRegularReason = (candidate: string): string => `${candidate} is not a regular file; nothing was written there`;
 
   let found: string | undefined;
+  let overlayNotRegular: string | undefined;
   for (const sourcePath of citation.sourcePaths) {
-    found = await findOverlayRule(sourcePath, citation.ref);
+    const lookup = await findOverlayRule(sourcePath, citation.ref);
+    found = lookup.found;
+    overlayNotRegular ??= lookup.notRegular;
     if (found) break;
   }
   if (!found) {
@@ -1253,9 +1295,13 @@ async function decideRule(
     }
     const reason = shipsWithKeryx
       ? "ships with keryx — run `keryx skills install` to restore it"
-      : citation.sourcePaths.length > 0
-        ? "no rules/ directory beside the source has it"
-        : "remote source; rules are not fetched";
+      : notRegularFiles[0] !== undefined
+        ? `${notRegularFiles[0]} is not a regular file`
+        : overlayNotRegular !== undefined
+          ? `${portableOriginRef(overlayNotRegular, options.projectRoot)} is not a regular file`
+          : citation.sourcePaths.length > 0
+            ? "no rules/ directory beside the source has it"
+            : "remote source; rules are not fetched";
     return { row: { ...base, status: "unresolved", reason } };
   }
 
@@ -1273,11 +1319,15 @@ async function decideRule(
   const collision =
     existing !== undefined && existingContent !== undefined ? { path: existing, content: existingContent } : undefined;
   const toProjectSlot = collision !== undefined || shipsWithKeryx;
+  const target = toProjectSlot ? resolution.project : resolution.literal;
+  if (notRegularFiles.includes(target)) {
+    return { row: { ...base, status: "unresolved", origin, reason: notRegularReason(target) } };
+  }
   const placement: RulePlacement = {
     ...base,
     origin,
     content,
-    target: toProjectSlot ? resolution.project : resolution.literal,
+    target,
     toProjectSlot,
     ...(collision !== undefined ? { existing: collision } : {}),
   };
@@ -1347,14 +1397,14 @@ function inferNameFromUrl(url: string): string {
 function inferModule(name: string, content: string): string {
   const category = frontmatterCategory(content);
   if (category) return category;
-  if (name.startsWith("review-") || name.startsWith("code-")) return "review";
+  if (name.startsWith("review-") || name.startsWith("code-")) return PROJECT_REVIEWER_MODULE;
   throw new Error(
     `keryx skills import: cannot infer module for ${name}. Pass --module review|quality|orchestration|…`,
   );
 }
 
 function wiringNote(moduleName: string): string {
-  if (moduleName === "review") {
+  if (moduleName === PROJECT_REVIEWER_MODULE) {
     return "review-orchestrator will dispatch this after `keryx review reviewers` lists it";
   }
   return "registered for `keryx skills route`; not auto-injected into flow-orchestrator";

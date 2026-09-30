@@ -88,7 +88,7 @@ is refused the same way:
 
 ```
 $ keryx review import --from ./vendor/odd/___ --dry-run
-keryx review import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md with --name <name>.
+keryx review import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md under a name you choose: keryx skills import --from ./vendor/odd/___/SKILL.md --module review --name <name>
 ```
 
 Before the first write, every destination the import would touch — the

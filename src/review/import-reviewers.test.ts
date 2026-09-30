@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { collectReviewers } from "./reviewers";
 import { importOverlayReviewers } from "./import-reviewers";
-import { renderImportProjectSkillsMarkdown } from "../gdskills/import-skills";
+import { importProjectSkills, renderImportProjectSkillsMarkdown } from "../gdskills/import-skills";
 
 let cwd: string;
 let source: string;
@@ -150,6 +150,27 @@ describe("importOverlayReviewers", () => {
       from: path.join(source, "skills", "review-vantage-frontend"),
     });
     expect(result.imported.map((row) => row.name)).toEqual(["review-vantage-frontend"]);
+  });
+
+  test("a package directory with no letter or digit is refused with advice this command's operator can follow", async () => {
+    // `keryx review import` rejects --name as an unknown option, so the advice
+    // names the `keryx skills import` form that takes one.
+    await writeOverlay(source, "___");
+    const from = path.join(source, "skills", "___");
+    for (const dryRun of [true, false]) {
+      await expect(importOverlayReviewers({ projectRoot: cwd, from, dryRun })).rejects.toThrow(
+        `keryx review import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md under a name you choose: keryx skills import --from ${from}/SKILL.md --module review --name <name>`,
+      );
+    }
+    // Under `keryx skills import` itself, --name is the advice.
+    await expect(importProjectSkills({ projectRoot: cwd, from, module: "review" })).rejects.toThrow(
+      "keryx skills import: package directory ___ has no letter or digit to name it by. Rename the directory, or import its SKILL.md with --name <name>.",
+    );
+    expect((await collectReviewers(cwd)).project).toEqual([]);
+
+    // The advised command works.
+    const named = await importProjectSkills({ projectRoot: cwd, from: `${from}/SKILL.md`, module: "review", name: "review-odd" });
+    expect(named.imported.map((row) => `${row.module}/${row.name}:${row.status}`)).toEqual(["review/review-odd:imported"]);
   });
 
   test("a tree with no packages is refused rather than reported as imported 0", async () => {
