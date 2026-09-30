@@ -10,12 +10,12 @@
   "title": "Managed blocks go to per-developer gitignored files (CLAUDE.local.md, AGENTS.override.md, settings.local.json, .git/info/exclude) instead of tracked team files",
   "status": "in-progress",
   "createdAt": "2026-09-30T14:26:46.112Z",
-  "updatedAt": "2026-09-30T17:46:48.867Z",
+  "updatedAt": "2026-09-30T18:34:27.023Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:6721e71a32ae715923d72d0547492908ab563ac07809022165c332e606655f0d",
+  "acChecksum": "sha256:00263736cd9bce2f62dbefab6db9445e8a243ef4042c265d9a1760ea25382458",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -64,8 +64,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:50:06.241Z",
+            "outcome": "started",
+            "detail": "orchestrator runs lint, typecheck, doc links and the full suite on the rebased branch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -226,17 +232,24 @@
       "id": "T11",
       "title": "End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T17:50:05.473Z",
+            "outcome": "started",
+            "detail": "361-T11 (on rebased branch)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -260,6 +273,28 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-30T18:34:27.023Z",
+            "outcome": "started",
+            "detail": "361-T13"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -405,6 +440,41 @@
       "at": "2026-09-30T17:46:48.867Z",
       "event": "task-done",
       "detail": "T12: Switching a target from local back to shared removes keryx's block from CLAUDE.local.md and the keryx-generated AGENTS.override.md, so neither is read twice nor hides AGENTS.md; docs' manual step dropped"
+    },
+    {
+      "at": "2026-09-30T17:50:05.473Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 361-T11 (on rebased branch)"
+    },
+    {
+      "at": "2026-09-30T17:50:06.241Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — orchestrator runs lint, typecheck, doc links and the full suite on the rebased branch"
+    },
+    {
+      "at": "2026-09-30T18:33:04.653Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"With Codex mode `skip`, no Codex file is written or modified and the command output says Codex was skipped.\" -> \"With Codex mode `skip`, no Codex file is written and the command output says Codex was skipped; the only change to a Codex file is removing an `AGENTS.override.md` that keryx itself generated (it carries keryx's provenance line), so a leftover cannot keep hiding `AGENTS.md`.\" (T12 removes a keryx-generated override in skip mode so it stops replacing AGENTS.md for Codex; the old wording forbade that removal, which would defeat skip (request item 7: nothing left in two places). T11 flagged the conflict.)"
+    },
+    {
+      "at": "2026-09-30T18:33:06.658Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"After init and after update, `git check-ignore` reports `CLAUDE.local.md`, `AGENTS.override.md` and `.claude/settings.local.json` as ignored, with missing ones added to `info/exclude`.\" -> \"After init and after update, `git check-ignore` reports every local target the manifest uses (by default `CLAUDE.local.md`, `AGENTS.override.md` and `.claude/settings.local.json`) as ignored, with missing ones added to `info/exclude`.\" (Under shared scope or Codex skip a file is not a local target and is not written, so requiring it to be ignored was unconditional where the request (item 6) scopes it to local targets. T11 flagged it.)"
+    },
+    {
+      "at": "2026-09-30T18:34:07.104Z",
+      "event": "task-done",
+      "detail": "T11: End-to-end acceptance: run the worktree build's init and update against throwaway git repos (fresh, legacy migration, second run, unrelated edits, block in HEAD, linked worktree) and record git status/diff evidence"
+    },
+    {
+      "at": "2026-09-30T18:34:08.026Z",
+      "event": "task-added",
+      "detail": "T13: Fix full-suite regressions and T11 findings: README Quick start verb, AFC-19 core/SAC facade reaching src/harness/routing, contradictory .gitignore notice, skip-mode docs, creation notice for local files"
+    },
+    {
+      "at": "2026-09-30T18:34:27.023Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 361-T13"
     }
   ],
   "owner": {
