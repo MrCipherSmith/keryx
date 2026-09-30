@@ -344,18 +344,19 @@ export function createCodeHealthService(): CodeHealthService {
       const rewritesAll = input.scope === undefined || input.scope.kind === "project" || input.scope.kind === "changed";
       if (!rewritesAll) {
         // The file's source set applies to every scope. A module/file score
-        // measured with a source the set does not hold yet would bake that
-        // source in while the set says it is unmeasured, and the next
-        // whole-project run would subtract its effect a second time.
+        // taken with a source the set does not hold yet would bake that
+        // source's findings in while every run still leaves them out of the
+        // comparison, so the scope would read improved by their weight and
+        // hide a regression of that size.
         const recorded = await loadBaselineSources(cwd);
         const unrecorded = recorded === null
           ? []
-          : scoredSourcesOfReport(latest).filter((source) => !recorded.sources.has(source));
+          : scoredSourcesOfReport(latest).filter((source) => !recorded.has(source));
         if (unrecorded.length > 0) {
           return {
             updated: [],
             path: baselinePathLabel,
-            refused: `the latest report measured sources the baseline has not recorded yet (${unrecorded.join(", ")}); run \`keryx health run\` on the whole project first so they are folded in`,
+            refused: `the latest report measured sources the baseline has not recorded yet (${unrecorded.join(", ")}); update the whole project's baseline first (\`keryx health baseline update\`)`,
           };
         }
       }

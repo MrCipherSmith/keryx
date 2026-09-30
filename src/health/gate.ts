@@ -47,6 +47,12 @@ export function computeGate(input: {
   sources: SourceRunInfo[];
   config: HealthConfig;
   strict: boolean;
+  /**
+   * Sources this run measured that the baseline did not; their findings are
+   * left out of the regression comparison (scopes.ts). Named here so the
+   * exclusion is visible and the operator knows how to end it.
+   */
+  newSources?: readonly string[];
 }): GateResult {
   const { findings, projectMetrics, sources, config } = input;
   const reasons: string[] = [];
@@ -57,6 +63,12 @@ export function computeGate(input: {
   // only explains a verdict already reached by the unmodified logic below.
   if (config.configUnreadable) {
     reasons.push(CONFIG_UNREADABLE_REASON);
+  }
+  // Informational, like the lint-family NOTE below: it never escalates.
+  if (input.newSources !== undefined && input.newSources.length > 0) {
+    reasons.push(
+      `NOTE: not in the baseline yet, so not compared for regression: ${[...input.newSources].sort().join(", ")}; run \`keryx health baseline update\` to include them`,
+    );
   }
   let status: GateStatus = "pass";
   const escalate = (next: GateStatus, reason: string) => {

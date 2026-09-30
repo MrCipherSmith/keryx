@@ -20,10 +20,10 @@ export type BaselineFile = {
 /**
  * What a baseline written before `sources` existed is taken to have measured:
  * every source keryx had before flow 352 (everything except oxlint). It is a
- * fact about history, so it is FROZEN -- do not add a source here. A legacy
- * baseline gets this set written into its file on the first whole-project
- * run (`recordBaselineSources`), so no source added later is ever resolved
- * through this list.
+ * fact about history, so it is FROZEN -- do not add a source here. A source
+ * added to keryx later is absent from it and so reads as new against a legacy
+ * baseline, which is exactly right; `keryx health baseline update` replaces
+ * the legacy resolution with a recorded set.
  *
  * Deliberately the whole pre-352 set, not "what this run measured": a source
  * the old baseline measured but that is missing now must stay in the set, or
@@ -95,50 +95,14 @@ async function readBaselineFile(cwd: string): Promise<BaselineFile | null> {
 }
 
 /**
- * The sources the stored baseline measured, and whether the file recorded
- * them (`false` for a legacy baseline, resolved to `LEGACY_BASELINE_SOURCES`);
- * `null` when there is no baseline.
+ * The sources the stored baseline measured (`LEGACY_BASELINE_SOURCES` for a
+ * baseline written before they were recorded), or `null` when there is none.
+ * Read-only: only the first run and `health baseline update` write a baseline.
  */
-export async function loadBaselineSources(cwd: string): Promise<{ sources: Set<string>; recorded: boolean } | null> {
+export async function loadBaselineSources(cwd: string): Promise<Set<string> | null> {
   const data = await readBaselineFile(cwd);
   if (data === null) return null;
-  if (Array.isArray(data.sources)) return { sources: new Set(data.sources), recorded: true };
-  return { sources: new Set(LEGACY_BASELINE_SOURCES), recorded: false };
-}
-
-/** Write the recorded source set without touching any score. */
-export async function recordBaselineSources(cwd: string, sources: Iterable<string>): Promise<void> {
-  const data = await readBaselineFile(cwd);
-  if (data === null) return;
-  await writeBaselineFile(cwd, { ...data, sources: [...new Set(sources)].sort() });
-}
-
-/**
- * A source measured for the first time adds its OWN effect to the baseline,
- * and nothing else. For every scope the baseline already holds, the new value
- * is the previous one minus the health points that scope loses to the new
- * sources (`effects`, from `computeMetrics`'s raw penalties -- a scope
- * clamped at 0 still records the full effect). Drift in sources the baseline
- * already measured is not absorbed (it stays a regression), and from the next
- * run the new source is compared like any other, so its own growth counts.
- * Folded on its first whole-project run, whether or not anything else
- * regressed. No scope is added.
- */
-export async function foldNewSources(
-  cwd: string,
-  effects: ReadonlyMap<string, number>,
-  recorded: ReadonlySet<string>,
-  newSources: readonly string[],
-): Promise<void> {
-  const data = await readBaselineFile(cwd);
-  if (data === null) return;
-  const scopes = { ...data.scopes };
-  for (const [key, effect] of effects) {
-    const entry = scopes[key];
-    if (entry === undefined) continue;
-    scopes[key] = { ...entry, health_score: Math.min(100, Math.max(0, Math.round(entry.health_score - effect))) };
-  }
-  await writeBaselineFile(cwd, { ...data, scopes, sources: [...new Set([...recorded, ...newSources])].sort() });
+  return new Set(Array.isArray(data.sources) ? data.sources : LEGACY_BASELINE_SOURCES);
 }
 
 async function writeBaselineFile(cwd: string, data: BaselineFile): Promise<void> {

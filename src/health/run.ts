@@ -6,11 +6,9 @@ import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
 import {
-  foldNewSources,
   loadBaseline,
   loadBaselineSources,
   scoredSources,
-  recordBaselineSources,
   writeBaseline,
 } from "./baseline";
 import { getChurn } from "./metrics/churn";
@@ -176,16 +174,15 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // A source measured now that the baseline never measured (e.g. oxlint, new
   // in this release, on a project that already named it) contributes new
   // MEASUREMENT, not new defects: its findings are kept out of the regression
-  // comparison instead of reading as a drop in unchanged code.
-  // The recorded set must name what shaped the scores (see `scoredSources`),
-  // or a baseline would carry a coverage penalty while claiming coverage
-  // unmeasured, and enabling coverage later would subtract it a second time.
+  // comparison instead of reading as a drop in unchanged code, and the gate
+  // says so until an operator re-baselines. The run never rewrites the
+  // baseline itself. The recorded set names what shaped the scores (see
+  // `scoredSources`).
   const measured = scoredSources(sourceInfos, coverage.total !== null || coverage.byFile.size > 0);
   const baselineSources = await loadBaselineSources(cwd);
   const newSources = new Set(
-    baselineSources === null ? [] : measured.filter((s) => !baselineSources.sources.has(s)),
+    baselineSources === null ? [] : measured.filter((s) => !baselineSources.has(s)),
   );
-  const newSourceEffects = new Map<string, number>();
   const metrics = await computeMetrics({
     cwd,
     config,
@@ -195,7 +192,6 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     churn,
     baseline,
     newSources,
-    newSourceEffects,
     ownership,
     scopeSelector: selector,
     sourceAnalysis,
@@ -207,6 +203,7 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
     sources: sourceInfos,
     config,
     strict,
+    newSources: [...newSources],
   });
 
   // D1: project-level hotspot ranking (churn×complexity, desc). Additive and
@@ -242,19 +239,10 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   const paths = await writeOutputs(cwd, report, config, stamp);
 
   // Accept-current baseline on the first run (none exists yet), recording
-  // which sources it measured.
+  // which sources it measured. After that, only `health baseline update`
+  // writes it.
   if (baseline.size === 0) {
     await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
-  } else if (baselineSources !== null && selector.kind === "project") {
-    // A whole-project run holds every scope, so it is where the baseline's
-    // source set is settled. New sources fold in their own effect only (see
-    // `foldNewSources`); a legacy baseline gets its resolved set written down,
-    // so nothing is ever resolved through `LEGACY_BASELINE_SOURCES` again.
-    if (newSources.size > 0) {
-      await foldNewSources(cwd, newSourceEffects, baselineSources.sources, [...newSources]);
-    } else if (!baselineSources.recorded) {
-      await recordBaselineSources(cwd, baselineSources.sources);
-    }
   }
 
   return { report, markdownPath: paths.markdownPath, jsonPath: paths.jsonPath };
