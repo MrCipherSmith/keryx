@@ -13,6 +13,7 @@ import {
   type CreateProjectSkillResult,
 } from "./project-skills";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
+import { descriptionPathTriggers, type PathTriggerSource } from "../review/reviewers";
 
 const BUNDLED_NAMES = new Set(BUNDLED_GDSKILLS.map((entry) => entry.name));
 
@@ -24,12 +25,15 @@ export type ImportProjectSkillsOptions = {
   module?: string;
   name?: string;
   /**
-   * Only import directory children whose names start with this prefix.
-   * `keryx review import` uses `review-vantage-` so generic copies of bundled
-   * reviewers cannot sneak in. `keryx skills import` does not set a prefix;
-   * it skips bundled names instead.
+   * Globs (`*`, `?`) matched against a package's directory name; a package is
+   * selected when any of them matches. Required when `--from` is a tree of
+   * several packages and any of them lands in module `review`: that module is
+   * dispatched wholesale by review-orchestrator, so which reviewers a project
+   * gets is a choice the operator makes, not a naming convention keryx guesses.
    */
-  namePrefix?: string;
+  only?: string[];
+  /** The spelling the operator typed, for refusals. Default `keryx skills import`. */
+  commandLabel?: string;
   dryRun?: boolean;
   force?: boolean;
   fetcher?: SkillFetcher;
@@ -43,7 +47,39 @@ export type ImportedProjectSkill = {
   origin: string;
   reason?: string;
   wired?: string;
+  /**
+   * Where a review package's path triggers come from, for a package that is
+   * (or would be) written. Absent for another module and for a skipped row.
+   */
+  pathsSource?: PathTriggerSource;
+  /** Things the importer did that the operator should read; one line each. */
+  warnings?: string[];
 };
+
+/**
+ * The warning a review package gets when nothing gates it on the diff. The
+ * first clause is the same text `keryx review reviewers` prints for it.
+ */
+export const PATHS_NONE_WARNING =
+  'paths: none — dispatched on every round. Declare `metadata.paths: "<glob>, <glob>"` in its frontmatter to gate it on the diff.';
+
+/** Every value of a repeatable `--name`, in both spellings (`--name v`, `--name=v`). */
+export function optionValues(args: readonly string[], name: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index] as string;
+    if (argument === name) {
+      const next = args[index + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        values.push(next);
+        index += 1;
+      }
+    } else if (argument.startsWith(`${name}=`)) {
+      values.push(argument.slice(name.length + 1));
+    }
+  }
+  return values.filter((value) => value.length > 0);
+}
 
 /**
  * A rule an imported skill names as its standard.
@@ -65,6 +101,8 @@ export type ImportedRule = {
 
 export type ImportProjectSkillsResult = {
   from: string;
+  /** The `--only` globs the selection was made with; empty when none were given. */
+  only: string[];
   imported: ImportedProjectSkill[];
   rules: ImportedRule[];
   dryRun: boolean;
@@ -107,10 +145,13 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
   // step existed gets the rules its reviewers cite.
   const rules = await importReferencedRules(
     options,
-    sources.filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
+    sources
+      .filter((source) => !skippedAsDeprecated(source))
+      .filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
   );
   return {
     from: options.from,
+    only: options.only ?? [],
     imported,
     rules,
     dryRun: options.dryRun === true,
@@ -148,6 +189,7 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
   }
   return {
     from: options.from ?? "(each skill Origin)",
+    only: [],
     imported,
     rules: [],
     dryRun: options.dryRun === true,
@@ -166,11 +208,33 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
     `imported: ${counts.imported} overwritten: ${counts.overwritten} updated: ${counts.updated} skipped: ${counts.skipped} would-import: ${counts["would-import"]} would-overwrite: ${counts["would-overwrite"]}`,
     "",
   ];
+  if (result.dryRun) {
+    // A dry run exists to answer one question — what would land — and the
+    // per-package rows below bury it among skips and wiring notes.
+    const planned = result.imported.filter((row) => row.status === "would-import" || row.status === "would-overwrite");
+    lines.push(`## would import (${planned.length}) — dry run, nothing written`, "");
+    if (planned.length === 0) {
+      lines.push("- nothing");
+    }
+    for (const row of planned) {
+      lines.push(`- ${row.module}/${row.name}${row.status === "would-overwrite" ? " (overwrites the existing one)" : ""}`);
+    }
+    lines.push("", "## packages", "");
+  }
   for (const row of result.imported) {
     const extra = [row.reason, row.wired].filter(Boolean).join(" — ");
     lines.push(`- ${row.module}/${row.name}: ${row.status}${extra ? ` — ${extra}` : ""}`);
+    for (const warning of row.warnings ?? []) {
+      lines.push(`  - warning: ${warning}`);
+    }
   }
   lines.push("");
+  if (result.imported.some((row) => row.status === "skipped" && row.reason === DEPRECATED_REASON)) {
+    lines.push(
+      "A package whose frontmatter says `deprecated: true` is skipped in a tree import. To import one anyway, pass its own directory as --from.",
+      "",
+    );
+  }
   if (result.rules.length > 0) {
     lines.push("## rules the skills cite", "");
     for (const rule of result.rules) {
@@ -214,7 +278,121 @@ type ImportSource = {
   content: string;
   /** Absolute path of a local source SKILL.md; absent for a URL. */
   sourcePath?: string;
+  /**
+   * True when the package was found by listing a directory of packages rather
+   * than named by its own path. Only a listed package can be skipped for being
+   * deprecated: naming one is the operator asking for it.
+   */
+  fromTree?: boolean;
 };
+
+const DEPRECATED_REASON = "deprecated";
+
+function frontmatterLines(content: string): string[] {
+  if (!content.startsWith("---")) return [];
+  const end = content.indexOf("\n---", 3);
+  return end === -1 ? [] : content.slice(3, end).split("\n");
+}
+
+/** A frontmatter scalar, top-level (`key:`) or under `metadata:`. */
+function frontmatterScalar(content: string, key: string, where: "top" | "metadata"): string | undefined {
+  let inMetadata = false;
+  for (const line of frontmatterLines(content)) {
+    const top = /^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
+    if (top) {
+      if (where === "top" && top[1] === key) return top[2]?.trim();
+      inMetadata = top[1] === "metadata";
+      continue;
+    }
+    if (where !== "metadata" || !inMetadata) continue;
+    const field = /^\s+([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$/.exec(line);
+    if (field?.[1] === key) return field[2]?.trim();
+  }
+  return undefined;
+}
+
+/** `deprecated: true` in the frontmatter, top-level or under `metadata:`. */
+function isDeprecated(content: string): boolean {
+  const value = frontmatterScalar(content, "deprecated", "top") ?? frontmatterScalar(content, "deprecated", "metadata");
+  return value !== undefined && /^["']?true["']?$/i.test(value);
+}
+
+function skippedAsDeprecated(source: ImportSource): boolean {
+  return source.fromTree === true && isDeprecated(source.content);
+}
+
+/**
+ * What would gate a review package on the diff once it is imported — the same
+ * precedence `keryx review reviewers` applies: `metadata.paths`, then globs in
+ * the description, then nothing.
+ *
+ * Computed from the source text, not read back from the inventory, so a dry
+ * run can say it too. The description half is the inventory's own extractor;
+ * the `metadata.paths` half is restated here because that reader is private to
+ * `review/reviewers.ts`.
+ */
+function pathTriggerSource(content: string): PathTriggerSource {
+  const declared = (frontmatterScalar(content, "paths", "metadata") ?? "")
+    .replace(/^["'[]|["'\]]$/g, "")
+    .split(",")
+    .map((entry) => entry.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+  if (declared.length > 0) return "metadata";
+  const description = parseSkillFrontmatter(content).description;
+  return description && descriptionPathTriggers(description).length > 0 ? "description" : "none";
+}
+
+/** What the operator should read about a package that is, or would be, written. */
+function importNotes(source: ImportSource): Pick<ImportedProjectSkill, "pathsSource" | "warnings"> {
+  const warnings: string[] = [];
+  if (isDeprecated(source.content)) {
+    warnings.push("deprecated: true in its frontmatter — imported because it was named by its own path; a tree import skips it.");
+  }
+  if (source.module !== "review") {
+    return warnings.length > 0 ? { warnings } : {};
+  }
+  const pathsSource = pathTriggerSource(source.content);
+  if (pathsSource === "none") warnings.push(PATHS_NONE_WARNING);
+  return { pathsSource, ...(warnings.length > 0 ? { warnings } : {}) };
+}
+
+/** `*` any run of characters, `?` one; everything else literal. Package names hold no `/`. */
+function onlyMatcher(glob: string): (name: string) => boolean {
+  const source = glob
+    .split("")
+    .map((char) => (char === "*" ? ".*" : char === "?" ? "." : char.replace(/[.+^${}()|[\]\\]/g, "\\$&")))
+    .join("");
+  const regex = new RegExp(`^${source}$`);
+  return (name) => regex.test(name);
+}
+
+type PackageCandidate = { name: string; skillMd: string; content: string };
+
+function candidateList(candidates: PackageCandidate[]): string {
+  return candidates
+    .map((candidate) => {
+      const note = isDeprecated(candidate.content)
+        ? " (deprecated — skipped in a tree import)"
+        : BUNDLED_NAMES.has(candidate.name)
+          ? " (bundled keryx skill name — skipped unless --force)"
+          : "";
+      return `  - ${candidate.name}${note}`;
+    })
+    .join("\n");
+}
+
+/** The module a package would pick for itself, or nothing when it cannot be inferred. */
+function ownModule(candidate: PackageCandidate): string | undefined {
+  try {
+    return inferModule(candidate.name, candidate.content);
+  } catch {
+    return undefined;
+  }
+}
+
+function moduleOrUndefined(options: ImportProjectSkillsOptions, candidate: PackageCandidate): string | undefined {
+  return options.module ? options.module : ownModule(candidate);
+}
 
 function isInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
@@ -297,29 +475,74 @@ async function sourceFromDirectory(
   options: ImportProjectSkillsOptions,
   absolute: string,
 ): Promise<ImportSource[]> {
-  const roots = await skillPackageDirs(absolute);
-  const sources: ImportSource[] = [];
-  for (const dir of roots) {
-    const name = path.basename(dir);
-    if (options.namePrefix && !name.startsWith(options.namePrefix)) continue;
-    if (options.name && name !== options.name) continue;
+  const { dirs, tree } = await skillPackageDirs(absolute);
+  const candidates: PackageCandidate[] = [];
+  for (const dir of dirs) {
     const skillMd = path.join(dir, "SKILL.md");
-    const content = await readFile(skillMd, "utf8");
-    const moduleName = options.module ?? inferModule(name, content);
-    sources.push({
-      name,
-      module: moduleName,
-      origin: portableOriginRef(skillMd, options.projectRoot),
-      content,
-      sourcePath: skillMd,
-    });
+    candidates.push({ name: path.basename(dir), skillMd, content: await readFile(skillMd, "utf8") });
   }
+  candidates.sort((a, b) => a.name.localeCompare(b.name));
+
+  const label = options.commandLabel ?? "keryx skills import";
+  const only = options.only ?? [];
+  let selected = options.name ? candidates.filter((candidate) => candidate.name === options.name) : candidates;
+  if (only.length > 0) {
+    const matchers = only.map(onlyMatcher);
+    const matched = selected.filter((candidate) => matchers.some((matches) => matches(candidate.name)));
+    if (matched.length === 0 && selected.length > 0) {
+      throw new Error(
+        `${label}: --only ${only.join(" --only ")} matches none of the ${selected.length} package${selected.length === 1 ? "" : "s"} in ${options.from}.\n\nCandidates:\n${candidateList(selected)}`,
+      );
+    }
+    selected = matched;
+  } else if (
+    tree &&
+    !options.name &&
+    candidates.length > 1 &&
+    candidates.some((candidate) => moduleOrUndefined(options, candidate) === "review")
+  ) {
+    // Everything in module `review` is dispatched by review-orchestrator. A
+    // tree imported whole brings its deprecated aliases, its non-reviewers and
+    // anything else that happens to sit there — so the selection is asked for,
+    // never inferred from how one overlay names its packages.
+    const importable = candidates.filter(
+      (candidate) => !isDeprecated(candidate.content) && !BUNDLED_NAMES.has(candidate.name),
+    );
+    // Prefer a package that is a reviewer by its own account over one that
+    // only lands in review because --module says so.
+    const example =
+      importable.find((candidate) => ownModule(candidate) === "review") ??
+      importable[0] ??
+      candidates[0];
+    const moduleFlag = options.commandLabel === undefined && options.module ? ` --module ${options.module}` : "";
+    throw new Error(
+      [
+        `${label}: ${options.from} holds ${candidates.length} packages and the import targets module review, where review-orchestrator dispatches every package it finds. Say which ones with --only <glob> (repeatable; matched against the package directory name).`,
+        "",
+        "Candidates:",
+        candidateList(candidates),
+        "",
+        "Example:",
+        `  ${label} --from ${options.from}${moduleFlag} --only '${example?.name ?? "<name>"}'`,
+      ].join("\n"),
+    );
+  }
+
+  const sources: ImportSource[] = selected.map((candidate) => ({
+    name: candidate.name,
+    module: options.module ?? inferModule(candidate.name, candidate.content),
+    origin: portableOriginRef(candidate.skillMd, options.projectRoot),
+    content: candidate.content,
+    sourcePath: candidate.skillMd,
+    fromTree: tree,
+  }));
   return sources.sort((a, b) => `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`));
 }
 
-async function skillPackageDirs(root: string): Promise<string[]> {
+/** The package directories under `root`; `tree` is false when `root` is itself one package. */
+async function skillPackageDirs(root: string): Promise<{ dirs: string[]; tree: boolean }> {
   if (await pathExists(path.join(root, "SKILL.md"))) {
-    return [root];
+    return { dirs: [root], tree: false };
   }
   const nestedSkills = path.join(root, "skills");
   const scan = (await pathExists(nestedSkills)) ? nestedSkills : root;
@@ -332,7 +555,7 @@ async function skillPackageDirs(root: string): Promise<string[]> {
       dirs.push(dir);
     }
   }
-  return dirs;
+  return { dirs, tree: true };
 }
 
 async function importOne(options: ImportProjectSkillsOptions, source: ImportSource): Promise<ImportedProjectSkill> {
@@ -340,6 +563,17 @@ async function importOne(options: ImportProjectSkillsOptions, source: ImportSour
   const destAbs = path.join(options.projectRoot, dest, "SKILL.md");
   const exists = await pathExists(destAbs);
   const bundled = BUNDLED_NAMES.has(source.name);
+
+  if (skippedAsDeprecated(source)) {
+    return {
+      name: source.name,
+      module: source.module,
+      status: "skipped",
+      path: dest,
+      origin: source.origin,
+      reason: DEPRECATED_REASON,
+    };
+  }
 
   if (bundled && !options.force) {
     return {
@@ -372,6 +606,7 @@ async function importOne(options: ImportProjectSkillsOptions, source: ImportSour
       path: dest,
       origin: source.origin,
       wired: wiringNote(source.module),
+      ...importNotes(source),
     };
   }
 
@@ -394,6 +629,7 @@ async function importOne(options: ImportProjectSkillsOptions, source: ImportSour
     path: created.skillPath,
     origin: source.origin,
     wired: wiringNote(source.module),
+    ...importNotes(source),
   };
 }
 
@@ -757,6 +993,7 @@ export async function runSkillsImportCommand(args: string[]): Promise<void> {
     from,
     ...(moduleName !== undefined ? { module: moduleName } : {}),
     ...(skillName !== undefined ? { name: skillName } : {}),
+    only: optionValues(args, "--only"),
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force"),
   });
@@ -797,7 +1034,7 @@ detectable.
 
 Usage:
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
-                      [--dry-run] [--force] [--json]
+                      [--only <glob>]... [--dry-run] [--force] [--json]
 
 --from:
   a skill package directory, a SKILL.md file, a parent tree that contains
@@ -808,10 +1045,24 @@ Usage:
   auto-dispatches. Other modules register for \`keryx skills route\` and are
   NOT injected into flow-orchestrator.
 
+--only:
+  a glob (\`*\`, \`?\`) matched against the package directory name; repeatable.
+  Required when --from is a tree of several packages and the import targets
+  module \`review\`: every package there is dispatched as a reviewer, so the
+  import is refused with the list of candidates until you say which ones.
+  A single package directory or a SKILL.md needs no --only.
+
+In a tree import a package whose frontmatter says \`deprecated: true\` is
+skipped. Pass its own directory as --from to import it anyway.
+
 A name that collides with a bundled keryx skill is skipped unless --force.
 
+A review package with neither \`metadata.paths\` nor a glob in its description
+is imported with a warning: it is dispatched on every round.
+
 Examples:
-  keryx skills import --from ./overlays --module review
+  keryx skills import --from ./overlays --module review --only 'review-house-*'
+  keryx skills import --from ./overlays/skills/review-house-api --module review
   keryx skills import --from ./skill-supper.md --module quality --name verifier
   keryx skills import --from https://github.com/org/repo/blob/main/skills/verifier/SKILL.md --module quality
 `);

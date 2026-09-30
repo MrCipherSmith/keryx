@@ -5,7 +5,10 @@ import path from "node:path";
 import {
   githubBlobToRaw,
   importProjectSkills,
+  optionValues,
+  PATHS_NONE_WARNING,
   portableOriginRef,
+  renderImportProjectSkillsMarkdown,
   stampImportHeader,
   updateProjectSkills,
 } from "./import-skills";
@@ -122,6 +125,196 @@ describe("importProjectSkills", () => {
         fetcher: async () => ({ ok: true, status: 200, text: "" }),
       }),
     ).rejects.toThrow(/https GitHub URL/);
+  });
+});
+
+describe("tree import selection", () => {
+  /**
+   * An overlay tree shaped like a real one: one reviewer worth importing, one
+   * deprecated alias, one skill that is not a reviewer at all, and one package
+   * whose name a bundled keryx skill already owns.
+   */
+  async function writeOverlayTree(): Promise<string> {
+    const skills = path.join(source, "skills");
+    const write = async (name: string, frontmatter: string, body: string): Promise<void> => {
+      await mkdir(path.join(skills, name), { recursive: true });
+      await writeFile(path.join(skills, name, "SKILL.md"), `---\nname: ${name}\n${frontmatter}---\n\n# ${name}\n\n${body}\n`, "utf8");
+    };
+    await write(
+      "review-house",
+      'description: "Use when reviewing house conventions. Dispatched for --house."\nmetadata:\n  category: review\n',
+      "house reviewer",
+    );
+    await write(
+      "code-old-review",
+      'description: "DEPRECATED alias. Use review-house instead."\ndeprecated: true\nmetadata:\n  category: review\n',
+      "old alias",
+    );
+    await write("house-job", "metadata:\n  category: orchestration\n", "not a reviewer");
+    await write("review-logic", "metadata:\n  category: review\n", "a copy of a bundled reviewer");
+    return skills;
+  }
+
+  const installed = (name: string): string =>
+    path.join(cwd, ".metaproject", "project-skills", "review", name, "SKILL.md");
+
+  test("a tree of several packages into module review is refused without --only, naming every candidate", async () => {
+    await writeOverlayTree();
+    let message = "";
+    try {
+      await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toContain("holds 4 packages");
+    expect(message).toContain("--only <glob>");
+    for (const name of ["code-old-review", "house-job", "review-house", "review-logic"]) {
+      expect(message).toContain(`  - ${name}`);
+    }
+    expect(message).toContain("code-old-review (deprecated");
+    expect(message).toContain("review-logic (bundled keryx skill name");
+    // The example names a package that would actually be imported.
+    expect(message).toContain("--only 'review-house'");
+    // A refusal writes nothing.
+    await expect(readFile(installed("review-house"), "utf8")).rejects.toThrow();
+  });
+
+  test("the refusal also covers packages that land in review by their own category", async () => {
+    const skills = await writeOverlayTree();
+    await rm(path.join(skills, "house-job"), { recursive: true });
+    await expect(importProjectSkills({ projectRoot: cwd, from: source })).rejects.toThrow(/holds 3 packages/);
+  });
+
+  test("--only imports the matching packages and nothing else", async () => {
+    await writeOverlayTree();
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-house"] });
+    expect(result.imported.map((row) => `${row.name}:${row.status}`)).toEqual(["review-house:imported"]);
+    expect(result.only).toEqual(["review-house"]);
+    await expect(readFile(installed("house-job"), "utf8")).rejects.toThrow();
+    await expect(readFile(installed("code-old-review"), "utf8")).rejects.toThrow();
+  });
+
+  test("--only is a glob, repeatable; a deprecated match is skipped as `deprecated`, a bundled name as a collision", async () => {
+    await writeOverlayTree();
+    const result = await importProjectSkills({
+      projectRoot: cwd,
+      from: source,
+      module: "review",
+      only: ["review-*", "code-*"],
+    });
+    const byName = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+    expect(Object.keys(byName).sort()).toEqual(["code-old-review", "review-house", "review-logic"]);
+    expect(byName["review-house"]?.status).toBe("imported");
+    expect(byName["code-old-review"]).toMatchObject({ status: "skipped", reason: "deprecated" });
+    expect(byName["review-logic"]?.status).toBe("skipped");
+    expect(byName["review-logic"]?.reason).toMatch(/bundled keryx skill/);
+    await expect(readFile(installed("code-old-review"), "utf8")).rejects.toThrow();
+    expect(renderImportProjectSkillsMarkdown(result)).toContain("- review/code-old-review: skipped — deprecated");
+  });
+
+  test("an --only that matches nothing is refused with the candidates", async () => {
+    await writeOverlayTree();
+    await expect(
+      importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-vantage-*"] }),
+    ).rejects.toThrow(/--only review-vantage-\* matches none of the 4 packages[\s\S]*- review-house/);
+  });
+
+  test("a tree of one package is still a tree: its deprecated package is skipped, and it needs no --only", async () => {
+    const skills = await writeOverlayTree();
+    for (const name of ["house-job", "review-house", "review-logic"]) {
+      await rm(path.join(skills, name), { recursive: true });
+    }
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(result.imported).toHaveLength(1);
+    expect(result.imported[0]).toMatchObject({ name: "code-old-review", status: "skipped", reason: "deprecated" });
+  });
+
+  test("a deprecated package named by its own path is imported, with a warning", async () => {
+    const skills = await writeOverlayTree();
+    const result = await importProjectSkills({
+      projectRoot: cwd,
+      from: path.join(skills, "code-old-review"),
+      module: "review",
+    });
+    expect(result.imported[0]).toMatchObject({ name: "code-old-review", status: "imported" });
+    expect(result.imported[0]?.warnings?.some((warning) => warning.startsWith("deprecated: true"))).toBe(true);
+    expect(await readFile(installed("code-old-review"), "utf8")).toContain("old alias");
+    expect(renderImportProjectSkillsMarkdown(result)).toContain("  - warning: deprecated: true");
+  });
+
+  test("a review package with no path gate is reported as dispatched on every round", async () => {
+    const skills = await writeOverlayTree();
+    const result = await importProjectSkills({ projectRoot: cwd, from: path.join(skills, "review-house"), module: "review" });
+    expect(result.imported[0]?.pathsSource).toBe("none");
+    expect(result.imported[0]?.warnings).toEqual([PATHS_NONE_WARNING]);
+    expect(PATHS_NONE_WARNING).toStartWith("paths: none — dispatched on every round");
+    expect(PATHS_NONE_WARNING).toContain("metadata.paths");
+    expect(renderImportProjectSkillsMarkdown(result)).toContain(`  - warning: ${PATHS_NONE_WARNING}`);
+  });
+
+  test("a package that declares metadata.paths, or names a glob in its description, gets no path warning", async () => {
+    const skills = path.join(source, "skills");
+    await mkdir(path.join(skills, "review-declared"), { recursive: true });
+    await writeFile(
+      path.join(skills, "review-declared", "SKILL.md"),
+      '---\nname: review-declared\ndescription: "House styles."\nmetadata:\n  category: review\n  paths: "src/**/*.css, src/theme/**"\n---\n\nbody\n',
+      "utf8",
+    );
+    await mkdir(path.join(skills, "review-described"), { recursive: true });
+    await writeFile(
+      path.join(skills, "review-described", "SKILL.md"),
+      '---\nname: review-described\ndescription: "Dispatched for src/core/** changes."\nmetadata:\n  category: review\n---\n\nbody\n',
+      "utf8",
+    );
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["review-*"] });
+    const byName = Object.fromEntries(result.imported.map((row) => [row.name, row]));
+    expect(byName["review-declared"]?.pathsSource).toBe("metadata");
+    expect(byName["review-described"]?.pathsSource).toBe("description");
+    expect(result.imported.every((row) => row.warnings === undefined)).toBe(true);
+  });
+
+  test("the path warning is a review concern: another module gets none, and a skipped package gets none", async () => {
+    const skills = await writeOverlayTree();
+    const job = await importProjectSkills({ projectRoot: cwd, from: path.join(skills, "house-job") });
+    expect(job.imported[0]).toMatchObject({ module: "orchestration", status: "imported" });
+    expect(job.imported[0]?.warnings).toBeUndefined();
+    expect(job.imported[0]?.pathsSource).toBeUndefined();
+
+    const bundled = await importProjectSkills({ projectRoot: cwd, from: path.join(skills, "review-logic"), module: "review" });
+    expect(bundled.imported[0]?.status).toBe("skipped");
+    expect(bundled.imported[0]?.warnings).toBeUndefined();
+  });
+
+  test("a dry run lists what it would import before the per-package rows, and warns the same way", async () => {
+    await writeOverlayTree();
+    const result = await importProjectSkills({
+      projectRoot: cwd,
+      from: source,
+      module: "review",
+      only: ["review-*", "code-*"],
+      dryRun: true,
+    });
+    const rendered = renderImportProjectSkillsMarkdown(result);
+    expect(rendered).toContain("## would import (1) — dry run, nothing written\n\n- review/review-house\n");
+    expect(rendered.indexOf("## would import")).toBeLessThan(rendered.indexOf("- review/review-house: would-import"));
+    expect(rendered).toContain(`  - warning: ${PATHS_NONE_WARNING}`);
+    await expect(readFile(installed("review-house"), "utf8")).rejects.toThrow();
+  });
+
+  test("a real import carries no dry-run section", async () => {
+    const skills = await writeOverlayTree();
+    const result = await importProjectSkills({ projectRoot: cwd, from: path.join(skills, "review-house"), module: "review" });
+    expect(renderImportProjectSkillsMarkdown(result)).not.toContain("## would import");
+  });
+});
+
+describe("optionValues", () => {
+  test("collects every occurrence, in both spellings, and skips one with no value", () => {
+    expect(optionValues(["--from", "x", "--only", "review-*", "--only=code-*", "--only", "--json"], "--only")).toEqual([
+      "review-*",
+      "code-*",
+    ]);
+    expect(optionValues(["--from", "x"], "--only")).toEqual([]);
   });
 });
 
