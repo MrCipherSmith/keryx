@@ -324,20 +324,32 @@ export function createCodeHealthService(): CodeHealthService {
         const result = await runHealth({ cwd });
         latest = result.report;
       }
+      const baselinePathLabel = ".metaproject/health/baselines/scores.json";
+      // A `--sources` run left sources out by choice: its scores are not a
+      // measurement of the project, and recording its source set would make
+      // every other source read as new on the next full run.
+      const filtered = latest.sources.some(
+        (s) => s !== null && typeof s === "object" && (s as { filtered?: unknown }).filtered === true,
+      );
+      if (filtered) {
+        return {
+          updated: [],
+          path: baselinePathLabel,
+          refused: "the latest health report came from a --sources run; run `keryx health run` without --sources, then update the baseline",
+        };
+      }
       const generatedAt = new Date().toISOString();
-      // A whole-project re-baseline records what the report it came from
-      // measured; a scoped one keeps the file's recorded set.
+      // A project or `changed` re-baseline rewrites every scope, so it records
+      // what the report measured; a module or file one keeps the file's set.
+      const rewritesAll = input.scope === undefined || input.scope.kind === "project" || input.scope.kind === "changed";
       const updated = await writeBaseline(
         cwd,
         latest.metrics,
         generatedAt,
         input.scope,
-        input.scope === undefined || input.scope.kind === "project" ? measuredSources(latest.sources) : undefined,
+        rewritesAll ? measuredSources(latest.sources) : undefined,
       );
-      return {
-        updated,
-        path: ".metaproject/health/baselines/scores.json",
-      };
+      return { updated, path: baselinePathLabel };
     },
   };
 }

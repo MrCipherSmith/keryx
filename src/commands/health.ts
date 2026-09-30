@@ -246,6 +246,11 @@ async function runBaseline(args: string[]): Promise<void> {
     cwd: process.cwd(),
     ...(scope ? { scope } : {}),
   });
+  if (result.refused !== undefined) {
+    console.error(`Baseline not updated: ${result.refused}`);
+    process.exitCode = 1;
+    return;
+  }
   console.log(`Updated baseline (${result.updated.length} scope(s)): ${result.path}`);
 }
 

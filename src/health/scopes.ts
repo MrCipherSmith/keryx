@@ -101,6 +101,9 @@ export async function computeMetrics(input: {
               config.scoring.priorityWeights,
             ),
             ...penalties,
+            // Coverage contributes a penalty, not findings: a coverage report
+            // seen for the first time is new measurement too.
+            ...(newSources.has("coverage") ? { coverage: 0 } : {}),
           },
           config,
         )

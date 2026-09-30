@@ -5,7 +5,14 @@ import { collectGitProvenance } from "../metrics/provenance";
 import { loadHealthConfig } from "./config";
 import { computeGate } from "./gate";
 import { computeMetrics } from "./scopes";
-import { loadBaseline, loadBaselineSources, measuredSources, writeBaseline } from "./baseline";
+import {
+  foldNewSources,
+  loadBaseline,
+  loadBaselineSources,
+  measuredSources,
+  recordBaselineSources,
+  writeBaseline,
+} from "./baseline";
 import { getChurn } from "./metrics/churn";
 import { rankHotspots } from "./metrics/hotspot";
 import { readWikiFreshnessMetric } from "./metrics/wiki-freshness";
@@ -34,7 +41,6 @@ import type {
   HealthRunInput,
   HealthRunResult,
   RawSourceResult,
-  ScopeMetrics,
   ScopeSelector,
   SourceAdapter,
   SourceConfig,
@@ -172,9 +178,9 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // MEASUREMENT, not new defects: its findings are kept out of the regression
   // comparison instead of reading as a drop in unchanged code.
   const measured = measuredSources(sourceInfos);
-  const baselineSources = await loadBaselineSources(cwd, measured);
+  const baselineSources = await loadBaselineSources(cwd);
   const newSources = new Set(
-    baselineSources === null ? [] : measured.filter((s) => !baselineSources.has(s)),
+    baselineSources === null ? [] : measured.filter((s) => !baselineSources.sources.has(s)),
   );
   const metrics = await computeMetrics({
     cwd,
@@ -233,40 +239,19 @@ export async function runHealth(input: HealthRunInput): Promise<HealthRunResult>
   // which sources it measured.
   if (baseline.size === 0) {
     await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
-  } else if (
-    baselineSources !== null &&
-    newSources.size > 0 &&
-    shouldAdoptWidenedBaseline({ selector, filter, baselineSources, measured, projectMetrics, config })
-  ) {
-    // The measured set grew and nothing the baseline already measured
-    // regressed: take this run as the new baseline, so the new source's own
-    // regressions are caught from now on instead of excluded forever.
-    await writeBaseline(cwd, metrics, report.generatedAt, undefined, measured);
+  } else if (baselineSources !== null && selector.kind === "project") {
+    // A whole-project run holds every scope, so it is where the baseline's
+    // source set is settled. New sources fold in their own effect only (see
+    // `foldNewSources`); a legacy baseline gets its resolved set written down,
+    // so nothing is ever resolved through `LEGACY_BASELINE_SOURCES` again.
+    if (newSources.size > 0) {
+      await foldNewSources(cwd, metrics, baselineSources.sources, [...newSources]);
+    } else if (!baselineSources.recorded) {
+      await recordBaselineSources(cwd, baselineSources.sources);
+    }
   }
 
   return { report, markdownPath: paths.markdownPath, jsonPath: paths.jsonPath };
-}
-
-/**
- * Re-accept the baseline only on a run that sees at least everything the old
- * one did: the whole project, no `--sources` filter, no previously measured
- * source lost (a missing source's absent findings would lock in a better
- * score), and no regression among the comparable sources (re-baselining then
- * would hide it).
- */
-function shouldAdoptWidenedBaseline(input: {
-  selector: ScopeSelector;
-  filter: Set<string> | null;
-  baselineSources: ReadonlySet<string>;
-  measured: readonly string[];
-  projectMetrics: ScopeMetrics | undefined;
-  config: HealthConfig;
-}): boolean {
-  const { selector, filter, baselineSources, measured, projectMetrics, config } = input;
-  if (selector.kind !== "project" || filter !== null) return false;
-  const now = new Set(measured);
-  if ([...baselineSources].some((source) => !now.has(source))) return false;
-  return (projectMetrics?.regression_score ?? 0) < config.gate.warnOnRegressionDrop;
 }
 
 function filterIgnoredFindings(findings: Finding[], config: HealthConfig): Finding[] {

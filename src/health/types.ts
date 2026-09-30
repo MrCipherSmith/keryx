@@ -313,7 +313,12 @@ export type HealthExplainResult = {
 };
 
 export type HealthBaselineInput = { cwd: string; scope?: ScopeSelector };
-export type HealthBaselineResult = { updated: string[]; path: string };
+export type HealthBaselineResult = {
+  updated: string[];
+  path: string;
+  /** Set when nothing was written, with the reason. */
+  refused?: string;
+};
 
 export interface CodeHealthService {
   run(input: HealthRunInput): Promise<HealthRunResult>;

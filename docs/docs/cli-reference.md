@@ -3049,12 +3049,17 @@ report a clean gate.
 **The baseline records which sources it measured.** A source that starts being
 measured after the baseline was taken — oxlint on a project that already named
 it, for example — adds findings, but they are new measurement of unchanged
-code, so they are left out of `regression_score` and cannot fail the gate as a
-regression; `health_score` still counts them. On a whole-project run where no
-previously measured source is missing and nothing comparable regressed, the
-baseline is re-accepted with the new source, and from then on its regressions
-count. A baseline written before this was recorded is taken to have measured
-what the current run measures, minus oxlint.
+code, so they are left out of `regression_score` and `trend` and cannot fail
+the gate as a regression; `health_score` still counts them (a coverage report
+seen for the first time is treated the same way). On the first whole-project
+run that measures the new source, its own effect — and nothing else — is added
+to each baseline scope, so drift in sources the baseline already measured stays
+a regression, and from the next run the new source's growth counts too. A run
+can therefore update `.metaproject/health/baselines/scores.json`: once to
+record the new source, and once to write down the source set of a baseline
+taken before sources were recorded (such a baseline is taken to have measured
+every source keryx had before oxlint). `keryx health baseline update` refuses a
+report from a `--sources` run.
 
 **A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
 and `typescript` now report e.g. `tsconfig.json found, binary not found
