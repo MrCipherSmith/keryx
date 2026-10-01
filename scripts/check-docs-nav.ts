@@ -18,7 +18,10 @@ const ROOT = path.resolve(import.meta.dir, "..");
 export type NavConfig = {
   docsDir: string;
   nav: Set<string>;
+  /** Every pattern of both blocks, in file order (for display and tests). */
   patterns: string[];
+  /** `exclude_docs` and `not_in_nav` separately: a `!` negation applies only within its own block. */
+  patternGroups: string[][];
 };
 
 /** Lines of a top-level `key: |` block scalar, trimmed, comments and blanks dropped. */
@@ -47,23 +50,50 @@ export function parseMkdocs(yaml: string): NavConfig {
       if (m?.[1]) nav.add(m[1]);
     }
   }
+  const excludeDocs = blockScalar(lines, "exclude_docs");
+  const notInNav = blockScalar(lines, "not_in_nav");
   return {
     docsDir,
     nav,
-    patterns: [...blockScalar(lines, "exclude_docs"), ...blockScalar(lines, "not_in_nav")],
+    patterns: [...excludeDocs, ...notInNav],
+    patternGroups: [excludeDocs, notInNav],
   };
 }
 
-/** gitignore-style match, reduced to what the config uses: exact path, `dir/`, or a glob. */
+/**
+ * gitignore-style match of ONE positive pattern, reduced to what the config
+ * uses: exact path, `dir/`, or a glob. A `!negation` is not a pattern on its
+ * own — Bun's Glob would read `!keep.md` as "everything except keep.md" and
+ * exempt every file — so it is refused here; `isExcluded` handles negation.
+ */
 export function matchesPattern(file: string, pattern: string): boolean {
-  const p = pattern.replace(/^\//, "");
+  if (pattern.startsWith("!")) throw new Error(`negated pattern passed to matchesPattern: ${pattern}`);
+  // `\!` and `\#` are the gitignore escapes for a literal leading `!`/`#`.
+  const p = pattern.replace(/^\\([!#])/, "$1").replace(/^\//, "");
   if (p.endsWith("/")) return file.startsWith(p);
   return new Glob(p).match(file) || file === p || file.startsWith(`${p}/`);
 }
 
+/**
+ * gitignore semantics over one block: patterns apply in order and the last
+ * one that matches wins, so `!pattern` re-includes a file an earlier pattern
+ * excluded.
+ */
+export function isExcluded(file: string, patterns: string[]): boolean {
+  let excluded = false;
+  for (const pattern of patterns) {
+    if (pattern.startsWith("!")) {
+      if (excluded && matchesPattern(file, pattern.slice(1))) excluded = false;
+    } else if (!excluded && matchesPattern(file, pattern)) {
+      excluded = true;
+    }
+  }
+  return excluded;
+}
+
 export function orphans(files: string[], cfg: NavConfig): string[] {
   return files
-    .filter((f) => !cfg.nav.has(f) && !cfg.patterns.some((p) => matchesPattern(f, p)))
+    .filter((f) => !cfg.nav.has(f) && !cfg.patternGroups.some((group) => isExcluded(f, group)))
     .sort();
 }
 

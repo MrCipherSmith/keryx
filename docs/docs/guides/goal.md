@@ -101,5 +101,3 @@ mode changes.
   workspace binding and wrap-up dispatch `/goal` reuses unchanged.
 - [Slate for external agents](slate.md) — the sibling MCP-exposed surface
   for hands other than keryx's own runtime.
-- [Requirements: `/goal` continuation](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/goal-continuation) —
-  the competitor survey this feature is drawn from, and its as-built design.

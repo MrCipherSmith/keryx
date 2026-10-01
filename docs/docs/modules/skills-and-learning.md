@@ -83,7 +83,7 @@ Plan for bundle keryx-project-5838ef3b2046 (ok):
 
 ## Status
 
-Stable. Skills and rules are part of the nine default modules. Passive learning observation runs by default in `keryx shell`; accepting, applying and promoting a learned pattern always needs you at a terminal. Model-judged skill evaluation (`keryx skills eval`, `judge-check`) calls a provider you choose and costs tokens, so it runs only when you ask.
+Stable. Skills come from `gdskills`, one of the nine modules `keryx init` enables by default; `keryx rules`, `keryx learn` and `keryx bundle` are commands, not separate modules. Passive learning observation runs by default in `keryx shell`; accepting, applying and promoting a learned pattern always needs you at a terminal. Model-judged skill evaluation (`keryx skills eval`, `judge-check`) calls a provider you choose and costs tokens, so it runs only when you ask.
 
 ## Reference
 

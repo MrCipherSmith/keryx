@@ -22,7 +22,7 @@ when nothing should be reachable at all.
 |---|---|
 | `ask` (default) | Every `shell_exec`, `spawn_subagent`, and destructive-risk tool call asks first — today's behavior, unchanged if you never touch this feature. |
 | `trust` | Safe calls run without asking. A call still asks when it is destructive — either the tool's own static risk, or a command keryx's classifier recognizes as destructive (`rm -rf`, force-push, and similar). |
-| `auto` | Nothing asks, **including destructive commands**. Use it only in a throwaway checkout or a contained environment. Entering it always requires an explicit one-time confirmation first. |
+| `auto` | Nothing asks, **including destructive commands**. Use it only in a throwaway checkout or a contained environment. Switching to it with `/mode auto` asks for a one-time confirmation; the `--auto` launch flag and a saved project default do not. |
 
 One thing no mode ever changes: a command that touches keryx's own
 credential/permission files (`auth.json`, `permissions.json`,
@@ -101,12 +101,14 @@ the TUI and `--no-tui`:
 /mode clear             # forget the stored project default
 ```
 
-Switching to `auto` always stops for an explicit confirmation first —
-typing `yes` in the readline shell, or a Confirm/Cancel choice in the TUI.
-There is no flag or setting that skips that confirmation; the mode can only
-ever be changed by you, directly, in the running session. Nothing a tool or
-the model outputs can set it — that is a deliberate boundary, not an
-oversight.
+Switching to `auto` with `/mode auto` stops for an explicit confirmation
+first — typing `yes` in the readline shell, or a Confirm/Cancel choice in the
+TUI. Starting a session with `--auto` or `--permission-mode auto` does not
+ask: typing the flag is the decision. A project default saved as `auto` (with
+`/mode auto save`, which itself asked once) also starts every later session in
+that project in `auto` without asking; `/mode clear` removes it. Only you set
+the mode — by flag, saved default or `/mode`. Nothing a tool or the model
+outputs can set it — that is a deliberate boundary, not an oversight.
 
 ## Read-only mode: `/plan`
 

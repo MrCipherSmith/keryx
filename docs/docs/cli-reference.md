@@ -668,8 +668,8 @@ does with each is a deliberate, per-capability decision, not a uniform rule:
   the client answers with — not necessarily what is on disk, since the
   client's view may differ (an unsaved buffer, for instance). Without it, or
   with it `false`, keryx reads the file itself with no wire call at all; the
-  turn completes the same way either way. This is the one half of AC6 that
-  is fully capability-routed, and it is tested both ways over a real pipe:
+  turn completes the same way either way. This is the half of the client file-system
+  support that is fully capability-routed, and it is tested both ways over a real pipe:
   the frame is asserted present when advertised and absent — for the whole
   connection, not just the one call — when it is not.
 - **Writes.** keryx's `apply_patch` tool always writes locally, whether or
@@ -1810,7 +1810,7 @@ user keryx toggle uses: **per-project `.metaproject/tasks.config.json`
 (`"on"`)**.
 
 **On by default, off when you say so.** `external: "on"` (the default, and
-the pre-flow-346 behavior byte-for-byte) sends private work to Jev/TypeSafe
+the behavior from before this setting existed, byte-for-byte) sends private work to Jev/TypeSafe
 and any connected provider/model exactly as before. `external: "off"`
 blocks every destination listed in `<keryx config dir>/external-
 providers.json` — the Jev client (`callJevSystemOne`, every `review-jev-*`
@@ -3705,16 +3705,16 @@ anyway" shape as `keryx providers status --refresh` and `keryx learn accept
 
 For every criterion in `acceptance-criteria.md`:
 
-1. **Deterministic facts first (AC2).** Backticked tokens, file paths and
+1. **Deterministic facts first.** Backticked tokens, file paths and
    `keryx <cmd>` names named IN the criterion's own text are checked against
    the diff and the changed-file list, and any changed TEST file mentioning
    one is noted — computed with no model call, and placed above the diff in
    Jev's `state`.
-2. **`not-checkable`, without a model (AC3).** A criterion about a live
+2. **`not-checkable`, without a model.** A criterion about a live
    check, CI green, `keryx health run`, docs being published, or a manual/
    human-process step is recognised by an explicit, documented marker list
    and never sent to Jev — always listed, never dropped.
-3. **One `noul` question per remaining criterion (AC4).** Batched under the
+3. **One `noul` question per remaining criterion.** Batched under the
    vendor's 64k `state`+`questions` budget (packed to half that, with a cap
    on criteria per batch — a real large diff can make a few generic tokens
    match far more hunks than the documented ceiling actually affords), with
@@ -3730,17 +3730,17 @@ Each checkable criterion is reported `likely-met` or `not-evident` (Jev's
 probability against a 0.5 threshold), alongside its probability, facts and
 matched evidence paths.
 
-**Cached (AC8).** Results are cached per flow under `.metaproject/data/ac-check/`
+**Cached.** Results are cached per flow under `.metaproject/data/ac-check/`
 (gitignored, mode 0600), keyed by (criteria checksum, diff hash) — an
 unchanged diff against unchanged criteria reads the cache rather than asking
 Jev again.
 
-**Advisory notices (AC5).** `flow implemented` and `flow complete` print a
+**Advisory notices.** `flow implemented` and `flow complete` print a
 one-line summary (counts, and which criteria are not evident) when the
 opt-in is on — never blocking, and a check failure is one line, not a
 command failure.
 
-**Review attachment (AC6).** `keryx review ingest` for a flow with the
+**Review attachment.** `keryx review ingest` for a flow with the
 opt-in attaches the latest CACHED result as `ac-check.md` in the review
 package, so reviewers see which criteria are in doubt — this never triggers
 a fresh Jev call itself. The cache is attached only when its key (criteria
@@ -3750,7 +3750,7 @@ against); a cache that exists but does not match gets a short STALE note
 instead (naming when it WAS checked, and that `--refresh` re-checks it),
 never a report that reads as current when it is not.
 
-**Shell (AC7).** `/flows`' modal carries an "AC" tab with per-criterion
+**Shell.** `/flows`' modal carries an "AC" tab with per-criterion
 markers (met / not evident / not checkable / not run); `c` re-runs the check
 for the selected flow, and `/ac` opens the modal straight to that tab.
 
@@ -5579,7 +5579,7 @@ These are placed in Jev's `state` as a labelled block above the log excerpt
 budget), and the questions are rewritten to point at that block explicitly.
 Printed evidence lines mirror `state`'s signals block exactly.
 
-**Deterministic override (AC8).** When the rerun or same-head signal alone
+**Deterministic override.** When the rerun or same-head signal alone
 answers the question — the same job/test passed on another attempt, or a
 later run of the same commit passed — the verdict says `DETERMINISTIC` and
 names the reason, and **Jev's probabilities are still shown beside it**, not
@@ -5588,7 +5588,7 @@ replaced: the signals decide `top`, not the numbers under it.
 **A known signal gap, found while building the evaluation set:** the
 cross-branch history signal matches candidate runs by JOB NAME. The SAME test
 failing under a DIFFERENT job-matrix leg (e.g. `opentui native (darwin-x64)`
-vs. `opentui native (linux-x64)` — the real `schedules-sidebar.test.ts` AC11
+vs. `opentui native (linux-x64)` — a real `schedules-sidebar.test.ts`
 flake did exactly this across two of this evaluation set's cases) is not
 picked up by that signal today. Diff proximity is also a heuristic that can
 point the wrong way on a PR whose OWN diff is the flakiness fix landing in

@@ -252,6 +252,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       "  keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]\n",
     ],
     [
+      "  sessions  List or export per-project shell sessions\n",
+      "  sessions  List, fork (branch), export or locate per-project shell sessions\n",
+    ],
+    [
       "  mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement\n",
       "  mcp       The MCP servers keryx connects to (list, add, trust, doctor, auth); mcp serve/install are retired spellings of serve-mcp/integrate\n",
     ],

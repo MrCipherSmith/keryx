@@ -1,6 +1,6 @@
 # Configuration and environment
 
-Keryx reads configuration from three places: a per-user directory, a per-user store under `~/.keryx/`, and files inside each project. Environment variables override or switch off a few behaviours. This page lists every file and every variable a user can meaningfully set, grouped by what it controls. Variables that exist only for tests or that keryx sets for its own child processes are listed at the end so you can recognise them.
+Keryx reads configuration from three places: a per-user directory, a per-user store under `~/.keryx/`, and files inside each project. Environment variables override or switch off a few behaviours. This page lists the files and variables a user can meaningfully set or should know about, grouped by what they control; caches and internal state files are left out. Variables that exist only for tests or that keryx sets for its own child processes are listed at the end so you can recognise them.
 
 ## Where configuration lives
 
@@ -21,9 +21,15 @@ Files in the user config directory are created owner-only (mode `0600`, director
 | `projects.json` | Registry of initialised projects | `keryx init`, `keryx projects` |
 | `serve.json`, `serve-credentials.json` | `keryx serve` settings; the salted hash of the bearer token | `keryx serve config`, `keryx serve token` |
 | `permissions.json` | Shell commands you chose to auto-approve | `keryx shell`, when you approve a command for reuse |
+| `permission-mode.json` | Saved per-project approval mode (`ask`, `trust`, `auto`) | `/mode <mode> save`, `/mode clear` |
+| `hooks-trust.json` | Which project `.metaproject/hooks.json` files you trusted, by digest | `keryx hooks trust` |
 | `sandbox.json` | Global sandbox defaults, for example `{"shell": "workspace"}` for the shell sandbox mode | you, by hand |
 | `tui.json` | Theme | `/theme` |
 | `mcp-servers.json`, `mcp-servers-disabled.json` | User-scope MCP servers for the shell; per-server disable overlay | `keryx mcp` |
+| `mcp-servers-trust.json` | Committed project MCP servers you trusted, by digest | `keryx mcp trust` |
+| `mcp-credentials.json` | OAuth tokens for remote MCP servers | `keryx mcp auth`, `keryx mcp logout` |
+| `search-providers.json`, `search-credentials.json` | Web search provider settings; the search provider's API key | `/search-provider` in `keryx shell` |
+| `external-providers.json` | Destinations that `/external off` blocks | keryx creates it with defaults; you edit it |
 | `version-check.json`, `codex-catalog-version.json` | Cached update-check and model-catalog data | `keryx version check` |
 | `turns/` | Durable records of remote turns | `keryx serve` |
 | `sessions/` | Per-project shell sessions | `keryx shell` |
@@ -120,6 +126,7 @@ Subscription logins and local runtimes are configured with `keryx auth` and `/co
 | `KERYX_AGENT_MAX_ROUNDS` | Tool rounds per turn before the loop-safety stop (positive integer, capped at 200) | 40 |
 | `KERYX_AGENT_MAX_ATTEMPTS_PER_HASH` | Attempts allowed for an identical tool call | 3 |
 | `KERYX_SHELL_TIMEOUT_MS` | Wall-clock limit for one `shell_exec` command; `0` disables it | 120000 |
+| `KERYX_SHELL_IDLE_MS` | Idle limit for a background task: one silent this long is stopped; `0` disables it. Falls back to `KERYX_SHELL_TIMEOUT_MS` when unset. | 120000 |
 | `KERYX_MAX_BACKGROUND_JOBS` | Concurrent background jobs per session | 3 |
 | `KERYX_SHELL_HOLD_MS` | How long a headless run waits for its own background tasks | 1800000 |
 | `KERYX_SHELL_MAX_AUTO_WAKE` | Cap on consecutive turns started by a task completion with no operator input | built in |
@@ -135,11 +142,11 @@ See [Contain an agent](../guides/contain-an-agent.md) and [Harness and safety](.
 |---|---|
 | `KERYX_SANDBOX_SHELL` | Sandbox for the shell's `shell_exec`: `off`, `workspace` (also `1`, `on`) or `strict`. Overrides `sandbox.json`. |
 | `KERYX_DANGEROUSLY_DISABLE_SANDBOX=1` | Turns the shell sandbox off. An unattended run refuses to start while it is set. |
-| `KERYX_SANDBOX_ALLOW_UNSANDBOXED=1` | Lets `keryx harness run` proceed when no sandbox launcher is available, instead of failing closed |
+| `KERYX_SANDBOX_ALLOW_UNSANDBOXED=1` | Lets `keryx harness exec` proceed when no sandbox launcher is available, instead of failing closed |
 | `KERYX_SANDBOX_ALLOW_WRITE`, `KERYX_SANDBOX_READ_DENY` | Comma-separated extra writable roots and extra read-denied roots |
 | `KERYX_SANDBOX_ALLOWED_DOMAINS` | Comma-separated domains; when set, shell network access is restricted to them |
 | `KERYX_SANDBOX_TRUST_PROJECT_POLICY=1` | Honour `.keryx/sandbox-policy.json` from the repository. Off by default so an untrusted repo cannot widen its own sandbox. |
-| `KERYX_SANDBOX_MASK_MODE` | Credential masking: `auto`, `manual` (default) or `off` |
+| `KERYX_SANDBOX_MASK_MODE` | Credential masking: `auto` (default: masks the keys of known providers), `manual` or `off`. Overrides the project policy and `sandbox.json`. |
 | `KERYX_SANDBOX_MASK_ENV` | `;`-separated `NAME@host` credential masks |
 | `KERYX_SANDBOX_TLS_TERMINATE` | Explicit on or off for TLS termination in the sandbox proxy (`1`/`true`/`on`, `0`/`false`/`off`) |
 | `KERYX_ALLOW_REAL_SUBPROCESS=1` | Allows `keryx harness exec` to start a real process (also `--allow-real-subprocess`) |

@@ -47,14 +47,14 @@ keryx flow complete 001
 
 **Lifecycle.** A flow moves through `initializing`, `ready` (after `freeze`), `in-progress` (after `start`), `implemented` (after `implemented --pr <url>`) and `completed`. `init` creates a directory under `.metaproject/flows/` with the description, plan, context, acceptance criteria, tasks, journal and `flow.json`. `freeze` records a checksum of `acceptance-criteria.md`. After that, any edit outside `keryx flow ac update` fails every gate and every status transition, and an `ac update` voids earlier confirmations. Tasks have a kind (`context`, `implement`, `test`, `verify`, `review` or `docs`), can depend on one another, and are closed with a disposition (`completed`, `blocked`, `failed` or `skipped`) and a reason. `flow next` names the first open task whose dependencies are done.
 
-**Completion gates.** `flow complete` evaluates these gates in order. Every one must report something other than `fail`, and `skipped` counts as a pass for a gate a flow never opted into:
+**Completion gates.** `flow complete` evaluates these gates in order. Every one must report something other than `fail`, and `skipped` counts as a pass for a gate that does not apply to the flow:
 
 | Gate | Passes when |
 |---|---|
 | acceptance-criteria | the checksum is intact and every `ACn` is confirmed |
 | pull-request, or main-merge | the PR exists with green checks, or the commit is proven to be on `origin/main` |
 | base-branch | the merge landed on the base branch the flow recorded |
-| tasks, owner, review | opt-in per flow: no open task, an accountable owner, and a clean review round actually observed |
+| tasks, owner, review | on for every new flow: no open task, an accountable owner, and a clean review round actually observed (flows created before these gates existed skip them) |
 | health | the [health gate](quality.md) passes |
 | security | the security gate does not fail (advisory by default; omitted if the module is off) |
 | confirmation | opt-in with `--require-confirmation`: a terminal-minted, single-use token for this criteria checksum |

@@ -67,7 +67,7 @@ A figure nobody recorded reads "not recorded", never zero.
 
 ## Status
 
-Stable and read-mostly. `governance`, `product`, `forgetting` and `dashboard` only read and write their own artifacts under `.metaproject/data/`. `retention sweep` deletes only with `--apply`. The governance report cannot show what was never recorded, which is why it says so.
+Stable and read-mostly. `governance`, `product`, `forgetting` and `dashboard` only read and write their own artifacts inside `.metaproject/`: the dashboard page is `.metaproject/keryx-dashboard.html`, the rest is under `.metaproject/data/`. `retention sweep` deletes only with `--apply`. The governance report cannot show what was never recorded, which is why it says so.
 
 ## Reference
 

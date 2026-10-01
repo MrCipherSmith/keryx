@@ -464,8 +464,9 @@ into.
 4. Installs the bundled skills for the chosen profile and analyzes the test
    stack once.
 5. Installs git hooks as managed blocks. With `--yes` that is the post-commit
-   hooks for the graph, skills, health and testing, a security pre-push guard,
-   and the security hooks for supported agents. The blocking testing pre-push
+   hooks for the graph, skills, health and testing, a security pre-push guard
+   (it warns in the default `advisory` mode and blocks only in `enforced`, `ci`
+   or `gateway` mode), and the security hooks for supported agents. The blocking testing pre-push
    gate stays off.
 6. Writes `metaproject.json`, `index.md`, `routing.md`, the skills and the
    dashboard, and registers the project in the per-user project registry.

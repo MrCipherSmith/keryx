@@ -9,9 +9,9 @@ covered, and how the project checks its own work. Figures were measured on
 
 | | |
 |---|---|
-| Current series | 0.3.x; 0.3.49 on 1 October 2026 |
-| Release tags | 195 since the first release, 0.1.0, on 10 July 2026 |
-| 0.3.x releases | 48 between 25 September and 1 October 2026 |
+| Current series | 0.3.x; `keryx --version` and the [latest release](https://github.com/MrCipherSmith/keryx/releases/latest) show the newest version |
+| Release tags | over 190 since the first release, 0.1.0, on 10 July 2026 |
+| 0.3.x releases | started with 0.3.0 on 25 September 2026; usually several a day |
 | Distribution | npm package `@mrciphersmith/keryx`, published from CI with a provenance attestation; standalone binaries attached to each GitHub release |
 | Changes | Recorded per version in [CHANGELOG.md](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md); highlights on [Changelog](changelog.md) |
 
@@ -74,7 +74,7 @@ documentation; `experimental` means it should be checked on a live install.
 ## Numbers
 
 Every figure below was produced by the commands after the table, run on
-1 October 2026 in a checkout of `main` at version 0.3.50. Run them yourself; the
+1 October 2026 in a checkout of `main` whose `package.json` said 0.3.50. Run them yourself; the
 figures grow with every merge.
 
 | Figure | Value |

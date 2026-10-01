@@ -21,7 +21,7 @@ what it does not protect. Read the last section before you rely on any of it.
 | A command reaches files or hosts it should not | OS sandbox (opt-in for the shell, enforced for contained runs) |
 | A cloned repository runs code or sets keys before Keryx starts | Environment isolation: no project `.env` or `bunfig.toml` |
 | A committed config starts a program you never reviewed | Committed MCP servers start only after `keryx mcp trust` |
-| Secrets leak into stored output or commits | Secret and PII scanning, redaction, pre-push guard |
+| Secrets leak into stored output or commits | Secret and PII scanning, redaction, pre-push guard (warns by default; blocks in `enforced` mode) |
 | Private code goes to a provider you did not choose to trust | The `/external` block list |
 | A remote caller gains more authority than a local user | Remote entry off by default, loopback-only, authenticated, never weaker than local policy |
 | An agent grants itself authority | Credential files are never auto-approved; modes are set only by you |
@@ -55,14 +55,15 @@ default `ask` mode. Two other modes trade confirmation for speed:
 |---|---|
 | `ask` (default) | every shell command, subagent and destructive tool call |
 | `trust` | destructive calls only (`rm -rf`, force-push and similar, by a command classifier) |
-| `auto` | nothing, except the floor below; entering it needs an explicit confirmation |
+| `auto` | nothing, except the floor below; `/mode auto` asks you to confirm, but `--auto`, `--permission-mode auto` and a saved project default of `auto` start the session in it without asking |
 
 Three rules hold in every mode:
 
 - A command that touches Keryx's own credential or permission files is never
-  auto-approved.
-- Only you change the mode, in the running session. No tool output, model reply
-  or remote caller can set it.
+  auto-approved. Neither is confirming a shared-context review, nor a publish
+  command while another agent holds a publish pause on the bus.
+- Only you set the mode: with a launch flag, a saved project default or `/mode`
+  in the running session. No tool output, model reply or remote caller can set it.
 - `/plan on` makes the session read-only: every non-read tool call is refused,
   with no prompt.
 
@@ -118,10 +119,16 @@ walks through contained runs.
   (`keryx security eval --corpus all`).
 - **Before storage.** Compact output from `keryx ctx` is redacted before the raw
   log is written. The harness scans every recorded tool result before it is
-  stored as evidence; a result that fails the scan is not stored at all.
+  stored as evidence. A result in which the scan finds a secret is stored only
+  as a masked placeholder with a hash and the finding's category; a result the
+  scan cannot complete is not stored at all.
 - **Before commits and pushes.** `keryx init` installs a pre-push guard and,
   for agents that support it, hooks that check the agent's input and output.
-  `keryx integrations install` adds them to more agents.
+  `keryx integrations install` adds them to more agents. In the default
+  `advisory` security mode the pre-push guard only warns and lets the push
+  through. To block a push that carries a finding, set `"mode": "enforced"`
+  (or `ci`/`gateway`) in `.metaproject/security.config.json`; `keryx security
+  status` shows the mode in effect.
 - **Credentials at rest.** Provider keys, subscription logins, MCP tokens and
   the project registry live in one per-user config directory
   (`~/.local/share/keryx/` on macOS and Linux), written owner-only (mode 0600).
@@ -177,8 +184,11 @@ change to it needs a new approval. Your own user-scope servers need none.
 Every MCP tool call counts as destructive, so it asks even in `trust` mode. You
 can trust one exact tool for one session, never a whole server, and never a tool
 its server marks destructive. Remote server credentials come from environment
-variables; Keryx refuses to dial when one is unset and does not follow
-redirects. See [MCP servers in the shell](../modules/mcp-servers.md).
+variables named in the server's config, or from an OAuth login you complete with
+`keryx mcp auth <name>`. That token is stored owner-only in `mcp-credentials.json`
+in your per-user config directory, filed under the server's name and URL, and
+`keryx mcp logout <name>` removes it. Keryx refuses to dial when a referenced
+variable is unset and does not follow redirects. See [MCP servers in the shell](../modules/mcp-servers.md).
 
 In the other direction, `keryx serve-mcp` publishes the workspace over stdio.
 Its HTTP transport binds to localhost and needs a separate capability switch,

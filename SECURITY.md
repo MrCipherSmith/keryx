@@ -12,7 +12,8 @@ protects users of the tool; this document covers how to report a vulnerability
 | latest `0.3.x`      | :white_check_mark: |
 | any earlier release | :x:                |
 
-The project is pre-1.0 and releases frequently (`0.3.46` as of this writing);
+The project is pre-1.0 and releases frequently, often several times a day
+(`npm view @mrciphersmith/keryx version` shows the latest);
 there is no long-term-support branch. Security fixes land on the latest
 release. Please upgrade to the latest version before reporting.
 

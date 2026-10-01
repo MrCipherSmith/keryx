@@ -444,7 +444,7 @@ Commands:
   setup     Print the Metaproject preparation guide: init, refresh, or repair
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
-  sessions  List or export per-project shell sessions
+  sessions  List, fork (branch), export or locate per-project shell sessions
   acp       Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor)
   bus       Agent bus: list peers and leases, read the log, send a message, prune
   version   Check whether a newer npm release is available

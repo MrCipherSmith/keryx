@@ -169,12 +169,15 @@ Absences matter most: they are what users rely on.
   `serve` binds loopback unless the operator acknowledges otherwise;
   `serve-mcp --http` needs a capability switch; the MCP publisher module is
   disabled until `integrate` enables it.
-- **State outside the project is limited to one user-global directory.** The
-  CLI keeps credentials, the project registry, and shell preferences in a
-  single keryx config directory, written owner-only (mode 0600) through one
-  resolver (`src/lib/config-dir.ts`), and source-level tests fail on code that
-  writes or reads there by another route. Everything else it writes is inside the
-  project's `.metaproject/` or the files you ask it to install. Installers
+- **State outside the project lives in three user-level places.** The CLI
+  keeps credentials, the project registry, and shell preferences in a single
+  keryx config directory, written owner-only (mode 0600) through one resolver
+  (`src/lib/config-dir.ts`), and source-level tests fail on code that writes or
+  reads there by another route. Personal skills, agents, memory and learned
+  patterns live in the user store `~/.keryx/` (or under `$KERYX_HOME`), and
+  downloaded assets are cached in `~/.cache/keryx/assets` (or
+  `$KERYX_ASSET_CACHE`). Everything else it writes is inside the project's
+  `.metaproject/` or the files you ask it to install. Installers
   that put hooks into an editor's settings run only on explicit commands.
 - **Bounded output.** Search, read and command output goes through `keryx ctx`,
   which compacts it and keeps the raw log, so an agent's context is not flooded

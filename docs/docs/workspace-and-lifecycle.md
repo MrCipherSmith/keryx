@@ -578,8 +578,9 @@ block into `.git/hooks/<post-commit|pre-push>` (creating a `#!/usr/bin/env sh`
 shebang if the file is new, `chmod 0o755`). Every post-commit hook `return 0`s on
 every branch and so never fails a commit; most are staleness reminders, while the
 gdgraph and dashboard hooks regenerate their artifacts. The blocking exceptions are
-the opt-in testing pre-push gate (blocks on test failure) and the opt-in security
-pre-push gate (blocks in `enforced`/`ci`/`gateway` mode).
+the opt-in testing pre-push gate (blocks on test failure) and the security
+pre-push gate, which is on by default but blocks only in `enforced`/`ci`/`gateway`
+mode (the default `advisory` mode warns).
 
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|

@@ -40,12 +40,18 @@ MCP server and the remote HTTP entry, are off until you enable them.
 
 ## Does Keryx collect telemetry?
 
-No. Keryx has no analytics or usage reporting. The one request it makes on its
-own is a version check: `keryx doctor`, `keryx version check` and the start of
-`keryx shell` send a `GET` to the npm registry for the latest
-`@mrciphersmith/keryx` version. The request carries no credentials and no
-project data, times out after two seconds, and its result is cached for
-24 hours in your per-user Keryx directory.
+No. Keryx has no analytics or usage reporting. It makes two kinds of request
+on its own, neither of which carries project data:
+
+- **Version check.** `keryx doctor`, `keryx version check` and the start of
+  `keryx shell` send a `GET` to the npm registry for the latest
+  `@mrciphersmith/keryx` version. The request carries no credentials, times
+  out after two seconds, and its result is cached for 24 hours in your
+  per-user Keryx directory.
+- **Model catalog refresh.** When the TUI shell starts and its cached catalog
+  is older than five minutes, it asks each provider you have connected for its
+  model list (and balance, where the provider has one), using the key or login
+  you saved for that provider. A local Ollama server is probed the same way.
 
 ## Which coding agents does it work with?
 

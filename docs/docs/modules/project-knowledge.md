@@ -87,7 +87,7 @@ For the layout of `.metaproject/` see [The Metaproject](../concepts/metaproject.
 
 ## Status
 
-Stable: the graph, compact context, wiki, memory, orient and sync belong to the nine modules that `keryx init` enables by default. Per-runtime `ctx` hooks are experimental. `wiki enrich` and `memory reflect --narrate` use a model and need a configured [provider](providers.md); everything else here is deterministic. See [Project status](../project/status.md).
+Stable: the graph (`gdgraph`), compact context (`gdctx`), wiki (`gdwiki`) and memory are among the nine modules that `keryx init` enables by default; `orient` and `sync` are commands that work on top of them, not modules. Per-runtime `ctx` hooks are experimental. `wiki enrich` and `memory reflect --narrate` use a model and need a configured [provider](providers.md); everything else here is deterministic. See [Project status](../project/status.md).
 
 ## Reference
 

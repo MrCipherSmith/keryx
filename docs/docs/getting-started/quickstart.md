@@ -248,8 +248,8 @@ a new prompt and reports that error. To get a real answer, connect a provider:
 provider and where keys are stored. [Use a local model](../guides/use-a-local-model.md)
 covers running fully offline.
 
-Every session starts in `ask` mode: the agent asks before it runs a shell
-command or changes a file. [Choose an approval mode](../guides/permission-modes.md)
+A session starts in `ask` mode unless a launch flag or a saved project default
+says otherwise: the agent asks before it runs a shell command or changes a file. [Choose an approval mode](../guides/permission-modes.md)
 explains the other modes.
 
 ## What you have now
@@ -275,8 +275,11 @@ Modules:
 ```
 
 Your project now has a committed workspace with a code graph, a wiki, a
-decision record and git hooks that keep the graph current. Any agent that
-reads the repository is pointed at `.metaproject/index.md` first.
+decision record and git hooks that keep the graph current. In this checkout,
+Claude Code is pointed at `.metaproject/index.md` first through `CLAUDE.local.md`.
+That file is per checkout and gitignored, so each developer gets it from their
+own `keryx init`. Codex gets the same block in `AGENTS.override.md` once the
+repository has an `AGENTS.md`; the `init` output above says when it skipped one.
 
 ## Reference
 

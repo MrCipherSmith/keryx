@@ -45,9 +45,8 @@ npm install -g @mrciphersmith/keryx
 keryx --version
 ```
 
-```text
-0.3.46
-```
+`keryx --version` prints the installed version, a `0.3.x` number. The newest
+one is on the [releases page](https://github.com/MrCipherSmith/keryx/releases/latest).
 
 !!! warning "Install the scoped name"
     The package is `@mrciphersmith/keryx`. The unscoped name `keryx` on npm
@@ -171,6 +170,9 @@ keryx version check
 Keryx 0.3.46 → 0.3.48
 npm install -g @mrciphersmith/keryx@latest
 ```
+
+The output above is from an older install; yours shows your version and the
+newest one.
 
 A successful answer is cached for 24 hours, a failed one is not retried for 15
 minutes, and each request times out after 2 seconds. Offline or unknown results
