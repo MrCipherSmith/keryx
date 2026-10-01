@@ -14,6 +14,9 @@ import { redactSensitiveText } from "../security/service";
 import {
   type BotApi,
   BotApiError,
+  type BotChatInfo,
+  type BotChatMemberInfo,
+  type BotIdentity,
   type BotUpdate,
   type GetUpdatesParams,
   type SendMessageParams,
@@ -128,7 +131,7 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       const timeoutSec = params.timeoutSec ?? 0;
       const body: Record<string, unknown> = {
         timeout: timeoutSec,
-        allowed_updates: ["message", "callback_query"],
+        allowed_updates: ["message", "callback_query", "my_chat_member"],
       };
       if (params.offset !== undefined) {
         body.offset = params.offset;
@@ -171,6 +174,15 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
         body.text = params.text;
       }
       await call<boolean>("answerCallbackQuery", body);
+    },
+    async getMe() {
+      return call<BotIdentity>("getMe", {});
+    },
+    async getChat(params) {
+      return call<BotChatInfo>("getChat", { chat_id: params.chatId });
+    },
+    async getChatMember(params) {
+      return call<BotChatMemberInfo>("getChatMember", { chat_id: params.chatId, user_id: params.userId });
     },
   };
 }

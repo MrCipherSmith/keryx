@@ -27,6 +27,100 @@ export function remoteRoutePath(route: RemoteRoute): string {
   return `${REMOTE_API_PREFIX}/${route}`;
 }
 
+// ---- channels (flow 377) ---------------------------------------------------------
+//
+// The shell connects Telegram by asking the local serve, over the same loopback
+// shell-token plane. These routes exist on every serve that minted a shell token,
+// whether or not remote control is configured yet. The BOT TOKEN is not in any of
+// them: the shell writes it to disk itself and serve reads it from there. What does
+// travel is not secret (a pairing code, a user id, a group id, a machine name).
+
+export type ChannelsRoute =
+  | "channels-status"
+  | "channels-pair"
+  | "channels-pairing"
+  | "channels-cancel"
+  | "channels-reload"
+  | "channels-test"
+  | "channels-disconnect";
+
+export const CHANNELS_ROUTE_METHODS: Readonly<Record<ChannelsRoute, "GET" | "POST">> = {
+  "channels-status": "GET",
+  "channels-pair": "POST",
+  "channels-pairing": "GET",
+  "channels-cancel": "POST",
+  "channels-reload": "POST",
+  "channels-test": "POST",
+  "channels-disconnect": "POST",
+};
+
+export function channelsRoutePath(route: ChannelsRoute): string {
+  return `${REMOTE_API_PREFIX}/${route}`;
+}
+
+export type TelegramChannelState =
+  /** Nothing is configured on this machine. */
+  | "not-connected"
+  /** A pairing is waiting for the operator. */
+  | "pairing"
+  /** The hub is polling. */
+  | "connected"
+  /** Configured, but the hub is not running (another poller owns the token, a bad config ...). `reason` says why. */
+  | "off";
+
+export interface ChannelsStatusResponse {
+  schemaVersion: string;
+  /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
+  machine: string;
+  telegram: {
+    state: TelegramChannelState;
+    reason?: string;
+    /** Registered sessions, i.e. open topics. */
+    sessions: number;
+  };
+}
+
+export type PairingState = "waiting-for-user" | "waiting-for-group" | "ready" | "failed" | "expired" | "cancelled";
+
+export interface PairingResponse {
+  schemaVersion: string;
+  state: PairingState;
+  /** One-time code the operator sends the bot in a private message. Present until the user is paired. */
+  code?: string;
+  botUsername?: string;
+  /** Epoch ms after which the code stops working. */
+  expiresAt: number;
+  /** Set once a private message carried the code. Not secret. */
+  userId?: number;
+  /** Set once the bot was added to a group by that user. Not secret. */
+  chatId?: number;
+  chatTitle?: string;
+  /** What is still missing in the group ("topics are off", "the bot may not manage topics"). Empty when ready. */
+  problems: string[];
+  /** Why the pairing failed, for `failed`. */
+  reason?: string;
+}
+
+export interface ChannelsReloadResponse {
+  schemaVersion: string;
+  state: TelegramChannelState;
+}
+
+export interface ChannelsTestResponse {
+  schemaVersion: string;
+  delivered: true;
+  machine: string;
+}
+
+export interface ChannelsDisconnectResponse {
+  schemaVersion: string;
+  /** Topics deleted, and topics Telegram would not delete (they stay in the group). */
+  deleted: number;
+  remaining: number;
+  /** False when serve had no running hub, so it could not reach the topics: they stay in the group. */
+  hubWasRunning: boolean;
+}
+
 /** Every body is small: a line, a reply, a prompt. Bigger is refused before it is parsed. */
 export const MAX_REMOTE_BODY_BYTES = 64 * 1024;
 export const MAX_PROJECT_CHARS = 256;

@@ -76,6 +76,11 @@ export type BusyDispatchTarget =
    */
   | "remote-control"
   /**
+   * `/channels` (flow 377): connect, test or disconnect Telegram for this machine. It talks to
+   * `keryx serve` and the user-global config, never to the main turn, so it works while one runs.
+   */
+  | "channels"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
@@ -130,6 +135,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/product") return "product";
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/remote-control") return "remote-control";
+  if (commandName === "/channels") return "channels";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
   if (commandName === "/external-diff") return "external-diff";
