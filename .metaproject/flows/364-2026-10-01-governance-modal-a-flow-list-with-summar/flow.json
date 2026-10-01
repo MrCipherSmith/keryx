@@ -8,15 +8,48 @@
   "id": "364",
   "slug": "governance-modal-a-flow-list-with-summar",
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T08:51:09.936Z",
+  "updatedAt": "2026-10-01T10:05:07.209Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T10:04:33.923Z",
+      "note": "src/governance/flow-narrative.ts summarizeEffect/summarizeWork, wired in aggregate.ts; no model. flow-narrative.test.ts (stated, hint-only, no-section, empty-section, unreadable, prose/numbered after review) and report.test.ts 'flow 364 AC1' + 'review T-007' (a stored report without the fields loads and reads not recorded). CI green at 8cb9cff7."
+    },
+    "AC2": {
+      "at": "2026-10-01T10:04:34.095Z",
+      "note": "renderGovernanceMarkdown prints summary: and effect: under every flow (report.ts); flow-narrative.test.ts 'AC2' asserts both lines and the not-recorded case; keryx governance --help documents it (cli.test.ts rich-help pin)."
+    },
+    "AC3": {
+      "at": "2026-10-01T10:04:34.277Z",
+      "note": "governance-inspector.ts opens on a Flows tab (open first, newest first) with summary and effect; up/down select and the selection is kept visible (revealSelection); Report tab kept; r re-runs. governance-inspector.test.ts 'flow 364 AC3' and the Report-tab AC3 tests; governance-flows.test.ts flowEntriesFrom."
+    },
+    "AC4": {
+      "at": "2026-10-01T10:04:34.438Z",
+      "note": "evaluateCompletionGates is the one gate function complete() and checkComplete() call (service.ts); keryx flow check-complete is routed (group-subcommands.ts) and reports merge state merged/open/closed/not-found/no-pr/unknown. check-complete.test.ts: flow.json byte-identical after a passing and a failing check, a token checked not spent, complete records the same gates, merge mapping incl. direct merge and a throwing tracker, real-CLI routing. Review round 1 found complete() unchanged line by line."
+    },
+    "AC5": {
+      "at": "2026-10-01T10:04:34.589Z",
+      "note": "c (and a click on the action row) runs the check for an open flow, never for a done one; the result lists merge state and every gate with its detail and a fix command (completionFixHint). governance-inspector.test.ts AC5-AC7, 'review T-005' (click), AC3 (c on done does nothing); check-complete.test.ts AC5 hints."
+    },
+    "AC6": {
+      "at": "2026-10-01T10:04:34.756Z",
+      "note": "closeOffer: only on a passing check of a merged PR (or verified direct merge), not older than the listed flow; d asks for the id typed back, any other key cancels; confirmation-required flows are pointed at keryx flow confirm. Enter re-checks the live flow first. governance-flows.test.ts closeOffer cases; governance-inspector.test.ts AC5-AC7, 'review L-001' (id 312), 'review L-003', 'review round 2'."
+    },
+    "AC7": {
+      "at": "2026-10-01T10:04:34.912Z",
+      "note": "runClose shows the real flow complete result (closed, or each failed gate) and re-runs the report (runner.start). governance-inspector.test.ts AC5-AC7 asserts the closed line and the report run."
+    },
+    "AC8": {
+      "at": "2026-10-01T10:04:35.074Z",
+      "note": "All listed areas have tests: flow-narrative.test.ts (extraction), report.test.ts (stored-report compatibility), check-complete.test.ts (no-write, merge mapping), governance-flows.test.ts and governance-inspector.test.ts (close visibility: not done, passed, merged, stale, confirmation required; inputBlocked never checks or closes, incl. with a confirmation open). CI green at 8cb9cff7."
+    }
+  },
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/821"
   },
@@ -302,6 +335,60 @@
       "at": "2026-10-01T08:51:09.936Z",
       "event": "task-done",
       "detail": "T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005"
+    },
+    {
+      "at": "2026-10-01T10:04:33.923Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/governance/flow-narrative.ts summarizeEffect/summarizeWork, wired in aggregate.ts; no model. flow-narrative.test.ts (stated, hint-only, no-section, empty-section, unreadable, prose/numbered after review) and report.test.ts 'flow 364 AC1' + 'review T-007' (a stored report without the fields loads and reads not recorded). CI green at 8cb9cff7. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.095Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: renderGovernanceMarkdown prints summary: and effect: under every flow (report.ts); flow-narrative.test.ts 'AC2' asserts both lines and the not-recorded case; keryx governance --help documents it (cli.test.ts rich-help pin). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.277Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: governance-inspector.ts opens on a Flows tab (open first, newest first) with summary and effect; up/down select and the selection is kept visible (revealSelection); Report tab kept; r re-runs. governance-inspector.test.ts 'flow 364 AC3' and the Report-tab AC3 tests; governance-flows.test.ts flowEntriesFrom. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.439Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: evaluateCompletionGates is the one gate function complete() and checkComplete() call (service.ts); keryx flow check-complete is routed (group-subcommands.ts) and reports merge state merged/open/closed/not-found/no-pr/unknown. check-complete.test.ts: flow.json byte-identical after a passing and a failing check, a token checked not spent, complete records the same gates, merge mapping incl. direct merge and a throwing tracker, real-CLI routing. Review round 1 found complete() unchanged line by line. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.589Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: c (and a click on the action row) runs the check for an open flow, never for a done one; the result lists merge state and every gate with its detail and a fix command (completionFixHint). governance-inspector.test.ts AC5-AC7, 'review T-005' (click), AC3 (c on done does nothing); check-complete.test.ts AC5 hints. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.756Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: closeOffer: only on a passing check of a merged PR (or verified direct merge), not older than the listed flow; d asks for the id typed back, any other key cancels; confirmation-required flows are pointed at keryx flow confirm. Enter re-checks the live flow first. governance-flows.test.ts closeOffer cases; governance-inspector.test.ts AC5-AC7, 'review L-001' (id 312), 'review L-003', 'review round 2'. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:34.912Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: runClose shows the real flow complete result (closed, or each failed gate) and re-runs the report (runner.start). governance-inspector.test.ts AC5-AC7 asserts the closed line and the report run. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:35.074Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: All listed areas have tests: flow-narrative.test.ts (extraction), report.test.ts (stored-report compatibility), check-complete.test.ts (no-write, merge mapping), governance-flows.test.ts and governance-inspector.test.ts (close visibility: not done, passed, merged, stale, confirmation required; inputBlocked never checks or closes, incl. with a confirmation open). CI green at 8cb9cff7. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:04:59.481Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T10:05:07.208Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-01T10:05:07.209Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -334,5 +421,160 @@
     "value": "MrCipherSmith",
     "basis": "stated",
     "source": "`--owner` flag on `flow owner set`"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T10:04:33.923Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.095Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.277Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.438Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.589Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.756Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:34.912Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:04:35.074Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    },
+    {
+      "at": "2026-10-01T10:05:07.209Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2",
+      "headCommit": "2cb71f1a994dfcf402862b4e28a84c23b983db01"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T10:05:07.208Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "10 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2"
+    }
+  ]
 }
