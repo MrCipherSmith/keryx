@@ -80,7 +80,7 @@ keryx doctor
   ! version: keryx 0.3.46 → 0.3.48 is available
       fix: npm install -g @mrciphersmith/keryx@latest
   ✓ bun: Bun 1.4.2 (floor >=1.3.14)
-  ✓ ripgrep: rg at /opt/homebrew/bin/rg
+  ✓ ripgrep: rg at <path>/rg
   ✓ sandbox: Seatbelt (sandbox-exec) available
   ✓ providers: 1 provider(s) configured: rapid-mlx
   ✓ mcp: 0 server(s) configured; run `keryx mcp doctor` to also check connectivity
@@ -95,7 +95,7 @@ keryx doctor
 
 $ keryx gdgraph build
 gdgraph build complete: 3 nodes, 2 edges
-summary: /private/tmp/claude-502/-Users-Goodea-goodea-keryx/84206f62-f154-4a1f-b114-025e8973227d/scratchpad/t12-quickstart/fresh/demo/.metaproject/data/gdgraph/artifacts/summary.md
+summary: <scratch>/t12-quickstart/fresh/demo/.metaproject/data/gdgraph/artifacts/summary.md
 [exit 0]
 
 $ keryx gdgraph affected src/price.ts
@@ -168,7 +168,7 @@ Results: 1
 [exit 0]
 
 $ keryx shell --provider fake -p "What does src/cart.ts depend on?"
-  keryx — fake/fake-echo · agent · /private/tmp/claude-502/-Users-Goodea-goodea-keryx/84206f62-f154-4a1f-b114-025e8973227d/scratchpad/t12-quickstart/fresh/demo
+  keryx — fake/fake-echo · agent · <scratch>/t12-quickstart/fresh/demo
   Type a message, or /help for commands.
 
 
@@ -303,3 +303,5 @@ complexity: max 1, 0 above threshold
 No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
 No API keys found in the environment or ~/.local/share/keryx/auth.json. Enter a key in `keryx shell` (/connect) or export e.g. DEEPSEEK_API_KEY / ZAI_API_KEY.
 [exit 1]
+
+# Note: absolute paths in the output above are replaced with <scratch> and <path>; nothing else is edited.

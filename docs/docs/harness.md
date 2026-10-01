@@ -1,59 +1,99 @@
 # The agent harness
 
-The harness is keryx's own agent runtime: the loop that lets a model operate on a
+The harness is Keryx's own agent runtime: the loop that lets a model work on a
 project through controlled tools, with a policy engine above it, an OS sandbox
-below it, and an append-only record of what happened beside it.
+below it, and an append-only record of what happened beside it. `keryx shell`
+is the interactive way in; this page covers the runtime under it.
 
-This page is the feature-level tour. [Architecture](./architecture.md#the-agent-harness-and-the-two-tool-systems)
-has the internals and the seam-by-seam citations; [CLI reference](./cli-reference.md#harness)
-has every flag.
+[Architecture](architecture.md#the-shell-turn-loop) shows where the harness sits
+in the code; the [CLI reference](cli-reference.md#harness) has every flag; the
+[security model](concepts/security-model.md) puts its controls in context.
 
 ## Four doors, one set of rules
 
 | Door | Command | Shape |
 |---|---|---|
-| CLI | `keryx harness run\|exec\|extension\|wave\|replay` | Scriptable, CI-facing, one prompt or one contained command per invocation |
-| JSONL / RPC | `runViaRpc` (`src/harness/rpc.ts`) | The same assembly framed as JSON envelopes, for embedding rather than a CLI verb |
-| Loopback HTTP | `keryx serve` | Authenticated, loopback-bound; a bot or another product drives turns |
-| Interactive | `keryx shell` | A TUI on the same tool registry and the same policy profile |
+| Interactive | `keryx shell` | A terminal UI (or readline) with tools, sessions and approval prompts |
+| CLI | `keryx harness run\|exec\|extension\|wave\|replay` | Scriptable and CI-facing: one prompt or one contained command per invocation |
+| JSON lines | `runViaRpc` in `src/harness/rpc.ts` | The same run framed as JSON envelopes, for embedding rather than a CLI verb |
+| Loopback HTTP | `keryx serve` | Authenticated and loopback-bound; a bot or a browser drives turns |
 
-CLI and RPC delegate to the same `runOffline`, so a transport cannot upgrade a
-decision — framing carries data, the policy engine decides policy. The
-interactive shell runs its own turn loop over the same registry and profile; it
-is a different loop, not a different rulebook.
+The CLI and JSON-lines doors share one run function, so a transport cannot
+upgrade a decision: framing carries data, and the policy engine decides. The
+interactive shell runs its own turn loop over the same tool registry and policy
+profile; it is a different loop, not a different rulebook.
 
 ## Providers
 
-`anthropic`, `ollama`, a deterministic offline `fake`, and the
-OpenAI-compatible gateways: `openrouter`, `deepseek`, `zai`, `zai-coding`,
-`cerebras`, `groq`, `moonshot`, `grok`. `keryx shell` offers the same set through
-its picker, listing each with the environment variable it reads.
+| Provider id | Kind | Credential |
+|---|---|---|
+| `anthropic` | native | `ANTHROPIC_API_KEY` |
+| `openai` | native | `OPENAI_API_KEY` |
+| `gemini` | native | `GEMINI_API_KEY`, or `GOOGLE_API_KEY` |
+| `openai-codex` | native | subscription login: `keryx auth login openai-codex` |
+| `ollama` | native, local | none; loopback endpoint |
+| `fake` | offline | none; replays recorded test transcripts only |
+| `openrouter` | OpenAI-compatible | `OPENROUTER_API_KEY` |
+| `deepseek` | OpenAI-compatible | `DEEPSEEK_API_KEY` |
+| `zai`, `zai-coding` | OpenAI-compatible | `ZAI_API_KEY` |
+| `cerebras` | OpenAI-compatible | `CEREBRAS_API_KEY` |
+| `groq` | OpenAI-compatible | `GROQ_API_KEY` |
+| `moonshot` | OpenAI-compatible | `MOONSHOT_API_KEY` |
+| `grok` | OpenAI-compatible | `XAI_API_KEY`, or subscription login: `keryx auth login grok` |
+| `github-copilot` | OpenAI-compatible | `GITHUB_COPILOT_TOKEN`, or subscription login: `keryx auth login github-copilot` |
+| `rapid-mlx` | OpenAI-compatible, local (macOS only) | none; loopback endpoint |
+| custom | OpenAI-compatible | added through the shell's provider picker |
 
-Swapping the model changes neither the loop, the tool registry, nor the policy.
-The `fake` provider replays a recorded transcript, which is what makes the loop
-testable with no network at all.
+`keryx shell` offers the same set in its picker, with the variable each one
+reads; keys entered there are stored owner-only in your per-user config
+directory. [Connect a model provider](guides/connect-a-provider.md) covers each
+path.
 
-Every full adapter (`anthropic`, `openai`, `gemini`, the OpenAI-compatible
-engine behind the gateways above) normalizes to the same event stream, and a
-shared contract test (`src/harness/provider/stream-contract.test.ts`) pins
-three cases identically across all four: a stream that ends mid tool-call
-(a `provider_error` naming the pending call, never a synthesized result), an
-in-stream error envelope (classified into the same retry taxonomy a pre-2xx
-failure gets), and a tool call the provider sent with no id (a synthetic id,
-unique within the response, so two same-named calls never collide).
+Choosing a provider never opens a connection. A hosted provider with no
+credential resolves to the offline `fake` provider instead of attempting a call,
+so a missing key fails closed:
+
+```bash
+keryx harness run --provider fake --model fake "hello"
+```
+
+```text
+{"events":[],"text":"","completion":{"status":"failed","passed":false,"reason":"FakeProvider: no transcript matches request hash …"},"evidence":[]}
+```
+
+Swapping the model changes neither the loop, the tool registry nor the policy.
+Every full adapter normalizes to the same event stream, and one shared contract
+test pins three edge cases identically across them: a stream that ends in the
+middle of a tool call (an error naming the pending call, never an invented
+result), an error inside the stream (classified like an error before it), and a
+tool call with no id (a synthetic id, unique within the response).
+
+## Turn budgets
+
+Each user turn in `keryx shell` is bounded so a confused model cannot loop:
+
+| Limit | Default | Override |
+|---|---|---|
+| Model round trips per user turn (one request and response, possibly with several tool calls) | 40 | `KERYX_AGENT_MAX_ROUNDS`, capped at 200 |
+| Attempts of an identical tool call (same tool, same normalized input) | 3 | `KERYX_AGENT_MAX_ATTEMPTS_PER_HASH`, capped at 10 |
+
+Up to three subagents from one turn run at the same time.
+
+The limit counts rounds, not distinct tool calls, so a large task that does many
+different things in few rounds is not cut short. Once a turn has used 80% of a
+limit, the model is told how much is left and asked to return its result.
 
 ## Sessions
 
-Sessions are **per project** — isolated by git root, or by absolute cwd outside a
-repository — and durable on disk as JSONL:
+Sessions are **per project**, keyed by the git root (or the absolute directory
+outside a repository), and stored on disk as JSONL:
 
-- `context.jsonl` — the model window a resume loads
-- `archive.jsonl` — the full audit log, which survives `/compact`
+- `context.jsonl`: the model window a resume loads.
+- `archive.jsonl`: the full log, which survives `/compact`.
 
-User messages and tool results are checkpointed immediately; streamed assistant
-text is journaled at most every 300 ms and is flushed when a turn ends or is
-interrupted. An interrupted turn therefore remains resumable with its latest
-partial answer.
+User messages and tool results are written immediately; streamed assistant text
+is written at least every 300 ms and when a turn ends or is interrupted, so an
+interrupted turn can be resumed with its latest partial answer.
 
 ```bash
 keryx shell -c                 # continue the last session in this project
@@ -64,58 +104,64 @@ keryx sessions export <id>     # Markdown transcript
 keryx sessions path            # where they live on disk
 ```
 
-**Forking** creates a new session that starts from the source's context *and*
-archive, with `parentSessionId` recording where it came from. The copy is a copy:
-writing to the fork never touches its source, so you can take a conversation in a
-second direction without losing the first. Merging branches is deliberately out of
-scope.
+**Forking** creates a new session that starts from the source's context and
+archive and records its parent. Writing to the fork never touches the source.
+Merging branches back is out of scope.
 
-Compaction (`/compact`) shortens the model window and keeps the archive intact —
-an entry never disappears; the compactor raises `EvidenceDeletionError` if one
-would.
+`/compact` shortens the model window and keeps the archive intact; compaction
+fails rather than drop an archived entry.
 
 ## The policy engine — three answers, not two
 
-`allow`, `ask`, `deny` over seven risk classes: read, write, shell, network,
-credential, delegate, destructive. Path and command rules sit underneath. Shell
-and destructive actions are default-deny.
+The policy engine answers `allow`, `ask` or `deny` for each action, by risk
+class: read, write, shell, network, credential, delegate, destructive. Path and
+command rules sit underneath. Shell and destructive actions are denied by
+default.
 
-Four properties are worth knowing before you rely on it:
+Four properties hold everywhere:
 
-1. **A hard deny is terminal.** No approval, role, or interactivity flips it.
-2. **An approval authorizes exactly one action**, bound to that action's
-   fingerprint, and a single-use grant is spent once consumed.
-3. **Headless never silently allows.** An `ask` with no live approver becomes a
-   `deny`, which is why a remote turn's recorded denial is correct rather than
-   incidental.
-4. **Structural safety runs before policy.** `guardAction` refuses malformed or
-   unsafe shapes ahead of any allow/ask/deny question.
+1. **A deny is final.** No approval, role or interactivity overturns it.
+2. **An approval covers one action**, bound to that action's fingerprint, and a
+   single-use grant is spent once used.
+3. **Headless never silently allows.** An `ask` with nobody to answer becomes a
+   `deny`. That is why a remote turn's recorded denial is correct, not an
+   accident.
+4. **Structural checks run first.** Malformed or unsafe action shapes are
+   refused before the allow, ask or deny question is asked.
+
+The engine also denies any write to a flow's state file, even with a matching
+approval. Flow state changes only through `keryx flow` commands.
 
 ## Interactive session: ask / trust / auto
 
-The properties above are unconditional — they hold for `keryx harness run`,
-`keryx harness exec`, and `keryx serve` no matter what. `keryx shell` sits on
-top of that same approval gate and adds a **session-level convenience layer**
-with three modes: `ask` (default, unchanged), `trust` (safe calls run without
-asking; a destructive one still asks), and `auto` (nothing asks except a
-credentials-touching command, which no mode ever auto-approves). Set it with
-`keryx shell --trust`/`--auto`, or the `/mode` command once inside a session.
-Full reference, including exactly where the per-project default is stored:
-[Choose an approval mode](guides/permission-modes.md).
+The properties above hold for `keryx harness run`, `keryx harness exec` and
+`keryx serve` unconditionally. `keryx shell` adds a session-level layer on top
+with three modes: `ask` (the default: shell commands, subagents and destructive
+calls ask first), `trust` (only destructive calls ask) and `auto` (nothing asks
+except a command touching Keryx's own credential files, which no mode
+auto-approves). Set it with `keryx shell --trust` or `--auto`, or with `/mode`
+inside a session. [Choose an approval mode](guides/permission-modes.md) is the
+full reference.
 
-This layer never reaches `harness run`/`harness exec`/`keryx serve` or the
-MCP server — property 3 above (**headless never silently allows**) is
-untouched by it.
+The modes never reach `harness run`, `harness exec`, `keryx serve` or the MCP
+server, so "headless never silently allows" is untouched by them.
 
 ## Containment underneath
 
-The OS sandbox sits *below* the policy engine — Seatbelt on macOS, bubblewrap on
-Linux — and is reached through `keryx harness exec`:
+The OS sandbox sits below the policy engine: Seatbelt on macOS, `bubblewrap` on
+Linux. `keryx harness exec` runs one command inside it, and refuses to start a
+real process at all without `--allow-real-subprocess`:
 
 ```bash
-keryx harness exec --allow-env HOME --max-runtime-ms 30000 \
+keryx harness exec --allow-real-subprocess --allow-env HOME --max-runtime-ms 30000 \
   --allowed-domains api.example.com --mask-env TOKEN@api.example.com \
   --tls-terminate -- ./script.sh
+```
+
+Without the flag nothing starts:
+
+```text
+keryx harness exec refuses to spawn a real subprocess without --allow-real-subprocess (or KERYX_ALLOW_REAL_SUBPROCESS=1); no process was started.
 ```
 
 | Capability | macOS | Linux |
@@ -124,48 +170,43 @@ keryx harness exec --allow-env HOME --max-runtime-ms 30000 \
 | Network off/on | yes | yes |
 | Domain allowlist, credential masking, TLS termination | yes | **refuses to run** |
 
-The Linux refusal is the point. A domain allowlist that quietly became "all
-network" would be worse than one that says it cannot run, so a
-`network: "restricted"` profile fails closed there — and it does so at the spawn
-point, which means `KERYX_SANDBOX_ALLOW_UNSANDBOXED` cannot reach it. That escape
-hatch still covers the case it was written for: a missing launcher, where running
-uncontained is a degradation an operator knowingly accepts.
-
-See [Limitations](./limitations.md#platform-support) for the full platform matrix.
+A domain allowlist that quietly became "all network" would be worse than one
+that says it cannot run, so a restricted-network run fails closed on Linux, at
+the point where the process is spawned. `KERYX_SANDBOX_ALLOW_UNSANDBOXED` cannot
+change that; it only covers a missing launcher. Shell commands in
+`keryx shell` are not sandboxed unless `KERYX_SANDBOX_SHELL` is set; see the
+[security model](concepts/security-model.md#os-sandbox) and
+[Limitations](limitations.md#platform-support).
 
 ## Evidence, redaction, and the completion gate
 
-Every recorded tool result is scanned and redacted **before** it is persisted. A
-failed scan blocks persistence entirely and emits only a reason — no preview, no
-hash, no category. The scanner is the same deterministic floor `keryx security
-scan` reports from: rules plus entropy, over the committed evaluation corpus.
+Every recorded tool result is scanned and redacted **before** it is stored. A
+result that fails the scan is not stored at all; only the reason is, with no
+preview, hash or category. The scanner is the same deterministic one
+`keryx security scan` uses. Session history is append-only and
+content-addressed.
 
-Session history is append-only and content-addressed; entries are deep-frozen.
+The completion gate decides whether a run passed. It passes only when all of
+these hold:
 
-The completion gate is the single authority on whether a run passed. It reaches
-`pass` only when **all** of these hold:
+- every required gate reports `pass`;
+- every required piece of evidence is present;
+- no undisposed blocker remains;
+- a final message was produced.
 
-- every required gate reports `pass`
-- every required evidence ref is present
-- no undisposed blocker remains
-- a final message was emitted
+A final message alone never passes. A run driven by a flow supplies its
+required gates and evidence from the flow's frozen criteria; an ad-hoc run with
+no requirements is judged on the last two.
 
-A final message alone never passes. The caller supplies the first two — a run
-driven by a flow with frozen acceptance criteria states what it must show — and a
-run with no requirements stated evaluates the last two, which is the right default
-for an ad-hoc run with no flow behind it.
-
-The gate **reports**; it never advances flow state itself. The single route from a
-gate verdict into Task Manager is `ManagedFlowPort.completeFromGate`, and the
-harness never writes `flow.json` — the policy engine denies that target even with
-a matching approval.
+The gate **reports**; it never advances flow state itself. One port carries a
+gate verdict into the task manager, and it performs no file write of its own.
 
 ## Child agents with budgets
 
-Dispatch runs over the canonical `subagent-dispatch` / `subagent-result`
-contracts, with a token budget per child and bounded parallel scheduling. The
-child path accepts no `FlowService` and no filesystem handle, so nothing in it can
-reach flow state structurally.
+Subagents are dispatched over the `subagent-dispatch` and `subagent-result`
+contracts, each with a token budget, under bounded parallel scheduling and a
+narrower credential scope than the parent. The child path is given no handle to
+flow state or the filesystem, so it cannot change flow state.
 
 ```bash
 keryx agents monitor <events-file>    # offline fleet report over a recorded log
@@ -173,156 +214,80 @@ keryx agents monitor <events-file>    # offline fleet report over a recorded log
 
 ## External children: a vendor CLI as a child agent
 
-keryx can hand a bounded, **read-only** piece of work (or, for `claude-cli` and `codex-cli`, a
-[reviewed write](guides/external-agent-write.md)) to a coding CLI you already
-have installed — `codex exec`, `claude -p`, or Google's Antigravity CLI (`agy -p
---output-format stream-json`) — as a child of this same harness. The vendor's own
-client authenticates itself from its own configuration and does the work on your
-subscription; keryx supplies the isolation, the budget, the supervision and the
-completion. Three line-stream agents ship this way, plus one ACP agent (below),
-described as data in one registry, with a pure codec each owning that CLI's argv,
-its event vocabulary and its failure classification.
+Keryx can hand a bounded piece of work to an agent CLI you already have
+installed and logged into, as a child of this harness. The CLI authenticates
+itself from its own configuration and works on your subscription; Keryx
+supplies the isolation, the budget, the supervision and the completion. Each
+agent is one registry entry with its own command-line arguments, event parser
+and failure classification.
 
-The whole layer is verified offline against recorded transcripts in
-`fixtures/external/`, on a machine with neither CLI installed; `antigravity-cli`
-additionally has one committed real run,
-`fixtures/external/live/antigravity-cli/2026-09-28/`, produced through
-`keryx agents external run antigravity-cli` itself, not by hand.
+| Agent id | Transport | Write mode | Live run recorded |
+|---|---|---|---|
+| `claude-cli` | line stream | yes, reviewed | completed with version 2.1.280 |
+| `codex-cli` | line stream | yes, reviewed; needs ≥ 0.159.2 and < 0.160.0 | 0.159.0, failure path only (usage limit) |
+| `antigravity-cli` | line stream | refused | completed with version 1.2.12 |
+| `gemini-acp` | ACP, with Keryx as the client | through ACP file requests | none |
 
-#### `agy` — install, login, consent, data collection
+The default tests replay recorded transcripts offline. The live transcripts
+are in `fixtures/external/live/`, each with its version.
+`KERYX_LIVE_EXTERNAL=1` runs tests against real processes.
 
-Google's Antigravity CLI is a third one-way line-stream agent, reached through
-its own documented headless print mode. It needs three things beyond the
-generic switch above before its first dispatch:
+### Turning it on
 
-1. **Install `agy`** and complete **one interactive login** — exactly the login
-   an operator would do to use it by hand. keryx never opens `~/.gemini/` or any
-   other Google credential store, not even to check whether a login exists; the
-   subscription is reached only by running your own logged-in binary.
-2. **One-time consent.** Google's Antigravity CLI sends prompts and agent
-   actions ("Interactions") to Google **by default**. The first dispatch, at a
-   real terminal, shows this plainly and asks you to accept it; the answer is
-   recorded once at `externalAgents.consent["antigravity-cli"]` in the keryx
-   user config and never asked again. A non-interactive dispatch with no
-   recorded consent is refused (`consent-required`) rather than assuming "yes"
-   on your behalf.
-3. **`antigravity-cli` ships on the `/external` block-list by default**
-   (`external-providers.json`), for the same reason as the consent text: Google
-   collects prompts and agent actions by default. `/external off` (or `keryx
-   external off`) refuses a dispatch to it before anything spawns, with the
-   same `ExternalBlockedError` a blocked LLM provider already gets.
+External agents are off by default. `keryx agents external enable` turns them on
+for your user; inside a project, the project must also opt in with
+`keryx init --external-agents`. Above both sits a hard disable that no
+configuration changes: the capability refuses on a remote transport or when a
+CI marker is set. Every refusal names its reason.
 
-Both gates hold on every path that starts `agy`: `keryx agents external run`
-and a model-initiated dispatch (`/delegate`, `spawn_subagent`) alike. Only
-`run` at a real terminal can ask for consent; every other path refuses until
-it has been given once there.
+`antigravity-cli` needs more before its first run. Its CLI sends prompts and
+agent actions to its vendor by default, so the first dispatch at a real
+terminal asks for your consent and records it; a non-interactive dispatch
+without recorded consent is refused. It is also on the default
+[`/external`](concepts/security-model.md#network-egress-and-external) block
+list. In headless mode it denies any tool call it cannot ask about and still
+reports success; Keryx reads those denials and reports the run as `Denied`.
 
-**Tools need an allow-rule in `agy`'s own settings.** Headless mode cannot ask
-you to approve a tool call, so `agy` auto-denies one (a shell command, for
-example) and still reports success, often with an empty answer. keryx reads
-the denials `agy` lists on its final result and reports the run as `Denied`,
-naming each denied action. To let a tool through, add a
-`permissions.allow` rule for it in `agy`'s `settings.json`. keryx never passes
-`--dangerously-skip-permissions`, even though `agy` suggests it.
+### Keryx does not check your login
 
-**Read-only only.** `worktree-write` is a registry-valid contract value `agy`
-itself supports, and keryx refuses it with `not-implemented`. A live test showed
-that `agy`'s file-edit tool writes outside the working directory (to `/tmp` and
-into `.git/hooks`), and that its headless shell is auto-denied only for commands,
-not for file edits. Of the line-stream agents only `claude-cli` and `codex-cli`
-can write (see [Write mode for `claude-cli` and
-`codex-cli`](#write-mode-for-claude-cli-and-codex-cli)), plus the ACP agent below.
+Keryx never opens an agent's credential store, not even to test whether a login
+exists. Availability comes from `--version` and exit codes only, so it has
+three states: installed, not installed and not probed.
+`keryx agents external list` says "login not verified — keryx cannot know". A
+version outside the recorded range is a warning, not a refusal; the count of
+unrecognised output lines per run is the drift signal.
 
-### Off by default, hard disabled where it matters
+### What the child gets
 
-The switch that always applies is `externalAgents.enabled: true` in the user
-config (`~/.local/share/keryx/auth.json`) — user-global, because a subscription
-belongs to a person rather than to a checkout. Inside a `.metaproject/`
-workspace the project must also have opted in, with `keryx init
---external-agents`; outside one — and `keryx shell` runs anywhere — the
-user-global switch is the whole story, because a workspace that does not exist
-cannot hold an opinion.
+The child runs in a **disposable git worktree** at `HEAD`, removed on every
+exit path. Your uncommitted work travels in the prompt as a diff; if the prompt
+is too long, the diff is cut, never the task, and the cut is stated.
 
-Above both sits a **hard disable** no configuration can flip: the capability
-refuses outright on a remote transport, or when a CI marker is set. A
-subscription reachable over a channel that reaches other people is the one thing
-the vendors' terms unambiguously forbid, so that check runs before the config is
-even read. Every refusal, on every layer, carries its own sentence — a silent
-no-op would leave you believing an agent ran.
+The environment is copied from the parent and then stripped: `ANTHROPIC_*`,
+`CLAUDECODE`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, the `CLAUDE_CODE_*` and
+`KERYX_*` namespaces, and every credential-shaped variable (`SSH_AUTH_SOCK`,
+`GIT_ASKPASS`, cloud credential files, `GITHUB_TOKEN`, other providers' keys),
+except the key the target CLI signs in with (`OPENAI_API_KEY`,
+`GEMINI_API_KEY`, `GOOGLE_API_KEY`). A nesting marker stops a Keryx started
+inside a child from starting another. A read-only `claude-cli` child gets only
+the read, grep and glob tools and no MCP servers.
 
-### keryx does not know whether you are logged in
-
-It never opens a vendor credential store — not `~/.codex/auth.json`, not
-Claude's, **not even to test whether a login exists**. Availability comes from
-`--version` and exit codes and nothing else, so it has three states — installed,
-not installed, and *not probed* — and the third is a real answer rather than a
-placeholder. There is no tick and no "ready": `keryx agents external list` reads
-*"installed, 0.147.0 (within the recorded range); login not verified — keryx
-cannot know"*, and that last clause is the load-bearing half of the line.
-
-A version outside the range the fixtures were recorded against is a **recorded
-warning, never a refusal** — neither CLI publishes a stable event schema, so
-hard-failing would break the feature on the vendor's next release. The count of
-transcript lines the codec did not recognise is the real drift signal, and it is
-reported per run.
-
-**No vendor sanction is claimed.** keryx starts a client you installed and
-already logged into, in the same relationship a terminal multiplexer has with it;
-it obtains, stores, forwards and proxies no token, and consumes no subscription
-tokens of its own. Whether a vendor considers headless third-party orchestration
-of its own CLI acceptable is **not addressed by either vendor's published
-terms**, and it is carried as an open risk rather than a settled question — see
-the package's decisions (`docs/requirements/keryx-external-agent-runtime/decisions.md`
-D-01) and security policy (`docs/requirements/keryx-external-agent-runtime/security-policy.md`
-§7).
-
-### What the child gets, and how it is asked for
-
-The child runs in a **disposable git worktree** checked out at `HEAD`, removed on
-every terminal path including a thrown error. Your uncommitted work travels in
-the prompt as a diff, since that worktree does not contain it; on overflow the
-diff is what gets cut — never the directive, never the task — and the cut is
-stated inside the prompt. The environment is copied from the parent and then
-stripped: `ANTHROPIC_*`, `CLAUDECODE`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, and the
-whole `CLAUDE_CODE_*` and `KERYX_*` namespaces, then every credential-shaped
-variable by the same shape rules an MCP server child gets (`SSH_AUTH_SOCK`,
-`GIT_ASKPASS`, cloud credential files, `GITHUB_TOKEN`, other providers' keys) —
-except the key the target CLI signs in with (`OPENAI_API_KEY` for Codex,
-`GEMINI_API_KEY`/`GOOGLE_API_KEY` for Gemini). `agy` gets no exemption at
-all — it has no API-key auth path, only its own subscription login under
-`HOME`, so there is nothing to exempt it FROM. Plus a nesting-depth marker added
-afterwards and honoured **on entry**, so a keryx started from inside an external
-child refuses to start another. The tool roster is restricted: `claude` runs with
-`--tools Read Grep Glob`, an allow-list over the built-in roster rather than a
-permission rule, and an empty strict MCP config. (A `--write` run of `claude-cli`
-adds `Edit` and `Write` to that roster and nothing else. `codex` has no roster; a
-`--write` run of `codex-cli` is confined by an operating-system sandbox instead,
-described under [Write mode](#write-mode-for-claude-cli-and-codex-cli).)
-
-`ANTHROPIC_API_KEY` is stripped to make the subscription *work*, not for secrecy:
-with a key present the CLI initialises normally, retries, and then fails in a way
-that looks like a network problem rather than a configuration one.
-
-Execution is requested through an optional `runtime` block on the canonical
-`subagent-dispatch` contract, which `spawn_subagent` also accepts as an optional
-`runtime` parameter. An absent block means the native runtime, so every dispatch
-authored before this existed stays valid.
+A dispatch asks for this runtime through an optional `runtime` block, which
+`spawn_subagent` also accepts. A missing block means the native runtime.
 
 ```json
 { "kind": "external", "agent": "claude-cli", "sandbox": "read-only" }
 ```
 
-A fail-closed validator enforces the three constraints the JSON Schema cannot —
-the agent resolves in the registry, the sandbox is one that agent's own CLI
-supports, and `read-only` does not contradict the dispatch's `allowed_actions` —
-with distinct refusal codes, because *"this agent cannot"* and *"keryx does not
-do this yet"* are different facts about the world. The hook runs **after**
-admission: the budget ledger and the depth and child caps have already applied,
-so there is no second spawn path and no second ledger.
+The block is validated before anything starts: the agent must exist, the
+sandbox must be one that agent supports, and `read-only` must not contradict
+the dispatch's allowed actions. "This agent cannot" and "Keryx does not do this
+yet" get different refusal codes. The external run starts after admission, so
+the budget ledger and the depth and child caps already apply.
 
 ### From the shell
 
-```
+```text
 /delegate <agent> <task>
 keryx agents external list [--json] [--no-probe]
 keryx agents external probe <id> [--json]
@@ -332,132 +297,76 @@ keryx agents external apply <run-id> [--allow-flagged]
 keryx agents external discard <run-id>
 ```
 
-`list` and `probe` are read-only and spend no quota — the only process either
-starts is `--version`. `run` drives EITHER transport on the same spawn seam,
-worktree and gates: a line-stream (codec) agent (`codex-cli`, `claude-cli`,
-`antigravity-cli`) through its own codec, or an ACP agent (`transport: acp`,
-today `gemini-acp`) with keryx as its ACP **client** — a third transport beside
-the line-stream codecs and the codex MCP supervisor. Its permission questions go
-through keryx's approval gate
-with the mode lowered to `ask`, its `fs/*` requests are served by keryx inside
-the worktree, and its own internal tools stay outside keryx's view — see the
-[ACP client guide](./guides/acp-client.md). Full reference:
-[CLI reference](./cli-reference.md#agents-external).
+`list` and `probe` start only `--version` and spend no quota. `run` drives
+either transport on the same worktree and gates. For an ACP agent, its
+permission questions go through Keryx's approval gate in `ask` mode, and its
+file requests are served inside the worktree; see the
+[ACP client guide](guides/acp-client.md).
 
-External children appear in the subagent sidebar with a `⤳` marker and open a
-modal with three tabs: **Work** (the live structured transcript, folded from the
-vendor's own event stream), **Meta** (agent, model, sandbox, session handle,
-cost, turns, tokens, worktree path, parse skips, warnings) and **Command** (the
-exact launch argv, a copy-pasteable shell form, and how to detach). Missing
-figures render as missing and never as zero; a run that announced no session
-handle says so rather than offering a command that cannot work.
-
-Messages to a running child use the existing queue semantics — `remove`, `edit`,
-`force` — per addressee, and every delivery reports which route it actually took.
-`claude` accepts messages on an open stdin channel, and `keryx shell` launches
-its runs steerable so that channel exists; `codex` has no mid-run input channel
-at all, so its messages can only travel by resume. Steerability is a spawn-time
-decision and cannot be revisited: the flag that accepts a later message also
-forbids the positional prompt a one-shot run starts with, so there is no
-conversion afterwards.
-
-`force` is **kill-plus-resume**, not an abort. Writing to a live stdin would
-queue the message behind the turn already in flight, which is the opposite of
-what `force` asks for, so the run is terminated instead and the resume command is
-recorded. It costs a restart, not the accumulated work — and where no resume
-handle was ever announced it degrades to a plain kill and says plainly that the
-message was not delivered.
-
-**keryx never spawns a resume itself.** It builds the exact resume argv through
-the agent's own codec and shows it in the Command tab; running it in a real
-terminal is yours to do. The worktree is gone by then, and the tab says so.
+In the shell, external children appear in the subagent sidebar with a `⤳`
+marker. Their modal has three tabs: the live transcript, the metadata (agent,
+model, cost, tokens, worktree, warnings) and the exact launch command with how
+to detach. A message to a running child is delivered on its open input channel
+where the CLI has one, or by resume where it does not. `force` stops the run
+and records the resume command; Keryx never spawns a resume itself.
 
 ### Write mode for `claude-cli` and `codex-cli`
 
 `keryx agents external run claude-cli --task "<text>" --write` (or `codex-cli`)
-runs the agent in a throwaway git worktree cut from the current commit. `claude`
-gets only the tools `Read Grep Glob Edit Write` — no shell, no network, no MCP
-server. `codex` has no allow-list; keryx runs it with `-s workspace-write -c
-sandbox_workspace_write.exclude_slash_tmp=true -c
-sandbox_workspace_write.exclude_tmpdir_env_var=true -c
-sandbox_workspace_write.network_access=false --ignore-rules`. Measured live on
-`codex` 0.159.2 in a scratch repository: writes outside the worktree fail
-with "read-only file system", a DNS lookup fails and `.git` is read-only. Without
-the two `exclude_*` flags the default sandbox lets `codex` write to `/tmp`, and
-without `--ignore-rules` the exec-policy rules in your own `codex` configuration can
-run commands outside the sandbox, so keryx always passes all of them. The difference that remains: `codex` keeps a sandboxed shell and can read any
-file your account can read; the network is closed as far as was measured, but the
-content can appear in the run's output, so review the diff and the output before
-applying. keryx refuses a `codex` write run unless the installed `codex` is 0.159.2
-or newer but older than 0.160.0 (an unknown `-c` key is ignored silently, so a newer
-release is refused until keryx has measured it), and a follow-up turn re-asserts the
-same flags. The worktree's diff is
-captured, secret-redacted, hashed (sha256 of the redacted patch) and stored as a
-pending review; nothing reaches your checkout. `keryx agents external review
-<run-id>` shows it. `apply <run-id> [--allow-flagged]` needs a real terminal, shows
-the diff and asks you to type the first 12 hex digits of the patch hash, then
-creates a NEW local branch `external/<run-id>` with one commit, cut from the
-recorded base commit in a second throwaway worktree. Your current branch, index and
-working tree are never touched, a run lands at most once, and nothing is pushed and
-no pull request is opened. `discard <run-id>` drops it. There is no flag or
-environment variable that skips the confirmation, and a caller without a terminal
-lands nothing. In the TUI, `/external-diff` opens a review modal and a sidebar row
-`External diffs: N pending` shows while a diff waits.
+runs the agent in a throwaway worktree cut from the current commit.
 
-The full flow, the refusals and the limits are in
-[Let an external agent write](guides/external-agent-write.md).
+- `claude-cli` gets only read, grep, glob, edit and write tools: no shell, no
+  network, no MCP server.
+- `codex-cli` runs in its own operating-system sandbox with workspace writes
+  only, `/tmp` excluded, network off and your own exec-policy rules ignored.
+  Measured in a scratch repository: writes outside the worktree fail, DNS fails,
+  and `.git` is read-only. It keeps a sandboxed shell that can read any file
+  your account can read, so review the output as well as the diff. Keryx
+  refuses a write run unless the installed version is at least 0.159.2 and
+  older than 0.160.0, because a newer release may ignore an unknown setting
+  silently.
+
+The worktree's diff is captured, secret-redacted, hashed and stored as a
+pending review; nothing reaches your checkout. `review <run-id>` shows it.
+`apply <run-id>` needs a real terminal, shows the diff and asks you to type the
+first 12 hex digits of the patch hash, then creates a new local branch
+`external/<run-id>` with one commit. Your branch, index and working tree are not
+touched, nothing is pushed and no pull request is opened. `discard <run-id>`
+drops it. In the shell, `/external-diff` opens the review.
+
+[Let an external agent write](guides/external-agent-write.md) has the full flow.
 
 ### What this deliberately does not do
 
-- **Write mode is `claude-cli` and `codex-cli` only, and a human is the only
-  review.** `antigravity-cli` still refuses `worktree-write` (its file-edit tool
-  was seen writing outside the working directory) — distinguishable from an agent
-  that cannot do it; Gemini write is not planned. A model review of the diff is not
-  built, there is no auto-approve, and keryx never pushes or opens a pull request
-  from the landed branch. Neither write path has a long live history: the
-  `claude` narrow-permission flags were probed against `claude` 2.1.280, and the
-  `codex` sandbox was measured live on `codex` 0.159.2 in a scratch repository.
-  A read-only `codex` child is launched without `--ignore-rules`, so an exec-policy
-  rule of yours that allows a command can still run it outside the sandbox there.
-- **No supervision triggers.** The specification describes a folded,
-  trigger-driven view of a *running* child for the parent agent. None of it is
-  implemented: the parent receives the child's result and nothing before it.
-- **`/delegate` does not pass the policy engine or the subagent admission
-  ledger.** A recorded, reasoned amendment rather than an oversight; the model's
-  own `spawn_subagent` path passes both.
-- **No resume is ever spawned.** The argv is built and displayed for detaching by
-  hand.
-- **Live-verified, with limits.** A real `claude` 2.1.280 process ran end to end
-  through `keryx agents external run` on 2026-09-29 and ended `Completed`;
-  `antigravity-cli` (`agy` 1.2.12) did the same on 2026-09-28 and again on
-  2026-09-29 (it denies any tool call it cannot ask about, so give it a task that
-  needs no tools). `codex-cli` 0.159.0 was run for real on 2026-09-29 but hit its
-  subscription usage limit, so only the failure path is recorded, not a successful
-  answer. Gemini has never been run. The raw transcripts live in
-  `fixtures/external/live/`, each with its vendor version, and the default tests
-  replay them offline. `KERYX_LIVE_EXTERNAL=1` runs live tests that assert against
-  real processes; they record nothing.
+- **Only two agents write, and a human is the only review.** `antigravity-cli`
+  refuses write mode because its edit tool was seen writing outside the working
+  directory. There is no model review of the diff and no auto-approve.
+- **No supervision of a running child.** The parent receives the child's result
+  and nothing before it.
+- **`/delegate` bypasses the policy engine and the admission ledger.** That is a
+  recorded decision; the model's own `spawn_subagent` path passes both.
+- **No resume is ever spawned.** The command is shown for you to run.
+- **A read-only `codex-cli` child honours your own exec-policy rules**, so a
+  rule that allows a command can still run it outside the sandbox there.
 
 ## Record and replay
 
 ```bash
-keryx harness run --provider anthropic --model <m> --record run.json "<prompt>"
+keryx harness run --provider anthropic --model <model> --record run.json "<prompt>"
 keryx harness replay --record run.json --write-fixture fixture.json
 keryx harness replay --record run.json --fixture fixture.json
 ```
 
-`--record` writes a run's replayable surface: five recomputable hashes — session
-manifest, event log, tool registry, provider transcript, expected terminal state —
-plus the run id, status and time. `replay` builds a fixture from a record and
-validates it, or compares against a fixture you kept. A divergence prints a typed
-mismatch naming the field and exits non-zero.
+`--record` writes a run's replayable surface: five hashes (session manifest,
+event log, tool registry, provider transcript, expected end state) plus the run
+id, status and time. `replay` builds a fixture from a record and validates it,
+or compares it with a fixture you kept. A difference prints the mismatched field
+and exits non-zero.
 
-**This is `validate-log`, and the distinction matters.** It answers "does this
-fixture still describe the run it was built from" — an integrity check. It does
-**not** re-execute anything and cannot tell you whether the same prompt would
-behave the same way today. Nothing is contacted: no provider, no tool, no network.
-Re-execution against recorded results (`simulate-recorded-results`) is not
-implemented.
+This is a **log integrity check**. It answers "does this fixture still describe
+the run it came from". It does not re-execute anything, contacts no provider,
+tool or network, and cannot tell you whether the same prompt would behave the
+same way today.
 
 ## Extensions and waves
 
@@ -466,27 +375,19 @@ keryx harness extension --spec <path>    # one declared extension
 keryx harness wave --spec <path>         # a declared multi-agent wave
 ```
 
-Extension dispatch is the one path that reaches `checkApproval`, so a mutating
+Extension dispatch is the one path that checks stored approvals, so a mutating
 extension needs a grant bound to its action fingerprint.
 
 ## What the harness does not do yet
 
-Stated here rather than left to be discovered:
-
-- **No shipped path registers a tool.** Both production executors are refusals, so
-  `keryx harness run` and `keryx serve` are single text turns today. The
-  interactive shell is where tools actually run.
-- **Remote approvals need a tool registry.** A `keryx serve` turn whose decision is
-  `ask` becomes a durable approval a person answers once, for that call, over HTTP or
-  `keryx approvals`; but the stock listener registers no tools, so it raises none. See
-  [Answer a remote approval](guides/answer-remote-approvals.md).
-- **No real replay.** See above — `validate-log` only.
-- **No branch merge.** Reconcile by forking again from a shared ancestor.
-- **Limited mutating external children, and no supervision of a running one.** The
-  external runtime is read-only except `claude-cli --write` and `codex-cli --write`
-  (reviewed by a human, landed only as a new local branch; little live write
-  history), off by
-  default, and live-verified only for
-  `claude` 2.1.280 and `agy` 1.2.12 (codex-cli: failure path only; Gemini: not at
-  all) — see
-  [what this deliberately does not do](#what-this-deliberately-does-not-do).
+- **No non-interactive path registers a tool.** `keryx harness run` and
+  `keryx serve` complete single text turns. Tools run in `keryx shell`.
+- **Remote approvals need a tool registry.** A `keryx serve` turn whose decision
+  is `ask` becomes a durable approval answered once over HTTP or with
+  `keryx approvals`, but the stock listener registers no tools, so it raises
+  none. See [Answer a remote approval](guides/answer-remote-approvals.md).
+- **No real replay.** Replay checks a log; it does not re-execute.
+- **No branch merge.** Fork again from a shared ancestor instead.
+- **Limited external writes and no supervision.** External agents are read-only
+  except the two reviewed write modes, are off by default, and have little live
+  history; see [what this deliberately does not do](#what-this-deliberately-does-not-do).
