@@ -54,7 +54,27 @@ export interface SessionSummary {
   runMode?: "interactive" | "unattended";
   /** Flow 165 (Slate Phase 5) catch-up field: this session's Course lifecycle state. */
   courseStatus?: "unbound" | "active" | "blocked" | "done";
+  /**
+   * Flow 376 (AC4): this session was driven from Telegram. The topic name and
+   * every interval remote control was on (ISO timestamps; `off` is absent while
+   * it is still on, or when the shell died without turning it off). Written when
+   * `/remote-control` turns it on or off; deleting the topic never touches it.
+   */
+  remote?: SessionRemote;
 }
+
+export interface RemoteInterval {
+  on: string;
+  off?: string;
+}
+
+export interface SessionRemote {
+  name: string;
+  intervals: RemoteInterval[];
+}
+
+/** Intervals kept per session; the oldest are dropped past this. */
+export const MAX_REMOTE_INTERVALS = 50;
 
 export interface SessionHandle {
   summary: SessionSummary;
@@ -288,6 +308,20 @@ function atomicWriteJson(file: string, value: unknown): void {
   atomicWriteText(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+function parseRemote(value: unknown): SessionRemote | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const raw = value as { name?: unknown; intervals?: unknown };
+  if (typeof raw.name !== "string" || !Array.isArray(raw.intervals)) return undefined;
+  const intervals: RemoteInterval[] = [];
+  for (const item of raw.intervals) {
+    if (typeof item !== "object" || item === null) continue;
+    const entry = item as { on?: unknown; off?: unknown };
+    if (typeof entry.on !== "string") continue;
+    intervals.push({ on: entry.on, ...(typeof entry.off === "string" ? { off: entry.off } : {}) });
+  }
+  return { name: raw.name, intervals: intervals.slice(-MAX_REMOTE_INTERVALS) };
+}
+
 function readSummaryFile(file: string): SessionSummary | undefined {
   // `readConfigFile`, not `readFileSync`: a summary is config-sized, and an
   // oversized one aborts the process outright (SIGABRT, no output, uncatchable
@@ -303,6 +337,7 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       return undefined;
     }
     const messageCount = typeof o.messageCount === "number" ? o.messageCount : 0;
+    const remote = parseRemote(o.remote);
     return {
       schemaVersion: SESSION_SCHEMA_VERSION,
       id: o.id,
@@ -319,6 +354,7 @@ function readSummaryFile(file: string): SessionSummary | undefined {
       ...(typeof o.model === "string" ? { model: o.model } : {}),
       ...(typeof o.parentSessionId === "string" ? { parentSessionId: o.parentSessionId } : {}),
       ...(o.runMode === "interactive" || o.runMode === "unattended" ? { runMode: o.runMode } : {}),
+      ...(remote !== undefined ? { remote } : {}),
       ...(o.courseStatus === "unbound" || o.courseStatus === "active" || o.courseStatus === "blocked" || o.courseStatus === "done" ? { courseStatus: o.courseStatus } : {}),
     };
   } catch {
@@ -787,6 +823,47 @@ export function persistCompacted(
   atomicWriteJson(path.join(withCount.dir, "summary.json"), withCount.summary);
   return { handle: withCount, context };
 }
+
+/**
+ * Flow 376 (AC4): remote control was turned ON for this session. Opens a new
+ * interval (one left open by a crashed shell stays without an `off`, so the
+ * record never claims a time nobody observed) and keeps the latest topic name.
+ * Returns the handle to keep; `persistHistory` spreads the summary, so the
+ * field survives later turns. `updatedAt` is not touched: this is not a
+ * conversation turn.
+ */
+export function recordRemoteOn(handle: SessionHandle, name: string, now: string = nowIso()): SessionHandle {
+  const intervals = [...(handle.summary.remote?.intervals ?? [])];
+  intervals.push({ on: now });
+  return writeRemote(handle, { name, intervals: intervals.slice(-MAX_REMOTE_INTERVALS) });
+}
+
+/** Remote control was turned OFF (or the shell closed): closes the open interval. No-op without one. */
+export function recordRemoteOff(handle: SessionHandle, now: string = nowIso()): SessionHandle {
+  const remote = handle.summary.remote;
+  if (remote === undefined) return handle;
+  const last = remote.intervals[remote.intervals.length - 1];
+  if (last === undefined || last.off !== undefined) return handle;
+  const intervals = [...remote.intervals.slice(0, -1), { on: last.on, off: now }];
+  return writeRemote(handle, { name: remote.name, intervals });
+}
+
+function writeRemote(handle: SessionHandle, remote: SessionRemote): SessionHandle {
+  const summary: SessionSummary = { ...handle.summary, remote };
+  atomicWriteJson(path.join(handle.dir, "summary.json"), summary);
+  return { summary, dir: handle.dir };
+}
+
+/** `remote <name>: 2026-10-01 12:00 - 2026-10-01 12:30; ...`; empty for a session never driven remotely. An open interval ends at the dash. */
+export function describeRemote(remote: SessionRemote | undefined): string {
+  if (remote === undefined) return "";
+  const stamp = (iso: string): string => iso.replace("T", " ").slice(0, 16);
+  const spans = remote.intervals.map((i) => `${stamp(i.on)} - ${i.off === undefined ? "" : stamp(i.off)}`.trimEnd());
+  return `remote ${remote.name}: ${spans.join("; ")}`;
+}
+
+/** The one-word list-row mark. */
+export const REMOTE_MARK = "remote";
 
 /**
  * Compact the live model context. Archive is preserved (and grown if needed).

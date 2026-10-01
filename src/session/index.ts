@@ -11,11 +11,14 @@ export {
 export { compactMessages, indexOfKeepFrom, type CompactOptions, type CompactResult } from "./compact";
 
 export {
+  MAX_REMOTE_INTERVALS,
+  REMOTE_MARK,
   SESSION_SCHEMA_VERSION,
   TranscriptUnreadableError,
   UnknownSessionError,
   compactSession,
   createSession,
+  describeRemote,
   exportSessionMarkdown,
   findSession,
   forkSession,
@@ -28,11 +31,15 @@ export {
   openSession,
   persistCompacted,
   persistHistory,
+  recordRemoteOff,
+  recordRemoteOn,
   renameSession,
   shortSessionId,
   titleFromPrompt,
   type OpenSessionOptions,
   type PersistMeta,
+  type RemoteInterval,
   type SessionHandle,
+  type SessionRemote,
   type SessionSummary,
 } from "./store";

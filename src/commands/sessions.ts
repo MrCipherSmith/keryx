@@ -3,6 +3,7 @@
 import {
   TranscriptUnreadableError,
   UnknownSessionError,
+  describeRemote,
   exportSessionMarkdown,
   findSession,
   forkSession,
@@ -58,6 +59,10 @@ export async function sessionsCommand(args: string[]): Promise<void> {
           // identical to an unrelated session hides it.
           (s.parentSessionId !== undefined ? `↳ ${s.title}` : s.title),
       );
+      // Flow 376 (AC4): a session driven from Telegram shows the topic and every interval.
+      if (s.remote !== undefined) {
+        console.log(`${" ".repeat(10)}⇄ ${describeRemote(s.remote)}`);
+      }
     }
     console.log("");
     console.log("Resume: keryx shell -r <id>   Continue last: keryx shell -c");
@@ -204,6 +209,9 @@ List columns: ID, UPDATED, MSGS, LIVE, MODEL, TITLE. LIVE is "live" when a
 shell has the session open, "stale" when its holder stopped heartbeating, and
 blank when no shell holds it. In --json every row carries "live": "live" |
 "stale" | null.
+A session that was driven from a Telegram topic (/remote-control) has a
+"⇄ remote <topic>: <from> - <to>" line under its row, one span per time remote
+control was on; in --json the row carries "remote": { name, intervals }.
 
 Shell:
   keryx shell -c                   Continue the last session no other shell has open

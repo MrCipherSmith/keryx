@@ -348,7 +348,7 @@ keryx sessions list | fork <id> | export <id> | path
 
 | Subcommand | Description |
 |---|---|
-| `list` | Print the sessions recorded for this project, newest first. Forks are marked `↳`. The `LIVE` column reads `live` when a shell has the session open, `stale` when its holder stopped heartbeating, and is blank when no shell holds it. `--json` prints the rows as JSON, each with a `live` field: `"live"`, `"stale"` or `null`. |
+| `list` | Print the sessions recorded for this project, newest first. Forks are marked `↳`. The `LIVE` column reads `live` when a shell has the session open, `stale` when its holder stopped heartbeating, and is blank when no shell holds it. `--json` prints the rows as JSON, each with a `live` field: `"live"`, `"stale"` or `null`. A session that was driven from a Telegram topic has a `⇄ remote <topic>: <from> - <to>` line under its row, one span per time `/remote-control` was on, and its JSON row carries `"remote": { "name", "intervals" }`; the `keryx shell -r` picker marks it `⇄ remote`. |
 | `fork <id>` | Branch a session: a new session with the same history and `parentSessionId` set to the original. `--title "<t>"` names it, `--json` prints the result as JSON. Writing to the fork never touches its source. |
 | `export <id>` | Emit one session in full, for archiving or review. |
 | `path` | Print the directory sessions are stored under. |
@@ -922,6 +922,19 @@ Refusals print their code and exit non-zero (except where noted):
   messages to a running child use the same `/queue` semantics
   (`remove`/`edit`/`force`); `force` here is kill-plus-resume, not an abort. See
   [the harness page](./harness.md#external-children-a-vendor-cli-as-a-child-agent).
+- `/remote-control [name|off|status]` mirrors this session into a topic of a
+  Telegram supergroup. **Off by default**, and it only works when `keryx serve`
+  has remote control configured (see
+  [serve](#remote-control-from-telegram)). `/remote-control <name>` creates the
+  topic (`on` lets `serve` pick `<project>-<short session id>`); `status`, or no
+  argument, prints the state — `off`, `on` or `offline` when `serve` is
+  unreachable — the topic, the last heartbeat and recent events; `off` removes the
+  topic. A line sent from the topic runs as if typed here, shown as `tg ❯` in the
+  transcript and `[tg]` in the queue panel. In the full-screen shell the sidebar
+  row and the `/remote-control` modal (key `o` toggles) show the same state; the
+  readline shell (`--no-tui`) can only print that it is off. Each time it is
+  turned on or off is recorded in the session's history (see
+  [sessions](#sessions)).
 - `keryx shell` supports a hard stop for a running main turn via
   `/interrupt`.
 - Session history is durable during a turn: user input and tool results save
@@ -1794,6 +1807,9 @@ keryx serve config init | set | show
 
 ### Routes
 
+The routes below take the serve bearer token. The `/v1/remote/*` routes, listed
+after them, take a different secret and are not reachable with it.
+
 | Route | Description |
 |---|---|
 | `GET /v1/status` | Listener state, authenticated. |
@@ -1802,6 +1818,49 @@ keryx serve config init | set | show
 | `GET /v1/turns/<id>` | The durable turn record, and its server-sent-event stream. |
 | `GET /v1/approvals` | Pending approvals (`?state=all` adds recently resolved). See [Approvals over serve](guides/answer-remote-approvals.md). |
 | `POST /v1/approvals/<id>` | Answer one approval with `{"decision":"allow"}` or `{"decision":"deny"}`. |
+
+**Remote control routes, shell token only.** These seven exist only when remote
+control is configured (see below), are reached by a running `keryx shell` over a
+loopback connection, and accept the local shell token — a separate secret `serve`
+creates under `remote/` in the user-global directory — and **not** the serve
+bearer token. A caller presenting the wrong one of the two gets the same `404` as
+for a path that does not exist. Bodies are limited to 64 KiB.
+
+| Route | Description |
+|---|---|
+| `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |
+| `POST /v1/remote/deregister` | The shell stops remote control; the topic is deleted. |
+| `POST /v1/remote/heartbeat` | Keeps the session alive; a heartbeat from an unregistered session is refused with a reason. |
+| `POST /v1/remote/reply` | Text for the topic. Replies over 4096 characters are split. |
+| `POST /v1/remote/approval` | Raises an approval question in the topic, with Allow and Deny buttons. |
+| `POST /v1/remote/ack` | The shell confirms it took a delivered line. |
+| `GET /v1/remote/stream?sessionId=<id>` | Server-sent events: the lines typed in the topic, and button answers, for that session. |
+
+### Remote control from Telegram
+
+Configuration for the Telegram transport inside `keryx serve`. It is **off unless
+both files exist and validate**; without them `serve` prints
+`remote control is off: <reason>` and behaves exactly as before. Both live under
+`remote/` in the user-global keryx directory (`~/.local/share/keryx/` on
+Linux and macOS, `%APPDATA%\keryx` on Windows):
+
+- `remote/bot-token` — the token of a separate BotFather bot, on one line, mode
+  600. A file readable by group or others is refused, naming `chmod 600`.
+- `remote/config.json` — a closed schema; an unknown key is an error.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `schemaVersion` | `1` | Required. |
+| `chatId` | integer, not 0 | Required. The supergroup (topics enabled, bot an admin with manage topics) the session topics are created in. |
+| `allowedUserIds` | integer array | Required, non-empty. Telegram user ids whose messages and button presses are accepted; anyone else is ignored and their id and time are appended to `remote/rejected.jsonl`. |
+| `orphanMs` | integer, 1 to 604800000 | Optional, default `600000` (10 minutes). How long a topic is kept after its session stops sending heartbeats, before it is deleted. A heartbeat inside the window cancels the deletion. |
+| `runTimeoutMs` | integer, 1 to 604800000 | Optional, default `1800000` (30 minutes). How long a run started from Telegram may take before the shell interrupts it and tells the topic. |
+
+The transport is the single Telegram poller in `keryx serve`; a second `serve` on
+the same token stops on Telegram's conflict answer and does not poll again. Turn
+it on per session from the shell with [`/remote-control`](#shell-behavior). The
+walk-through, including what is not yet verified against real Telegram, is in
+[Drive keryx remotely](guides/drive-keryx-remotely.md#remote-control-from-telegram).
 
 ### Boundaries
 

@@ -25,6 +25,13 @@ export interface QueuedMainQuestion {
   id: string;
   question: string;
   displayQuestion: string;
+  /**
+   * Flow 376: where the line came from, when not typed here. `"tg"` is a line
+   * from the remote-control Telegram topic; the drain passes it back to
+   * `runLine` so the turn is labelled and its reply goes back to the topic.
+   * Absent for everything the operator typed.
+   */
+  source?: "tg";
 }
 
 export type QueueCommandAction = "remove" | "edit" | "force";
