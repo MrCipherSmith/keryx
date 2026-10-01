@@ -349,10 +349,18 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
         : [],
     ),
   );
+  // Read before the first write, as in the import, so a dry run and a real run
+  // compare the refreshed packages with the same set of reviewers.
+  const existingFlags = await projectReviewerFlags(options.projectRoot);
   const imported: ImportedProjectSkill[] = [];
   for (const plan of plans) {
     imported.push("row" in plan ? plan.row : await writeUpdate(options, plan));
   }
+  addFlagWarnings(
+    imported,
+    plans.map((plan) => ("content" in plan ? plan : undefined)),
+    existingFlags,
+  );
   return {
     from: options.from ?? "(each skill Origin)",
     only: [],
@@ -422,8 +430,8 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
       lines.push(
         "A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,",
         "and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite",
-        "rules/core with keryx's own rules and leave rules/project alone. `keryx review reviewers` lists each such reference",
-        "under `shadowedRules`.",
+        "rules/core with keryx's own rules (`skills install --target` from a manifest skips files it has no record of) and leave",
+        "rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.",
         "",
       );
     }
@@ -436,6 +444,53 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
   if (result.imported.some((row) => row.module !== PROJECT_REVIEWER_MODULE && isWrittenRow(row))) {
     lines.push(
       "Non-review modules are registered for `keryx skills route`. They are NOT injected into flow-orchestrator's fixed pipeline — name the skill in a dispatch if you want it there.",
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/** `keryx skills update`'s text output: the same rows and warnings as an import, in an update's words. */
+export function renderUpdateProjectSkillsMarkdown(result: ImportProjectSkillsResult): string {
+  const counts = countByStatus(result.imported);
+  // The row's status is `would-overwrite` in --json (stable); the text says what an update does.
+  const statusWord = (status: ImportedProjectSkill["status"]): string => (status === "would-overwrite" ? "would-update" : status);
+  const lines = [
+    "# skills update",
+    "",
+    `from: ${result.from}`,
+    `dry-run: ${result.dryRun ? "yes" : "no"}`,
+    `updated: ${counts.updated} skipped: ${counts.skipped}${
+      counts["would-overwrite"] > 0 ? ` would-update: ${counts["would-overwrite"]}` : ""
+    }${counts.refused > 0 ? ` refused: ${counts.refused}` : ""}${
+      counts["would-refuse"] > 0 ? ` would-refuse: ${counts["would-refuse"]}` : ""
+    }`,
+    "",
+  ];
+  if (result.dryRun) {
+    const planned = result.imported.filter((row) => row.status === "would-overwrite");
+    lines.push(`## would update (${planned.length}) — dry run, nothing written`, "");
+    if (planned.length === 0) {
+      lines.push("- nothing");
+    }
+    for (const row of planned) {
+      lines.push(`- ${row.module}/${row.name}`);
+    }
+    lines.push("", "## packages", "");
+  }
+  for (const row of result.imported) {
+    const extra = [row.reason, row.wired].filter(Boolean).join(" — ");
+    lines.push(`- ${row.module}/${row.name}: ${statusWord(row.status)}${extra ? ` — ${extra}` : ""}`);
+    for (const warning of row.warnings ?? []) {
+      lines.push(`  - warning: ${warning}`);
+    }
+  }
+  lines.push("");
+  if (result.imported.some((row) => isRefusedStatus(row.status))) {
+    lines.push(refusedNote(result), "");
+  }
+  if (result.imported.some((row) => row.module === PROJECT_REVIEWER_MODULE && isWrittenRow(row))) {
+    lines.push(
+      `Reviewers: \`keryx review reviewers\` must list every updated ${PROJECT_REVIEWER_MODULE}/* name. That is the same call review-orchestrator makes.`,
     );
   }
   return `${lines.join("\n")}\n`;
@@ -560,13 +615,25 @@ function importNotes(source: ImportSource): Pick<ImportedProjectSkill, "pathsSou
   if (isDeprecated(source.content)) {
     warnings.push("deprecated: true in its frontmatter — imported because it was named by its own path; a tree import skips it.");
   }
-  if (source.module !== PROJECT_REVIEWER_MODULE) {
+  return reviewNotes(source.content, source.module, warnings);
+}
+
+/**
+ * The review-package half of {@link importNotes}, shared with `keryx skills
+ * update`: no path gate, and the `metadata.flags` entries `keryx review
+ * reviewers` will drop, in its words. Nothing for another module.
+ */
+function reviewNotes(
+  content: string,
+  module: string,
+  warnings: string[] = [],
+): Pick<ImportedProjectSkill, "pathsSource" | "warnings"> {
+  if (module !== PROJECT_REVIEWER_MODULE) {
     return warnings.length > 0 ? { warnings } : {};
   }
-  const pathsSource = pathTriggerSource(source.content);
+  const pathsSource = pathTriggerSource(content);
   if (pathsSource === "none") warnings.push(PATHS_NONE_WARNING);
-  // The `metadata.flags` entries `keryx review reviewers` will drop, in its words.
-  warnings.push(...reviewerFlagReport(source.content).warnings);
+  warnings.push(...reviewerFlagReport(content).warnings);
   return { pathsSource, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
@@ -613,7 +680,11 @@ function soleCarrierWarning(flag: string, overwritten: string, remaining: string
  * fires when the flag was a family flag and one of its carriers is left alone
  * with it.
  */
-function addFlagWarnings(rows: ImportedProjectSkill[], sources: ImportSource[], existingFlags: Map<string, string[]>): void {
+function addFlagWarnings(
+  rows: ImportedProjectSkill[],
+  sources: ReadonlyArray<Pick<ImportSource, "content"> | undefined>,
+  existingFlags: Map<string, string[]>,
+): void {
   const isWritten = (row: ImportedProjectSkill): boolean =>
     row.module === PROJECT_REVIEWER_MODULE && isWrittenRow(row);
   const replaced = new Set(rows.filter(isWritten).map((row) => row.name));
@@ -1306,6 +1377,7 @@ async function writeUpdate(
   options: UpdateProjectSkillsOptions,
   { entry, origin, content, gate }: { entry: RegistryEntry; origin: string; content: string; gate: WriteGate },
 ): Promise<ImportedProjectSkill> {
+  const notes = reviewNotes(content, entry.module);
   if (options.dryRun) {
     return {
       name: entry.name,
@@ -1314,7 +1386,7 @@ async function writeUpdate(
       path: entry.path,
       origin,
       wired: wiringNote(entry.module),
-      ...mergeNotes({}, gateRowParts(gate, true)),
+      ...mergeNotes(notes, gateRowParts(gate, true)),
     };
   }
 
@@ -1336,7 +1408,7 @@ async function writeUpdate(
     path: created.skillPath,
     origin,
     wired: wiringNote(entry.module),
-    ...mergeNotes({}, gateRowParts(gate, false)),
+    ...mergeNotes(notes, gateRowParts(gate, false)),
   };
 }
 
@@ -1846,7 +1918,7 @@ export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log(renderImportProjectSkillsMarkdown(result));
+    console.log(renderUpdateProjectSkillsMarkdown(result));
   }
   exitNonZeroOnRefusal(result);
 }

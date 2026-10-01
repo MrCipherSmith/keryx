@@ -1009,8 +1009,8 @@ describe("portableOriginRef", () => {
 const PROJECT_SLOT_PARAGRAPH = [
   "A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,",
   "and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite",
-  "rules/core with keryx's own rules and leave rules/project alone. `keryx review reviewers` lists each such reference",
-  "under `shadowedRules`.",
+  "rules/core with keryx's own rules (`skills install --target` from a manifest skips files it has no record of) and leave",
+  "rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.",
 ].join("\n");
 
 describe("rules the imported skills cite", () => {
