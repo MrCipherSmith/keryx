@@ -13,14 +13,12 @@ Hooks never replace the policy engine (`keryx.*`'s `decide()`,
 allow/ask/deny outcome — turn an `allow` into `ask` or `deny`, or an `ask`
 into `deny` — never loosen it, and never override a hard deny.
 
-The field names and the stdin/exit-code/stdout shape intentionally mirror the
-public Claude Code hooks convention, so a hook command you already have for a
-Claude Code-shaped host runs unmodified under `keryx shell` too.
+The field names and the stdin/exit-code/stdout shape intentionally follow the
+convention other agent hosts use for hooks, so a hook command you already have
+for such a host runs unmodified under `keryx shell` too.
 
 Source: `src/harness/hooks/` (the runtime), `src/commands/hooks.ts` (the
 CLI), `src/commands/agent-hooks.ts` (production wiring into `keryx shell`).
-Design doc:
-[W6-shell-hooks.md](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/workstreams/W6-shell-hooks.md).
 Schema:
 [hook-config.schema.json](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/schemas/hook-config.schema.json).
 
@@ -61,7 +59,7 @@ effect), not as a prompt for the operator.
 
 Every payload carries the shared base fields, plus event-specific fields.
 Each payload is shaped by `buildHookStdin` (`src/harness/hooks/codec.ts`)
-into **both** a camelCase field and, where the Claude Code convention has an
+into **both** a camelCase field and, where the common host convention has an
 equivalent, a snake_case alias — so one hook command works against either
 naming convention unmodified.
 
@@ -278,8 +276,8 @@ because those two classes can never change a decision — tying loop
 availability to their failure would be a category error. `gate-advisory`
 sits in between: it can tighten a decision when it runs, but a project may
 want it to degrade gracefully rather than block every matching call, except
-when unattended (matching W8's requirement that an unattended run never
-silently loses impact-evidence enforcement).
+when unattended, so an unattended run never silently loses impact-evidence
+enforcement.
 
 ## Composition with the policy engine
 
@@ -315,11 +313,11 @@ tool call → decide() (hard-deny → flow-file guard → baseline → approval 
 
 ### Where `PreToolUse` actually fires, relative to `decide()`
 
-The design doc's pipeline diagram reads "hooks before `decide()`". The
+A natural reading of the pipeline is "hooks before `decide()`". The
 production wiring in `src/harness/run/run.ts` instead runs `decide()` (and
-the optional MP-6 blast-radius escalation) **first**, then fires
+the optional blast-radius escalation) **first**, then fires
 `PreToolUse` with `decide()`'s outcome passed in as `ctx.decideOutcome`,
-*then* composes. This is deliberate, not a spec violation: `decide()` is pure
+*then* composes. This is deliberate: `decide()` is pure
 and a hook cannot influence its inputs (the hook payload carries the same
 `toolCallId`/`toolName`/`toolInput`/`risk`/`policyProfile` either way), so
 the only point a hook's decision and the policy decision actually meet is
@@ -336,7 +334,7 @@ first.
   - Empty or whitespace-only stdout is a **silent approve** — no decision, no
     anomaly.
   - Otherwise stdout must be a JSON object: `{"decision": "allow"|"ask"|"deny",
-    "additionalContext": "...", "reason": "..."}`. The Claude Code shape is
+    "additionalContext": "...", "reason": "..."}`. The nested form other hook hosts use is
     also accepted: `hookSpecificOutput.permissionDecision` (also
     `"approve"`→`allow` and `"block"`→`deny` legacy aliases),
     `hookSpecificOutput.additionalContext`,
@@ -359,7 +357,7 @@ first.
   `hookSpecificOutput.updatedInput`) is accepted for forward-compatible
   parsing and then dropped — it never reaches the executor. Its mere
   presence is recorded once as the `hook-attempted-input-rewrite` anomaly.
-  This is deliberate (see the design doc's non-goals): letting a hook
+  This is deliberate: letting a hook
   silently substitute what a tool actually does, while the transcript still
   shows the model's original call, is the highest-leverage vector for a
   buggy or compromised hook to do quiet damage.
@@ -375,8 +373,8 @@ first.
   `runsIn: "unsandboxed"` is refused outright (`spawnError: "refused"`)
   whenever the active security profile's isolation is
   `required-fail-closed`.
-- **Built-in command hooks run unsandboxed off `required-fail-closed`**
-  (flow 322, W6, T15): `keryx.ctx-guard`, `keryx.security-check-input` and
+- **Built-in command hooks run unsandboxed off `required-fail-closed`**:
+  `keryx.ctx-guard`, `keryx.security-check-input` and
   `keryx.security-check-output` spawn the running `keryx` binary itself —
   the same trust domain and containment as the Keryx process that spawns
   them, not an untrusted third-party command, so wrapping them in the OS
@@ -407,7 +405,7 @@ first.
   - Always set by the runner: `KERYX_HOOK_EVENT`, `KERYX_HOOK_ID`,
     `KERYX_SESSION_ID`, `KERYX_RUN_ID`, `KERYX_PROJECT_ROOT`,
     `KERYX_POLICY_PROFILE`, `CLAUDE_PROJECT_DIR` (= the project root, for
-    Claude-Code-shaped hook commands).
+    hook commands written for other hosts).
   - Then the registration's own `command.env` entries, applied last (so
     they can override the above).
 
@@ -442,7 +440,7 @@ default.
 | `keryx.security-check-input` | `UserPromptSubmit` | `*` | `gate` | Scans a submitted prompt for injection/secret patterns before it reaches the model (`keryx security check-input --source untrusted-external --runtime claude`). |
 | `keryx.security-check-output` | `PreToolUse` | `Write\|Edit` | `gate` | Scans a Write/Edit's content before it executes (`keryx security check-output --runtime claude`). |
 | `keryx.learning-observer` | `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `UserPromptSubmit`, `SessionStart`, `Stop`, `SessionEnd` (exactly these seven) | `*` | `observe` | Appends a redacted, bounded observation record for the Observe stage — on by default, see [learning.md](./learning.md). In-process, not a spawned command. |
-| `keryx.impact-evidence` | `PreToolUse` | `Write\|Edit` | `gate-advisory` | On a session's first edit of a file, injects impact evidence (importers, related tests, memory caveats) — see [Extension points](#extension-points-for-w3-and-w8) below. In-process, not a spawned command. |
+| `keryx.impact-evidence` | `PreToolUse` | `Write\|Edit` | `gate-advisory` | On a session's first edit of a file, injects impact evidence (importers, related tests, memory caveats) — see [the learning and impact-evidence built-ins](#the-learning-and-impact-evidence-built-ins) below. In-process, not a spawned command. |
 
 **Who can turn one off, and from where** (tighten-only: a hook config can
 only ever remove enforcement it would otherwise add, never widen what a
@@ -656,15 +654,16 @@ Anyone else who clones this project, or you yourself on another machine,
 sees the session-start notice for these two hooks until they run `keryx
 hooks trust` here too.
 
-## Extension points for W3 and W8
+## The learning and impact-evidence built-ins
 
-Two built-ins are deliberately stubs: they run in-process, through a small
-injectable port, so the workstreams that own their real behavior (W3's
-Observe stage, W8's impact-evidence enforcement) can plug in without adding
-a process boundary. Both ports live in `src/harness/hooks/builtins.ts` and
-default to a no-op.
+Two built-ins run in-process, through a small injectable port, instead of
+spawning a command. Both ports live in `src/harness/hooks/builtins.ts`, and
+`keryx shell` wires the real implementation into every session
+(`buildShellHookRuntime` in `src/commands/agent-hooks.ts`). A test or a
+bespoke entry point can call `createHookRuntime` with its own `ports` to
+substitute a fake.
 
-### `LearningObservationSink` (W3)
+### `keryx.learning-observer`
 
 ```ts
 export interface LearningObservation {
@@ -694,31 +693,33 @@ export interface LearningObservationSink {
 | `Stop` | `turn-stop` |
 | `SessionEnd` | `session-end` |
 
-On each fire, the runtime calls `sink.record(...)` with the raw event
-payload passed straight through. The default port
-(`NOOP_LEARNING_OBSERVATION_SINK`) writes nothing. The hook's own `class` is
-`observe`, so a sink that throws or exceeds the hook's `timeoutMs` never
-blocks the lifecycle — it fails open with `hook-observer-failed`, matching
-the failure-semantics table above. W3 owns the observation schema,
-retention, and redaction on its side of this call; W6 only guarantees the
-call happens, reliably, once per mapped event, observe-only (writes data
-only — per W3's own D-3, mutation to rules/skills/memory stays
-human-applied, never automatic from an observation).
+On each fire, the runtime calls `sink.record(...)`. The production sink writes
+one redacted, bounded line to
+`.metaproject/data/learning/observations/<YYYY-MM-DD>.jsonl`; see
+[Self-learning loop](./learning.md) for what is and is not stored.
+`KERYX_LEARNING=off` turns the sink into a no-op, and `keryx hooks disable
+keryx.learning-observer` removes the hook. The hook's own `class` is `observe`,
+so a sink that throws or exceeds the hook's `timeoutMs` never blocks the
+lifecycle: it fails open with `hook-observer-failed`, matching the
+failure-semantics table above. The hook only writes data; changes to rules,
+skills and memory stay human-applied, never automatic from an observation.
 
-### `ImpactEvidenceProvider` (W8)
+### `keryx.impact-evidence`
 
 ```ts
 export interface ImpactEvidenceInput {
   sessionId: string;
-  filePath: string;
+  files: string[];              // every file this one tool call touches
   toolName: string;
   projectRoot: string;
-  firstEditInSession: boolean;
+  firstEditInSession: boolean;  // at least one of `files` is a first edit
+  acknowledgement?: string;     // set after you approved an earlier ask for these files
 }
 
 export interface ImpactEvidenceResult {
   additionalContext?: string;
-  decision?: "ask";
+  decision?: "ask" | "deny";
+  warnings?: string[];
 }
 
 export interface ImpactEvidenceProvider {
@@ -727,44 +728,24 @@ export interface ImpactEvidenceProvider {
 ```
 
 `keryx.impact-evidence` is registered on `PreToolUse` with matcher
-`Write|Edit`. The runtime tracks, per `HookRuntime` instance (i.e. per
+`Write|Edit`. The runtime tracks, per `HookRuntime` instance (that is, per
 session), which file paths have already been edited; the provider is
-consulted **only on a session's first edit of a given file** — every
-subsequent edit of that same file is a no-op (`outcome: "none"`,
-`firstEditInSession` is always `true` when the provider is called, so the
-field is really "was this the first" rather than something the provider
-needs to check itself). The default port (`NOOP_IMPACT_EVIDENCE_PROVIDER`)
-returns `{}` — no context, no escalation.
+consulted **only when a call touches a file for the first time in the
+session**. Later edits of files that already passed are a no-op
+(`outcome: "none"`).
 
-The hook's `class` is `gate-advisory`: when the provider returns
-`additionalContext`, it is appended to the turn's context (capped, as
-above); when it returns `decision: "ask"`, that tightens the composed
-`PreToolUse` outcome exactly like any other gate-capable hook `ask`
-would. This is the default, gate-advisory behavior today — the design doc
-also describes a **W8 strict mode** where this same hook escalates to a full
-`gate` class (fail-closed on failure in every profile, not just
-`unattended-untrusted`). That escalation is not implemented by this runtime:
-the registration's `class` is currently fixed at `gate-advisory` in
-`builtins.ts` and is not read from a strict-mode flag. Implementing strict
-mode is W8's to do, along the lines of either (a) W8 makes
-`keryx.impact-evidence`'s `class` conditional on the active profile/strict
-flag when building the registration list, or (b) W8's provider itself
-always returns `decision: "ask"` on a lookup failure it considers
-disqualifying, relying on `composeDecision`'s tighten-only rule rather than
-changing the hook's own class. Either path is additive to this runtime, not
-a change to it.
-
-### Where the ports are injected
-
-Both ports are optional fields of `HookRuntimePorts`, passed to
-`createHookRuntime({..., ports})` (`src/harness/hooks/runtime.ts`). The
-production wiring for `keryx shell` (`buildShellHookRuntime` in
-`src/commands/agent-hooks.ts`) does not yet pass either port through — it
-calls `createHookRuntime` with no `ports` option, so both built-ins run
-against their no-op defaults today. W3 and W8 plug in by extending
-`BuildShellHookRuntimeOptions`/`buildShellHookRuntime` to accept and forward
-a real sink/provider (or by calling `createHookRuntime` directly with their
-own ports, for a bespoke entry point).
+The production provider is on by default, in advisory mode. When it has
+something to say it returns `additionalContext`, which is appended to the
+turn's context (capped, as above); when it returns `decision: "ask"`, that
+tightens the composed `PreToolUse` outcome exactly like any other
+gate-capable hook `ask` would, and a `deny` that the provider returns in strict
+mode is honoured the same way. The `impactEvidence` block of
+`.metaproject/security.config.json` controls it (`enabled`, `strict`,
+`exemptGlobs`, `dampenAfter`), and `keryx security impact-evidence status`
+prints the effective settings. The registration's own class stays
+`gate-advisory`, so a provider failure degrades gracefully except when
+unattended. Setting `KERYX_DISABLE_IMPACT_GATE=1` switches the
+provider off for a process.
 
 ### The `hook_invocation` session record
 
@@ -789,7 +770,7 @@ export interface HookInvocationRecord {
 }
 ```
 
-This is the record W8 governance (or a W1 stocktake) reads to audit hook
+This is the record to read when you audit hook
 behavior over a session or across sessions without re-deriving it from raw
 logs: which hooks ran, on which events, whether each one changed the
 outcome, and — for a failure — which of the five named failure kinds it was.
