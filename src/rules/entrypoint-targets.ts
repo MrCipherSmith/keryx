@@ -171,6 +171,60 @@ export function localTargetPaths(targets: EntrypointTargets): string[] {
   return paths;
 }
 
+/** A runtime's local target that it no longer writes, with the file it reads instead. */
+export type UnusedLocalTarget = {
+  runtime: EntrypointRuntime;
+  path: string;
+  /** Why the file is no longer keryx's target, for the output: `the claude entry's scope is "shared"`. */
+  because: string;
+  /** The file the runtime reads instead. */
+  instead: string;
+};
+
+/** The local target `entry`'s runtime no longer writes, or `undefined` when it still writes one. */
+export function unusedLocalTarget(entry: RootEntrypointEntry): UnusedLocalTarget | undefined {
+  if (entry.runtime === "codex" && entry.scope === "local") {
+    if (entry.mode !== "skip") return undefined;
+    return { runtime: "codex", path: entry.path, because: `the codex entry's mode is "skip"`, instead: entry.source };
+  }
+  if (entry.scope !== "shared") return undefined;
+  const localPath = localRootEntry(entry.runtime).path;
+  if (localPath.toLowerCase() === entry.path.toLowerCase()) return undefined;
+  return { runtime: entry.runtime, path: localPath, because: `the ${entry.runtime} entry's scope is "shared"`, instead: entry.path };
+}
+
+/**
+ * The paths keryx keeps in `info/exclude`: every local target it writes
+ * (`localTargetPaths`), plus the local file of a runtime that no longer uses
+ * one — a `CLAUDE.local.md` holding the developer's own lines is still a
+ * per-developer file after Claude goes back to shared, and must not surface
+ * in `git status`. That file is listed whether or not it exists in this
+ * checkout: `info/exclude` is shared by every worktree, and its block must not
+ * depend on which one runs (flow 361 AC6, review round 2, F-014).
+ */
+export function ignoredLocalTargetPaths(targets: EntrypointTargets): string[] {
+  const paths = localTargetPaths(targets);
+  for (const entry of targets.root) {
+    const unused = unusedLocalTarget(entry);
+    if (unused === undefined || TEAM_FILE_NAMES.includes(unused.path.toLowerCase())) continue;
+    if (!paths.includes(unused.path)) paths.push(unused.path);
+  }
+  return paths;
+}
+
+/**
+ * Flow 363: the tracked team file a runtime's `keryx:rules` block lived in
+ * before it followed the entrypoint targets — `CLAUDE.md` for Claude, the
+ * team file a Codex override is built from (`AGENTS.md` by default) — and
+ * where it still goes under `scope: "shared"`.
+ */
+export function rulesExportTeamFile(entry: RootEntrypointEntry): string {
+  if (entry.scope === "shared") return entry.path;
+  return entry.runtime === "codex" ? entry.source : SHARED_ROOT_PATH.claude;
+}
+
+const TEAM_FILE_NAMES = [SHARED_ROOT_PATH.codex.toLowerCase(), SHARED_ROOT_PATH.claude.toLowerCase()];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -215,11 +269,21 @@ function rootEntryFromLegacyString(value: string): RootEntrypointEntry | undefin
 }
 
 /**
- * A local entry names its scope, never its file: it always resolves to the
- * runtime's standard local path. The path a manifest states for it lands in
- * `info/exclude` and is where keryx writes — a cloned manifest saying `.env`
- * would have the block written into the secrets file. A stated path still has
- * to be safe, or the whole entry is junk.
+ * An entry names a scope, never an arbitrary file: every path it resolves to
+ * is a write destination (the index block, the rules-export block, the Codex
+ * override's copy) and lands in `info/exclude`, and the manifest stating it is
+ * tracked — one a cloned repository controls.
+ *
+ * - A local entry always resolves to the runtime's standard local path (flow
+ *   361 T14); a stated path still has to be safe, or the whole entry is junk.
+ * - A shared entry is the runtime's own team file (`CLAUDE.md`, `AGENTS.md`),
+ *   in whatever case the manifest spells it (flow 363 review round 1, F-001).
+ *   Any other stated path — `.env`, the manifest itself — makes the entry junk.
+ * - A Codex override is only ever built from `AGENTS.md`, in any case; any
+ *   other `source` makes the entry junk.
+ *
+ * Junk is dropped into `ignored`, so the runtime becomes a legacy candidate and
+ * `HEAD` decides its scope, as for a manifest that never stated it.
  */
 function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntry | undefined {
   const runtime = runtimeOf(value.runtime);
@@ -231,12 +295,28 @@ function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntr
 
   const scope =
     statedScope ?? (statedPath?.toLowerCase() === LOCAL_ROOT_PATH[runtime].toLowerCase() ? "local" : "shared");
-  if (scope === "shared") return sharedRootEntry(runtime, statedPath ?? SHARED_ROOT_PATH[runtime]);
+  if (scope === "shared") {
+    if (statedPath === undefined) return sharedRootEntry(runtime);
+    return isTeamFileOf(runtime, statedPath) ? sharedRootEntry(runtime, statedPath) : undefined;
+  }
   if (runtime === "claude") return localRootEntry(runtime);
-  return {
-    ...(localRootEntry(runtime, safeRelativePath(value.source) ?? DEFAULT_CODEX_SOURCE) as CodexLocalRootEntry),
-    mode: value.mode === "skip" ? "skip" : "override",
-  };
+  let source = DEFAULT_CODEX_SOURCE;
+  if (value.source !== undefined) {
+    const statedSource = safeRelativePath(value.source);
+    if (statedSource === undefined || !isTeamFileOf("codex", statedSource)) return undefined;
+    source = statedSource;
+  }
+  return { ...(localRootEntry(runtime, source) as CodexLocalRootEntry), mode: value.mode === "skip" ? "skip" : "override" };
+}
+
+/** `relativePath` is `runtime`'s team file (`CLAUDE.md` / `AGENTS.md`) at the project root, in any case. */
+export function isTeamFileOf(runtime: EntrypointRuntime, relativePath: string): boolean {
+  return relativePath.toLowerCase() === SHARED_ROOT_PATH[runtime].toLowerCase();
+}
+
+/** `relativePath` is `runtime`'s standard local target (`CLAUDE.local.md` / `AGENTS.override.md`), in any case. */
+export function isLocalFileOf(runtime: EntrypointRuntime, relativePath: string): boolean {
+  return relativePath.toLowerCase() === LOCAL_ROOT_PATH[runtime].toLowerCase();
 }
 
 /** The settings target: the standard file for its scope, whatever path is stated (see `rootEntryFromRecord`). */

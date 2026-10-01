@@ -57,6 +57,8 @@ import {
 import { describeServeStatus, startServeListener } from "../lib/serve-server";
 import { countPending } from "../lib/serve-approvals-store";
 import { assembleSubmitTurn } from "../lib/serve-runner";
+import { localMachineName } from "../remote/naming";
+import { openRemoteService } from "../remote/service";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -204,9 +206,19 @@ async function runServe(args: string[]): Promise<void> {
   const runtimeAck = parsed.parsed.flags.has(ACK_FLAG);
   const config = stored === null ? null : overlay(stored, parsed.parsed, port, runtimeAck);
 
+  // Remote control and the channels plane (flows 376, 377). The plane is always offered
+  // on a loopback serve, so the shell can connect Telegram without a restart; the hub
+  // polls only once a bot token and a remote config exist. Refusals are reported, never fatal.
+  const remoteService = openRemoteService({
+    machine: localMachineName(),
+    nameTopicsByMachine: true,
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+
   const outcome = await startServeListener({
     config,
     credential: readServeCredential(),
+    remote: remoteService.surface,
     // Without this the `no-configuration` refusal cannot tell "nothing is
     // configured" from "the file is there and I could not read it", and the
     // instruction it prints is wrong for two of the three.
@@ -218,6 +230,7 @@ async function runServe(args: string[]): Promise<void> {
     makeSubmitTurn: assembleSubmitTurn,
   });
   if (!outcome.ok) {
+    await remoteService.stop();
     fail(sanitizeForDisplay(outcome.message));
     if (outcome.reason === "non-loopback-not-acknowledged" && stored !== null) {
       // Security policy requires BOTH halves; say which one is missing rather
@@ -259,6 +272,15 @@ async function runServe(args: string[]): Promise<void> {
   if (!isLoopbackAddress(listener.address)) {
     console.log(`  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and there is no TLS in this release`);
   }
+  // After the bind, so the hub never polls for a listener that did not come up.
+  // A refusal (second serve, conflict, non-loopback) is printed by the service and
+  // is not fatal: the listener keeps serving every other route.
+  const started = await remoteService.start({ address: listener.address, port: listener.port });
+  if (started.ok) {
+    console.log(`    ${style.dim("remote control on: shells register at /v1/remote/*")}`);
+  } else if (started.notConnected === true) {
+    console.log(`    ${style.dim("channels ready: connect Telegram from the shell with /channels")}`);
+  }
 
   await new Promise<void>((resolve) => {
     let draining = false;
@@ -268,7 +290,10 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void listener.drain().then(() => {
+      void listener
+        .drain()
+        .then(() => remoteService.stop())
+        .then(() => {
         console.log(`  ${style.green(symbols.ok)} stopped`);
         resolve();
       });

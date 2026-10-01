@@ -180,6 +180,20 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 376: the Telegram topic for this session. Turning it on is TUI-only (the modal, the
+    // sidebar row); the readline agent REPL prints the status as text.
+    name: "/remote-control",
+    description: "Drive this session from a Telegram topic: /remote-control [name|off|status]. Off by default",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 377: the machine's Telegram connection. Connect needs the hidden token entry of the
+    // full-screen shell; the readline agent REPL prints the state and says where to connect.
+    name: "/channels",
+    description: "Connect, test or disconnect Telegram for this machine: /channels [status]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

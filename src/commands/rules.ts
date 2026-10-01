@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { mkdirContained, writeContained } from "../lib/contained-write";
+import { reinstallRulesExport, rulesBlocksLeavingLocalTargets } from "../rules/rules-export-migration";
 import {
   planRoutingEntrypointPair,
   rulesReadmeStep,
@@ -115,6 +116,10 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   const onNotice = (line: string): void => {
     entrypointNotices.push(line);
   };
+  // Flow 363 review round 1, F-002: a rules-export block installed in a local
+  // target the runtime no longer uses goes with that file below; it is
+  // installed again in the team file once the manifest is persisted.
+  const leavingRulesBlocks = await rulesBlocksLeavingLocalTargets(projectRoot, entrypoints.targets);
 
   if (subcommand === "distill") {
     const result = await distillAgentEntrypoints(projectRoot, metaprojectRoot, {
@@ -128,6 +133,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
       resolution: options.resolution,
     });
     await persistManifestEntrypoints(projectRoot, manifestPath, manifest, entrypoints);
+    await reinstallRulesExport(projectRoot, leavingRulesBlocks, onNotice);
 
     console.log(`# rules distill`);
     console.log("");
@@ -154,6 +160,7 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   await mkdirContained(projectRoot, `${path.relative(projectRoot, metaprojectRoot).split(path.sep).join("/")}/rules`);
 
   await persistManifestEntrypoints(projectRoot, manifestPath, manifest, entrypoints);
+  await reinstallRulesExport(projectRoot, leavingRulesBlocks, onNotice);
   await refreshRoutingEntrypoints(
     metaprojectRoot,
     manifest,

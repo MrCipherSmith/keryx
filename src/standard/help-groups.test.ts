@@ -6,6 +6,7 @@
 // `listSourceFiles` drops every `*.test.ts` file from the scan, so this
 // cross-zone read exists ONLY here, never in the production table it checks.
 
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "bun:test";
 import { CLI_ROUTES } from "../cli";
 import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
@@ -287,5 +288,63 @@ describe("AC7 support: renderGroupedSlashHelp restricts to the given names", () 
     for (const line of text.split("\n")) {
       expect(line.length).toBeLessThanOrEqual(80);
     }
+  });
+});
+
+// Flow 376 review (m2): remote control is a feature the operator is told about in
+// four places. The docs shipped with the code once and then drifted; this keeps the
+// four from going quiet again, and keeps the version above the release before it.
+describe("remote control is documented where operators look", () => {
+  const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`${file} mentions remote control`, () => {
+      expect(read(file)).toMatch(/remote[- ]control/i);
+    });
+  }
+
+  test("the CLI reference names the shell token rotation, the 500 cap and the dropped-lines notice", () => {
+    const reference = read("docs/docs/cli-reference.md");
+    expect(reference).toContain("minted fresh every time `serve` starts");
+    expect(reference).toContain("At most 500 undelivered lines");
+    expect(reference).toContain("Turning remote control off from the shell");
+  });
+
+  test("package.json is above 0.3.46, the version before remote control", () => {
+    const parts = (JSON.parse(read("package.json")) as { version: string }).version
+      .split(".")
+      .map((part) => Number.parseInt(part, 10));
+    const [major = 0, minor = 0, patch = 0] = parts;
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_046);
+  });
+});
+
+// Flow 377: `/channels` is told in the same places, and the version is above 0.3.48.
+describe("/channels is documented where operators look", () => {
+  const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/commands-by-task.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`${file} mentions /channels`, () => {
+      expect(read(file)).toContain("/channels");
+    });
+  }
+
+  test("package.json is above 0.3.48, the version before /channels", () => {
+    const [major = 0, minor = 0, patch = 0] = (JSON.parse(read("package.json")) as { version: string }).version
+      .split(".")
+      .map((part) => Number.parseInt(part, 10));
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_048);
   });
 });

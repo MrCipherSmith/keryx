@@ -137,6 +137,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/governance` | Show the last governance report, or run one in the background. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
+| `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 
 ## External agents, ACP and MCP
 

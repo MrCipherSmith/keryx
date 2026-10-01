@@ -16,6 +16,7 @@
 // (`src/core-package.test.ts`). So the error class lives here and
 // `./agent-entrypoints` re-exports it.
 
+import { RULES_BLOCK_END_MARKER, RULES_BLOCK_START_MARKER } from "./export-render";
 import { computeFencedRanges, hasMarkerLine, indexOfMarkerLine } from "./marker-matching";
 
 /**
@@ -56,22 +57,59 @@ export function hasManagedIndexBlock(content: string): boolean {
  * Content with no block is returned unchanged.
  */
 export function stripManagedIndexBlock(content: string, filePath: string): string {
+  return stripMarkedBlocks(content, filePath, MANAGED_INDEX_BLOCK_START, MANAGED_INDEX_BLOCK_END);
+}
+
+/**
+ * Flow 363: the `keryx:rules` block the opt-in rules-export surface writes
+ * (`src/integrations/surfaces-rules.ts`), detected and removed by the same
+ * whole-line, fence-aware rules as the index block — so the migration off a
+ * tracked team file and the Codex override regeneration treat both blocks
+ * alike, and each leaves the other byte for byte where it was.
+ */
+export function hasManagedRulesBlock(content: string): boolean {
+  return hasMarkerLine(content, RULES_BLOCK_START_MARKER);
+}
+
+/** `content` without its `keryx:rules` block(s); see `stripManagedIndexBlock` for what is kept. */
+export function stripManagedRulesBlock(content: string, filePath: string): string {
+  return stripMarkedBlocks(content, filePath, RULES_BLOCK_START_MARKER, RULES_BLOCK_END_MARKER);
+}
+
+/**
+ * The first `keryx:rules` block of `content`, marker lines included and
+ * without a trailing line terminator; `undefined` when there is none. Throws
+ * `UnterminatedMetaprojectReferenceError` for a start marker with no end.
+ */
+export function extractManagedRulesBlock(content: string, filePath: string): string | undefined {
+  const start = indexOfMarkerLine(content, RULES_BLOCK_START_MARKER, computeFencedRanges(content));
+  if (start < 0) return undefined;
+  const afterStartLine = endOfLine(content, start);
+  const tail = content.slice(afterStartLine);
+  const endOffset = indexOfMarkerLine(tail, RULES_BLOCK_END_MARKER, computeFencedRanges(tail));
+  if (endOffset < 0) throw unterminated(filePath, RULES_BLOCK_START_MARKER, RULES_BLOCK_END_MARKER);
+  return content.slice(start, afterStartLine + endOfLine(tail, endOffset)).replace(/\r?\n$/, "");
+}
+
+function stripMarkedBlocks(content: string, filePath: string, startMarker: string, endMarker: string): string {
   let kept = "";
   let rest = content;
   for (;;) {
-    const start = indexOfMarkerLine(rest, MANAGED_INDEX_BLOCK_START, computeFencedRanges(rest));
+    const start = indexOfMarkerLine(rest, startMarker, computeFencedRanges(rest));
     if (start < 0) return kept + rest;
     const afterStartLine = endOfLine(rest, start);
     const tail = rest.slice(afterStartLine);
-    const endOffset = indexOfMarkerLine(tail, MANAGED_INDEX_BLOCK_END, computeFencedRanges(tail));
-    if (endOffset < 0) {
-      throw new UnterminatedMetaprojectReferenceError(
-        `${filePath}: unterminated ${MANAGED_INDEX_BLOCK_START} block: found ${MANAGED_INDEX_BLOCK_START} with no matching ${MANAGED_INDEX_BLOCK_END} — fix it by hand`,
-      );
-    }
+    const endOffset = indexOfMarkerLine(tail, endMarker, computeFencedRanges(tail));
+    if (endOffset < 0) throw unterminated(filePath, startMarker, endMarker);
     kept += rest.slice(0, start);
     rest = tail.slice(endOfLine(tail, endOffset));
   }
+}
+
+function unterminated(filePath: string, startMarker: string, endMarker: string): UnterminatedMetaprojectReferenceError {
+  return new UnterminatedMetaprojectReferenceError(
+    `${filePath}: unterminated ${startMarker} block: found ${startMarker} with no matching ${endMarker} — fix it by hand`,
+  );
 }
 
 /** The offset just past the line starting at `lineStart`, its `\n` included when it has one. */

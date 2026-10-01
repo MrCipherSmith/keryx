@@ -8,17 +8,74 @@
   "id": "360",
   "slug": "reviewer-import-fixes",
   "title": "Overlay reviewer import: filter non-reviewers, skills remove, rule collisions, path gate, dispatch by package, help and manifest path",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-30T09:17:35.740Z",
-  "updatedAt": "2026-09-30T21:59:45.796Z",
+  "updatedAt": "2026-10-01T07:21:36.915Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T07:21:18.761Z",
+      "note": "import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-vantage-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781."
+    },
+    "AC2": {
+      "at": "2026-10-01T07:21:18.935Z",
+      "note": "import-skills.test.ts: deprecated package skipped with reason 'deprecated' in a tree import (also under metadata:, and for CRLF/BOM files after d6ffff97); 'a deprecated package named by its own path is imported, with a warning'. CI green at 3cf1d781."
+    },
+    "AC3": {
+      "at": "2026-10-01T07:21:19.088Z",
+      "note": "remove-skill.test.ts and src/commands/skills-remove.test.ts: package, registry entry, catalog row and verification report removed; --dry-run, --json and own --help; bundled and unknown names refused. Containment (2abe5c2e), exact-name identity and registry-last ordering (bb3a68ff), case-variant package refusal (7aeeda8a) added after review. CI green at 3cf1d781. Known open item: F-010 test gap, dismissed-deprioritised by MrCipherSmith to flow 362."
+    },
+    "AC4": {
+      "at": "2026-10-01T07:21:19.293Z",
+      "note": "import-skills.test.ts 'rules the imported skills cite': different content reports differs and the overlay's version lands in .metaproject/rules/project/<dir>/<name>.mdc (slot keyed on the full ref since 1ff78608), identical content is present; reviewers.test.ts: shadowedRules reported and the rule absent from unresolvedRules. Core/ refs normalised to core/ (bfd68c21). CI green at 3cf1d781."
+    },
+    "AC5": {
+      "at": "2026-10-01T07:21:19.485Z",
+      "note": "reviewers.test.ts 'missing skills/ and rules/ files and non-portable rule paths are unresolved references': unresolvedReferences reports a missing skills/... .md/.json and a ~ / absolute rule path. CI green at 3cf1d781."
+    },
+    "AC6": {
+      "at": "2026-10-01T07:21:19.640Z",
+      "note": "reviewers.test.ts 'metadata.flags wins over flags named in the description', literal path beside a glob is a trigger while a cited .md is not (reviewer-triggers.ts since 7d639d09, one frontmatter reader since d6ffff97); import-skills.test.ts asserts the 'paths: none — dispatched on every round' warning. Round-3 run over the real overlay yields src/utils/column-zone.ts. CI green at 3cf1d781."
+    },
+    "AC7": {
+      "at": "2026-10-01T07:21:19.832Z",
+      "note": "reviewers.test.ts 'a flag more than one project reviewer carries is a family flag' (familyFlags, owned by src/gdskills/project-reviewers.ts since 379f814d); review-orchestrator SKILL.md 'Path gate' and SKILL.detail.md 'Family flags — why a shared flag does not lift the path gate'."
+    },
+    "AC8": {
+      "at": "2026-10-01T07:21:20.012Z",
+      "note": "review-orchestrator SKILL.md 'Agent Runtime Compatibility' (a project reviewer is dispatched by its package, skill_path, BLOCKED on a missing file) and SKILL.detail.md 'Dispatching a project reviewer — by its package, not by its name'; reviewer-input.schema.json optional skill_path; shadowedRules passed into the dispatch (20f4f720)."
+    },
+    "AC9": {
+      "at": "2026-10-01T07:21:20.171Z",
+      "note": "review-frontend/SKILL.md (A3, B10, D6) and rules/core/mobx-store-template.mdc 'Lifecycle Initialization' treat useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store]) as the bridge and flag fetches/business logic instead (9fc03091); projections byte-identical (parity test green in CI)."
+    },
+    "AC10": {
+      "at": "2026-10-01T07:21:20.322Z",
+      "note": "manifest.test.ts 'bundledManifestPath resolves the shipped manifest from the flat published dist/ layout' (7e8c0cc2, red on the old resolver); from a real npm pack tarball of 0.3.40, dist/cli.js skills install --profile full --dry-run exits 0 (T13 and round-3 reviewer, independently)."
+    },
+    "AC11": {
+      "at": "2026-10-01T07:21:20.506Z",
+      "note": "cli.test.ts 'flow 360 AC11' block: review --help lists every routed subcommand (drift guard against the router), own usage for skills import/update/remove, review import/comments/learn, nothing executed; skills parity test (2abe5c2e). Confirmed from the packed build. CI green at 3cf1d781."
+    },
+    "AC12": {
+      "at": "2026-10-01T07:21:20.763Z",
+      "note": "review-orchestrator SKILL.md 'A round never answers a pull request…' and 'Legacy/Profile Reviewer Auto-Detection', SKILL.detail.md 'Skills present only when installed' (bundledSource qualifier since 56d39e0f, exit-code behaviour since 43e803be); the named commands were run from the packed build: --profile core --target keryx-shell installs review-pr-feedback (exit 1 with a skip list, as documented), --with capability:mobx plans code-mobx-store-review."
+    },
+    "AC13": {
+      "at": "2026-10-01T07:21:20.990Z",
+      "note": "reviewer-skill-creator SKILL.md points to SKILL.detail.md, which holds the end-to-end example captured from real runs (dry run, what each run writes, field derivation, what is not a reviewer, Undo with skills remove, refresh, per-clone note, review-learning.config.json shape); no 'alias' claim for review import. Re-captured after every behaviour change (56d39e0f, 454ed007, bfd68c21, 3cf1d781); skills verify --bundled 0 findings."
+    },
+    "AC14": {
+      "at": "2026-10-01T07:21:21.166Z",
+      "note": "CI on PR #812 head 3cf1d781: all checks green on the first run (typecheck-and-tests incl. lint and the full suite, bundled-skill checks, mkdocs, wiki gate). keryx health run PASS (score 94) on the branch and on main in the round-3 comparison. The earlier run at a9f7810d had two failures outside the branch (install-state same-millisecond timestamp, a darwin-x64 TUI timeout) that passed on re-run."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/812"
   },
   "baseBranch": "main",
   "outcomeAuthor": "agent",
@@ -681,7 +738,7 @@
       "id": "T31",
       "title": "Final review round over the whole branch after consolidation, then full suite and health",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T27",
         "T28",
@@ -689,7 +746,7 @@
         "T30"
       ],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-30T20:01:07.059Z",
@@ -700,12 +757,18 @@
             "at": "2026-09-30T21:46:47.838Z",
             "outcome": "failed",
             "detail": "final review round 3: 0 blocker, 4 major (H-001..H-004), 8 minor, 8 info; round-2 majors all fixed; AC1-AC14 met; fix tasks T32-T34, then a targeted verification round"
+          },
+          {
+            "at": "2026-09-30T22:14:26.596Z",
+            "outcome": "started",
+            "detail": "targeted verification of round-3 fixes H-001..H-013 at 3cf1d781"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T32",
@@ -774,7 +837,7 @@
       "id": "T35",
       "title": "Docs for round-3 messages: case-variant package refusal and partial-removal wording in Undo and cli-reference",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -788,7 +851,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1319,6 +1383,110 @@
       "at": "2026-09-30T21:59:45.796Z",
       "event": "task-attempt",
       "detail": "T35: started (attempt 1) — 360-T35"
+    },
+    {
+      "at": "2026-09-30T22:14:20.060Z",
+      "event": "task-done",
+      "detail": "T35: Docs for round-3 messages: case-variant package refusal and partial-removal wording in Undo and cli-reference"
+    },
+    {
+      "at": "2026-09-30T22:14:26.596Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 3) — targeted verification of round-3 fixes H-001..H-013 at 3cf1d781"
+    },
+    {
+      "at": "2026-09-30T22:42:34.270Z",
+      "event": "task-done",
+      "detail": "T31: Final review round over the whole branch after consolidation, then full suite and health"
+    },
+    {
+      "at": "2026-09-30T22:51:52.163Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/812 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T07:21:18.761Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-vantage-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:18.935Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: import-skills.test.ts: deprecated package skipped with reason 'deprecated' in a tree import (also under metadata:, and for CRLF/BOM files after d6ffff97); 'a deprecated package named by its own path is imported, with a warning'. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:19.088Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: remove-skill.test.ts and src/commands/skills-remove.test.ts: package, registry entry, catalog row and verification report removed; --dry-run, --json and own --help; bundled and unknown names refused. Containment (2abe5c2e), exact-name identity and registry-last ordering (bb3a68ff), case-variant package refusal (7aeeda8a) added after review. CI green at 3cf1d781. Known open item: F-010 test gap, dismissed-deprioritised by MrCipherSmith to flow 362. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:19.293Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: import-skills.test.ts 'rules the imported skills cite': different content reports differs and the overlay's version lands in .metaproject/rules/project/<dir>/<name>.mdc (slot keyed on the full ref since 1ff78608), identical content is present; reviewers.test.ts: shadowedRules reported and the rule absent from unresolvedRules. Core/ refs normalised to core/ (bfd68c21). CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:19.485Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: reviewers.test.ts 'missing skills/ and rules/ files and non-portable rule paths are unresolved references': unresolvedReferences reports a missing skills/... .md/.json and a ~ / absolute rule path. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:19.640Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: reviewers.test.ts 'metadata.flags wins over flags named in the description', literal path beside a glob is a trigger while a cited .md is not (reviewer-triggers.ts since 7d639d09, one frontmatter reader since d6ffff97); import-skills.test.ts asserts the 'paths: none — dispatched on every round' warning. Round-3 run over the real overlay yields src/utils/column-zone.ts. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:19.832Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: reviewers.test.ts 'a flag more than one project reviewer carries is a family flag' (familyFlags, owned by src/gdskills/project-reviewers.ts since 379f814d); review-orchestrator SKILL.md 'Path gate' and SKILL.detail.md 'Family flags — why a shared flag does not lift the path gate'. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.012Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: review-orchestrator SKILL.md 'Agent Runtime Compatibility' (a project reviewer is dispatched by its package, skill_path, BLOCKED on a missing file) and SKILL.detail.md 'Dispatching a project reviewer — by its package, not by its name'; reviewer-input.schema.json optional skill_path; shadowedRules passed into the dispatch (20f4f720). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.171Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: review-frontend/SKILL.md (A3, B10, D6) and rules/core/mobx-store-template.mdc 'Lifecycle Initialization' treat useEffect(() => { store.onMount(); return () => store.onUnmount(); }, [store]) as the bridge and flag fetches/business logic instead (9fc03091); projections byte-identical (parity test green in CI). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.322Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: manifest.test.ts 'bundledManifestPath resolves the shipped manifest from the flat published dist/ layout' (7e8c0cc2, red on the old resolver); from a real npm pack tarball of 0.3.40, dist/cli.js skills install --profile full --dry-run exits 0 (T13 and round-3 reviewer, independently). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.506Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: cli.test.ts 'flow 360 AC11' block: review --help lists every routed subcommand (drift guard against the router), own usage for skills import/update/remove, review import/comments/learn, nothing executed; skills parity test (2abe5c2e). Confirmed from the packed build. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.764Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: review-orchestrator SKILL.md 'A round never answers a pull request…' and 'Legacy/Profile Reviewer Auto-Detection', SKILL.detail.md 'Skills present only when installed' (bundledSource qualifier since 56d39e0f, exit-code behaviour since 43e803be); the named commands were run from the packed build: --profile core --target keryx-shell installs review-pr-feedback (exit 1 with a skip list, as documented), --with capability:mobx plans code-mobx-store-review. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:20.990Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: reviewer-skill-creator SKILL.md points to SKILL.detail.md, which holds the end-to-end example captured from real runs (dry run, what each run writes, field derivation, what is not a reviewer, Undo with skills remove, refresh, per-clone note, review-learning.config.json shape); no 'alias' claim for review import. Re-captured after every behaviour change (56d39e0f, 454ed007, bfd68c21, 3cf1d781); skills verify --bundled 0 findings. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:21.167Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: CI on PR #812 head 3cf1d781: all checks green on the first run (typecheck-and-tests incl. lint and the full suite, bundled-skill checks, mkdocs, wiki gate). keryx health run PASS (score 94) on the branch and on main in the round-3 comparison. The earlier run at a9f7810d had two failures outside the branch (install-state same-millisecond timestamp, a darwin-x64 TUI timeout) that passed on re-run. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:21:31.143Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T07:21:36.912Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-01T07:21:36.915Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -1369,5 +1537,231 @@
     "value": "MrCipherSmith",
     "basis": "stated",
     "source": "`--owner` flag on `flow owner set`"
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T07:21:18.761Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:18.935Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:19.088Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:19.293Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:19.485Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:19.640Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:19.832Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.012Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.171Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.322Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.506Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.763Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:20.990Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:21.166Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    },
+    {
+      "at": "2026-10-01T07:21:36.915Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366",
+      "headCommit": "0ba8816ec840ea20300cf1df7bae591d6f393102"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T07:21:36.912Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "14 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0ba8816ec840ea20300cf1df7bae591d6f393102 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0ba8816ec840ea20300cf1df7bae591d6f393102 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "35 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 5 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:9ce0dac9c99f3fc7c7c073ba563c6154d1cb6bee4f859fa7fac4b46dffdcb366"
+    }
+  ],
+  "merged": {
+    "commit": "0ba8816ec840ea20300cf1df7bae591d6f393102",
+    "ref": "origin/main",
+    "at": "2026-10-01T07:21:36.915Z"
   }
 }

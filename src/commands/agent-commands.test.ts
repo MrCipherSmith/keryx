@@ -44,6 +44,8 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/workspace",
     "/review",
     "/reviews",
+    "/remote-control",
+    "/channels",
     "/product",
     "/governance",
     "/triggers",
@@ -172,6 +174,8 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/workspace",
     "/review",
     "/reviews",
+    "/remote-control",
+    "/channels",
     "/product",
     "/governance",
     "/triggers",
@@ -323,6 +327,8 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/workspace",
     "/review",
     "/reviews",
+    "/remote-control",
+    "/channels",
     "/product",
     "/governance",
     "/triggers",
@@ -388,6 +394,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",
+    "/channels",
     "/ci",
     "/conform",
     "/contract",
@@ -403,7 +410,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
-  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/rewind", "/reasoning"]);
+  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/remote-control", "/rewind", "/reasoning"]);
   // `/integrate` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix

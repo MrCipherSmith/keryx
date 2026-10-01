@@ -714,10 +714,10 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
     expect(nextIdx).toBeGreaterThanOrEqual(0);
     const block = source.slice(nextIdx, nextIdx + 700);
-    expect(block).toContain("runLine(next.question);");
+    expect(block).toContain('runLine(next.question, "operator", next.source);');
     expect(block).toContain("busWakeController?.onSettle();");
     // The queued item wins — bus-wake only runs in the `else` branch.
-    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf("runLine(next.question);"));
+    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf('runLine(next.question, "operator", next.source);'));
   });
 
   test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {

@@ -2,10 +2,13 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import {
   drainIdleMainQueue,
+  dropQueuedBySource,
   editMainQueueItem,
   formatMainQueueMarker,
   parseQueueCommand,
+  pendingQueueEditFor,
   QueuedMainQuestion,
+  reinsertEditedMainQueueItem,
   reinsertMainQueueItem,
   removeMainQueueItem,
 } from "./main-queue";
@@ -156,4 +159,48 @@ test("the busy recipient choice wires the idle drain after adding to the main qu
   for (const guard of ["!destroyed", "!chrome.isBusy()", "!foregroundOperation.isActive", "!forceHandoff.isAwaitingSettlement", "leaseView()?.held() !== true"]) {
     expect(choice).toContain(guard);
   }
+});
+
+// Flow 376 review (M2): `/queue edit` of a Telegram line must keep its source, or the
+// reply of the turn it starts never reaches the topic.
+test("editing a Telegram line and re-queuing it keeps source tg, so the drained turn is labelled", () => {
+  const items: QueuedMainQuestion[] = [q("mq1", "typed"), { ...q("mq2", "from telegram"), source: "tg" }, q("mq3", "typed too")];
+  const edited = editMainQueueItem(items, 1);
+  expect(edited).toBeDefined();
+  if (edited === undefined) return;
+  const pending = pendingQueueEditFor(edited.removed, 1);
+  expect(pending).toEqual({ id: "mq2", at: 1, source: "tg" });
+
+  const requeued = reinsertEditedMainQueueItem(edited.rest, pending, "from telegram, reworded", "from telegram, reworded");
+  expect(requeued.map((item) => item.id)).toEqual(["mq1", "mq2", "mq3"]);
+  expect(requeued[1]).toEqual({ id: "mq2", question: "from telegram, reworded", displayQuestion: "from telegram, reworded", source: "tg" });
+
+  // What the shell's drain hands to runLine: the source is still there.
+  const dispatched: (QueuedMainQuestion | undefined)[] = [];
+  const queue = requeued.slice(1);
+  drainIdleMainQueue(queue, { isIdle: () => true, takeForced: () => undefined, dispatch: (item) => dispatched.push(item) });
+  expect(dispatched[0]?.source).toBe("tg");
+});
+
+test("editing a typed line does not gain a source, and an absent source stays absent (exactOptionalPropertyTypes)", () => {
+  const edited = editMainQueueItem([q("mq1", "typed")], 0);
+  if (edited === undefined) throw new Error("expected an edit");
+  const pending = pendingQueueEditFor(edited.removed, 0);
+  expect("source" in pending).toBe(false);
+  const requeued = reinsertEditedMainQueueItem([], pending, "typed again", "typed again");
+  expect("source" in (requeued[0] ?? {})).toBe(false);
+});
+
+test("dropQueuedBySource splits the Telegram lines out in queue order and keeps the rest", () => {
+  const items: QueuedMainQuestion[] = [
+    { ...q("a", "tg one"), source: "tg" },
+    q("b", "typed"),
+    { ...q("c", "tg two"), source: "tg" },
+  ];
+  const { kept, dropped } = dropQueuedBySource(items, "tg");
+  expect(kept.map((item) => item.id)).toEqual(["b"]);
+  expect(dropped.map((item) => item.question)).toEqual(["tg one", "tg two"]);
+  // Non-destructive: the input is untouched.
+  expect(items).toHaveLength(3);
+  expect(dropQueuedBySource([q("x", "typed")], "tg").dropped).toEqual([]);
 });

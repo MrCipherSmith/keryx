@@ -69,6 +69,18 @@ export type BusyDispatchTarget =
    */
   | "reviews"
   /**
+   * `/remote-control` (flow 376): the status modal, turning it off, and turning it on
+   * all work WHILE a turn runs, the same reason as `/bus`: the operator reaches for it
+   * from a shell that is busy, often a turn that came from Telegram. It never touches
+   * the main turn.
+   */
+  | "remote-control"
+  /**
+   * `/channels` (flow 377): connect, test or disconnect Telegram for this machine. It talks to
+   * `keryx serve` and the user-global config, never to the main turn, so it works while one runs.
+   */
+  | "channels"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
@@ -122,6 +134,8 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/triggers") return "triggers";
   if (commandName === "/product") return "product";
   if (commandName === "/reviews") return "reviews";
+  if (commandName === "/remote-control") return "remote-control";
+  if (commandName === "/channels") return "channels";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
   if (commandName === "/external-diff") return "external-diff";

@@ -1000,6 +1000,32 @@ compared at startup, and a weaker profile refuses to bind at all. See
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md) for routes and
 setup.
 
+### Remote control from Telegram (opt-in, off by default)
+
+`/remote-control` in a running shell mirrors that session into its own topic of a
+Telegram supergroup: you send a line from your phone and it runs as if typed
+there, the reply and any approval question come back to the topic. Nothing
+happens until Telegram is connected to the machine: make a separate bot with
+BotFather and a supergroup with topics, then type `/channels` in any shell and
+choose Connect. The only thing you type is the bot token (hidden); your Telegram
+user id and the group id are found from a one-time pairing code and from adding
+the bot to the group as an admin with the manage topics right. Test sends a
+message to the group's General topic, Disconnect deletes the topics and erases the
+token. The connection is per machine, so use one bot per machine (Telegram allows
+one poller per token); `/remote-control` then turns individual sessions on. The
+files it writes, `remote/bot-token` (mode 600) and `remote/config.json`, can still
+be made by hand. The Telegram transport is the single poller inside `keryx serve` — shells
+talk to `serve` over loopback with a local shell token (new on every `serve`
+start, and never sent to an endpoint whose `serve` is gone), they never poll
+Telegram themselves, and a second `keryx serve` does not poll while the first one
+runs. At most 500 lines wait per topic, and turning it off tells the topic which
+queued lines will not run.
+Without a connection `serve` starts as before, with remote control off, and only
+offers the local `/channels` routes. This
+has been verified against a fake Bot API only; no run against real Telegram has
+been done yet. Setup and limits:
+[drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram).
+
 ## CI integration
 
 CI can publish normalized, committable artifacts that humans and agents read

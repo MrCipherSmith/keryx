@@ -225,8 +225,11 @@ export interface SurfaceAdapter {
    * (`./claude-settings.ts`). `relativePath` is then only the default, and a
    * caller that has a project root asks `surfaceRelativePath` (`registry.ts`)
    * instead of reading the field. `settingsFile` answers per project already.
+   * Flow 363: the Claude and Codex `rules-export` surfaces resolve theirs the
+   * same way (`./rules-export-target.ts`), and answer `undefined` when the
+   * project gives them no file to write (Codex with mode `skip`, say).
    */
-  relativePathFor?(projectRoot: string): string;
+  relativePathFor?(projectRoot: string): string | undefined;
   /**
    * Every path `relativePathFor` can answer with. The registry builds one
    * `SettingsFileOwner` per candidate and runs its coherence checks against
@@ -276,6 +279,15 @@ export interface SurfaceAdapter {
    * experimental surface's static risk notes already are.
    */
   customUninstall?(projectRoot: string): Promise<boolean | CustomUninstallResult>;
+  /**
+   * Flow 363 (end-to-end check): what a real `customUninstall` removes
+   * besides the file `inspect` describes — the rules-export surface also
+   * takes a block it left in the runtime's other file out — so
+   * `keryx integrations uninstall --dry-run` names it, and reports
+   * `would-remove` when that is the only thing a real run would remove.
+   * Optional; most surfaces remove nothing else.
+   */
+  dryRunUninstallExtras?(projectRoot: string): Promise<{ readonly warnings: readonly string[]; readonly removesElsewhere: boolean }>;
   /**
    * Health check for a surface that has no `merge`/`strip` to validate
    * against — a non-JSON artifact (a generated plugin file, a markdown
