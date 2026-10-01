@@ -56,8 +56,8 @@ describe("metadataList", () => {
 
 describe("reviewerFlagReport", () => {
   test("normalises each entry: split, trimmed, lower-cased, `--` added when it has no leading dash", () => {
-    expect(reviewerFlagReport(skill('metadata:\n  flags: " Vantage,--HOUSE-ui   core2 "\n'))).toEqual({
-      flags: ["--vantage", "--house-ui", "--core2"],
+    expect(reviewerFlagReport(skill('metadata:\n  flags: " Acme,--HOUSE-ui   core2 "\n'))).toEqual({
+      flags: ["--acme", "--house-ui", "--core2"],
       warnings: [],
     });
   });
@@ -173,7 +173,7 @@ describe("description triggers and flags (round 3, H-008)", () => {
   });
 
   test("a flag is found only at a word start, never inside a word (T18)", () => {
-    expect(descriptionFlags("Dispatched by vantage-review--vantage, x=--house or a/--ui")).toEqual([]);
+    expect(descriptionFlags("Dispatched by acme-review--acme, x=--house or a/--ui")).toEqual([]);
     expect(descriptionFlags("--lead, then (--paren), x,--comma and --spaced")).toEqual(["--lead", "--paren", "--comma", "--spaced"]);
   });
 });

@@ -24,63 +24,63 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-implementation-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Pre-production contract for the pure validator, schema subset, contextual detection and bounded verification.",
       "hash": "8bfe8e1ce3530ef5b4ea5b6825d1f417637e5930872a2d44aa3edd2e645a2751"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T19-change-report.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Stable exports, behavior, file hashes, RED/GREEN evidence, verification and routing audit.",
       "hash": "4dff0b2483919a101ebdae04b5f606dd5374710864559572254fa513636175de"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/security/output-validation.ts",
+      "path": "~/goodea/keryx/src/security/output-validation.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Pure structural transport validator and schema-subset fail-closed boundary.",
       "hash": "c6ec113558cb19c3ddef660554630801751febb60139ee370bb95238657c9e50"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/security/output-validation.test.ts",
+      "path": "~/goodea/keryx/src/security/output-validation.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Seven pure boundary tests for preservation, redaction, format safety, schemas and auto-fetch content.",
       "hash": "9ee097770d05b6d9131489990435cc9f5f0a6af6de2b29a7e4cedffea5d37f10"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-20-20-779Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-20-20-779Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Initial RED evidence: missing pure module produced 0 pass and 2 fail.",
       "hash": "d6035d568b98d7a836a5f758572879633816e5b4a27cda1d6c8bb2884b615d59"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-30-169Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-30-169Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Refinement RED evidence: contextual credential regression produced 6 pass and 1 fail.",
       "hash": "12a14960db029dbf642cc1df7300e0ce17a4c8431d98a6c0e3032adffa055e1e"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-57-041Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-27-57-041Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Final focused GREEN evidence: 22 pass, 0 fail, 92 assertions.",
       "hash": "ba4ac6090784bd84a137974916d2f07d903a5563718e011bb5f4f4edf93b1fa9"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-31-45-015Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-31-45-015Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Root integration boundary: 14 pass, 0 fail after guard/MCP adoption of the pure helper.",
       "hash": "1ddd20a3fa0f76a595692fcff7646d61594717cd2f17461808c0b0ef83d83db7"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-06-710Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-28-06-710Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Project TypeScript check passed.",

@@ -23,37 +23,37 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "The defect reproduced pre-edit via the reviewer's own T57-flow.ts probe, the reader enumeration for both surfaces touched, the fix design, the 'why not widen to a 4th GateOutcome.status member' and 'why not join every gate's detail' rejections with their reasoning, the code-comment correction, and the regression-test plan -- written before any code change."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Which option was chosen and why, full reader enumeration, evidence taken from the persisted artifact (before/after probe rows), RED/GREEN transcripts including the title-bug caught and fixed during RED verification, and every verification command with raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-before.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-before.log",
       "kind": "report",
       "exists": true,
       "summary": "Reviewer's own T57-flow.ts probe, run before any code change, reproducing F-001 (row C99: storedRecordsIdentical:true, storedRecordContainsWarnWord:false)."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-after-final.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-after-final.log",
       "kind": "report",
       "exists": true,
       "summary": "Same probe, post-fix (row C99: storedRecordsIdentical:false, storedRecordContainsWarnWord:true); re-run confirmed byte-identical in T60-probe-after-final2.log."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-T39exit-after.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T60-T39exit-after.log",
       "kind": "report",
       "exists": true,
       "summary": "T39-exit.ts re-run post-fix, confirming healthGateOutcome's own in-memory return values (which the review did not fault) are unchanged."

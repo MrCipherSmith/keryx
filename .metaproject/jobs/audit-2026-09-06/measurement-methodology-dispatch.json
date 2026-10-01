@@ -29,7 +29,7 @@
     ".metaproject/data/testing/context.md"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; read index first",
+    "Root ~/goodea/keryx; read index first",
     "No source edits, branch switching, installs, network model calls, benchmark sweep, commits or publication",
     "Read git objects with keryx ctx run -- git show; current main graph does not represent branch benchmark modules; record limitation",
     "Use exact pinned branch b65aa0173a6148c12595a4e134ecfbca8c562a0d",

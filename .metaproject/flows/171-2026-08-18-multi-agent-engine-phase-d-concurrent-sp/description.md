@@ -18,11 +18,9 @@ live use across multiple projects (keryx, carlson-bot, goodai):
    plan. `src/commands/agent.ts`'s tool-call loop (~line 1192-1238) processes
    every `spawn_subagent` call in a batch strictly one at a time — every batch
    is one wave of size one in practice, regardless of what `planWaves` could
-   compute. A three-project reference study (xAI Grok Build, OpenAI Codex CLI,
-   sst/opencode — cloned to `~/forks/`, direct code inspection except
-   opencode's default dispatch path which delegates to the un-inspected Vercel
-   AI SDK) found Keryx is the only one of the four studied that never runs
-   sibling spawns concurrently.
+   compute. A reference study (including OpenAI Codex CLI, by direct code inspection)
+   found that other agent harnesses run sibling spawns concurrently and Keryx
+   never does.
 2. **A child's own budget exhaustion is invisible to the parent.**
    `spawn-subagent-tool.ts` only sets `isError:true` for a parent-granted
    wall-clock timeout (~line 812-840) or a thrown/internal error (~line
@@ -30,9 +28,8 @@ live use across multiple projects (keryx, carlson-bot, goodai):
    (`agent.ts`'s `finishWithBudgetSummary`, ~line 1349) or hits the existing
    no-progress detector (~line 1318) without a clean finish, the tool takes
    its normal success path (~line 844-872), returning `isError:false` —
-   indistinguishable from a deliberate, successful completion. 2 of 3
-   references studied (Grok Build, Codex) distinguish this with a typed
-   status; opencode shares Keryx's exact gap for this one specific case.
+   indistinguishable from a deliberate, successful completion. Codex
+   distinguishes this with a typed status.
 
 ## Expected Outcome
 

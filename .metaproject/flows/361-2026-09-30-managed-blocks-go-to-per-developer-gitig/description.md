@@ -12,7 +12,7 @@ repository tracks and shares with the whole team:
 2. the `# keryx:begin … # keryx:end` block into `.gitignore`;
 3. `_keryxManaged` hooks into `.claude/settings.json`.
 
-In a consumer repo (observed in vantage-frontend) these stay as uncommitted edits in
+In a consumer repo (observed in a consumer project) these stay as uncommitted edits in
 every clone. When upstream changes `AGENTS.md`/`CLAUDE.md`, `git merge --ff-only` and
 `git pull` refuse ("local changes would be overwritten"), and the project forbids
 `git stash`, so a developer has no clean way to update.

@@ -7,7 +7,7 @@ default) + slash commands + output polish over the flow-021 shell. New `src/comm
 select.ts`; additive `shell.ts` + `cli.ts`. Variant A — NO new dep (readline+ANSI). Reuse
 flow-021 core + W14/W20 providers + W15/W20 egress unchanged. Tests OFFLINE (injected IO/
 fetch/env + FakeProvider); live smoke manual. `deps {}`. Credential never stored. D-02.
-Root `/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-tui). Worktree-guard.
+Root `~/goodea/keryx` (branch feature/keryx-release2-tui). Worktree-guard.
 Commits/PR: NO co-authorship.
 
 | ID | Kind | Model | Title / definition |

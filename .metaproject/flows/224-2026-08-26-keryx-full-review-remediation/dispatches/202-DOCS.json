@@ -12,10 +12,10 @@
   ],
   "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/docs/reviews/keryx-full-project-review-2026-08-24.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/rules/core/requirements-package-standard.mdc"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md",
+    "~/goodea/keryx/docs/reviews/keryx-full-project-review-2026-08-24.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/rules/core/requirements-package-standard.mdc"
   ],
   "constraints": [
     "Read the new worktree .metaproject/index.md before every repository action.",

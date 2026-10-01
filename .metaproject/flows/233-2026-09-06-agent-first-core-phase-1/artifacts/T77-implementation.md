@@ -159,7 +159,7 @@ a timing measurement and needs no oracle. The viability decision's four axes are
 
 ## Part 3 — verification, with counts and raw log paths
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes ran directly with
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes ran directly with
 `bun` for the reason every prior round on this surface disclosed and which holds here — `ctx run`'s
 compaction elides the per-case rows that ARE the evidence. The one required focused-suite run went
 through `ctx run` as the dispatch specifies. No network, no model call, no `bun test` without file

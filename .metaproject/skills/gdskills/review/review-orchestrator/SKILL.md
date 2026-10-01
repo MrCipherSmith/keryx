@@ -497,7 +497,7 @@ the SHA:
 
 ```yaml
 cross_repo:
-  - repo: vantage-backend
+  - repo: acme-backend
     state: merged
     sha: f5219d5d4
     merge_order: independent

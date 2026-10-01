@@ -7,7 +7,7 @@ with Session + Usage tabs, readline text dump, clipboard via existing
 `/copy`/OSC-52 path. TDD via `shell-slash-registry.test.ts` plus host tests.
 
 Rejected: implementing a second `overlayBox` inspector. Rejected: inventing
-Grok-only fields.
+fields keryx has no data for.
 
 ## Tasks
 

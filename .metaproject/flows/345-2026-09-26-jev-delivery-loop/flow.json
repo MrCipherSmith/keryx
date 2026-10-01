@@ -10,7 +10,7 @@
   "title": "Wire Jev edit-guard and ci-triage into delivery orchestrators",
   "status": "implemented",
   "createdAt": "2026-09-26T11:39:15.361Z",
-  "updatedAt": "2026-09-26T13:23:49.845Z",
+  "updatedAt": "2026-10-01T06:50:36.404Z",
   "source": {
     "type": "description",
     "ref": null
@@ -59,9 +59,9 @@
   },
   "baseBranch": "main",
   "owner": {
-    "value": "aleks.zeitler@gmail.com",
+    "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "tasks": [
     {
@@ -216,6 +216,11 @@
       "at": "2026-09-26T13:23:49.845Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/755 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T06:50:36.404Z",
+      "event": "owner-changed",
+      "detail": "operator@example.com -> MrCipherSmith (replace personal email with the public handle before publication)"
     }
   ],
   "signatures": [

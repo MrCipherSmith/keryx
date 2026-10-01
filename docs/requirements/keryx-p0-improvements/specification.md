@@ -39,7 +39,7 @@ named below that is not marked *(exists)* is planned.
   true }` in the shell config *(planned)*.
 - W3: action inputs `pr`, `scope: changed|full`, `spend-cap-usd`, `post:
   inline|summary|none`, `provider`, `model`.
-- W4: `serve.approvals: { transport: "helyx"|"cli"|"http", expiresSeconds:
+- W4: `serve.approvals: { transport: "telegram"|"cli"|"http", expiresSeconds:
   900 }`; `trigger` entries may set `approvals: inherit|deny`.
 - W5: none.
 
@@ -78,7 +78,7 @@ named below that is not marked *(exists)* is planned.
 
 - `keryx approvals list|show <id>|approve <id>|deny <id> [--reason]` — from any
   machine holding a serve token.
-- helyx transport: a card with summary, risk class, expiry; two buttons.
+- Telegram transport (the operator chat channel): a card with summary, risk class, expiry; two buttons.
 - `keryx serve` HTTP: `GET /approvals`, `POST /approvals/<id>` (signed).
 
 ### W5

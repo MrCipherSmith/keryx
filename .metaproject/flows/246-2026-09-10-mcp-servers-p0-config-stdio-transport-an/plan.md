@@ -58,8 +58,8 @@ so "not run in CI" cannot later read as "not required".
 
 ## Rejected
 
-**Register every MCP tool on the model's tool list.** What OpenCode does, and
-what this package explicitly refuses. The advertised surface would grow with
+**Register every MCP tool on the model's tool list.** What this package
+explicitly refuses. The advertised surface would grow with
 every server the operator adds and the model would pay for all of it every
 turn. spec AC5 exists to make the refusal checkable.
 

@@ -13,7 +13,7 @@
 | keryx | 0.2.112 (`f4cd8bd8`), запуск через bun |
 | Провайдер | пользовательский `MiniMax`, OpenAI-совместимый, `https://api.minimax.io` |
 | Модель | `MiniMax-M3`, рассуждения идут в `content` внутри `<think>…</think>` |
-| Проект | `/home/altsay/olimpyx` |
+| Проект | `~/olimpyx` |
 | Сессии | `5e57d10e…d6edb107` (39 сообщений), `439cc06e…f7e7837b` (75 сообщений) |
 | Запрос | «изучи документацию что реализовано какой роадмап есть реквайрменты?» |
 
@@ -208,4 +208,4 @@ R1–R3 — одна доработка провайдерного слоя; п.
 - MiniMax, OpenAI-совместимый API: https://platform.minimax.io/docs/api-reference/text-openai-api
 - DeepSeek, режим рассуждений: https://api-docs.deepseek.com/guides/thinking_mode/
 - Gemini, thought signatures: https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
-- Утечка `<think>` MiniMax в других клиентах: https://github.com/QwenLM/qwen-code/issues/3387, https://github.com/sst/opencode/issues/3555
+- Утечка `<think>` MiniMax в других клиентах подтверждена публичными issue в сторонних агентах.

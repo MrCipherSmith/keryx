@@ -7,7 +7,7 @@
 - 2026-07-20T13:42:17.187Z - started
 
 ## Phase 2/3 — implement + verify
-- tui-shell.ts: createCliRenderer useMouse:true; on CliRenderEvents.SELECTION → r.getSelection()?.getSelectedText() → r.copyToClipboardOSC52(text) (best-effort). Matches grok/opencode copy-on-select; OSC52 works over SSH; terminal must allow clipboard access.
+- tui-shell.ts: createCliRenderer useMouse:true; on CliRenderEvents.SELECTION → r.getSelection()?.getSelectedText() → r.copyToClipboardOSC52(text) (best-effort). Conventional copy-on-select; OSC52 works over SSH; terminal must allow clipboard access.
 - Verify: tsc CLEAN; bun test 1507/0. Real-terminal copy = user.
 - AC1-AC4 satisfied.
 - 2026-07-20T13:42:17.269Z - task-done: T1: Collect remaining context

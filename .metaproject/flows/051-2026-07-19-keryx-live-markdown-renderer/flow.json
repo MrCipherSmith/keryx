@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "051",
   "slug": "keryx-live-markdown-renderer",
-  "title": "keryx agent live-markdown differential renderer (Pi-style line diff + synchronized output)",
+  "title": "keryx agent live-markdown differential renderer (line diff + synchronized output)",
   "status": "done",
   "createdAt": "2026-07-19T00:37:41.163Z",
   "updatedAt": "2026-07-19T00:42:42.212Z",

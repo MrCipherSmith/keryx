@@ -7,7 +7,7 @@
 - Operator selected architectural option 2: unified foreground-operation lifecycle.
 - Operator explicitly requested completion outcome A: separate branch → PR → review/fix → merge → push.
 - Operator opted in to execution statistics.
-- Created worktree `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/tui-foreground-operation-cancellation` and branch `fix/tui-foreground-operation-cancellation` from `origin/main` at `09e8555c9079c3142125799c9e560e65d1eeae01`.
+- Created worktree `~/goodea/keryx/.worktrees/tui-foreground-operation-cancellation` and branch `fix/tui-foreground-operation-cancellation` from `origin/main` at `09e8555c9079c3142125799c9e560e65d1eeae01`.
 - Existing in-flight flows were unrelated; initialized new flow 219.
 - Context dispatch `219-context` ran on Luna and returned `STATUS: DONE`.
 - Analysis dispatch `219-analysis` ran on Terra and returned `STATUS: DONE`.

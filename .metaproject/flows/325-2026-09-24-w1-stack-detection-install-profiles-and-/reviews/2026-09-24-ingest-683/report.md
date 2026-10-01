@@ -1,6 +1,6 @@
 # PR #683 review round 3 (final, adversarial verification) — flow 309 W1 Wave 2
 
-Root: /Users/Goodea/goodea/keryx-ape-309-w1 @ 490a4c2b (fix commits f7164c7d stack, dd4f9318 manifest, ea419ceb governance, 490a4c2b journal). Read-only review. Repros are in `scratchpad/r3/` (ev3/ev3.ts, rootdir.ts, loo.ts, stk/, det/), plus the round-2 repros in `scratchpad/r2/`, re-run unchanged.
+Root: ~/goodea/keryx-ape-309-w1 @ 490a4c2b (fix commits f7164c7d stack, dd4f9318 manifest, ea419ceb governance, 490a4c2b journal). Read-only review. Repros are in `scratchpad/r3/` (ev3/ev3.ts, rootdir.ts, loo.ts, stk/, det/), plus the round-2 repros in `scratchpad/r2/`, re-run unchanged.
 
 Targeted suite at HEAD (`bun test src/stack src/commands/stack.test.ts src/gdskills/governance src/gdskills/stack-packs.test.ts src/gdskills/manifest src/commands/skills-install-route.test.ts src/commands/skills-governance.test.ts`): 258 pass, 0 fail.
 

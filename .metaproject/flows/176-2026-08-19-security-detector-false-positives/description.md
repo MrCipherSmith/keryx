@@ -1,7 +1,7 @@
 # Security detectors: ISO-dated flow prefixes masked as phones, dotted/hex credentials under-masked, and agent tool-call nudge noise
 
 Status: formalized
-Source: user description (evidence: keryx session `4a24a760`, project `/home/altsay/keryx`, 2026-08-19)
+Source: user description (evidence: keryx session `4a24a760`, project `~/keryx`, 2026-08-19)
 
 ## Problem
 

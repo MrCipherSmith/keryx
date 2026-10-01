@@ -636,8 +636,8 @@ async function submitTurn(request: Request, ctx: ServeContext): Promise<Response
 
   // (4) Resolve the session identity-first from the declared project. Never
   // infer. An unknown project fails rather than falling back to "the obvious
-  // one" — the failure mode that made helyx cross-link transports between
-  // projects.
+  // one" — the failure mode that makes an inferring server cross-link
+  // transports between projects.
   const project = resolveProject(validated.request.project, ctx.dir);
   if (!project.ok) {
     return errorResponse(404, project.code, project.message);

@@ -29,7 +29,7 @@ marked "fixed, verified this session."
 
 ## Current state (verified fixed, with proof)
 
-Re-run live in this worktree (`/Users/Goodea/goodea/keryx-agent-platform`,
+Re-run live in this worktree (`~/goodea/keryx-agent-platform`,
 main-derived branch, `keryx --version` 0.2.154):
 
 - **`ctx diff --stat` matches `git status --short`.** The 2026-07-10

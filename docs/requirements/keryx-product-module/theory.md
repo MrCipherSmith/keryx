@@ -61,7 +61,7 @@ Attention is allocated by chance rather than by risk.
 |---|---|---|
 | Ideas that do not work (Cagan; still true in 2026) | 50–75 % | If one idea in four survives and nobody looks back, the signal from the other three is discarded entirely. The process produces four times more waste than product and collects no data on it. |
 | New companies with a single founder (Carta) | ⅓ | Developer and product owner converged into one head as the default mode, not the exception. |
-| Tools built for the converged role | 0 | The market is split along a boundary that no longer exists: Jira, Linear, Productboard, Amplitude on one side; Cursor, Claude Code, Codex, Kiro on the other. Each serves half a person. |
+| Tools built for the converged role | 0 | The market is split along a boundary that no longer exists: Jira, Linear, Productboard, Amplitude on one side; Cursor, Claude Code, Codex on the other. Each serves half a person. |
 | Discovery | cheaper, not obsolete | "It matters more, not less — what changed is how fast and how cheaply you find out whether ideas work." Evals became a new discovery habit. |
 | Teams measuring outcomes rather than outputs | **no data exists** | The evidence base is practitioner guidance, not studies, and it names the reason: outcomes are noisier than outputs, so outputs get measured. The missing number is itself a finding. |
 

@@ -39,5 +39,5 @@ Collected by `keryx flow init` and enriched for W10. (T1 context.) SECURITY-CRIT
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. Verify after each. fetch-mocks `as unknown as typeof fetch`; guard array indexing; immutability via `.toThrow()`; NO real fs mutation.
+- WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first, write ONLY under it. Verify after each. fetch-mocks `as unknown as typeof fetch`; guard array indexing; immutability via `.toThrow()`; NO real fs mutation.
 - TDD order: M-01 (T5→T6), M-02 (T7→T8), review T9 (security).

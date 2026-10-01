@@ -565,7 +565,7 @@ the bound plus an escalation — never an unbounded loop.
    **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
    is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the
    agent finds the fix and then destroys it, throwing away ~15 points by not
-   stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
+   stopping. Other agent tools hardcode the same bound (`max_reflections = 3`).
    Rounds four through six were not buying convergence; they were buying
    regressions.
 

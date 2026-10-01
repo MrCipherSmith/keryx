@@ -98,8 +98,6 @@ function findingKey(reviewId: string, finding: OnDiskFinding): string {
 // are GitHub URLs this dataset needs for provenance, not free text.
 const IDENTITY_PATTERNS: readonly RegExp[] = [
   /altsay/gi,
-  /aleksandr-tsaitler/gi,
-  /Aleksandr Tsaitler/gi,
   /MrCipherSmith/gi,
 ];
 const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;

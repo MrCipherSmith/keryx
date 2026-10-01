@@ -46,8 +46,7 @@ per D-03). `skills_catalog`/`skill_load` are registered in
 release (PR #359, `feat(metaproject): add skills_catalog + skill_load
 operations`). This package's design followed a live comparative review
 (this package's [brainstorm.md](brainstorm.md)) of how Claude Code itself,
-and five open-source coding-agent CLIs
-(`opencode`, `cline`, `kilocode`, `continue`, `oh-my-claudecode`), each
+and five open-source coding-agent CLIs each
 implement skill/capability discovery and loading, and of how eleven CLIs
 implement `web_fetch` — the latter only as a calibration reference for how
 rigorous a comparable keryx mechanism (`SandboxedWebTransport`) already is,
@@ -82,7 +81,7 @@ not as scope for this package.
   replacing reliance on a self-reported routing-audit line.
 - Optional: exposing every gdskill as a `/name` slash command for assistants
   that don't natively support skill relevance-matching (mirrors the
-  opencode/cline/kilocode dual-path convention).
+  dual-path convention several other harnesses use).
 
 ## Non-goals
 

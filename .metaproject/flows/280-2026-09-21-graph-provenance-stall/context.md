@@ -65,7 +65,7 @@ _(flow-init skill appends here)_
 ### T5 reproduction (280-T5-T8 implementer, 2026-09-21)
 
 Reproduced on a throwaway repo under scratch space, using THIS branch's CLI
-(`bun /home/altsay/keryx/src/cli.ts ...`), not the globally installed 0.2.131:
+(`bun ~/keryx/src/cli.ts ...`), not the globally installed 0.2.131:
 
 1. `git init` + one commit with `src/index.ts`.
 2. `bun cli.ts init --yes` — scaffolds `.metaproject/`, including

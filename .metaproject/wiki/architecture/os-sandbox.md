@@ -117,7 +117,7 @@ Anyone reasoning about the security of the interactive agent should start here.
 
 - `runAgentTurn` never executes a `shell`-risk tool without an approver returning approval
 - An absent approver is a denial
-- A user allowlist (`~/.local/share/keryx/permissions.json`) provides OpenCode-style glob patterns that auto-approve without prompting
+- A user allowlist (`~/.local/share/keryx/permissions.json`) provides glob patterns that auto-approve without prompting
 
 ### Allowlist Pattern Matching: A Critical Warning
 

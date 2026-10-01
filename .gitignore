@@ -91,6 +91,14 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # just at a nested path the root-anchored pattern above does not reach.
 bench/jev-review/fixtures/conform-project/.metaproject/data/
 
+# Shared Agent Context session evidence holds raw agent-session transcripts
+# (prompts, tool output, local paths). They are personal working material, not
+# project content, and must never reach a public repository. Outside the
+# managed block for the same reason as the entries above.
+.metaproject/workspaces/*/session-evidence/
+# `keryx integrate opencode` writes a machine-specific absolute --cwd path.
+opencode.json
+
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
 .metaproject/runtime/

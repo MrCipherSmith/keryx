@@ -75,7 +75,7 @@
        web_fetch/web_search untrusted content in the same turn.
   - `maxSubagentConcurrency` (not `maxConcurrency` — actual field name):
     `AgentDeps.maxSubagentConcurrency?: number`, default
-    `DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3` (NOT grok-build's 32 — documented
+    `DEFAULT_MAX_SUBAGENT_CONCURRENCY = 3` (NOT a 32-default — documented
     reasoning: can't assume uniform provider rate-limit headroom). No
     env/config-file wiring yet, same (non-)state as existing
     `maxTreeDepth`/`maxChildrenPerRun` (hardcoded constants, not

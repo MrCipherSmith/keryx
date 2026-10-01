@@ -99,7 +99,7 @@ harness into project env file”.
 | Source | Takeaway |
 |--------|----------|
 | ADR-0006 / ADR-0007 | Opt-in sandbox; mask requires TLS terminate; fail closed |
-| opencode-style auth.json | User-global secrets, 0600 — keep |
+| User-global auth.json | User-global secrets, 0600 — keep |
 | Claude Code TLS notes (via ADR-0007) | Not all tools honor CA env vars |
 | OPENAI_COMPAT_PROVIDERS | Ready-made envKey + baseUrl map |
 

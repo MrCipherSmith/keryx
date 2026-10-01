@@ -13,7 +13,7 @@ items. The field evidence contradicts that bet without exception.
   maintainers switched the tool off.
 - Neither market leader converged on our architecture. Cursor abandoned fixed
   parallel fan-out for a single adaptive agent and called it their largest gain.
-  The closest open competitor ships 5 dimensions defaulting to 3. **Nobody runs
+  The closest open tool ships 5 dimensions defaulting to 3. **Nobody runs
   19.**
 
 What works is subtraction: a QA-checker stage took precision **51% → 93%** by

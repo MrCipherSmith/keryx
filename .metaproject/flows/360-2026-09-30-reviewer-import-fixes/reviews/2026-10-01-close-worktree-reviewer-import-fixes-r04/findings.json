@@ -161,7 +161,7 @@
     "reviewer": "review-logic",
     "severity": "major",
     "problem": "metadata.flags entries are taken verbatim.",
-    "impact": "flags: [vantage], ['--Vantage '] and 'flags: --vantage --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
+    "impact": "flags: [acme], ['--Acme '] and 'flags: --acme --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
     "suggested_fix": "Normalise entries and drop those not matching ^--[a-z][a-z0-9-]*$ with a visible warning.",
     "evidence": "Reproduced by the logic probe and review-verifier f006.ts with a control case.",
     "confidence": "high",
@@ -179,7 +179,7 @@
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "Re-checked against fix 7d639d09 + d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f006.ts and r360-3/review-logic/triggers.ts: [vantage], ['--Vantage '], '--vantage --house', block lists all normalise to valid flags, invalid entries are dropped with a warning (S9: import output, reviewers text and JSON); mutants T06-T13 (reviewer-triggers.test.ts), I28 (import-skills.test.ts), V01/V02/V04 (src/review/reviewers.test.ts) killed. No longer reproduces.",
+      "evidence": "Re-checked against fix 7d639d09 + d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f006.ts and r360-3/review-logic/triggers.ts: [acme], ['--Acme '], '--acme --house', block lists all normalise to valid flags, invalid entries are dropped with a warning (S9: import output, reviewers text and JSON); mutants T06-T13 (reviewer-triggers.test.ts), I28 (import-skills.test.ts), V01/V02/V04 (src/review/reviewers.test.ts) killed. No longer reproduces.",
       "verifier": "close-verifier-360"
     },
     "disposition": {

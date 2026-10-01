@@ -1,6 +1,6 @@
-# Flow 068 — grok-style TUI layout
+# Flow 068 — conventional TUI layout
 
-Polish the OpenTUI agent shell toward the grok/opencode look (both open source):
+Polish the OpenTUI agent shell toward a conventional terminal-agent look:
 a header bar with a right-aligned token counter, a bordered rounded composer, a
 dim footer hint line, and user messages in bordered boxes — via OpenTUI flexbox
 (Box border/justifyContent/padding). runAgentTurn + the readline shell are

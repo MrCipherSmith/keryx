@@ -1,6 +1,6 @@
 # Review round 1 — PR #690 (flow 313, W4 portability)
 
-**Scope.** Worktree `/Users/Goodea/goodea/keryx-ape-313-w4` on `flow/313-w4`, reviewed against the diff to `feat/agent-platform-expansion` (`pr-690.diff`), the frozen ACs 1–15, plan.md, `W4-portability.md` and `portable-bundle.schema.json`.
+**Scope.** Worktree `~/goodea/keryx-ape-313-w4` on `flow/313-w4`, reviewed against the diff to `feat/agent-platform-expansion` (`pr-690.diff`), the frozen ACs 1–15, plan.md, `W4-portability.md` and `portable-bundle.schema.json`.
 
 - **Areas covered:** `src/bundle/**`, `src/commands/bundle.ts`, memory/MCP harness identity and handoff, `src/lib/private-dir.ts`, external catalog vetting and scout, rules-export rendering, the audit-harness `imported-bundles` surface, and the docs.
 - **How findings were confirmed:** every blocker and major finding below was reproduced against the real modules, or against `bun src/cli.ts` in a fresh `git init` repo with `KERYX_HOME` pointed at a scratch home, all on macOS APFS (case-insensitive).

@@ -3,8 +3,7 @@
 Implemented in `.metaproject/flows/186-2026-08-21-bounded-autonomous-continuation-for-goal/`
 (source of truth for the full design history, including the mid-implementation
 acceptance-criteria revisions — see that flow's `journal.md`). This file is a
-short as-built summary; `competitor-survey.md` in this same directory is the
-research that motivated the feature.
+short as-built summary.
 
 ## What shipped
 

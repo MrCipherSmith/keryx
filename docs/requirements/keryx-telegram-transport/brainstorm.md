@@ -42,40 +42,9 @@ is never a second Harness runtime or Task Manager writer.
 
 ## 2.1.0: multi-project and voice
 
-### Evidence
-
-`helyx`, a private system on the same host, runs this exact surface in production
-against agent sessions and was studied directly. Its Telegram layer settled two
-questions this package had left open.
-
-**Multi-project.** It uses a forum supergroup with one topic per project.
-Routing resolves the project from the topic identifier. The decisive detail is
-in `sessions/router.ts`: when a topic maps to no project it returns
-`disconnected` rather than falling through to chat-based routing, with the
-comment that the fallback "could accidentally deliver the message to another
-project's session". Work is queued per `chatId:topicId`
-(`bot/topic-queue.ts`), so projects run in parallel while one project's messages
-run in order, and a queued sender is told its position immediately.
-
-Two further details are worth copying: topic liveness is probed with a no-op
-chat action and only a definite "thread not found" clears the mapping — any
-other error leaves it alone (`services/forum-service.ts`); and the Bot API
-cannot list a forum's topics, so synchronization can create but not reconcile.
-
-**Voice.** Inbound is transcription with a fallback chain, a status message
-edited through its phases, deduplication by message identifier, and — the part
-worth copying most — degradation to delivering the audio as a file rather than
-losing the message. Outbound qualifies before speaking: a minimum length, a cap
-on how much of the text may be code, and a diff check that deliberately does not
-mistake markdown bullets for diff lines (`utils/tts.ts`). Long replies are split
-at paragraph, sentence, line, then word boundaries under a duration cap, markup
-is stripped, and an optional model pass rewrites paths and identifiers so they
-read naturally aloud — with a guard that discards the rewrite if it changed the
-language of the text.
-
 ### What is adopted, and what is changed
 
-| helyx behaviour | Decision here |
+| Behaviour observed in another agent tool | Decision here |
 |---|---|
 | Topic-per-project routing; unmapped topic refuses instead of falling back | **Adopted, and promoted to a security rule.** A wrong guess runs one project's prompt under another project's profile and scope, and the operator only finds out afterwards. AC-17 and AC-18. |
 | Per-topic queue with position reporting | **Adopted**, plus a depth bound whose breach is an explicit refusal rather than a silent drop. AC-20, AC-21. |
@@ -103,8 +72,8 @@ left implicit, and reopened one that had been decided wrongly.
 
 ### Topics follow `keryx init`, not a bulk setup
 
-helyx enumerates projects from its database and creates topics in a batch. That
-works because it has a central project table. keryx does not: `keryx init`
+Another agent tool studied enumerates projects from its database and creates
+topics in a batch. That works because it has a central project table. keryx does not: `keryx init`
 writes a `.metaproject/` into a directory and nothing on the machine knows the
 set of projects.
 
@@ -144,7 +113,7 @@ dependency rather than worked around in the transport.
 ### Rejected: entering an API key in the chat
 
 The obvious way to authorize a provider without a web UI is to paste the key
-into the chat, and helyx-style deployments do keep secrets in ordinary
+into the chat, and some other deployments do keep secrets in ordinary
 configuration.
 
 **Rejected.** A key sent as a message traverses Telegram's servers, persists in

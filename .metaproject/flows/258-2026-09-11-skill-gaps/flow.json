@@ -58,7 +58,7 @@
     },
     "AC11": {
       "at": "2026-09-12T12:49:08.187Z",
-      "note": "Techniques adapted from addyosmani/agent-skills carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
+      "note": "Techniques adapted from an external MIT-licensed skills library carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
     },
     "AC12": {
       "at": "2026-09-12T12:49:08.292Z",
@@ -1065,7 +1065,7 @@
     {
       "at": "2026-09-12T12:49:08.187Z",
       "event": "ac-confirmed",
-      "detail": "AC11: Techniques adapted from addyosmani/agent-skills carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
+      "detail": "AC11: Techniques adapted from an external MIT-licensed skills library carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
     },
     {
       "at": "2026-09-12T12:49:08.293Z",

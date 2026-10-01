@@ -4,7 +4,7 @@ STATUS: DONE_WITH_CONCERNS
 
 Reviewer: `review-logic` (independent). I wrote none of the code, none of the
 earlier reviews (T62/T68/T70/T73/T75/T76), and none of the T79 repair under
-recheck. Root: `/Users/Goodea/goodea/keryx` (`pwd` confirmed before the first
+recheck. Root: `~/goodea/keryx` (`pwd` confirmed before the first
 read). No `.claude/worktrees/**` entered. No `git stash` at any point. Read-only
 on all production/test/documentation files — every edit this review made is
 confined to `T80-review.md`, `T80-result.json`, and two new probe scripts
@@ -121,7 +121,7 @@ Per `RESIDUALS.md`'s own recorded decision: after T78 and T80, no new round open
 
 ## Evidence
 
-Raw logs, all under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`:
+Raw logs, all under `~/goodea/keryx/.metaproject/data/gdctx/raw/`:
 
 | Log | SHA-256 |
 |---|---|

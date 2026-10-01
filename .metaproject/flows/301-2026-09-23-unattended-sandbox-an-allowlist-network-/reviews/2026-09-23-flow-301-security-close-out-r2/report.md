@@ -5,7 +5,7 @@ runs (flow 301), across three rounds:
 
 - Round 1: adversarial review of the original implementation, commit `cbe2e6da`.
 - Round 2: re-review of fix commits `051f1475` (F1-F5) and `17d42d0a` (F5b) on
-  worktree `/home/altsay/keryx-net`.
+  worktree `~/keryx-net`.
 - Round 3 (this package): close-out verification against `70362a5a` (branch
   head, includes the F5c opt-in fix) and the squash-merge commit on `main`,
   `aae6558c7d414a3278d4a1290eb4b95b2af14b4c`. `git diff aae6558c7d414a3278d4a1290eb4b95b2af14b4c 70362a5a77a79417de1bf09a0b933521b0856b7e`

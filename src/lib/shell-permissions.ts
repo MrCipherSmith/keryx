@@ -1,12 +1,8 @@
-// Shell command allowlist for the interactive agent (inspired by OpenCode /
-// Claude Code / Grok Build permission models).
+// Shell command allowlist for the interactive agent.
 //
-// - OpenCode: bash rules with `*` wildcards; ask UI offers once / always / reject;
+// - Rules use `*` wildcards; the ask UI offers once / always / reject, and
 //   "always" stores a command-prefix pattern for the session (or config).
-// - Claude Code: `permissions.allow: ["Bash(npm run *)"]` with Tool(specifier)
-//   patterns; deny > ask > allow.
-// - Grok Build: always-approve mode + remembered "always allow" for common
-//   command prefixes.
+// - Precedence is deny > ask > allow.
 //
 // keryx stores shell allow patterns in `~/.local/share/keryx/permissions.json`
 // (same XDG base as auth.json). Default is ask (prompt). Never throws.
@@ -25,7 +21,7 @@ export { hasUnquotedMetacharacter };
 export interface ShellPermissions {
   /**
    * Glob patterns that auto-allow `shell_exec` without prompting.
-   * Matching is case-sensitive; `*` / `?` wildcards (OpenCode-style).
+   * Matching is case-sensitive; `*` / `?` wildcards.
    * Examples: `keryx wiki index`, `keryx *`, `git status*`.
    */
   allow: string[];
@@ -352,7 +348,7 @@ export function allowShellPattern(pattern: string, dir?: string): string {
 }
 
 /**
- * OpenCode-style glob: `*` = any run of chars **including newlines** (heredoc /
+ * Glob: `*` = any run of chars **including newlines** (heredoc /
  * multiline shell_exec), `?` = one char (any, including newline), other chars literal.
  * Pure.
  *
@@ -459,7 +455,7 @@ export interface ShellPatternSuggestion {
 }
 
 /**
- * Suggested patterns for the approval UI (OpenCode-style "always" grants), each
+ * Suggested patterns for the approval UI ("always" grants), each
  * with a flag saying whether it may be OFFERED at all.
  *
  * - exact: full command (preserves newlines so heredoc matches on re-use)

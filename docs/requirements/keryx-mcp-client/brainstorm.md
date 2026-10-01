@@ -8,9 +8,9 @@ useful as the reasoning that kept things in.
 ## Origin
 
 This package was scoped from a broader comparative research pass (8 agents,
-17-dimension rubric) profiling keryx against 7 peer coding-agent harnesses.
-That pass found: (a) keryx has no MCP-client capability at all — server-only —
-while 6 of 7 peers do; and, on a later, corrected pass into
+17-dimension rubric) across peer coding-agent harnesses. That pass found:
+(a) keryx has no MCP-client capability at all — server-only — while most
+peers do; and, on a later, corrected pass into
 `keryx-external-agent-runtime`'s own `decisions.md`, that D-03's "kept idea
 1" (forwarding an external agent's permission requests back into keryx's own
 decision layer) is exactly the mechanism an MCP client would need to
@@ -18,7 +18,7 @@ implement for `codex mcp-server`. The two gaps turned out to be one gap.
 
 ## Reference designs studied
 
-### deepseek-harness (`packages/mcp/mcp-client`)
+### A lean TypeScript harness (MCP client plugin)
 
 A standalone plugin on `@modelcontextprotocol/sdk`'s `Client`. `connection.ts`
 is a per-server connection supervisor that owns "generations" of the SDK
@@ -34,7 +34,7 @@ registry, not a VS Code extension or a framework-heavy service. The
 generation-swap reconnect supervisor and two-phase tool sync are concurrency
 hazards keryx's own registry would hit; worth studying even though this
 package's v1 scope (one server, one purpose) does not need the full
-multi-server generality deepseek-harness built.
+multi-server generality that harness built.
 
 ### codex (`rmcp-client`, `codex-mcp`)
 
@@ -66,16 +66,15 @@ Two relevant, DIFFERENT mechanisms, easy to conflate:
      specification.md §4 as a version-compat concern, since keryx's own
      registry already pins `codex-cli` to `knownGoodRange.min: "0.147.0"`.
 
-### cline (MCP client, for context — not a candidate pattern here)
+### An editor-extension MCP client (for context — not a candidate pattern here)
 
-Full standalone OAuth-capable MCP client (`extensions/mcp/client.ts`,
-`oauth.ts`) with a dual stdio-framing probe. Relevant as evidence that a
+Full standalone OAuth-capable MCP client with a dual stdio-framing probe. Relevant as evidence that a
 generic multi-server client is a real, buildable thing — not relevant as a
 pattern for *this* package's narrow v1 scope, which has one server and no
 OAuth (codex's own subscription auth is untouched, per D-01/D-07 boundaries
 already established in the parent package).
 
-### opencode (`catalog.ts`'s `convertTool()`)
+### Another harness's tool conversion (`convertTool()`)
 
 Converts a raw MCP tool definition into a generic tool object
 (schema + async `execute()` wrapping `client.callTool()`), so MCP tools
@@ -85,32 +84,6 @@ the abstract — but this package's v1 has no discovered *tools* to bridge in
 that sense; codex's elicitation is a side-channel approval request, not a
 tool call the model itself makes. Kept as a reference for whichever later
 version of this client does add real tool-bridging.
-
-## Reference design: helyx (`/home/altsay/bots/helyx`, not locally available)
-
-Already documented in `keryx-external-agent-runtime/brainstorm.md` from a
-prior research pass; restated here with the specific angle this package
-needed (human-in-the-loop approval over Telegram).
-
-**Pattern 1 — inverted MCP channel.** A human/tmux supervisor starts Claude
-Code interactively (not `-p`); helyx attaches as a stdio MCP server
-(`helyx-channel`). Inbound work queues in Postgres, delivered via MCP
-notification `notifications/claude/channel`; replies go back through MCP
-tools (`reply`/`react`/`edit_message`). **Permission requests are forwarded
-outward via a custom `notifications/claude/channel/permission_request`
-notification, so a human approves from Telegram** — not a standard MCP
-method, an ad-hoc extension built for this one integration.
-
-Why it doesn't transfer directly: it works specifically because Claude Code
-is NOT running under `-p`. keryx's push architecture (D-03 in the parent
-package, reaffirmed here as D-02) commits to headless spawning, which is
-exactly the mode where Claude's own permission-prompt-tool restriction bites
-(see D-01). helyx sidesteps the restriction by not being headless at all, not
-by finding a `-p`-compatible workaround. The lesson kept: a Telegram-relayed
-human approval is a legitimate shape for *codex's* elicitation flow too
-(codex has no `-p`-style non-interactive restriction on this path), but it is
-an operator-surface decision, not an architectural requirement — recorded
-here so a future TUI/Telegram integration doesn't need to rediscover it.
 
 ## Open question, elaborated — RESOLVED (see decisions.md D-05, specification.md §9)
 

@@ -15,7 +15,7 @@ Design decisions (made here so workers do not re-decide them):
 both take `--only <glob>` (repeatable, matched against the package directory name). When
 `--from` resolves to a directory holding more than one package and the module is `review`,
 a missing `--only` is a refusal that lists the candidate package names and shows an
-example. The hardcoded `review-vantage-` prefix (`OVERLAY_REVIEWER_PREFIX`) is removed:
+example. The hardcoded `review-acme-` prefix (`OVERLAY_REVIEWER_PREFIX`) is removed:
 it is one overlay's naming, not a Keryx concept. `keryx review import` stays as the
 review-shaped spelling (`--module review` implied) and is documented as that, not as an
 "alias with an extra filter". A single package directory or a SKILL.md file needs no

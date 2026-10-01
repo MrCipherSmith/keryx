@@ -13,7 +13,7 @@ Driven by a prior comparative research pass (8 agents, 17-dimension rubric,
 *every one of them* — including things with no structural relationship to
 Ollama at all (OpenRouter, DeepSeek, Z.AI, Cerebras, Groq, Moonshot, Grok) —
 is served by one adapter class named for a specific local runtime it also
-happens to serve. opencode's `packages/llm` was the strongest studied
+happens to serve. Another agent harness's multi-protocol layer was the strongest studied
 pattern for closing this without abandoning keryx's existing SDK-free,
 provider-neutral `ProviderPort` design: one native module per real wire
 format, one thin generic module for the OpenAI-Chat-compatible long tail.
@@ -61,7 +61,7 @@ zero-behavior-change requirement.
 | [prd.md](prd.md) | Problem, goal, users, requirements, success criteria, risks, recommendation. |
 | [specification.md](specification.md) | Identity, structure, data contracts, integration points, acceptance criteria. |
 | [decisions.md](decisions.md) | Adopted decisions: scope (both providers at once) and the `OllamaProvider` split/rename. |
-| [brainstorm.md](brainstorm.md) | Reference designs studied (opencode, cline, deepseek-harness, codex) and current-state findings. |
+| [brainstorm.md](brainstorm.md) | Reference designs studied (codex and other agent harnesses) and current-state findings. |
 
 ## Scope
 

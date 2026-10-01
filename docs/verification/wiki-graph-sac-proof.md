@@ -276,10 +276,10 @@ Closest analogues and the difference:
 
 | Analogue | Difference |
 |---|---|
-| Mem0 / Zep / Letta memory | Those *are* the store. SAC is not; wiki/memory stay owners. |
-| Cursor/Claude memories + rules | Session/user scoped, no reviewed promotion into a versioned wiki. |
-| Sourcegraph / graphify | Graph only. No FWK, no proposal receipt. |
-| Aider/Cline repo map | Prompt packing, not a durable collaboration object. |
+| Dedicated agent-memory stores | Those *are* the store. SAC is not; wiki/memory stay owners. |
+| Editor/assistant memories + rules | Session/user scoped, no reviewed promotion into a versioned wiki. |
+| Code-graph tools | Graph only. No FWK, no proposal receipt. |
+| Repo maps | Prompt packing, not a durable collaboration object. |
 | Notion/ADR + GitHub issues | Human workflow. No typed Facts/Work/Know-how receipt or owner write-intent. |
 
 ### Residual gaps (explicit)
@@ -315,8 +315,8 @@ Prove it with this run (do not invent numbers):
 - propose wiki-update from session efdc4c01 → review accepted →
   .metaproject/wiki/decisions/sac-proposal-a41fc4152ad147e2.md Version 0.1.0 Status draft
 
-Contrast Mem0/Zep (the store is the product), Cursor memories (no owner write
-receipt), and repo maps (prompt packing). End with the rule: if the model
+Contrast dedicated memory stores (the store is the product), editor memories
+(no owner write receipt), and repo maps (prompt packing). End with the rule: if the model
 disappears, navigation and accepted knowledge still work; only generation stops.
 ```
 

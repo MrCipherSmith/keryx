@@ -59,9 +59,9 @@ Two gaps confirmed by direct code investigation, not present in flows 088-101:
   every `spawn_subagent` call in a batch strictly one at a time (`await`s each
   child's entire turn before starting the next), so in practice every batch is
   one wave of size one regardless of what `planWaves` could compute. A
-  three-project reference study (xAI Grok Build, OpenAI Codex CLI, sst/opencode
+  three-project reference study (OpenAI Codex CLI and two other harnesses
   — see `brainstorm.md`) found Keryx is the only one of the four studied that
-  never runs sibling spawns concurrently (opencode's default dispatch path
+  never runs sibling spawns concurrently (one harness's default dispatch path
   delegates to the Vercel AI SDK, not directly inspected in this study — see
   `brainstorm.md`'s hedge on that specific point).
 - **A child's own budget exhaustion is invisible to the parent.** When a
@@ -70,7 +70,7 @@ Two gaps confirmed by direct code investigation, not present in flows 088-101:
   `isError:false` — identical in shape to a deliberate, successful completion.
   Only a parent-granted wall-clock timeout or a thrown error are currently
   distinguished. The same reference study found this distinct-status pattern
-  in 2 of 3 comparators (Grok Build, Codex); opencode shares Keryx's exact gap
+  in 2 of 3 comparators (Codex and one other harness); the third shares Keryx's exact gap
   for this one case.
 
 ## Requirements

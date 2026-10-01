@@ -315,7 +315,7 @@ argument for this file — it only ever covered the label-matching path, not the
 
 ## Evidence
 
-Every command run from `/Users/Goodea/goodea/keryx` on branch `codex/agent-first-core`. No git state
+Every command run from `~/goodea/keryx` on branch `codex/agent-first-core`. No git state
 change, no flow state change, no dependency change, no network, no model call. Synthetic and reserved
 hosts only (`attacker.invalid`, `ok.example.org`, `ci.example.org`). Production, test and documentation
 files were not modified. All probes were run against the working tree exactly as I found it

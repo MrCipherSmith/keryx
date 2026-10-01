@@ -1,7 +1,7 @@
 # TUI transcript blocks: toggle-collapsible reasoning/tool blocks + copyable markdown/prompt renderer + code & diff rendering
 
 Status: formalized
-Source: user description (3 screenshots: Grok prompt block vs. keryx shell transcript)
+Source: user description (3 screenshots: a reference prompt block vs. keryx shell transcript)
 
 ## Problem
 
