@@ -16,3 +16,5 @@
 - 2026-10-01T08:02:59.535Z - task-done: T1: Collect remaining context
 - 2026-10-01T08:03:00.322Z - task-done: T2: Implement per plan
 - 2026-10-01T08:03:01.007Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T08:04:05.400Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/821 (warning: PR is not a draft)
+- 2026-10-01T08:04:06.087Z - task-done: T4: Self-review and prepare draft PR

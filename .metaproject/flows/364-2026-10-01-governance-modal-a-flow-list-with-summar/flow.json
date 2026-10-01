@@ -8,9 +8,9 @@
   "id": "364",
   "slug": "governance-modal-a-flow-list-with-summar",
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T08:03:01.007Z",
+  "updatedAt": "2026-10-01T08:04:06.087Z",
   "source": {
     "type": "description",
     "ref": null
@@ -18,7 +18,7 @@
   "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/821"
   },
   "baseBranch": "main",
   "outcomeAuthor": "human",
@@ -76,7 +76,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +84,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -250,6 +251,16 @@
       "at": "2026-10-01T08:03:01.007Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T08:04:05.400Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/821 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T08:04:06.087Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
