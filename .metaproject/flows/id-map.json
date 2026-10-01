@@ -382,5 +382,13 @@
     "toDir": "383-2026-09-29-outcome-author-flag",
     "at": "2026-10-01T12:22:20.503Z",
     "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "366",
+    "to": "385",
+    "fromDir": "366-2026-10-01-local-env-test-failures",
+    "toDir": "385-2026-10-01-local-env-test-failures",
+    "at": "2026-10-01T13:45:04.262Z",
+    "reason": "duplicate id with 366-2026-09-29-external-agents-live on main; operator chose to move the later flow (housekeeping, flow 384)"
   }
 ]
