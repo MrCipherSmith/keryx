@@ -378,7 +378,9 @@ Two properties people get wrong when summarising this:
   the same listener also serves seven `/v1/remote/*` routes. They accept only the
   local shell token, from loopback; the bearer token above does not reach them,
   and the shell token reaches nothing else. Which principal a caller is is decided
-  by which token verified, still before the URL is read.
+  by which token verified, still before the URL is read. The shell sends a
+  nonce-bound HMAC of that token, never the token itself, and `serve` signs every
+  answer, so a shell refuses an answer from a process that only squats the port.
 
 ## Containment — two tiers, and the platform split is not a footnote
 

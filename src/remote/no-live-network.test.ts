@@ -174,7 +174,10 @@ describe("src/remote cannot reach the network except through its one client", ()
       expect(importedSpecifiers(code).filter(isNetworkSpecifier)).toEqual([]);
       // The one place a URL is built is `target`, and the check sits in it.
       expect(code.match(/`http:\/\//g)?.length).toBe(1);
-      const target = code.slice(code.indexOf("private target("), code.indexOf("private async post("));
+      const start = code.indexOf("private target(");
+      expect(start).toBeGreaterThanOrEqual(0);
+      // Up to the next member: the body of `target` and nothing else.
+      const target = code.slice(start, code.indexOf("\n  private ", start + 1));
       expect(target).toContain("isLoopbackAddress(");
       expect(target.indexOf("isLoopbackAddress(")).toBeLessThan(target.indexOf("`http://"));
       // No other network primitive, and no other host.

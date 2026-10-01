@@ -158,9 +158,15 @@ Make a separate bot with BotFather and a supergroup with topics enabled, then ru
    group id is taken from that event, and a bot that is already in the group is
    picked up too. This step has its own 10 minutes, counted from the moment the
    code is accepted, and the modal shows how many are left. If the group has no
-   topics or the bot lacks the right, the modal says which.
+   topics or the bot lacks the right, the modal says which. Turning Topics on
+   turns a basic group into a supergroup with a new id; the pairing follows that
+   move by itself.
 4. A test message arrives in the group's General topic and the channel reads
    Connected. `serve` starts using it without a restart.
+
+A pairing that is finished while the modal is closed is not lost: reopen `/channels`
+and **Resume** connects it. A mistyped token on a second Connect is refused and
+leaves a pairing that is already open, with its code, untouched.
 
 **Test** sends another message naming this machine. When the files are saved but
 `serve` could not start Telegram (the modal reads "configured, but not running"),
@@ -225,6 +231,16 @@ that it is off.
   restarting `serve` needs nothing from you; a shell will not send it to an
   endpoint whose `serve` process is no longer running, and says remote control
   is unreachable instead.
+- **`serve` proves it is `serve`.** The shell never sends the raw token: each
+  request carries a fresh random nonce and an HMAC of it made with the token, and
+  `serve` answers every shell route with a proof (the header
+  `x-keryx-serve-proof`) over the nonce, the route, the status and the body. A shell
+  that gets no proof, or a wrong one, from whatever listens on the port refuses the
+  answer, writes nothing (no allowlist entry, no group id) and says to restart
+  `keryx serve`. That also covers a `serve` from before this check. A process that
+  took over the port after a crashed `serve` therefore cannot make the shell save
+  its own Telegram id as the operator; the bearer it saw is useless after the next
+  `serve` start.
 - **Nothing is replayed or lost across a restart of `serve`.** No Telegram offset
   is stored; `serve` drops an update id it has already seen, and a lower id than
   ones seen (Telegram restarted its numbering) is delivered, not swallowed. At most

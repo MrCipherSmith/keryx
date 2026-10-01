@@ -20,6 +20,10 @@ export interface BotMessage {
   /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
   forward_origin?: unknown;
   forward_date?: number;
+  /** Service message on a basic group that became a supergroup (Topics turned on): the supergroup's NEW chat id. */
+  migrate_to_chat_id?: number;
+  /** The matching service message on the new supergroup: the old group's chat id. */
+  migrate_from_chat_id?: number;
 }
 
 /** The part of a Telegram `my_chat_member` update the pairing reads: who changed the bot's membership, and where. */

@@ -167,6 +167,22 @@ export class FakeBotApi implements BotApi {
     });
   }
 
+  /**
+   * A basic group became a supergroup (Topics turned on): Telegram's service message with
+   * `migrate_to_chat_id` on the old chat (`side: "to"`) or `migrate_from_chat_id` on the new one (`side: "from"`).
+   */
+  pushMigration(input: { fromId: number; oldChatId: number; newChatId: number; side?: "to" | "from" }): BotUpdate {
+    const from = input.side === "from";
+    const message = {
+      message_id: ++this.messageSeq,
+      from: { id: input.fromId },
+      chat: { id: from ? input.newChatId : input.oldChatId, type: from ? "supergroup" : "group" },
+      date: Math.floor(this.now() / 1000),
+      ...(from ? { migrate_from_chat_id: input.oldChatId } : { migrate_to_chat_id: input.newChatId }),
+    };
+    return this.enqueueUpdate({ message });
+  }
+
   /** Every call answers 401, as Telegram does for a token it does not know. */
   setTokenRejected(rejected: boolean): void {
     this.tokenRejected = rejected;

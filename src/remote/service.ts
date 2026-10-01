@@ -34,7 +34,7 @@ import { localMachineName } from "./naming";
 import { ensureRemoteDir, remoteConfigPath } from "./paths";
 import { acquirePollLock, type AcquirePollLockOptions, type PollLock } from "./poll-lock";
 import { RemoteHttpSurface, type RemoteSurfaceOptions } from "./http-surface";
-import { createShellTokenVerifier, mintShellToken } from "./shell-token";
+import { createShellTokenVerifier, mintShellToken, serveResponseProof } from "./shell-token";
 
 export interface OpenRemoteServiceOptions
   extends Pick<
@@ -71,8 +71,10 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
   const machine = options.machine ?? localMachineName();
   // Set by `start`, once the poller lock is ours and a fresh token has been minted.
   let verifyShellToken: ((presented: string) => boolean) | undefined;
+  let shellToken: string | undefined;
   const surface = new RemoteHttpSurface({
     verifyShellToken: (presented) => verifyShellToken?.(presented) ?? false,
+    proveResponse: (nonce, route, status, body) => (shellToken === undefined ? undefined : serveResponseProof(shellToken, nonce, route, status, body)),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.timers === undefined ? {} : { timers: options.timers }),
     ...options.surface,
@@ -247,12 +249,20 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
           return refuse(lock.reason);
         }
       }
+      // The previous serve's endpoint goes before the new token exists: a shell reads the token and then the
+      // endpoint, so it can never hold the new token while the endpoint still names an old (possibly squatted) port.
+      try {
+        unlinkSync(endpointPath(options.dir));
+      } catch {
+        // Nothing left over.
+      }
       // Every start rotates the token: whatever an earlier serve handed out stops working here.
       const token = mintShellToken(options.dir);
       if (!token.ok) {
         return refuse(token.reason);
       }
       verifyShellToken = createShellTokenVerifier(token.value);
+      shellToken = token.value;
       try {
         ensureRemoteDir(options.dir);
         const body: RemoteEndpoint = { address: endpoint.address, port: endpoint.port, pid: process.pid };
