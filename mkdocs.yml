@@ -8,11 +8,16 @@
 # `docs_dir` is `docs/docs` — the developer documentation only. The rest of
 # `docs/` (requirements packages, decisions, plans, reports) is working material
 # that is versioned and readable on GitHub but is not a published site section;
-# publishing it would bury the eight pages a reader actually needs under two
-# hundred they do not.
+# publishing it would bury the pages a reader actually needs (about sixty in the
+# nav) under hundreds of project records they do not.
 #
-# The build runs with `--strict` in CI, so a broken internal link or a page
-# missing from the nav fails the job rather than shipping a site with dead ends.
+# The build runs with `--strict` in CI, so a broken internal link or an unresolved
+# reference fails the job. `--strict` does NOT fail on a page that exists but is
+# missing from the nav (it only logs an INFO line), so `scripts/check-docs-nav.ts`
+# runs in CI as well and fails on any Markdown file that is neither in the nav
+# nor excluded.
+#
+# Dependencies are pinned in `requirements-docs.txt`.
 site_name: keryx
 site_description: One project-local brain for your AI agents and your team.
 site_url: https://mrciphersmith.github.io/keryx/
@@ -33,26 +38,90 @@ exclude_docs: |
 
 theme:
   name: material
+  custom_dir: docs/overrides
+  logo: assets/keryx-mark.svg
+  favicon: assets/favicon.svg
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
+      primary: indigo
+      accent: deep purple
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
+      primary: indigo
+      accent: deep purple
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
   features:
+    - navigation.tabs
+    - navigation.indexes
     - navigation.sections
     - navigation.top
     - content.code.copy
     - search.suggest
 
+extra_css:
+  - assets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/MrCipherSmith/keryx
+      name: Keryx on GitHub
+    - icon: fontawesome/brands/npm
+      link: https://www.npmjs.com/package/@mrciphersmith/keryx
+      name: "@mrciphersmith/keryx on npm"
+
+plugins:
+  - search
+  # `onboarding.md` and `complete-setup-and-agent-workflows.md` still exist, so
+  # nothing is redirected yet. When the setup-pages task (T12) retires them it
+  # adds:
+  #   onboarding.md: getting-started/quickstart.md
+  #   complete-setup-and-agent-workflows.md: guides/set-up-a-project.md
+  - redirects:
+      redirect_maps: {}
+  - llmstxt:
+      markdown_description: >-
+        Keryx is a project-local brain for AI agents and teams: a
+        `.metaproject/` workspace of wiki, graph, memory, skills and flows,
+        a terminal shell with its own agent harness, and adapters for the
+        agents you already use.
+      full_output: llms-full.txt
+      sections:
+        Getting started:
+          - getting-started/*.md
+        Guides:
+          - guides/*.md
+          - agent-installation-playbook.md
+        Modules:
+          - modules/*.md
+        Concepts:
+          - concepts/*.md
+          - architecture.md
+          - harness.md
+          - learning.md
+          - jev-in-review.md
+        Reference:
+          - reference/*.md
+          - cli-reference.md
+          - commands-by-task.md
+          - modules.md
+          - workspace-and-lifecycle.md
+          - integrations.md
+          - hooks.md
+        Project:
+          - project/*.md
+          - limitations.md
+
 markdown_extensions:
   - admonition
   - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
@@ -67,44 +136,91 @@ markdown_extensions:
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
 
+# `onboarding.md` and `complete-setup-and-agent-workflows.md` are not in the nav:
+# they are being split into the Getting started and Guides pages and then
+# retired. They stay in the build so existing links keep resolving until then.
+not_in_nav: |
+  onboarding.md
+  complete-setup-and-agent-workflows.md
+
 nav:
   # `README.md` is deliberately absent. MkDocs maps a directory's `README.md`
   # onto its `index.md`, so listing both makes them collide and the README is
   # dropped. `index.md` is the landing page here; the README stays in the
   # repository for people browsing on GitHub.
-  - Start here: index.md
-  - Onboarding: onboarding.md
+  - Home: index.md
+  - Getting started:
+      - Install: getting-started/install.md
+      - Quickstart: getting-started/quickstart.md
+      - Keryx in five minutes: getting-started/concepts.md
+      - Troubleshooting: getting-started/troubleshooting.md
   - Guides:
-      - Give an agent context: guides/give-an-agent-context.md
-      - Choose an approval mode (ask, trust, auto): guides/permission-modes.md
-      - "Undo a turn with /rewind": guides/rewind.md
-      - Run an agent without giving it your machine: guides/contain-an-agent.md
-      - Give a subagent a name instead of a paragraph: guides/agent-catalog.md
-      - "ACP client: drive a foreign agent under keryx's policy": guides/acp-client.md
-      - "Let an external agent write (claude-cli)": guides/external-agent-write.md
-      - Agent web search: guides/web-search.md
-      - Use local SearXNG for web search: guides/use-local-searxng.md
-      - Drive keryx from a bot: guides/drive-keryx-remotely.md
-      - Answer a remote approval from a bot: guides/answer-remote-approvals.md
-      - Review with a durable record: guides/review-with-a-record.md
-      - Review as a pull request bot: guides/review-as-a-pr-bot.md
-      - Jev in the delivery loop: guides/jev-in-the-delivery-loop.md
-      - Shared Agent Context (experimental): guides/shared-agent-context.md
-      - "/goal: deterministic starts, autonomous continuation": guides/goal.md
-      - Slate for external agents: guides/slate.md
-      - Keep the wiki current: guides/keep-the-wiki-current.md
-      - Run keryx in CI: guides/run-in-ci.md
-      - Move skills, rules, agents, and memory between projects and machines: guides/portability.md
-      - Write a rubric (judge) eval scenario: guides/write-a-rubric-scenario.md
-  - Architecture: architecture.md
-  - The agent harness: harness.md
-  - Integrations: integrations.md
-  - Lifecycle hooks: hooks.md
-  - Modules: modules.md
-  - Self-learning loop: learning.md
-  - CLI reference: cli-reference.md
-  - Commands by task: commands-by-task.md
-  - Workspace and lifecycle: workspace-and-lifecycle.md
-  - Limitations: limitations.md
-  - Complete setup and agent workflows: complete-setup-and-agent-workflows.md
-  - Agent installation playbook: agent-installation-playbook.md
+      - Set up:
+          - Set up a project end to end: guides/set-up-a-project.md
+          - Connect a model provider: guides/connect-a-provider.md
+          - Use a local model: guides/use-a-local-model.md
+          - Give an agent context: guides/give-an-agent-context.md
+          - Agent installation playbook: agent-installation-playbook.md
+          - Copy-ready agent prompts: guides/agent-prompts.md
+      - Work in the shell:
+          - Choose an approval mode: guides/permission-modes.md
+          - "Undo a turn with /rewind": guides/rewind.md
+          - "/goal": guides/goal.md
+          - Agent web search: guides/web-search.md
+          - Use local SearXNG: guides/use-local-searxng.md
+          - Keep private work in-house: guides/keep-private-work-in-house.md
+      - Agents and delegation:
+          - Run an agent without your machine: guides/contain-an-agent.md
+          - Name a subagent: guides/agent-catalog.md
+          - Drive a foreign ACP agent: guides/acp-client.md
+          - Let an external agent write: guides/external-agent-write.md
+          - Slate for external agents: guides/slate.md
+          - Shared Agent Context (experimental): guides/shared-agent-context.md
+      - Review and quality:
+          - Review with a durable record: guides/review-with-a-record.md
+          - Review as a pull request bot: guides/review-as-a-pr-bot.md
+          - Review service in the delivery loop: guides/jev-in-the-delivery-loop.md
+          - Write a rubric eval scenario: guides/write-a-rubric-scenario.md
+          - Keep the wiki current: guides/keep-the-wiki-current.md
+      - Automation and remote:
+          - Run keryx in CI: guides/run-in-ci.md
+          - Drive keryx from a bot: guides/drive-keryx-remotely.md
+          - Answer a remote approval: guides/answer-remote-approvals.md
+          - Move skills, rules, memory: guides/portability.md
+  - Modules:
+      - Project knowledge: modules/project-knowledge.md
+      - The keryx shell: modules/shell.md
+      - Models and providers: modules/providers.md
+      - Harness and safety: modules/harness-and-safety.md
+      - Connect your agents: modules/integrations.md
+      - MCP servers in the shell: modules/mcp-servers.md
+      - Delegation: modules/delegation.md
+      - "Managed work: flows, jobs, review": modules/managed-work.md
+      - "Quality: health and testing": modules/quality.md
+      - Skills, rules and learning: modules/skills-and-learning.md
+      - Automation and remote control: modules/automation.md
+      - Governance and data lifecycle: modules/governance.md
+      - Shared Agent Context: modules/shared-agent-context.md
+  - Concepts:
+      - The Metaproject: concepts/metaproject.md
+      - Architecture: architecture.md
+      - The agent harness: harness.md
+      - Security model: concepts/security-model.md
+      - Self-learning loop: learning.md
+      - "Review service: what was measured": jev-in-review.md
+  - Reference:
+      - Overview: reference/index.md
+      - CLI reference: cli-reference.md
+      - Commands by task: commands-by-task.md
+      - Module reference: modules.md
+      - Configuration and environment: reference/configuration.md
+      - Workspace and lifecycle: workspace-and-lifecycle.md
+      - Integrations and adapters: integrations.md
+      - Lifecycle hooks: hooks.md
+  - Project:
+      - Project status: project/status.md
+      - Built with Keryx: project/built-with-keryx.md
+      - Limitations: limitations.md
+      - Changelog: project/changelog.md
+      - FAQ: project/faq.md
+      - Contributing and support: project/contributing.md

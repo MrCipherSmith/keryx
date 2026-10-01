@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Keryx">
+  <rect x="3" y="3" width="58" height="58" rx="12" fill="#6b63c9"/>
+  <path d="M20 18c-4 0-5 2-5 5v4c0 3-1.5 5-4 5 2.5 0 4 2 4 5v4c0 3 1 5 5 5" fill="none" stroke="#1f2233" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 18c4 0 5 2 5 5v4c0 3 1.5 5 4 5-2.5 0-4 2-4 5v4c0 3-1 5-5 5" fill="none" stroke="#1f2233" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="32" r="3.5" fill="#4cb782"/>
+  <circle cx="32" cy="32" r="3.5" fill="#c97b7b"/>
+  <circle cx="40" cy="32" r="3.5" fill="#f2cc8f"/>
+</svg>
