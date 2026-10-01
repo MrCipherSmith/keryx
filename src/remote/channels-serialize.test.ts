@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "bun:test";
 import { ChannelsController, type ChannelsHost } from "./channels";
+import { DEFAULT_ORPHAN_MS, DEFAULT_RUN_TIMEOUT_MS, REMOTE_CONFIG_SCHEMA_VERSION, saveBotToken, saveRemoteConfig } from "./config";
 import { FakeBotApi } from "./fake-bot-api";
 import type { RemoteHub } from "./hub";
 import { until } from "./remote.test-helpers";
@@ -191,5 +192,91 @@ test("a pairing closed while its status is being checked answers no-pairing, not
   const checking = controller.handle("channels-pairing", request);
   await controller.handle("channels-cancel", request);
   expect((await checking).status).toBe(404);
+  await controller.stop();
+});
+
+// ---- review follow-ups: F-107 (ready pairing is resumable) and F-109 (a bad token keeps the pairing) ----
+
+const CODE = "K7M2QX9P";
+const OPERATOR = 90_113_377;
+const fastPairing = { code: CODE, pollTimeoutSec: 1, pollSleep: () => new Promise<void>((resolve) => setTimeout(resolve, 1)) };
+const statusState = async (controller: ChannelsController): Promise<string> =>
+  ((await (await controller.handle("channels-status", request)).json()) as { telegram: { state: string } }).telegram.state;
+const pairingSnapshot = async (controller: ChannelsController): Promise<{ status: number; state?: string }> => {
+  const response = await controller.handle("channels-pairing", request);
+  return { status: response.status, ...(response.ok ? { state: ((await response.json()) as { state: string }).state } : {}) };
+};
+
+test("F-107: a pairing that reached ready is reported as a pairing until a reload consumes it", async () => {
+  const api = new FakeBotApi();
+  let running: RemoteHub | undefined;
+  const { host, dir } = await makeHost(api, {
+    hub: () => running,
+    startHub: async () => {
+      running = { list: () => [] } as unknown as RemoteHub;
+      return { ok: true };
+    },
+  });
+  const controller = new ChannelsController({ host, pairing: fastPairing });
+  expect((await controller.handle("channels-pair", request)).status).toBe(200);
+  api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+  await until(async () => (await pairingSnapshot(controller)).state === "waiting-for-group", "the operator to be paired");
+  api.pushMyChatMember({ fromId: OPERATOR });
+  await until(async () => (await pairingSnapshot(controller)).state === "ready", "the group to be accepted");
+
+  // Nobody connected it (the modal was closed): the controller still says "pairing", so the modal offers Resume.
+  expect(await statusState(controller)).toBe("pairing");
+  expect(await pairingSnapshot(controller)).toEqual({ status: 200, state: "ready" });
+
+  // What connectFinish does: write the files, then reload. Reload consumes the pairing.
+  expect(saveBotToken("123456:AAHunit_followup_token_0123456789", dir).ok).toBe(true);
+  expect(
+    saveRemoteConfig(
+      { schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION, chatId: api.chatId, allowedUserIds: [OPERATOR], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS },
+      dir,
+    ).ok,
+  ).toBe(true);
+  expect((await controller.handle("channels-reload", request)).status).toBe(200);
+  expect(await statusState(controller)).toBe("connected");
+  expect((await pairingSnapshot(controller)).status).toBe(404);
+  await controller.stop();
+});
+
+test("F-109: a token Telegram rejects leaves the pairing in progress untouched and its code still usable", async () => {
+  const good = new FakeBotApi();
+  const bad = new FakeBotApi();
+  bad.setTokenRejected(true);
+  let current: FakeBotApi = good;
+  const { host } = await makeHost(good, { openApi: () => ({ ok: true, api: current }) });
+  const controller = new ChannelsController({ host, pairing: fastPairing });
+  expect((await controller.handle("channels-pair", request)).status).toBe(200);
+  await until(() => good.activePollers() === 1, "the first pairing to poll");
+
+  current = bad;
+  const refused = await controller.handle("channels-pair", request);
+  expect(refused.status).toBe(422);
+  expect(await errorCode(refused)).toBe("token-rejected");
+
+  // The pairing that was open is still open: same state, still polling, and its code still pairs the operator.
+  expect(await statusState(controller)).toBe("pairing");
+  expect(await pairingSnapshot(controller)).toEqual({ status: 200, state: "waiting-for-user" });
+  expect(good.activePollers()).toBe(1);
+  good.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+  await until(async () => (await pairingSnapshot(controller)).state === "waiting-for-group", "the old code to still work");
+  await controller.stop();
+});
+
+test("F-109: a valid new token replaces the pairing, and the old poller is gone before the new one runs", async () => {
+  const first = new FakeBotApi();
+  const second = new FakeBotApi();
+  let current: FakeBotApi = first;
+  const { host } = await makeHost(first, { openApi: () => ({ ok: true, api: current }) });
+  const controller = new ChannelsController({ host, pairing: fastPairing });
+  expect((await controller.handle("channels-pair", request)).status).toBe(200);
+  await until(() => first.activePollers() === 1, "the first pairing to poll");
+
+  current = second;
+  expect((await controller.handle("channels-pair", request)).status).toBe(200);
+  await until(() => first.activePollers() === 0 && second.activePollers() === 1, "only the new pairing to poll");
   await controller.stop();
 });
