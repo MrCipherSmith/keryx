@@ -97,7 +97,7 @@ The gates passing does not clear N2: the nav gate's false pass is latent and the
 
 ## Process note
 
-Reviewer B reported that two of its commands ran with the shell cwd reset to the owner's checkout `/Users/Goodea/goodea/keryx`:
+Reviewer B reported that two of its commands ran with the shell cwd reset to the owner's checkout `~/goodea/keryx`:
 
 - `keryx shell --provider ollama --model x --base-url http://192.168.1.50:11434 --print hi`, which printed "bus: joined as @agent-1";
 - a `find`/`git status`.

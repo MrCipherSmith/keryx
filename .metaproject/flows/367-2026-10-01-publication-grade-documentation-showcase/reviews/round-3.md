@@ -1,7 +1,7 @@
 # Review round 3: publication-grade documentation (dispatch 367-T18-r3)
 
 - Target: branch `docs/publication-grade-docs`, head `2709073d`. Fix commits under review: `97ed073f` (T22, 13 files, +86/-28) and `10fcfd0b` (README.ru sync).
-- Mode: single reviewer, report only, no subagents. Every command ran from `/Users/Goodea/goodea/keryx-docs` (`pwd` confirmed at start).
+- Mode: single reviewer, report only, no subagents. Every command ran from `~/goodea/keryx-docs` (`pwd` confirmed at start).
 - Isolation: the only state-writing runs (`keryx mcp list`/`doctor`) used throwaway `HOME`/`XDG_*` dirs and a scratch repo under `scratchpad/r3-mcp`. `HOME` was echoed first to confirm. No fetch, stash, add or commit.
 
 ## Verdict

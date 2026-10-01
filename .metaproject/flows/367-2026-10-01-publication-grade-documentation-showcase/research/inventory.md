@@ -1,6 +1,6 @@
 # Documentation inventory (flow 363, context collection)
 
-Collected 2026-10-01 on branch docs/publication-grade-docs, worktree /Users/Goodea/goodea/keryx-docs. Dates = `git log -1 --format=%cs`. Lines = `wc -l`. `.metaproject/` excluded by scope.
+Collected 2026-10-01 on branch docs/publication-grade-docs, worktree ~/goodea/keryx-docs. Dates = `git log -1 --format=%cs`. Lines = `wc -l`. `.metaproject/` excluded by scope.
 Audience codes: EU end-user, INT integrator, CON contributor, HIST internal-history.
 
 ## 1. Inventory by area

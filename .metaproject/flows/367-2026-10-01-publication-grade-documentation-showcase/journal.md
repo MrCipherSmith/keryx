@@ -138,7 +138,7 @@ flow-id collision (main has its own 363 — renumber at merge); rebase onto main
 Command, run at the T21 commit over README.md, README.ru.md, docs/docs/**,
 ARCHITECTURE.md, SUPPORT.md, ROADMAP.md, CONTRIBUTING.md, SECURITY.md:
 
-`git grep -n -I -i -E 'flow [0-9]{2,3}\b|\bW[0-9]+\b|R[0-9]+-F|SLATE-[0-9]|\bD-[0-9]|/Users/|/home/[a-z]|tsaitler|altsay|@gmail|competitor|inspired by'`
+`git grep -n -I -i -E 'flow [0-9]{2,3}\b|\bW[0-9]+\b|R[0-9]+-F|SLATE-[0-9]|\bD-[0-9]|/Users/|/home/[a-z]|operator|altsay|@gmail|competitor|inspired by'`
 excluding the `W3-self-learning` link target, the `--flow 12` example id and
 the `/home/you` placeholder → 0 hits.
 

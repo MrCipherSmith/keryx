@@ -1,6 +1,6 @@
 # Code truth — what Keryx is, per the code (flow 363 research)
 
-Worktree: `/Users/Goodea/goodea/keryx-docs` @ branch `docs/publication-grade-docs`, package `@mrciphersmith/keryx` **0.3.46** (`package.json:3`).
+Worktree: `~/goodea/keryx-docs` @ branch `docs/publication-grade-docs`, package `@mrciphersmith/keryx` **0.3.46** (`package.json:3`).
 Sources of truth used: `src/cli-registry.ts` `CLI_ROUTES` (`:109-182`, top-level verbs) and `USAGE_BODY` (`:239-483`); `src/lib/group-subcommands.ts` (`:42-271`, real per-group subcommand vocabulary read from each handler's dispatch); `bun ./src/cli.ts help` / `<group> --help`; `bun ./src/cli.ts doctor --json`; `keryx modules status`.
 Items not verified against code are marked **UNCONFIRMED**.
 
