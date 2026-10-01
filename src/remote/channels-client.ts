@@ -86,6 +86,8 @@ export interface ChannelsDisconnectResult {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+/** Failures of `channels-pair` after which serve may have taken the token or another start owns the file. */
+const PAIRING_OUTCOME_UNKNOWN: ReadonlySet<string> = new Set(["no-answer", "superseded", "unexpected-response"]);
 export const UNVERIFIED_SERVE_REASON =
   "The program answering on keryx serve's port did not prove it is the keryx serve this shell trusts, so its answer was ignored and nothing was written. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides).";
 /** Deleting many topics is one call per topic. */
@@ -142,7 +144,9 @@ export class ChannelsClient {
   /**
    * Step 1 of Connect. Validates the token's shape, writes it to the token file (owner-only,
    * atomically) and asks serve to open a pairing. If serve refuses, or is down, the file is put
-   * back as it was: a refused token leaves nothing on disk.
+   * back as it was: a refused token leaves nothing on disk. When the outcome is unknown (no answer,
+   * superseded, an answer that does not parse) the file stays, and so does a file another shell has
+   * replaced since.
    */
   async startPairing(token: string): Promise<ChannelsResult<PairingResponse>> {
     // Reach serve first: a token is not written for a serve that is not there.
@@ -156,9 +160,14 @@ export class ChannelsClient {
     if (!saved.ok) {
       return { ok: false, code: "invalid", reason: saved.reason };
     }
+    const written = readConfigFile(file);
     const result = await this.call<PairingResponse>("channels-pair", isPairing);
-    if (!result.ok) {
-      this.restore(file, before);
+    if (!result.ok && !PAIRING_OUTCOME_UNKNOWN.has(result.code)) {
+      const now = readConfigFile(file);
+      // Only a file still holding exactly what this call wrote is this call's to put back.
+      if (written.ok && now.ok && now.text === written.text) {
+        this.restore(file, before);
+      }
     }
     return result;
   }

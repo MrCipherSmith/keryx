@@ -3,6 +3,14 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.55] — 2026-10-01
+### Fixed
+- **A timeout while starting a pairing no longer erases the bot token.** The shell wrote the new token, asked `serve` to open the pairing, and on any failure put the old file back, even when `serve` had simply not answered in time and may have taken the token, or had answered `superseded` because a newer start owns the file. It now puts the previous token back only when `serve` definitely refused (a rejected token, `already-connected`, `serve` not running and the like), and only when the file still holds exactly the token this start wrote: a token another shell wrote in between is left alone.
+- **A rejected token no longer cancels a valid start in progress.** A second `/channels` start with a token Telegram refuses used to answer `superseded` to a valid start that was still waiting for Telegram. Only a token Telegram accepted supersedes an earlier start now; of two valid starts the later one still wins.
+- **Stopping `serve` while a pairing is starting no longer leaves a poller behind.** A start waiting for Telegram when `serve` stopped could still begin polling afterwards and park a pairing in the stopped controller. It now answers `superseded` and starts nothing.
+
+[Changes since 0.3.54](https://github.com/MrCipherSmith/keryx/compare/v0.3.54...v0.3.55)
+
 ## [0.3.54] — 2026-10-01
 ### Fixed
 - **`flow check` no longer fails a clone over stale remote branches.** 0.3.53 judged every remote-tracking ref alike, so a fresh clone of this repository reported about thirty `duplicate-id` failures against old branches cut before earlier renumberings (and `flow list` tagged those flows `dup id`). Only a clash with the default branch (`<remote>/main`, `<remote>/master`, the `<remote>/HEAD` target) fails the check now; a clash with any other remote branch is a warning (`flow id <n> is also used on <ref> by a different flow (...); ignore it if that branch is stale, otherwise renumber one of them before it merges`) and does not change the exit code or the `dup id` tag. `flow init` and `flow renumber --to` still reserve numbers held by every known remote branch.

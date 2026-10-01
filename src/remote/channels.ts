@@ -48,6 +48,8 @@ export class ChannelsController {
   private pairing: Pairing | undefined;
   // pair, reload and disconnect run one at a time; any call that changes what the channel is bumps the generation, so work queued or in flight for an older one gives up.
   private generation = 0;
+  private pairTickets = 0;
+  private latestPair = 0;
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: ChannelsOptions) {}
@@ -77,6 +79,7 @@ export class ChannelsController {
 
   /** Serve is stopping: nothing may keep polling. */
   async stop(): Promise<void> {
+    this.generation += 1;
     await this.dropPairing();
   }
 
@@ -120,35 +123,43 @@ export class ChannelsController {
     await running?.cancel();
   }
 
-  private pair(): Promise<Response> {
-    const mine = ++this.generation;
+  private async pair(): Promise<Response> {
+    // The generation moves only for a token Telegram accepted: a rejected one must not end a valid start still in flight. Of two valid starts the later one wins.
+    const seen = this.generation;
+    const ticket = ++this.pairTickets;
+    const stale = (): boolean => seen !== this.generation || ticket < this.latestPair;
     const superseded = (): Response => fail(409, "superseded", "Another change to this channel came in while the pairing was starting; start again.");
+    const connected = (): Response => fail(409, "already-connected", "Telegram is already connected on this machine; disconnect it first.");
+    if (this.host.hub() !== undefined) {
+      return connected();
+    }
+    // Validate the new token before touching the pairing that exists: a mistyped token, or a second shell, must not kill a pairing in progress.
+    const api = this.host.openApi();
+    if (!api.ok) {
+      return fail(422, "no-token", api.reason);
+    }
+    const opened: OpenPairingResult = await Pairing.prepare({
+      api: api.api,
+      ...(this.options.now === undefined ? {} : { now: this.options.now }),
+      ...this.options.pairing,
+    });
+    if (!opened.ok) {
+      return fail(opened.kind === "rejected" ? 422 : 502, opened.kind === "rejected" ? "token-rejected" : "telegram-unreachable", opened.reason);
+    }
+    if (stale()) {
+      return superseded();
+    }
+    this.latestPair = ticket;
     return this.exclusive(async () => {
-      if (mine !== this.generation) {
+      if (stale()) {
         return superseded();
       }
       if (this.host.hub() !== undefined) {
-        return fail(409, "already-connected", "Telegram is already connected on this machine; disconnect it first.");
-      }
-      // Validate the new token before touching the pairing that exists: a mistyped token, or a second shell, must not kill a pairing in progress.
-      const api = this.host.openApi();
-      if (!api.ok) {
-        return fail(422, "no-token", api.reason);
-      }
-      const opened: OpenPairingResult = await Pairing.prepare({
-        api: api.api,
-        ...(this.options.now === undefined ? {} : { now: this.options.now }),
-        ...this.options.pairing,
-      });
-      if (!opened.ok) {
-        return fail(opened.kind === "rejected" ? 422 : 502, opened.kind === "rejected" ? "token-rejected" : "telegram-unreachable", opened.reason);
-      }
-      if (mine !== this.generation) {
-        return superseded();
+        return connected();
       }
       // Replace the old one only now, and end its poller before the new one starts (one poller per token).
       await this.dropPairing();
-      if (mine !== this.generation) {
+      if (stale()) {
         return superseded();
       }
       opened.pairing.begin();
