@@ -1,0 +1,404 @@
+{
+  "verifier": "close-verifier-360",
+  "verifications": [
+    {
+      "finding": "F-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-security-code/p1-round1.ts against the tree: F-001 a/b/c/d (symlinked module dir, symlinked project-skills, unregistered via symlinked module, link into src/) are refused on dry, real and second run with project and outside dir UNCHANGED; mutants R11, R13, R15, R27, R30, R38 (round-2 list) each killed by src/gdskills/remove-skill.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: p1-round1.ts F-002 A/B and five C variants (path = module dir, another skill, src, /etc, traversal, empty) all refused with 'not its own package directory', project UNCHANGED; mutants R04, R05 killed by remove-skill.test.ts (R06, trailing-slash normalisation of a recorded path, survives — not part of this finding). No longer reproduces."
+    },
+    {
+      "finding": "F-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 + 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f003.ts (skills import and review import entry points): review_logic and review_house_api with --only 'review*' are both skipped (bundled name / already exists), the hand-written marker survives, registry unchanged; mutants I06, I09, I10, I12-I16 (round 2) and I07r, I08r, I07s, I16 (round 3, the G-005 file/URL/inference residue) each killed by src/gdskills/import-skills.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-004",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f004.ts: core/mobx-store-template.mdc goes to rules/project/core/…, house/… to rules/house/…, dry run and real run agree, shadowedRules names the full-ref slot; mutants U01 (rule-references.test.ts), I41, I53, I54 (import-skills.test.ts) killed. No longer reproduces."
+    },
+    {
+      "finding": "F-005",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7d639d09 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f005.ts: 'React/Next.js conventions reviewer.' gives paths [] / pathsSource none with the paths-none warning; r360-3/review-logic/triggers.ts 'literal beside glob' rows: literal-only prose yields no trigger; mutants T01, T23 killed by src/gdskills/reviewer-triggers.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-006",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7d639d09 + d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-logic/f006.ts and r360-3/review-logic/triggers.ts: [vantage], ['--Vantage '], '--vantage --house', block lists all normalise to valid flags, invalid entries are dropped with a warning (S9: import output, reviewers text and JSON); mutants T06-T13 (reviewer-triggers.test.ts), I28 (import-skills.test.ts), V01/V02/V04 (src/review/reviewers.test.ts) killed. No longer reproduces."
+    },
+    {
+      "finding": "F-007",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: p1-round1.ts F-007, nine crafted registry entries (.., ../../.., a/b, ../../../../victim, x/../../y, a\\b, '', .., .): every dry/real/second run refused or not found, project UNCHANGED, no report outside reports/ touched; mutants R01, R03 killed by remove-skill.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-008",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7d639d09 + 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-3/review-logic/imports.ts S6: a flag carried by one existing project reviewer produces the collision warning on both arriving rows (dry and real), a skipped row gets none, and S6e warns when an overwrite leaves a flag with one carrier; mutant I35r killed by import-skills.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-009",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: imports.ts S5 and triggers.ts onlyOption rows: --only '' / '--only=' / bare --only / whitespace are refused before anything is written; mutants I01, I02, I03, I05 (import-skills.test.ts) and A04 (src/lib/args.test.ts) killed; I04 (whitespace check in onlyOption) survives because importProjectSkills' own trim check (I05) still refuses the same input. No longer reproduces."
+    },
+    {
+      "finding": "F-010",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "round-2 mutant R02 (drop the SEGMENT test on the name in resolveTarget) survives ONLY remove-skill.test.ts and ONLY src/commands/skills-remove.test.ts on the tree; under R02, p1-round1.ts shows registered entries review/.. and review/. are no longer refused — the registry entry is removed (nothing else on disk changes). At 016f06be R02 was killed by 'F-010: an unregistered name is addressable only as two plain segments'; since bb3a68ff that test passes for another reason (exact readdir names), so the name half of SEGMENT is unpinned again. The module half (R01) and the root-equality case are pinned. Tree: throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree."
+    },
+    {
+      "finding": "F-011",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutant I52 (skills import command drops --only) killed by src/commands/import-only.test.ts (2 of 4 fail), and r3 mutant O3 (review import label) killed by src/review/import-reviewers.test.ts: both commands drive --only through their own entry point. No longer reproduces."
+    },
+    {
+      "finding": "F-012",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutant I41 (a collision alone no longer sends the rule to the project slot) killed by import-skills.test.ts with 4 failures, including the non-shipped-name collision fixture. No longer reproduces."
+    },
+    {
+      "finding": "F-013",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutants I17, I18 (anchoring), I19 (`?`), I20 (literal escaping) each killed by import-skills.test.ts ('--only globs' block). No longer reproduces."
+    },
+    {
+      "finding": "F-014",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e + bb3a68ff (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutants R23, R24, R25 (round 2) and R25, R26, R29 (round 3, the G-013 residue) each killed by remove-skill.test.ts: report found by body under a non-conventional name, conventional name with an unrelated body not claimed. No longer reproduces."
+    },
+    {
+      "finding": "F-015",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutants I37, I38, I39 (rules of deprecated/bundled-skipped sources), I46, I47 (gate-blocked rule), I48 (post-gate present re-check) each killed by import-skills.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-016",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutant R09 (installed-tree half of the bundled refusal) killed by remove-skill.test.ts; the one-name-in-two-modules fixture (F-016 test) passes on the tree; R19/R20 no longer apply (code reshaped to registryKey / parseProjectSkillCatalogRow). No longer reproduces."
+    },
+    {
+      "finding": "F-017",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7d639d09 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutants I23 (metadata-level deprecated, import-skills.test.ts), T15, T16, T18, U05 (src/review/reviewers.test.ts) and M01 (packaged-first defaultBundledSourceRoot, src/gdskills/manifest/manifest.test.ts) each killed. No longer reproduces."
+    },
+    {
+      "finding": "F-018",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7d639d09 + 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants P2, P2b, P2c, P2d, P2e (value and type-only imports of review from gdskills) each killed by src/lib/import-policy.live.test.ts on the tree. No longer reproduces."
+    },
+    {
+      "finding": "F-019",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e + 379f814d + 7aeeda8a (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: keryx ctx rg over verify.ts, commands/skills.ts, governance/stocktake.ts, install.ts, import-skills.ts and remove-skill.ts in the tree for hand-built project-skills paths, report names, catalog markers and `${module}/${name}` templates: the only hits are comments and help text; remove-skill.ts uses projectSkillKey / projectSkillPackagePath / parseProjectSkillCatalogRow (the G-008 → H-011 residue chain). No longer reproduces."
+    },
+    {
+      "finding": "F-020",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 2abe5c2e (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: src/cli.test.ts in the tree carries the 'skills parity' block (router vs known-subcommand table, group help usage line per subcommand, SKILLS_SUBCOMMAND_HELP keys) derived from the router source. No longer reproduces."
+    },
+    {
+      "finding": "F-021",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: import-skills.ts in the tree: decideRule takes the resolution order from resolveRuleReference (only caller site :1265); no restated order remains. No longer reproduces."
+    },
+    {
+      "finding": "F-022",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 + d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: imports.ts S7 and the F-022 rows: a fenced category example in a body no longer makes a tree 'target module review' (no --module: cannot infer; --module quality: imports into quality), LF/CRLF/BOM read identically; mutant I22r killed by src/gdskills/skill-frontmatter.test.ts, I27 by import-skills.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-023",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: import-skills.ts in the tree has no importReferencedRules; rule handling is split into decideRule and the placement/writer helpers. No longer reproduces."
+    },
+    {
+      "finding": "F-024",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: optionValues lives in src/lib/args.ts: mutant A04 applied to lib/args.ts is killed by src/lib/args.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "F-025",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 1ff78608 + 7d639d09 + 56d39e0f (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: keryx ctx rg 'keryx install\\b' over src/gdskills and src/review/reviewers.ts in the tree: no site names the command; the only hits are a test asserting its absence and a rule saying there is no `keryx install`. No longer reproduces."
+    },
+    {
+      "finding": "F-026",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix a9f7810d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: acceptance-criteria.md as committed in a9f7810d (an ancestor of 3cf1d781): AC13 names the reviewer-skill-creator skill 'its SKILL.md plus the SKILL.detail.md it points at' (amended by `keryx flow ac update`, journal 2026-09-30T14:02:08Z). No longer reproduces."
+    },
+    {
+      "finding": "F-027",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 56d39e0f (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: review-orchestrator SKILL.detail.md in the tree has the bundledSource table (:144-148, 'Is a listed skill installed here?') and SKILL.md:1027 says installed only 'when bundledSource is \"project\"'. No longer reproduces."
+    },
+    {
+      "finding": "G-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/sec002.ts against the tree: variants A-D (rules/project/core, rules/project, rules/house, rules/core symlinked outside) are refused on the dry run and the real run with 'refuses to write through a symlink … Nothing was written', outside dir stays empty. No longer reproduces."
+    },
+    {
+      "finding": "G-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/log001.ts: LF, CRLF and BOM SKILL.md all import as quality/review-lint (round 2 had crlf/bom → review). No longer reproduces."
+    },
+    {
+      "finding": "G-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/log002.ts: '- --a # family flag' yields flags [--a] and '- src/x/** # the x tree' yields paths [src/x/**] (metadata), identically through gdskills and review/reviewers.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-004",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/arc001.ts: block-list and scalar metadata.paths give the same declaredPaths in review jev-rules and the inventory; clauseApplicability(docs/tools/readme.ts) is false for both. No longer reproduces."
+    },
+    {
+      "finding": "G-005",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants I07r, I08r, I07s (file / URL source names not slugged) and I16 (ownModule infers from the raw name) each killed by src/gdskills/import-skills.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-006",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix bb3a68ff (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/sec001.ts on a case-insensitive FS: `remove Review/Alpha` with review/alpha registered is refused on dry and real run, naming the registered spelling; registry, catalog row, package and report all unchanged. No longer reproduces."
+    },
+    {
+      "finding": "G-007",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix bb3a68ff (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: re-ran r360-2/review-verifier/sec003.ts: with a read-only reports dir the first run fails at the report step with 'Removed so far: nothing', everything still in place; the second run (reports writable) removes all five parts. No longer reproduces."
+    },
+    {
+      "finding": "G-008",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d + 7aeeda8a (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: same rg over the five files G-008 named plus remove-skill.ts: no hand copy of the on-disk format remains in code (comments/help only); the catalog row is parsed by parseProjectSkillCatalogRow beside its writer in project-skills.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-009",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d + bfd68c21 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: import-skills.ts in the tree imports PROJECT_REVIEWER_MODULE, projectReviewerFlags, flagCarriers and flagStatus from project-reviewers.ts; no REVIEW_MODULE or local family-flag rule remains (the one literal 'review' left is the KNOWN_CATEGORIES vocabulary). No longer reproduces."
+    },
+    {
+      "finding": "G-010",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: imports.ts S6e: a --force overwrite that removes --fam from review-e2 warns 'flag --fam is dropped by this version of review-e2, which leaves review-e3…'. No longer reproduces."
+    },
+    {
+      "finding": "G-011",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix d6ffff97 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: r360-3/review-logic/triggers.ts: '- --a', '-', '- --b' yields [--a, --b]; flags nested under metadata.sub or another mapping are not read as metadata fields. No longer reproduces."
+    },
+    {
+      "finding": "G-012",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: imports.ts S2: a directory ___ is refused ('has no letter or digit to name it by') and nothing is written; S1b: a deprecated alias beside its target with --only '*' gives a skipped row and a would-import row instead of a refusal. No longer reproduces."
+    },
+    {
+      "finding": "G-013",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix bb3a68ff (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants R01, R05, R12, R14, R17, R25, R26, R29, R33r (the nine G-013 survivors, re-derived) each killed by src/gdskills/remove-skill.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-014",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix bb3a68ff + 7aeeda8a (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: mutant R32 (planning moved under the lock) killed by remove-skill.test.ts with 20 failures, and a new mutant L1 (the dry run takes the lock) killed by the --dry-run test: the lock assertion now watches the lock's parent directory. No longer reproduces."
+    },
+    {
+      "finding": "G-015",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix d6ffff97 + 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants I22r and I25r (skill-frontmatter.test.ts), I27 and I35r (import-skills.test.ts), O3 (src/review/import-reviewers.test.ts) each killed. No longer reproduces."
+    },
+    {
+      "finding": "G-016",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants C7, C8, C8b (fs.promises.rm through a default import, { promises as fsp }, bare 'fs') each killed by src/lib/contained-write.ratchet.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-017",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 379f814d (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: round-3 mutants P2, P2b, P2c, P2d, P2e (type-only edges gdskills → review) each killed by src/lib/import-policy.live.test.ts. No longer reproduces."
+    },
+    {
+      "finding": "G-018",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 454ed007 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: review-orchestrator SKILL.detail.md:17 and reviewer-skill-creator SKILL.detail.md:389 in the tree both say metadata.flags replaces the description's flags 'when it has at least one non-empty entry'. No longer reproduces."
+    },
+    {
+      "finding": "H-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix 7aeeda8a (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-001 fixed by execution; adjacent checks (plain remove, stale entry without a case variant) clean."
+    },
+    {
+      "finding": "H-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix bfd68c21 (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-002 fixed by execution; adjacent check (House/ refs untouched by the core normalisation) clean."
+    },
+    {
+      "finding": "H-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix bfd68c21 (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-003 fixed by execution; adjacent check (a symlink to a real rule file still treated as a rule) clean."
+    },
+    {
+      "finding": "H-004",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix bfd68c21 (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-004 fixed by execution — mutants W04 and W06 now killed."
+    },
+    {
+      "finding": "H-005",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix bfd68c21 (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-005 fixed by execution."
+    },
+    {
+      "finding": "H-006",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix c5bf3caa (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: applied each named survivor from r360-3 mutation-table.md (F03, F06, F12, F13, F14, F22, F23, F26, F37, F42, F44, F45, F46, F49, F51, F52, F54, F55, F58, F59, F60, F63) and I25r to skill-frontmatter.ts and ran ONLY src/gdskills/skill-frontmatter.test.ts: all 23 killed (baseline 50 pass); F34 still survives and is equivalent — readBlockList only receives lines readMapping already bounded to indent >= keyIndent. No longer reproduces."
+    },
+    {
+      "finding": "H-007",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7aeeda8a (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: applied N12, N13, N21, N22, N23, N24, N28, N33 and N25 (re-spelled for registryKey's projectSkillKey form) to remove-skill.ts and ran ONLY src/gdskills/remove-skill.test.ts: all 9 killed (baseline 67 pass); N15, N16, N19 are concurrency-only, as the finding says, and were not re-run. No longer reproduces."
+    },
+    {
+      "finding": "H-008",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix c5bf3caa + bfd68c21 (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: T05, T15, T18 killed by ONLY src/gdskills/reviewer-triggers.test.ts; V01 killed by ONLY src/gdskills/project-reviewers.test.ts; W16 killed by ONLY src/gdskills/import-skills.test.ts (baselines 18 / 3 / 99 pass). No longer reproduces."
+    },
+    {
+      "finding": "H-009",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix c5bf3caa (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: C8c (const fsp = fs.promises), C8d ({ rm } = fs.promises), C8e (require('node:fs').promises.rm) added to remove-skill.ts: each killed by ONLY src/lib/contained-write.ratchet.test.ts (baseline 49 pass). No longer reproduces."
+    },
+    {
+      "finding": "H-010",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "close-verifier-360",
+      "evidence": "Re-checked against fix 7aeeda8a + c5bf3caa (contained in PR #812 head 3cf1d7811f82) on a throwaway copy of `git archive 3cf1d7811f82 src docs package.json tsconfig.json bunfig.toml` (PR #812 head 3cf1d7811f82b252a03344b24e6c6dedd8d6cade), never the live worktree: new mutant L1 (dry run takes the lock) killed by the --dry-run test in ONLY remove-skill.test.ts; R32 (refusals made under the lock) killed with 20 failures, including fixtures where a report sits beside the lock (symlinked reports directory, N33), which expectRefusedUntouched could not see before; F35 (block list skips a non-item instead of ending) killed by ONLY skill-frontmatter.test.ts; F34 equivalent (see H-006). No longer reproduces."
+    },
+    {
+      "finding": "H-011",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix 7aeeda8a (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-011 fixed, checked by reading remove-skill.ts."
+    },
+    {
+      "finding": "H-012",
+      "verdict": "refuted",
+      "method": "site-check",
+      "verifier": "review-verifier",
+      "evidence": "Re-checked against fix bfd68c21 (contained in PR #812 head 3cf1d7811f82): T31 targeted verification recorded in the flow journal (2026-09-30, review-verifier, probes re-run as written at 3cf1d781, no local suites): H-012 fixed, checked by reading import-skills.ts."
+    }
+  ]
+}
