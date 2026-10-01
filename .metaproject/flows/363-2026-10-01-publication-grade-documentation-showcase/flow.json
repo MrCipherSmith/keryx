@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T07:41:06.962Z",
+  "updatedAt": "2026-10-01T09:23:02.996Z",
   "source": {
     "type": "description",
     "ref": null
@@ -122,7 +122,7 @@
       "id": "T6",
       "title": "Owner approves the target IA (gate before public files change)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -132,7 +132,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "owner approval and answers recorded in journal.md"
     },
     {
       "id": "T7",
@@ -447,6 +449,11 @@
       "at": "2026-10-01T07:41:06.962Z",
       "event": "task-done",
       "detail": "T5: Consolidate research into audit-report.md with target IA"
+    },
+    {
+      "at": "2026-10-01T09:23:02.996Z",
+      "event": "task-done",
+      "detail": "T6: Owner approves the target IA (gate before public files change)"
     }
   ],
   "acKinds": {

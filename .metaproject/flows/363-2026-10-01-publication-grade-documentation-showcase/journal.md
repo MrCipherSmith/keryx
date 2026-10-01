@@ -23,3 +23,26 @@
 - 2026-10-01T07:33:07.700Z - started
 - 2026-10-01T07:33:07.993Z - task-attempt: T5: started (attempt 1) — 363-T5 audit report
 - 2026-10-01T07:41:06.962Z - task-done: T5: Consolidate research into audit-report.md with target IA
+
+## 2026-10-01 — T6: owner approved the target IA
+
+The owner approved `research/audit-report.md` section 4 (README outline, nav
+tree, page list, redirects, assets) in chat ("Ок"), then answered the five
+open questions interactively, choosing the recommended option each time:
+
+1. External product names: only in factual compatibility/provider tables and
+   install commands; never in comparisons, inspiration credits or evaluative prose.
+2. Stability: stable = the nine default modules, `keryx shell`, providers,
+   flows, review packages; experimental = Shared Agent Context, review-service
+   checks, per-runtime ctx hooks, the one editor adapter flagged experimental;
+   opt-in features labelled separately.
+3. Logo: simplified SVG mark (brace tile) + dark variant for site logo and
+   favicon; the full artwork stays as the README hero.
+4. Demo: VHS recording, tape committed (VHS installed via Homebrew).
+5. CHANGELOG: not split; a docs page shows 0.3.x highlights and links the file.
+
+Check at approval time: no commit on this branch had changed README.md,
+mkdocs.yml or docs/docs/ (`git log origin/main..HEAD -- README.md mkdocs.yml docs/docs` empty).
+Local docs toolchain for verification: mkdocs 1.6.1, mkdocs-material 9.7.7,
+mkdocs-redirects 1.2.3, mkdocs-llmstxt 0.5.0.
+- 2026-10-01T09:23:02.996Z - task-done: T6: Owner approves the target IA (gate before public files change)
