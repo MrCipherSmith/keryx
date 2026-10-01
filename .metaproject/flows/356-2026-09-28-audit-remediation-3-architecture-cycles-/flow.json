@@ -1,0 +1,584 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "356",
+  "slug": "audit-remediation-3-architecture-cycles-",
+  "title": "Audit remediation 3: architecture (cycles, retryableFor, orphans) and own-tree gates (security scan, module data dirs, worktrees, doctor) plus L-16, S-11 (R4, R5)",
+  "status": "done",
+  "createdAt": "2026-09-28T11:57:09.964Z",
+  "updatedAt": "2026-09-28T16:29:54.622Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T16:29:35.572Z",
+      "note": "8 -> 2 cycles (only the A-4 facade loops, accepted); moves: impact-evidence, cli-registry, wiki/key-files, mcp-servers/json-utils; avoidable-bypass ceiling 150. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC2": {
+      "at": "2026-09-28T16:29:35.734Z",
+      "note": "retryableFor once in provider-port; mergeUsage per adapter (recorded). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC3": {
+      "at": "2026-09-28T16:29:35.898Z",
+      "note": "gdgraph orphans reads bunfig preloads, comments stripped. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC4": {
+      "at": "2026-09-28T16:29:36.058Z",
+      "note": "security scan respects ignore rules, still reads secret-bearing names, coverage complete on this repo (~30 s). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC5": {
+      "at": "2026-09-28T16:29:36.225Z",
+      "note": "G-4 accepted (fresh init 0 warnings, pinned); keryx update prunes stale worktrees, never with commits ahead, local or ignored-but-not-carryover files. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC6": {
+      "at": "2026-09-28T16:29:36.387Z",
+      "note": "doctor outside a project: one warn, exit 0 (smoke: exit 0); project search bounded; worktree check from the main checkout. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC7": {
+      "at": "2026-09-28T16:29:36.553Z",
+      "note": "compat in-band error classified, unknown codes not retried; Grok TOML never echoes raw values. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    },
+    "AC8": {
+      "at": "2026-09-28T16:29:36.714Z",
+      "note": "tsc, lint, gates green; ledger, README, CHANGELOG 0.3.23/0.3.24. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/782"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T5",
+      "title": "Cycles, retryableFor, orphans (AC1-AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T12:17:01.424Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-ar3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #782"
+    },
+    {
+      "id": "T6",
+      "title": "Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #782"
+    },
+    {
+      "id": "T7",
+      "title": "L-16 and S-11 (AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "PR #782"
+    },
+    {
+      "id": "T8",
+      "title": "Ledger, README, docs, changelog, bump (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T13:31:32.607Z",
+            "outcome": "started",
+            "detail": "PR #782 open; review round 1 dispatched; release 0.3.23"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released 0.3.24"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T11:57:09.964Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-28T11:57:38.577Z",
+      "event": "frozen",
+      "detail": "1 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-28T11:57:38.725Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-28T11:57:38.868Z",
+      "event": "task-added",
+      "detail": "T5: Cycles, retryableFor, orphans (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-28T11:57:39.017Z",
+      "event": "task-added",
+      "detail": "T6: Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)"
+    },
+    {
+      "at": "2026-09-28T11:57:39.160Z",
+      "event": "task-added",
+      "detail": "T7: L-16 and S-11 (AC7)"
+    },
+    {
+      "at": "2026-09-28T11:57:39.310Z",
+      "event": "task-added",
+      "detail": "T8: Ledger, README, docs, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T11:57:39.460Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-28T11:57:39.607Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-28T11:57:39.750Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-28T11:57:39.894Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-28T12:17:01.424Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar3"
+    },
+    {
+      "at": "2026-09-28T12:20:19.243Z",
+      "event": "ac-updated",
+      "detail": "same format defect as flow 355: '- ACn (ref):' reformatted to '- ACn: (ref)', wording unchanged"
+    },
+    {
+      "at": "2026-09-28T13:31:31.662Z",
+      "event": "task-done",
+      "detail": "T5: Cycles, retryableFor, orphans (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-28T13:31:31.980Z",
+      "event": "task-done",
+      "detail": "T6: Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)"
+    },
+    {
+      "at": "2026-09-28T13:31:32.297Z",
+      "event": "task-done",
+      "detail": "T7: L-16 and S-11 (AC7)"
+    },
+    {
+      "at": "2026-09-28T13:31:32.607Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — PR #782 open; review round 1 dispatched; release 0.3.23"
+    },
+    {
+      "at": "2026-09-28T16:29:35.395Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/782 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-28T16:29:35.572Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 8 -> 2 cycles (only the A-4 facade loops, accepted); moves: impact-evidence, cli-registry, wiki/key-files, mcp-servers/json-utils; avoidable-bypass ceiling 150. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:35.734Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: retryableFor once in provider-port; mergeUsage per adapter (recorded). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:35.898Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: gdgraph orphans reads bunfig preloads, comments stripped. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.058Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: security scan respects ignore rules, still reads secret-bearing names, coverage complete on this repo (~30 s). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: G-4 accepted (fresh init 0 warnings, pinned); keryx update prunes stale worktrees, never with commits ahead, local or ignored-but-not-carryover files. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.387Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: doctor outside a project: one warn, exit 0 (smoke: exit 0); project search bounded; worktree check from the main checkout. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.553Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: compat in-band error classified, unknown codes not retried; Grok TOML never echoes raw values. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.714Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: tsc, lint, gates green; ledger, README, CHANGELOG 0.3.23/0.3.24. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T16:29:36.870Z",
+      "event": "task-done",
+      "detail": "T8: Ledger, README, docs, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T16:29:37.030Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-28T16:29:41.483Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-28T16:29:41.484Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#782 was last collected against 0998ca2d472077cf833b4e3cc325b7b4768c0034 (round 1), but the PR head is 7457ed83a6a4980594577810f53df98e2b232638. Everything anyone said after 0998ca2d472077cf833b4e3cc325b7b4768c0034 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 782 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-09-28T16:29:50.277Z",
+      "event": "completing",
+      "detail": "merged commit: 7ceecf5e772041be78bd352ded02af423f98946b"
+    },
+    {
+      "at": "2026-09-28T16:29:54.621Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-28T16:29:54.622Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T16:29:35.572Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:35.734Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:35.898Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:36.058Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:36.225Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:36.387Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:36.553Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:36.714Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:54.622Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd",
+      "headCommit": "7ceecf5e772041be78bd352ded02af423f98946b"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T16:29:41.483Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7ceecf5e772041be78bd352ded02af423f98946b is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "7ceecf5e772041be78bd352ded02af423f98946b is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#782 was last collected against 0998ca2d472077cf833b4e3cc325b7b4768c0034 (round 1), but the PR head is 7457ed83a6a4980594577810f53df98e2b232638. Everything anyone said after 0998ca2d472077cf833b4e3cc325b7b4768c0034 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 782 --sha <pr-head>`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    },
+    {
+      "at": "2026-09-28T16:29:54.621Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7ceecf5e772041be78bd352ded02af423f98946b is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "7ceecf5e772041be78bd352ded02af423f98946b is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "8 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:f2fc55a972fef7b00c4ff28ed8c8f11eaf6d9f99042ef79d732e959e1ebed3cd"
+    }
+  ],
+  "merged": {
+    "commit": "7ceecf5e772041be78bd352ded02af423f98946b",
+    "ref": "origin/main",
+    "at": "2026-09-28T16:29:54.622Z"
+  }
+}

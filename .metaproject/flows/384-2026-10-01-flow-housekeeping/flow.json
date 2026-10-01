@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "384",
+  "slug": "flow-housekeeping",
+  "title": "Flow housekeeping: unique flow ids across clones, flow folders committed with the code",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T12:24:44.273Z",
+  "updatedAt": "2026-10-01T12:29:41.013Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T12:24:44.273Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T12:25:04.287Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T12:25:04.477Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T12:29:41.013Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not tracked in git or has uncommitted changes; the green path still completes. Covered by tests for both.\" -> \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not committed in HEAD (flows created from 0.3.53 on carry the opt-in flag, like the owner and tasks gates; a flow without it reports the gate as skipped); the committed path still completes. Covered by tests for pass, fail and skipped.\" (wording made exact before any implementation: committed in HEAD, opt-in per package so no pre-existing flow is blocked retroactively)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-09-28T22:13:49.999Z - flow created
+- 2026-09-29T10:00:12.056Z - owner-set: not set -> altsay (operator confirmed flow 360 as release 0.3.34)
+- 2026-09-29T10:00:12.208Z - frozen: 9 criteria; checksum recorded
+- 2026-09-29T10:00:12.362Z - started
+- 2026-09-29T10:43:27.928Z - ac-confirmed: AC1: approval-render.trust.test.ts and agent-permission-mode.test.ts (drives runAgentTurn) green in CI on beea5d48: destructiveHint true is never offered, absent/false keeps T (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.084Z - ac-confirmed: AC2: agent-permission-mode.test.ts: a grant held while harmless is dropped once the live catalog says destructive or the fingerprint differs; green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.243Z - ac-confirmed: AC3: approval-render.trust.test.ts: list, revoke, revoke all, hostile targets, stale-grant reasons; readline path in shell-agent-repl.test.ts; green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.403Z - ac-confirmed: AC4: registry, help-groups, cli-reference and commands-by-task pins green in CI; docs regenerated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.564Z - ac-confirmed: AC5: trusted marker on approval lines, auto-approve line and /mcp per-server count covered by unit tests; site-check only, no live TUI render (no headless seam for launchTuiAgentShell) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.719Z - ac-confirmed: AC6: mcp-trust-shell-wiring.test.ts source-text audit pins io.trustedMcpTools.clear() in startNewSession; written failing first; not run against a live TUI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:28.876Z - ac-confirmed: AC7: 0.3.27 behaviour unchanged: existing trust tests stay green in CI; annotations stay out of the fingerprint (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:43:29.031Z - ac-confirmed: AC8: docs (permission-modes, cli-reference, README, module page) and CHANGELOG in the release; shipped as 0.3.35 not 0.3.34 because the hotfix took 0.3.34; 18/18 CI on the head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T11:04:15.296Z - ac-confirmed: AC9: stop recorded: W1 (external agents live) waits for the operator. Smoke on installed 0.3.35: --version, review tier, mcp list show no leak; /mcp trust could not be driven through piped stdin, TUI not driven headless (stated) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T11:04:15.451Z - task-done: T1: Collect remaining context
+- 2026-09-29T11:04:15.603Z - task-done: T2: Implement per plan
+- 2026-09-29T11:04:15.759Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T11:04:15.916Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T11:04:18.033Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/798 (warning: PR is not a draft) (base: main)
+- 2026-09-29T11:04:23.000Z - completing
+- 2026-09-29T11:04:27.024Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-29T11:04:27.024Z - done: all gates passed
+- 2026-10-01T12:22:18.456Z - renumbered: 360 -> 378: duplicate id with a flow from another clone (main holds 360-365); housekeeping

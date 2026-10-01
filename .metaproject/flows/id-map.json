@@ -334,5 +334,53 @@
     "toDir": "351-2026-09-27-review-orchestration-fails-closed-plan-i",
     "at": "2026-09-27T11:41:23.238Z",
     "reason": "id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs"
+  },
+  {
+    "from": "360",
+    "to": "378",
+    "fromDir": "360-2026-09-28-mcp-trust-followups",
+    "toDir": "378-2026-09-28-mcp-trust-followups",
+    "at": "2026-10-01T12:22:18.456Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "361",
+    "to": "379",
+    "fromDir": "361-2026-09-28-acceptance-layer-w0",
+    "toDir": "379-2026-09-28-acceptance-layer-w0",
+    "at": "2026-10-01T12:22:18.829Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "362",
+    "to": "380",
+    "fromDir": "362-2026-09-28-product-module-p1",
+    "toDir": "380-2026-09-28-product-module-p1",
+    "at": "2026-10-01T12:22:19.211Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "363",
+    "to": "381",
+    "fromDir": "363-2026-09-29-product-verdicts-g1",
+    "toDir": "381-2026-09-29-product-verdicts-g1",
+    "at": "2026-10-01T12:22:19.646Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "364",
+    "to": "382",
+    "fromDir": "364-2026-09-29-closed-flow-state-g1a-author",
+    "toDir": "382-2026-09-29-closed-flow-state-g1a-author",
+    "at": "2026-10-01T12:22:20.060Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+  },
+  {
+    "from": "365",
+    "to": "383",
+    "fromDir": "365-2026-09-29-outcome-author-flag",
+    "toDir": "383-2026-09-29-outcome-author-flag",
+    "at": "2026-10-01T12:22:20.503Z",
+    "reason": "duplicate id with a flow from another clone (main holds 360-365); housekeeping"
   }
 ]

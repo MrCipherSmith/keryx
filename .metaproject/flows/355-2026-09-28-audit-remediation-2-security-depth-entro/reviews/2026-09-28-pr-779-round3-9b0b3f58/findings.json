@@ -1,0 +1,206 @@
+[
+  {
+    "id": "SEC-F3",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "isSlugHexTail — added this round to fix REG-F1 — grants a hyphenated slug's LAST segment a content-free carve-out whenever it is a 10-16 character pure-hex run, with no check on whether that segment is itself the secret. Because bareShapeQualifies checks isWordSlug BEFORE any entropy/allow-shape/label logic, and labelledPieceQualifies (the LABELLED path, reached only after ADJACENT_LABEL already confirmed a label) calls bareShapeQualifies first and only falls back to isAllowShapedValue afterward, a real secret dressed as `<word>-<word>-<10to16-hex>` bypasses looksSecretShaped, containsOutboundSecret (S-8) and redactSensitiveText (S-6) completely — even when the value carries an explicit label right next to it.",
+    "impact": "Complete bypass of S-6 and S-8 for a secret formatted as a word-slug with a hex tail, in both the label-free and the labelled path. Reproduced: redactSensitiveText('leaked api_key: log-report-deadbeef01234567') returns the value UNREDACTED, byte for byte, despite the explicit label; containsOutboundSecret('https://exfil.example/log-report-deadbeef01234567') returns false (not refused); looksSecretShaped('log-report-deadbeef01234567') returns false. This is the same class of defect SEC-F1 (round 2, blocker) fixed for the digit/letter-run segmentation trick — round 3's own fix for REG-F1 reopened an equivalent primitive.",
+    "suggested_fix": "isSlugHexTail's carve-out must not be content-free with respect to the reconstituted secret risk: either (a) do not let it bypass the LABELLED path at all — labelledPieceQualifies should check isAllowShapedValue independently of bareShapeQualifies's isWordSlug gate, so a label always gets a chance to override a slug-shaped value, or (b) additionally require the specific segment to be validated against a real registry/shape rather than 'any 10-16 hex chars'.",
+    "evidence": "bun run against /home/altsay/keryx (post-merge main, HEAD 9b0b3f58/ed1c3ba6): looksSecretShaped('log-report-deadbeef01234567') -> false; containsOutboundSecret('https://exfil.example/log-report-deadbeef01234567') -> false; redactSensitiveText('leaked api_key: log-report-deadbeef01234567') -> unchanged. Root cause: entropy.ts:412 `if (isWordSlug(head)) return { qualifies: false, entropy: 0 };` runs unconditionally inside bareShapeQualifies, which labelledPieceQualifies (entropy.ts:624) calls first, before its isAllowShapedValue fallback (entropy.ts:628).",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 340,
+    "quote": "const SLUG_HEX_TAIL_RE = /^[0-9a-f]{10,16}$/i;\nfunction isSlugHexTail(segment: string): boolean {\n  return SLUG_HEX_TAIL_RE.test(segment);\n}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 341
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:341 isSlugHexTail",
+        "src/security/detect/entropy.ts:345 isWordSlug (calls isSlugHexTail on the last segment)",
+        "src/security/detect/entropy.ts:394 bareShapeQualifies (calls isWordSlug unconditionally, before entropy/hex-blob)",
+        "src/security/detect/entropy.ts:424 shapeQualifiesAsSecret (label-free callers)",
+        "src/security/detect/entropy.ts:439 looksSecretShaped (export)",
+        "src/security/detect/entropy.ts:584 secretShapedCandidatesIn (export, URL components)",
+        "src/security/detect/entropy.ts:623 labelledPieceQualifies (labelled path — calls bareShapeQualifies BEFORE isAllowShapedValue)",
+        "src/security/redact.ts:142 redactSensitiveText (S-6)",
+        "src/harness/web/outbound-secret.ts:116 containsOutboundSecret (S-8)",
+        "src/mcp-servers/http-headers.ts:384 displayUrl (S-9)"
+      ],
+      "enumeration_method": "keryx ctx rg -- \"isWordSlug\\(|isSlugHexTail\\(|labelledPieceQualifies\\(|bareShapeQualifies\\(\" src (excluding *.test.ts) -> all definitions and call sites are in entropy.ts (single-file gate), consistent with SEC-F1's own round-2 class_scope for the downstream exporters/callers."
+    },
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#SEC-F3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run against /home/altsay/keryx at HEAD 9b0b3f58/ed1c3ba6: looksSecretShaped('log-report-deadbeef01234567') -> false; containsOutboundSecret('https://exfil.example/log-report-deadbeef01234567') -> false; redactSensitiveText('leaked api_key: log-report-deadbeef01234567') -> unchanged (label present and adjacent, value still not redacted). Independently reproduced exactly as the finding describes; deterministic (no randomness in the construction).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: redactSensitiveText('leaked api_key: log-report-deadbeef01234567') -> [REDACTED:entropy] (was unchanged); pinned by entropy.test.ts describe 'SEC-F3 (flow 355 review round 3): the LABELLED path consults no slug exemption at all' (3 tests) and redact.test.ts describe 'SEC-F3 (flow 355 review round 3): no slug exemption survives adjacency to a real label' (2 tests), both green at 22478bc0a9970324373cbe38fb5fd7e34568f64c"
+    }
+  },
+  {
+    "id": "LOG-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "ADJACENT_LABEL (round 2's fix for LOG-F1's false-positive proximity window) requires the label word to sit immediately before the value with only a continuation, optional quote and a single ':'/'=' connector between them. This over-corrects: it now misses a real labelled secret whenever an ordinary filler word sits between the label and the connector ('password IS: <secret>'), or when the label and the value are on different lines, and the label look-back is explicitly bounded to the current line.",
+    "impact": "A real, explicitly-labelled secret is not redacted (S-6) and not caught by the outbound-egress check (S-8). Reproduced: detectEntropy('password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> [] (the exact secret from this PR's own header-comment example, immediately preceded by an unambiguous label); redactSensitiveText on the same text leaves it verbatim. A label ending one line with the value starting the next is also never labelled.",
+    "suggested_fix": "Either widen ADJACENT_LABEL to tolerate a short, closed set of copula/filler words between the label and the connector, or special-case the common 'LABEL is VALUE' / 'LABEL: \\n VALUE' shapes the same way LABEL_ASSIGNMENT_RE special-cases 'LABEL=VALUE'. For the cross-line case, either extend the label look-back to also check the end of the previous line (bounded), or document the gap explicitly.",
+    "evidence": "bun run against /home/altsay/keryx (post-merge main, HEAD 9b0b3f58/ed1c3ba6): detectEntropy('password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []; redactSensitiveText same input -> unchanged. detectEntropy('export API_KEY=\\\\\\n' + 'kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []; detectEntropy('password is:\\n' + 'kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []. Root cause: ADJACENT_LABEL (entropy.ts:214) requires no intervening word, and lastLineOf (entropy.ts:275) bounds the look-back to the current line by design.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 214,
+    "quote": "const ADJACENT_LABEL = new RegExp(\n  `(?:^|[^A-Za-z0-9])(?:${caseless(SENSITIVE_LABEL_WORDS)})[A-Za-z0-9_-]*[\"']?\\\\s*[:=]?\\\\s*[\"']?$`,\n);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 214
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:214 ADJACENT_LABEL (root)",
+        "src/security/detect/entropy.ts:275 lastLineOf (bounds the look-back to the current line)",
+        "src/security/detect/entropy.ts:706-757 detectEntropy generic per-line pass (the only caller of ADJACENT_LABEL)",
+        "src/security/redact.ts:142 redactSensitiveText (S-6)",
+        "src/harness/web/outbound-secret.ts:116,122 containsOutboundSecret (S-8)",
+        "src/security/detect/index.ts runDetectors (keryx security scan/report/gate)"
+      ],
+      "enumeration_method": "keryx ctx rg -- \"ADJACENT_LABEL\" src (excluding *.test.ts) -> single definition and single caller in entropy.ts; downstream callers re-confirmed against round-2 LOG-F1's own class_scope."
+    },
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#LOG-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run against /home/altsay/keryx at HEAD 9b0b3f58/ed1c3ba6: detectEntropy('password is: kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []; redactSensitiveText same input -> unchanged. detectEntropy('export API_KEY=\\\\\\n' + 'kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []; detectEntropy('password is:\\n' + 'kd8Fj2LmQp9xZr4TvWn7Yb3xxyyzz') -> []. All three constructions reproduce the miss deterministically.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: detectEntropy('password is: <secret>') and the explicit-continuation-marker case now match (were []); pinned by entropy.test.ts describe 'LOG-F2 (flow 355 review round 3): ADJACENT_LABEL tolerates a filler word and an explicit line continuation' (6 tests, all green at 22478bc0a9970324373cbe38fb5fd7e34568f64c, bun test src/security/detect/entropy.test.ts -t LOG-F2)"
+    }
+  },
+  {
+    "id": "REG-F2",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "REG-F1 (round 2) is only partially fixed. isSlugHexTail correctly carves out a hex tail that is the LAST segment of an already-valid word-slug (fixes Medium's '<words>-<hex>' shape), but a GitHub Gist URL's real, common shape is 'gist.github.com/<user>/<32-hex-id>' — the id is a SINGLE path segment with no internal hyphenation, so it never reaches isWordSlug at all (segments.length < 3 short-circuit). That segment falls straight to bareShapeQualifies's unconditional isHexBlob check.",
+    "impact": "web_fetch still refuses an entirely ordinary, public GitHub Gist URL — REG-F1's own stated AC4 guarantee remains violated for this shape, even though the CHANGELOG and PR body describe REG-F1 as closed for 'a Medium OR GitHub Gist URL'. This is the exact reproduction the round-2 finding used, still failing.",
+    "suggested_fix": "Extend the carve-out to a bare hex-blob path segment that is not preceded by a sensitive label — e.g. treat a 24-40 character pure-hex SINGLE path segment the same way isAllowShapedValue already treats a full git SHA (FULL_GIT_SHA_RE is the same alphabet at 40 chars; a Gist id is 32).",
+    "evidence": "bun run against /home/altsay/keryx (post-merge main, HEAD 9b0b3f58/ed1c3ba6): containsOutboundSecret on the Medium URL from REG-F1's own repro -> false (fixed). containsOutboundSecret('https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890') -> true (still refused). detectEntropy shows the flagged span is the 32-char id via the hex-blob branch, not isWordSlug/isSlugHexTail.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 254,
+    "quote": "function isHexBlob(value: string): boolean {\n  return HEX_BLOB.test(value) && /[a-f]/i.test(value);\n}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 254
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:251 HEX_BLOB",
+        "src/security/detect/entropy.ts:254 isHexBlob",
+        "src/security/detect/entropy.ts:394 bareShapeQualifies (unconditional isHexBlob branch)",
+        "src/harness/web/outbound-secret.ts:98 anyComponentLooksSecret / :116 containsOutboundSecret (S-8, real-world failure site)",
+        "src/security/detect/entropy.ts urlComponentSpans / secretShapedCandidatesIn (S-6)"
+      ],
+      "enumeration_method": "Same keryx ctx rg sweep as REG-F1's own round-2 enumeration; both call sites re-read directly and reproduced against the live Gist URL at this head."
+    },
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#REG-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run against /home/altsay/keryx at HEAD 9b0b3f58/ed1c3ba6: containsOutboundSecret('https://gist.github.com/someuser/a1b2c3d4e5f67890abcdef1234567890') -> true (refused). detectEntropy on the same URL shows the flagged span is the 32-char id via the hex-blob branch. Same command as the REG-F1 re-verification above; same result.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: containsOutboundSecret on the reviewer's own Gist URL (with and without user segment) -> false (was true); pinned by outbound-secret.test.ts describe 'REG-F2 (flow 355 review round 3): a known public paste/commit identifier fetches' (7 tests, all green at 22478bc0a9970324373cbe38fb5fd7e34568f64c, bun test src/harness/web/outbound-secret.test.ts -t REG-F2)"
+    }
+  },
+  {
+    "id": "DOC-F1",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The file header comment added this round (entropy.ts:168-171) claims token=abcdefghijklmnopqrstuvwx12345678 is 'DELIBERATELY still missed' because 'its value is low-entropy'. This is factually wrong: a string with 32-33 distinct characters has entropy near the theoretical maximum, not low. The code's own test, added in the same diff, correctly documents and pins the OPPOSITE behaviour, but the header comment was not updated to match.",
+    "impact": "No runtime defect — the code is more protective than the comment claims. But a future maintainer reading only the header could 're-fix' a future regression by reintroducing the wrong exemption based on a false premise already written into the file.",
+    "suggested_fix": "Update the header comment to match entropy.test.ts:331-343's own framing: the value is caught BECAUSE it is maximal-entropy under this file's per-character model, not despite being low-entropy.",
+    "evidence": "bun run against /home/altsay/keryx (post-merge main): shannonEntropy('abcdefghijklmnopqrstuvwx12345678') = 5.0; detectEntropy('token=abcdefghijklmnopqrstuvwx12345678') -> 1 match. entropy.test.ts:331 test title: \"R3 — the coordinator's own 'low-entropy' example is actually maximal-entropy and IS caught\".",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": null,
+    "quote": "// `token=abcdefghijklmnopqrstuvwx12345678` is DELIBERATELY still missed: its\n// value is low-entropy (a near-sequential alphabet-then-digits run), so the\n// usual 3.6-bit floor correctly does not fire",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 168
+    },
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#DOC-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun run against /home/altsay/keryx: shannonEntropy('abcdefghijklmnopqrstuvwx12345678') = 5.0; detectEntropy('token=abcdefghijklmnopqrstuvwx12345678') -> 1 match. The header comment's claim (this value is 'DELIBERATELY still missed' due to low entropy) is directly contradicted by running the code — confirmed the comment is inaccurate, not the code.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: entropy.ts:168-176 header comment corrected to state the value IS caught (maximal entropy), matching entropy.test.ts's own R3 framing (site-check, direct read)"
+    }
+  },
+  {
+    "id": "DOC-F2",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "CHANGELOG.md's [0.3.20] entry documents the four round-2 findings but has no line for this same PR's LABEL_ASSIGNMENT_RE (LABEL=VALUE assignments) and camelCase label-boundary fix. Both are genuine, user-facing behaviour changes shipped in this same diff, with their own tests, but with no changelog line.",
+    "impact": "No runtime defect. A reader of the 0.3.20 changelog would not learn that LABEL=VALUE assignments and camelCase labels are now redacted differently than before.",
+    "suggested_fix": "Add a changelog bullet for the LABEL=VALUE / camelCase-label fix alongside the four already documented.",
+    "evidence": "git diff 1a11bff6..9b0b3f58 -- CHANGELOG.md: +50 lines, all covering SEC-F1/REG-F1/LOG-F1/SEC-F2; no line mentions LABEL_ASSIGNMENT_RE, api_key=, or apiKey. entropy.ts:148-166 and entropy.test.ts's new 'REVIEW ROUND 3' tests confirm the behaviour shipped in this same diff.",
+    "confidence": "medium",
+    "file": "CHANGELOG.md",
+    "line": 6,
+    "quote": "## [0.3.20] — 2026-09-28\n\n### Fixed\n- **A secret re-chunked into hyphenated pieces no longer bypasses redaction",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 6
+    },
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#DOC-F2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "git diff 1a11bff6fbb9fa8c05f2ba11537c6da3414959cd..9b0b3f58b18caf90b2e811744133ef2364dc7e4b -- CHANGELOG.md: +50 lines, none mentioning LABEL_ASSIGNMENT_RE/api_key=/apiKey. keryx ctx rg confirms LABEL_ASSIGNMENT_RE and its tests exist in the same diff (src/security/detect/entropy.ts, entropy.test.ts) with no corresponding changelog line.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: CHANGELOG.md [0.3.21] entry adds 'Also shipped in 0.3.19-0.3.20: LABEL=VALUE assignment shapes ... and camelCase labels ... are now recognised and redacted' line (site-check, direct read)"
+    }
+  },
+  {
+    "id": "TEST-F1",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "src/security/redact.test.ts's 'F-SEC-F2 ... 20 random UUIDs' test draws unseeded crypto.randomUUID() values and asserts the unlabelled half are never redacted. This is flaky: one of the 20 random UUIDs can pass the pre-existing pii.credit-card Luhn check (unrelated to this PR's entropy.ts diff), producing a [REDACTED:cc] match on the 'unlabelled' assertion. Reproduced once in 4 runs.",
+    "impact": "No security gap (over-redaction, not under-redaction), and outside this diff's own blast radius, but an intermittently-red test erodes trust in the suite's signal.",
+    "suggested_fix": "Seed the UUID generation or filter out any sampled UUID whose digit run happens to be Luhn-valid before asserting on it.",
+    "evidence": "bun test src/security/redact.test.ts -t \"F-SEC-F2\" run 4 times: 1 failure (Expected \"request id: 59593996-3554-4212-8ce6-3b142d420c0f\", Received \"request id: [REDACTED:cc]-8ce6-3b142d420c0f\"), 3 passes. pii.ts:146-147 confirms the colliding detector (pii.credit-card, mask \"cc\") is distinct from entropy.ts.",
+    "confidence": "high",
+    "file": "src/security/redact.test.ts",
+    "line": 164,
+    "global_id": "2026-09-28-pr-779-round3-9b0b3f58#TEST-F1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun test src/security/redact.test.ts -t \"F-SEC-F2\" run 4 times: 1 fail (Expected \"request id: 59593996-3554-4212-8ce6-3b142d420c0f\", Received \"request id: [REDACTED:cc]-8ce6-3b142d420c0f\"), 3 pass. Confirms the test is flaky as described; src/security/detect/pii.ts:146-147 confirms the colliding detector (pii.credit-card, mask \"cc\") is real and distinct from entropy.ts.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "head 22478bc0a9970324373cbe38fb5fd7e34568f64c: redact.test.ts's F-SEC-F2 UUID coverage now uses 20 fixed committed UUIDs (crypto.randomUUID only appears in a comment); bun test src/security/redact.test.ts -t 'F-SEC-F2' run 5 times -> 5/5 pass, 0 failures (round 3 reproduced 1 failure in 4 runs pre-fix)"
+    }
+  }
+]

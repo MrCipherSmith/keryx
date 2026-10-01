@@ -1,0 +1,784 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "377",
+  "slug": "channels-pairing",
+  "title": "channels: connect Telegram from /channels by pairing",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T08:08:40.508Z",
+  "updatedAt": "2026-10-01T12:18:58.734Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T09:51:35.068Z",
+      "note": "merged 0b6f4384; CI green on PR 823; channels-surface.test.ts passes in CI"
+    },
+    "AC2": {
+      "at": "2026-10-01T09:51:39.224Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC3": {
+      "at": "2026-10-01T09:51:39.394Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC4": {
+      "at": "2026-10-01T09:51:39.561Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC5": {
+      "at": "2026-10-01T09:51:39.730Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC6": {
+      "at": "2026-10-01T09:51:39.899Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC7": {
+      "at": "2026-10-01T09:51:40.080Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC8": {
+      "at": "2026-10-01T09:51:40.265Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC9": {
+      "at": "2026-10-01T09:51:40.430Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC10": {
+      "at": "2026-10-01T09:51:40.597Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC11": {
+      "at": "2026-10-01T09:51:40.768Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC12": {
+      "at": "2026-10-01T09:51:40.936Z",
+      "note": "tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token"
+    },
+    "AC13": {
+      "at": "2026-10-01T09:51:41.106Z",
+      "note": "smoke from the npm 0.3.49 package against a fake Bot API (bun --preload): /channels modal, hidden token, code, group event, connected, Test (two messages naming machine geekom), Disconnect erased bot-token and config; token found in no other file or screen history. Real second-machine check stays an outcome-observed line for the operator"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/823"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "generic template task; this flow was planned as blocks T5-T9, which covered it (context, implementation, tests, self-review, PR)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "generic template task; this flow was planned as blocks T5-T9, which covered it (context, implementation, tests, self-review, PR)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "generic template task; this flow was planned as blocks T5-T9, which covered it (context, implementation, tests, self-review, PR)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "generic template task; this flow was planned as blocks T5-T9, which covered it (context, implementation, tests, self-review, PR)"
+    },
+    {
+      "id": "T5",
+      "title": "Block 1: serve always offers local channel routes; reload without restart; pairing engine (code, user id, group events, forum and rights check) on the fake Bot API",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Block 2: shell side: write token and config atomically 600, connect/test/disconnect client calls, machine name",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Block 3: TUI /channels command, modal with pairing view, menu entry, sidebar row, readline equivalent",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Block 4: docs, version, CHANGELOG, release, npm smoke",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Independent review (review-orchestrator) and PR",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T08:08:40.508Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T08:10:17.088Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T08:10:17.461Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T08:10:17.828Z",
+      "event": "task-added",
+      "detail": "T5: Block 1: serve always offers local channel routes; reload without restart; pairing engine (code, user id, group events, forum and rights check) on the fake Bot API"
+    },
+    {
+      "at": "2026-10-01T08:10:18.188Z",
+      "event": "task-added",
+      "detail": "T6: Block 2: shell side: write token and config atomically 600, connect/test/disconnect client calls, machine name"
+    },
+    {
+      "at": "2026-10-01T08:10:18.529Z",
+      "event": "task-added",
+      "detail": "T7: Block 3: TUI /channels command, modal with pairing view, menu entry, sidebar row, readline equivalent"
+    },
+    {
+      "at": "2026-10-01T08:10:18.919Z",
+      "event": "task-added",
+      "detail": "T8: Block 4: docs, version, CHANGELOG, release, npm smoke"
+    },
+    {
+      "at": "2026-10-01T08:10:19.284Z",
+      "event": "task-added",
+      "detail": "T9: Independent review (review-orchestrator) and PR"
+    },
+    {
+      "at": "2026-10-01T08:40:33.852Z",
+      "event": "task-done",
+      "detail": "T5: Block 1: serve always offers local channel routes; reload without restart; pairing engine (code, user id, group events, forum and rights check) on the fake Bot API"
+    },
+    {
+      "at": "2026-10-01T08:40:34.022Z",
+      "event": "task-done",
+      "detail": "T6: Block 2: shell side: write token and config atomically 600, connect/test/disconnect client calls, machine name"
+    },
+    {
+      "at": "2026-10-01T09:51:35.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: merged 0b6f4384; CI green on PR 823; channels-surface.test.ts passes in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:39.224Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:39.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:39.561Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:39.731Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:39.900Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.080Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.265Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.597Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.768Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:40.936Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: tests named in the AC pass in CI on PR 823 (merge 0b6f4384); npm 0.3.49 smoke with fake Bot API: connect, test, disconnect, no token outside bot-token (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:41.106Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: smoke from the npm 0.3.49 package against a fake Bot API (bun --preload): /channels modal, hidden token, code, group event, connected, Test (two messages naming machine geekom), Disconnect erased bot-token and config; token found in no other file or screen history. Real second-machine check stays an outcome-observed line for the operator (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T09:51:46.428Z",
+      "event": "task-done",
+      "detail": "T8: Block 4: docs, version, CHANGELOG, release, npm smoke"
+    },
+    {
+      "at": "2026-10-01T09:51:46.594Z",
+      "event": "task-done",
+      "detail": "T9: Independent review (review-orchestrator) and PR"
+    },
+    {
+      "at": "2026-10-01T09:51:48.741Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/823 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-01T09:51:51.239Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T09:51:55.851Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-10-01T09:51:55.852Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T1, T2, T3, T4, T7; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 377 T1 --disposition skipped --reason \"<why this flow did not need it>\") | review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/377-2026-10-01-channels-pairing/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-10-01T09:52:05.849Z",
+      "event": "task-done",
+      "detail": "T7: Block 3: TUI /channels command, modal with pairing view, menu entry, sidebar row, readline equivalent"
+    },
+    {
+      "at": "2026-10-01T09:52:06.016Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T09:52:06.190Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T09:52:06.358Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T09:52:06.524Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T10:37:49.632Z",
+      "event": "completing",
+      "detail": "merged commit: 0b6f4384b40982812de9c6af1347c1ec064e0b19"
+    },
+    {
+      "at": "2026-10-01T10:37:53.579Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-10-01T10:37:53.580Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-002 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-102 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-107 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-109 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+    },
+    {
+      "at": "2026-10-01T12:18:54.044Z",
+      "event": "completing",
+      "detail": "merged commit: 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3"
+    },
+    {
+      "at": "2026-10-01T12:18:58.731Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-10-01T12:18:58.734Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3, but the PR head is 85ed3ce88b487fbe8987afb75f9dc697f1c6c348. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/tui/channels-surface.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/remote/pairing.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/remote/pairing.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/remote/pairing-group.test.ts"
+    },
+    "AC5": {
+      "kind": "invariant",
+      "check": "bun test src/remote/channels-secrecy.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/remote/channels-connect.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/remote/channels-test.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/remote/channels-disconnect.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/remote/channels-machine.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/tui/channels-surface.test.ts"
+    },
+    "AC11": {
+      "kind": "invariant",
+      "check": "bun test src/remote/no-live-network.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/standard/help-groups.test.ts"
+    },
+    "AC13": {
+      "kind": "none",
+      "reason": "a manual smoke from the published package, recorded in the journal"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T09:51:35.068Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:39.224Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:39.394Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:39.561Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:39.730Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:39.899Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.080Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.265Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.430Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.597Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.768Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:40.936Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T09:51:41.106Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T09:51:55.851Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0b6f4384b40982812de9c6af1347c1ec064e0b19 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0b6f4384b40982812de9c6af1347c1ec064e0b19 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T1, T2, T3, T4, T7; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 377 T1 --disposition skipped --reason \"<why this flow did not need it>\")"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/377-2026-10-01-channels-pairing/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T10:37:53.579Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0b6f4384b40982812de9c6af1347c1ec064e0b19 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0b6f4384b40982812de9c6af1347c1ec064e0b19 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-002 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-102 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-107 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-109 (minor, round 2026-10-01-ingest-823): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-01T12:18:58.731Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3, but the PR head is 85ed3ce88b487fbe8987afb75f9dc697f1c6c348. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    }
+  ]
+}

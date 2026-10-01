@@ -1,0 +1,521 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "367",
+  "slug": "w2-rewind",
+  "title": "P0 W2 rewind: per-turn file snapshots with rollback of files and history",
+  "status": "done",
+  "createdAt": "2026-09-29T15:43:28.251Z",
+  "updatedAt": "2026-09-29T20:48:42.932Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T20:48:04.152Z",
+      "note": "bun test src/rewind/snapshot.test.ts passes on merged main 75a5fa99 and in CI on PR 800 head ae2bfdbc"
+    },
+    "AC2": {
+      "at": "2026-09-29T20:48:10.564Z",
+      "note": "shadow-isolation.test.ts passes in CI on PR 800"
+    },
+    "AC3": {
+      "at": "2026-09-29T20:48:10.934Z",
+      "note": "restore.test.ts passes in CI on PR 800, including the apply_patch and shell_exec end-to-end test"
+    },
+    "AC4": {
+      "at": "2026-09-29T20:48:11.244Z",
+      "note": "history.test.ts and apply.test.ts pass in CI; F-001 stale-index case fixed in ae2bfdbc"
+    },
+    "AC5": {
+      "at": "2026-09-29T20:48:11.538Z",
+      "note": "rewind-inspector and slash registry tests pass in CI; /rewind answered in the installed 0.3.37 readline shell"
+    },
+    "AC6": {
+      "at": "2026-09-29T20:48:11.913Z",
+      "note": "retention.test.ts passes in CI on PR 800"
+    },
+    "AC7": {
+      "at": "2026-09-29T20:48:12.269Z",
+      "note": "docs:links and mkdocs strict build green in CI; guide, README, CHANGELOG, version 0.3.37"
+    },
+    "AC8": {
+      "at": "2026-09-29T20:48:12.564Z",
+      "note": "CI green on head ae2bfdbc, review round with verifier recorded (flow367-pr800-r1, r2), installed 0.3.37 passes keryx --version, review tier, mcp list and /rewind in keryx shell"
+    },
+    "AC9": {
+      "at": "2026-09-29T20:48:24.108Z",
+      "note": "Flow stops after the release smoke; write mode for external agents was not touched and waits for the operator's word"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/800"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected in context.md and plan.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented per plan, merged in PR 800 as 75a5fa99"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tests for snapshot, isolation, restore, history, retention and apply added; CI green"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "self-review and independent review round recorded, F-001 fixed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-29T15:43:28.251Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T15:46:27.897Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T15:46:28.050Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T15:46:32.936Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a scripted `/rewind` round trip through the real CLI route. [verify: judged — the release evidence and the smoke output in the flow journal]\" -> \"# gdctx rg summary\" (marker syntax: judged takes no arguments)"
+    },
+    {
+      "at": "2026-09-29T15:46:49.530Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"# gdctx rg summary\" -> \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a scripted `/rewind` round trip through the real CLI route. [verify: judged]\" (restore AC8 text with valid marker)"
+    },
+    {
+      "at": "2026-09-29T20:48:04.153Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun test src/rewind/snapshot.test.ts passes on merged main 75a5fa99 and in CI on PR 800 head ae2bfdbc (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:10.565Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shadow-isolation.test.ts passes in CI on PR 800 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:10.934Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: restore.test.ts passes in CI on PR 800, including the apply_patch and shell_exec end-to-end test (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:11.244Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: history.test.ts and apply.test.ts pass in CI; F-001 stale-index case fixed in ae2bfdbc (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:11.538Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: rewind-inspector and slash registry tests pass in CI; /rewind answered in the installed 0.3.37 readline shell (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:11.914Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: retention.test.ts passes in CI on PR 800 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:12.270Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: docs:links and mkdocs strict build green in CI; guide, README, CHANGELOG, version 0.3.37 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:12.564Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: CI green on head ae2bfdbc, review round with verifier recorded (flow367-pr800-r1, r2), installed 0.3.37 passes keryx --version, review tier, mcp list and /rewind in keryx shell (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:24.108Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Flow stops after the release smoke; write mode for external agents was not touched and waits for the operator's word (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T20:48:24.446Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T20:48:24.735Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T20:48:25.041Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T20:48:25.348Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T20:48:31.627Z",
+      "event": "completing",
+      "detail": "merged commit: 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5"
+    },
+    {
+      "at": "2026-09-29T20:48:31.691Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-29T20:48:31.694Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against ae2bfdbc8370826b644ad5621ee89897a315d8c6, but the completion names merged commit 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5, and ae2bfdbc8370826b644ad5621ee89897a315d8c6 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f36f05f858653ee600289af59a7540124926705f, merged b69a4e064eb50020cdaefced73d6f8a74285d122). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge."
+    },
+    {
+      "at": "2026-09-29T20:48:38.457Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/800 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-29T20:48:38.802Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-29T20:48:42.930Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-29T20:48:42.932Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/rewind/snapshot.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/rewind/shadow-isolation.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/rewind/restore.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/rewind/history.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/tui/rewind-inspector.test.ts src/commands/shell-slash-registry.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/rewind/retention.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun run docs:links"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the journal entry and the operator report are the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-29T20:48:04.152Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:10.564Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:10.934Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:11.244Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:11.538Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:11.913Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:12.269Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:12.564Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:24.108Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:42.932Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37",
+      "headCommit": "75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T20:48:31.691Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (violated): the latest round ran against ae2bfdbc8370826b644ad5621ee89897a315d8c6, but the completion names merged commit 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5, and ae2bfdbc8370826b644ad5621ee89897a315d8c6 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f36f05f858653ee600289af59a7540124926705f, merged b69a4e064eb50020cdaefced73d6f8a74285d122). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    },
+    {
+      "at": "2026-09-29T20:48:42.930Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:f5166bfedc15e42876085817d3676f5f1d2cd5848e583f8c78645299d83a4d37"
+    }
+  ],
+  "baseBranch": "main",
+  "merged": {
+    "commit": "75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5",
+    "ref": "origin/main",
+    "at": "2026-09-29T20:48:42.932Z"
+  }
+}

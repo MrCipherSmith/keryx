@@ -1,0 +1,543 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "373",
+  "slug": "external-agents-one-step-enable-and-shor",
+  "title": "External agents: one-step enable and short agent names",
+  "status": "done",
+  "createdAt": "2026-09-30T20:51:22.863Z",
+  "updatedAt": "2026-09-30T22:23:07.137Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-30T22:18:02.386Z",
+      "note": "PR #810: enable toggles user flag and manifest entry only; tests in external-agents.test.ts; live smoke on 0.3.44 from npm"
+    },
+    "AC2": {
+      "at": "2026-09-30T22:18:02.548Z",
+      "note": "PR #810: disable reverses enable, idempotent; live smoke round trip printed 'set to false' / 'set to true' and 'already on' on repeat"
+    },
+    "AC3": {
+      "at": "2026-09-30T22:18:02.708Z",
+      "note": "PR #810: canonicalExternalAgentId at entry points (delegate, agents external, spawn_subagent); registry tests incl. prototype keys; live run with 'claude'"
+    },
+    "AC4": {
+      "at": "2026-09-30T22:18:02.875Z",
+      "note": "PR #810: aliases resolved before per-agent config lookup; run-external-factory tests; review F-001/F-002 fixed in 19f1479d"
+    },
+    "AC5": {
+      "at": "2026-09-30T22:18:03.038Z",
+      "note": "PR #810: ENABLE_HINT in every capability refusal; live smoke disabled run showed 'run keryx agents external enable (in the shell: /external-agents on)'"
+    },
+    "AC6": {
+      "at": "2026-09-30T22:18:03.200Z",
+      "note": "PR #810: /external-agents on|off slash command (agent-commands, tui-shell), /delegate refusal names it; F-004 documents busy deferral"
+    },
+    "AC7": {
+      "at": "2026-09-30T22:18:03.366Z",
+      "note": "PR #810: README, cli-reference, commands-by-task regenerated, CHANGELOG 0.3.44, package.json 0.3.44; mkdocs --strict green"
+    },
+    "AC8": {
+      "at": "2026-09-30T22:18:03.528Z",
+      "note": "live smoke 2026-09-30 with keryx 0.3.44 installed from npm: enable then 'run claude' in scratch project returned Completed with file contents; keryx repo tracked tree clean"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/810"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T20:51:22.863Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T20:52:09.440Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T20:52:09.782Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T22:17:55.657Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T22:17:55.820Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T22:17:55.976Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-30T22:17:56.141Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-30T22:18:02.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #810: enable toggles user flag and manifest entry only; tests in external-agents.test.ts; live smoke on 0.3.44 from npm (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:02.548Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: PR #810: disable reverses enable, idempotent; live smoke round trip printed 'set to false' / 'set to true' and 'already on' on repeat (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:02.709Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PR #810: canonicalExternalAgentId at entry points (delegate, agents external, spawn_subagent); registry tests incl. prototype keys; live run with 'claude' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:02.875Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PR #810: aliases resolved before per-agent config lookup; run-external-factory tests; review F-001/F-002 fixed in 19f1479d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:03.038Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #810: ENABLE_HINT in every capability refusal; live smoke disabled run showed 'run keryx agents external enable (in the shell: /external-agents on)' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:03.200Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR #810: /external-agents on|off slash command (agent-commands, tui-shell), /delegate refusal names it; F-004 documents busy deferral (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:03.366Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #810: README, cli-reference, commands-by-task regenerated, CHANGELOG 0.3.44, package.json 0.3.44; mkdocs --strict green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:03.528Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: live smoke 2026-09-30 with keryx 0.3.44 installed from npm: enable then 'run claude' in scratch project returned Completed with file contents; keryx repo tracked tree clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T22:18:10.245Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/810 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-30T22:18:11.683Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-30T22:18:15.357Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-30T22:18:15.357Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-003 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-30-ingest-810#F-004 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | verifier-stats (violated): round `2026-09-30-ingest-810` ran with `verification_mode: annotate` and received 0 claims while retaining 4 finding(s) at or above `minor` (2026-09-30-ingest-810#F-001, 2026-09-30-ingest-810#F-002, 2026-09-30-ingest-810#F-003, 2026-09-30-ingest-810#F-004). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-30T22:22:42.881Z",
+      "event": "completing",
+      "detail": "merged commit: 51497ac58de5ee8e277a946f8f369fa6e07c6d92"
+    },
+    {
+      "at": "2026-09-30T22:22:47.325Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-30T22:22:47.326Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-30T22:23:02.502Z",
+      "event": "completing",
+      "detail": "merged commit: 51497ac58de5ee8e277a946f8f369fa6e07c6d92"
+    },
+    {
+      "at": "2026-09-30T22:23:07.135Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-30T22:23:07.137Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-30T22:18:02.386Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:02.548Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:02.708Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:02.875Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:03.038Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:03.200Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:03.366Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:18:03.528Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:23:07.137Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c",
+      "headCommit": "51497ac58de5ee8e277a946f8f369fa6e07c6d92"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-30T22:18:15.357Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-003 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-30-ingest-810#F-004 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | verifier-stats (violated): round `2026-09-30-ingest-810` ran with `verification_mode: annotate` and received 0 claims while retaining 4 finding(s) at or above `minor` (2026-09-30-ingest-810#F-001, 2026-09-30-ingest-810#F-002, 2026-09-30-ingest-810#F-003, 2026-09-30-ingest-810#F-004). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:22:47.325Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    },
+    {
+      "at": "2026-09-30T22:23:07.135Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "51497ac58de5ee8e277a946f8f369fa6e07c6d92 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:d588d77d269c358f952ac4d4f35ff8cb65d797770eed745de5eed88607a8c64c"
+    }
+  ],
+  "merged": {
+    "commit": "51497ac58de5ee8e277a946f8f369fa6e07c6d92",
+    "ref": "origin/main",
+    "at": "2026-09-30T22:23:07.137Z"
+  }
+}

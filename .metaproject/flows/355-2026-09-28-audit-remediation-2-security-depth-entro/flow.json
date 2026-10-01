@@ -1,0 +1,657 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "355",
+  "slug": "audit-remediation-2-security-depth-entro",
+  "title": "Audit remediation 2: security depth — entropy redaction, injection evasions, outbound URL secrets, token paths, win32 open, credential-shape module (R3)",
+  "status": "done",
+  "createdAt": "2026-09-28T04:19:21.877Z",
+  "updatedAt": "2026-09-28T12:40:58.380Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T12:20:36.341Z",
+      "note": "security eval baseline and after in the journal every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC2": {
+      "at": "2026-09-28T12:20:36.490Z",
+      "note": "entropy redaction with allow-shapes; 204-output fixture 0 FP; real-file sweeps 0 FP (bun.lock, CHANGELOG, git log -p, docs). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC3": {
+      "at": "2026-09-28T12:20:36.639Z",
+      "note": "injection folding: newline and Cyrillic confusable cases in the corpus, detected. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC4": {
+      "at": "2026-09-28T12:20:36.787Z",
+      "note": "web_fetch/web_search outbound check, egress.outbound-secret; ordinary-URL fixture 0 refusals; crafted recall intact; public-id allowlist. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC5": {
+      "at": "2026-09-28T12:20:36.940Z",
+      "note": "displayUrl masks token-shaped path segments; numeric ids visible. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC6": {
+      "at": "2026-09-28T12:20:37.088Z",
+      "note": "win32 open via rundll32 with validated URL, no cmd. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC7": {
+      "at": "2026-09-28T12:20:37.235Z",
+      "note": "credential-shape.ts via the security facade; case-insensitive names; suffix-anchored glued regex; import-policy ceiling 150. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    },
+    "AC8": {
+      "at": "2026-09-28T12:20:37.386Z",
+      "note": "tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/781"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T5",
+      "title": "Corpus baseline; entropy redaction with allow-shapes; injection folding (AC1-AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T04:19:47.093Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-ar2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #776; orchestrator re-ran the corpus and a real-output redaction probe"
+    },
+    {
+      "id": "T6",
+      "title": "Outbound secret check in web tools; displayUrl masking; win32 open; credential-shape module (AC4-AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #776; orchestrator re-ran the corpus and a real-output redaction probe"
+    },
+    {
+      "id": "T7",
+      "title": "Corpus re-run, docs, ledger, changelog, bump (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T05:02:48.684Z",
+            "outcome": "started",
+            "detail": "PR #776 open, review round 1 dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released 0.3.19-0.3.21"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T04:19:21.877Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-28T04:19:45.733Z",
+      "event": "frozen",
+      "detail": "2 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-28T04:19:45.883Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-28T04:19:46.033Z",
+      "event": "task-added",
+      "detail": "T5: Corpus baseline; entropy redaction with allow-shapes; injection folding (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-28T04:19:46.181Z",
+      "event": "task-added",
+      "detail": "T6: Outbound secret check in web tools; displayUrl masking; win32 open; credential-shape module (AC4-AC7)"
+    },
+    {
+      "at": "2026-09-28T04:19:46.331Z",
+      "event": "task-added",
+      "detail": "T7: Corpus re-run, docs, ledger, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T04:19:46.482Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-28T04:19:46.630Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-28T04:19:46.780Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-28T04:19:46.938Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-28T04:19:47.093Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar2"
+    },
+    {
+      "at": "2026-09-28T05:02:47.963Z",
+      "event": "task-done",
+      "detail": "T5: Corpus baseline; entropy redaction with allow-shapes; injection folding (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-28T05:02:48.315Z",
+      "event": "task-done",
+      "detail": "T6: Outbound secret check in web tools; displayUrl masking; win32 open; credential-shape module (AC4-AC7)"
+    },
+    {
+      "at": "2026-09-28T05:02:48.685Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — PR #776 open, review round 1 dispatched"
+    },
+    {
+      "at": "2026-09-28T12:19:46.292Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/781 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-28T12:19:59.988Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: security eval baseline and after in the journal for every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:01.555Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds, all findings terminal; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:01.706Z",
+      "event": "task-done",
+      "detail": "T7: Corpus re-run, docs, ledger, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T12:20:01.858Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-28T12:20:05.967Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-28T12:20:05.967Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 18 finding(s) at or above `minor` are not terminal: 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F2 (minor, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#ARCH-F1 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F1 (blocker, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#LOG-F1 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#REG-F1 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F2 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#SEC-F3 (blocker, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#LOG-F2 (major, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#REG-F2 (major, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#DOC-F1 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#DOC-F2 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#TEST-F1 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-28T12:20:19.098Z",
+      "event": "ac-updated",
+      "detail": "AC2-AC7 used '- ACn (ref):' which the parser does not read as criteria; reformatted to '- ACn: (ref)', wording unchanged"
+    },
+    {
+      "at": "2026-09-28T12:20:36.341Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: security eval baseline and after in the journal every round; no row regressed (prompt-injection fnRate 0.375 -> 0.300). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:36.490Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: entropy redaction with allow-shapes; 204-output fixture 0 FP; real-file sweeps 0 FP (bun.lock, CHANGELOG, git log -p, docs). Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:36.639Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: injection folding: newline and Cyrillic confusable cases in the corpus, detected. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:36.787Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: web_fetch/web_search outbound check, egress.outbound-secret; ordinary-URL fixture 0 refusals; crafted recall intact; public-id allowlist. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:36.940Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: displayUrl masks token-shaped path segments; numeric ids visible. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:37.088Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: win32 open via rundll32 with validated URL, no cmd. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:37.235Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: credential-shape.ts via the security facade; case-insensitive names; suffix-anchored glued regex; import-policy ceiling 150. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:20:37.386Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: tsc, lint, security/web/mcp-servers/import-policy suites green each round; docs and ledger updated; CHANGELOG 0.3.19-0.3.21. Shipped across PR #776 (0.3.19), #779 (0.3.20), #781 (0.3.21); four verifier-backed review rounds; round-4 residuals S-12/S-13 accepted by the operator (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-28T12:34:00.916Z",
+      "event": "completing",
+      "detail": "merged commit: 536a697181053f764d2a2afc1d26c602b7bdef4a"
+    },
+    {
+      "at": "2026-09-28T12:34:05.285Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-28T12:34:05.286Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 9 finding(s) at or above `minor` are not terminal: 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F2 (minor, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#ARCH-F1 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F1 (blocker, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-28T12:40:53.732Z",
+      "event": "completing",
+      "detail": "merged commit: 536a697181053f764d2a2afc1d26c602b7bdef4a"
+    },
+    {
+      "at": "2026-09-28T12:40:58.378Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-28T12:40:58.380Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T12:19:59.988Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8f3a436d940e412de747e5161aa1377e09dbaafae5b89cda51cc18040d982fc2"
+    },
+    {
+      "at": "2026-09-28T12:20:01.555Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8f3a436d940e412de747e5161aa1377e09dbaafae5b89cda51cc18040d982fc2"
+    },
+    {
+      "at": "2026-09-28T12:20:36.341Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:36.490Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:36.639Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:36.787Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:36.940Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:37.088Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:37.235Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:20:37.386Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:40:58.379Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5",
+      "headCommit": "536a697181053f764d2a2afc1d26c602b7bdef4a"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T12:20:05.967Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "2 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 18 finding(s) at or above `minor` are not terminal: 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F2 (minor, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#ARCH-F1 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F1 (blocker, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#LOG-F1 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#REG-F1 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F2 (major, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#SEC-F3 (blocker, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#LOG-F2 (major, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#REG-F2 (major, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#DOC-F1 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#DOC-F2 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-779-round3-9b0b3f58#TEST-F1 (minor, round 2026-09-28-pr-779-round3-9b0b3f58): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:8f3a436d940e412de747e5161aa1377e09dbaafae5b89cda51cc18040d982fc2"
+    },
+    {
+      "at": "2026-09-28T12:34:05.285Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 9 finding(s) at or above `minor` are not terminal: 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F1 (blocker, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F2 (minor, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F2 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F3 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#ARCH-F1 (major, round 2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-28-pr-776-round2-2a2db6b7#SEC-F1 (blocker, round 2026-09-28-pr-776-round2-2a2db6b7): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    },
+    {
+      "at": "2026-09-28T12:40:58.378Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "536a697181053f764d2a2afc1d26c602b7bdef4a is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 7 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:77bfa217a8d48a6f4d455b4ef87b96267a3fc72a0a0df6934248719464f13ed5"
+    }
+  ],
+  "merged": {
+    "commit": "536a697181053f764d2a2afc1d26c602b7bdef4a",
+    "ref": "origin/main",
+    "at": "2026-09-28T12:40:58.379Z"
+  }
+}

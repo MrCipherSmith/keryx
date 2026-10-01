@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079",
+  "mode": "ingest",
+  "status": "closed",
+  "target": {
+    "kind": "report",
+    "ref": "cbbbe29f36fac4a3305ce1b5548bfa8ce3063079",
+    "head": "cbbbe29f36fac4a3305ce1b5548bfa8ce3063079"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/scope.md",
+    "coverage": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/coverage.md",
+    "report": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/report.md",
+    "findings": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/findings.json",
+    "learning": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/learning.md",
+    "decisions": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me/reviews/2026-09-27-ingest-cbbbe29f36fac4a3305ce1b5548bfa8ce3063079/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 1,
+    "dropped_prefilter": 1,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 1,
+    "dropped_scope_b": null,
+    "dropped_findings_cap": 0,
+    "retained": 0,
+    "dismissed_by_round": null,
+    "by_reason": {
+      "prefilter:comment-only": 1,
+      "refuted:verifier-refuted": 1
+    },
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      },
+      {
+        "stage": "scope_b",
+        "reason": "no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart."
+      }
+    ]
+  },
+  "cost": {
+    "input_tokens": 8000,
+    "output_tokens": 1200
+  },
+  "createdAt": "2026-09-27T22:26:35.426Z",
+  "updatedAt": "2026-09-27T22:26:41.169Z",
+  "flow": {
+    "id": "353",
+    "path": ".metaproject/flows/353-2026-09-27-p0-w5-first-hour-keryx-doctor-did-you-me"
+  }
+}

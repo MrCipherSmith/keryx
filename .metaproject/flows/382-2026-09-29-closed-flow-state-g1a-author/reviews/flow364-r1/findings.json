@@ -1,0 +1,177 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow364-pr795-review",
+    "severity": "minor",
+    "problem": "Plain git status opportunistically rewrites .git/index and takes index.lock, so the read-only note was not read-only against the index.",
+    "impact": "A concurrent operator git commit or git add could fail with Unable to create index.lock while flow status or the TUI list ran.",
+    "suggested_fix": "Run every git call with --no-optional-locks.",
+    "evidence": "the reviewer measured the index mtime in a scratch repo",
+    "confidence": "high",
+    "file": "src/flow/uncommitted-state.ts",
+    "line": null,
+    "quote": "spawnGit",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 75
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/uncommitted-state.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow364-r1#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At c5098d11 fixed: READ_ONLY_GIT_FLAGS adds --no-optional-locks to every call; test asserts the flag on all calls",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c5098d11f6363dd3547484a70ebfea923e008b0c; the ingest carries a refuted verdict citing c5098d11"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow364-pr795-review",
+    "severity": "minor",
+    "problem": "The TUI git pass had no timeout and ran ls-files and status even with no done flows.",
+    "impact": "A hung git on a network filesystem stalled loadInspectorFlows and the list open.",
+    "suggested_fix": "Bound the git calls and skip the pass when there are no done flows.",
+    "evidence": "the reviewer compared with computeAcCheckStaleness which bounds its git call",
+    "confidence": "high",
+    "file": "src/tui/inspector-sources.ts",
+    "line": null,
+    "quote": "uncommittedFlowStateNotes call",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/inspector-sources.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow364-r1#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At c5098d11 fixed: GIT_TIMEOUT_MS 5000 through spawn timeout, killed process counts as null note; pass skipped when no done flows",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c5098d11f6363dd3547484a70ebfea923e008b0c; the ingest carries a refuted verdict citing c5098d11"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow364-pr795-review",
+    "severity": "minor",
+    "problem": "The batch variant re-split the whole ls-files and status listings for every flow.",
+    "impact": "600 done flows with 25 tracked files each took 1329 ms against 57 ms for one call.",
+    "suggested_fix": "Group the listings by flow directory once and look up per flow.",
+    "evidence": "the reviewer benchmarked it",
+    "confidence": "high",
+    "file": "src/flow/uncommitted-state.ts",
+    "line": null,
+    "quote": "noteFor insideDir",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 50
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/uncommitted-state.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow364-r1#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At c5098d11 fixed: listings grouped once by the .metaproject/flows/<dir>/ prefix, map lookup per flow, single variant shares the grouping",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c5098d11f6363dd3547484a70ebfea923e008b0c; the ingest carries a refuted verdict citing c5098d11"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow364-pr795-review",
+    "severity": "minor",
+    "problem": "The batch function was tested with one flow only and flow complete printing the note only on success, with the exit code unchanged, was untested.",
+    "impact": "A disagreement between the batch and scoped logic on mixed directories, or a note on a refused completion, would not fail any test.",
+    "suggested_fix": "Add mixed-directory batch tests and a flow complete test.",
+    "evidence": "the reviewer read the tests",
+    "confidence": "high",
+    "file": "src/flow/uncommitted-state-note.test.ts",
+    "line": null,
+    "quote": "batch vs single",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 49
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/uncommitted-state-note.test.ts"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow364-r1#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At c5098d11 fixed: mixed tracked-dirty, tracked-clean, untracked and lookalike-path cases against the single variant; flow-complete-uncommitted.test.ts covers passed, refused and exit code",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c5098d11f6363dd3547484a70ebfea923e008b0c; the ingest carries a refuted verdict citing c5098d11"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow364-pr795-review",
+    "severity": "info",
+    "problem": "The note and the docs asserted the uncommitted changes were the closing state flow complete wrote.",
+    "impact": "A hand-edited file in the directory would get a wrong cause attributed to it.",
+    "suggested_fix": "Say the directory has uncommitted changes and name the closing state as a common cause.",
+    "evidence": "the reviewer read the note text",
+    "confidence": "high",
+    "file": "docs/docs/cli-reference.md",
+    "line": null,
+    "quote": "closing state wording",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "class_scope": {
+      "sites": [
+        "docs/docs/cli-reference.md"
+      ],
+      "enumeration_method": "the reviewer read the diff and ran edge inputs"
+    },
+    "global_id": "flow364-r1#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At c5098d11 fixed: note, cli-reference, CHANGELOG and helper header use has uncommitted changes, a common cause is the closing state",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit c5098d11f6363dd3547484a70ebfea923e008b0c; the ingest carries a refuted verdict citing c5098d11"
+    }
+  }
+]

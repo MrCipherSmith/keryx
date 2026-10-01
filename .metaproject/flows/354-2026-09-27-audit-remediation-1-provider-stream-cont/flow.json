@@ -1,0 +1,486 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "354",
+  "slug": "audit-remediation-1-provider-stream-cont",
+  "title": "Audit remediation 1: provider stream contracts and harness/shell error boundaries (R1, R2)",
+  "status": "done",
+  "createdAt": "2026-09-27T23:45:44.361Z",
+  "updatedAt": "2026-09-28T02:35:02.152Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T02:34:57.079Z",
+      "note": "stream-contract.test.ts 3 rows x 4 adapters; compat EOF -> malformed w/ pendingToolCallId, Gemini in-stream error via classifyGeminiError, unique synthetic call ids. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC2": {
+      "at": "2026-09-28T02:34:57.228Z",
+      "note": "L-10 probed by the orchestrator on gpt-6-luna: 400 Unsupported parameter with the field, 200 without (journal); omission kept, comment+test say so; L-9 open in findings.md with the required reason. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC3": {
+      "at": "2026-09-28T02:34:57.378Z",
+      "note": "cached_tokens -> cacheReadTokens; cost estimate applies the OpenAI discount (openai/openai-codex only after review r1); tests in openai-provider.test.ts and tui-shell.test.ts. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC4": {
+      "at": "2026-09-28T02:34:57.532Z",
+      "note": "sequential loop try/catch; error tool result, Stop hook fires; caughtToolErrors on RunAgentTurnResult reaches trigger outcomes (review r1). agent.test.ts AC4. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC5": {
+      "at": "2026-09-28T02:34:57.686Z",
+      "note": "/new,/clear reset lastToolOutput; waiters bounded; shell-agent-repl.test.ts. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC6": {
+      "at": "2026-09-28T02:34:57.838Z",
+      "note": "provisionWorktrees cleans up (worktree.test.ts); credential-boundary header honest; duplicate source-text audit removed, order asserted at runtime. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC7": {
+      "at": "2026-09-28T02:34:57.991Z",
+      "note": "findings.md 0.2.1: rows closed, L-9 and L-16 open with reasons. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    },
+    "AC8": {
+      "at": "2026-09-28T02:34:58.143Z",
+      "note": "tsc, lint, 866 tests incl. all provider suites; docs/docs/harness.md providers section; CHANGELOG 0.3.18; CI green after a flake rerun. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/774"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T5",
+      "title": "Provider stream contract: compat EOF, Gemini in-stream error and call ids, cached tokens, L-10 probe (AC1-AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T23:46:24.936Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-ar1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #774; orchestrator re-ran the L-10 probe and verified"
+    },
+    {
+      "id": "T6",
+      "title": "Harness/shell: sequential loop boundary, /new reset, waiters bound, worktree helper, test headers (AC4-AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR #774; orchestrator re-ran the L-10 probe and verified"
+    },
+    {
+      "id": "T7",
+      "title": "Ledger, docs, changelog, bump (AC7-AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T00:45:02.690Z",
+            "outcome": "started",
+            "detail": "ledger/docs/changelog done, PR #774 open, review round 1 dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "released 0.3.18"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-27T23:45:44.361Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-27T23:46:21.843Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-27T23:46:22.210Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-27T23:46:22.559Z",
+      "event": "task-added",
+      "detail": "T5: Provider stream contract: compat EOF, Gemini in-stream error and call ids, cached tokens, L-10 probe (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-27T23:46:22.912Z",
+      "event": "task-added",
+      "detail": "T6: Harness/shell: sequential loop boundary, /new reset, waiters bound, worktree helper, test headers (AC4-AC6)"
+    },
+    {
+      "at": "2026-09-27T23:46:23.256Z",
+      "event": "task-added",
+      "detail": "T7: Ledger, docs, changelog, bump (AC7-AC8)"
+    },
+    {
+      "at": "2026-09-27T23:46:23.576Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-27T23:46:23.934Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-27T23:46:24.320Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-27T23:46:24.638Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-27T23:46:24.936Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar1"
+    },
+    {
+      "at": "2026-09-28T00:45:01.991Z",
+      "event": "task-done",
+      "detail": "T5: Provider stream contract: compat EOF, Gemini in-stream error and call ids, cached tokens, L-10 probe (AC1-AC3)"
+    },
+    {
+      "at": "2026-09-28T00:45:02.343Z",
+      "event": "task-done",
+      "detail": "T6: Harness/shell: sequential loop boundary, /new reset, waiters bound, worktree helper, test headers (AC4-AC6)"
+    },
+    {
+      "at": "2026-09-28T00:45:02.690Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — ledger/docs/changelog done, PR #774 open, review round 1 dispatched"
+    },
+    {
+      "at": "2026-09-28T02:34:56.920Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/774 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-28T02:34:57.079Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: stream-contract.test.ts 3 rows x 4 adapters; compat EOF -> malformed w/ pendingToolCallId, Gemini in-stream error via classifyGeminiError, unique synthetic call ids. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.228Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: L-10 probed by the orchestrator on gpt-6-luna: 400 Unsupported parameter with the field, 200 without (journal); omission kept, comment+test say so; L-9 open in findings.md with the required reason. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.378Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: cached_tokens -> cacheReadTokens; cost estimate applies the OpenAI discount (openai/openai-codex only after review r1); tests in openai-provider.test.ts and tui-shell.test.ts. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: sequential loop try/catch; error tool result, Stop hook fires; caughtToolErrors on RunAgentTurnResult reaches trigger outcomes (review r1). agent.test.ts AC4. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: /new,/clear reset lastToolOutput; waiters bounded; shell-agent-repl.test.ts. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.838Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: provisionWorktrees cleans up (worktree.test.ts); credential-boundary header honest; duplicate source-text audit removed, order asserted at runtime. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:57.991Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: findings.md 0.2.1: rows closed, L-9 and L-16 open with reasons. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:58.143Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: tsc, lint, 866 tests incl. all provider suites; docs/docs/harness.md providers section; CHANGELOG 0.3.18; CI green after a flake rerun. PR #774 merged as 83e1f847, released 0.3.18 and installed; review rounds 1-2 closed with verifier verdicts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T02:34:58.292Z",
+      "event": "task-done",
+      "detail": "T7: Ledger, docs, changelog, bump (AC7-AC8)"
+    },
+    {
+      "at": "2026-09-28T02:34:58.445Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-28T02:35:02.151Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-28T02:35:02.152Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T02:34:57.079Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.228Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.378Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.532Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.686Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.838Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:57.991Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:34:58.143Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    },
+    {
+      "at": "2026-09-28T02:35:02.152Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3",
+      "headCommit": "83e1f847bf4af4cbaf2e02a7d4a98de7c67f45de"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T02:35:02.151Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "83e1f847bf4af4cbaf2e02a7d4a98de7c67f45de is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "83e1f847bf4af4cbaf2e02a7d4a98de7c67f45de is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8da1c9656aca7871b9dc252fde1b1f551a74330716273d9e39529f87c664bff3"
+    }
+  ],
+  "merged": {
+    "commit": "83e1f847bf4af4cbaf2e02a7d4a98de7c67f45de",
+    "ref": "origin/main",
+    "at": "2026-09-28T02:35:02.152Z"
+  }
+}

@@ -1,0 +1,4 @@
+# Decisions
+
+- T4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).

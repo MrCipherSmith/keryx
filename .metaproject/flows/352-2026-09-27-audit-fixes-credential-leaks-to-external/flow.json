@@ -1,0 +1,543 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "352",
+  "slug": "audit-fixes-credential-leaks-to-external",
+  "title": "Audit fixes: credential leaks to external agents and web redirects, sub-agent cancel, shell lease",
+  "status": "implemented",
+  "createdAt": "2026-09-27T14:53:18.244Z",
+  "updatedAt": "2026-09-27T18:18:10.530Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-27T17:09:11.376Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC2": {
+      "at": "2026-09-27T17:09:11.533Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC3": {
+      "at": "2026-09-27T17:09:11.688Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC4": {
+      "at": "2026-09-27T17:09:11.846Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC5": {
+      "at": "2026-09-27T17:09:11.999Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC6": {
+      "at": "2026-09-27T17:09:12.154Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC7": {
+      "at": "2026-09-27T17:09:12.303Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    },
+    "AC8": {
+      "at": "2026-09-27T17:09:12.454Z",
+      "note": "PR #770 merged, v0.3.15; test per criterion in the PR, CI green"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/770"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context from the 2026-09-27 audit (three reviewers, findings verified)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (concrete scopes)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (concrete scopes)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7 (concrete scopes)"
+    },
+    {
+      "id": "T5",
+      "title": "Security: external child env, web redirect credential, subagent timeout quarantine, MCP env filter, MCP oauth fingerprint (AC1-AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T14:53:55.619Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-audit"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Cancel and lifecycle: abort reaches sub-agents (sequential, concurrent batch, wrap-up), shell lease on throw, SIGINT sweeps jobs (AC6-AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-27T14:53:55.979Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-audit"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Verify, changelog, version bump (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-27T14:53:18.244Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-27T14:53:36.598Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-27T14:53:36.744Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-27T14:53:41.112Z",
+      "event": "task-added",
+      "detail": "T5: Security: external child env, web redirect credential, subagent timeout quarantine, MCP env filter, MCP oauth fingerprint (AC1-AC5)"
+    },
+    {
+      "at": "2026-09-27T14:53:41.263Z",
+      "event": "task-added",
+      "detail": "T6: Cancel and lifecycle: abort reaches sub-agents (sequential, concurrent batch, wrap-up), shell lease on throw, SIGINT sweeps jobs (AC6-AC7)"
+    },
+    {
+      "at": "2026-09-27T14:53:41.417Z",
+      "event": "task-added",
+      "detail": "T7: Verify, changelog, version bump (AC8)"
+    },
+    {
+      "at": "2026-09-27T14:53:54.240Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-27T14:53:54.613Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-27T14:53:54.932Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-27T14:53:55.279Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-27T14:53:55.619Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit"
+    },
+    {
+      "at": "2026-09-27T14:53:55.980Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit"
+    },
+    {
+      "at": "2026-09-27T16:31:47.918Z",
+      "event": "task-done",
+      "detail": "T5: Security: external child env, web redirect credential, subagent timeout quarantine, MCP env filter, MCP oauth fingerprint (AC1-AC5)"
+    },
+    {
+      "at": "2026-09-27T16:31:48.305Z",
+      "event": "task-done",
+      "detail": "T6: Cancel and lifecycle: abort reaches sub-agents (sequential, concurrent batch, wrap-up), shell lease on throw, SIGINT sweeps jobs (AC6-AC7)"
+    },
+    {
+      "at": "2026-09-27T16:31:48.705Z",
+      "event": "task-done",
+      "detail": "T7: Verify, changelog, version bump (AC8)"
+    },
+    {
+      "at": "2026-09-27T17:09:11.215Z",
+      "event": "implemented",
+      "detail": "draft PR: 770 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-27T17:09:11.376Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:11.533Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:11.688Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:11.846Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:11.999Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:12.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:12.303Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:12.454Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR #770 merged, v0.3.15; test per criterion in the PR, CI green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-27T17:09:12.602Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-27T17:09:18.056Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-27T17:09:18.057Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/352-2026-09-27-audit-fixes-credential-leaks-to-external/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: the recorded PR (770) is not a GitHub pull request URL, so no comment record can be located | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-27T18:17:18.979Z",
+      "event": "implemented",
+      "detail": "draft PR: 770 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-27T18:17:19.390Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-27T18:17:26.136Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-27T18:17:26.138Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-27-branch-33a3591b-1#BLOCKER-1 (blocker, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-1 (major, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-2 (major, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-3 (major, round 2026-09-27-branch-33a3591b-1): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-27-branch-33a3591b-1#MINOR-1 (minor, round 2026-09-27-branch-33a3591b-1): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 33a3591b, but the PR head is 4a1487cf7ddfe285560e2fcc552e0bd6de8f206c. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (unobserved): the external-comment collection did not run: the recorded PR (770) is not a GitHub pull request URL, so no comment record can be located | verifier-stats (violated): round `2026-09-27-branch-33a3591b-1` ran with `verification_mode: off` — no verdict was read, so no finding in it was independently checked by anyone but its author."
+    },
+    {
+      "at": "2026-09-27T18:18:10.530Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/770 (warning: PR is not a draft)"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-27T17:09:11.376Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:11.533Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:11.688Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:11.846Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:11.999Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:12.154Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:12.303Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T17:09:12.454Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-27T17:09:18.056Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/352-2026-09-27-audit-fixes-credential-leaks-to-external/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: the recorded PR (770) is not a GitHub pull request URL, so no comment record can be located | verifier-stats (unobserved): no ingested round to read verification stats from"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    },
+    {
+      "at": "2026-09-27T18:17:26.136Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "pull-request",
+          "status": "pass",
+          "detail": "PR exists, checks green"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "the pull request targets main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "4 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-27-branch-33a3591b-1#BLOCKER-1 (blocker, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-1 (major, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-2 (major, round 2026-09-27-branch-33a3591b-1): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-branch-33a3591b-1#MAJOR-3 (major, round 2026-09-27-branch-33a3591b-1): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-27-branch-33a3591b-1#MINOR-1 (minor, round 2026-09-27-branch-33a3591b-1): `dismissed-deprioritised` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 33a3591b, but the PR head is 4a1487cf7ddfe285560e2fcc552e0bd6de8f206c. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (unobserved): the external-comment collection did not run: the recorded PR (770) is not a GitHub pull request URL, so no comment record can be located | verifier-stats (violated): round `2026-09-27-branch-33a3591b-1` ran with `verification_mode: off` — no verdict was read, so no finding in it was independently checked by anyone but its author."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:0e89bfc02624422443cc2e538eb982068171587061b59f1250f5661d248e8676"
+    }
+  ]
+}
