@@ -94,6 +94,19 @@ function shQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+/**
+ * `DetectOptions` plus the two host-filesystem reads the plan makes for the
+ * `/run` and `/var/run` hide list. A test that injects `platform: "linux"` on a
+ * non-Linux host supplies a fake filesystem here; production leaves both unset
+ * and reads the real one.
+ */
+export interface UnattendedDetectOptions extends DetectOptions {
+  /** Is `p` a directory on the (possibly fake) host? Default: real `statSync`. */
+  isDir?: (p: string) => boolean;
+  /** Canonical path of `p` on the (possibly fake) host. Default: real `realpathSync`, falling back to `path.resolve`. */
+  realpath?: (p: string) => string;
+}
+
 export interface UnattendedSandboxInput {
   /** The run's worktree — the command's cwd, read-write. */
   readonly worktree: string;
@@ -116,7 +129,7 @@ export interface UnattendedSandboxInput {
   readonly uid?: number;
   readonly platform?: string;
   /** Test seams. */
-  readonly detect?: DetectOptions;
+  readonly detect?: UnattendedDetectOptions;
   readonly probe?: (launcher: string) => boolean;
 }
 
@@ -241,8 +254,10 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   //   resolv.conf note below for the one file a network-on run needs.
   //   $HOME, and $XDG_RUNTIME_DIR in case it lives outside /run.
   const hidden = new Set<string>();
+  const hostIsDir = input.detect?.isDir ?? isDir;
+  const hostReal = input.detect?.realpath ?? real;
   for (const runDir of ["/run", "/var/run"]) {
-    if (isDir(runDir) && real(runDir) === path.resolve(runDir)) hidden.add(runDir);
+    if (hostIsDir(runDir) && hostReal(runDir) === path.resolve(runDir)) hidden.add(runDir);
   }
   if (isDir(home)) hidden.add(home);
   const runtimeDir = input.env["XDG_RUNTIME_DIR"];

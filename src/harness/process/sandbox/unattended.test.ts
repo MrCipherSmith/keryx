@@ -95,11 +95,19 @@ describe("AC13: the plan is built from allow lists", () => {
   });
 
   test("T14: /run is hidden wholesale (not socket-by-socket), and resolv.conf is bound back only for network: true", () => {
-    const off = planUnattendedSandbox(input());
+    // A fake Linux filesystem: `/run` is a real directory, `/var/run` is absent.
+    // The plan must not depend on the host this test happens to run on (macOS has
+    // no `/run`).
+    const linuxFs: UnattendedSandboxInput["detect"] = {
+      existsSync: (p) => p === "/usr/bin/bwrap",
+      isDir: (p) => p === "/run",
+      realpath: (p) => p,
+    };
+    const off = planUnattendedSandbox(input({ detect: linuxFs }));
     if (!off.ok) throw new Error(off.reason);
     expect(off.args.join(" ")).toContain("--tmpfs /run");
     expect(off.args.join(" ")).not.toContain("docker.sock");
-    const on = planUnattendedSandbox(input({ network: true }));
+    const on = planUnattendedSandbox(input({ network: true, detect: linuxFs }));
     if (!on.ok) throw new Error(on.reason);
     const resolvIdx = on.args.findIndex((a, i) => a === "--ro-bind" && on.args[i + 1]?.includes("resolv"));
     // Only when this host's /etc/resolv.conf points into a hidden dir; never a directory.

@@ -17,7 +17,7 @@
 // the wrong answer (it was asking beside the wrong root) while the main
 // checkout had dozens.
 
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile, realpath, stat } from "node:fs/promises";
 import path from "node:path";
 
 /** Resolve `git rev-parse --git-common-dir`, absolute. `undefined` outside a git repo, or if `git` itself is unavailable. */
@@ -28,7 +28,15 @@ export async function resolveGitCommonDir(cwd: string): Promise<string | undefin
     if ((await proc.exited) !== 0 || out.length === 0) {
       return undefined;
     }
-    return path.isAbsolute(out) ? out : path.resolve(cwd, out);
+    const absolute = path.isAbsolute(out) ? out : path.resolve(cwd, out);
+    // Git prints a symlinked path from the main checkout (relative to a cwd
+    // that may sit behind a symlink) but a realpath from a linked worktree;
+    // canonicalise so both agree.
+    try {
+      return await realpath(absolute);
+    } catch {
+      return absolute;
+    }
   } catch {
     return undefined;
   }

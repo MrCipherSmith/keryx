@@ -18,7 +18,8 @@
 // before this file loaded.
 
 import { describe, expect, test } from "bun:test";
-import { homedir } from "node:os";
+import { realpathSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { keryxConfigDir } from "./config-dir";
 import { projectRegistryPath } from "./project-registry";
@@ -58,6 +59,13 @@ describe("the test preload isolates the user-global config directory", () => {
     const home = homedir();
     expect(projectRegistryPath().startsWith(home)).toBe(false);
     expect(shellConfigPath().startsWith(home)).toBe(false);
+  });
+
+  test("the temp directory is canonical, so tmpdir()-built paths equal what the product resolves", () => {
+    // macOS `$TMPDIR` is a symlink (/var → /private/var); without the preload's
+    // realpath, this differs there.
+    expect(tmpdir()).toBe(realpathSync(tmpdir()));
+    expect(process.env.TMPDIR).toBe(realpathSync(process.env.TMPDIR ?? tmpdir()));
   });
 
   test("both platform variables are set, not just the one this host reads", () => {
