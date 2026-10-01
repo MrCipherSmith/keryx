@@ -87,6 +87,8 @@ export interface RemoteEvent {
 export interface RemoteHubOptions extends RemoteConsumer {
   api: BotApi;
   config: RemoteConfig;
+  /** This machine's name; when set, default topic names start with it so two machines never collide. */
+  machine?: string;
   /** User-global directory override (the test seam). */
   dir?: string;
   now?: () => number;
@@ -141,6 +143,7 @@ function formatDuration(ms: number): string {
 export class RemoteHub {
   private readonly api: BotApi;
   private readonly config: RemoteConfig;
+  private readonly machine: string | undefined;
   private readonly consumer: RemoteConsumer;
   private readonly now: () => number;
   private readonly timers: HubTimers;
@@ -166,6 +169,7 @@ export class RemoteHub {
   constructor(options: RemoteHubOptions) {
     this.api = options.api;
     this.config = options.config;
+    this.machine = options.machine;
     this.consumer = { deliver: options.deliver, ...(options.deliverCallback === undefined ? {} : { deliverCallback: options.deliverCallback }) };
     this.now = options.now ?? Date.now;
     this.timers = options.timers ?? realTimers;
@@ -305,6 +309,27 @@ export class RemoteHub {
       await this.retire(record, "closed by the session");
       return { ok: true as const, existed: true };
     });
+  }
+
+  /**
+   * Delete every topic this hub owns (a channel is being disconnected). Reports how
+   * many were deleted and how many could not be, which stay recorded so a later
+   * sweep or a second disconnect retries them.
+   */
+  deleteAllTopics(): Promise<{ deleted: number; remaining: number }> {
+    return this.serial(async () => {
+      const records = this.registry.records();
+      for (const record of records) {
+        await this.retire(record, "channel disconnected");
+      }
+      const remaining = this.registry.records().length;
+      return { deleted: records.length - remaining, remaining };
+    });
+  }
+
+  /** One message to the General topic of the group, sent now (not queued): the caller reports the outcome. */
+  async sendGeneral(text: string): Promise<void> {
+    await this.api.sendMessage({ chatId: this.config.chatId, text });
   }
 
   heartbeat(sessionId: string): Promise<HeartbeatResult> {
@@ -515,7 +540,7 @@ export class RemoteHub {
       name = existing.name;
     } else {
       let chosen: string | undefined;
-      for (const candidate of defaultNameCandidates(input.project, input.sessionId)) {
+      for (const candidate of defaultNameCandidates(input.project, input.sessionId, this.machine)) {
         const holder = this.registry.byNameKey(candidate);
         if (holder === undefined || holder.sessionId === input.sessionId || !isLive(holder, now)) {
           chosen = candidate;
@@ -607,6 +632,10 @@ export class RemoteHub {
   private route(update: BotUpdate): { key: string; dropped: number; callbackQueryId?: string } | undefined {
     const message = update.message;
     const query = update.callback_query;
+    if (message === undefined && query === undefined) {
+      // A membership change (my_chat_member) is the pairing's business, not a message for a topic.
+      return undefined;
+    }
     const fromId = message?.from?.id ?? query?.from.id;
     if (fromId === undefined || !this.config.allowedUserIds.includes(fromId)) {
       this.journal.record(fromId);

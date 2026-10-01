@@ -90,11 +90,8 @@ describe("a second serve on the same bot token", () => {
     const serve = await rig.startServe();
     // The refusal for a non-loopback bind is unit-level (the listener here is loopback): the service
     // says so for an address that is not.
-    const opened = openRemoteService({ dir: rig.dir, api: rig.api, lock: { disabled: true }, onNotice: (message) => rig.notices.push(message) });
-    if (opened.status !== "ready") {
-      throw new Error("expected a ready service");
-    }
-    const result = await opened.service.start({ address: "0.0.0.0", port: 1 });
+    const service = openRemoteService({ dir: rig.dir, api: rig.api, lock: { disabled: true }, onNotice: (message) => rig.notices.push(message) });
+    const result = await service.start({ address: "0.0.0.0", port: 1 });
     expect(result.ok).toBe(false);
     expect(rig.notices.at(-1)).toContain("not a loopback address");
     expect((await call(serve.origin, serve.serveToken, "GET", "/v1/status")).status).toBe(200);

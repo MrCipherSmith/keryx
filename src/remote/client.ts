@@ -112,7 +112,7 @@ const MAX_COMPLETED_IDS = 256;
  * process of ANOTHER user (a pid that was reused, or a squatter). Neither is a
  * serve of ours, so both are refused.
  */
-function ownProcessIsAlive(pid: number): boolean {
+export function ownProcessIsAlive(pid: number): boolean {
   if (!Number.isInteger(pid) || pid <= 0) {
     return false;
   }
@@ -141,7 +141,7 @@ function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 /** A URL host for an address; IPv6 literals need brackets. */
-function authority(address: string, port: number): string {
+export function authority(address: string, port: number): string {
   const bare = address.replace(/^\[|\]$/g, "");
   return bare.includes(":") ? `[${bare}]:${port}` : `${bare}:${port}`;
 }

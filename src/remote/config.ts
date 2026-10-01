@@ -12,7 +12,7 @@
 // validated against a closed schema: an unknown key is an error, so a token
 // pasted into the wrong file is rejected rather than stored.
 
-import { statSync } from "node:fs";
+import { statSync, unlinkSync } from "node:fs";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { botTokenPath, ensureRemoteDir, remoteConfigPath } from "./paths";
 
@@ -163,4 +163,46 @@ export function loadBotToken(dir?: string): Loaded<string> {
     };
   }
   return { ok: true, value: token };
+}
+
+export function isBotTokenShape(value: string): boolean {
+  return TOKEN_SHAPE.test(value);
+}
+
+/**
+ * Write the bot token, atomically and owner-only. The token is validated for shape
+ * first and never echoed: a refusal names the expected shape, not the value.
+ */
+export function saveBotToken(token: string, dir?: string): Loaded<true> {
+  const trimmed = token.trim();
+  if (!TOKEN_SHAPE.test(trimmed)) {
+    return { ok: false, reason: "that does not look like a bot token (expected <digits>:<secret>, as BotFather gives it)" };
+  }
+  const file = botTokenPath(dir);
+  try {
+    ensureRemoteDir(dir);
+    writeOwnerOnlyFileAtomic(file, `${trimmed}\n`);
+  } catch {
+    return { ok: false, reason: `could not write the bot token file at ${file}` };
+  }
+  return { ok: true, value: true };
+}
+
+function removeFile(file: string): boolean {
+  try {
+    unlinkSync(file);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "ENOENT";
+  }
+}
+
+/** Erase the bot token file. True when it is gone (including when it never existed). */
+export function removeBotToken(dir?: string): boolean {
+  return removeFile(botTokenPath(dir));
+}
+
+/** Erase the remote-control config file. True when it is gone. */
+export function removeRemoteConfig(dir?: string): boolean {
+  return removeFile(remoteConfigPath(dir));
 }

@@ -1,0 +1,351 @@
+// The shell-side client of the channels plane of `keryx serve` (flow 377).
+//
+// What the /channels modal calls: connect Telegram, test it, disconnect it. A library,
+// not a feature: nothing from `src/tui`.
+//
+// The bot token is typed once into the shell and goes exactly one place: the owner-only
+// token file in the user-global directory, written HERE, atomically, by the shell itself.
+// It is never put in a request, a response, a result, a reason or a log: serve reads the
+// file from disk. What does travel is not secret (a pairing code, a user id, a group id,
+// a machine name). Every call returns a typed result whose `reason` is plain language
+// built from fixed words and serve's own messages, never from the token.
+//
+// Like the remote client, it finds serve by `endpoint.json`, authenticates with the local
+// shell token (both re-read on every call), and sends them only to a loopback address of
+// a serve process that runs as this user.
+
+import { isLoopbackAddress } from "../lib/serve-config";
+import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
+import { authority, ownProcessIsAlive } from "./client";
+import {
+  DEFAULT_ORPHAN_MS,
+  DEFAULT_RUN_TIMEOUT_MS,
+  REMOTE_CONFIG_SCHEMA_VERSION,
+  removeBotToken,
+  removeRemoteConfig,
+  saveBotToken,
+  saveRemoteConfig,
+} from "./config";
+import { readEndpoint } from "./endpoint";
+import { botTokenPath, ensureRemoteDir, remoteConfigPath } from "./paths";
+import {
+  type ChannelsDisconnectResponse,
+  type ChannelsReloadResponse,
+  type ChannelsRoute,
+  type ChannelsStatusResponse,
+  type ChannelsTestResponse,
+  channelsRoutePath,
+  CHANNELS_ROUTE_METHODS,
+  type PairingResponse,
+} from "./protocol";
+import { readShellToken } from "./shell-token";
+
+export interface ChannelsClientOptions {
+  /** User-global directory override (the test seam). */
+  dir?: string | undefined;
+  fetchImpl?: typeof fetch;
+  requestTimeoutMs?: number;
+  /** Test seam: is the serve process named in `endpoint.json` running, as this user? */
+  isAlive?: (pid: number) => boolean;
+}
+
+export type ChannelsFailureCode =
+  /** No serve to talk to (not running, stale endpoint, no shell token, connection refused). */
+  | "serve-down"
+  /** The endpoint file names a non-loopback address: nothing was sent. */
+  | "unsafe-endpoint"
+  /** The input was refused locally; nothing was written. */
+  | "invalid"
+  /** Anything serve refused, with serve's own code (`token-rejected`, `not-connected`, `no-pairing`, ...). */
+  | (string & {});
+
+export type ChannelsResult<T> = { ok: true; value: T } | { ok: false; code: ChannelsFailureCode; reason: string };
+
+export interface ChannelsLocalFiles {
+  /** A bot token file exists. Its content is not read here. */
+  tokenFile: boolean;
+  /** A remote-control config exists. */
+  configFile: boolean;
+}
+
+export interface ChannelsDisconnectResult {
+  deleted: number;
+  /** Topics Telegram would not delete, or that serve could not reach: they stay in the group. */
+  remaining: number;
+  /** False when serve was down or had no running hub: the topics were not touched. */
+  topicsDeleted: boolean;
+  /** The token and config files are gone. */
+  erased: boolean;
+  /** One plain-language line for the operator. */
+  message: string;
+}
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+/** Deleting many topics is one call per topic. */
+const DISCONNECT_TIMEOUT_FACTOR = 8;
+
+class ServeDown extends Error {
+  constructor(
+    readonly code: "serve-down" | "unsafe-endpoint",
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+function fileExists(file: string): boolean {
+  const read = readConfigFile(file);
+  return read.ok || read.reason !== "absent";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+export class ChannelsClient {
+  private readonly fetchImpl: typeof fetch;
+  private readonly requestTimeoutMs: number;
+  private readonly isAlive: (pid: number) => boolean;
+
+  constructor(private readonly options: ChannelsClientOptions = {}) {
+    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.isAlive = options.isAlive ?? ownProcessIsAlive;
+  }
+
+  /** What is on disk, without asking serve: enough to draw "not connected" when serve is down. */
+  localFiles(): ChannelsLocalFiles {
+    return {
+      tokenFile: fileExists(botTokenPath(this.options.dir)),
+      configFile: fileExists(remoteConfigPath(this.options.dir)),
+    };
+  }
+
+  status(): Promise<ChannelsResult<ChannelsStatusResponse>> {
+    return this.call<ChannelsStatusResponse>("channels-status", (body) => {
+      const telegram = body.telegram;
+      return typeof body.machine === "string" && isObject(telegram) && typeof telegram.state === "string" && typeof telegram.sessions === "number";
+    });
+  }
+
+  /**
+   * Step 1 of Connect. Validates the token's shape, writes it to the token file (owner-only,
+   * atomically) and asks serve to open a pairing. If serve refuses, or is down, the file is put
+   * back as it was: a refused token leaves nothing on disk.
+   */
+  async startPairing(token: string): Promise<ChannelsResult<PairingResponse>> {
+    // Reach serve first: a token is not written for a serve that is not there.
+    const reachable = this.reachable();
+    if (!reachable.ok) {
+      return reachable;
+    }
+    const file = botTokenPath(this.options.dir);
+    const before = readConfigFile(file);
+    const saved = saveBotToken(token, this.options.dir);
+    if (!saved.ok) {
+      return { ok: false, code: "invalid", reason: saved.reason };
+    }
+    const result = await this.call<PairingResponse>("channels-pair", isPairing);
+    if (!result.ok) {
+      this.restore(file, before);
+    }
+    return result;
+  }
+
+  pairingStatus(): Promise<ChannelsResult<PairingResponse>> {
+    return this.call<PairingResponse>("channels-pairing", isPairing);
+  }
+
+  /** Abandon a pairing. A token that never became a connection is erased with it. */
+  async cancelPairing(): Promise<ChannelsResult<{ cancelled: boolean }>> {
+    const result = await this.call<{ cancelled: boolean }>("channels-cancel", (body) => typeof body.cancelled === "boolean");
+    if (!fileExists(remoteConfigPath(this.options.dir))) {
+      removeBotToken(this.options.dir);
+    }
+    return result;
+  }
+
+  /**
+   * Step 2 of Connect: write the config from the ids Telegram reported and ask serve to start
+   * the hub, with no restart. The data is checked before anything is written; if serve cannot
+   * connect, the files are put back as they were (and a connection that never existed leaves
+   * neither a config nor a token).
+   */
+  async connectFinish(ids: { userId: number; chatId: number }): Promise<ChannelsResult<ChannelsReloadResponse>> {
+    const reachable = this.reachable();
+    if (!reachable.ok) {
+      return reachable;
+    }
+    const configFile = remoteConfigPath(this.options.dir);
+    const before = readConfigFile(configFile);
+    const saved = saveRemoteConfig(
+      {
+        schemaVersion: REMOTE_CONFIG_SCHEMA_VERSION,
+        chatId: ids.chatId,
+        allowedUserIds: [ids.userId],
+        orphanMs: DEFAULT_ORPHAN_MS,
+        runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
+      },
+      this.options.dir,
+    );
+    if (!saved.ok) {
+      return { ok: false, code: "invalid", reason: saved.reason };
+    }
+    const result = await this.call<ChannelsReloadResponse>("channels-reload", (body) => typeof body.state === "string");
+    if (!result.ok) {
+      this.restore(configFile, before);
+      if (!before.ok) {
+        removeBotToken(this.options.dir);
+      }
+    }
+    return result;
+  }
+
+  /** One message to the General topic, naming this machine. */
+  test(): Promise<ChannelsResult<ChannelsTestResponse>> {
+    return this.call<ChannelsTestResponse>("channels-test", (body) => body.delivered === true && typeof body.machine === "string");
+  }
+
+  /**
+   * Delete every topic, stop polling, then erase the token and config. With serve down the files
+   * are erased anyway and the result says the topics remain in the group.
+   */
+  async disconnect(): Promise<ChannelsResult<ChannelsDisconnectResult>> {
+    const result = await this.call<ChannelsDisconnectResponse>(
+      "channels-disconnect",
+      (body) =>
+        typeof body.deleted === "number" && typeof body.remaining === "number" && typeof body.hubWasRunning === "boolean",
+    );
+    if (!result.ok && result.code !== "serve-down") {
+      // Serve is up and refused: keep the files, the connection is still there.
+      return result;
+    }
+    const erasedToken = removeBotToken(this.options.dir);
+    const erasedConfig = removeRemoteConfig(this.options.dir);
+    const erased = erasedToken && erasedConfig;
+    const gone = erased ? "The bot token and the config were erased." : "The bot token or the config could not be erased; remove the files in the keryx remote directory by hand.";
+    if (!result.ok) {
+      return {
+        ok: true,
+        value: {
+          deleted: 0,
+          remaining: 0,
+          topicsDeleted: false,
+          erased,
+          message: `keryx serve is not running, so the topics could not be deleted: they remain in the group. ${gone}`,
+        },
+      };
+    }
+    const { deleted, remaining, hubWasRunning } = result.value;
+    const topics = !hubWasRunning
+      ? "Telegram was not running in serve, so the topics could not be deleted: they remain in the group."
+      : remaining > 0
+        ? `${plural(deleted, "topic", "topics")} deleted; ${plural(remaining, "topic", "topics")} could not be deleted and remain in the group.`
+        : `${plural(deleted, "topic", "topics")} deleted.`;
+    return { ok: true, value: { deleted, remaining, topicsDeleted: hubWasRunning && remaining === 0, erased, message: `${topics} ${gone}` } };
+  }
+
+  // ---- requests --------------------------------------------------------------
+
+  /** The one place a URL is built, and the one place the loopback rule is enforced. */
+  private target(route: ChannelsRoute): { url: string; token: string } {
+    const endpoint = readEndpoint(this.options.dir);
+    if (!endpoint.ok) {
+      throw new ServeDown("serve-down", `keryx serve is not running (${endpoint.reason})`);
+    }
+    if (!isLoopbackAddress(endpoint.value.address)) {
+      throw new ServeDown("unsafe-endpoint", "the serve endpoint is not a loopback address; refusing to send the shell token there");
+    }
+    if (!this.isAlive(endpoint.value.pid)) {
+      throw new ServeDown("serve-down", `keryx serve is not running (pid ${endpoint.value.pid} is gone); start it with \`keryx serve\``);
+    }
+    const token = readShellToken(this.options.dir);
+    if (!token.ok) {
+      throw new ServeDown("serve-down", `keryx serve is not accepting the shell yet (${token.reason})`);
+    }
+    return { url: `http://${authority(endpoint.value.address, endpoint.value.port)}${channelsRoutePath(route)}`, token: token.value };
+  }
+
+  private async post(route: ChannelsRoute): Promise<Response> {
+    const { url, token } = this.target(route);
+    return this.fetchImpl(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(route === "channels-disconnect" ? this.requestTimeoutMs * DISCONNECT_TIMEOUT_FACTOR : this.requestTimeoutMs),
+    });
+  }
+
+  private async get(route: ChannelsRoute): Promise<Response> {
+    const { url, token } = this.target(route);
+    return this.fetchImpl(url, {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(this.requestTimeoutMs),
+    });
+  }
+
+  private reachable(): { ok: true } | { ok: false; code: ChannelsFailureCode; reason: string } {
+    try {
+      this.target("channels-status");
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof ServeDown) {
+        return { ok: false, code: error.code, reason: error.message };
+      }
+      throw error;
+    }
+  }
+
+  private async call<T>(route: ChannelsRoute, guard: (body: Record<string, unknown>) => boolean): Promise<ChannelsResult<T>> {
+    let response: Response;
+    try {
+      response = CHANNELS_ROUTE_METHODS[route] === "GET" ? await this.get(route) : await this.post(route);
+    } catch (error) {
+      if (error instanceof ServeDown) {
+        return { ok: false, code: error.code, reason: error.message };
+      }
+      return { ok: false, code: "serve-down", reason: "keryx serve did not answer; is it still running?" };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await response.text());
+    } catch {
+      parsed = undefined;
+    }
+    if (!response.ok) {
+      const error = isObject(parsed) && isObject(parsed.error) ? parsed.error : undefined;
+      const code = typeof error?.code === "string" ? error.code : `http-${response.status}`;
+      const message = typeof error?.message === "string" ? error.message : `keryx serve refused the request (HTTP ${response.status})`;
+      return { ok: false, code, reason: message };
+    }
+    if (!isObject(parsed) || !guard(parsed)) {
+      return { ok: false, code: "unexpected-response", reason: "keryx serve sent an answer this shell does not understand; update keryx on both sides" };
+    }
+    return { ok: true, value: parsed as T };
+  }
+
+  /** Put a file back as it was: its old bytes, or gone. */
+  private restore(file: string, before: ReturnType<typeof readConfigFile>): void {
+    try {
+      if (before.ok) {
+        ensureRemoteDir(this.options.dir);
+        writeOwnerOnlyFileAtomic(file, before.text);
+      } else if (file === botTokenPath(this.options.dir)) {
+        removeBotToken(this.options.dir);
+      } else {
+        removeRemoteConfig(this.options.dir);
+      }
+    } catch {
+      // Nothing more can be done from here; the reason already tells the operator what failed.
+    }
+  }
+}
+
+function isPairing(body: Record<string, unknown>): boolean {
+  return typeof body.state === "string" && typeof body.expiresAt === "number" && Array.isArray(body.problems);
+}
