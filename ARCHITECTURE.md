@@ -50,7 +50,7 @@ or client code.
 | `src/testing/`, `src/health/` | Test-impact context, quality signals and the gate. |
 | `src/flow/`, `src/job/` | Task-flow lifecycle and state machine (`flow/machine.ts`), job packages. |
 | `src/review/` | Managed review packages, dispositions, the review gate. |
-| `src/gdskills/`, `src/agents/`, `src/rules/`, `src/learning/`, `src/bundle/` | Bundled skills, the agent catalog, rule sync, the learning loop, portable bundles. |
+| `src/gdskills/`, `src/agents/`, `src/learning/`, `src/bundle/` | Bundled skills, the agent catalog, the learning loop, portable bundles. |
 | `src/security/` | Secret, PII and injection scanning, redaction, the structural command guard. |
 | `src/sac/` | Shared Agent Context across workspaces (opt-in). It declares a model-turn port and holds no provider. |
 | `src/sync/`, `src/retention/`, `src/forgetting/`, `src/trigger/`, `src/governance/`, `src/product/`, `src/stack/`, `src/standard/`, `src/metrics/`, `src/eval/`, `src/integrations/`, `src/capability/` | Bookkeeping owners: reconciliation, store bounds, deletion trails, declared triggers, reports, stack detection, the Metaproject Standard, run metrics, fixtures, host-harness surfaces. |
@@ -73,6 +73,7 @@ or client code.
 | `src/acp/` | Agent Client Protocol server over stdio, for editors. |
 | `src/lib/` | Shared primitives: config directory resolution, owner-only file helpers, the serve server, OAuth, import policy. |
 | `src/contracts/`, `src/assets/` | Contract registry and validator, embedded assets. |
+| `src/rules/` | Rule sync and entrypoint writers (`AGENTS.md`, `CLAUDE.md`); shared, so core and client both import it. |
 
 ## Main flows
 

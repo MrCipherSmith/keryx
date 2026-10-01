@@ -28,6 +28,11 @@ export type NavConfig = {
 function blockScalar(lines: string[], key: string): string[] {
   const start = lines.findIndex((l) => new RegExp(`^${key}:\\s*[|>]`).test(l));
   if (start < 0) return [];
+  // YAML joins a folded (`>`) block into ONE value; this reader splits per
+  // line, so it would disagree with mkdocs. Fail closed rather than guess.
+  if (!new RegExp(`^${key}:\\s*\\|[+-]?\\s*(#.*)?$`).test(lines[start] ?? "")) {
+    throw new Error(`${key}: only a literal block scalar (\`|\`) is supported, not a folded one (\`>\`)`);
+  }
   const out: string[] = [];
   for (const line of lines.slice(start + 1)) {
     if (line.trim() !== "" && !/^\s/.test(line)) break;
@@ -69,7 +74,11 @@ export function parseMkdocs(yaml: string): NavConfig {
 export function matchesPattern(file: string, pattern: string): boolean {
   if (pattern.startsWith("!")) throw new Error(`negated pattern passed to matchesPattern: ${pattern}`);
   // `\!` and `\#` are the gitignore escapes for a literal leading `!`/`#`.
+  const escaped = /^\\[!#]/.test(pattern);
   const p = pattern.replace(/^\\([!#])/, "$1").replace(/^\//, "");
+  // An escaped leading `!`/`#` names a literal file. Handing `!x.md` to Glob
+  // would make it a negation that matches everything else.
+  if (escaped) return file === p || file.startsWith(`${p}/`);
   if (p.endsWith("/")) return file.startsWith(p);
   return new Glob(p).match(file) || file === p || file.startsWith(`${p}/`);
 }

@@ -78,3 +78,44 @@ nav:
     expect(matchesPattern("!odd.md", "\\!odd.md")).toBe(true);
   });
 });
+
+describe("escaped literals and folded scalars (review round 2, N2)", () => {
+  test("an escaped \\!literal.md matches only that file, never everything", () => {
+    expect(matchesPattern("!literal.md", "\\!literal.md")).toBe(true);
+    expect(matchesPattern("orphan.md", "\\!literal.md")).toBe(false);
+    expect(matchesPattern("guides/x.md", "\\!literal.md")).toBe(false);
+  });
+
+  test("an escaped \\!literal.md in exclude_docs does not exempt other orphans", () => {
+    const cfg = parseMkdocs(`docs_dir: docs
+exclude_docs: |
+  \\!literal.md
+nav:
+  - Home: index.md
+`);
+    expect(orphans(["index.md", "orphan.md", "guides/x.md"], cfg)).toEqual(["guides/x.md", "orphan.md"]);
+  });
+
+  test("a folded exclude_docs block fails closed instead of being split per line", () => {
+    expect(() =>
+      parseMkdocs(`docs_dir: docs
+exclude_docs: >
+  orphan.md
+nav:
+  - Home: index.md
+`),
+    ).toThrow(/folded/);
+  });
+
+  test("literal block scalars with chomping indicators still parse", () => {
+    const cfg = parseMkdocs(`docs_dir: docs
+exclude_docs: |-
+  a.md
+not_in_nav: |+
+  b.md
+nav:
+  - Home: index.md
+`);
+    expect(cfg.patterns).toEqual(["a.md", "b.md"]);
+  });
+});

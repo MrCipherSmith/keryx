@@ -15,7 +15,7 @@
     keryx shell
     ```
 
-    Choose a built-in provider, or "add custom provider" for any OpenAI-compatible endpoint. If the provider needs a key, you are prompted for it before the model list loads, so a gateway that rejects an unauthenticated request still shows a real model list. Pick a model and the session starts. The key is saved to `auth.json` in your keryx data directory, owner-only (`~/.local/share/keryx/` on macOS and Linux). It is never written into the project.
+    Choose a built-in provider, or "add custom provider" for any OpenAI-compatible endpoint. If the provider needs a key, you are prompted for it before the model list loads, so a gateway that rejects an unauthenticated request still shows a real model list. Pick a model and the session starts. The key is saved to `auth.json` in your keryx data directory, owner-only (`~/.local/share/keryx/` on macOS and Linux, or `$XDG_DATA_HOME/keryx/` when that is set). It is never written into the project.
 
 2. **Or use a subscription login.** For `grok`, `openai-codex` (ChatGPT Plus or Pro) and `github-copilot`, log in by device code from outside the shell:
 

@@ -73,23 +73,24 @@ documentation; `experimental` means it should be checked on a live install.
 
 ## Numbers
 
-Every figure below was produced by the commands after the table, run on
-1 October 2026 in a checkout of `main` whose `package.json` said 0.3.50. Run them yourself; the
-figures grow with every merge.
+As of 1 October 2026, measured on `main` at commit `1aec6f7d` (`package.json`
+version 0.3.51, 1,722 commits). Every figure below was produced by the commands
+after the table, run on that commit's tree. Run them yourself; the figures grow
+with every merge.
 
 | Figure | Value |
 |---|---|
-| Commits | 1,729 |
+| Commits | 1,722 |
 | First commit | 2026-07-10 |
-| Merged pull requests | 271 |
+| Merged pull requests | 275 |
 | Release tags | 195 |
-| Flows (of which done) | 343 (305) |
-| Tasks across flows | 2,900 |
-| Flows with review rounds | 123 |
-| Review rounds | 280 |
-| TypeScript source files, not tests | 1,117 files, 372,992 lines |
+| Flows (of which done) | 343 (307) |
+| Tasks across flows | 2,894 |
+| Flows with review rounds | 124 |
+| Review rounds | 284 |
+| TypeScript source files, not tests | 1,117 files, 373,386 lines |
 | Test files | 1,367 |
-| Test lines under `src/` | 381,842 |
+| Test lines under `src/` | 382,616 |
 | Wiki pages | 97 |
 | Bundled skills | 78 workflow skills; 92 stack skills in 23 stack packs |
 | Project rules | 41 |
@@ -101,7 +102,7 @@ The commands, in the same order, from the root of a checkout of `main`:
 git rev-list --count main
 git log main --reverse --format=%ad --date=short | head -1
 git log main --merges --grep '^Merge pull request' --oneline | wc -l
-git tag -l 'v*' | wc -l
+git tag -l 'v*' --merged main | wc -l
 keryx flow list | grep -cE '^ *[0-9]+ \['
 keryx flow list | grep -cE '^ *[0-9]+ \[done\]'
 keryx flow list | grep -oE 'tasks [0-9]+/[0-9]+' | awk -F/ '{s+=$2} END{print s}'

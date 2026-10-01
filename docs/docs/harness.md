@@ -115,8 +115,11 @@ fails rather than drop an archived entry.
 
 The policy engine answers `allow`, `ask` or `deny` for each action, by risk
 class: read, write, shell, network, credential, delegate, destructive. Path and
-command rules sit underneath. Shell and destructive actions are denied by
-default.
+command rules sit underneath. The defaults come from the run's policy
+profile: `harness run` denies write, shell and network; `harness exec` allows
+shell and asks for write and network; `keryx serve` asks for write and shell
+and denies network. Credential and destructive actions are never allowed
+outright by any profile.
 
 Four properties hold everywhere:
 

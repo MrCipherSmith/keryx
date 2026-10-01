@@ -44,6 +44,8 @@ The stdio form needs `--` before the server's command, so Keryx can tell its own
 
 **Trust.** A project server is a command someone else wrote the moment you clone the repository, so Keryx will not start one until you run `keryx mcp trust <name>`. The approval is bound to the exact command: a later commit that changes it needs approving again. It is stored in your config directory, never in the repository. Your own `user` servers need no approval.
 
+**Servers from other tools.** Keryx also reads MCP servers configured for other tools, as a layer below its own files: a name defined in `.keryx/mcp-servers.json` or your user file wins over the same name from these. The sources are `~/.claude.json`, `~/.cursor/mcp.json`, `./.cursor/mcp.json`, `./.mcp.json` and `~/.grok/config.toml` and `./.grok/config.toml`; where two of them define the same name, Claude's wins over Cursor's, then `.mcp.json`, then Grok's. `keryx mcp list` shows each one with the tool it came from, for example `foo (cursor) stdio`, so you know which file to edit. Trust follows where the file lives, not which tool wrote it: a server from a file inside the repository (`./.cursor/mcp.json`, `./.mcp.json`, `./.grok/config.toml`) is a project server and needs `keryx mcp trust <name>` before it starts, while one from your home directory is yours and needs no approval.
+
 **Credentials.** Remote servers use `--transport http <url>`. Credentials come from the environment, for example `--header 'Authorization: Bearer ${TRACKER_TOKEN}'`. If the variable is unset Keryx refuses to dial, rather than sending an empty bearer and letting the server answer 401. `keryx mcp doctor` then names the cause:
 
 ```text
@@ -72,7 +74,7 @@ Keryx also refuses to follow a redirect, because a custom credential header woul
 
 <!-- retired-spellings-ok: line — the retired spelling is named here on purpose, to say it is retired -->
 
-Stable for stdio and remote HTTP servers, project and user scope, trust, `doctor` and OAuth login. Importing servers you already configured in another editor is not available. The retired `keryx mcp serve`, `install` and `uninstall` spellings still work but print a deprecation line and point at [`serve-mcp` and `integrate`](integrations.md).
+Stable for stdio and remote HTTP servers, project and user scope, trust, `doctor` and OAuth login. There is no import step: servers you already configured for other tools are read automatically (see "Servers from other tools"). The retired `keryx mcp serve`, `install` and `uninstall` spellings still work but print a deprecation line and point at [`serve-mcp` and `integrate`](integrations.md).
 
 ## Reference
 

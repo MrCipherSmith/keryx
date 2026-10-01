@@ -279,7 +279,7 @@ decision record and git hooks that keep the graph current. In this checkout,
 Claude Code is pointed at `.metaproject/index.md` first through `CLAUDE.local.md`.
 That file is per checkout and gitignored, so each developer gets it from their
 own `keryx init`. Codex gets the same block in `AGENTS.override.md` once the
-repository has an `AGENTS.md`; the `init` output above says when it skipped one.
+repository has an `AGENTS.md` and you run `keryx update`; the `init` output above says when it skipped one.
 
 ## Reference
 

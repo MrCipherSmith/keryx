@@ -1,6 +1,6 @@
 # Automation and remote control
 
-Keryx can do project upkeep without you at the keyboard: declared triggers fire from git events or a schedule, scheduled agent tasks run unattended and leave a report, and a loopback HTTP listener lets a bot or another product drive the same agent. Keryx runs no daemon of its own; your OS scheduler, git hooks or CI job call it, and every path is bounded by spend ceilings and a refusal floor.
+Keryx can do project upkeep without you at the keyboard: declared triggers fire from git events or a schedule, scheduled agent tasks run unattended and leave a report, and an HTTP listener (loopback by default) lets a bot or another product drive the same agent. Keryx runs no daemon of its own; your OS scheduler, git hooks or CI job call it, and every path is bounded by spend ceilings and a refusal floor.
 
 ## When to use it
 
@@ -57,7 +57,7 @@ keryx trigger status (reading <repo>/.metaproject/data/trigger/runs.jsonl):
 
 **Schedules.** `keryx schedule add` drafts a scheduled agent task from a cadence and a prompt, shows a confirmation card, and installs a per-user timer (systemd on Linux, launchd on macOS, cron elsewhere) only after you confirm at a terminal. Each run leaves a report you read with `keryx schedule show <name>`. A pipe, an agent's shell or an unattended run cannot confirm a schedule.
 
-**Remote entry.** `keryx serve` is a loopback, token-authenticated HTTP listener over the same harness `keryx shell` uses. It is off until you run `keryx serve config init` and `keryx serve token issue`. A turn whose policy decision is `ask` raises a durable pending approval; you answer it once, for that call, with `keryx approvals list|allow|deny` or the approvals route. Unanswered means denied. See [Drive keryx from a bot](../guides/drive-keryx-remotely.md) and [Answer a remote approval](../guides/answer-remote-approvals.md).
+**Remote entry.** `keryx serve` is a token-authenticated HTTP listener that binds to loopback by default (a non-loopback `--bind` needs `--acknowledge-non-loopback`, and there is no TLS) over the same harness `keryx shell` uses. It is off until you run `keryx serve config init` and `keryx serve token issue`. A turn whose policy decision is `ask` raises a durable pending approval; you answer it once, for that call, with `keryx approvals list|allow|deny` or the approvals route. Unanswered means denied. See [Drive keryx from a bot](../guides/drive-keryx-remotely.md) and [Answer a remote approval](../guides/answer-remote-approvals.md).
 
 **CI.** In a pipeline you call the same commands directly: `keryx gdgraph build`, `keryx health gate --strict-warn`, `keryx security eval --corpus all`. See [Run keryx in CI](../guides/run-in-ci.md).
 

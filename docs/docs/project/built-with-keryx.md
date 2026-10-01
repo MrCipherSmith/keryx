@@ -15,9 +15,10 @@ task list, a journal, review rounds and the pull request that closed it. A flow
 completes only when every criterion is confirmed against recorded evidence and
 the completion gate passes.
 
-On 1 October 2026 the main branch held 341 flows (305 done), 2,871 tasks and
-1,696 commits since the first commit on 10 July 2026. Each number is
-reproduced by a command listed on [Project status](status.md#numbers).
+As of 1 October 2026, measured on `main`, the repository held 343 flows and
+1,722 commits since the first commit on 10 July 2026. The full set of figures,
+the commit they were measured on and the commands that reproduce them are on
+[Project status](status.md#numbers).
 
 ## Map of the workspace
 
@@ -105,8 +106,8 @@ the disposition of each finding, and a verifier's verdict on each fix. A fix
 round is reviewed like new code, because experience on this repository showed
 that it is new code. The lessons in the next section come from that history.
 
-Across the main branch, 122 flows carry a `reviews/` directory with 279 review
-rounds between them. The record is not uniform: some finished flows were
+Across the main branch, 124 flows carry a `reviews/` directory with 284 review
+rounds between them (figures as of 1 October 2026; see [Project status](status.md#numbers)). The record is not uniform: some finished flows were
 reviewed outside the flow directory, or not at all.
 
 ## Memory and rules

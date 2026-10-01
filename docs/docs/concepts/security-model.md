@@ -23,7 +23,7 @@ what it does not protect. Read the last section before you rely on any of it.
 | A committed config starts a program you never reviewed | Committed MCP servers start only after `keryx mcp trust` |
 | Secrets leak into stored output or commits | Secret and PII scanning, redaction, pre-push guard (warns by default; blocks in `enforced` mode) |
 | Private code goes to a provider you did not choose to trust | The `/external` block list |
-| A remote caller gains more authority than a local user | Remote entry off by default, loopback-only, authenticated, never weaker than local policy |
+| A remote caller gains more authority than a local user | Remote entry off by default, loopback by default (`--acknowledge-non-loopback` to bind otherwise), authenticated, never weaker than local policy |
 | An agent grants itself authority | Credential files are never auto-approved; modes are set only by you |
 
 ## Layers
