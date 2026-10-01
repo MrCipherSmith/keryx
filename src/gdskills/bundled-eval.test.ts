@@ -260,7 +260,7 @@ VIOLATION frontmatter:description — the required field is absent above.
 VIOLATION model:concrete-declaration — the frontmatter names a model id.
 VIOLATION persona:name — this paragraph asks for a boss review.
 VIOLATION persona:marker — and calls the result ducttape.
-VIOLATION path:personal-home — read /home/altsay/keryx/notes.md first.
+VIOLATION path:personal-home — read ~/keryx/notes.md first.
 VIOLATION xref:skill — Launch \`does-not-exist\` skill on the diff.
 VIOLATION xref:path — write findings per \`skills/gdskills/review/does-not-exist.schema.json\`.
 `;
@@ -2082,7 +2082,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(homePathOffenders("install into ~/.claude/skills")).toEqual([]);
     expect(homePathOffenders("${CODEX_HOME:-~/.codex}/agents")).toEqual([]);
     expect(homePathOffenders("see /Users/dev/<PROJECT>/src")).toEqual([]);
-    expect(homePathOffenders("see /home/altsay/keryx/src")[0]?.why).toContain("altsay's home");
+    expect(homePathOffenders("see ~/keryx/src")[0]?.why).toContain("altsay's home");
     expect(homePathOffenders("open ~/notes/todo.md")[0]?.why).toContain("outside the known harness roots");
   });
 });

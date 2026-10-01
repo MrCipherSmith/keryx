@@ -13,13 +13,13 @@
   ],
   "context_refs": [{"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/context.md", "kind": "context", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/shell-exec-tool.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/background-job-registry.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/security/guard.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/testing/service.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/shell-exec-tool.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/background-job-registry.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/security/guard.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/testing/service.ts"
   ],
   "constraints": [
     "Read the exact new worktree .metaproject/index.md first; use local testing/gdgraph/gdctx and keryx ctx rg.",
