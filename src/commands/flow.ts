@@ -49,6 +49,7 @@ import type {
   FlowService,
   FlowServiceDeps,
   FlowSignature,
+  FlowCompletionCheck,
   FlowStatus,
   GateOutcome,
   TaskDisposition,
@@ -1237,18 +1238,29 @@ function printGateOutcomes(gates: readonly GateOutcome[], hint?: (gate: GateOutc
 /**
  * `keryx flow check-complete <id> [--merged <commit>] [--json]` (flow 364,
  * AC4): every gate `flow complete` would evaluate, plus the PR's merge state,
- * with nothing written. Exit 0 when `complete` would pass, 1 otherwise.
+ * with nothing written. Exit 0 when `complete` would pass, 1 when it would not,
+ * 2 (with `--json`: an `{error}` object) when the check could not run.
  */
 async function runCheckComplete(args: string[]): Promise<void> {
-  const id = requireId(args);
-  const result = await getService().checkComplete({
-    cwd: process.cwd(),
-    id,
-    mergedCommit: optionValue(args, "--merged"),
-    confirmToken: optionValue(args, "--confirm-token"),
-  });
+  const asJson = args.includes("--json");
+  let result: FlowCompletionCheck;
+  try {
+    result = await getService().checkComplete({
+      cwd: process.cwd(),
+      id: requireId(args),
+      mergedCommit: optionValue(args, "--merged"),
+      confirmToken: optionValue(args, "--confirm-token"),
+    });
+  } catch (error) {
+    // Review A-003: under --json a check that could not run is still JSON, and
+    // exits 2 — never the 1 that means "ran, and complete would not pass".
+    if (!asJson) throw error;
+    console.log(JSON.stringify({ error: { message: error instanceof Error ? error.message : String(error) } }, null, 2));
+    process.exitCode = 2;
+    return;
+  }
   process.exitCode = result.passed ? 0 : 1;
-  if (args.includes("--json")) {
+  if (asJson) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }

@@ -4,6 +4,7 @@ import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFil
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import {
   assertTransition,
+  canTransition,
   dependencyIssues,
   evaluateTaskGate,
   isUntouchedScaffold,
@@ -226,6 +227,21 @@ function prMergeState(pr: PrObservation, gates: readonly GateOutcome[]): PrMerge
   }
 }
 
+/** The acceptance-criteria gate's failing detail starts with this, then the ids joined by ", ". */
+const UNCONFIRMED_PREFIX = "unconfirmed: ";
+/** The pull-request gate's detail when the flow recorded no PR. */
+const NO_PR_DETAIL = "no PR recorded";
+
+/**
+ * Whether `complete` can start from this status (flow 364, review A-001): the
+ * state machine's own `→ completing` edge, or the direct-merge path from
+ * `in-progress`. `complete()` acts on it and `checkComplete()` reports it, so
+ * the two cannot disagree.
+ */
+function completionAdmitted(status: FlowStatus, merged: boolean): boolean {
+  return canTransition(status, "completing") || (merged && status === "in-progress");
+}
+
 /**
  * The command that would fix a failing completion gate, where one is known
  * (flow 364, AC5); `undefined` for a passing or skipped gate and for a gate
@@ -236,14 +252,16 @@ export function completionFixHint(gate: GateOutcome, flowId: string): string | u
   if (gate.status !== "fail") return undefined;
   switch (gate.name) {
     case "acceptance-criteria": {
-      const unconfirmed = /^unconfirmed: (.+)$/.exec(gate.detail)?.[1]?.split(", ") ?? [];
+      // Read back through the same prefix the gate writes (review A-002), so a
+      // reworded detail cannot silently drop the hint.
+      const unconfirmed = gate.detail.startsWith(UNCONFIRMED_PREFIX) ? gate.detail.slice(UNCONFIRMED_PREFIX.length).split(", ") : [];
       const first = unconfirmed[0];
       if (first === undefined) return undefined;
       const more = unconfirmed.length > 1 ? ` (then ${unconfirmed.slice(1).join(", ")})` : "";
       return `keryx flow ac confirm ${flowId} ${first} --note "<evidence>"${more}`;
     }
     case "pull-request":
-      return gate.detail === "no PR recorded" ? `keryx flow implemented ${flowId} --pr <url>` : undefined;
+      return gate.detail === NO_PR_DETAIL ? `keryx flow implemented ${flowId} --pr <url>` : undefined;
     case "tasks":
       return `keryx flow next ${flowId}`;
     case "owner":
@@ -429,7 +447,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           : {
               name: "acceptance-criteria",
               status: "fail",
-              detail: criteria.length === 0 ? "no criteria found" : `unconfirmed: ${missing.join(", ")}`,
+              detail: criteria.length === 0 ? "no criteria found" : `${UNCONFIRMED_PREFIX}${missing.join(", ")}`,
             },
       );
     } catch {
@@ -497,7 +515,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       }
     } else if (!flow.pr.url) {
       pr = { kind: "no-pr" };
-      gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
+      gates.push({ name: "pull-request", status: "fail", detail: NO_PR_DETAIL });
     } else {
       pr = { kind: "unevaluable" };
       try {
@@ -1257,7 +1275,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // `updatedAt` on the result is for.
       const { dir, flow } = await load(cwd, id);
       const merged = Boolean(mergedCommit);
-      const allowed = flow.status === "implemented" || (flow.status === "in-progress" && merged);
+      const allowed = completionAdmitted(flow.status, merged);
       const transition = allowed
         ? { allowed, detail: `${flow.status} → completing` }
         : {
@@ -1296,6 +1314,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
       let flow = await readFlow(cwd, dir);
+      // The direct-merge arm of `completionAdmitted`; every other status goes
+      // through the state machine's own `→ completing` edge in `transition`.
       if (mergedCommit && flow.status === "in-progress") {
         await assertAcIntact(cwd, dir, flow);
         flow.status = "completing";

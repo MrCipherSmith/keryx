@@ -174,6 +174,9 @@ test("AC4: merge state comes from the tracker, and is `unknown` whenever the tra
     current = next;
     expect((await service.checkComplete({ cwd: ROOT, id })).merge.state).toBe(expected);
   }
+  // Review T-004: a tracker call that throws is `unknown`, never `merged`.
+  current = { ...fakeTracker(), prStatus: async () => Promise.reject(new Error("gh died")) };
+  expect((await service.checkComplete({ cwd: ROOT, id })).merge).toEqual({ state: "unknown", detail: "the tracker call failed" });
 });
 
 test("AC4: `keryx flow check-complete --json` prints the check and exits by whether complete would pass", async () => {
@@ -189,6 +192,49 @@ test("AC4: `keryx flow check-complete --json` prints the check and exits by whet
   expect(printed.passed).toBe(false);
   expect(printed.gates.length).toBeGreaterThan(0);
   expect(process.exitCode).toBe(1);
+});
+
+test("AC4 (review T-003): a flow sent back to in-progress with its PR and every gate passing still cannot start a completion", async () => {
+  const service = await fresh();
+  const { id } = await readyFlow(service, { confirmAc: false });
+  // A failed completion returns an implemented flow to in-progress, PR kept.
+  expect((await service.complete({ cwd: ROOT, id })).passed).toBe(false);
+  await service.acConfirm({ cwd: ROOT, id, criterion: "AC1" });
+  await service.acConfirm({ cwd: ROOT, id, criterion: "AC2" });
+  const check = await service.checkComplete({ cwd: ROOT, id });
+  expect(check.status).toBe("in-progress");
+  expect(check.gates.find((gate) => gate.name === "acceptance-criteria")?.status).toBe("pass");
+  expect(check.transition.allowed).toBe(false);
+  expect(check.passed).toBe(false);
+});
+
+test("AC4 (review T-004): a direct merge reads `merged` only when the main-merge gate passed; a tracker that throws reads `unknown`", async () => {
+  let onMain = true;
+  const service = await fresh({
+    mainMergeGate: async () => (onMain ? { status: "pass", detail: "abc contained in origin/main" } : { status: "fail", detail: "abc not on origin/main" }),
+  });
+  const { id } = await readyFlow(service, { implemented: false });
+  const merged = await service.checkComplete({ cwd: ROOT, id, mergedCommit: "abc" });
+  expect(merged.merge).toEqual({ state: "merged", detail: "direct merge: abc contained in origin/main" });
+  expect(merged.transition.allowed).toBe(true);
+  onMain = false;
+  expect((await service.checkComplete({ cwd: ROOT, id, mergedCommit: "abc" })).merge).toEqual({
+    state: "unknown",
+    detail: "direct merge not verified: abc not on origin/main",
+  });
+});
+
+test("AC4 (review L-006): `keryx flow check-complete` is routed by the real CLI; an unknown id under --json is a JSON error with exit 2", async () => {
+  await fresh();
+  const proc = Bun.spawn(["bun", path.join(import.meta.dir, "..", "cli.ts"), "flow", "check-complete", "999", "--json"], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([proc.exited, new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+  expect(stderr).not.toContain("Unknown command");
+  expect(exitCode).toBe(2);
+  expect((JSON.parse(stdout) as { error: { message: string } }).error.message.length).toBeGreaterThan(0);
 });
 
 test("AC5: completionFixHint names a command only for a failing gate with a known remedy", () => {

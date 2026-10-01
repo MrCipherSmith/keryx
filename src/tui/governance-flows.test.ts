@@ -81,6 +81,23 @@ describe("closeOffer (AC6)", () => {
     });
   });
 
+  test("review T-003: never offered when complete could not start from the flow's status", () => {
+    const blocked = { allowed: false, detail: "in-progress: record the PR first" };
+    expect(closeOffer(open, check({ transition: blocked, passed: false })).kind).toBe("none");
+    const tokenless = check({
+      transition: blocked,
+      passed: false,
+      confirmationRequired: true,
+      gates: [{ name: "confirmation", status: "fail", detail: "missing" }],
+    });
+    expect(closeOffer(open, tokenless).kind).toBe("none");
+  });
+
+  test("review L-005: an in-progress flow with no PR is pointed at a direct-merge completion in the terminal", () => {
+    const offer = closeOffer(flow("364", "in-progress"), check({ merge: { state: "no-pr", detail: "no PR recorded on the flow" }, passed: false }));
+    expect(offer).toEqual({ kind: "none", reason: "no PR recorded — for a direct merge, run `keryx flow complete 364 --merged <sha>` in a terminal" });
+  });
+
   test("a flow that requires a confirmation token is sent to the terminal, only when every other gate passes", () => {
     const tokenless = check({
       passed: false,

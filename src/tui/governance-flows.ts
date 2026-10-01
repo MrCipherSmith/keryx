@@ -36,10 +36,14 @@ export type CloseOffer = { kind: "close" } | { kind: "confirm-in-terminal" } | {
  * shows. A flow that requires a confirmation token is pointed at the terminal
  * instead — the modal never mints one.
  */
-export function closeOffer(flow: Pick<FlowGovernance, "status" | "updatedAt">, check: FlowCompletionCheck | undefined): CloseOffer {
+export function closeOffer(flow: Pick<FlowGovernance, "id" | "status" | "updatedAt">, check: FlowCompletionCheck | undefined): CloseOffer {
   if (flow.status === "done") return { kind: "none", reason: "already done" };
   if (check === undefined) return { kind: "none", reason: "press c to check first" };
   if (check.updatedAt < flow.updatedAt) return { kind: "none", reason: "the flow changed since the check — press c again" };
+  // Review L-005: a direct merge has no PR to read, and the modal never names a commit.
+  if (check.merge.state === "no-pr" && flow.status === "in-progress") {
+    return { kind: "none", reason: `no PR recorded — for a direct merge, run \`keryx flow complete ${flow.id} --merged <sha>\` in a terminal` };
+  }
   if (check.merge.state !== "merged") return { kind: "none", reason: `PR not merged (${check.merge.state})` };
   if (check.confirmationRequired) {
     // Without a token the confirmation gate always fails here; every OTHER gate decides.

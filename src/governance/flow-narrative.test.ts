@@ -49,6 +49,21 @@ describe("summarizeEffect", () => {
     expect(summarizeEffect(`## Outcome criteria\n\n- ${OUTCOME_HINT}\n`)).toEqual({ stated: false, reason: "hint-only" });
   });
 
+  test("review L-002: prose and numbered items are stated effects; an empty section is not called hint-only", () => {
+    expect(summarizeEffect("## Outcome criteria\n\nUsers close flows from the report.\n\n## Out of Scope\n")).toEqual({
+      stated: true,
+      text: "Users close flows from the report.",
+      bullets: ["Users close flows from the report."],
+    });
+    expect(summarizeEffect("## Outcome criteria\n\n1. Fewer manual commands.\n2. Faster closing.\n")).toEqual({
+      stated: true,
+      text: "Fewer manual commands.",
+      bullets: ["Fewer manual commands.", "Faster closing."],
+    });
+    expect(summarizeEffect("## Outcome criteria\n\n## Out of Scope\n")).toEqual({ stated: false, reason: "empty-section" });
+    expect(renderEffectLine({ stated: false, reason: "empty-section" })).toBe("effect: not stated (the Outcome criteria section is empty)");
+  });
+
   test("a description without the section, and an unreadable one, are distinct states", () => {
     expect(summarizeEffect("## Problem\n\nx.\n")).toEqual({ stated: false, reason: "no-section" });
     expect(summarizeEffect(undefined)).toEqual({ stated: false, reason: "unreadable" });

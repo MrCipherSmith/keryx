@@ -236,7 +236,7 @@ export type FlowGovernance = {
  */
 export type FlowEffect =
   | { stated: true; text: string; bullets: string[] }
-  | { stated: false; reason: "no-section" | "hint-only" | "unreadable" };
+  | { stated: false; reason: "no-section" | "hint-only" | "empty-section" | "unreadable" };
 
 /**
  * Flow 364 (AC1): a one-line account of the flow, derived without a model:

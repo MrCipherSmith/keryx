@@ -10,7 +10,7 @@ import type { GovernanceFlowActions } from "./governance-flow-actions";
 import { createGovernanceRunner } from "./governance-panel";
 import { formatModalFooter } from "./modal-host";
 import { applyThemeId, getThemeId, roleColor } from "./theme";
-import { chunkColors, findById, keypressSource, loadOpenTui, makeProject, mountChrome, settle, writeReport } from "./ops-sidebar.test-helpers";
+import { chunkColors, clickNode, findById, keypressSource, loadOpenTui, makeProject, mountChrome, settle, writeReport } from "./ops-sidebar.test-helpers";
 import { flowsRoot } from "../flow/store";
 import { mkdir, writeFile } from "node:fs/promises";
 
@@ -181,12 +181,12 @@ otuiTest("AC3/AC1: a malformed stored report gives its reason in the modal", asy
 
 // --- Flow 364: the Flows tab, check and close ---------------------------------
 
-async function projectWithOpenFlow(): Promise<string> {
+async function projectWithOpenFlow(openId = "364"): Promise<string> {
   const root = await makeProject("keryx-govflows-");
   roots.push(root);
   const flows: Array<[string, string]> = [
-    ["363", "done"],
-    ["364", "implemented"],
+    ["003", "done"],
+    [openId, "implemented"],
   ];
   for (const [id, status] of flows) {
     const dir = path.join(flowsRoot(root), `${id}-2026-10-01-fixture-${id}`);
@@ -206,7 +206,7 @@ async function projectWithOpenFlow(): Promise<string> {
   return root;
 }
 
-function fakeActions(over: { passed?: boolean; merged?: boolean } = {}) {
+function fakeActions(over: { passed?: boolean; merged?: boolean; updatedAt?: () => string } = {}) {
   const calls: string[] = [];
   const actions: GovernanceFlowActions = {
     check: async (id) => {
@@ -214,7 +214,7 @@ function fakeActions(over: { passed?: boolean; merged?: boolean } = {}) {
       return {
         id,
         status: "implemented",
-        updatedAt: "2026-10-01T09:00:00.000Z",
+        updatedAt: over.updatedAt?.() ?? "2026-10-01T09:00:00.000Z",
         checkedAt: "2026-10-01T10:00:00.000Z",
         transition: { allowed: true, detail: "implemented → completing" },
         merge: over.merged === false ? { state: "open", detail: "PR open, not merged" } : { state: "merged", detail: "PR merged" },
@@ -236,7 +236,8 @@ otuiTest("flow 364 AC3: the modal opens on Flows — open flows first, each with
   const otui = OTUI!;
   const h = await mountChrome(otui);
   const cwd = await projectWithOpenFlow();
-  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: fakeActions().actions });
+  const { actions, calls } = fakeActions();
+  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: actions });
   try {
     await modal!.ready;
     const lines = modal!.allFlowLines();
@@ -246,8 +247,13 @@ otuiTest("flow 364 AC3: the modal opens on Flows — open flows first, each with
     expect(modal!.actionLine()).toBe("[c] check 364   close: press c to check first");
     h.mockInput.pressArrow("down");
     await settle(h);
-    expect(modal!.selectedFlowId()).toBe("363");
-    expect(modal!.actionLine()).toBe("363 is done — nothing to check or close");
+    expect(modal!.selectedFlowId()).toBe("003");
+    expect(modal!.actionLine()).toBe("003 is done — nothing to check or close");
+    // Review T-006: `c` on a done flow does nothing.
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual([]);
   } finally {
     modal?.close();
     h.destroy();
@@ -284,14 +290,36 @@ otuiTest("flow 364 AC5-AC7: c checks, d asks for the id typed back, Enter closes
     await settle(h);
     expect(calls).toEqual(["check 364"]);
 
-    // The right id closes, then the report re-runs.
+    // Review T-002: any other key cancels — the digits typed after it never complete anything.
+    h.mockInput.pressKey("d");
+    await settle(h);
+    h.mockInput.pressKey("3");
+    h.mockInput.pressKey("c");
+    await settle(h);
+    expect(modal!.actionLine()).not.toContain("Close flow");
+    // `x` during a confirmation cancels it rather than closing the modal (review L-001).
+    h.mockInput.pressKey("d");
+    await settle(h);
+    h.mockInput.pressKey("x");
+    await settle(h);
+    expect(h.chrome.overlayActive()).toBe(true);
+    expect(modal!.actionLine()).not.toContain("Close flow");
+    await modal!.settled();
+    for (const key of ["6", "4"]) h.mockInput.pressKey(key);
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls.filter((call) => call.startsWith("close"))).toEqual([]);
+
+    // The right id re-checks against the live flow, completes, then the report re-runs.
+    const before = calls.length;
     h.mockInput.pressKey("d");
     await settle(h);
     for (const key of ["3", "6", "4"]) h.mockInput.pressKey(key);
     h.mockInput.pressEnter();
     await settle(h);
     await modal!.settled();
-    expect(calls).toEqual(["check 364", "close 364"]);
+    expect(calls.slice(before)).toEqual(["check 364", "close 364"]);
     expect(modal!.allFlowLines()).toContain("    closed: flow complete passed — the flow is done");
     expect(["running", "done"]).toContain(runner.state().kind);
   } finally {
@@ -329,6 +357,133 @@ otuiTest("flow 364 AC6: no close on an unmerged PR; AC8: a blocked keyboard neit
     h.mockInput.pressKey("d");
     await settle(h);
     expect(modal!.actionLine()).not.toContain("Close flow");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("review L-001: a flow id with 1 and 2 can be typed back — digits do not jump tabs during a confirmation", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow("312");
+  const { actions, calls } = fakeActions();
+  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: actions });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    h.mockInput.pressKey("d");
+    await settle(h);
+    for (const key of ["3", "1", "2"]) h.mockInput.pressKey(key);
+    await settle(h);
+    expect(modal!.activeTab()).toBe("flows");
+    expect(modal!.actionLine()).toContain("— 312 (any other key cancels)");
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 312", "check 312", "close 312"]);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("review T-001: while a confirmation is open, a blocked keyboard's Enter neither completes nor cancels it", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow();
+  const { actions, calls } = fakeActions();
+  let blocked = false;
+  const modal = openGovernanceReport(otui.core, h.chrome, {
+    cwd,
+    runner: createGovernanceRunner({ cwd }),
+    onKeypress: keypressSource(h.renderer),
+    flowActions: actions,
+    inputBlocked: () => blocked,
+  });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    h.mockInput.pressKey("d");
+    await settle(h);
+    for (const key of ["3", "6", "4"]) h.mockInput.pressKey(key);
+    await settle(h);
+    blocked = true;
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 364"]);
+    expect(modal!.actionLine()).toContain("— 364 (any other key cancels)");
+    blocked = false;
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 364", "check 364", "close 364"]);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("review L-003: Enter re-checks the live flow and does not complete one that changed since the check", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow();
+  let updatedAt = "2026-10-01T09:00:00.000Z";
+  const { actions, calls } = fakeActions({ updatedAt: () => updatedAt });
+  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: actions });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    h.mockInput.pressKey("d");
+    await settle(h);
+    for (const key of ["3", "6", "4"]) h.mockInput.pressKey(key);
+    // Another session changes the flow before Enter.
+    updatedAt = "2026-10-01T09:45:00.000Z";
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 364", "check 364"]);
+    expect(modal!.allFlowLines().join(" ")).toContain("not completed: the flow changed or no longer passes");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("review T-005: the action row is clickable — check, then confirm — and a blocked keyboard makes the click do nothing", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow();
+  const { actions, calls } = fakeActions();
+  let blocked = true;
+  const modal = openGovernanceReport(otui.core, h.chrome, {
+    cwd,
+    runner: createGovernanceRunner({ cwd }),
+    onKeypress: keypressSource(h.renderer),
+    flowActions: actions,
+    inputBlocked: () => blocked,
+  });
+  try {
+    await modal!.ready;
+    const row = findById(h.renderer.root, "gov-actions");
+    await clickNode(h, row);
+    await modal!.settled();
+    expect(calls).toEqual([]);
+    blocked = false;
+    await clickNode(h, row);
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 364"]);
+    await clickNode(h, row);
+    await settle(h);
+    expect(modal!.actionLine()).toContain("Close flow 364");
   } finally {
     modal?.close();
     h.destroy();

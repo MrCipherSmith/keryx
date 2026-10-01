@@ -970,3 +970,19 @@ test("flow 364 AC1: each flow carries its stated effect and summary; a missing d
   expect(noDescription?.effect).toEqual({ stated: false, reason: "unreadable" });
   expect(noDescription?.summary?.statement).toBeNull();
 });
+
+test("flow 364 AC1 (review T-007): a stored report written before effect/summary still loads, and reads them as not recorded", async () => {
+  await writeFlowFixture("303-2026-01-01-old-report");
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  for (const flow of report.projects[0]?.flows ?? []) {
+    delete flow.effect;
+    delete flow.summary;
+  }
+  await writeGovernanceArtifacts(ROOT, report);
+  const read = await readLatestGovernanceReport(ROOT);
+  expect(read.state).toBe("present");
+  if (read.state !== "present") return;
+  const markdown = renderGovernanceMarkdown(read.report);
+  expect(markdown).toContain("effect: not recorded");
+  expect(markdown).toContain("summary: not recorded");
+});

@@ -594,7 +594,8 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "Evaluate every gate `flow complete` would, through the same code, and report the PR's merge state " +
       "(merged, open, closed, not-found, no-pr, unknown) and, per failing gate, the command that would fix it. " +
       "Writes nothing: no status change, no completion attempt, no signature, no spent token. Exits 0 when " +
-      "`flow complete` would pass, 1 otherwise.",
+      "`flow complete` would pass, 1 when it would not, 2 when the check could not run (with --json: an " +
+      "`{\"error\":{\"message\"}}` object).",
     intent: ["можно ли закрыть флоу", "проверь закрытие флоу", "flow check-complete", "can this flow be completed", "check flow completion"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "flow id" },

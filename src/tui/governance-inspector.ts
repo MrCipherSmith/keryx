@@ -316,13 +316,26 @@ export function openGovernanceReport(
   };
 
   const runClose = (id: string): void => {
+    const offeredOn = checks.get(id);
+    const flow = flows().find((candidate) => candidate.id === id);
+    if (offeredOn === undefined || flow === undefined) return;
     closingId = id;
     errors.delete(id);
     closeResults.delete(id);
     paint();
-    inFlight = flowActions()
-      .close(id)
-      .then((result) => {
+    // Review L-003: the offer was made on a check and the stored report, and
+    // either can be stale by now. Check again against the live flow first;
+    // complete only when nothing changed since and the offer still stands.
+    const actions = flowActions();
+    inFlight = actions
+      .check(id)
+      .then(async (fresh) => {
+        checks.set(id, fresh);
+        if (fresh.updatedAt !== offeredOn.updatedAt || closeOffer(flow, fresh).kind !== "close") {
+          errors.set(id, "not completed: the flow changed or no longer passes since the check — the new check is shown");
+          return;
+        }
+        const result = await actions.close(id);
         closeResults.set(id, { passed: result.passed, gates: result.gates });
         // Whatever happened, the check it was offered on is spent.
         checks.delete(id);
@@ -389,8 +402,20 @@ export function openGovernanceReport(
     ],
     initialTab: options.initialTab ?? "flows",
     footer: GOVERNANCE_FOOTER,
+    // Review L-001: while the flow id is being typed, every key but Escape is
+    // the confirmation's — digits must not jump tabs, `x` must not close the
+    // modal. A blocked keyboard claims nothing, so the prompt that owns it
+    // still gets its keys.
+    claimKey: (key) => {
+      if (closed || confirming === undefined || options.inputBlocked?.() === true) return false;
+      confirmKey(key.name || key.sequence, key.sequence);
+      return true;
+    },
     renderTab: (tabId, body, ctx) => {
       width = ctx.width;
+      // A tab switch (possible only while the keyboard is blocked) cancels a
+      // pending confirmation rather than hiding it on the other tab.
+      confirming = undefined;
       const parent = body as { add(child: unknown): void };
       headerNode = new core.TextRenderable(r as never, { id: "gov-header", content: "" }) as never;
       parent.add(headerNode);
