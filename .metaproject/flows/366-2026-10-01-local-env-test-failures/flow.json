@@ -8,17 +8,46 @@
   "id": "366",
   "slug": "local-env-test-failures",
   "title": "Tests that fail only on a developer macOS checkout: flow 305 review-tier routing, worktree realpath, sandbox and shell-exec",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-10-01T07:41:31.124Z",
-  "updatedAt": "2026-10-01T10:03:46.192Z",
+  "updatedAt": "2026-10-01T13:16:17.940Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T13:15:16.683Z",
+      "note": "test-preload.ts canonicalises TMPDIR/os.tmpdir(); test-preload.test.ts portable subprocess check (23ccdf2b) fails without it; reviewer mutation removing it fails 7 flow-305 tests in review.test.ts plus both preload tests; CI green at 29dfa73d"
+    },
+    "AC2": {
+      "at": "2026-10-01T13:15:19.659Z",
+      "note": "resolveGitCommonDir canonicalises the directory part (23ccdf2b); git-worktrees symlinked-checkout and doctor tests fail with the realpath reverted (review round 1). Limit recorded as K-002: a linked worktree of a repo whose .git itself is a symlink still resolves to the target (git prints the realpath), pre-existing"
+    },
+    "AC3": {
+      "at": "2026-10-01T13:15:22.126Z",
+      "note": "shell-exec-tool.test.ts F5c uses a ps invocation valid on macOS and Linux; passes locally (darwin) and in CI (linux) at 29dfa73d"
+    },
+    "AC4": {
+      "at": "2026-10-01T13:15:24.394Z",
+      "note": "codex control-char round-trip skips with a stated reason where Bun.TOML rejects the escapes; after review fix 29dfa73d a parser-free test runs on every Bun and fails when escaping breaks (verifier mutation)"
+    },
+    "AC5": {
+      "at": "2026-10-01T13:15:26.239Z",
+      "note": "planUnattendedSandbox reads /run, /var/run and (after review fix 29dfa73d) /etc/resolv.conf through the detect seam; T14 passes on macOS with a fake Linux fs and fails on the hostIsDir/hostReal revert and the resolv guard mutation"
+    },
+    "AC6": {
+      "at": "2026-10-01T13:15:28.226Z",
+      "note": "pinned-wrapper tests use an interpreter that runs on macOS; reviewer mutation back to a /bin/sh copy fails all 3 pinned #! wrapper tests, so the changed-wrapper refusal no longer passes vacuously"
+    },
+    "AC7": {
+      "at": "2026-10-01T13:15:31.562Z",
+      "note": "CI, Docs and Wiki freshness all success on PR #827 at head 29dfa73d870968694fd018e4738f1c43e57319e4; keryx health run PASS"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/827"
   },
   "baseBranch": "main",
   "owner": {
@@ -83,21 +112,28 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:36:13.549Z",
+            "outcome": "started",
+            "detail": "366-T4 review round 1 over origin/main..4fe2c269 (CI green on PR #827)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
       "title": "Fix the five causes (preload TMPDIR realpath, resolveGitCommonDir canonical, ps keyword, TOML probe, sandbox detect seam, schedule interpreter) and verify each file locally",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -111,7 +147,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -152,6 +189,75 @@
       "at": "2026-10-01T10:03:46.192Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1) — 366-T5 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:10:51.759Z",
+      "event": "task-done",
+      "detail": "T5: Fix the five causes (preload TMPDIR realpath, resolveGitCommonDir canonical, ps keyword, TOML probe, sandbox detect seam, schedule interpreter) and verify each file locally"
+    },
+    {
+      "at": "2026-10-01T10:36:13.549Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 366-T4 review round 1 over origin/main..4fe2c269 (CI green on PR #827)"
+    },
+    {
+      "at": "2026-10-01T13:15:09.330Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T13:15:16.683Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: test-preload.ts canonicalises TMPDIR/os.tmpdir(); test-preload.test.ts portable subprocess check (23ccdf2b) fails without it; reviewer mutation removing it fails 7 flow-305 tests in review.test.ts plus both preload tests; CI green at 29dfa73d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:19.659Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: resolveGitCommonDir canonicalises the directory part (23ccdf2b); git-worktrees symlinked-checkout and doctor tests fail with the realpath reverted (review round 1). Limit recorded as K-002: a linked worktree of a repo whose .git itself is a symlink still resolves to the target (git prints the realpath), pre-existing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:22.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-exec-tool.test.ts F5c uses a ps invocation valid on macOS and Linux; passes locally (darwin) and in CI (linux) at 29dfa73d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:24.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: codex control-char round-trip skips with a stated reason where Bun.TOML rejects the escapes; after review fix 29dfa73d a parser-free test runs on every Bun and fails when escaping breaks (verifier mutation) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:26.239Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: planUnattendedSandbox reads /run, /var/run and (after review fix 29dfa73d) /etc/resolv.conf through the detect seam; T14 passes on macOS with a fake Linux fs and fails on the hostIsDir/hostReal revert and the resolv guard mutation (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:28.227Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: pinned-wrapper tests use an interpreter that runs on macOS; reviewer mutation back to a /bin/sh copy fails all 3 pinned #! wrapper tests, so the changed-wrapper refusal no longer passes vacuously (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:31.562Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: CI, Docs and Wiki freshness all success on PR #827 at head 29dfa73d870968694fd018e4738f1c43e57319e4; keryx health run PASS (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T13:15:37.229Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/827"
+    },
+    {
+      "at": "2026-10-01T13:16:11.605Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T13:16:17.932Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-01T13:16:17.940Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -176,5 +282,154 @@
     "AC7": {
       "kind": "unclassified"
     }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T13:15:16.683Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:19.659Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:22.126Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:24.394Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:26.239Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:28.226Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:15:31.562Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    },
+    {
+      "at": "2026-10-01T13:16:17.940Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13",
+      "headCommit": "88ffe3beb489e58ddba564b3a8e2f3e1ec7eeb5e"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T13:16:17.932Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "88ffe3beb489e58ddba564b3a8e2f3e1ec7eeb5e is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "88ffe3beb489e58ddba564b3a8e2f3e1ec7eeb5e is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "5 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13"
+    }
+  ],
+  "merged": {
+    "commit": "88ffe3beb489e58ddba564b3a8e2f3e1ec7eeb5e",
+    "ref": "origin/main",
+    "at": "2026-10-01T13:16:17.939Z"
   }
 }
