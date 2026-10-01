@@ -8,14 +8,14 @@
   "id": "363",
   "slug": "publication-grade-documentation-showcase",
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T07:22:55.680Z",
+  "updatedAt": "2026-10-01T07:41:06.962Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:3baf70e19e01c0aa05905529804146a9722e1538886de625b3d93e0c1cab0ac8",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -99,17 +99,24 @@
       "id": "T5",
       "title": "Consolidate research into audit-report.md with target IA",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:33:07.993Z",
+            "outcome": "started",
+            "detail": "363-T5 audit report"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -421,6 +428,60 @@
       "at": "2026-10-01T07:22:55.680Z",
       "event": "task-done",
       "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T07:33:07.403Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T07:33:07.700Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T07:33:07.993Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 363-T5 audit report"
+    },
+    {
+      "at": "2026-10-01T07:41:06.962Z",
+      "event": "task-done",
+      "detail": "T5: Consolidate research into audit-report.md with target IA"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    }
+  }
 }

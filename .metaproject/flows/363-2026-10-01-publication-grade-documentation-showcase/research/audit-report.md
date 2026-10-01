@@ -148,6 +148,38 @@ handlers exist; `orient install-hook --runtime` accepts `claude, codex, cursor,
 all`, as complete-setup says; doc links 0 broken; retired spellings 0
 undeclared.
 
+### 2.3a Concept pages and guides — completed pass (late sub-audit, verified against code and live `--help`)
+
+Closes the UNCONFIRMED gap in 2.3. Paths under `docs/docs/`.
+
+| ID | Doc path:line | Claim | Evidence | Sev |
+|---|---|---|---|---|
+| D60 | guides/review-with-a-record.md:10,23-59 | console block is the "full surface" of `review` | live help adds floor, tier, ci-triage, conform, jev-*, bot, metrics, learn, reviewers, import; `ingest` flags; `comments reply --review` missing from help (`review.ts:327`) | S [T10] |
+| D61 | guides/shared-agent-context.md:45 | `workspace --help` shows the full surface | `workspace.ts:31` prints 2 lines; ~18 subcommands (`module-commands.ts:71-90`) | W [T7] |
+| D62 | guides/agent-catalog.md:230,254 | `agents verify --name` | unknown flag; usage `agents verify [<name>]` | W [T10] |
+| D63 | guides/permission-modes.md:190 | "MCP server (`keryx mcp`)" | publisher is `serve-mcp` | S [T9] |
+| D64 | harness.md:116-118 | `harness exec --allow-env HOME … -- ./script.sh` runs | refuses without `--allow-real-subprocess` | W [T12] |
+| D65 | harness.md:238; guides/external-agent-write.md:13-16; guides/acp-client.md:49-51 | enable external agents by hand-editing config | `agents external enable/disable` exist | M [T10] |
+| D66 | hooks.md:757-767 (+:697-699, :736) | built-in hooks run no-op (no ports) | `agent-hooks.ts:290-296` passes impactEvidence and learning sink; contradicts hooks.md:444, learning.md:43-60 | W [T11] |
+| D67 | architecture.md:130 | host-harness verbs are `ctx/orient/security … install-hook` | `integrations install\|uninstall\|doctor\|matrix`; old ones are aliases | S [T12] |
+| D68 | architecture.md:249-250,265-266,354,356 | file:line citations | moved (`harness.ts:292`, `serve-turn.ts:481`, `guard.ts:371`; serve-server lines now other code) | S [T12] |
+| D69 | architecture.md:319; modules.md:1441-1442 | external subsystem never run against a real vendor | live runs recorded (`fixtures/external/live/`) | W [T11, T12] |
+| D70 | architecture.md:614 | init hooks default off | `init --yes` installs post-commit, pre-commit, pre-push; contradicts workspace-and-lifecycle.md:537-546 | W [T12] |
+| D71 | architecture.md:51,264 | provider port = fake · one vendor · local runtime | also openai, gemini, openai-codex | S [T12] |
+| D72 | modules.md:239,1600,346 | LOC and skill counts (~637, ~1836, ~90 skills) | 1845, 3025, 170 bundled SKILL.md | S [T11] |
+| D73 | workspace-and-lifecycle.md:214-215; modules.md MODULE_COMMANDS table | gdskills lacks import/update; memory lacks supersede/transition; no sac row | `module-commands.ts:16-32,71-90` | S [T11] |
+| D74 | modules.md:690-695,664 | `flow complete` has 4 gates; no `verify` kind | 8 gates (architecture.md:575-591); `verify` kind exists | S [T11] |
+| D75 | modules.md:1147-1164 | SAC has 17 subcommands, no `handoff` | 18, incl. `handoff` | S [T11] |
+| D76 | modules.md:1410-1422 | external runtime = two-entry registry; `run` drives one ACP agent; no enable/disable | 4 entries; both transports; enable/disable exist | S [T11] |
+| D77 | modules.md:914 | `security scan` flags | `--recursive/--no-recursive --exclude --max-files --max-bytes` | S [T11] |
+| D78 | `update --help` | `[--skip-runtime] [--hooks]` | `--preview` works (`update.ts:243`); help omits it (doc is right) | S [T7] |
+| D79 | workspace-and-lifecycle.md:540 vs :47-61 | data tree | queue at `data/wiki/` (`freshness/queue.ts:44`); tree omits `data/wiki/`, `data/trigger/`, `data/governance/` | S [T11] |
+| D80 | `skills judge-check --help` | six canned answers | guide (correct) says eight; help stale | S [T7] |
+
+Resolved: `orient uninstall-hook` exists (`orient.ts:36,141`) — D32 is not drift.
+Code defect found (out of this flow's scope, filed separately): `keryx ctx install-hook --dry-run` ignores `--dry-run` and installs.
+Clean, every code block checked: learning.md, integrations.md (beyond D44/D46), and guides answer-remote-approvals, contain-an-agent, drive-keryx-remotely, give-an-agent-context, goal, jev-in-the-delivery-loop, keep-the-wiki-current, portability, review-as-a-pr-bot, rewind, run-in-ci, slate, use-local-searxng, web-search.
+
 ### 2.4 Drift totals and owners
 
 | Category | Count |

@@ -19,3 +19,7 @@
 - 2026-10-01T07:22:55.076Z - task-added: T17: Strict build, link check, retired spellings, internal-id and external-name scan
 - 2026-10-01T07:22:55.380Z - task-added: T18: review-orchestrator round over the final diff
 - 2026-10-01T07:22:55.680Z - task-done: T1: Collect remaining context
+- 2026-10-01T07:33:07.403Z - frozen: 11 criteria; checksum recorded
+- 2026-10-01T07:33:07.700Z - started
+- 2026-10-01T07:33:07.993Z - task-attempt: T5: started (attempt 1) — 363-T5 audit report
+- 2026-10-01T07:41:06.962Z - task-done: T5: Consolidate research into audit-report.md with target IA
