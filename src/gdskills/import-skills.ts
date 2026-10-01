@@ -22,6 +22,7 @@ import {
   PROJECT_SKILLS_MANIFEST_PATH,
   projectSkillKey,
   projectSkillPackagePath,
+  hashOriginContent,
   projectSkillSlug,
   projectSkillWritePaths,
   resolveOriginPath,
@@ -29,7 +30,8 @@ import {
 } from "./project-skills";
 import { flagCarriers, flagStatus, PROJECT_REVIEWER_MODULE, projectReviewerFlags } from "./project-reviewers";
 import { reviewerFlagReport, reviewerFlags, reviewerPathGate, type PathTriggerSource } from "./reviewer-triggers";
-import { guardOutput, prepareOutputForPersistence } from "../security/guard";
+import { formatGuardWarning, guardOutput, prepareOutputForPersistence } from "../security/guard";
+import type { SecurityAction, SecurityCategory } from "../security/types";
 
 const BUNDLED_NAMES = new Set(BUNDLED_GDSKILLS.map((entry) => entry.name));
 
@@ -52,17 +54,47 @@ export type ImportProjectSkillsOptions = {
   commandLabel?: string;
   dryRun?: boolean;
   force?: boolean;
+  /**
+   * Write content with a `prompt-injection.*` finding instead of refusing it.
+   * The row says it was flagged and written because of this option. It does not
+   * override a block by the project's security mode (a secret under `enforced`).
+   */
+  allowFlagged?: boolean;
   fetcher?: SkillFetcher;
+};
+
+/**
+ * What the security gate said about a file that is, or would be, written or
+ * refused. Policy ids, categories and actions only: never the matched text.
+ */
+export type ImportSecurity = {
+  /** The strongest action the gate applied. */
+  action: SecurityAction;
+  findings: { policyId: string; category: SecurityCategory; action: SecurityAction }[];
+  /** The gate changed the bytes that are, or would be, written. */
+  redacted: boolean;
+  /** The file was not written (or, on a dry run, would not be). */
+  refused: boolean;
 };
 
 export type ImportedProjectSkill = {
   name: string;
   module: string;
-  status: "imported" | "overwritten" | "skipped" | "would-import" | "would-overwrite" | "updated";
+  status:
+    | "imported"
+    | "overwritten"
+    | "skipped"
+    | "would-import"
+    | "would-overwrite"
+    | "updated"
+    | "refused"
+    | "would-refuse";
   path: string;
   origin: string;
   reason?: string;
   wired?: string;
+  /** Absent when the gate had nothing to say about the file. */
+  security?: ImportSecurity;
   /**
    * Where a review package's path triggers come from, for a package that is
    * (or would be) written. Absent for another module and for a skipped row.
@@ -133,7 +165,9 @@ export type ImportedRule = {
     | "would-import"
     | "imported-project"
     | "would-import-project"
-    | "unresolved";
+    | "unresolved"
+    | "refused"
+    | "would-refuse";
   /** The skills that cite it. */
   citedBy: string[];
   origin?: string;
@@ -144,6 +178,8 @@ export type ImportedRule = {
   target?: string;
   /** For `differs`: whether the overlay's version is now at `target`. */
   written?: boolean;
+  /** Absent when the gate had nothing to say about the rule. */
+  security?: ImportSecurity;
 };
 
 export type ImportProjectSkillsResult = {
@@ -225,8 +261,12 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
       "row" in decision
         ? decision.row
         : options.dryRun
-          ? unwrittenRow(decision.placement, decision.dryRunReason)
-          : await writePlacedRule(options, decision.placement),
+          ? unwrittenRow(
+              decision.placement,
+              [decision.dryRunReason, ...gateNotes(decision.gate, true)].filter(isString).join(" — ") || undefined,
+              decision.gate.security,
+            )
+          : await writePlacedRule(options, decision.placement, decision.gate),
     );
   }
   return {
@@ -266,6 +306,8 @@ export type UpdateProjectSkillsOptions = {
   all?: boolean;
   from?: string;
   dryRun?: boolean;
+  /** As {@link ImportProjectSkillsOptions.allowFlagged}. */
+  allowFlagged?: boolean;
   fetcher?: SkillFetcher;
 };
 
@@ -322,7 +364,9 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
     `from: ${result.from}`,
     `dry-run: ${result.dryRun ? "yes" : "no"}`,
     `force: ${result.force ? "yes" : "no"}`,
-    `imported: ${counts.imported} overwritten: ${counts.overwritten} updated: ${counts.updated} skipped: ${counts.skipped} would-import: ${counts["would-import"]} would-overwrite: ${counts["would-overwrite"]}`,
+    `imported: ${counts.imported} overwritten: ${counts.overwritten} updated: ${counts.updated} skipped: ${counts.skipped} would-import: ${counts["would-import"]} would-overwrite: ${counts["would-overwrite"]}${
+      counts.refused > 0 ? ` refused: ${counts.refused}` : ""
+    }${counts["would-refuse"] > 0 ? ` would-refuse: ${counts["would-refuse"]}` : ""}`,
     "",
   ];
   if (result.dryRun) {
@@ -352,6 +396,15 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
       "",
     );
   }
+  if (
+    result.imported.some((row) => isRefusedStatus(row.status)) ||
+    result.rules.some((rule) => isRefusedStatus(rule.status))
+  ) {
+    lines.push(
+      REFUSED_NOTE,
+      "",
+    );
+  }
   if (result.rules.length > 0) {
     lines.push("## rules the skills cite", "");
     for (const rule of result.rules) {
@@ -371,12 +424,12 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
       );
     }
   }
-  if (result.imported.some((row) => row.module === PROJECT_REVIEWER_MODULE && row.status !== "skipped")) {
+  if (result.imported.some((row) => row.module === PROJECT_REVIEWER_MODULE && isWrittenRow(row))) {
     lines.push(
       `Reviewers: \`keryx review reviewers\` must list every imported ${PROJECT_REVIEWER_MODULE}/* name. That is the same call review-orchestrator makes.`,
     );
   }
-  if (result.imported.some((row) => row.module !== PROJECT_REVIEWER_MODULE && row.status !== "skipped")) {
+  if (result.imported.some((row) => row.module !== PROJECT_REVIEWER_MODULE && isWrittenRow(row))) {
     lines.push(
       "Non-review modules are registered for `keryx skills route`. They are NOT injected into flow-orchestrator's fixed pipeline — name the skill in a dispatch if you want it there.",
     );
@@ -558,7 +611,7 @@ function soleCarrierWarning(flag: string, overwritten: string, remaining: string
  */
 function addFlagWarnings(rows: ImportedProjectSkill[], sources: ImportSource[], existingFlags: Map<string, string[]>): void {
   const isWritten = (row: ImportedProjectSkill): boolean =>
-    row.module === PROJECT_REVIEWER_MODULE && row.status !== "skipped";
+    row.module === PROJECT_REVIEWER_MODULE && isWrittenRow(row);
   const replaced = new Set(rows.filter(isWritten).map((row) => row.name));
   const flagsAfter = new Map(existingFlags);
   for (const [index, row] of rows.entries()) {
@@ -877,8 +930,169 @@ async function skillPackageDirs(root: string): Promise<{ dirs: string[]; tree: b
   return { dirs, tree: true };
 }
 
+/**
+ * What the security gate decides about one text the import would write.
+ *
+ * Imported SKILL.md and rule text becomes instructions an agent follows, so the
+ * import is stricter than the project's security mode in one case: any
+ * `prompt-injection.*` finding, at any action, is refused in every mode.
+ * `--allow-flagged` is the operator saying they read it, and overrides only that.
+ *
+ * Every other finding follows the mode the gate already applied. In `advisory`
+ * the text is written as the gate returns it (a secret masked) and the row
+ * reports the findings; in `enforced` the gate blocks (`allowed: false`) and the
+ * text is refused, with or without --allow-flagged.
+ *
+ * - `write` — write `content`, which is the gate's output, never the pre-gate text.
+ * - `refuse` — write nothing; `reason` is the gate's own leak-safe warning.
+ * - `blocked` — the gate could not produce bytes that are safe to persist
+ *   (format-unsafe, posture unavailable). Not a finding, and not overridable.
+ */
+type GateVerdict =
+  | {
+      kind: "write";
+      content: string;
+      /** Present when the gate reported findings, or changed the bytes. */
+      security?: ImportSecurity;
+      /** `formatGuardWarning` of the decision; null when it had no findings. */
+      warning: string | null;
+      /** A prompt-injection finding, written because of --allow-flagged. */
+      overridden: boolean;
+      redacted: boolean;
+    }
+  | { kind: "refuse"; reason: string; security: ImportSecurity }
+  | { kind: "blocked"; reason: string };
+
+type WriteGate = Extract<GateVerdict, { kind: "write" }>;
+
+const isString = (value: string | undefined): value is string => value !== undefined;
+
+const REFUSED_NOTE =
+  "A refused file was not written. A prompt-injection refusal can be overridden after you read the file: run the command again with --allow-flagged.";
+
+function isRefusedStatus(status: string): boolean {
+  return status === "refused" || status === "would-refuse";
+}
+
+/** A row for a package or rule the run wrote, or would write: not a skip, not a refusal. */
+function isWrittenRow(row: ImportedProjectSkill): boolean {
+  return row.status !== "skipped" && !isRefusedStatus(row.status);
+}
+
+async function gateText(
+  projectRoot: string,
+  text: string,
+  target: string,
+  allowFlagged: boolean,
+): Promise<GateVerdict> {
+  const guard = await guardOutput({
+    cwd: projectRoot,
+    content: text,
+    target: "skill",
+    source: "untrusted-external",
+    path: target,
+  });
+  const findings = guard.decision.findings;
+  const warning = formatGuardWarning(guard.decision);
+  const summary = findings.map(({ policyId, category, action }) => ({ policyId, category, action }));
+  const security = (redacted: boolean, refused: boolean): ImportSecurity => ({
+    action: guard.decision.action,
+    findings: summary,
+    redacted,
+    refused,
+  });
+  const injection = findings.some((finding) => finding.policyId.startsWith("prompt-injection."));
+  // `allowed: false` with findings is the project's own mode blocking (enforced).
+  const blockedByMode = !guard.allowed && findings.length > 0;
+
+  if (blockedByMode || (injection && !allowFlagged)) {
+    return { kind: "refuse", reason: warning ?? guard.reason ?? "security gate blocked", security: security(false, true) };
+  }
+  const output = prepareOutputForPersistence(guard, text);
+  if (!output.allowed) return { kind: "blocked", reason: output.reason };
+  const redacted = !output.bytesPreserved;
+  return {
+    kind: "write",
+    content: output.content,
+    warning,
+    overridden: injection,
+    redacted,
+    ...(findings.length > 0 || redacted ? { security: security(redacted, false) } : {}),
+  };
+}
+
+/**
+ * What the row says about a written (or, on a dry run, would-be-written) file
+ * the gate had something to say about: written because of --allow-flagged,
+ * redacted, or flagged with findings that changed nothing.
+ */
+function gateRowParts(gate: WriteGate, dryRun: boolean): Pick<ImportedProjectSkill, "reason" | "security"> {
+  const detail = gate.warning !== null ? ` (${gate.warning})` : "";
+  const security = gate.security !== undefined ? { security: gate.security } : {};
+  if (gate.overridden) {
+    const redacted = gate.redacted ? ", redacted" : "";
+    return {
+      reason: `flagged by the security gate${detail}${redacted}, ${dryRun ? "would be written" : "written"} because --allow-flagged`,
+      ...security,
+    };
+  }
+  if (gate.redacted) {
+    return { reason: `${dryRun ? "would be redacted" : "redacted"} by the security gate${detail}`, ...security };
+  }
+  if (gate.warning !== null) {
+    return { reason: `flagged by the security gate${detail}`, ...security };
+  }
+  return security;
+}
+
+/** The same, as the lines a rule row carries in its `reason`. */
+function gateNotes(gate: WriteGate, dryRun: boolean): string[] {
+  return [gateRowParts(gate, dryRun).reason].filter(isString);
+}
+
+/**
+ * The SKILL.md as it would be written, header included, for the gate to read
+ * during planning — before the scaffold that carries the real header exists.
+ * Only the header's values can differ from the written file, and they are the
+ * package's own name, module, origin and hash.
+ */
+function plannedSkillText(
+  content: string,
+  header: { name: string; module: string; origin: string },
+): string {
+  const version = parseSkillFrontmatter(content).metadataVersion ?? "0.1.0";
+  return stampImportHeader(
+    content,
+    [
+      `Version: ${version}`,
+      `Target: ${header.name}`,
+      `Module: ${header.module}`,
+      `Origin: ${header.origin}`,
+      `Origin Hash: ${hashOriginContent(content)}`,
+      `Imported At: ${new Date().toISOString()}`,
+      "Status: active",
+      "Last Verified: never",
+      "",
+    ].join("\n"),
+  );
+}
+
+/** The row for a SKILL.md the gate would not let through. */
+function refusedSkillRow(
+  base: Pick<ImportedProjectSkill, "name" | "module" | "path" | "origin">,
+  verdict: Exclude<GateVerdict, { kind: "write" }>,
+  dryRun: boolean,
+): ImportedProjectSkill {
+  return {
+    ...base,
+    status: dryRun ? "would-refuse" : "refused",
+    reason: verdict.kind === "blocked" ? `blocked by the security gate: ${verdict.reason}` : verdict.reason,
+    ...(verdict.kind === "refuse" ? { security: verdict.security } : {}),
+  };
+}
+
 /** What an import does with one source: a row that is already final, or a package to write. */
-type ImportPlan = { row: ImportedProjectSkill } | { write: ImportSource; exists: boolean };
+type ImportPlan = { row: ImportedProjectSkill } | { write: ImportSource; exists: boolean; gate: WriteGate };
 
 async function planOne(options: ImportProjectSkillsOptions, source: ImportSource): Promise<ImportPlan> {
   const dest = projectSkillPackagePath(source.module, source.name);
@@ -926,15 +1140,31 @@ async function planOne(options: ImportProjectSkillsOptions, source: ImportSource
     };
   }
 
-  return { write: source, exists };
+  // The gate reads the text that would be written, now: a refusal is decided
+  // before anything is, a dry run says what the real run does, and a refused
+  // package leaves no scaffold, registry entry or catalog row behind.
+  const verdict = await gateText(
+    options.projectRoot,
+    plannedSkillText(source.content, { name: source.name, module: source.module, origin: source.origin }),
+    toPosix(path.join(dest, "SKILL.md")),
+    options.allowFlagged === true,
+  );
+  if (verdict.kind !== "write") {
+    return {
+      row: refusedSkillRow({ name: source.name, module: source.module, path: dest, origin: source.origin }, verdict, options.dryRun === true),
+    };
+  }
+  return { write: source, exists, gate: verdict };
 }
 
 /** Write one planned package — or, on a dry run, say it would be written. */
 async function writeOne(
   options: ImportProjectSkillsOptions,
-  { write: source, exists }: { write: ImportSource; exists: boolean },
+  { write: source, exists, gate }: { write: ImportSource; exists: boolean; gate: WriteGate },
 ): Promise<ImportedProjectSkill> {
+  const notes = importNotes(source);
   if (options.dryRun) {
+    const parts = gateRowParts(gate, true);
     return {
       name: source.name,
       module: source.module,
@@ -942,7 +1172,7 @@ async function writeOne(
       path: projectSkillPackagePath(source.module, source.name),
       origin: source.origin,
       wired: wiringNote(source.module),
-      ...importNotes(source),
+      ...mergeNotes(notes, parts),
     };
   }
 
@@ -956,7 +1186,14 @@ async function writeOne(
     ...versionOption(source.content),
     format: "single",
   });
-  await overwriteImportedSkill(options.projectRoot, created, source.content);
+  const verdict = await overwriteImportedSkill(options.projectRoot, created, source.content, options.allowFlagged === true);
+  if (verdict.kind !== "write") {
+    return refusedSkillRow(
+      { name: source.name, module: source.module, path: created.skillPath, origin: source.origin },
+      verdict,
+      false,
+    );
+  }
 
   return {
     name: source.name,
@@ -965,14 +1202,29 @@ async function writeOne(
     path: created.skillPath,
     origin: source.origin,
     wired: wiringNote(source.module),
-    ...importNotes(source),
+    ...mergeNotes(notes, gateRowParts(verdict, false)),
+  };
+}
+
+/** The importer's own notes and the gate's, on one row. */
+function mergeNotes(
+  notes: Pick<ImportedProjectSkill, "pathsSource" | "warnings">,
+  parts: Pick<ImportedProjectSkill, "reason" | "security">,
+): Pick<ImportedProjectSkill, "pathsSource" | "warnings" | "reason" | "security"> {
+  return {
+    ...(notes.pathsSource !== undefined ? { pathsSource: notes.pathsSource } : {}),
+    ...(notes.warnings !== undefined ? { warnings: notes.warnings } : {}),
+    ...(parts.reason !== undefined ? { reason: parts.reason } : {}),
+    ...(parts.security !== undefined ? { security: parts.security } : {}),
   };
 }
 
 type RegistryEntry = { module: string; name: string; path: string };
 
 /** What an update does with one registry entry: a final row, or new content to write over it. */
-type UpdatePlan = { row: ImportedProjectSkill } | { entry: RegistryEntry; origin: string; content: string };
+type UpdatePlan =
+  | { row: ImportedProjectSkill }
+  | { entry: RegistryEntry; origin: string; content: string; gate: WriteGate };
 
 async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEntry): Promise<UpdatePlan> {
   const skillMd = path.join(options.projectRoot, entry.path, "SKILL.md");
@@ -1001,13 +1253,24 @@ async function planUpdate(options: UpdateProjectSkillsOptions, entry: RegistryEn
     content = await readFile(resolved, "utf8");
     origin = portableOriginRef(resolved, options.projectRoot);
   }
-  return { entry, origin, content };
+  const verdict = await gateText(
+    options.projectRoot,
+    plannedSkillText(content, { name: entry.name, module: entry.module, origin }),
+    toPosix(path.join(entry.path, "SKILL.md")),
+    options.allowFlagged === true,
+  );
+  if (verdict.kind !== "write") {
+    return {
+      row: refusedSkillRow({ name: entry.name, module: entry.module, path: entry.path, origin }, verdict, options.dryRun === true),
+    };
+  }
+  return { entry, origin, content, gate: verdict };
 }
 
 /** Write one planned update — or, on a dry run, say it would be written. */
 async function writeUpdate(
   options: UpdateProjectSkillsOptions,
-  { entry, origin, content }: { entry: RegistryEntry; origin: string; content: string },
+  { entry, origin, content, gate }: { entry: RegistryEntry; origin: string; content: string; gate: WriteGate },
 ): Promise<ImportedProjectSkill> {
   if (options.dryRun) {
     return {
@@ -1017,6 +1280,7 @@ async function writeUpdate(
       path: entry.path,
       origin,
       wired: wiringNote(entry.module),
+      ...mergeNotes({}, gateRowParts(gate, true)),
     };
   }
 
@@ -1030,7 +1294,14 @@ async function writeUpdate(
     ...versionOption(content),
     format: "single",
   });
-  await overwriteImportedSkill(options.projectRoot, created, content);
+  const verdict = await overwriteImportedSkill(options.projectRoot, created, content, options.allowFlagged === true);
+  if (verdict.kind !== "write") {
+    return refusedSkillRow(
+      { name: entry.name, module: entry.module, path: created.skillPath, origin },
+      verdict,
+      false,
+    );
+  }
   return {
     name: entry.name,
     module: entry.module,
@@ -1038,30 +1309,32 @@ async function writeUpdate(
     path: created.skillPath,
     origin,
     wired: wiringNote(entry.module),
+    ...mergeNotes({}, gateRowParts(verdict, false)),
   };
 }
 
+/**
+ * Stamp the scaffold's header onto the source and write what the gate lets
+ * through. Planning already ran the gate on the same text, so a refusal here is
+ * not expected; if it happens anyway (the header differs from the planned one
+ * in a way the gate reads) nothing more is written and the verdict is returned,
+ * never thrown.
+ */
 async function overwriteImportedSkill(
   projectRoot: string,
   created: CreateProjectSkillResult,
   source: string,
-): Promise<void> {
+  allowFlagged: boolean,
+): Promise<GateVerdict> {
   const relative = toPosix(path.join(created.skillPath, "SKILL.md"));
   const scaffold = await readFile(path.join(projectRoot, relative), "utf8");
   const header = extractImportHeader(scaffold, parseSkillFrontmatter(source).metadataVersion);
   const stamped = stampImportHeader(source, header);
-  const guard = await guardOutput({
-    cwd: projectRoot,
-    content: stamped,
-    target: "skill",
-    source: "untrusted-external",
-    path: relative,
-  });
-  const output = prepareOutputForPersistence(guard, stamped);
-  if (!output.allowed) {
-    throw new Error(`Project skill blocked by the security gate: ${output.reason}`);
+  const verdict = await gateText(projectRoot, stamped, relative, allowFlagged);
+  if (verdict.kind === "write") {
+    await writeContained(projectRoot, relative, verdict.content);
   }
-  await writeContained(projectRoot, relative, output.content);
+  return verdict;
 }
 
 /**
@@ -1219,8 +1492,9 @@ type RulePlacement = {
 };
 
 /** The row for a placement that was not written, for the reason given (none on a plain dry run). */
-function unwrittenRow(placement: RulePlacement, reason?: string): ImportedRule {
+function unwrittenRow(placement: RulePlacement, reason?: string, security?: ImportSecurity): ImportedRule {
   const { ref, citedBy, origin, target } = placement;
+  const gate = security !== undefined ? { security } : {};
   if (placement.existing !== undefined) {
     return {
       ref,
@@ -1231,17 +1505,49 @@ function unwrittenRow(placement: RulePlacement, reason?: string): ImportedRule {
       target,
       written: false,
       ...(reason !== undefined ? { reason } : {}),
+      ...gate,
     };
   }
-  return { ref, citedBy, status: placement.toProjectSlot ? "would-import-project" : "would-import", origin, target };
+  return {
+    ref,
+    citedBy,
+    status: placement.toProjectSlot ? "would-import-project" : "would-import",
+    origin,
+    target,
+    ...(reason !== undefined ? { reason } : {}),
+    ...gate,
+  };
 }
 
-function writtenRow(placement: RulePlacement): ImportedRule {
+function writtenRow(placement: RulePlacement, gate: WriteGate): ImportedRule {
   const { ref, citedBy, origin, target } = placement;
+  const notes = gateNotes(gate, false).join(" — ");
+  const extra = {
+    ...(notes !== "" ? { reason: notes } : {}),
+    ...(gate.security !== undefined ? { security: gate.security } : {}),
+  };
   if (placement.existing !== undefined) {
-    return { ref, citedBy, status: "differs", origin, existing: placement.existing.path, target, written: true };
+    return { ref, citedBy, status: "differs", origin, existing: placement.existing.path, target, written: true, ...extra };
   }
-  return { ref, citedBy, status: placement.toProjectSlot ? "imported-project" : "imported", origin, target };
+  return { ref, citedBy, status: placement.toProjectSlot ? "imported-project" : "imported", origin, target, ...extra };
+}
+
+/** The row for a rule the gate would not let through: nothing is written, the project's own file (if any) stays the one read. */
+function refusedRuleRow(
+  placement: RulePlacement,
+  verdict: Extract<GateVerdict, { kind: "refuse" }>,
+  dryRun: boolean,
+): ImportedRule {
+  const { ref, citedBy, origin } = placement;
+  return {
+    ref,
+    citedBy,
+    status: dryRun ? "would-refuse" : "refused",
+    origin,
+    ...(placement.existing !== undefined ? { existing: placement.existing.path } : {}),
+    reason: verdict.reason,
+    security: verdict.security,
+  };
 }
 
 /**
@@ -1254,7 +1560,7 @@ function writtenRow(placement: RulePlacement): ImportedRule {
  * is decided here, from the same placement a real run writes, so the two name
  * one destination.
  */
-type RuleDecision = { row: ImportedRule } | { placement: RulePlacement; dryRunReason?: string };
+type RuleDecision = { row: ImportedRule } | { placement: RulePlacement; dryRunReason?: string; gate: WriteGate };
 
 async function decideRule(
   options: ImportProjectSkillsOptions,
@@ -1337,34 +1643,40 @@ async function decideRule(
   if (replacesProjectCopy && options.force !== true) {
     return { row: unwrittenRow(placement, "left as it is; pass --force to replace it with the overlay's") };
   }
+  // The gate reads the text that would be written now, so a dry run says what
+  // the real run does and a refusal happens before anything is written.
+  const verdict = await gateText(options.projectRoot, content, target, options.allowFlagged === true);
+  if (verdict.kind === "refuse") {
+    return { row: refusedRuleRow(placement, verdict, options.dryRun === true) };
+  }
+  if (verdict.kind === "blocked") {
+    const reason = `blocked by the security gate: ${verdict.reason}`;
+    return {
+      row:
+        placement.existing !== undefined
+          ? unwrittenRow(placement, reason)
+          : { ...base, status: "unresolved", origin, reason },
+    };
+  }
+  if (placement.existing?.content === verdict.content) {
+    // The gate rewrote the overlay's text and the project already holds that result.
+    return { row: { ...base, status: "present", origin, existing: placement.existing.path } };
+  }
   // A dry run turns this into an unwritten row — after the destination has
   // been checked like the real run's, so both refuse the same symlink.
-  return replacesProjectCopy ? { placement, dryRunReason: "would be replaced with the overlay's (--force)" } : { placement };
+  return replacesProjectCopy
+    ? { placement, gate: verdict, dryRunReason: "would be replaced with the overlay's (--force)" }
+    : { placement, gate: verdict };
 }
 
-/** Write a placed rule through the security gate, and report what became of it. */
-async function writePlacedRule(options: ImportProjectSkillsOptions, placement: RulePlacement): Promise<ImportedRule> {
-  const { ref, citedBy, origin, target } = placement;
-  const guard = await guardOutput({
-    cwd: options.projectRoot,
-    content: placement.content,
-    target: "skill",
-    source: "untrusted-external",
-    path: target,
-  });
-  const output = prepareOutputForPersistence(guard, placement.content);
-  if (!output.allowed) {
-    const reason = `blocked by the security gate: ${output.reason}`;
-    return placement.existing !== undefined
-      ? unwrittenRow(placement, reason)
-      : { ref, citedBy, status: "unresolved", origin, reason };
-  }
-  if (placement.existing?.content === output.content) {
-    // The gate rewrote the overlay's text and the project already holds that result.
-    return { ref, citedBy, status: "present", origin, existing: placement.existing.path };
-  }
-  await writeContained(options.projectRoot, target, output.content);
-  return writtenRow(placement);
+/** Write a placed rule — already decided, and already through the security gate — and report it. */
+async function writePlacedRule(
+  options: ImportProjectSkillsOptions,
+  placement: RulePlacement,
+  gate: WriteGate,
+): Promise<ImportedRule> {
+  await writeContained(options.projectRoot, placement.target, gate.content);
+  return writtenRow(placement, gate);
 }
 
 /** One decision per cited rule, in citation order; nothing is written here. */
@@ -1444,6 +1756,8 @@ function countByStatus(rows: ImportedProjectSkill[]): Record<ImportedProjectSkil
     "would-import": 0,
     "would-overwrite": 0,
     updated: 0,
+    refused: 0,
+    "would-refuse": 0,
   };
   for (const row of rows) {
     counts[row.status] += 1;
@@ -1471,6 +1785,7 @@ export async function runSkillsImportCommand(args: string[]): Promise<void> {
     only: onlyOption(args, "keryx skills import"),
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force"),
+    allowFlagged: args.includes(ALLOW_FLAGGED_FLAG),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
@@ -1478,6 +1793,9 @@ export async function runSkillsImportCommand(args: string[]): Promise<void> {
   }
   console.log(renderImportProjectSkillsMarkdown(result));
 }
+
+/** Write content the security gate flags instead of refusing it; spelled the same on every command that imports. */
+export const ALLOW_FLAGGED_FLAG = "--allow-flagged";
 
 export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
   if (args.includes("--help") || args.includes("-h")) {
@@ -1492,6 +1810,7 @@ export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
     all: args.includes("--all"),
     ...(from !== undefined ? { from } : {}),
     dryRun: args.includes("--dry-run"),
+    allowFlagged: args.includes(ALLOW_FLAGGED_FLAG),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
@@ -1499,6 +1818,17 @@ export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
   }
   console.log(renderImportProjectSkillsMarkdown(result));
 }
+
+/** The security-gate paragraph of the import, review import and update help. */
+export const SECURITY_GATE_HELP = `Security gate: a SKILL.md or rule is written as the gate returns it, so a secret is
+masked and the row says it was redacted, and any other finding is reported on the
+row. Text with a prompt-injection finding is refused in every security mode: the
+row is \`refused\` (\`would-refuse\` on a dry run) with the gate's own summary,
+nothing is written, and the other packages and rules go on. After reading the
+file, --allow-flagged writes it anyway and the row says it was flagged and written
+because of the flag. It does not override a block by the project's security mode:
+under mode enforced a secret is refused either way. --json rows carry a
+\`security\` object.`;
 
 export function printSkillsImportHelp(): void {
   console.log(`keryx skills import
@@ -1509,7 +1839,7 @@ detectable.
 
 Usage:
   keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
-                      [--only <glob>]... [--dry-run] [--force] [--json]
+                      [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 
 --from:
   a skill package directory, a SKILL.md file, a parent tree that contains
@@ -1542,6 +1872,8 @@ In a tree import a package whose frontmatter says \`deprecated: true\` is
 skipped. Pass its own directory as --from to import it anyway.
 
 A name that collides with a bundled keryx skill is skipped unless --force.
+
+${SECURITY_GATE_HELP}
 
 A package landing in module \`review\` is imported with a warning for each of:
   - neither \`metadata.paths\` nor a glob in its description (a file path named
@@ -1591,8 +1923,10 @@ export function printSkillsUpdateHelp(): void {
 Re-read a project-skill's Origin and overwrite SKILL.md when the source moved on.
 
 Usage:
-  keryx skills update <module>/<name> [--from <new-origin>] [--dry-run] [--json]
-  keryx skills update --all [--dry-run] [--json]
+  keryx skills update <module>/<name> [--from <new-origin>] [--dry-run] [--allow-flagged] [--json]
+  keryx skills update --all [--dry-run] [--allow-flagged] [--json]
+
+${SECURITY_GATE_HELP}
 
 Before anything is written, every destination is checked for a symlink on the
 way that resolves outside the project, as \`keryx skills import\` does. One is

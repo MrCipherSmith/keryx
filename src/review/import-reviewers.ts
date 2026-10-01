@@ -1,7 +1,9 @@
 import { optionValue } from "../lib/args";
 import {
+  ALLOW_FLAGGED_FLAG,
   importProjectSkills,
   onlyOption,
+  SECURITY_GATE_HELP,
   renderImportProjectSkillsMarkdown,
   type ImportProjectSkillsResult,
 } from "../gdskills/import-skills";
@@ -17,6 +19,8 @@ export type ImportReviewersOptions = {
   only?: string[];
   dryRun?: boolean;
   force?: boolean;
+  /** Write content the security gate flags instead of refusing it. */
+  allowFlagged?: boolean;
 };
 
 /**
@@ -39,6 +43,7 @@ export async function importOverlayReviewers(options: ImportReviewersOptions): P
     ...(options.only !== undefined ? { only: options.only } : {}),
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
     ...(options.force !== undefined ? { force: options.force } : {}),
+    ...(options.allowFlagged !== undefined ? { allowFlagged: options.allowFlagged } : {}),
   });
 }
 
@@ -58,6 +63,7 @@ export async function runImportReviewers(args: string[]): Promise<void> {
     only: onlyOption(args, REVIEW_IMPORT_LABEL),
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force"),
+    allowFlagged: args.includes(ALLOW_FLAGGED_FLAG),
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify({ ...result, inventory: await collectReviewers(process.cwd()) }, null, 2));
@@ -76,7 +82,7 @@ The review-shaped spelling of:
 Same importer, same rules; the module is implied.
 
 Usage:
-  keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--json]
+  keryx review import --from <package-dir|tree> [--only <glob>]... [--dry-run] [--force] [--allow-flagged] [--json]
 
 --from:
   one reviewer package directory, or a tree that holds several (a directory of
@@ -97,6 +103,8 @@ selected directories that slug to one destination are refused.
 In a tree import a package whose frontmatter says \`deprecated: true\` is
 skipped; pass its own directory as --from to import it anyway. A name that
 collides with a bundled keryx skill is skipped unless --force.
+
+${SECURITY_GATE_HELP}
 
 A reviewer is imported with a warning for each of:
   - neither \`metadata.paths\` nor a glob in its description (a file path named
