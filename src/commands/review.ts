@@ -495,7 +495,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
-const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--json", "--help"] as const;
+const IMPORT_FLAGS = ["--from", "--only", "--dry-run", "--force", "--allow-flagged", "--json", "--help"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.

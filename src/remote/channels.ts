@@ -29,6 +29,8 @@ export interface ChannelsHost {
   /** (Re)start the hub from the files on disk. */
   startHub(): Promise<{ ok: true } | { ok: false; reason: string }>;
   stopHub(reason: string): Promise<void>;
+  /** Resolves once every hub start or stop already in flight has finished. */
+  settle(): Promise<void>;
   openApi(): OpenBotApiResult;
 }
 
@@ -155,6 +157,9 @@ export class ChannelsController {
       return fail(404, "no-pairing", "No pairing is open; start one first.");
     }
     await current.recheck();
+    if (this.pairing !== current) {
+      return fail(404, "no-pairing", "The pairing was closed while it was being checked; start one again.");
+    }
     return ok({ ...current.snapshot() });
   }
 
@@ -188,6 +193,7 @@ export class ChannelsController {
   }
 
   private async test(): Promise<Response> {
+    await this.host.settle();
     const hub = this.host.hub();
     if (hub === undefined) {
       const reason = this.host.hubReason();
@@ -205,6 +211,8 @@ export class ChannelsController {
     this.generation += 1;
     return this.exclusive(async () => {
       await this.dropPairing();
+      // A start still in flight would otherwise finish after this and leave a running hub with nothing on disk.
+      await this.host.settle();
       const hub = this.host.hub();
       if (hub === undefined) {
         return ok({ deleted: 0, remaining: 0, hubWasRunning: false });

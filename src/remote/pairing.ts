@@ -78,11 +78,15 @@ function normalise(text: string): string {
 }
 
 const FINAL: ReadonlySet<PairingState> = new Set(["ready", "failed", "expired", "cancelled"]);
+// The bot may be added to the group a moment before the code is sent; that event is kept, not lost.
+const EARLY_GROUP_EVENTS = 20;
 
 export class Pairing {
   private state: PairingState = "waiting-for-user";
   private code: string | undefined;
-  private readonly expiresAt: number;
+  private expiresAt: number;
+  private readonly ttlMs: number;
+  private readonly earlyGroups = new Map<number, BotUpdate>();
   private userId: number | undefined;
   private chatId: number | undefined;
   private chatTitle: string | undefined;
@@ -103,7 +107,8 @@ export class Pairing {
     this.now = options.now ?? Date.now;
     this.timers = options.timers ?? realTimers;
     this.code = options.code ?? newPairingCode();
-    this.expiresAt = this.now() + (options.ttlMs ?? PAIRING_CODE_TTL_MS);
+    this.ttlMs = options.ttlMs ?? PAIRING_CODE_TTL_MS;
+    this.expiresAt = this.now() + this.ttlMs;
     this.poller = new UpdatePoller({
       api: options.api,
       sink: { accept: (updates) => this.accept(updates) },
@@ -131,10 +136,17 @@ export class Pairing {
   }
 
   private begin(): void {
+    this.armExpiryTimer();
+    this.poller.start();
+  }
+
+  private armExpiryTimer(): void {
+    if (this.expiryTimer !== undefined) {
+      this.timers.clearTimeout(this.expiryTimer);
+    }
     const handle = this.timers.setTimeout(() => this.expireIfDue(), Math.max(0, this.expiresAt - this.now()) + 1);
     (handle as { unref?: () => void } | undefined)?.unref?.();
     this.expiryTimer = handle;
-    this.poller.start();
   }
 
   snapshot(): PairingSnapshot {
@@ -192,6 +204,9 @@ export class Pairing {
   }
 
   private settle(state: PairingState): void {
+    if (FINAL.has(this.state)) {
+      return;
+    }
     this.state = state;
     if (FINAL.has(state)) {
       this.code = undefined;
@@ -225,6 +240,7 @@ export class Pairing {
           return;
         }
         if (this.state === "waiting-for-user") {
+          this.rememberGroupEvent(update);
           await this.takeCode(update);
         } else if (this.state === "waiting-for-group") {
           await this.takeGroup(update);
@@ -250,9 +266,35 @@ export class Pairing {
     this.userId = message.from.id;
     this.code = undefined;
     this.state = "waiting-for-group";
+    // The code's ten minutes are spent; the group step gets its own.
+    this.expiresAt = this.now() + this.ttlMs;
+    this.armExpiryTimer();
     await this.options.api
       .sendMessage({ chatId: message.chat.id, text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator." })
       .catch(() => undefined);
+    const early = [...this.earlyGroups.values()];
+    this.earlyGroups.clear();
+    for (const event of early) {
+      if (this.state !== "waiting-for-group") {
+        break;
+      }
+      await this.takeGroup(event);
+    }
+  }
+
+  private rememberGroupEvent(update: BotUpdate): void {
+    const change = update.my_chat_member;
+    if (change === undefined) {
+      return;
+    }
+    this.earlyGroups.delete(change.chat.id);
+    this.earlyGroups.set(change.chat.id, update);
+    if (this.earlyGroups.size > EARLY_GROUP_EVENTS) {
+      const oldest = this.earlyGroups.keys().next().value;
+      if (oldest !== undefined) {
+        this.earlyGroups.delete(oldest);
+      }
+    }
   }
 
   private async takeGroup(update: BotUpdate): Promise<void> {
@@ -296,6 +338,11 @@ export class Pairing {
       }
     } catch (error) {
       problems.push(`could not inspect the group: ${describe(error)}`);
+    }
+    // The pairing may have been cancelled, have expired or have failed while Telegram was answering.
+    this.expireIfDue();
+    if (FINAL.has(this.state)) {
+      return;
     }
     this.problems = problems;
     if (problems.length === 0) {

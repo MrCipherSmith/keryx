@@ -193,6 +193,7 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
       hubReason: () => hubReason,
       startHub: () => exclusive(startHubNow),
       stopHub: (reason) => exclusive(() => stopHubNow(reason)),
+      settle: () => exclusive(async () => undefined),
       openApi: () =>
         openBotApi({ ...(options.api === undefined ? {} : { api: options.api }), ...(options.dir === undefined ? {} : { dir: options.dir }) }),
     },

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,14 +8,14 @@
   "id": "362",
   "slug": "import-installer-followups",
   "title": "Import and installer follow-ups from flow 360: neutral trigger, security-gate reporting, --with validation, skills update output",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-30T17:46:53.626Z",
-  "updatedAt": "2026-09-30T17:46:53.626Z",
+  "updatedAt": "2026-10-01T08:08:18.858Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -33,34 +33,286 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5 (context: gate behaviour reproduced on main)"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T7 (implement D1-D3)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written test-first inside T6 and T7; the suite runs in CI"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:40:22.316Z",
+            "outcome": "started",
+            "detail": "362-T5 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:40:27.781Z",
+            "outcome": "started",
+            "detail": "362-T6 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:54:31.168Z",
+            "outcome": "started",
+            "detail": "362-T7 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:54:33.780Z",
+            "outcome": "started",
+            "detail": "362-T8 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T08:08:18.858Z",
+            "outcome": "started",
+            "detail": "362-T9 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-30T17:46:53.626Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-01T07:40:14.322Z",
+      "event": "task-added",
+      "detail": "T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)"
+    },
+    {
+      "at": "2026-10-01T07:40:20.147Z",
+      "event": "task-added",
+      "detail": "T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)"
+    },
+    {
+      "at": "2026-10-01T07:40:22.316Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 362-T5 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:40:27.781Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 362-T6 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:51:48.712Z",
+      "event": "task-done",
+      "detail": "T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)"
+    },
+    {
+      "at": "2026-10-01T07:53:45.360Z",
+      "event": "task-done",
+      "detail": "T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)"
+    },
+    {
+      "at": "2026-10-01T07:54:08.918Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T07:54:10.661Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T07:54:12.579Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T07:54:14.443Z",
+      "event": "task-added",
+      "detail": "T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged"
+    },
+    {
+      "at": "2026-10-01T07:54:16.443Z",
+      "event": "task-added",
+      "detail": "T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)"
+    },
+    {
+      "at": "2026-10-01T07:54:18.278Z",
+      "event": "task-added",
+      "detail": "T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts"
+    },
+    {
+      "at": "2026-10-01T07:54:26.143Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T07:54:28.567Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T07:54:31.168Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 362-T7 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:54:33.780Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 362-T8 sonnet"
+    },
+    {
+      "at": "2026-10-01T08:05:05.841Z",
+      "event": "task-done",
+      "detail": "T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)"
+    },
+    {
+      "at": "2026-10-01T08:08:16.952Z",
+      "event": "task-done",
+      "detail": "T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged"
+    },
+    {
+      "at": "2026-10-01T08:08:18.858Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 362-T9 sonnet"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    }
+  }
 }

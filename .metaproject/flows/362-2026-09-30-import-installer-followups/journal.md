@@ -1,3 +1,22 @@
 # Flow Journal
 
 - 2026-09-30T17:46:53.626Z - flow created
+- 2026-10-01T07:40:14.322Z - task-added: T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)
+- 2026-10-01T07:40:20.147Z - task-added: T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)
+- 2026-10-01T07:40:22.316Z - task-attempt: T5: started (attempt 1) — 362-T5 sonnet
+- 2026-10-01T07:40:27.781Z - task-attempt: T6: started (attempt 1) — 362-T6 sonnet
+- 2026-10-01T07:51:48.712Z - task-done: T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)
+- 2026-10-01T07:53:45.360Z - task-done: T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)
+- 2026-10-01T07:54:08.918Z - task-done: T1: Collect remaining context
+- 2026-10-01T07:54:10.661Z - task-done: T2: Implement per plan
+- 2026-10-01T07:54:12.579Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T07:54:14.443Z - task-added: T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged
+- 2026-10-01T07:54:16.443Z - task-added: T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)
+- 2026-10-01T07:54:18.278Z - task-added: T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts
+- 2026-10-01T07:54:26.143Z - frozen: 4 criteria; checksum recorded
+- 2026-10-01T07:54:28.567Z - started
+- 2026-10-01T07:54:31.168Z - task-attempt: T7: started (attempt 1) — 362-T7 sonnet
+- 2026-10-01T07:54:33.780Z - task-attempt: T8: started (attempt 1) — 362-T8 sonnet
+- 2026-10-01T08:05:05.841Z - task-done: T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)
+- 2026-10-01T08:08:16.952Z - task-done: T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged
+- 2026-10-01T08:08:18.858Z - task-attempt: T9: started (attempt 1) — 362-T9 sonnet
