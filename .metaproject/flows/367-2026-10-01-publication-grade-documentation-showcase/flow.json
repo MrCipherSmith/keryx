@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T10:54:53.836Z",
+  "updatedAt": "2026-10-01T11:09:12.308Z",
   "source": {
     "type": "description",
     "ref": null
@@ -404,10 +404,10 @@
       "status": "todo",
       "dependsOn": [
         "T17",
-        "T21"
+        "T22"
       ],
       "attempts": {
-        "count": 2,
+        "count": 4,
         "log": [
           {
             "at": "2026-10-01T10:31:24.690Z",
@@ -418,6 +418,16 @@
             "at": "2026-10-01T10:45:38.324Z",
             "outcome": "failed",
             "detail": "round 1: 0 blocker, 3 major, 19 minor, 8 info"
+          },
+          {
+            "at": "2026-10-01T10:55:13.771Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 2"
+          },
+          {
+            "at": "2026-10-01T11:05:00.222Z",
+            "outcome": "failed",
+            "detail": "round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)"
           }
         ]
       },
@@ -492,6 +502,29 @@
             "at": "2026-10-01T10:47:12.485Z",
             "outcome": "started",
             "detail": "367-T21 round-1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T11:05:23.180Z",
+            "outcome": "started",
+            "detail": "367-T22"
           }
         ]
       },
@@ -799,6 +832,36 @@
       "at": "2026-10-01T10:54:53.836Z",
       "event": "task-done",
       "detail": "T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies"
+    },
+    {
+      "at": "2026-10-01T10:55:13.771Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 3) — 367-T18 review round 2"
+    },
+    {
+      "at": "2026-10-01T11:05:00.222Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 4) — round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)"
+    },
+    {
+      "at": "2026-10-01T11:05:00.525Z",
+      "event": "task-added",
+      "detail": "T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures"
+    },
+    {
+      "at": "2026-10-01T11:05:22.871Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T17, T22 (was T17, T21) — review round 3 checks the round-2 fixes"
+    },
+    {
+      "at": "2026-10-01T11:05:23.180Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 367-T22"
+    },
+    {
+      "at": "2026-10-01T11:09:12.308Z",
+      "event": "task-done",
+      "detail": "T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures"
     }
   ],
   "acKinds": {

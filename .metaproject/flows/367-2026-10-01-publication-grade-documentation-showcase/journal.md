@@ -152,3 +152,9 @@ env-var and file names (owner decision 1).
 
 Merge of origin/main 0.3.51 into the branch (5b578c81) instead of a second
 rebase: replaying the branch onto main re-raised already-resolved conflicts.
+- 2026-10-01T10:55:13.771Z - task-attempt: T18: started (attempt 3) — 367-T18 review round 2
+- 2026-10-01T11:05:00.222Z - task-attempt: T18: failed (attempt 4) — round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)
+- 2026-10-01T11:05:00.525Z - task-added: T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures
+- 2026-10-01T11:05:22.871Z - task-depends-set: T18: dependsOn T17, T22 (was T17, T21) — review round 3 checks the round-2 fixes
+- 2026-10-01T11:05:23.180Z - task-attempt: T22: started (attempt 1) — 367-T22
+- 2026-10-01T11:09:12.308Z - task-done: T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures
