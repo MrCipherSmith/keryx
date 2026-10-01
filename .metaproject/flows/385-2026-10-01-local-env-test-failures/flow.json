@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "366",
+  "id": "385",
   "slug": "local-env-test-failures",
   "title": "Tests that fail only on a developer macOS checkout: flow 305 review-tier routing, worktree realpath, sandbox and shell-exec",
   "status": "in-progress",
   "createdAt": "2026-10-01T07:41:31.124Z",
-  "updatedAt": "2026-10-01T10:03:46.192Z",
+  "updatedAt": "2026-10-01T13:45:04.262Z",
   "source": {
     "type": "description",
     "ref": null
@@ -152,6 +152,11 @@
       "at": "2026-10-01T10:03:46.192Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1) — 366-T5 sonnet"
+    },
+    {
+      "at": "2026-10-01T13:45:04.262Z",
+      "event": "renumbered",
+      "detail": "366 -> 385: duplicate id with 366-2026-09-29-external-agents-live on main; operator chose to move the later flow (housekeeping, flow 384)"
     }
   ],
   "acKinds": {
