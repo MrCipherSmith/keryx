@@ -12,7 +12,9 @@
 //      `my_chat_member` update, and only one whose sender is the paired user counts,
 //      so nobody else can nominate a group. The group is then checked: it must be a
 //      forum (topics on) and the bot must hold the manage-topics right. What is
-//      missing is named, and the check repeats until it passes.
+//      missing is named, and the check repeats until it passes. Turning Topics on makes
+//      Telegram move a basic group to a new supergroup id; the `migrate_to_chat_id` /
+//      `migrate_from_chat_id` service message moves the candidate along with it.
 //
 // The poller here is the only getUpdates consumer for this token while a pairing is
 // open (serve starts no hub for an unconfigured channel), so Telegram's one-poller
@@ -87,6 +89,8 @@ export class Pairing {
   private expiresAt: number;
   private readonly ttlMs: number;
   private readonly earlyGroups = new Map<number, BotUpdate>();
+  // Basic group -> supergroup moves seen before the code: replayed after the group events, so the candidate ends on the new id.
+  private earlyMigrations: BotUpdate[] = [];
   private userId: number | undefined;
   private chatId: number | undefined;
   private chatTitle: string | undefined;
@@ -98,6 +102,7 @@ export class Pairing {
   private readonly timers: HubTimers;
   private expiryTimer: unknown;
   private finished = false;
+  private begun = false;
   private queue: Promise<void> = Promise.resolve();
 
   private constructor(
@@ -121,6 +126,19 @@ export class Pairing {
 
   /** Ask Telegram who the token belongs to, then begin listening. A bad token is refused here, before anything else happens. */
   static async open(options: PairingOptions): Promise<OpenPairingResult> {
+    const prepared = await Pairing.prepare(options);
+    if (prepared.ok) {
+      prepared.pairing.begin();
+    }
+    return prepared;
+  }
+
+  /**
+   * Validate the token (getMe) but do not listen yet. The caller starts it with `begin()`, so it can
+   * end a pairing that already exists for the same token in between (Telegram allows one poller per
+   * token) and a bad token never disturbs it.
+   */
+  static async prepare(options: PairingOptions): Promise<OpenPairingResult> {
     let bot: { id: number; username?: string };
     try {
       bot = await options.api.getMe();
@@ -130,12 +148,16 @@ export class Pairing {
       }
       return { ok: false, kind: "unreachable", reason: `could not reach Telegram: ${describe(error)}` };
     }
-    const pairing = new Pairing(options, bot);
-    pairing.begin();
-    return { ok: true, pairing };
+    return { ok: true, pairing: new Pairing(options, bot) };
   }
 
-  private begin(): void {
+  /** Start the ten minutes of the code and the listening. Only once, and not for a pairing that has ended. */
+  begin(): void {
+    if (this.begun || FINAL.has(this.state)) {
+      return;
+    }
+    this.begun = true;
+    this.expiresAt = this.now() + this.ttlMs;
     this.armExpiryTimer();
     this.poller.start();
   }
@@ -169,11 +191,21 @@ export class Pairing {
     return FINAL.has(this.state);
   }
 
+  /** The Telegram steps are done and nothing has consumed the result yet: Resume can still connect it. */
+  isReady(): boolean {
+    this.expireIfDue();
+    return this.state === "ready";
+  }
+
   /** Look at the group again (the operator has just changed its settings). */
   async recheck(): Promise<void> {
     if (this.state === "waiting-for-group" && this.candidate !== undefined) {
-      const chatId = this.candidate;
-      await this.enqueue(() => this.inspectGroup(chatId));
+      // Read the candidate when the work runs, not now: a queued migration may move it in between.
+      await this.enqueue(async () => {
+        if (this.state === "waiting-for-group" && this.candidate !== undefined) {
+          await this.inspectGroup(this.candidate);
+        }
+      });
     }
   }
 
@@ -244,6 +276,7 @@ export class Pairing {
           await this.takeCode(update);
         } else if (this.state === "waiting-for-group") {
           await this.takeGroup(update);
+          await this.takeMigration(update);
         }
       }
     });
@@ -273,16 +306,33 @@ export class Pairing {
       .sendMessage({ chatId: message.chat.id, text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator." })
       .catch(() => undefined);
     const early = [...this.earlyGroups.values()];
+    const earlyMoves = this.earlyMigrations;
     this.earlyGroups.clear();
+    this.earlyMigrations = [];
     for (const event of early) {
       if (this.state !== "waiting-for-group") {
         break;
       }
       await this.takeGroup(event);
     }
+    // After the groups, in the order they arrived: a move only applies to the candidate the groups settled on.
+    for (const event of earlyMoves) {
+      if (this.state !== "waiting-for-group") {
+        break;
+      }
+      await this.takeMigration(event);
+    }
   }
 
   private rememberGroupEvent(update: BotUpdate): void {
+    const message = update.message;
+    if (message !== undefined && (typeof message.migrate_to_chat_id === "number" || typeof message.migrate_from_chat_id === "number")) {
+      this.earlyMigrations.push(update);
+      if (this.earlyMigrations.length > EARLY_GROUP_EVENTS) {
+        this.earlyMigrations.shift();
+      }
+      return;
+    }
     const change = update.my_chat_member;
     if (change === undefined) {
       return;
@@ -315,6 +365,31 @@ export class Pairing {
       this.chatTitle = change.chat.title;
     }
     await this.inspectGroup(change.chat.id);
+  }
+
+  /**
+   * Turning Topics on converts a basic group into a supergroup with a NEW chat id: Telegram sends a
+   * service message with `migrate_to_chat_id` on the old chat and `migrate_from_chat_id` on the new one.
+   * The sender is not checked. The guard is the candidate match: a `migrate_to_chat_id` counts only when it
+   * arrives in the candidate chat (`chat.id === candidate`), and a `migrate_from_chat_id` only when it names
+   * the candidate. A move from any other chat is ignored; the new chat is then inspected like any group.
+   */
+  private async takeMigration(update: BotUpdate): Promise<void> {
+    const message = update.message;
+    if (message === undefined || this.candidate === undefined || FINAL.has(this.state)) {
+      return;
+    }
+    let next: number | undefined;
+    if (typeof message.migrate_to_chat_id === "number" && message.chat.id === this.candidate) {
+      next = message.migrate_to_chat_id;
+    } else if (typeof message.migrate_from_chat_id === "number" && message.migrate_from_chat_id === this.candidate) {
+      next = message.chat.id;
+    }
+    if (next === undefined || next === this.candidate) {
+      return;
+    }
+    this.candidate = next;
+    await this.inspectGroup(next);
   }
 
   private async inspectGroup(chatId: number): Promise<void> {

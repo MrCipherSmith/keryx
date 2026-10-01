@@ -415,6 +415,28 @@ otuiTest("pairing: an expired code says so and offers Try again", async () => {
   }
 });
 
+otuiTest("resume: a pairing that already reached ready is connected from the list view", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  // The modal was closed after the Telegram steps: serve still holds the finished pairing and reports "pairing".
+  const { api, fake } = fakeClient({ status: ok(status("pairing")) });
+  fake.pairingNow = ok(pairing({ state: "ready", userId: 42, chatId: -1001234, chatTitle: "Team room", botUsername: "keryx_demo_bot" }));
+  const modal = await openModalFor(h, api);
+  try {
+    expect(h.captureCharFrame()).toContain("Resume");
+    await h.mockInput.typeText("c");
+    await settle(h, 10);
+    expect(fake.calls.pairingStatus).toBe(1);
+    expect(fake.calls.connectFinish).toEqual([{ userId: 42, chatId: -1001234 }]);
+    expect(fake.calls.startPairing).toEqual([]);
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("Step 4 of 4");
+    expect(frame).toContain("Team room");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
 otuiTest("token entry: x, X and Esc belong to the hidden field on a SECOND open too", async () => {
   const h = await mountChrome(OTUI!, { height: 40, kittyKeyboard: true });
   const { api, fake } = fakeClient();

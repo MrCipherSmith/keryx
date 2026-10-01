@@ -338,6 +338,9 @@ Two properties are easy to get wrong:
   accept only the local shell token, from loopback; the bearer token does not
   reach them, and the shell token reaches nothing else. Which principal a
   caller is follows from which token verified, still before the URL is read.
+  The shell sends a nonce-bound HMAC of that token, never the token itself, and
+  `serve` signs every answer, so a shell refuses an answer from a process that
+  only squats the port.
 
 ## Containment: two tiers, and the platform split matters
 

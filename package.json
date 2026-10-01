@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.3.51",
+  "version": "0.3.52",
   "description": "One project-local brain for your AI agents and your team. Code graph, wiki, memory, tests and task flows in .metaproject/, plus a sandboxed agent shell.",
   "private": false,
   "publishConfig": {

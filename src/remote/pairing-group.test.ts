@@ -142,6 +142,67 @@ describe("what is missing is named", () => {
   });
 });
 
+describe("a basic group that Topics turn into a supergroup (F-102)", () => {
+  // The bot was added to a basic group (old id); turning Topics on gives it a new supergroup id (GROUP).
+  const OLD_GROUP = -4_455_667_788;
+
+  test("migrate_to_chat_id on the old chat moves the candidate to the new id", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group", title: "Basic" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().problems).toEqual([]);
+  });
+
+  test("migrate_from_chat_id on the new chat does the same", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP, side: "from" });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+  });
+
+  test("the group event and the migration both arrive before the code: the candidate ends on the new id", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await openPairing(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group", title: "Basic" });
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP });
+    await settle();
+    await settle();
+    expect(pairing.snapshot().state).toBe("waiting-for-user");
+    expect(api.callCount("getChat")).toBe(0);
+
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted after the replay");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().problems).toEqual([]);
+  });
+
+  test("a migration of some other chat does not move the candidate", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await pairedOperator(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group" });
+    await until(() => pairing.snapshot().problems.length > 0, "the old id to be reported as not inspectable");
+    const inspected = api.callCount("getChat");
+
+    api.pushMigration({ fromId: STRANGER_ID, oldChatId: -999_000_111, newChatId: GROUP });
+    api.pushMigration({ fromId: STRANGER_ID, oldChatId: -999_000_111, newChatId: GROUP, side: "from" });
+    await settle();
+    await settle();
+    expect(api.callCount("getChat")).toBe(inspected);
+    expect(pairing.snapshot().state).toBe("waiting-for-group");
+    expect(pairing.snapshot().chatId).toBeUndefined();
+  });
+});
+
 describe("only the paired operator can nominate a group", () => {
   test("a stranger adding the bot to a group is ignored", async () => {
     const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
