@@ -1,0 +1,164 @@
+[
+  {
+    "id": "J-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`--without <component>` is accepted whenever the profile declares the component, even when excluding it cannot change the plan. Profile `full` lists every module unconditionally, so all 23 `--without <component>` ids are accepted, exit 0 and install the same 56 modules; the dry-run prints `✗ framework:react — explicitly excluded via --without` while listing react-review-skills, react-rules and react-skills. Same for react/nestjs/vue/angular/nextjs-nuxt `--without lang:ts-js-node`, nextjs-nuxt `--without framework:vue`, django/fastapi `--without lang:python`: 31 accepted no-op `--without` ids across 25 profiles.",
+    "impact": "The silent-success case AC2 targets; the user is told a component was excluded and its files are installed anyway. The refusal's 'valid --without ids' list advertises these no-op ids.",
+    "suggested_fix": "After selection and the --without filter, refuse any --without component none of whose modules left the selection, with the 'cannot change the plan' error; build the valid list from removable components only. Add a fixture where a declared component's module is also in profile.modules.",
+    "evidence": "verified — scratchpad/r365/noop-without.ts over every (profile, flag, id) through planInstall: 'no-op --without=31'; CLI probe one.ts `--profile full --target claude --without framework:react --dry-run` exits 0 with the ✗ line and all react-* modules.",
+    "confidence": "high",
+    "file": "src/gdskills/manifest/plan.ts",
+    "line": 409,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/manifest/plan.ts:407",
+        "src/gdskills/manifest/plan.ts:409",
+        "src/gdskills/manifest/plan.ts:424",
+        "src/gdskills/manifest/plan.ts:425"
+      ],
+      "enumeration_method": "keryx ctx rg 'ValidIds|checkIds' over src: withValidIds/withoutValidIds are built once in planInstall and read only by the two checkIds calls; no other site validates --with/--without ids."
+    },
+    "global_id": "2026-10-01-ingest-main#J-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f365b889130f7a924701ee9ecbfcae07b776cd39 (PR #829): --without id valid only when it changes the selected modules; verifier refuted at head c81af15e"
+    }
+  },
+  {
+    "id": "J-002",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "withValidIds is every component plus every closure module, so a `--with` id already selected is accepted though it cannot change the plan (`core --with core-common-rules`, `react --with framework:react`); 232 such ids across bundled profiles.",
+    "impact": "Falls short of AC2's literal 'cannot change the plan … exits non-zero'; comment and cli-reference describe a narrower rule than the AC.",
+    "suggested_fix": "Refuse a `--with` id whose modules are all already selected, or reword AC2 and docs; record the choice.",
+    "evidence": "verified — scratchpad/r365/noop-without.ts: 'accepted=984 no-op --with=232'.",
+    "confidence": "high",
+    "file": "src/gdskills/manifest/plan.ts",
+    "line": 407,
+    "global_id": "2026-10-01-ingest-main#J-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f365b889130f7a924701ee9ecbfcae07b776cd39 (PR #829): --with id valid only when it changes the selected modules; verifier refuted at head c81af15e"
+    }
+  },
+  {
+    "id": "J-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "review-orchestrator detail still says the dry-run `Apply this plan:` hint prints only --profile and --target and must be re-typed; T6 fixed that. The .metaproject projection has the same text.",
+    "impact": "Agents are told the hint is wrong when it is now correct.",
+    "suggested_fix": "Rewrite the bullet in both copies: the hint repeats every plan-shaping flag; run it as printed.",
+    "evidence": "verified — `keryx ctx rg --hidden \"hint is not the whole command\"` hits both copies at :243; probe-install.ts round-trips 248 hints to identical plans.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.detail.md",
+    "line": 243,
+    "global_id": "2026-10-01-ingest-main#J-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c81af15ece28980974208558bfc8b04f669be785 (PR #829): review-orchestrator SKILL.detail.md:243 now says the hint is the whole command; verifier refuted"
+    }
+  },
+  {
+    "id": "J-004",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC2 hint tests call only the pure installApplyCommand helper; no test drives installFromManifest's dry-run output. Emptying the call-site arguments (the exact pre-T6 bug) leaves every test green.",
+    "impact": "The regression AC2 names is not pinned where it happened.",
+    "suggested_fix": "Add a test running `skills install --profile core --with capability:mobx --dry-run` and asserting the printed `Apply this plan:` line contains `--with capability:mobx`.",
+    "evidence": "verified — mutate.ts skills-oldhint: scratch copy with call-site args emptied, `bun test src/commands/skills-install-route.test.ts` 17 pass 0 fail.",
+    "confidence": "high",
+    "file": "src/commands/skills.ts",
+    "line": 576,
+    "global_id": "2026-10-01-ingest-main#J-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f365b889130f7a924701ee9ecbfcae07b776cd39 (PR #829): skills-install-route.test.ts drives the dry-run hint through skills install; verifier refuted by mutation"
+    }
+  },
+  {
+    "id": "J-005",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "frontmatterScalar changes tier reads beyond BOM: `model_tier: \"deep\",`, `model_tier:deep`, mismatched quote and a `---yaml` fence no longer declare; `# comment`, `model_tier : deep`, block scalar and a `----` line now do.",
+    "impact": "0 differences over 374 real SKILL*.md files (67 declare a tier).",
+    "suggested_fix": "None required.",
+    "evidence": "verified — scratchpad/r365/diff-fm.ts, main vs HEAD: 'tier: files=374 declared=67 diffs=0' plus 17 synthetic cases.",
+    "confidence": "high",
+    "file": "src/gdskills/model-tier.ts",
+    "line": 1505,
+    "global_id": "2026-10-01-ingest-main#J-005",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — intended stricter frontmatter reading; 0 differences over 374 real SKILL files (report J-005)"
+    }
+  },
+  {
+    "id": "J-006",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Presence checks are stricter: `name:x`, a deeply nested version, an empty version are now missing; `name: x # comment` equals `name: x` for name-unique.",
+    "impact": "0 finding differences main vs HEAD over bundled, .metaproject, project-skills, ~/.vantage-frontend/skills and ~/.claude/skills.",
+    "suggested_fix": "None required.",
+    "evidence": "verified — diff-fm.ts evaluateBundledTree on each root; synthetic tree shows exactly 4 new-only findings.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "line": 1843,
+    "global_id": "2026-10-01-ingest-main#J-006",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — YAML-correct tightening; 0 finding differences on all real roots (report J-006)"
+    }
+  },
+  {
+    "id": "J-007",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The qualifier says '`skills install --target` from a manifest' (reviewers.ts:451 'with `--target`'), but any non-legacy --profile or --with/--without/--include-deprecated also takes the manifest route (installRoute, skills.ts:313).",
+    "impact": "A reader may think `skills install --profile react` overwrites rules/core.",
+    "suggested_fix": "Say 'the manifest form' in both strings.",
+    "evidence": "verified — probe-install.ts `[--profile core]` without --target took the manifest route.",
+    "confidence": "medium",
+    "file": "src/gdskills/import-skills.ts",
+    "line": 433,
+    "global_id": "2026-10-01-ingest-main#J-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c81af15ece28980974208558bfc8b04f669be785 (PR #829): qualifier says 'the manifest form of skills install' in import-skills.ts, reviewers.ts and reviewer-skill-creator; verifier refuted"
+    }
+  },
+  {
+    "id": "J-008",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "An unknown profile no longer reports unknown --with/--without ids alongside it.",
+    "impact": "Cosmetic; exit 1 either way.",
+    "suggested_fix": "Optional.",
+    "evidence": "verified — probe-install.ts `[--profile nope-profile --with nope]` prints only 'unknown profile'.",
+    "confidence": "high",
+    "file": "src/gdskills/manifest/plan.ts",
+    "line": 348,
+    "global_id": "2026-10-01-ingest-main#J-008",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — cosmetic; unknown profile still exits 1 (report J-008)"
+    }
+  },
+  {
+    "id": "J-009",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "'import vantage reviewers' now routes first to review-orchestrator (65) not reviewer-skill-creator (20); 'import overlay reviewers' routes to reviewer-skill-creator at 85.",
+    "impact": "Intended effect of AC1.",
+    "suggested_fix": "None required.",
+    "evidence": "verified — `bun src/cli.ts skills route` for both phrases.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/core/reviewer-skill-creator/SKILL.md",
+    "line": 20,
+    "global_id": "2026-10-01-ingest-main#J-009",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith, 2026-10-01 — intended effect of AC1 (report J-009)"
+    }
+  }
+]
