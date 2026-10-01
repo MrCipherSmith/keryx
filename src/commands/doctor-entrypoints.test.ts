@@ -155,6 +155,49 @@ describe("keryx doctor: entrypoints (flow 361, AC11)", () => {
     }
   });
 
+  // Flow 363 review round 1, F-005: each runtime's own target, and a fix that clears the warning.
+  test("a stray keryx:rules block names its own runtime's local target only", async () => {
+    const committed = { "AGENTS.md": AGENTS, "CLAUDE.md": "# Claude\n" };
+    for (const [file, target, other] of [["CLAUDE.md", "CLAUDE.local.md", "AGENTS.override.md"], ["AGENTS.md", "AGENTS.override.md", "CLAUDE.local.md"]] as const) {
+      await withRepo("keryx-doctor-entry-rules-own-", { ...MIGRATED, committed }, async (root) => {
+        await writeFreshLocalTargets(root);
+        await writeRel(root, file, `${committed[file]}\n${RULES_BLOCK}`);
+        const check = await checkEntrypoints(root);
+        expectWarn(check, `belongs in ${target}`);
+        expect(check.detail).not.toContain(other);
+      });
+    }
+  });
+
+  test("with an AGENTS.override.md keryx did not generate, the rules warning says update leaves the block and names the fix that clears it", async () => {
+    await withRepo("keryx-doctor-entry-rules-foreign-", MIGRATED, async (root) => {
+      await writeRel(root, "CLAUDE.local.md", `# Local Claude Instructions\n\n${BLOCK}`);
+      await writeRel(root, "AGENTS.override.md", "# my own override\n");
+      await writeRel(root, "AGENTS.md", `${AGENTS}\n${RULES_BLOCK}`);
+      const check = await checkEntrypoints(root);
+      expect(check.status).toBe("warn");
+      expect(check.detail).toContain("AGENTS.md carries the rules-export keryx:rules block");
+      expect(check.detail).toContain("keryx update leaves it there");
+      expect(check.fix).toContain("remove AGENTS.override.md");
+    });
+  });
+
+  test("with a tracked CLAUDE.local.md, the rules warning names untracking it as the fix", async () => {
+    await withRepo(
+      "keryx-doctor-entry-rules-tracked-",
+      { ...MIGRATED, committed: { "AGENTS.md": AGENTS, "CLAUDE.md": "# Claude\n", "CLAUDE.local.md": `# Team-owned local\n\n${BLOCK}` } },
+      async (root) => {
+        await writeRel(root, "AGENTS.override.md", renderCodexOverride({ source: "AGENTS.md", sourceContent: AGENTS, block: BLOCK }));
+        await writeRel(root, "CLAUDE.md", `# Claude\n\n${RULES_BLOCK}`);
+        const check = await checkEntrypoints(root);
+        expect(check.status).toBe("warn");
+        expect(check.detail).toContain("CLAUDE.md carries the rules-export keryx:rules block");
+        expect(check.detail).toContain("CLAUDE.local.md is tracked in git");
+        expect(check.fix).toContain("git rm --cached CLAUDE.local.md");
+      },
+    );
+  });
+
   test("a keryx:rules block committed in HEAD, or one in a file whose scope is shared, is not warned about", async () => {
     await withRepo(
       "keryx-doctor-entry-rules-head-",

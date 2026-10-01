@@ -27,8 +27,8 @@ import { writeContained } from "../lib/contained-write";
 import { isPathIgnored } from "../lib/git-local-ignore";
 import { syncMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
-import { insertRulesBlockAfterIndex } from "../rules/codex-override";
-import { hasManagedRulesBlock } from "../rules/managed-index-block";
+import { overrideRulesSlot, parseCodexOverrideProvenance, withOverrideRulesSlot, withoutOverrideRulesSlot } from "../rules/codex-override";
+import { UnterminatedMetaprojectReferenceError } from "../rules/managed-index-block";
 import { ignoredLocalTargetPaths, localRootEntry, normalizeEntrypointTargets, type EntrypointRuntime } from "../rules/entrypoint-targets";
 import {
   collectCanonicalRules,
@@ -45,6 +45,7 @@ import {
   probeMarkdownBlock,
   uninstallMarkdownBlock,
   type ManagedBlockSpec,
+  type MarkdownBlockInspection,
 } from "./markdown-block";
 import {
   SUBSYSTEM_RULES_EXPORT,
@@ -215,17 +216,39 @@ function entrypointRulesExportSurface(
     customUninstall: (root) => uninstallEntrypointRulesExport(root, runtime),
     probe: async (root) => {
       const target = resolveRulesExportTarget(root, runtime);
-      return target.kind === "file" ? probeRulesExport(root, target.path) : [];
+      if (target.kind === "none") return [];
+      const inspection = await inspectTarget(root, runtime, target);
+      return inspection.state === "present" ? [] : [inspection.message ?? `${target.path}: file is missing`];
     },
     inspect: async (root) => {
       const target = resolveRulesExportTarget(root, runtime);
-      return target.kind === "file" ? inspectRulesExport(root, target.path) : { state: "absent-file", message: target.reason };
+      return target.kind === "file" ? inspectTarget(root, runtime, target) : { state: "absent-file", message: target.reason };
     },
     dryRunWarnings: async (root) => {
       const target = resolveRulesExportTarget(root, runtime);
-      return [...(target.kind === "none" ? [target.reason] : []), ...(await dryRunRulesExportWarnings(root))];
+      const placement: string[] = [];
+      if (target.kind === "none") {
+        placement.push(target.reason);
+      } else {
+        const stray = await strayLocalCopy(root, runtime, target.path);
+        if (stray !== undefined) placement.push(`${stray}: the keryx:rules block left there would be removed — the block goes to ${target.path} now.`);
+      }
+      return [...placement, ...(await dryRunRulesExportWarnings(root))];
+    },
+    dryRunUninstallExtras: async (root) => {
+      const target = resolveRulesExportTarget(root, runtime);
+      if (target.kind === "none") return { warnings: [target.reason], removesElsewhere: false };
+      const stray = await strayLocalCopy(root, runtime, target.path);
+      return stray === undefined
+        ? { warnings: [], removesElsewhere: false }
+        : { warnings: [`${stray}: the keryx:rules block left there would be removed too — the block's file is ${target.path}.`], removesElsewhere: true };
     },
   };
+}
+
+/** The block's state in the resolved file: keryx's own slot in a Codex override, the whole file anywhere else. */
+async function inspectTarget(root: string, runtime: EntrypointRuntime, target: { readonly path: string; readonly scope: "local" | "shared" }): Promise<MarkdownBlockInspection> {
+  return runtime === "codex" && target.scope === "local" ? inspectOverrideSlot(root, target.path) : inspectRulesExport(root, target.path);
 }
 
 /**
@@ -251,33 +274,99 @@ async function installEntrypointRulesExport(root: string, runtime: EntrypointRun
 }
 
 /**
- * The first install into a keryx-generated `AGENTS.override.md` puts the
- * block right after the index block — where every regeneration carries it
- * (`renderCodexOverride`) — instead of appending it after the team text, so
- * the next `keryx update` does not rewrite the file only to move it. An
- * override that already has the block is refreshed in place like any file.
+ * A keryx-generated `AGENTS.override.md` holds keryx's block in its own slot
+ * (`overrideRulesSlot`): right after the index block, where every
+ * regeneration carries it (`renderCodexOverride`), ahead of the copy of the
+ * team file. Install fills or refreshes that slot and nothing else — the copy
+ * is the team's text, and a block inside it is never edited (flow 363 review
+ * round 1, F-003).
  */
 async function installIntoOverride(root: string, relativePath: string): Promise<CustomInstallResult> {
   const { spec, skipped } = await rulesSpec(root);
-  if ((await refuseEscapingSymlink(root, relativePath)) === undefined) {
-    const content = await readFile(path.join(root, ...relativePath.split("/")), "utf8");
-    const placed = hasManagedRulesBlock(content) ? undefined : insertRulesBlockAfterIndex(content, spec.render());
-    if (placed !== undefined) {
-      await writeContained(root, relativePath, placed);
-      return { errors: [], warnings: skippedMessages(skipped) };
-    }
+  const warnings = skippedMessages(skipped);
+  const refusal = await refuseEscapingSymlink(root, relativePath);
+  if (refusal !== undefined) return { errors: [refusal], warnings };
+  const content = await readFile(path.join(root, ...relativePath.split("/")), "utf8");
+  let next: string | undefined;
+  try {
+    next = withOverrideRulesSlot(content, spec.render());
+  } catch (error) {
+    if (error instanceof UnterminatedMetaprojectReferenceError) return { errors: [error.message], warnings };
+    throw error;
   }
-  return installRulesExport(root, relativePath);
+  if (next === undefined) {
+    return { errors: [`${relativePath}: has no keryx:index block to place the keryx:rules block after — run \`keryx update\` to generate it again, then install again.`], warnings };
+  }
+  if (next !== content) await writeContained(root, relativePath, next);
+  return { errors: [], warnings };
+}
+
+/** Takes keryx's block out of the override's slot; the copy of the team file is left as it is. True when a block was removed. */
+async function uninstallFromOverride(root: string, relativePath: string): Promise<boolean> {
+  const refusal = await refuseEscapingSymlink(root, relativePath);
+  if (refusal !== undefined) throw new Error(refusal);
+  const content = await readTextIfPresent(root, relativePath);
+  if (content === undefined) return false;
+  const next = withoutOverrideRulesSlot(content);
+  if (next === content) return false;
+  await writeContained(root, relativePath, next);
+  return true;
+}
+
+/** `inspectMarkdownBlock`'s states for keryx's slot in an override; an override keryx did not generate has no slot. */
+async function inspectOverrideSlot(root: string, relativePath: string): Promise<MarkdownBlockInspection> {
+  const refusal = await refuseEscapingSymlink(root, relativePath);
+  if (refusal !== undefined) return { state: "malformed", message: refusal };
+  const content = await readTextIfPresent(root, relativePath);
+  if (content === undefined) return { state: "absent-file" };
+  const missing: MarkdownBlockInspection = { state: "no-block", message: `${relativePath}: missing the keryx:rules block` };
+  if (parseCodexOverrideProvenance(content) === undefined) return missing;
+  let slot: ReturnType<typeof overrideRulesSlot>;
+  try {
+    slot = overrideRulesSlot(content);
+  } catch (error) {
+    if (error instanceof UnterminatedMetaprojectReferenceError) return { state: "malformed", message: error.message };
+    throw error;
+  }
+  if (slot === undefined) return missing;
+  const { spec } = await rulesSpec(root);
+  if (slot.block.replace(/\r\n/g, "\n").trim() !== spec.render().trim()) {
+    return { state: "stale", message: `${relativePath}: keryx:rules block is stale — re-run the install` };
+  }
+  return { state: "present" };
+}
+
+async function readTextIfPresent(root: string, relativePath: string): Promise<string | undefined> {
+  try {
+    return await readFile(path.join(root, ...relativePath.split("/")), "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
 }
 
 async function uninstallEntrypointRulesExport(root: string, runtime: EntrypointRuntime): Promise<boolean | CustomUninstallResult> {
   const target = resolveRulesExportTarget(root, runtime);
   if (target.kind === "none") return { removed: false, warnings: [target.reason] };
-  const outcome = await uninstallRulesExport(root, target.path);
+  const outcome =
+    runtime === "codex" && target.scope === "local" ? await uninstallFromOverride(root, target.path) : await uninstallRulesExport(root, target.path);
   const cleanup = await removeFromOtherCandidate(root, runtime, target.path);
   const removed = typeof outcome === "boolean" ? outcome : outcome.removed;
   const warnings = [...cleanup, ...(typeof outcome === "boolean" ? [] : (outcome.warnings ?? []))];
   return warnings.length === 0 ? removed || cleanup.length > 0 : { removed: removed || cleanup.length > 0, warnings };
+}
+
+/**
+ * The runtime's local file when it still holds a `keryx:rules` block keryx
+ * put there while the block's file is `written` — installed while the scope
+ * was local. For Codex only keryx's slot in a keryx-generated override
+ * counts; a block in its copy of `AGENTS.md` is the team's.
+ */
+async function strayLocalCopy(root: string, runtime: EntrypointRuntime, written: string): Promise<string | undefined> {
+  const localFile = localRootEntry(runtime).path;
+  if (written === localFile) return undefined;
+  const inspection = runtime === "codex" ? await inspectOverrideSlot(root, localFile) : await inspectRulesExport(root, localFile);
+  return inspection.state === "present" || inspection.state === "stale" ? localFile : undefined;
 }
 
 /**
@@ -287,12 +376,14 @@ async function uninstallEntrypointRulesExport(root: string, runtime: EntrypointR
  * move. Returns a line for the output when something was removed.
  */
 async function removeFromOtherCandidate(root: string, runtime: EntrypointRuntime, written: string): Promise<string[]> {
-  const localFile = localRootEntry(runtime).path;
-  if (written === localFile) return [];
-  const inspection = await inspectRulesExport(root, localFile);
-  if (inspection.state !== "present" && inspection.state !== "stale") return [];
-  const { spec } = await rulesSpec(root);
-  if (!(await uninstallMarkdownBlock(root, localFile, undefined, spec))) return [];
+  const localFile = await strayLocalCopy(root, runtime, written);
+  if (localFile === undefined) return [];
+  if (runtime === "codex") {
+    if (!(await uninstallFromOverride(root, localFile))) return [];
+  } else {
+    const { spec } = await rulesSpec(root);
+    if (!(await uninstallMarkdownBlock(root, localFile, undefined, spec))) return [];
+  }
   return [`${localFile}: removed the keryx:rules block left there — the block is in ${written} now.`];
 }
 

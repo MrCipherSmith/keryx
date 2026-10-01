@@ -108,7 +108,13 @@ export function resolveSurfaceSelectionLenient(
 // Shared result shapes
 // ---------------------------------------------------------------------------
 
-export type InstallSurfaceStatus = "installed" | "would-install" | "satisfied-by-runtime" | "failed";
+/**
+ * `skipped`: the surface succeeded but wrote nothing, because this project
+ * gives it no file (flow 363: rules-export for Codex with mode `skip`, no
+ * team file, an override keryx did not generate, or a tracked
+ * `CLAUDE.local.md`). Its warnings say why; nothing is recorded as installed.
+ */
+export type InstallSurfaceStatus = "installed" | "would-install" | "skipped" | "satisfied-by-runtime" | "failed";
 export type UninstallSurfaceStatus = "removed" | "nothing-to-remove" | "would-remove" | "satisfied-by-runtime" | "failed";
 
 export interface SurfaceResult<Status extends string = InstallSurfaceStatus | UninstallSurfaceStatus> {
@@ -192,6 +198,11 @@ function warningsFor(surface: SurfaceAdapter): string[] {
   return surface.confidence === "experimental"
     ? ["experimental — verify on a live install", ...(surface.riskNotes ?? [])]
     : [];
+}
+
+/** A surface whose file follows the project (`relativePathFor`) and that this project gives none: it writes nothing. */
+function writesNothingHere(surface: SurfaceAdapter, customPath: string | undefined): boolean {
+  return customPath === undefined && surface.relativePathFor !== undefined;
 }
 
 function baseResult(surface: SurfaceAdapter, file?: string): Pick<SurfaceResult, "surfaceId" | "flag" | "subsystem" | "confidence" | "file"> {
@@ -503,7 +514,7 @@ export async function installIntegration(
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
       results.push({
         ...baseResult(surface, customPath),
-        status: dryRun.status,
+        status: dryRun.status === "would-install" && writesNothingHere(surface, customPath) ? "skipped" : dryRun.status,
         errors: dryRun.errors,
         warnings: [...warningsFor(surface), ...dryRun.warnings],
       });
@@ -545,7 +556,7 @@ export async function installIntegration(
     }
     results.push({
       ...baseResult(surface, customPath),
-      status: "installed",
+      status: writesNothingHere(surface, customPath) ? "skipped" : "installed",
       errors: [],
       warnings: [...warningsFor(surface), ...customWarnings],
     });
@@ -680,7 +691,10 @@ export async function uninstallIntegration(
       // `failed` here exactly as the real run would.
       const dryRun = await customUninstallDryRun(root, surface, file);
       if (dryRun.errors.length > 0) errors.push(...dryRun.errors);
-      results.push({ ...baseResult(surface, customPath), status: dryRun.status, errors: dryRun.errors, warnings: warningsFor(surface) });
+      // Flow 363: what else the real run removes (a block left in the runtime's other file).
+      const extras = surface.dryRunUninstallExtras ? await surface.dryRunUninstallExtras(root) : { warnings: [], removesElsewhere: false };
+      const status = dryRun.status === "nothing-to-remove" && extras.removesElsewhere ? "would-remove" : dryRun.status;
+      results.push({ ...baseResult(surface, customPath), status, errors: dryRun.errors, warnings: [...warningsFor(surface), ...extras.warnings] });
       continue;
     }
     // N1: a thrown error from `customUninstall` (markdown-block surfaces

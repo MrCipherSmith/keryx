@@ -170,7 +170,8 @@ describe("flow 363 AC3: no Codex target writes nothing and succeeds with a warni
     await fixture([LOCAL_CLAUDE, { ...LOCAL_CODEX, mode: "skip" }]);
     const result = await installIntegration(root, "codex", { surfaces: ["rules"] });
     expect(result.errors).toEqual([]);
-    expect(result.results[0]!.status).toBe("installed");
+    // Flow 363 end-to-end check: nothing was written, so the status says so.
+    expect(result.results[0]!.status).toBe("skipped");
     expect(result.results[0]!.file).toBeUndefined();
     expect(result.results[0]!.warnings.join("\n")).toContain('mode "skip"');
     expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
@@ -203,6 +204,7 @@ describe("flow 363 AC3: no Codex target writes nothing and succeeds with a warni
   test("the dry run and bundle --render-for report the same reason and write nothing", async () => {
     await fixture([LOCAL_CLAUDE, { ...LOCAL_CODEX, mode: "skip" }]);
     const dryRun = await installIntegration(root, "codex", { surfaces: ["rules"], dryRun: true });
+    expect(dryRun.results[0]!.status).toBe("skipped");
     expect(dryRun.results[0]!.warnings.join("\n")).toContain('mode "skip"');
     const rendered = await renderRulesForHarnesses(root, ["codex"]);
     expect(rendered[0]).toMatchObject({ harness: "codex", status: "unchanged" });
@@ -272,6 +274,153 @@ describe("flow 363 AC6: every entry point names the same resolved file", () => {
 
     expect(result.results[0]).toMatchObject({ status: "installed", file: "CLAUDE.md" });
     expect(count(await readRel("CLAUDE.md"), RULES_START)).toBe(1);
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+  });
+});
+
+// Flow 363 review round 1. Each test is the reproduction the verifier ran
+// (`scratchpad/r363/repro*.ts`, `scratchpad/t363/s5c`), as a real temp repo.
+const TEAM_RULES = `${RULES_START}\n- the team's committed rule list\n<!-- /keryx:rules -->\n`;
+
+describe("flow 363 review F-001: a cloned manifest cannot point the block at another file", () => {
+  test("a shared path naming .env, or a Codex source naming package.json, is never written", async () => {
+    await fixture([{ runtime: "claude", scope: "shared", path: ".env" }, { ...LOCAL_CODEX, source: "package.json" }]);
+    await writeRel(".gitignore", ".env\n");
+    await writeRel(".env", "API_KEY=secret\n");
+    await writeRel("package.json", '{ "name": "x" }\n');
+
+    const claude = await installIntegration(root, "claude", { surfaces: ["rules"] });
+    const codex = await installIntegration(root, "codex", { surfaces: ["rules"] });
+
+    expect(claude.errors).toEqual([]);
+    expect(codex.errors).toEqual([]);
+    expect(await readRel(".env")).toBe("API_KEY=secret\n");
+    expect(await readRel("package.json")).toBe('{ "name": "x" }\n');
+    // Junk entries fall back to the team file, as an unsettled legacy entry does.
+    expect(claude.results[0]!.file).toBe("CLAUDE.md");
+    expect(codex.results[0]!.file).toBe("AGENTS.md");
+  });
+
+  test("a shared path naming the manifest leaves the manifest byte for byte", async () => {
+    await fixture([{ runtime: "claude", scope: "shared", path: ".metaproject/metaproject.json" }, LOCAL_CODEX]);
+    const manifest = await readRel(".metaproject/metaproject.json");
+    const result = await installIntegration(root, "claude", { surfaces: ["rules"] });
+    expect(result.errors).toEqual([]);
+    expect(await readRel(".metaproject/metaproject.json")).toBe(manifest);
+    expect(result.results[0]!.file).toBe("CLAUDE.md");
+  });
+});
+
+describe("flow 363 review F-003: only keryx's own slot in AGENTS.override.md is carried, written or removed", () => {
+  test("a block the team removed from AGENTS.md is not resurrected by the next regeneration", () => {
+    const teamWithBlock = `${AGENTS}\n${TEAM_RULES}`;
+    const before = renderCodexOverride({ source: "AGENTS.md", sourceContent: teamWithBlock, block: INDEX_BLOCK });
+    expect(count(before, RULES_START)).toBe(1);
+    const after = renderCodexOverride({ source: "AGENTS.md", sourceContent: AGENTS, block: INDEX_BLOCK, previous: before });
+    expect(count(after, RULES_START)).toBe(0);
+    expect(after).toBe(renderCodexOverride({ source: "AGENTS.md", sourceContent: AGENTS, block: INDEX_BLOCK }));
+  });
+
+  test("a block keryx installed in its slot is still carried across a regeneration", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    await writeKeryxOverride();
+    await installIntegration(root, "codex", { surfaces: ["rules"] });
+    const installed = await readRel("AGENTS.override.md");
+    const revised = `${AGENTS}\nMore team text.\n`;
+    const regenerated = renderCodexOverride({ source: "AGENTS.md", sourceContent: revised, block: INDEX_BLOCK, previous: installed });
+    expect(count(regenerated, RULES_START)).toBe(1);
+    expect(regenerated.endsWith(revised)).toBe(true);
+  });
+
+  test("with the block committed in AGENTS.md, install and uninstall never edit the override's copy of it (end-to-end check s5c)", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    const team = `${AGENTS}\n${TEAM_RULES}`;
+    await writeRel("AGENTS.md", team);
+    git(["commit", "-q", "-am", "team commits the rules block"]);
+    const override = renderCodexOverride({ source: "AGENTS.md", sourceContent: team, block: INDEX_BLOCK });
+    await writeRel("AGENTS.override.md", override);
+
+    const install = await installIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(install.results[0]).toMatchObject({ status: "installed", file: "AGENTS.md" });
+    expect(install.results[0]!.warnings.join("\n")).not.toContain("AGENTS.override.md");
+    // Byte for byte: the copy, and so the provenance hash it was recorded with, are untouched.
+    expect(await readRel("AGENTS.override.md")).toBe(override);
+
+    const dryUninstall = await uninstallIntegration(root, "codex", { surfaces: ["rules"], dryRun: true });
+    expect(dryUninstall.results[0]!.warnings.join("\n")).not.toContain("AGENTS.override.md");
+    await uninstallIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(await readRel("AGENTS.override.md")).toBe(override);
+  });
+
+  test("a stale copy of a block in the override's team text is left alone; install and uninstall touch only the slot", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    // Generated while AGENTS.md still carried the block; the team has removed it since.
+    const stale = renderCodexOverride({ source: "AGENTS.md", sourceContent: `${AGENTS}\n${TEAM_RULES}`, block: INDEX_BLOCK });
+    await writeRel("AGENTS.override.md", stale);
+
+    const install = await installIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(install.results[0]).toMatchObject({ status: "installed", file: "AGENTS.override.md" });
+    const installed = await readRel("AGENTS.override.md");
+    expect(installed.endsWith(`${AGENTS}\n${TEAM_RULES}`)).toBe(true);
+    expect(installed.indexOf(RULES_START)).toBeLessThan(installed.indexOf("# Team"));
+    expect(count(installed, "the team's committed rule list")).toBe(1);
+
+    await uninstallIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(await readRel("AGENTS.override.md")).toBe(stale);
+  });
+});
+
+describe("flow 363 review F-004: a tracked CLAUDE.local.md is the team's and is never written", () => {
+  test("install writes nothing, says how to fix it, and git status stays clean", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    await writeRel("CLAUDE.local.md", "# Team-owned local\n");
+    git(["add", "CLAUDE.local.md"]);
+    git(["commit", "-q", "-m", "team tracks CLAUDE.local.md"]);
+
+    const dryRun = await installIntegration(root, "claude", { surfaces: ["rules"], dryRun: true });
+    expect(dryRun.results[0]!.warnings.join("\n")).toContain("git rm --cached CLAUDE.local.md");
+    const result = await installIntegration(root, "claude", { surfaces: ["rules"] });
+
+    expect(result.errors).toEqual([]);
+    expect(result.results[0]!.status).toBe("skipped");
+    expect(result.results[0]!.file).toBeUndefined();
+    expect(result.results[0]!.warnings.join("\n")).toContain("git rm --cached CLAUDE.local.md");
+    expect(await readRel("CLAUDE.local.md")).toBe("# Team-owned local\n");
+    expect(await readRel("CLAUDE.md")).toBe(CLAUDE);
+    expect(statusLines()).toEqual([]);
+  });
+});
+
+describe("flow 363 end-to-end check: uninstall --dry-run names the cleanup a real run does", () => {
+  test("a block keryx left in AGENTS.override.md is named by the dry run and removed by the real run", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    const override = await writeKeryxOverride();
+    await installIntegration(root, "codex", { surfaces: ["rules"] });
+    // The team then commits a block in AGENTS.md: the surface follows it there.
+    await writeRel("AGENTS.md", `${AGENTS}\n${TEAM_RULES}`);
+    git(["commit", "-q", "-am", "team commits the rules block"]);
+
+    const dryRun = await uninstallIntegration(root, "codex", { surfaces: ["rules"], dryRun: true });
+    expect(dryRun.results[0]).toMatchObject({ status: "would-remove", file: "AGENTS.md" });
+    expect(dryRun.results[0]!.warnings.join("\n")).toContain("AGENTS.override.md");
+    expect(count(await readRel("AGENTS.override.md"), RULES_START)).toBe(1);
+
+    const real = await uninstallIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(real.results[0]!.warnings.join("\n")).toContain("AGENTS.override.md");
+    expect(await readRel("AGENTS.override.md")).toBe(override);
+  });
+
+  test("a block left in CLAUDE.local.md after a switch to shared makes the dry run report would-remove", async () => {
+    await fixture([LOCAL_CLAUDE, LOCAL_CODEX]);
+    await installIntegration(root, "claude", { surfaces: ["rules"] });
+    const manifestPath = ".metaproject/metaproject.json";
+    await writeRel(manifestPath, (await readRel(manifestPath)).replace('"path": "CLAUDE.local.md",\n        "scope": "local"', '"path": "CLAUDE.md",\n        "scope": "shared"'));
+
+    const dryRun = await uninstallIntegration(root, "claude", { surfaces: ["rules"], dryRun: true });
+    expect(dryRun.results[0]).toMatchObject({ status: "would-remove", file: "CLAUDE.md" });
+    expect(dryRun.results[0]!.warnings.join("\n")).toContain("CLAUDE.local.md");
+    const real = await uninstallIntegration(root, "claude", { surfaces: ["rules"] });
+    expect(real.results[0]!.status).toBe("removed");
     expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
   });
 });

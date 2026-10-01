@@ -280,6 +280,15 @@ export interface SurfaceAdapter {
    */
   customUninstall?(projectRoot: string): Promise<boolean | CustomUninstallResult>;
   /**
+   * Flow 363 (end-to-end check): what a real `customUninstall` removes
+   * besides the file `inspect` describes — the rules-export surface also
+   * takes a block it left in the runtime's other file out — so
+   * `keryx integrations uninstall --dry-run` names it, and reports
+   * `would-remove` when that is the only thing a real run would remove.
+   * Optional; most surfaces remove nothing else.
+   */
+  dryRunUninstallExtras?(projectRoot: string): Promise<{ readonly warnings: readonly string[]; readonly removesElsewhere: boolean }>;
+  /**
    * Health check for a surface that has no `merge`/`strip` to validate
    * against — a non-JSON artifact (a generated plugin file, a markdown
    * instructions block) or a surface satisfied entirely by keryx's own

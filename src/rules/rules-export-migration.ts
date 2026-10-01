@@ -10,11 +10,16 @@
 // which re-renders it from the current rules library into the local target
 // the surface now resolves to. Kept out of `./entrypoint-writers` so the
 // block writers do not depend on the integrations installer.
+//
+// The other direction (review round 1, F-002): a runtime switched from local
+// to shared loses its local target, the installed block with it;
+// `rulesBlocksLeavingLocalTargets` (before) names those runtimes, and the
+// same `reinstallRulesExport` (after) writes the block into the team file.
 
 import { installIntegration } from "../integrations/installer";
 import type { EntrypointRuntime } from "./entrypoint-targets";
 
-export { moveRulesBlocksOutOfTeamFiles } from "./entrypoint-writers";
+export { moveRulesBlocksOutOfTeamFiles, rulesBlocksLeavingLocalTargets } from "./entrypoint-writers";
 
 const RULES_EXPORT_SURFACE_ID = "rules-export";
 

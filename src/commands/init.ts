@@ -118,7 +118,7 @@ import {
   parseDivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
-import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport } from "../rules/rules-export-migration";
+import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport, rulesBlocksLeavingLocalTargets } from "../rules/rules-export-migration";
 import {
   declaredImportSources,
   ignoredLocalTargetPaths,
@@ -627,6 +627,8 @@ export async function initCommand(args: string[]): Promise<void> {
   const movedRulesBlocks = await moveRulesBlocksOutOfTeamFiles(projectRoot, entrypoints.targets, (line) => {
     entrypointNotices.push(line);
   });
+  // A block installed in a local target the runtime no longer uses moves to the team file (review round 1, F-002).
+  movedRulesBlocks.push(...(await rulesBlocksLeavingLocalTargets(projectRoot, entrypoints.targets)));
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,

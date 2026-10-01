@@ -288,7 +288,7 @@ The older form, `"root": ["AGENTS.md", "CLAUDE.md"]`, is still read, and one
 | Claude Code block | `CLAUDE.local.md` | `CLAUDE.md` |
 | Codex block | `AGENTS.override.md` (`mode: "override"`) or nothing (`mode: "skip"`, which only removes an override keryx generated) | `AGENTS.md` |
 | keryx-managed Claude hooks | `.claude/settings.local.json` | `.claude/settings.json` |
-| Opt-in `rules-export` block (`<!-- keryx:rules -->`), Claude Code | `CLAUDE.local.md` | `CLAUDE.md` |
+| Opt-in `rules-export` block (`<!-- keryx:rules -->`), Claude Code | `CLAUDE.local.md`; nothing when git tracks it | `CLAUDE.md` |
 | Opt-in `rules-export` block, Codex | the keryx-generated `AGENTS.override.md`, after its index block; nothing with `mode: "skip"`, no `AGENTS.md`, or an override keryx did not generate | `AGENTS.md` |
 
 The `rules-export` block is written only by `keryx integrations install
@@ -297,7 +297,9 @@ The `rules-export` block is written only by `keryx integrations install
 [Integrations: rules-export surface](integrations.md#rules-export-surface). A
 regenerated `AGENTS.override.md` keeps it. A team file whose `rules-export`
 block is committed in `HEAD` keeps receiving it: that is the team's shared
-choice.
+choice. Once installed, the block follows the scope: switch a runtime between
+`local` and `shared` and run `keryx update`, and the block is moved to the new
+file, re-rendered there, and left in exactly one file.
 
 Local targets are gitignored per clone, so `init` and `update` leave `AGENTS.md`,
 `CLAUDE.md`, `.gitignore` and `.claude/settings.json` untouched and a `git pull`
@@ -307,7 +309,13 @@ re-includes one, keryx says so: that rule outranks `info/exclude`. A local
 entry always uses its runtime's standard file — `CLAUDE.local.md`,
 `AGENTS.override.md`, `.claude/settings.local.json` — whatever `path` the
 manifest states, and a path with a control character or a leading `!` or `#`
-is rejected: the manifest is tracked, so a cloned repository controls it. A
+is rejected: the manifest is tracked, so a cloned repository controls it. For
+the same reason a shared entry is only ever its runtime's team file
+(`CLAUDE.md`, `AGENTS.md`, in any case), and a Codex `source` is only
+`AGENTS.md`: an entry naming any other file — `.env`, the manifest itself — is
+ignored, and that runtime's scope is decided from `HEAD` as for a manifest
+that never stated it. Neither the `keryx:index` block nor the `rules-export`
+block is ever written anywhere else. A
 `CLAUDE.local.md` the team tracks gets no block; the output says to untrack it
 or set the claude entry to `"shared"`.
 

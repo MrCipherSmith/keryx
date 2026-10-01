@@ -62,7 +62,7 @@ import {
   resolveProjectEntrypoints,
   type ProjectEntrypoints,
 } from "../rules/entrypoint-writers";
-import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport } from "../rules/rules-export-migration";
+import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport, rulesBlocksLeavingLocalTargets } from "../rules/rules-export-migration";
 import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { previewEntrypointLines } from "../rules/entrypoint-inspection";
 import { describeModelChoiceStatus } from "../lib/model-choice";
@@ -545,6 +545,10 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   const movedRulesBlocks = await moveRulesBlocksOutOfTeamFiles(projectRoot, entrypoints.targets, (line) => {
     entrypointNotices.push(line);
   });
+  // ...and one installed in a local target the runtime no longer uses (its
+  // scope went back to shared) goes with that file and is installed again in
+  // the team file (review round 1, F-002).
+  movedRulesBlocks.push(...(await rulesBlocksLeavingLocalTargets(projectRoot, entrypoints.targets)));
   const syncedRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,

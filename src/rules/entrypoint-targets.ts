@@ -269,11 +269,21 @@ function rootEntryFromLegacyString(value: string): RootEntrypointEntry | undefin
 }
 
 /**
- * A local entry names its scope, never its file: it always resolves to the
- * runtime's standard local path. The path a manifest states for it lands in
- * `info/exclude` and is where keryx writes — a cloned manifest saying `.env`
- * would have the block written into the secrets file. A stated path still has
- * to be safe, or the whole entry is junk.
+ * An entry names a scope, never an arbitrary file: every path it resolves to
+ * is a write destination (the index block, the rules-export block, the Codex
+ * override's copy) and lands in `info/exclude`, and the manifest stating it is
+ * tracked — one a cloned repository controls.
+ *
+ * - A local entry always resolves to the runtime's standard local path (flow
+ *   361 T14); a stated path still has to be safe, or the whole entry is junk.
+ * - A shared entry is the runtime's own team file (`CLAUDE.md`, `AGENTS.md`),
+ *   in whatever case the manifest spells it (flow 363 review round 1, F-001).
+ *   Any other stated path — `.env`, the manifest itself — makes the entry junk.
+ * - A Codex override is only ever built from `AGENTS.md`, in any case; any
+ *   other `source` makes the entry junk.
+ *
+ * Junk is dropped into `ignored`, so the runtime becomes a legacy candidate and
+ * `HEAD` decides its scope, as for a manifest that never stated it.
  */
 function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntry | undefined {
   const runtime = runtimeOf(value.runtime);
@@ -285,12 +295,28 @@ function rootEntryFromRecord(value: Record<string, unknown>): RootEntrypointEntr
 
   const scope =
     statedScope ?? (statedPath?.toLowerCase() === LOCAL_ROOT_PATH[runtime].toLowerCase() ? "local" : "shared");
-  if (scope === "shared") return sharedRootEntry(runtime, statedPath ?? SHARED_ROOT_PATH[runtime]);
+  if (scope === "shared") {
+    if (statedPath === undefined) return sharedRootEntry(runtime);
+    return isTeamFileOf(runtime, statedPath) ? sharedRootEntry(runtime, statedPath) : undefined;
+  }
   if (runtime === "claude") return localRootEntry(runtime);
-  return {
-    ...(localRootEntry(runtime, safeRelativePath(value.source) ?? DEFAULT_CODEX_SOURCE) as CodexLocalRootEntry),
-    mode: value.mode === "skip" ? "skip" : "override",
-  };
+  let source = DEFAULT_CODEX_SOURCE;
+  if (value.source !== undefined) {
+    const statedSource = safeRelativePath(value.source);
+    if (statedSource === undefined || !isTeamFileOf("codex", statedSource)) return undefined;
+    source = statedSource;
+  }
+  return { ...(localRootEntry(runtime, source) as CodexLocalRootEntry), mode: value.mode === "skip" ? "skip" : "override" };
+}
+
+/** `relativePath` is `runtime`'s team file (`CLAUDE.md` / `AGENTS.md`) at the project root, in any case. */
+export function isTeamFileOf(runtime: EntrypointRuntime, relativePath: string): boolean {
+  return relativePath.toLowerCase() === SHARED_ROOT_PATH[runtime].toLowerCase();
+}
+
+/** `relativePath` is `runtime`'s standard local target (`CLAUDE.local.md` / `AGENTS.override.md`), in any case. */
+export function isLocalFileOf(runtime: EntrypointRuntime, relativePath: string): boolean {
+  return relativePath.toLowerCase() === LOCAL_ROOT_PATH[runtime].toLowerCase();
 }
 
 /** The settings target: the standard file for its scope, whatever path is stated (see `rootEntryFromRecord`). */

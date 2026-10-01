@@ -14,8 +14,11 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { trackedInGitSync } from "../lib/git-head";
 import { parseCodexOverrideProvenance } from "../rules/codex-override";
 import {
+  isLocalFileOf,
+  isTeamFileOf,
   localRootEntry,
   normalizeEntrypointTargets,
   rulesExportTeamFile,
@@ -73,21 +76,53 @@ function fileHoldsRulesBlock(projectRoot: string, relativePath: string): boolean
  *   is either committed there — the team's shared choice, never moved — or
  *   an uncommitted edit that `keryx update` moves; until then every command
  *   keeps working where the block is, so it never ends up in two files.
- * - Claude, scope local: `CLAUDE.local.md`.
+ * - Claude, scope local: `CLAUDE.local.md` — unless git tracks it: then it is
+ *   the team's file and nothing is written.
  * - Codex, scope local: `AGENTS.override.md` when keryx generated it. With
  *   mode `skip`, no team file, no override yet, or an override keryx did not
  *   generate, nothing is written — Codex reads the override instead of
  *   `AGENTS.md`, so a block keryx put anywhere else would never reach it, and
  *   creating the override here would hide the team file from Codex.
+ *
+ * Whatever the manifest says, the answer is one of the runtime's standard
+ * files (`rulesExportCandidates`) or nothing.
  */
 export function resolveRulesExportTarget(projectRoot: string, runtime: EntrypointRuntime): RulesExportTarget {
+  const target = resolveFromEntrypoints(projectRoot, runtime);
+  // Defence in depth (flow 363 review round 1, F-001): `normalizeEntrypointTargets`
+  // already turns any other path a manifest states into junk; whatever reaches
+  // here, the block only ever goes into one of the runtime's standard files.
+  if (target.kind === "file" && !isTeamFileOf(runtime, target.path) && !isLocalFileOf(runtime, target.path)) {
+    return {
+      kind: "none",
+      reason: `${RUNTIME_LABEL[runtime]}: nothing written — ${target.path} is not one of the files the rules-export block goes into (${rulesExportCandidates(runtime).join(", ")}).`,
+    };
+  }
+  return target;
+}
+
+const RUNTIME_LABEL: Record<EntrypointRuntime, string> = { claude: "Claude", codex: "Codex" };
+
+function resolveFromEntrypoints(projectRoot: string, runtime: EntrypointRuntime): RulesExportTarget {
   const normalized = normalizeEntrypointTargets(manifestAgentEntrypoints(projectRoot));
   const entry = normalized.targets.root.find((candidate) => candidate.runtime === runtime) ?? sharedRootEntry(runtime);
   const legacy = normalized.legacy.some((item) => item.kind === "root" && item.runtime === runtime);
   const teamFile = rulesExportTeamFile(entry);
   if (entry.scope === "shared" || legacy) return { kind: "file", path: teamFile, scope: "shared" };
   if (fileHoldsRulesBlock(projectRoot, teamFile)) return { kind: "file", path: teamFile, scope: "shared" };
-  if (entry.runtime === "claude") return { kind: "file", path: entry.path, scope: "local" };
+  if (entry.runtime === "claude") {
+    // A tracked local file is the team's: `writeEntrypointBlocks` and the
+    // migration refuse it for the same reason (flow 363 review round 1, F-004).
+    if (trackedInGitSync(projectRoot, entry.path)) {
+      return {
+        kind: "none",
+        reason:
+          `Claude: nothing written — ${entry.path} is tracked in git, so a block there would show as a change after every install. ` +
+          `Untrack it (\`git rm --cached ${entry.path}\`) to keep it per-developer, or set the claude entry's scope to "shared" in ${MANIFEST_REL}.`,
+      };
+    }
+    return { kind: "file", path: entry.path, scope: "local" };
+  }
 
   if (entry.mode === "skip") {
     return { kind: "none", reason: `Codex: nothing written — the codex entry in ${MANIFEST_REL} has mode "skip", so keryx writes no Codex file.` };

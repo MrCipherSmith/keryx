@@ -19,13 +19,14 @@ import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { hasManagedIgnoreBlock, planMetaprojectIgnoreRules } from "../lib/metaproject-gitignore";
 import { settingsTextHasManagedHooks } from "./entrypoint-migration";
-import { ruleImportSources, rulesExportTeamFile, type CodexLocalRootEntry, type EntrypointTargets } from "./entrypoint-targets";
+import { ruleImportSources, rulesExportTeamFile, type CodexLocalRootEntry, type EntrypointRuntime, type EntrypointTargets } from "./entrypoint-targets";
 import {
   codexOverrideByteSize,
   codexOverrideState,
   ignoredLocalTargetPaths,
   planLocalLeftovers,
   resolveProjectEntrypoints,
+  rulesBlockLocalTargetGap,
   type CodexOverrideState,
   type LocalLeftover,
 } from "./entrypoint-writers";
@@ -40,6 +41,15 @@ export type MisplacedContent = {
   tracked: boolean;
   /** `HEAD`'s version carries the managed content too — the team committed it. */
   committed: boolean;
+};
+
+/** A rules-export block in a team file whose runtime's scope is local (flow 363). */
+export type StrayRulesBlock = MisplacedContent & {
+  runtime: EntrypointRuntime;
+  /** The runtime's own local target: where `keryx update` moves the block. */
+  localTarget: string;
+  /** Set when `keryx update` leaves the block where it is, and why (`rulesBlockLocalTargetGap`). */
+  kept?: "codex-foreign-override" | "claude-tracked-local";
 };
 
 export type LocalTargetState = {
@@ -61,11 +71,13 @@ export type EntrypointInspection = {
   /** Team files (and custom import sources) holding the block while no shared entry names them. */
   strayIndexBlocks: MisplacedContent[];
   /**
-   * Flow 363: tracked team files holding the rules-export `keryx:rules` block
-   * while their runtime's scope is local and it has a local target to move to
-   * (`moveRulesBlocksOutOfTeamFiles`'s set; Codex `skip` has none).
+   * Flow 363: team files holding the rules-export `keryx:rules` block while
+   * their runtime's scope is local — the ones `moveRulesBlocksOutOfTeamFiles`
+   * moves, and (with `kept`) the ones it leaves because the runtime has no
+   * local target until a person fixes that. Codex `skip` is not listed: there the
+   * team file is the file Codex reads.
    */
-  strayRulesBlocks: MisplacedContent[];
+  strayRulesBlocks: StrayRulesBlock[];
   /** Shared targets that hold the block, with whether `HEAD` has it. */
   sharedIndexBlocks: Array<{ path: string; committed: boolean }>;
   /** Shared targets with no file: a real run creates the team file (the only case keryx creates one). */
@@ -126,13 +138,20 @@ export async function inspectEntrypoints(
     if (found.committed && !TEAM_FILE_NAMES.includes(key)) continue;
     strayIndexBlocks.push(found);
   }
-  const strayRulesBlocks: MisplacedContent[] = [];
+  const strayRulesBlocks: StrayRulesBlock[] = [];
   for (const entry of targets.root) {
-    if (entry.scope !== "local" || (entry.runtime === "codex" && entry.mode === "skip")) continue;
+    if (entry.scope !== "local") continue;
+    const gap = await rulesBlockLocalTargetGap(projectRoot, entry);
+    if (gap !== undefined && gap !== "codex-foreign-override" && gap !== "claude-tracked-local") continue;
     const teamFile = rulesExportTeamFile(entry);
     const text = await readText(projectRoot, teamFile);
     if (text === undefined || !hasManagedRulesBlock(text)) continue;
-    strayRulesBlocks.push(await placement(teamFile, hasManagedRulesBlock));
+    strayRulesBlocks.push({
+      ...(await placement(teamFile, hasManagedRulesBlock)),
+      runtime: entry.runtime,
+      localTarget: entry.path,
+      ...(gap === undefined ? {} : { kept: gap }),
+    });
   }
   const sharedIndexBlocks: EntrypointInspection["sharedIndexBlocks"] = [];
   const missingSharedTargets: string[] = [];
@@ -250,7 +269,9 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     lines.push(
       stray.committed
         ? `${stray.path}: the keryx:rules block is committed in HEAD, so it would stay there.`
-        : `${stray.path}: the keryx:rules block would move to the local target and be rendered again there.`,
+        : stray.kept !== undefined
+          ? `${stray.path}: the keryx:rules block would stay there — ${rulesBlockKeptReason(stray)}.`
+          : `${stray.path}: the keryx:rules block would move to ${stray.localTarget} and be rendered again there.`,
     );
   }
   for (const missing of inspection.missingSharedTargets) {
@@ -299,6 +320,25 @@ export async function previewEntrypointLines(projectRoot: string, agentEntrypoin
     );
   }
   return lines.map((line) => `Entrypoints: ${line}`);
+}
+
+/** Why `keryx update` leaves a stray rules block where it is, for `--preview` and `keryx doctor`. */
+export function rulesBlockKeptReason(stray: StrayRulesBlock): string {
+  return stray.kept === "claude-tracked-local"
+    ? `${stray.localTarget} is tracked in git, so keryx does not write it`
+    : `${stray.localTarget} was not generated by keryx, so keryx does not write it`;
+}
+
+/** The fix that clears a stray rules block's warning: `keryx update`, after whatever stops it from moving the block. */
+export function rulesBlockFix(stray: StrayRulesBlock): string {
+  switch (stray.kept) {
+    case "claude-tracked-local":
+      return `git rm --cached ${stray.localTarget}, then keryx update — or set the ${stray.runtime} entry's scope to "shared" in .metaproject/metaproject.json and commit the block`;
+    case "codex-foreign-override":
+      return `remove ${stray.localTarget} (or move its content into ${stray.path}), then keryx update — or set the ${stray.runtime} entry's scope to "shared" in .metaproject/metaproject.json`;
+    default:
+      return "keryx update";
+  }
 }
 
 function leftoverPreviewLine(leftover: LocalLeftover): string {

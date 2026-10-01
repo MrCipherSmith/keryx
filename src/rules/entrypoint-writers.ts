@@ -17,7 +17,7 @@ import { explainIgnoredPaths } from "../lib/git-local-ignore";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { refuseEscapingSymlink } from "../lib/symlink-safety";
 import { ensureMetaprojectReference, renderManagedIndexBlock } from "./agent-entrypoints";
-import { overrideSourceHash, parseCodexOverrideProvenance, renderCodexOverride } from "./codex-override";
+import { overrideRulesSlot, overrideSourceHash, parseCodexOverrideProvenance, renderCodexOverride } from "./codex-override";
 import { resolveLegacyEntrypointTargets, type ResolvedLegacyEntrypointTargets } from "./entrypoint-migration";
 import {
   localRootEntry,
@@ -418,7 +418,8 @@ export type LocalLeftover = {
  * there and what a run does about it. Read-only: asks git whether the file is
  * tracked, writes nothing.
  *
- * - `CLAUDE.local.md`: keryx's part is the managed block, and the `@AGENTS.md`
+ * - `CLAUDE.local.md`: keryx's part is the managed block, the rules-export
+ *   `keryx:rules` block (flow 363), and the `@AGENTS.md`
  *   import when the keryx comment above it shows keryx added it. With nothing
  *   left but blank lines and the heading keryx gave the file, the file is
  *   removed; otherwise only keryx's part goes and every other byte stays.
@@ -458,7 +459,9 @@ export async function planLocalLeftovers(
 
     let next: string;
     try {
-      next = removeKeryxAgentsImport(removeBlock(content, filePath, undefined));
+      // The rules-export block is keryx's too: `init`/`update` install it
+      // again at the shared target (`rulesBlocksLeavingLocalTargets`).
+      next = removeKeryxAgentsImport(removeBlock(removeBlock(content, filePath, undefined), filePath, undefined, RULES_BLOCK));
     } catch (error) {
       leftovers.push({ ...unused, action: "keep", reason: error instanceof Error ? error.message : String(error) });
       continue;
@@ -658,20 +661,72 @@ export async function moveRulesBlocksOutOfTeamFiles(
   return moved;
 }
 
+/** Why a runtime's rules-export block has no local file to go to (see `rulesBlockLocalTargetGap`). */
+export type RulesBlockLocalTargetGap =
+  /** The runtime's scope is shared: the team file is the target. */
+  | "shared"
+  /** Codex with mode `skip`: keryx writes no Codex file. */
+  | "codex-skip"
+  /** Codex's team file does not exist, so no override is generated. */
+  | "codex-no-source"
+  /** `AGENTS.override.md` exists and keryx did not generate it. */
+  | "codex-foreign-override"
+  /** `CLAUDE.local.md` is tracked in git: it is the team's file. */
+  | "claude-tracked-local";
+
 /**
- * Whether the rules-export surface of `entry`'s runtime writes a local file
- * once `init`/`update` has run: Claude with scope local always; Codex with
- * mode `override` when its team file exists and the override is either not
- * there yet (the same run generates it) or keryx's own.
+ * Why the rules-export surface of `entry`'s runtime has no local file once
+ * `init`/`update` has run, or `undefined` when it has one: Claude with scope
+ * local unless git tracks `CLAUDE.local.md`; Codex with mode `override` when
+ * its team file exists and the override is either not there yet (the same run
+ * generates it) or keryx's own. The one predicate behind the migration
+ * (`moveRulesBlocksOutOfTeamFiles`) and `keryx doctor`'s warning (flow 363
+ * review round 1, F-005), matching what `resolveRulesExportTarget` resolves.
  */
-async function rulesBlockHasLocalTarget(projectRoot: string, entry: RootEntrypointEntry): Promise<boolean> {
-  if (entry.scope !== "local") return false;
+export async function rulesBlockLocalTargetGap(projectRoot: string, entry: RootEntrypointEntry): Promise<RulesBlockLocalTargetGap | undefined> {
+  if (entry.scope !== "local") return "shared";
   // A tracked `CLAUDE.local.md` is the team's; `writeEntrypointBlocks` does not write it either.
-  if (entry.runtime === "claude") return !(await trackedInGit(projectRoot, entry.path));
-  if (entry.mode === "skip" || !(await pathExists(path.join(projectRoot, entry.source)))) return false;
+  if (entry.runtime === "claude") return (await trackedInGit(projectRoot, entry.path)) ? "claude-tracked-local" : undefined;
+  if (entry.mode === "skip") return "codex-skip";
+  if (!(await pathExists(path.join(projectRoot, entry.source)))) return "codex-no-source";
   const overridePath = path.join(projectRoot, entry.path);
-  if (!(await pathExists(overridePath))) return true;
-  return parseCodexOverrideProvenance(await readFile(overridePath, "utf8")) !== undefined;
+  if (!(await pathExists(overridePath))) return undefined;
+  return parseCodexOverrideProvenance(await readFile(overridePath, "utf8")) === undefined ? "codex-foreign-override" : undefined;
+}
+
+async function rulesBlockHasLocalTarget(projectRoot: string, entry: RootEntrypointEntry): Promise<boolean> {
+  return (await rulesBlockLocalTargetGap(projectRoot, entry)) === undefined;
+}
+
+/**
+ * Flow 363 review round 1, F-002: the runtimes switched to a shared scope
+ * whose local target still holds the rules-export block keryx installed
+ * there — `CLAUDE.local.md`, or keryx's slot in a keryx-generated
+ * `AGENTS.override.md`. The writers are about to take that file (or keryx's
+ * part of it) away (`planLocalLeftovers`), the rules block with it, so the
+ * caller installs the surface again once the manifest names the new target
+ * (`reinstallRulesExport`) — the block ends up in the team file, once.
+ * Read-only. A Codex entry switched to `skip` is not listed: it has no file
+ * to carry the block to.
+ */
+export async function rulesBlocksLeavingLocalTargets(projectRoot: string, targets: EntrypointTargets): Promise<EntrypointRuntime[]> {
+  const runtimes: EntrypointRuntime[] = [];
+  for (const leftover of await planLocalLeftovers(projectRoot, targets)) {
+    if (leftover.action === "keep") continue;
+    if (targets.root.find((entry) => entry.runtime === leftover.runtime)?.scope !== "shared") continue;
+    const content = await readFile(path.join(projectRoot, leftover.path), "utf8");
+    if (leftover.runtime === "codex" ? overrideSlotHoldsBlock(content) : hasManagedRulesBlock(content)) runtimes.push(leftover.runtime);
+  }
+  return runtimes;
+}
+
+/** A broken slot block counts as one: the override is about to go, and installing again renders it whole. */
+function overrideSlotHoldsBlock(content: string): boolean {
+  try {
+    return overrideRulesSlot(content) !== undefined;
+  } catch {
+    return true;
+  }
 }
 
 /**
