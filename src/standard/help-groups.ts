@@ -525,6 +525,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary: "Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name|off|status].",
   },
+  {
+    kind: "slash",
+    name: "/channels",
+    group: "Automation",
+    summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",
+  },
 
   // ---- External agents, ACP and MCP ----------------------------------------
   {
