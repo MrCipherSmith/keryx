@@ -255,13 +255,25 @@
     }
   },
   "agentEntrypoints": {
+    "metaproject": ".metaproject/index.md",
     "index": ".metaproject/index.md",
     "readme": ".metaproject/README.md",
     "root": [
-      "AGENTS.md",
-      "CLAUDE.md"
+      {
+        "runtime": "codex",
+        "path": "AGENTS.md",
+        "scope": "shared"
+      },
+      {
+        "runtime": "claude",
+        "path": "CLAUDE.md",
+        "scope": "shared"
+      }
     ],
-    "metaproject": ".metaproject/index.md"
+    "claudeSettings": {
+      "path": ".claude/settings.json",
+      "scope": "shared"
+    }
   },
   "standardVersion": "0.1.0",
   "profiles": [
@@ -270,5 +282,5 @@
     "ci",
     "full"
   ],
-  "updatedAt": "2026-09-10T08:05:43.473Z"
+  "updatedAt": "2026-10-01T05:04:49.207Z"
 }
