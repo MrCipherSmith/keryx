@@ -19,7 +19,7 @@ npm i -g @mrciphersmith/keryx
 [GitHub](https://github.com/MrCipherSmith/keryx){ .md-button }
 </div>
 
-![The keryx shell](assets/shell.png)
+![keryx init, doctor and the code graph in a small project](assets/demo.gif)
 
 ## What is in it
 
