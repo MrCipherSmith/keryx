@@ -1,4 +1,4 @@
-<!-- synced-with: README.md @ 7882f9a9 -->
+<!-- synced-with: README.md @ 860e82e0 -->
 
 <p align="center">
   <picture>
@@ -26,6 +26,10 @@
   <a href="https://mrciphersmith.github.io/keryx/modules/project-knowledge/">Модули</a> ·
   <a href="CHANGELOG.md">Изменения</a>
 </p>
+
+```bash
+npm install -g @mrciphersmith/keryx
+```
 
 <p align="center">
   <img src="docs/assets/demo.gif" alt="Сеанс в терминале: keryx init, keryx doctor, keryx gdgraph build, keryx gdgraph affected и keryx wiki status в небольшом проекте на TypeScript" width="880">
@@ -58,11 +62,7 @@ Keryx хранит знания, правила и историю работы �
 
 ## Установка
 
-```bash
-npm install -g @mrciphersmith/keryx
-keryx --version
-```
-
+Установите командой из верха страницы и проверьте через `keryx --version`.
 Пакет работает на [Bun](https://bun.sh) 1.3.14 или новее, поэтому Bun должен
 быть в `PATH`. Автономный бинарный файл, которому не нужен Bun, и два
 установщика на основе клонирования описаны в разделе
