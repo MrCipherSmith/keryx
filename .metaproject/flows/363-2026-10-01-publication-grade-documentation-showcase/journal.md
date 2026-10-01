@@ -111,3 +111,9 @@ Open for T17: two tests in src/cli-reference-coverage.test.ts compare the old
 docs index with the nav; retired spellings at modules/integrations.md:63 and
 modules/mcp-servers.md:73; SLATE-* ids in guides/goal.md and guides/slate.md;
 flow-id collision (main has its own 363 — renumber at merge); rebase onto main (0.3.49).
+- 2026-10-01T09:56:24.790Z - task-done: T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)
+- 2026-10-01T09:56:32.907Z - task-added: T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests
+- 2026-10-01T09:56:33.228Z - task-attempt: T14: started (attempt 1) — 363-T14
+- 2026-10-01T09:56:33.527Z - task-attempt: T19: started (attempt 1) — 363-T19
+- 2026-10-01T10:10:23.705Z - task-done: T14: Showcase README, README.ru.md, hero/OG assets
+- 2026-10-01T10:10:56.819Z - task-done: T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests

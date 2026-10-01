@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T09:49:58.710Z",
+  "updatedAt": "2026-10-01T10:10:56.819Z",
   "source": {
     "type": "description",
     "ref": null
@@ -256,7 +256,7 @@
       "id": "T12",
       "title": "Getting started tutorial and concept pages (architecture, security model, Metaproject)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
@@ -272,7 +272,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -301,7 +302,7 @@
       "id": "T14",
       "title": "Showcase README, README.ru.md, hero/OG assets",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9",
         "T10",
@@ -310,12 +311,19 @@
         "T13"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:56:33.228Z",
+            "outcome": "started",
+            "detail": "363-T14"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
@@ -389,6 +397,35 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:56:33.526Z",
+            "outcome": "started",
+            "detail": "363-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -584,6 +621,36 @@
       "at": "2026-10-01T09:49:58.710Z",
       "event": "task-done",
       "detail": "T11: Area pages batch 3 (areas 11-15)"
+    },
+    {
+      "at": "2026-10-01T09:56:24.790Z",
+      "event": "task-done",
+      "detail": "T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)"
+    },
+    {
+      "at": "2026-10-01T09:56:32.907Z",
+      "event": "task-added",
+      "detail": "T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests"
+    },
+    {
+      "at": "2026-10-01T09:56:33.228Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 363-T14"
+    },
+    {
+      "at": "2026-10-01T09:56:33.527Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 363-T19"
+    },
+    {
+      "at": "2026-10-01T10:10:23.705Z",
+      "event": "task-done",
+      "detail": "T14: Showcase README, README.ru.md, hero/OG assets"
+    },
+    {
+      "at": "2026-10-01T10:10:56.819Z",
+      "event": "task-done",
+      "detail": "T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests"
     }
   ],
   "acKinds": {
