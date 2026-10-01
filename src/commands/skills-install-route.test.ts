@@ -3,8 +3,13 @@
 // the CLI must note it plainly when --dry-run/--json alone is what routed a
 // legacy profile id onto the manifest path.
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { expect, test } from "bun:test";
+import { withCwd } from "../lib/test-cwd";
 import {
+  skillsCommand,
   installApplyCommand,
   installNeedsManifestPreviewNote,
   installRoute,
@@ -25,6 +30,32 @@ test("AC2: the dry-run apply hint reproduces every plan-shaping flag", () => {
     "keryx skills install --profile core --target keryx-shell --with capability:mobx --with lang:python " +
       "--without review-core-skills --include-deprecated",
   );
+});
+
+test("AC2: the command's own dry-run prints an apply hint carrying the --with that was passed", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-skills-dry-run-hint-"));
+  const logs: string[] = [];
+  const originalLog = console.log;
+  const originalExitCode = process.exitCode;
+  // biome-ignore lint: intentional console capture for assertions in this test only.
+  console.log = (...values: unknown[]) => {
+    logs.push(values.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" "));
+  };
+  try {
+    await withCwd(cwd, async () => {
+      // capability:mobx is not in the core profile, so it changes the plan and is accepted
+      await skillsCommand(["install", "--profile", "core", "--with", "capability:mobx", "--dry-run"]);
+    });
+    expect(process.exitCode).toBe(originalExitCode);
+  } finally {
+    console.log = originalLog;
+    process.exitCode = originalExitCode;
+    await rm(cwd, { recursive: true, force: true });
+  }
+  const hint = logs.join("\n").split("\n").find((line) => line.includes("Apply this plan:"));
+  expect(hint).toBeDefined();
+  expect(hint).toContain("--profile core");
+  expect(hint).toContain("--with capability:mobx");
 });
 
 test("AC2: the apply hint omits flags that were not passed", () => {

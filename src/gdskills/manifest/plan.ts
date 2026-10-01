@@ -38,7 +38,7 @@ import path from "node:path";
 import { sha256OfFile } from "../../integrations/install-state";
 import { generateCapabilityMatrix, type CapabilityMatrixDocument, type MatrixSurfaceState } from "../../integrations/matrix";
 import { resolveGlobs } from "./glob";
-import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ModuleKind } from "./manifest";
+import { HARNESS_IDS, type HarnessId, type InstallManifest, type ManifestModule, type ManifestProfile, type ModuleKind } from "./manifest";
 
 export interface StackDetectionInput {
   tags: Record<string, boolean>;
@@ -290,6 +290,124 @@ function dependencyClosure(
   return result;
 }
 
+type ModuleSelection = {
+  componentEntries: PlanComponentEntry[];
+  closure: Set<string>;
+  selectedModuleIds: string[];
+};
+
+/**
+ * The module-selection half of `planInstall`: which modules a profile selects for a
+ * given `--with`/`--without` pair. It pushes only selection errors (unknown
+ * component/module, dependency cycle, a `--without` that drops a dependency), so
+ * `planInstall` can run it again with other lists to ask whether an id changes the plan.
+ */
+function selectModules(
+  input: PlanInstallInput,
+  profile: ManifestProfile,
+  withList: readonly string[],
+  withoutList: readonly string[],
+  errors: string[],
+): ModuleSelection {
+  const { manifest } = input;
+
+  // --- components ----------------------------------------------------------
+  const declaredComponents = new Set(profile.components ?? []);
+  for (const id of withList) {
+    if (manifest.components[id] !== undefined) declaredComponents.add(id);
+  }
+
+  const componentEntries: PlanComponentEntry[] = [];
+  const includedComponentModuleIds = new Set<string>();
+  const forcedModuleIds = new Set<string>(withList.filter((id) => manifest.modules[id] !== undefined));
+
+  for (const componentId of [...declaredComponents].sort()) {
+    const component = manifest.components[componentId];
+    if (component === undefined) {
+      errors.push(`unknown component id "${componentId}" referenced by profile "${input.profileId}"`);
+      continue;
+    }
+    if (withoutList.includes(componentId)) {
+      componentEntries.push({ id: componentId, included: false, reason: "explicitly excluded via --without" });
+      continue;
+    }
+    let decision: { included: boolean; reason: string };
+    if (withList.includes(componentId)) {
+      decision = { included: true, reason: "explicitly requested via --with" };
+    } else if (profile.stackDetectionAware === true) {
+      decision = resolveComponentInclusion(componentId, component.detectionMarkers ?? [], input.stack);
+    } else {
+      decision = { included: true, reason: "component listed unconditionally by profile" };
+    }
+    componentEntries.push({ id: componentId, included: decision.included, reason: decision.reason });
+    if (decision.included) {
+      for (const moduleId of component.modules) {
+        includedComponentModuleIds.add(moduleId);
+        if (withList.includes(componentId)) forcedModuleIds.add(moduleId);
+      }
+    }
+  }
+
+  // --- modules ---------------------------------------------------------------
+  // Profile-listed modules install unconditionally (schema: "installed
+  // unconditionally by this profile"); component-sourced modules are gated by
+  // `defaultInstall` unless force-included (explicit --with of the module id
+  // or of the owning component, or pulled in as a dependency).
+  const unconditionalModuleIds = new Set(profile.modules);
+  const candidateModuleIds = new Set<string>([...unconditionalModuleIds, ...includedComponentModuleIds]);
+
+  const closure = dependencyClosure([...candidateModuleIds], manifest.modules, errors);
+
+  // Dependencies must always be present once something that needs them is
+  // included, regardless of defaultInstall.
+  for (const id of closure) {
+    if (!candidateModuleIds.has(id)) forcedModuleIds.add(id);
+  }
+
+  let selectedModuleIds = [...closure].filter((id) => {
+    const module = manifest.modules[id];
+    if (module === undefined) return false; // already reported by dependencyClosure
+    if (unconditionalModuleIds.has(id)) return true;
+    if (forcedModuleIds.has(id)) return true;
+    return module.defaultInstall === true;
+  });
+
+  // --without at module granularity, plus stripping modules whose owning
+  // component was excluded and that are not required unconditionally/by another
+  // included module's dependency chain.
+  const beforeWithout = new Set(selectedModuleIds);
+  selectedModuleIds = selectedModuleIds.filter((id) => !withoutList.includes(id));
+
+  // F15: --without must not silently drop a module something ELSE still
+  // selected depends on — `dependencyClosure` guaranteed every dependency was
+  // present before this filter ran, so any dependency missing from the
+  // filtered set was removed BY `--without` specifically. Refuse (name the
+  // dependency chain) rather than shipping a plan with a broken dependency.
+  const afterWithout = new Set(selectedModuleIds);
+  for (const id of selectedModuleIds) {
+    const module = manifest.modules[id];
+    if (module === undefined) continue;
+    for (const dep of module.dependencies ?? []) {
+      if (beforeWithout.has(dep) && !afterWithout.has(dep)) {
+        errors.push(
+          `--without "${dep}" also excludes it as a dependency of selected module "${id}" — ` +
+            `pass --without "${id}" too, or drop "${dep}" from --without`,
+        );
+      }
+    }
+  }
+
+  if (input.profileId === "full") {
+    selectedModuleIds = selectedModuleIds.filter((id) => {
+      const module = manifest.modules[id];
+      return module !== undefined && (module.stability !== "deprecated" || input.includeDeprecated === true);
+    });
+  }
+
+  selectedModuleIds = [...new Set(selectedModuleIds)].sort();
+  return { componentEntries, closure, selectedModuleIds };
+}
+
 export async function planInstall(input: PlanInstallInput): Promise<InstallPlan> {
   const { manifest, repoRoot } = input;
   const target = input.target ?? DEFAULT_TARGET;
@@ -350,69 +468,40 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
     };
   }
 
-  // --- components ----------------------------------------------------------
-  const declaredComponents = new Set(profile.components ?? []);
-  for (const id of withList) {
-    if (manifest.components[id] !== undefined) declaredComponents.add(id);
-  }
-
-  const componentEntries: PlanComponentEntry[] = [];
-  const includedComponentModuleIds = new Set<string>();
-  const forcedModuleIds = new Set<string>(withList.filter((id) => manifest.modules[id] !== undefined));
-
-  for (const componentId of [...declaredComponents].sort()) {
-    const component = manifest.components[componentId];
-    if (component === undefined) {
-      errors.push(`unknown component id "${componentId}" referenced by profile "${input.profileId}"`);
-      continue;
-    }
-    if (withoutList.includes(componentId)) {
-      componentEntries.push({ id: componentId, included: false, reason: "explicitly excluded via --without" });
-      continue;
-    }
-    let decision: { included: boolean; reason: string };
-    if (withList.includes(componentId)) {
-      decision = { included: true, reason: "explicitly requested via --with" };
-    } else if (profile.stackDetectionAware === true) {
-      decision = resolveComponentInclusion(componentId, component.detectionMarkers ?? [], input.stack);
-    } else {
-      decision = { included: true, reason: "component listed unconditionally by profile" };
-    }
-    componentEntries.push({ id: componentId, included: decision.included, reason: decision.reason });
-    if (decision.included) {
-      for (const moduleId of component.modules) {
-        includedComponentModuleIds.add(moduleId);
-        if (withList.includes(componentId)) forcedModuleIds.add(moduleId);
-      }
-    }
-  }
-
-  // --- modules ---------------------------------------------------------------
-  // Profile-listed modules install unconditionally (schema: "installed
-  // unconditionally by this profile"); component-sourced modules are gated by
-  // `defaultInstall` unless force-included (explicit --with of the module id
-  // or of the owning component, or pulled in as a dependency).
-  const unconditionalModuleIds = new Set(profile.modules);
-  const candidateModuleIds = new Set<string>([...unconditionalModuleIds, ...includedComponentModuleIds]);
-
-  const closure = dependencyClosure([...candidateModuleIds], manifest.modules, errors);
+  // --- selection -----------------------------------------------------------
+  const { componentEntries, selectedModuleIds } = selectModules(input, profile, withList, withoutList, errors);
 
   // F15 + flow 365 AC2: an id that is unknown, or that cannot change THIS
-  // profile's plan, fails the plan and names what the planner accepts. A
-  // `--with` module id is only honoured when it is already in the dependency
-  // closure (`forcedModuleIds` is consulted nowhere else), so a module id
-  // outside the closure would be silently ignored — refuse it instead.
-  // `--without` of a module counts any module of a declared component, so
-  // `--without lang:x --without <its module>` is not flagged as redundant.
-  const withValidIds = [...new Set([...Object.keys(manifest.components), ...closure])].sort();
-  const declaredComponentModuleIds = [...declaredComponents].flatMap((id) => manifest.components[id]?.modules ?? []);
-  const withoutValidIds = [
-    ...new Set([...declaredComponents, ...closure, ...declaredComponentModuleIds]),
-  ].sort();
-  const checkIds = (flag: "--with" | "--without", ids: string[], valid: string[]): void => {
+  // profile's plan, fails the plan and names what the planner accepts. "Cannot
+  // change the plan" is decided by effect, not by a static id list: the
+  // selection is run again with the id alone and compared with the run without
+  // it. A `--without` is judged against the selection for `withList`, a `--with`
+  // against the selection with no flags at all, so a variant that itself fails
+  // (the dependency refusal) counts as a change — the real plan reports that
+  // error anyway. Each id is judged alone, so `--without lang:x --without <its
+  // module>` is not flagged as mutually redundant: a module of a component that
+  // is itself an effective `--without` is accepted as its companion.
+  const selectionKey = (withIds: readonly string[], withoutIds: readonly string[]): string => {
+    const variantErrors: string[] = [];
+    const variant = selectModules(input, profile, withIds, withoutIds, variantErrors);
+    return `${variantErrors.join("\n")}\u0000${variant.selectedModuleIds.join(",")}`;
+  };
+  const baseWithout = selectionKey(withList, []);
+  const baseWith = selectionKey([], []);
+  const changesWithout = (id: string): boolean => selectionKey(withList, [id]) !== baseWithout;
+  const changesWith = (id: string): boolean => selectionKey([id], []) !== baseWith;
+  const knownIds = [...new Set([...Object.keys(manifest.components), ...Object.keys(manifest.modules)])].sort();
+  const isCompanionModule = (id: string): boolean =>
+    withoutList.some(
+      (componentId) => manifest.components[componentId]?.modules.includes(id) === true && changesWithout(componentId),
+    );
+  const checkIds = (flag: "--with" | "--without", ids: readonly string[]): void => {
+    const effective = flag === "--with" ? changesWith : (id: string) => changesWithout(id) || isCompanionModule(id);
+    let valid: string[] | undefined;
     for (const id of ids) {
-      if (valid.includes(id)) continue;
       const known = manifest.modules[id] !== undefined || manifest.components[id] !== undefined;
+      if (known && effective(id)) continue;
+      valid ??= knownIds.filter(effective);
       errors.push(
         known
           ? `id "${id}" passed to ${flag} cannot change the plan for profile "${input.profileId}" ` +
@@ -421,56 +510,8 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
       );
     }
   };
-  checkIds("--with", withList, withValidIds);
-  checkIds("--without", withoutList, withoutValidIds);
-
-  // Dependencies must always be present once something that needs them is
-  // included, regardless of defaultInstall.
-  for (const id of closure) {
-    if (!candidateModuleIds.has(id)) forcedModuleIds.add(id);
-  }
-
-  let selectedModuleIds = [...closure].filter((id) => {
-    const module = manifest.modules[id];
-    if (module === undefined) return false; // already reported by dependencyClosure
-    if (unconditionalModuleIds.has(id)) return true;
-    if (forcedModuleIds.has(id)) return true;
-    return module.defaultInstall === true;
-  });
-
-  // --without at module granularity, plus stripping modules whose owning
-  // component was excluded and that are not required unconditionally/by another
-  // included module's dependency chain.
-  const beforeWithout = new Set(selectedModuleIds);
-  selectedModuleIds = selectedModuleIds.filter((id) => !withoutList.includes(id));
-
-  // F15: --without must not silently drop a module something ELSE still
-  // selected depends on — `dependencyClosure` guaranteed every dependency was
-  // present before this filter ran, so any dependency missing from the
-  // filtered set was removed BY `--without` specifically. Refuse (name the
-  // dependency chain) rather than shipping a plan with a broken dependency.
-  const afterWithout = new Set(selectedModuleIds);
-  for (const id of selectedModuleIds) {
-    const module = manifest.modules[id];
-    if (module === undefined) continue;
-    for (const dep of module.dependencies ?? []) {
-      if (beforeWithout.has(dep) && !afterWithout.has(dep)) {
-        errors.push(
-          `--without "${dep}" also excludes it as a dependency of selected module "${id}" — ` +
-            `pass --without "${id}" too, or drop "${dep}" from --without`,
-        );
-      }
-    }
-  }
-
-  if (input.profileId === "full") {
-    selectedModuleIds = selectedModuleIds.filter((id) => {
-      const module = manifest.modules[id];
-      return module !== undefined && (module.stability !== "deprecated" || input.includeDeprecated === true);
-    });
-  }
-
-  selectedModuleIds = [...new Set(selectedModuleIds)].sort();
+  checkIds("--with", withList);
+  checkIds("--without", withoutList);
 
   const modules: PlanModuleEntry[] = [];
   for (const moduleId of selectedModuleIds) {
