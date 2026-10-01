@@ -22,7 +22,7 @@ when nothing should be reachable at all.
 |---|---|
 | `ask` (default) | Every `shell_exec`, `spawn_subagent`, and destructive-risk tool call asks first — today's behavior, unchanged if you never touch this feature. |
 | `trust` | Safe calls run without asking. A call still asks when it is destructive — either the tool's own static risk, or a command keryx's classifier recognizes as destructive (`rm -rf`, force-push, and similar). |
-| `auto` | Nothing asks, **including destructive commands** — the same shape as Claude Code's `--dangerously-skip-permissions` or the informal "yolo mode" other CLIs offer. Entering it always requires an explicit one-time confirmation first. |
+| `auto` | Nothing asks, **including destructive commands**. Use it only in a throwaway checkout or a contained environment. Entering it always requires an explicit one-time confirmation first. |
 
 One thing no mode ever changes: a command that touches keryx's own
 credential/permission files (`auth.json`, `permissions.json`,
@@ -151,8 +151,8 @@ in-memory, always starts `false` on a new session. There is no
 {
   "schemaVersion": 1,
   "projects": {
-    "/Users/you/code/api-server": "trust",
-    "/Users/you/code/scratch-experiments": "auto"
+    "/path/to/api-server": "trust",
+    "/path/to/scratch-experiments": "auto"
   }
 }
 ```
@@ -187,7 +187,7 @@ Permission modes apply to the interactive `keryx shell` session only:
   the formal policy-profile engine described in
   [the harness page](../harness.md#the-policy-engine-three-answers-not-two)
   — completely unaffected by this feature.
-- **The MCP server** (`keryx mcp`) does not consult permission modes at all;
+- **The MCP server** (`keryx serve-mcp`) does not consult permission modes at all;
   an inbound MCP tool call from another agent is a separate code path.
 - **No remote or headless caller can set `trust`/`auto` for you.** The mode
   is local, in-session, human-set state.
