@@ -6,6 +6,7 @@
 // `defaultNameCandidates` yields progressively longer ids, still deterministic,
 // and the hub takes the first one no live session holds.
 
+import { createHash } from "node:crypto";
 import { hostname } from "node:os";
 import path from "node:path";
 
@@ -61,7 +62,8 @@ export function machineSlug(machine: string): string {
     .replace(/-+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, MAX_MACHINE_SLUG);
-  return slug.length > 0 ? slug : "machine";
+  // Nothing ASCII survived (a hostname in another script): a short id of the name keeps two such machines apart, and is the same every time.
+  return slug.length > 0 ? slug : `host-${createHash("sha256").update(machine.normalize("NFC")).digest("hex").slice(0, 6)}`;
 }
 
 /** This machine's name, from its hostname: the only thing that tells two machines apart, so nothing is configured per machine. */

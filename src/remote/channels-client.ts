@@ -56,6 +56,8 @@ export type ChannelsFailureCode =
   | "unsafe-endpoint"
   /** The input was refused locally; nothing was written. */
   | "invalid"
+  /** The request may have reached serve but no answer came (a timeout, a dropped connection): the outcome is unknown. */
+  | "no-answer"
   /** Anything serve refused, with serve's own code (`token-rejected`, `not-connected`, `no-pairing`, ...). */
   | (string & {});
 
@@ -178,6 +180,7 @@ export class ChannelsClient {
   async connectFinish(ids: { userId: number; chatId: number }): Promise<ChannelsResult<ChannelsReloadResponse>> {
     const reachable = this.reachable();
     if (!reachable.ok) {
+      this.dropUnusedToken();
       return reachable;
     }
     const configFile = remoteConfigPath(this.options.dir);
@@ -193,16 +196,25 @@ export class ChannelsClient {
       this.options.dir,
     );
     if (!saved.ok) {
+      this.dropUnusedToken();
       return { ok: false, code: "invalid", reason: saved.reason };
     }
     const result = await this.call<ChannelsReloadResponse>("channels-reload", (body) => typeof body.state === "string");
-    if (!result.ok) {
+    // No answer is not a refusal: serve may have started the hub from these files, so they stay and the next status read tells the truth.
+    if (!result.ok && result.code !== "no-answer") {
       this.restore(configFile, before);
       if (!before.ok) {
         removeBotToken(this.options.dir);
       }
     }
     return result;
+  }
+
+  /** The token written for a pairing that did not become a connection: nothing is kept, so it goes. */
+  private dropUnusedToken(): void {
+    if (!fileExists(remoteConfigPath(this.options.dir))) {
+      removeBotToken(this.options.dir);
+    }
   }
 
   /** One message to the General topic, naming this machine. */
@@ -221,8 +233,8 @@ export class ChannelsClient {
         typeof body.deleted === "number" && typeof body.remaining === "number" && typeof body.hubWasRunning === "boolean",
     );
     if (!result.ok && result.code !== "serve-down") {
-      // Serve is up and refused: keep the files, the connection is still there.
-      return result;
+      // Serve refused, or may have acted and not answered (a timeout): keep the files, the connection may still be there.
+      return result.code === "no-answer" ? { ...result, reason: `${result.reason} Nothing was erased on this machine.` } : result;
     }
     const erasedToken = removeBotToken(this.options.dir);
     const erasedConfig = removeRemoteConfig(this.options.dir);
@@ -309,7 +321,15 @@ export class ChannelsClient {
       if (error instanceof ServeDown) {
         return { ok: false, code: error.code, reason: error.message };
       }
-      return { ok: false, code: "serve-down", reason: "keryx serve did not answer; is it still running?" };
+      if (refusedConnection(error)) {
+        return { ok: false, code: "serve-down", reason: "keryx serve is not accepting connections; is it still running?" };
+      }
+      // The request may have been sent: a timeout or a dropped connection says nothing about what serve did.
+      return {
+        ok: false,
+        code: "no-answer",
+        reason: "keryx serve did not answer in time or dropped the connection, so the outcome is unknown. Check /channels, then retry if needed.",
+      };
     }
     let parsed: unknown;
     try {
@@ -344,6 +364,20 @@ export class ChannelsClient {
       // Nothing more can be done from here; the reason already tells the operator what failed.
     }
   }
+}
+
+/** A failure that happened before any byte reached serve: nothing was sent, so nothing was done. */
+function refusedConnection(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  for (let current: unknown = error; isObject(current) || current instanceof Error; ) {
+    if (seen.has(current)) break;
+    seen.add(current);
+    const { code, message, cause } = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (code === "ECONNREFUSED" || code === "ConnectionRefused" || code === "EHOSTUNREACH" || code === "ENETUNREACH") return true;
+    if (typeof message === "string" && /ECONNREFUSED|Unable to connect|connection refused/i.test(message)) return true;
+    current = cause;
+  }
+  return false;
 }
 
 function isPairing(body: Record<string, unknown>): boolean {

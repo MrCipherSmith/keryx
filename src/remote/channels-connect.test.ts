@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
 import { botTokenPath, remoteConfigPath } from "./paths";
 import { BOT_TOKEN, connectFully, makeChannelsRig, pairFully, type ChannelsRig } from "./channels.test-helpers";
+import { ChannelsClient } from "./channels-client";
 import { OWNER_ID, until } from "./remote.test-helpers";
 
 let r: ChannelsRig | undefined;
@@ -149,8 +150,49 @@ describe("invalid data leaves nothing on disk and says why", () => {
       expect(bad.code).toBe("invalid");
       expect(bad.reason.length).toBeGreaterThan(10);
     }
-    expect(r.client.localFiles().configFile).toBe(false);
+    expect(r.client.localFiles()).toEqual({ tokenFile: false, configFile: false });
     expect(r.serve.service.hub()).toBeUndefined();
+  });
+
+  test("serve gone before the ids are saved: no config, and the token that never became a connection is erased", async () => {
+    r = await makeChannelsRig();
+    const ready = await pairFully(r);
+    await r.serve.stop();
+    const result = await r.client.connectFinish({ userId: ready.userId as number, chatId: ready.chatId as number });
+    expect(result.ok).toBe(false);
+    expect(r.client.localFiles()).toEqual({ tokenFile: false, configFile: false });
+  });
+
+  test("a timeout while Connect finishes is 'no answer', not a refusal: the files stay for the next status read", async () => {
+    r = await makeChannelsRig();
+    const ready = await pairFully(r);
+    const timedOut = new ChannelsClient({
+      dir: r.rig.dir,
+      fetchImpl: (async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }) as unknown as typeof fetch,
+    });
+    const result = await timedOut.connectFinish({ userId: ready.userId as number, chatId: ready.chatId as number });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("no-answer");
+    }
+    expect(r.client.localFiles()).toEqual({ tokenFile: true, configFile: true });
+  });
+
+  test("cancelling after the pairing expired erases the token, and a later status says not-connected", async () => {
+    r = await makeChannelsRig({ service: { pairing: { code: "ABCD2345", ttlMs: 1 } } });
+    const started = await r.client.startPairing(BOT_TOKEN);
+    expect(started.ok).toBe(true);
+    await until(async () => {
+      const state = await r?.client.pairingStatus();
+      return state?.ok === true && state.value.state === "expired";
+    }, "the pairing to expire");
+    expect(r.client.localFiles().tokenFile).toBe(true);
+    await r.client.cancelPairing();
+    expect(r.client.localFiles()).toEqual({ tokenFile: false, configFile: false });
+    const status = await r.client.status();
+    expect(status.ok && status.value.telegram.state).toBe("not-connected");
   });
 
   test("abandoning Connect erases the token that never became a connection and stops polling", async () => {

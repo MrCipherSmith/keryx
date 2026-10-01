@@ -238,7 +238,12 @@ export class Pairing {
     if (message === undefined || message.chat.type !== "private" || message.from === undefined || typeof message.text !== "string") {
       return;
     }
-    if (this.code === undefined || !normalise(message.text).includes(this.code)) {
+    // A forwarded message was typed by someone else; the code must be the whole message (or the `/start <code>` deep link).
+    if (message.forward_origin !== undefined || message.forward_date !== undefined) {
+      return;
+    }
+    const sent = message.text.trim().replace(/^\/start(?:@\w+)?\s+/i, "");
+    if (this.code === undefined || normalise(sent) !== this.code) {
       // No reply: a stranger learns nothing, not even that a pairing is open.
       return;
     }

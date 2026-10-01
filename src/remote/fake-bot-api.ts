@@ -142,13 +142,14 @@ export class FakeBotApi implements BotApi {
   }
 
   /** A private message to the bot: the chat is the sender's own. */
-  pushPrivateMessage(input: { fromId: number; text: string }): BotUpdate {
+  pushPrivateMessage(input: { fromId: number; text: string; forwarded?: boolean }): BotUpdate {
     const message = {
       message_id: ++this.messageSeq,
       from: { id: input.fromId },
       chat: { id: input.fromId, type: "private" },
       date: Math.floor(this.now() / 1000),
       text: input.text,
+      ...(input.forwarded === true ? { forward_origin: { type: "user", date: 1 }, forward_date: 1 } : {}),
     };
     return this.enqueueUpdate({ message });
   }

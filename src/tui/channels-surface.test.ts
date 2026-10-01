@@ -201,6 +201,7 @@ test("view lines: the token step shows only asterisks, and each pairing step say
   expect(group).toContain("Step 3 of 4");
   expect(group).toContain("Manage topics");
   expect(group).toContain("topics are off in this group");
+  expect(group).not.toContain("valid for");
 
   const done = channelsViewLines({ kind: "connected", group: "Team", test: { tone: "ok", text: "Test message delivered" } }, { state: "connected", configured: true, machine: "devbox" }, ctx).map((l) => l.text).join("\n");
   expect(done).toContain("Step 4 of 4");
@@ -256,6 +257,7 @@ otuiTest("modal: serve down names the reason and offers no Connect that cannot w
     const frame = h.captureCharFrame();
     expect(frame).toContain("keryx serve is not running");
     expect(frame).not.toContain("Step 1 of 4");
+    expect(frame).not.toContain("Connect");
   } finally {
     modal?.close();
     h.destroy();
@@ -398,6 +400,95 @@ otuiTest("pairing: an expired code says so and offers Try again", async () => {
     const frame = h.captureCharFrame();
     expect(frame).toContain("The pairing code expired");
     expect(frame).toContain("Try again");
+    expect(timer.active()).toBe(0);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("token entry: x, X and Esc belong to the hidden field on a SECOND open too", async () => {
+  const h = await mountChrome(OTUI!, { height: 40, kittyKeyboard: true });
+  const { api, fake } = fakeClient();
+  const first = await openModalFor(h, api);
+  first?.close();
+  await settle(h, 4);
+  const modal = await openModalFor(h, api);
+  try {
+    await h.mockInput.typeText("c");
+    await settle(h, 6);
+    await h.mockInput.typeText("xX1");
+    await settle(h);
+    // the global close-on-x would have closed the modal; it is still on the token step with three characters
+    const typed = h.captureCharFrame();
+    expect(typed).toContain("Step 1 of 4");
+    expect(typed).toContain("Token: ***");
+    await h.mockInput.pressEscape();
+    await settle(h, 6);
+    // Esc leaves the token step, not the modal
+    expect(h.captureCharFrame()).toContain("Telegram: not connected");
+    expect(fake.calls.startPairing).toEqual([]);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("leftovers: a token file with no config and no pairing is shown, and Disconnect erases it", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok(status("not-connected")), files: { tokenFile: true, configFile: false } });
+  const clock = { now: T0 };
+  const modal = await openModalFor(h, api, { now: () => clock.now });
+  try {
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("left on this machine");
+    expect(frame).toContain("Disconnect");
+    await h.mockInput.typeText("d");
+    await settle(h, 6);
+    await h.mockInput.pressKey("ARROW_RIGHT");
+    clock.now += CONFIRM_MIN_GAP_MS;
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(fake.calls.disconnect).toBe(1);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("leftovers: serve down with a token file still offers Disconnect", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api } = fakeClient({ status: fail("serve-down", "keryx serve is not running."), files: { tokenFile: true, configFile: false } });
+  const modal = await openModalFor(h, api);
+  try {
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("keryx serve is not running");
+    expect(frame).toContain("Disconnect");
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("pairing: serve answering no-pairing means the code is dead (serve restarted), not a silent hang", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient();
+  const timer = ticker();
+  const modal = await openModalFor(h, api, { schedule: timer.schedule });
+  try {
+    await h.mockInput.typeText("c");
+    await settle(h, 6);
+    await h.mockInput.typeText("tok");
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(h.captureCharFrame()).toContain("Step 2 of 4");
+    fake.pairingNow = fail("no-pairing", "No pairing is open; start one first.");
+    timer.tick();
+    await settle(h, 8);
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("no longer has this pairing");
+    expect(frame).toContain("Try again");
+    expect(fake.calls.cancel).toBeGreaterThan(0);
     expect(timer.active()).toBe(0);
   } finally {
     modal?.close();

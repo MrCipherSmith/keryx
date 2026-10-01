@@ -34,7 +34,18 @@ describe("the machine name is the hostname", () => {
     const slug = machineSlug("WS Berlin.07");
     expect(slug).not.toMatch(/\s/);
     expect(slug.length).toBeGreaterThan(0);
-    expect(machineSlug("???")).toBe("machine");
+  });
+
+  test("a hostname with no ASCII letters gets a short stable id, so two such machines still differ", () => {
+    const a = machineSlug("Рабочая-станция");
+    const b = machineSlug("工作站");
+    expect(a).toMatch(/^host-[0-9a-f]{6}$/);
+    expect(b).toMatch(/^host-[0-9a-f]{6}$/);
+    expect(a).not.toBe(b);
+    expect(machineSlug("Рабочая-станция")).toBe(a);
+    expect(defaultName("/work/app", "sess-aaaa-1111", undefined, "工作站").startsWith(`${b}-`)).toBe(true);
+    // A name that does survive is unchanged.
+    expect(machineSlug("ws-berlin-07")).toBe("ws-berlin-07");
   });
 
   test("two machines get different topic names for the same project and session", () => {

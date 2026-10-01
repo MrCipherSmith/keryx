@@ -99,11 +99,33 @@ describe("the first private message that carries the code adds its sender", () =
     expect(api.sent[0]?.messageThreadId).toBeUndefined();
   });
 
-  test("the code is found inside the text and read forgivingly (case, spaces, a /start prefix)", async () => {
+  test("the code is read forgivingly when it is the whole message (case, spaces, a /start prefix)", async () => {
     const api = new FakeBotApi();
     const pairing = await openPairing(api, new ManualClock());
     api.pushPrivateMessage({ fromId: OPERATOR, text: "/start k7m2 qx9p" });
     await until(() => pairing.snapshot().userId === OPERATOR, "a sloppily typed code to be accepted");
+  });
+
+  test("a message that merely CONTAINS the code among other words does not pair", async () => {
+    const api = new FakeBotApi();
+    const pairing = await openPairing(api, new ManualClock());
+    api.pushPrivateMessage({ fromId: STRANGER, text: `my code is ${CODE}, let me in` });
+    await until(() => api.pendingUpdates().length === 0 || api.callCount("getUpdates") > 2, "the update to be read");
+    await settle();
+    expect(pairing.snapshot().state).toBe("waiting-for-user");
+    expect(pairing.snapshot().userId).toBeUndefined();
+    expect(api.sent).toEqual([]);
+  });
+
+  test("a FORWARDED message that carries the code does not pair; the operator's own message still does", async () => {
+    const api = new FakeBotApi();
+    const pairing = await openPairing(api, new ManualClock());
+    api.pushPrivateMessage({ fromId: STRANGER, text: CODE, forwarded: true });
+    await until(() => api.pendingUpdates().length === 0 || api.callCount("getUpdates") > 2, "the forwarded update to be read");
+    await settle();
+    expect(pairing.snapshot().userId).toBeUndefined();
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().userId === OPERATOR, "the operator's own message to pair");
   });
 
   test("a wrong code is ignored without a reply: a stranger learns nothing, not even that a pairing is open", async () => {

@@ -17,6 +17,9 @@ export interface BotMessage {
   /** Unix seconds. */
   date: number;
   text?: string;
+  /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
+  forward_origin?: unknown;
+  forward_date?: number;
 }
 
 /** The part of a Telegram `my_chat_member` update the pairing reads: who changed the bot's membership, and where. */

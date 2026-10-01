@@ -42,6 +42,12 @@ export type OpenModalInput = {
   renderTab: (tabId: string, body: unknown, ctx: ModalTabContext) => void | (() => void);
   /** Claim left/right arrows before modal-host's tab switch. */
   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
+  /**
+   * True while the tab body takes every key itself (a hand-built secret field): the host then
+   * neither closes on `x`/Esc nor switches tabs, whatever the focus and whichever handler is
+   * registered first.
+   */
+  ownsKeys?: () => boolean;
   onClose?: () => void;
   /** Content row count for adaptive modal height (AC7). */
   contentRows?: number;
@@ -503,6 +509,9 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   state.releaseOverlay = chrome.addOverlaySource(() => state.open, { kind: "modal" });
   state.unsubKeys = onKeypress(r, (key) => {
     if (!state.open || state.input === undefined) {
+      return;
+    }
+    if (state.input.ownsKeys?.() === true) {
       return;
     }
     const focused = r.currentFocusedRenderable;

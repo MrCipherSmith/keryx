@@ -97,6 +97,58 @@ describe("Disconnect with serve running", () => {
     expect(r.client.localFiles()).toEqual({ tokenFile: false, configFile: false });
   });
 
+  test("a topic Telegram refuses to delete with a 403 is NOT counted as deleted: it stays, and the answer says so", async () => {
+    r = await makeChannelsRig();
+    await connectFully(r);
+    await openSessions(r, 2);
+    r.rig.api.failNext("deleteForumTopic", new BotApiError("rejected", "deleteForumTopic: Forbidden: not enough rights to delete a topic", { status: 403 }));
+
+    const result = await r.client.disconnect();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.deleted).toBe(1);
+      expect(result.value.remaining).toBe(1);
+      expect(result.value.topicsDeleted).toBe(false);
+      expect(result.value.message).toContain("remain in the group");
+    }
+    expect(r.rig.api.topics()).toHaveLength(1);
+  });
+
+  test("a topic that is already gone (thread not found) counts as deleted", async () => {
+    r = await makeChannelsRig();
+    await connectFully(r);
+    await openSessions(r, 1);
+    r.rig.api.failNext("deleteForumTopic", new BotApiError("rejected", "deleteForumTopic: Bad Request: message thread not found", { status: 400 }));
+
+    const result = await r.client.disconnect();
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.deleted).toBe(1);
+      expect(result.value.remaining).toBe(0);
+      expect(result.value.topicsDeleted).toBe(true);
+    }
+  });
+
+  test("a timeout is not 'serve is down': nothing is erased and the answer says the outcome is unknown", async () => {
+    r = await makeChannelsRig();
+    await connectFully(r);
+    const timedOut = new ChannelsClient({
+      dir: r.rig.dir,
+      fetchImpl: (async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }) as unknown as typeof fetch,
+    });
+
+    const result = await timedOut.disconnect();
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe("no-answer");
+      expect(result.reason).toContain("Nothing was erased");
+    }
+    expect(r.client.localFiles()).toEqual({ tokenFile: true, configFile: true });
+    expect(r.serve.service.hub()).toBeDefined();
+  });
+
   test("Disconnect, then Connect again, works without restarting serve", async () => {
     r = await makeChannelsRig();
     await connectFully(r);

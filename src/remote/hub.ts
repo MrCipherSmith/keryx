@@ -24,7 +24,7 @@ import { checkName, defaultNameCandidates, nameKey } from "./naming";
 import { OutboundQueue } from "./outbound-queue";
 import { type PollerStatus, UpdatePoller } from "./poller";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
-import { type BotApi, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
+import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 export interface DeliverMeta {
   updateId: number;
@@ -129,6 +129,10 @@ const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
 
 function describeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
+}
+
+function isThreadGone(error: BotApiError): boolean {
+  return error.kind === "rejected" && /thread not found|topic_id_invalid|topic.*not found/i.test(error.message);
 }
 
 function formatDuration(ms: number): string {
@@ -320,7 +324,7 @@ export class RemoteHub {
     return this.serial(async () => {
       const records = this.registry.records();
       for (const record of records) {
-        await this.retire(record, "channel disconnected");
+        await this.retire(record, "channel disconnected", true);
       }
       const remaining = this.registry.records().length;
       return { deleted: records.length - remaining, remaining };
@@ -607,12 +611,14 @@ export class RemoteHub {
    * as deleted; a transient failure leaves an ownerless, already-expired record
    * behind so the next sweep retries the deletion instead of leaking the topic.
    */
-  private async retire(record: RemoteSessionRecord, why: string): Promise<void> {
+  private async retire(record: RemoteSessionRecord, why: string, strict = false): Promise<void> {
     this.outbound.discardForThread(record.chatId, record.threadId);
     try {
       await this.api.deleteForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
     } catch (error) {
-      if (isBotApiError(error) && isRetryable(error)) {
+      // Strict (a disconnect): only "the topic is gone" counts as deleted. A 403 (the bot lost its rights) leaves a topic that is still there.
+      const stillThere = strict && isBotApiError(error) && !isThreadGone(error);
+      if (isBotApiError(error) && (isRetryable(error) || stillThere)) {
         record.sessionId = "";
         record.status = "unavailable";
         record.unavailableSince = this.now() - this.config.orphanMs;

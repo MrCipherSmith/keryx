@@ -4,7 +4,8 @@
 //
 // The bot token is the one secret that passes through this file. opentui's input
 // renderable cannot mask, so the token step is built by hand: a key and paste handler
-// registered BEFORE the modal host swallows every key, keeps the token in a closure
+// takes every key (the modal host is told so through `ownsKeys`, so `x` and Esc never close
+// it from under the field, whichever listener runs first), keeps the token in a closure
 // variable and draws asterisks. The composer, the transcript, the input history and the
 // scrollback never see it. It is handed to `client.startPairing` once and dropped; it is
 // never put in a notice, a status line or an error.
@@ -61,17 +62,18 @@ export interface ChannelsSnapshot {
 
 export async function loadChannelsSnapshot(client: Pick<ChannelsApi, "status" | "localFiles">): Promise<ChannelsSnapshot> {
   const status = await client.status();
+  const local: ChannelsLocalFiles = client.localFiles();
   if (status.ok) {
     const { machine, telegram } = status.value;
     return {
       state: telegram.state,
-      configured: telegram.state !== "not-connected",
+      // A token or config left on disk counts even when serve says nothing is connected (a crash between the two writes).
+      configured: telegram.state !== "not-connected" || local.tokenFile || local.configFile,
       machine,
       sessions: telegram.sessions,
       ...(telegram.reason !== undefined ? { reason: telegram.reason } : {}),
     };
   }
-  const local: ChannelsLocalFiles = client.localFiles();
   const configured = local.tokenFile || local.configFile;
   const down = status.code === "serve-down" || status.code === "unsafe-endpoint";
   return { state: down ? "serve-down" : "error", configured, reason: status.reason };
@@ -118,8 +120,12 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
       return [
         "Telegram: not connected",
         ...machine,
-        "This machine has no bot yet. Connect it to drive keryx sessions from Telegram topics.",
-        "You need a bot token from @BotFather and a Telegram group with topics turned on.",
+        ...(snapshot.configured
+          ? ["A bot token is left on this machine from an unfinished connection. Connect starts over; Disconnect erases it."]
+          : [
+              "This machine has no bot yet. Connect it to drive keryx sessions from Telegram topics.",
+              "You need a bot token from @BotFather and a Telegram group with topics turned on.",
+            ]),
       ];
     case "pairing":
       return [
@@ -140,7 +146,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
         "Telegram: configured, but not running",
         ...machine,
         ...(snapshot.reason === undefined ? [] : [`Why: ${snapshot.reason}`]),
-        "Disconnect erases the token and config; Test needs it running.",
+        "Disconnect erases the token and config. Test works once Telegram is running again.",
       ];
     case "serve-down":
       return [
@@ -254,7 +260,6 @@ export function channelsViewLines(
         ...(pairing.problems.length === 0
           ? [{ text: "Waiting for the group…", tone: "muted" as const }]
           : [{ text: "Still missing:", tone: "attention" as const }, ...pairing.problems.map((text): ViewLine => ({ text: `  - ${text}`, tone: "attention" }))]),
-        { text: `The code is valid for ${codeLifetime(pairing.expiresAt, ctx.now)}.`, tone: "muted" },
       ];
     }
     case "connected":
@@ -372,20 +377,23 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
   function actions(): Action[] {
     switch (view.kind) {
       case "list": {
-        const state = snapshot?.state;
-        if (state === "pairing") {
-          return [
-            { id: "resume", label: "Resume", tone: "primary", run: () => void resume() },
-            { id: "cancel-pairing", label: "Cancel pairing", tone: "danger", run: () => void cancelPairing() },
-          ];
+        if (snapshot === undefined) return [];
+        const disconnectButton: Action = { id: "disconnect", label: "Disconnect", tone: "danger", run: () => askDisconnect() };
+        switch (snapshot.state) {
+          case "pairing":
+            return [
+              { id: "resume", label: "Resume", tone: "primary", run: () => void resume() },
+              { id: "cancel-pairing", label: "Cancel pairing", tone: "danger", run: () => void cancelPairing() },
+            ];
+          case "connected":
+            return [{ id: "test", label: "Test", tone: "primary", run: () => void runTest(false) }, disconnectButton];
+          case "not-connected":
+            // Leftover files (a crash between the two writes) can only be erased by Disconnect.
+            return [{ id: "connect", label: "Connect", tone: "primary", run: () => void beginConnect() }, ...(snapshot.configured ? [disconnectButton] : [])];
+          default:
+            // off, serve down, error: Connect and Test cannot work, but what is on disk can still be erased.
+            return snapshot.configured ? [disconnectButton] : [];
         }
-        if (snapshot === undefined || !snapshot.configured) {
-          return [{ id: "connect", label: "Connect", tone: "primary", run: () => void beginConnect() }];
-        }
-        return [
-          { id: "test", label: "Test", tone: "primary", run: () => void runTest(false) },
-          { id: "disconnect", label: "Disconnect", tone: "danger", run: () => askDisconnect() },
-        ];
       }
       case "token":
         return [
@@ -560,6 +568,10 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
       const result = await client.pairingStatus();
       if (closed || epoch !== mine) return;
       if (!result.ok) {
+        if (result.code === "no-pairing") {
+          await settlePairing(lostPairing());
+          return;
+        }
         backToList({ tone: "attention", text: result.reason });
         return;
       }
@@ -575,13 +587,27 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     } else if (pairing.state === "waiting-for-user" || pairing.state === "waiting-for-group") {
       go({ kind: "pairing", pairing });
     } else {
+      // The attempt is over: nothing is kept, so the token written for it goes too (cancelPairing erases it when no config exists).
+      const mine = epoch;
+      await client.cancelPairing();
       await reload();
+      if (closed || epoch !== mine) return;
       go({
         kind: "failed",
         title: pairing.state === "expired" ? "The pairing code expired" : pairing.state === "cancelled" ? "Pairing was cancelled" : "Pairing failed",
         reason: pairing.reason ?? (pairing.state === "expired" ? "The code is valid for 10 minutes. Connect again for a new one." : "Connect again to start over."),
       });
     }
+  }
+
+  function lostPairing(): PairingResponse {
+    return {
+      schemaVersion: "1",
+      state: "expired",
+      expiresAt: 0,
+      problems: [],
+      reason: "keryx serve no longer has this pairing (it was restarted or the pairing was dropped), so the code on screen does not work. Connect again for a new one.",
+    };
   }
 
   async function pollPairing(): Promise<void> {
@@ -591,6 +617,17 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     try {
       const result = await client.pairingStatus();
       if (closed || epoch !== mine) return;
+      if (!result.ok && result.code === "no-pairing") {
+        // Serve restarted (or dropped the pairing): the code on screen no longer works.
+        polling = false;
+        busy = true;
+        try {
+          await settlePairing(lostPairing());
+        } finally {
+          busy = false;
+        }
+        return;
+      }
       if (!result.ok) {
         // A hiccup while waiting: keep the code on screen and say why.
         view = { kind: "pairing", pairing: { ...view.pairing, problems: [...view.pairing.problems.filter((p) => !p.startsWith("serve: ")), `serve: ${result.reason}`] } };
@@ -617,6 +654,8 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
 
   async function finishConnect(pairing: PairingResponse): Promise<void> {
     if (pairing.userId === undefined || pairing.chatId === undefined) {
+      await client.cancelPairing();
+      await reload();
       go({ kind: "failed", title: "Pairing is incomplete", reason: "Telegram did not report both the user and the group. Connect again." });
       return;
     }
@@ -625,6 +664,9 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     const connected = await client.connectFinish({ userId: pairing.userId, chatId: pairing.chatId });
     if (closed || epoch !== mine) return;
     if (!connected.ok) {
+      // The client already put the files back; read the state so the list and the sidebar agree with the disk.
+      await reload();
+      if (closed || epoch !== mine) return;
       go({ kind: "failed", title: "Could not connect", reason: connected.reason });
       return;
     }
@@ -690,7 +732,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
       await reload();
       if (closed || epoch !== mine) return;
       if (!result.ok) {
-        backToList({ tone: "error", text: `Not disconnected: ${result.reason}` });
+        backToList({ tone: "error", text: result.code === "no-answer" ? result.reason : `Not disconnected: ${result.reason}` });
         return;
       }
       backToList({ tone: result.value.erased && result.value.remaining === 0 && result.value.topicsDeleted ? "ok" : "attention", text: result.value.message });
@@ -774,6 +816,7 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
   const handle = openModal(core, chrome as never, {
     title: CHANNELS_COMMAND,
     tabs: [{ id: "telegram", label: "Telegram" }],
+    ownsKeys: () => view.kind === "token",
     footer: CHANNELS_FOOTER,
     contentRows: 14,
     renderTab: (_tabId, tabBody) => {
