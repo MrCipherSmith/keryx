@@ -448,7 +448,7 @@ export function renderReviewerInventoryMarkdown(inventory: ReviewerInventory): s
       "The reviewer's text names the path on the left; the file it must read is the one on the",
       "right. `.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`:",
       "`keryx init`, `keryx update` and `keryx skills install` overwrite rules/core with keryx's own rules",
-      "(the manifest form of `skills install`, with `--target`, skips existing files it did not record)",
+      "(the manifest form of `skills install` skips existing files it did not record)",
       "and leave rules/project alone, so a rule an overlay provides under a name keryx also ships is kept",
       "in rules/project.",
     );

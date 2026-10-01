@@ -430,7 +430,7 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
       lines.push(
         "A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,",
         "and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite",
-        "rules/core with keryx's own rules (`skills install --target` from a manifest skips files it has no record of) and leave",
+        "rules/core with keryx's own rules (the manifest form of `skills install` skips files it has no record of) and leave",
         "rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.",
         "",
       );

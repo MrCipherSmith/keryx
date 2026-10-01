@@ -240,10 +240,9 @@ What to expect from the exit code:
   skills catalog and gdskills module manifest for the `full` profile. It sets
   exit 1 only when `.metaproject/` is absent; a destination it will not write
   through (a symlink, a non-directory) is listed under `Warnings` with exit 0.
-- **The dry-run's `Apply this plan:` hint is not the whole command.** It prints
-  only `--profile` and `--target`, so after a dry-run with
-  `--with capability:mobx` the hinted command installs the profile without
-  `code-mobx-store-review`. Re-type the command you dry-ran, minus `--dry-run`.
+- **The dry-run's `Apply this plan:` hint is the whole command.** It repeats
+  every plan-shaping flag (`--with`, `--without`, `--include-deprecated`,
+  `--target`, `--profile`), so run it as printed.
 
 Run `keryx review reviewers --json` again afterwards and dispatch from what it
 returns.

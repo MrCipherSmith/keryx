@@ -203,7 +203,7 @@ imported: 3 overwritten: 0 updated: 0 skipped: 1 would-import: 0 would-overwrite
 
 A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,
 and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite
-rules/core with keryx's own rules (`skills install --target` from a manifest skips files it has no record of) and leave
+rules/core with keryx's own rules (the manifest form of `skills install` skips files it has no record of) and leave
 rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.
 
 Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.
@@ -282,7 +282,7 @@ reports one status:
   `.metaproject/rules/project/core/<name>.mdc` rather than to `rules/core`,
   because `keryx init`, `keryx update` and the legacy-profile
   `keryx skills install` overwrite `rules/core` with keryx's own rules (the
-  manifest form with `--target` skips files it has no record of).
+  manifest form skips files it has no record of).
 - `unresolved` — no `rules/` directory beside the source has it. Add the file by
   hand, or the reviewer keeps citing a rule the project lacks.
 
