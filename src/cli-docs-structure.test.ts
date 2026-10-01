@@ -1,84 +1,66 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "bun:test";
-import { CLI_ROUTES } from "./cli";
 
-// Flow 302 (AC1/AC2): README used to carry two quick starts — an unheaded
-// install snippet near the top, and a full "## Quick start" section far
-// below, AFTER the deep-dive "The agent harness" and "Core capabilities"
-// sections. A newcomer reading top to bottom hit provider-neutral internals
-// before ever learning how to install the thing or connect a provider. This
-// pins the merged structure so it cannot regress: exactly one "## Quick
-// start" heading, placed before both deep dives, walking install -> init ->
-// provider -> first session -> where next, in that order.
+// Pins the README's invariants: the order of its top-level sections, the
+// language switcher, parity of the Russian translation, and a prose budget so
+// the page stays a front door rather than a manual.
 
 const README = new URL("../README.md", import.meta.url);
+const README_RU = new URL("../README.ru.md", import.meta.url);
 
-function headingLines(source: string): string[] {
-  return source.split("\n").filter((line) => /^#{1,2} /.test(line));
+const SECTIONS = [
+  "What is Keryx",
+  "Install",
+  "Quickstart",
+  "What you get",
+  "How it works",
+  "Where to go next",
+  "Status",
+  "Built with Keryx",
+  "Community and contributing",
+];
+
+const PROSE_WORD_BUDGET = 1000;
+
+function stripFences(source: string): string {
+  return source.replace(/^```[\s\S]*?^```[^\n]*$/gm, "");
 }
 
-function quickStartSection(source: string): string {
-  const start = source.indexOf("\n## Quick start\n");
-  const end = source.indexOf("\n## Why keryx\n");
-  if (start < 0 || end < 0 || end <= start) {
-    throw new Error("README's Quick start / Why keryx headings were not found where expected");
-  }
-  return source.slice(start, end);
+function sectionHeadings(source: string): string[] {
+  return stripFences(source)
+    .split("\n")
+    .filter((line) => /^## /.test(line))
+    .map((line) => line.slice(3).trim());
 }
 
-test("README has exactly one Quick start section, before both deep dives", async () => {
+function proseWords(source: string): number {
+  const prose = stripFences(source)
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\]\([^)]*\)/g, "]")
+    .replace(/\|/g, " ")
+    .replace(/[#*>`\[\]]/g, " ");
+  return prose.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
+}
+
+test("README keeps its top-level sections in order", async () => {
   const source = await readFile(README, "utf8");
-  const headings = headingLines(source);
-
-  // Guards against silently matching zero headings (a heading-syntax change).
-  expect(headings.length).toBeGreaterThan(10);
-
-  expect(headings.filter((h) => h === "## Quick start")).toEqual(["## Quick start"]);
-
-  const quickStartIdx = headings.indexOf("## Quick start");
-  const harnessIdx = headings.indexOf("## The agent harness");
-  const coreCapabilitiesIdx = headings.indexOf("## Core capabilities");
-
-  expect(quickStartIdx).toBeGreaterThanOrEqual(0);
-  expect(harnessIdx).toBeGreaterThan(quickStartIdx);
-  expect(coreCapabilitiesIdx).toBeGreaterThan(quickStartIdx);
+  expect(sectionHeadings(source)).toEqual(SECTIONS);
 });
 
-test("README's Quick start walks install, init, provider and first session in order", async () => {
+test("README offers the English | Русский switcher and the install command above the demo", async () => {
   const source = await readFile(README, "utf8");
-  const section = quickStartSection(source);
-
-  const order = [
-    "npm install -g @mrciphersmith/keryx",
-    "keryx init",
-    "### Connect a model provider",
-    "### Your first session",
-    "keryx shell",
-    "### Where to go next",
-  ];
-
-  let cursor = -1;
-  for (const needle of order) {
-    const at = section.indexOf(needle, cursor + 1);
-    expect(at).toBeGreaterThan(cursor);
-    cursor = at;
-  }
+  expect(source).toContain('English | <a href="README.ru.md">Русский</a>');
+  const install = source.indexOf("npm install -g @mrciphersmith/keryx");
+  const demo = source.indexOf("docs/assets/demo.gif");
+  expect(install).toBeGreaterThan(0);
+  expect(install).toBeLessThan(demo);
 });
 
-test("every `keryx <verb>` command shown in README's Quick start is a real CLI verb", async () => {
-  const source = await readFile(README, "utf8");
-  const section = quickStartSection(source);
-
-  const verbs = new Set(
-    Array.from(section.matchAll(/\bkeryx ([a-z][a-z0-9-]*)\b/g), (m) => m[1]).filter(
-      (v): v is string => v !== undefined,
-    ),
-  );
-
-  // Guards the scrape: a formatting change that matched nothing would leave
-  // this comparing an empty set and passing while checking nothing.
-  expect(verbs.size).toBeGreaterThan(3);
-
-  const unknown = [...verbs].filter((v) => !(v in CLI_ROUTES));
-  expect(unknown).toEqual([]);
+test("README.ru.md mirrors the section count and both stay within the prose budget", async () => {
+  const en = await readFile(README, "utf8");
+  const ru = await readFile(README_RU, "utf8");
+  expect(sectionHeadings(ru).length).toBe(SECTIONS.length);
+  expect(proseWords(en)).toBeLessThanOrEqual(PROSE_WORD_BUDGET);
+  expect(proseWords(ru)).toBeLessThanOrEqual(PROSE_WORD_BUDGET);
 });

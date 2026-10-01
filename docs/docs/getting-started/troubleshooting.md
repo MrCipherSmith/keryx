@@ -199,6 +199,11 @@ then cannot tell which variables to strip, so it refuses. The message names the
 file. Move or shrink it, or run the installed `keryx` instead, which never reads
 `.env` files.
 
+## Reference
+
+- [`doctor`](../cli-reference.md#doctor), [`version`](../cli-reference.md#version) and [`update`](../cli-reference.md#update) in the CLI reference.
+- [Reference index](../reference/index.md): configuration and every other reference page.
+
 ## Still stuck
 
 Search the [FAQ](../project/faq.md), then open an issue with the output of

@@ -386,7 +386,7 @@ disabled.
 | `~/.keryx/learning/decisions.jsonl` | user | User-scope decision log |
 | `~/.keryx/learning/learn.lock` | user | File lock for the user-scope writers above |
 
-See also: [Self-learning loop design spec](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md)
+See also: [Self-learning loop design spec (workstream document)](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/workstreams/W3-self-learning.md)
 (the design spec this page tracks) and
 [`learned-pattern.schema.json`](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-agent-platform-expansion/schemas/learned-pattern.schema.json)
 (the record schema).

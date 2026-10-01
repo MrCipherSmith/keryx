@@ -190,6 +190,11 @@ files in `.metaproject/` (skills, module manifests, hooks, the dashboard) and
 never writes your data under `.metaproject/data/`. For npm and binary installs
 `keryx update` does not touch the program itself.
 
+## Reference
+
+- [`version`](../cli-reference.md#version), [`doctor`](../cli-reference.md#doctor) and [`update`](../cli-reference.md#update) in the CLI reference.
+- [Reference index](../reference/index.md): configuration and every other reference page.
+
 ## Next steps
 
 - [Quickstart](quickstart.md): set up a project and ask it a question.

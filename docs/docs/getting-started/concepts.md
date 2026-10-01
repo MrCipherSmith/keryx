@@ -80,6 +80,11 @@ reports what changed in the code since each layer was last built.
 - **Not finished.** Keryx is pre-1.0 and changes often. See
   [Project status](../project/status.md).
 
+## Reference
+
+- [`shell`](../cli-reference.md#shell), [`gdgraph`](../cli-reference.md#gdgraph), [`wiki`](../cli-reference.md#wiki) and [`flow`](../cli-reference.md#flow) in the CLI reference.
+- [Reference index](../reference/index.md): configuration and every other reference page.
+
 ## Where to go next
 
 | You want to… | Read |

@@ -95,6 +95,7 @@ keryx doctor
 ```text
 keryx doctor
 
+  …
   ✓ bun: Bun 1.4.2 (floor >=1.3.14)
   ✓ ripgrep: rg at …/bin/rg
   ✓ sandbox: Seatbelt (sandbox-exec) available
@@ -276,6 +277,11 @@ Modules:
 Your project now has a committed workspace with a code graph, a wiki, a
 decision record and git hooks that keep the graph current. Any agent that
 reads the repository is pointed at `.metaproject/index.md` first.
+
+## Reference
+
+- [`init`](../cli-reference.md#init), [`doctor`](../cli-reference.md#doctor), [`gdgraph`](../cli-reference.md#gdgraph) and [`wiki`](../cli-reference.md#wiki) in the CLI reference.
+- [Reference index](../reference/index.md): configuration and every other reference page.
 
 ## Next steps
 

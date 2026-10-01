@@ -82,7 +82,7 @@ coverage:
 
 ## Recommended profile — now on by default when Jev is reachable
 
-Flow 346: `ci_triage`, `select`, and `edit_guard` no longer need
+`ci_triage`, `select`, and `edit_guard` no longer need
 `keryx review jev-profile --apply recommended` to turn on. They apply
 automatically whenever [`/external`](./cli-reference.md#external) is on
 (the default) AND a Jev/OpenRouter credential resolves (env or a saved

@@ -369,7 +369,7 @@ runs by default in CI or locally. Every other integrity check, including the
 AG rule above, runs against the **recorded** verdicts and needs no network
 access or `KERYX_LIVE_JUDGE`.
 
-Flow 317 added a related but distinct live check: `keryx skills eval
+There is also a related but distinct live check: `keryx skills eval
 --reverify <pack-dir> [--sample N] --judge <provider>[:<model>]` re-judges a
 random sample of already-recorded TRIAL outputs (not the canned anti-gaming
 answers `judge-check` uses) against the current live judge, and reports

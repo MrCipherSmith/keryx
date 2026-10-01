@@ -25,6 +25,10 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
+```bash
+npm install -g @mrciphersmith/keryx
+```
+
 <p align="center">
   <img src="docs/assets/demo.gif" alt="A terminal session running keryx init, keryx doctor, keryx gdgraph build, keryx gdgraph affected and keryx wiki status in a small TypeScript project" width="880">
 </p>
@@ -50,11 +54,7 @@ shell and a few commands that write prose need a provider.
 
 ## Install
 
-```bash
-npm install -g @mrciphersmith/keryx
-keryx --version
-```
-
+Install with the command at the top of this page, then check it with `keryx --version`.
 The package runs on [Bun](https://bun.sh) 1.3.14 or newer, so Bun must be on
 your `PATH`. A standalone binary that needs no Bun, and two clone-based
 installers, are described in [Install](https://mrciphersmith.github.io/keryx/getting-started/install/).
