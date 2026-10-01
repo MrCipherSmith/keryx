@@ -411,9 +411,9 @@ settings files, so a hook in both would fire twice. A managed block that stays i
 a tracked file whose scope is local is reported by `keryx doctor` with the fix
 command.
 
-**The `rules-export` block** (0.3.46) follows the same cases in `keryx update`
+**The `rules-export` block** (0.3.47) follows the same cases in `keryx update`
 and in `keryx init` over an existing project. A `<!-- keryx:rules -->` block a
-keryx before 0.3.46 left as an uncommitted edit in `CLAUDE.md` or `AGENTS.md`,
+keryx before 0.3.47 left as an uncommitted edit in `CLAUDE.md` or `AGENTS.md`,
 whose runtime's scope is local, moves to `CLAUDE.local.md` or
 `AGENTS.override.md`, re-rendered there from the current `.metaproject/rules/`;
 the team file goes back to its `HEAD` bytes, or loses only the block when it

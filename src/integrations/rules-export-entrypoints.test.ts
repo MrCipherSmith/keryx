@@ -130,7 +130,7 @@ describe("flow 363 AC1: with local scopes the block goes to CLAUDE.local.md and 
 });
 
 describe("flow 363 AC2: scope shared keeps writing the tracked team files", () => {
-  test("CLAUDE.md and AGENTS.md get the block exactly as before 0.3.46, and uninstall restores them byte for byte", async () => {
+  test("CLAUDE.md and AGENTS.md get the block exactly as before 0.3.47, and uninstall restores them byte for byte", async () => {
     await fixture([SHARED_CLAUDE, SHARED_CODEX]);
 
     for (const [runtime, file] of [["claude", "CLAUDE.md"], ["codex", "AGENTS.md"]] as const) {

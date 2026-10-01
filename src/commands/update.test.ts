@@ -1409,7 +1409,7 @@ async function withRootEntry(root: string, runtime: string, entry: Record<string
   }
 }
 
-/** The block exactly where a keryx before 0.3.46 put it: the tracked team file, through the surface itself. */
+/** The block exactly where a keryx before 0.3.47 put it: the tracked team file, through the surface itself. */
 async function installRulesIntoTeamFile(root: string, runtime: "claude" | "codex"): Promise<void> {
   const file = runtime === "claude" ? "CLAUDE.md" : "AGENTS.md";
   await withRootEntry(root, runtime, { path: file, scope: "shared" }, async () => {

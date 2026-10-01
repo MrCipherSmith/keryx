@@ -350,7 +350,7 @@ export async function checkEntrypoints(cwd: string): Promise<DoctorCheck> {
     });
   }
   // Flow 363: the opt-in rules-export block, left in a tracked team file by a
-  // keryx before 0.3.46. Committed in HEAD, it is the team's shared choice.
+  // keryx before 0.3.47. Committed in HEAD, it is the team's shared choice.
   // Review round 1, F-005: each runtime's own target, and the fix that clears
   // the warning — `keryx update` alone where it moves the block.
   for (const stray of inspection.strayRulesBlocks) {

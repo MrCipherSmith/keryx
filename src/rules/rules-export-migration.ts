@@ -1,6 +1,6 @@
 // Flow 363: `keryx init` / `keryx update` moving a `keryx:rules` block — the
 // opt-in rules-export surface's, written into a tracked `CLAUDE.md` /
-// `AGENTS.md` by keryx before 0.3.46 — to the local target its runtime uses.
+// `AGENTS.md` by keryx before 0.3.47 — to the local target its runtime uses.
 //
 // Two steps around `syncAgentRules`, because the local targets are written
 // in between: `moveRulesBlocksOutOfTeamFiles` (before) takes the block out of

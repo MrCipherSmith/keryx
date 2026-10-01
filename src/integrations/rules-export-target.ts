@@ -1,5 +1,5 @@
 // Flow 363: the ONE resolver for "which file does the Claude or Codex
-// rules-export surface write its `keryx:rules` block into". Until 0.3.46 the
+// rules-export surface write its `keryx:rules` block into". Until 0.3.47 the
 // two surfaces carried a fixed `CLAUDE.md` / `AGENTS.md` and so wrote a tracked
 // team file on every install — the uncommitted edit flow 361 took out of every
 // other keryx writer. They now follow `agentEntrypoints.root`, the way the
@@ -70,7 +70,7 @@ function fileHoldsRulesBlock(projectRoot: string, relativePath: string): boolean
  *
  * - `scope: "shared"`, or a manifest that does not state the runtime in entry
  *   form (a legacy string array, no manifest): the team file, as before
- *   0.3.46 — until `keryx update` settles a legacy entry against `HEAD`, the
+ *   0.3.47 — until `keryx update` settles a legacy entry against `HEAD`, the
  *   entrypoint model itself counts it as shared (`normalizeEntrypointTargets`).
  * - The team file already carries a `keryx:rules` block: the team file. It
  *   is either committed there — the team's shared choice, never moved — or

@@ -114,7 +114,7 @@ const CASES: ReadonlyArray<{ harness: string; relativePath: string; hasFrontMatt
       block: "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n",
     }),
   },
-  // Scope shared: the tracked team files, exactly as before 0.3.46.
+  // Scope shared: the tracked team files, exactly as before 0.3.47.
   { harness: "claude", relativePath: "CLAUDE.md", hasFrontMatter: false, entrypoints: SHARED_ENTRYPOINTS },
   { harness: "codex", relativePath: "AGENTS.md", hasFrontMatter: false, entrypoints: SHARED_ENTRYPOINTS },
   { harness: "gemini-cli", relativePath: "GEMINI.md", hasFrontMatter: false },

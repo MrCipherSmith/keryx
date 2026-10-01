@@ -268,7 +268,7 @@ front matter), `cursor` (`.cursor/rules/keryx-rules.mdc`, created with
 For `claude` and `codex` the file follows `agentEntrypoints.root` in
 `.metaproject/metaproject.json`, the way the `keryx:index` block does
 ([Where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope)),
-since 0.3.46:
+since 0.3.47:
 
 | Runtime | Scope `local` (the default) | Scope `shared` |
 |---|---|---|
@@ -292,7 +292,7 @@ since 0.3.46:
   a warning saying which, and its status is `skipped` (`--json` included).
 - A team file that already carries a `keryx:rules` block keeps getting it:
   committed in `HEAD`, it is the team's shared choice; as an uncommitted edit
-  (what a keryx before 0.3.46 left), `keryx update` moves it to the local file.
+  (what a keryx before 0.3.47 left), `keryx update` moves it to the local file.
   Until then every command keeps writing where the block is, so it is never in
   two files.
 - Switching a runtime between local and shared in the manifest and running
@@ -302,7 +302,7 @@ since 0.3.46:
   the same. `uninstall --dry-run` names a block the real run would also take
   out of the other file.
 - A manifest that does not state the runtime in entry form (not yet migrated
-  by `keryx update`) still gets the team file, as before 0.3.46. So does an
+  by `keryx update`) still gets the team file, as before 0.3.47. So does an
   entry the manifest states with any file other than the runtime's own
   (`CLAUDE.md`, `AGENTS.md`, `CLAUDE.local.md`, `AGENTS.override.md`): the
   block never goes anywhere else.

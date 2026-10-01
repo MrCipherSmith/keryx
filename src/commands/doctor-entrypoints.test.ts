@@ -141,7 +141,7 @@ describe("keryx doctor: entrypoints (flow 361, AC11)", () => {
     });
   });
 
-  // Flow 363 AC7: the rules-export block, where a keryx before 0.3.46 left it.
+  // Flow 363 AC7: the rules-export block, where a keryx before 0.3.47 left it.
   test("an uncommitted keryx:rules block in a tracked CLAUDE.md or AGENTS.md whose scope is local warns, with keryx update as the fix", async () => {
     const committed = { "AGENTS.md": AGENTS, "CLAUDE.md": "# Claude\n" };
     for (const file of ["CLAUDE.md", "AGENTS.md"]) {
