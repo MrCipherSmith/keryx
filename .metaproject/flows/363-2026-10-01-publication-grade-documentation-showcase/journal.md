@@ -1,0 +1,21 @@
+# Flow Journal
+
+- 2026-10-01T05:03:43.749Z - flow created
+- 2026-10-01T07:22:42.466Z - task-done: T2: Implement per plan
+- 2026-10-01T07:22:42.770Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T07:22:43.079Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-01T07:22:51.467Z - task-added: T5: Consolidate research into audit-report.md with target IA
+- 2026-10-01T07:22:51.767Z - task-added: T6: Owner approves the target IA (gate before public files change)
+- 2026-10-01T07:22:52.069Z - task-added: T7: Fix keryx --help and cli-reference drift; subcommand-level coverage test
+- 2026-10-01T07:22:52.372Z - task-added: T8: Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job
+- 2026-10-01T07:22:52.674Z - task-added: T9: Area pages batch 1 (areas 1-5)
+- 2026-10-01T07:22:52.974Z - task-added: T10: Area pages batch 2 (areas 6-10)
+- 2026-10-01T07:22:53.275Z - task-added: T11: Area pages batch 3 (areas 11-15)
+- 2026-10-01T07:22:53.576Z - task-added: T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)
+- 2026-10-01T07:22:53.874Z - task-added: T13: Built with Keryx and Project status pages
+- 2026-10-01T07:22:54.174Z - task-added: T14: Showcase README, README.ru.md, hero/OG assets
+- 2026-10-01T07:22:54.475Z - task-added: T15: Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map
+- 2026-10-01T07:22:54.775Z - task-added: T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript
+- 2026-10-01T07:22:55.076Z - task-added: T17: Strict build, link check, retired spellings, internal-id and external-name scan
+- 2026-10-01T07:22:55.380Z - task-added: T18: review-orchestrator round over the final diff
+- 2026-10-01T07:22:55.680Z - task-done: T1: Collect remaining context

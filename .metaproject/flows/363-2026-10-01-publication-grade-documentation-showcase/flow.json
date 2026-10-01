@@ -1,0 +1,426 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "363",
+  "slug": "publication-grade-documentation-showcase",
+  "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
+  "status": "initializing",
+  "createdAt": "2026-10-01T05:03:43.749Z",
+  "updatedAt": "2026-10-01T07:22:55.680Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "four research workers, research/*.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T5",
+      "title": "Consolidate research into audit-report.md with target IA",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Owner approves the target IA (gate before public files change)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Fix keryx --help and cli-reference drift; subcommand-level coverage test",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Area pages batch 1 (areas 1-5)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Area pages batch 2 (areas 6-10)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Area pages batch 3 (areas 11-15)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Getting started tutorial and concept pages (architecture, security model, Metaproject)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Built with Keryx and Project status pages",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Showcase README, README.ru.md, hero/OG assets",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Run README quickstart and tutorial verbatim in a fresh dir; save transcript",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "Strict build, link check, retired spellings, internal-id and external-name scan",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T14",
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "review-orchestrator round over the final diff",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [
+        "T16",
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T05:03:43.749Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T07:22:42.466Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T07:22:42.770Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T07:22:43.079Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T07:22:51.467Z",
+      "event": "task-added",
+      "detail": "T5: Consolidate research into audit-report.md with target IA"
+    },
+    {
+      "at": "2026-10-01T07:22:51.767Z",
+      "event": "task-added",
+      "detail": "T6: Owner approves the target IA (gate before public files change)"
+    },
+    {
+      "at": "2026-10-01T07:22:52.069Z",
+      "event": "task-added",
+      "detail": "T7: Fix keryx --help and cli-reference drift; subcommand-level coverage test"
+    },
+    {
+      "at": "2026-10-01T07:22:52.372Z",
+      "event": "task-added",
+      "detail": "T8: Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job"
+    },
+    {
+      "at": "2026-10-01T07:22:52.674Z",
+      "event": "task-added",
+      "detail": "T9: Area pages batch 1 (areas 1-5)"
+    },
+    {
+      "at": "2026-10-01T07:22:52.974Z",
+      "event": "task-added",
+      "detail": "T10: Area pages batch 2 (areas 6-10)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.275Z",
+      "event": "task-added",
+      "detail": "T11: Area pages batch 3 (areas 11-15)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.576Z",
+      "event": "task-added",
+      "detail": "T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.874Z",
+      "event": "task-added",
+      "detail": "T13: Built with Keryx and Project status pages"
+    },
+    {
+      "at": "2026-10-01T07:22:54.174Z",
+      "event": "task-added",
+      "detail": "T14: Showcase README, README.ru.md, hero/OG assets"
+    },
+    {
+      "at": "2026-10-01T07:22:54.475Z",
+      "event": "task-added",
+      "detail": "T15: Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map"
+    },
+    {
+      "at": "2026-10-01T07:22:54.775Z",
+      "event": "task-added",
+      "detail": "T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript"
+    },
+    {
+      "at": "2026-10-01T07:22:55.076Z",
+      "event": "task-added",
+      "detail": "T17: Strict build, link check, retired spellings, internal-id and external-name scan"
+    },
+    {
+      "at": "2026-10-01T07:22:55.380Z",
+      "event": "task-added",
+      "detail": "T18: review-orchestrator round over the final diff"
+    },
+    {
+      "at": "2026-10-01T07:22:55.680Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    }
+  ]
+}
