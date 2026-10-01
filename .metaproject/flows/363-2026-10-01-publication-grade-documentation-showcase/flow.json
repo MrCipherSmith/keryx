@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T09:23:02.996Z",
+  "updatedAt": "2026-10-01T09:49:58.710Z",
   "source": {
     "type": "description",
     "ref": null
@@ -140,82 +140,117 @@
       "id": "T7",
       "title": "Fix keryx --help and cli-reference drift; subcommand-level coverage test",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:27.492Z",
+            "outcome": "started",
+            "detail": "363-T7 wave 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:27.784Z",
+            "outcome": "started",
+            "detail": "363-T8 wave 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Area pages batch 1 (areas 1-5)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:15.514Z",
+            "outcome": "started",
+            "detail": "363-T9 wave 2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Area pages batch 2 (areas 6-10)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:15.822Z",
+            "outcome": "started",
+            "detail": "363-T10 wave 2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Area pages batch 3 (areas 11-15)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7",
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.131Z",
+            "outcome": "started",
+            "detail": "363-T11 wave 2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -226,8 +261,14 @@
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.444Z",
+            "outcome": "started",
+            "detail": "363-T12 wave 2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -237,17 +278,24 @@
       "id": "T13",
       "title": "Built with Keryx and Project status pages",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.760Z",
+            "outcome": "started",
+            "detail": "363-T13 wave 2"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -273,17 +321,24 @@
       "id": "T15",
       "title": "Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:28.074Z",
+            "outcome": "started",
+            "detail": "363-T15 wave 1"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
@@ -454,6 +509,81 @@
       "at": "2026-10-01T09:23:02.996Z",
       "event": "task-done",
       "detail": "T6: Owner approves the target IA (gate before public files change)"
+    },
+    {
+      "at": "2026-10-01T09:23:27.492Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 363-T7 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:23:27.784Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 363-T8 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:23:28.074Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 363-T15 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:31:15.515Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 363-T9 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:15.822Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 363-T10 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.131Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 363-T11 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.444Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 363-T12 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.761Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 363-T13 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:29.708Z",
+      "event": "task-done",
+      "detail": "T15: Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map"
+    },
+    {
+      "at": "2026-10-01T09:33:03.189Z",
+      "event": "task-done",
+      "detail": "T8: Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job"
+    },
+    {
+      "at": "2026-10-01T09:41:02.047Z",
+      "event": "task-done",
+      "detail": "T10: Area pages batch 2 (areas 6-10)"
+    },
+    {
+      "at": "2026-10-01T09:41:40.802Z",
+      "event": "task-done",
+      "detail": "T9: Area pages batch 1 (areas 1-5)"
+    },
+    {
+      "at": "2026-10-01T09:45:17.650Z",
+      "event": "task-done",
+      "detail": "T13: Built with Keryx and Project status pages"
+    },
+    {
+      "at": "2026-10-01T09:48:09.955Z",
+      "event": "task-done",
+      "detail": "T7: Fix keryx --help and cli-reference drift; subcommand-level coverage test"
+    },
+    {
+      "at": "2026-10-01T09:49:58.710Z",
+      "event": "task-done",
+      "detail": "T11: Area pages batch 3 (areas 11-15)"
     }
   ],
   "acKinds": {
