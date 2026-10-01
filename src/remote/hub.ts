@@ -201,6 +201,7 @@ export class RemoteHub {
     this.registry.load();
     this.outbound.load();
     this.offset.load();
+    this.forgetOtherGroups();
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
     this.poller = new UpdatePoller({
       api: this.api,
@@ -213,6 +214,21 @@ export class RemoteHub {
         onPollerStatus(status);
       },
     });
+  }
+
+  /** Records left by a channel connected to another group are not ours: reusing one would answer into the old group. */
+  private forgetOtherGroups(): void {
+    const foreign = this.registry.records().filter((record) => record.chatId !== this.config.chatId);
+    if (foreign.length === 0) {
+      return;
+    }
+    for (const record of foreign) {
+      this.outbound.discardForThread(record.chatId, record.threadId);
+      this.inbound.remove(nameKey(record.name));
+      this.registry.remove(record.name);
+      this.event("topic-deleted", `${record.name}: forgotten, it belonged to another group`);
+    }
+    this.registry.save();
   }
 
   // ---- lifecycle of the hub ------------------------------------------------

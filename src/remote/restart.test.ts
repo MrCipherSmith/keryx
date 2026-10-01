@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { FakeBotApi } from "./fake-bot-api";
 import { INBOUND_DIRNAME, remoteDirPath } from "./paths";
 import type { BotApi } from "./types";
 import { type Harness, fileMode, makeHarness, OWNER_ID, STALE_MS, until } from "./remote.test-helpers";
@@ -30,6 +31,25 @@ describe("restart", () => {
     const again = await second.register({ sessionId: "sess-two-0002", project: "/w/app", name: "release" });
     expect(again).toEqual({ ok: true, name: "release", threadId: reg.threadId, reused: true });
     expect(h.api.topics()).toHaveLength(1);
+  });
+
+  test("records that belong to another group are dropped, so a reconnect to a new group does not reuse their topics", async () => {
+    h = makeHarness();
+    const first = h.makeHub();
+    const reg = await first.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+    if (!reg.ok) throw new Error("register failed");
+    await first.stop();
+
+    const otherChat = h.config.chatId - 1;
+    const otherApi = new FakeBotApi({ chatId: otherChat, now: h.clock.now });
+    const otherGroup = h.makeHub({ api: otherApi, config: { ...h.config, chatId: otherChat } });
+    expect(otherGroup.list()).toEqual([]);
+
+    await h.clock.advance(STALE_MS + 1);
+    const again = await otherGroup.register({ sessionId: "sess-two-0002", project: "/w/app", name: "release" });
+    if (!again.ok) throw new Error("register failed");
+    expect(again.reused).toBe(false);
+    expect(otherApi.topics()).toHaveLength(1);
   });
 
   test("a session that was live gets a fresh lease period instead of being declared dead off an old stamp", async () => {
