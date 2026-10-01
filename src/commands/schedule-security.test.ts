@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { pinGrantedBinary, type BinaryPin } from "../trigger/granted-binary";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -714,18 +714,43 @@ describe("N2: granted programs run from an empty directory, and shims/scripts ar
 });
 
 describe("pinned #! wrappers at run time", () => {
-  /** A private interpreter (a copy of /bin/sh) named on the wrapper's `#!/usr/bin/env` line. */
+  /**
+   * A private interpreter named on the wrapper's `#!/usr/bin/env` line: a copy of the
+   * running `bun`, not of `/bin/sh`. A copied signed system binary is SIGKILLed on
+   * macOS (so nothing runs and every "refused / never ran" assertion passes
+   * vacuously), and a script interpreter is refused by the pin itself. A copy of bun
+   * is a real binary that still executes where it is copied. The wrapper is a JS file
+   * with a `#!` line, which bun accepts.
+   */
   function envWrapper(): { wrapper: string; interp: string; binDir: string; marker: string } {
     const binDir = path.join(aside, "bin");
     mkdirSync(binDir, { recursive: true });
-    const interp = path.join(binDir, "kxsh");
-    writeFileSync(interp, readFileSync(realpathSync("/bin/sh")), { mode: 0o755 });
+    const interp = path.join(binDir, "kxbun");
+    copyFileSync(process.execPath, interp);
+    chmodSync(interp, 0o755);
     const marker = path.join(aside, "WRAPPER-RAN");
     const wrapper = path.join(aside, "gh");
-    writeFileSync(wrapper, `#!/usr/bin/env kxsh\necho ran > '${marker}'\necho '[]'\n`, { mode: 0o755 });
+    writeFileSync(wrapper, wrapperSource("ran", marker), { mode: 0o755 });
     return { wrapper, interp, binDir, marker };
   }
+  const wrapperSource = (word: string, marker: string): string =>
+    `#!/usr/bin/env kxbun\nrequire("node:fs").writeFileSync(${JSON.stringify(marker)}, ${JSON.stringify(word)});\nconsole.log("[]");\n`;
   const envFor = (binDir: string): Record<string, string | undefined> => ({ PATH: `${binDir}:/usr/bin:/bin` });
+
+  /**
+   * Positive control for the "refused / never ran" assertions, run BEFORE the
+   * schedule is confirmed (a changed interpreter no longer executes): the wrapper
+   * must write `marker` when run directly under the same PATH. If the interpreter
+   * cannot execute on this host the marker never appears, and the refusal assertions
+   * further down would pass vacuously; this turns that into a failure. The marker is
+   * removed afterwards, so a later `existsSync(marker) === false` means the run
+   * under test did not execute the wrapper.
+   */
+  function expectWrapperRuns(wrapper: string, binDir: string, marker: string): void {
+    execFileSync(wrapper, [], { env: envFor(binDir) as NodeJS.ProcessEnv, stdio: "ignore" });
+    expect(existsSync(marker)).toBe(true);
+    rmSync(marker);
+  }
 
   test("a pinned wrapper runs", async () => {
     const { wrapper, binDir, marker } = envWrapper();
@@ -737,8 +762,9 @@ describe("pinned #! wrappers at run time", () => {
 
   test("a changed wrapper is refused", async () => {
     const { wrapper, binDir, marker } = envWrapper();
+    expectWrapperRuns(wrapper, binDir, marker);
     await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
-    writeFileSync(wrapper, `#!/usr/bin/env kxsh\necho changed > '${marker}'\n`, { mode: 0o755 });
+    writeFileSync(wrapper, wrapperSource("changed", marker), { mode: 0o755 });
     await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: envFor(binDir) } });
     const record = await lastRecord();
     expect(record.agentTask?.refusal).toBe("grants-changed");
@@ -747,12 +773,14 @@ describe("pinned #! wrappers at run time", () => {
 
   test("a changed interpreter is refused, and so is one resolved elsewhere on the runtime PATH", async () => {
     const { wrapper, interp, binDir, marker } = envWrapper();
+    expectWrapperRuns(wrapper, binDir, marker);
     await addConfirmedSchedule(root, agentTaskEntry({ gh: wrapper }, {}, "nightly", envFor(binDir)["PATH"]));
 
-    // Another `kxsh` earlier on the runtime PATH: env would run that one.
+    // Another `kxbun` earlier on the runtime PATH: env would run that one.
     const other = path.join(aside, "other");
     mkdirSync(other, { recursive: true });
-    writeFileSync(path.join(other, "kxsh"), readFileSync(realpathSync("/bin/sh")), { mode: 0o755 });
+    copyFileSync(process.execPath, path.join(other, "kxbun"));
+    chmodSync(path.join(other, "kxbun"), 0o755);
     await runTriggerOnce(root, "nightly", { agentTask: { makeProvider: () => scripted(ghRounds()), planSandbox: () => INERT_SANDBOX, grantedEnv: { PATH: `${other}:${binDir}:/usr/bin:/bin` } } });
     expect((await lastRecord()).detail).toContain("the interpreter");
     expect(existsSync(marker)).toBe(false);

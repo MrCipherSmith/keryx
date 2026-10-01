@@ -23,9 +23,23 @@
 //
 // Wired through `bunfig.toml` `[test].preload`.
 
-import { mkdtempSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+// Canonicalise the temp directory before anything builds a path from it.
+//
+// On macOS `$TMPDIR` is `/var/folders/…`, a symlink to `/private/var/folders/…`.
+// Tests build fixture paths from `os.tmpdir()`, while the product canonicalises
+// (`process.cwd()` after `chdir`, `realpathSync.native`, git's absolute paths),
+// so string comparisons disagree. `os.tmpdir()` re-reads the env var on every
+// call, so fixing the variable fixes every `mkdtemp(tmpdir())` in the suite.
+// A no-op on Linux, where the temp directory is not a symlink.
+try {
+  process.env.TMPDIR = realpathSync(tmpdir());
+} catch {
+  // An unresolvable tmpdir keeps whatever the environment gave us.
+}
 
 const root = mkdtempSync(path.join(tmpdir(), "keryx-test-config-"));
 process.env.XDG_DATA_HOME = root;

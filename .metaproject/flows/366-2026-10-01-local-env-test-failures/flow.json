@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "366",
+  "slug": "local-env-test-failures",
+  "title": "Tests that fail only on a developer macOS checkout: flow 305 review-tier routing, worktree realpath, sandbox and shell-exec",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T07:41:31.124Z",
+  "updatedAt": "2026-10-01T10:03:46.192Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:38d6338bdae9e9d329d5d2d7bf66d51c5c1a4e161362df9ac3326703ec219d13",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5 (one implementer for the five causes)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of T5; the suite runs in CI"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Fix the five causes (preload TMPDIR realpath, resolveGitCommonDir canonical, ps keyword, TOML probe, sandbox detect seam, schedule interpreter) and verify each file locally",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:03:46.192Z",
+            "outcome": "started",
+            "detail": "366-T5 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T07:41:31.124Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T10:03:23.104Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T10:03:24.832Z",
+      "event": "task-added",
+      "detail": "T5: Fix the five causes (preload TMPDIR realpath, resolveGitCommonDir canonical, ps keyword, TOML probe, sandbox detect seam, schedule interpreter) and verify each file locally"
+    },
+    {
+      "at": "2026-10-01T10:03:39.225Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T10:03:41.058Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T10:03:42.774Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T10:03:44.505Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T10:03:46.192Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 366-T5 sonnet"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    }
+  }
+}
