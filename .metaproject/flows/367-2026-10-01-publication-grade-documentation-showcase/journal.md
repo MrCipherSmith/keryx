@@ -117,3 +117,4 @@ flow-id collision (main has its own 363 — renumber at merge); rebase onto main
 - 2026-10-01T09:56:33.527Z - task-attempt: T19: started (attempt 1) — 363-T19
 - 2026-10-01T10:10:23.705Z - task-done: T14: Showcase README, README.ru.md, hero/OG assets
 - 2026-10-01T10:10:56.819Z - task-done: T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests
+- 2026-10-01T10:14:38.603Z - renumbered: 363 -> 367: id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch

@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "363",
+  "id": "367",
   "slug": "publication-grade-documentation-showcase",
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T10:10:56.819Z",
+  "updatedAt": "2026-10-01T10:14:38.603Z",
   "source": {
     "type": "description",
     "ref": null
@@ -651,6 +651,11 @@
       "at": "2026-10-01T10:10:56.819Z",
       "event": "task-done",
       "detail": "T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests"
+    },
+    {
+      "at": "2026-10-01T10:14:38.603Z",
+      "event": "renumbered",
+      "detail": "363 -> 367: id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch"
     }
   ],
   "acKinds": {

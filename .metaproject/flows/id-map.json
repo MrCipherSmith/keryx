@@ -334,5 +334,13 @@
     "toDir": "351-2026-09-27-review-orchestration-fails-closed-plan-i",
     "at": "2026-09-27T11:41:23.238Z",
     "reason": "id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs"
+  },
+  {
+    "from": "363",
+    "to": "367",
+    "fromDir": "363-2026-10-01-publication-grade-documentation-showcase",
+    "toDir": "367-2026-10-01-publication-grade-documentation-showcase",
+    "at": "2026-10-01T10:14:38.603Z",
+    "reason": "id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch"
   }
 ]
