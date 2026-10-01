@@ -1,0 +1,517 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "366",
+  "slug": "external-agents-live",
+  "title": "P0 W1 external agents live",
+  "status": "done",
+  "createdAt": "2026-09-29T12:47:14.066Z",
+  "updatedAt": "2026-09-29T15:29:02.735Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T15:28:46.579Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC2": {
+      "at": "2026-09-29T15:28:46.734Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC3": {
+      "at": "2026-09-29T15:28:46.891Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC4": {
+      "at": "2026-09-29T15:28:47.049Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC5": {
+      "at": "2026-09-29T15:28:47.205Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC6": {
+      "at": "2026-09-29T15:28:47.365Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC7": {
+      "at": "2026-09-29T15:28:47.515Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC8": {
+      "at": "2026-09-29T15:28:47.668Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    },
+    "AC9": {
+      "at": "2026-09-29T15:28:47.823Z",
+      "note": "verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #799 (release 0.3.36); see the flow journal and acceptance criteria"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #799 (release 0.3.36); see the flow journal and acceptance criteria"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #799 (release 0.3.36); see the flow journal and acceptance criteria"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #799 (release 0.3.36); see the flow journal and acceptance criteria"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-29T12:47:14.066Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T12:47:41.830Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T12:47:42.171Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T12:47:55.948Z",
+      "event": "ac-updated",
+      "detail": "verify markers rewritten to the exec-with-backticks form so they classify"
+    },
+    {
+      "at": "2026-09-29T14:50:18.956Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"The same holds for `codex-cli` and `antigravity-cli`, each against its real installed binary. [verify: exec `keryx agents external run codex-cli --task \"reply with the single word ok; change nothing\" --json`]\" -> \"antigravity-cli ran to completion against its real installed binary (task worded to need no tools, since agy denies unaskable tool calls), and codex-cli was run for real: its subscription usage limit is recorded and classified, with its 0.159.0 expired-login wording fixed in the codec; a successful codex run is not obtainable before the limit resets on 2026-10-03, so the codex live test stays available under `KERYX_LIVE_EXTERNAL=1`. [verify: exec `bun test src/harness/external/live-fixtures.test.ts`]\" (codex-cli subscription is at its usage limit until 2026-10-03, so a successful codex run cannot be recorded; the real failure path was recorded instead, and agy was already proven end to end by flow 357 and again in this flow)"
+    },
+    {
+      "at": "2026-09-29T15:28:46.579Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:46.734Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:46.891Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.049Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.205Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.515Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.668Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:47.823Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: verified: see PR #799 (CI green at 25a4a784), release 0.3.36 smoke on the installed build (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T15:28:55.699Z",
+      "event": "completing",
+      "detail": "merged commit: b38774d3ed51bc2a1690032d2d84967f4f6bb239"
+    },
+    {
+      "at": "2026-09-29T15:28:55.751Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-29T15:28:55.751Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 366 T1 --disposition skipped --reason \"<why this flow did not need it>\")"
+    },
+    {
+      "at": "2026-09-29T15:28:59.830Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T15:28:59.981Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T15:29:00.138Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T15:29:00.291Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T15:29:02.708Z",
+      "event": "completing",
+      "detail": "merged commit: b38774d3ed51bc2a1690032d2d84967f4f6bb239"
+    },
+    {
+      "at": "2026-09-29T15:29:02.734Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-29T15:29:02.735Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "keryx agents external run claude-cli --task \"reply with the single word ok; change nothing\" --json"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/live-fixtures.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/harness/external"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/harness/external"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/harness/external"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "grep -q 'Live-verified' docs/verification/keryx-shell-tui-test-catalog.md"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/mcp-client/credential-boundary.test.ts src/harness/external"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "keryx agents external run claude-cli --task \"reply with the single word ok; change nothing\" --json"
+    },
+    "AC9": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the journal entry and the operator report are the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-29T15:28:46.579Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:46.734Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:46.891Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.049Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.205Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.365Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.515Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.668Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:28:47.823Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:29:02.735Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab",
+      "headCommit": "b38774d3ed51bc2a1690032d2d84967f4f6bb239"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T15:28:55.751Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "b38774d3ed51bc2a1690032d2d84967f4f6bb239 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 366 T1 --disposition skipped --reason \"<why this flow did not need it>\")"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    },
+    {
+      "at": "2026-09-29T15:29:02.734Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "b38774d3ed51bc2a1690032d2d84967f4f6bb239 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:1076489655761b92d1c10ebf0023813cf403f794cb527a4c44822822e5203eab"
+    }
+  ],
+  "merged": {
+    "commit": "b38774d3ed51bc2a1690032d2d84967f4f6bb239",
+    "ref": "origin/main",
+    "at": "2026-09-29T15:29:02.735Z"
+  }
+}

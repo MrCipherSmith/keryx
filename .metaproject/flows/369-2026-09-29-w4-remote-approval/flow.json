@@ -1,0 +1,536 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "369",
+  "slug": "w4-remote-approval",
+  "title": "P0 W4 remote approval: async approvals over keryx serve (R4d)",
+  "status": "done",
+  "createdAt": "2026-09-29T15:43:29.405Z",
+  "updatedAt": "2026-09-29T21:40:12.740Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T21:39:47.802Z",
+      "note": "store tests green in CI on PR 804 (head 4bec3721)"
+    },
+    "AC2": {
+      "at": "2026-09-29T21:39:47.973Z",
+      "note": "turn-approval tests green in CI"
+    },
+    "AC3": {
+      "at": "2026-09-29T21:39:48.129Z",
+      "note": "route tests green in CI"
+    },
+    "AC4": {
+      "at": "2026-09-29T21:39:48.287Z",
+      "note": "binding tests green in CI; AC names actionFingerprint and the floors that exist"
+    },
+    "AC5": {
+      "at": "2026-09-29T21:39:48.445Z",
+      "note": "durability tests green in CI, including bind-failure and stranded-turn cases from the review round"
+    },
+    "AC6": {
+      "at": "2026-09-29T21:39:48.607Z",
+      "note": "approvals inspector and slash registry tests green; pty smoke green"
+    },
+    "AC7": {
+      "at": "2026-09-29T21:39:48.765Z",
+      "note": "docs:links and mkdocs strict green in CI"
+    },
+    "AC8": {
+      "at": "2026-09-29T21:39:48.924Z",
+      "note": "released 0.3.39. Installed build: --version, review tier, mcp list, approvals --help, approvals list. Scripted serve turn plus the real keryx approvals list/allow (replay answered, call executed once) through bun src/cli.ts at the merged code. Stock keryx serve registers no tools, so it raises no approvals; AC8 was rewritten to say so."
+    },
+    "AC9": {
+      "at": "2026-09-29T21:39:49.085Z",
+      "note": "a stop: the journal entry and the operator report are the evidence"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/804"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR 804, released as 0.3.39; ACs confirmed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR 804, released as 0.3.39; ACs confirmed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR 804, released as 0.3.39; ACs confirmed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR 804, released as 0.3.39; ACs confirmed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-29T15:43:29.405Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T15:46:28.522Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T15:46:28.677Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T15:46:33.574Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a real `keryx serve` round trip (a turn raises an approval, `keryx approvals allow` answers it, the tool runs once). [verify: judged — the release evidence and the smoke output in the flow journal]\" -> \"# gdctx rg summary\" (marker syntax: judged takes no arguments)"
+    },
+    {
+      "at": "2026-09-29T15:46:49.991Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"# gdctx rg summary\" -> \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a real `keryx serve` round trip (a turn raises an approval, `keryx approvals allow` answers it, the tool runs once). [verify: judged]\" (restore AC8 text with valid marker)"
+    },
+    {
+      "at": "2026-09-29T20:55:28.939Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"An allow is bound to the pending call: it applies only to the call whose fingerprint (`toolCallHash`) is on the record, cannot change arguments or broaden scope, is one-time only (never sets session MCP trust), never lifts the destructive, credentials, publish-lease, untrusted-origin or hook-ask floors, and never overrides a policy deny; a tool call executes at most once per approval, including across a process restart. [verify: exec `bun test src/lib/serve-approvals-binding.test.ts`]\" -> \"An allow is bound to the pending call: it applies only to the call whose fingerprint (`actionFingerprint`) is on the record, cannot change arguments or broaden scope, is one-time only (never sets session MCP trust), never lifts the destructive, credentials, publish-lease, untrusted-origin or hook-ask floors, and never overrides a policy deny; a tool call executes at most once per approval, including across a process restart. [verify: exec `bun test src/lib/serve-approvals-binding.test.ts`]\" (The implemented name is actionFingerprint; toolCallHash was the requirements-draft name.)"
+    },
+    {
+      "at": "2026-09-29T20:55:29.097Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a real `keryx serve` round trip (a turn raises an approval, `keryx approvals allow` answers it, the tool runs once). [verify: judged]\" -> \"The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a round trip through the real CLI route (a scripted serve turn raises an approval, `keryx approvals list` shows it, `keryx approvals allow` answers it, the tool runs once). Stock `keryx serve` registers no tools and so raises no approvals, which is why the turn is scripted. [verify: judged]\" (Stock keryx serve registers no tools, so a real serve round trip cannot raise an approval; the smoke runs a scripted turn plus the real approvals CLI.)"
+    },
+    {
+      "at": "2026-09-29T21:03:13.257Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"An allow is bound to the pending call: it applies only to the call whose fingerprint (`actionFingerprint`) is on the record, cannot change arguments or broaden scope, is one-time only (never sets session MCP trust), never lifts the destructive, credentials, publish-lease, untrusted-origin or hook-ask floors, and never overrides a policy deny; a tool call executes at most once per approval, including across a process restart. [verify: exec `bun test src/lib/serve-approvals-binding.test.ts`]\" -> \"An allow is bound to the pending call: it applies only to the call whose fingerprint (`actionFingerprint`) is on the record, cannot change arguments or broaden scope, is one-time only (never sets session MCP trust), covers this one call only so that a destructive, credentials or hook-ask call asks again the next time (the floors are recorded as labels, not lifted), and never overrides a policy deny; a tool call executes at most once per approval, including across a process restart. [verify: exec `bun test src/lib/serve-approvals-binding.test.ts`]\" (Publish-lease and untrusted-origin floors are not implemented in the run loop; the criterion now names only the floors that exist (destructive, credentials, hook-ask), as a review finding pointed out.)"
+    },
+    {
+      "at": "2026-09-29T21:39:47.802Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: store tests green in CI on PR 804 (head 4bec3721) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:47.973Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: turn-approval tests green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.129Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: route tests green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.287Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: binding tests green in CI; AC names actionFingerprint and the floors that exist (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.445Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: durability tests green in CI, including bind-failure and stranded-turn cases from the review round (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: approvals inspector and slash registry tests green; pty smoke green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.765Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: docs:links and mkdocs strict green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:48.924Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: released 0.3.39. Installed build: --version, review tier, mcp list, approvals --help, approvals list. Scripted serve turn plus the real keryx approvals list/allow (replay answered, call executed once) through bun src/cli.ts at the merged code. Stock keryx serve registers no tools, so it raises no approvals; AC8 was rewritten to say so. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:49.085Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: a stop: the journal entry and the operator report are the evidence (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T21:39:54.314Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T21:39:54.477Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T21:39:54.632Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T21:39:54.794Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T21:39:57.070Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/804 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-29T21:39:59.799Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-29T21:40:03.782Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-29T21:40:03.783Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#804 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__804.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 804 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+    },
+    {
+      "at": "2026-09-29T21:40:08.695Z",
+      "event": "completing",
+      "detail": "merged commit: 8f674bbaca49c4076dfe48b5f864ad0557182a64"
+    },
+    {
+      "at": "2026-09-29T21:40:12.739Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-29T21:40:12.740Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/lib/serve-approvals-store.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/lib/serve-turn-approval.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/lib/serve-approvals.route.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/lib/serve-approvals-binding.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/lib/serve-approvals-durability.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/tui/approvals-inspector.test.ts src/commands/shell-slash-registry.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun run docs:links"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the journal entry and the operator report are the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-29T21:39:47.802Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:47.973Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.129Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.287Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.445Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.607Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.765Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:48.924Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:39:49.085Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:40:12.740Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a",
+      "headCommit": "8f674bbaca49c4076dfe48b5f864ad0557182a64"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T21:40:03.782Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "8f674bbaca49c4076dfe48b5f864ad0557182a64 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "8f674bbaca49c4076dfe48b5f864ad0557182a64 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#804 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__804.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 804 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    },
+    {
+      "at": "2026-09-29T21:40:12.739Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "8f674bbaca49c4076dfe48b5f864ad0557182a64 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "8f674bbaca49c4076dfe48b5f864ad0557182a64 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:834ed496fb0494490e12ac858b76db65ca5f997f44ee4bcd1c33e940a6d0292a"
+    }
+  ],
+  "merged": {
+    "commit": "8f674bbaca49c4076dfe48b5f864ad0557182a64",
+    "ref": "origin/main",
+    "at": "2026-09-29T21:40:12.740Z"
+  }
+}

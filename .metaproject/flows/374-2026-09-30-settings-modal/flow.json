@@ -1,0 +1,437 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "374",
+  "slug": "settings-modal",
+  "title": "Settings modal: /settings",
+  "status": "done",
+  "createdAt": "2026-09-30T21:03:01.927Z",
+  "updatedAt": "2026-09-30T23:38:04.106Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-30T23:25:05.677Z",
+      "note": "settings-model tests (19+) and settings-state tests; PR #814 merged e357ccc3"
+    },
+    "AC2": {
+      "at": "2026-09-30T23:25:05.843Z",
+      "note": "settings-modal tests incl. inputBlocked and two-step Enter; verifier refuted F-001..F-006 at f240da30"
+    },
+    "AC3": {
+      "at": "2026-09-30T23:25:06.008Z",
+      "note": "settings-actions tests: rows run the existing handlers, no disk write for mode/plan"
+    },
+    "AC4": {
+      "at": "2026-09-30T23:25:06.175Z",
+      "note": "modal tests: auto needs a second Enter at least 400 ms later"
+    },
+    "AC5": {
+      "at": "2026-09-30T23:25:06.343Z",
+      "note": "settings-model tests: scope per row and per reasoning source"
+    },
+    "AC6": {
+      "at": "2026-09-30T23:25:06.513Z",
+      "note": "shell-agent-repl tests for the readline table"
+    },
+    "AC7": {
+      "at": "2026-09-30T23:25:06.680Z",
+      "note": "agent-commands, help-groups, tui-shell tests; sidebar click via settingsOpenDecision"
+    },
+    "AC8": {
+      "at": "2026-09-30T23:25:06.847Z",
+      "note": "README, onboarding, modules, commands-by-task, CHANGELOG 0.3.46, package.json 0.3.46"
+    },
+    "AC9": {
+      "at": "2026-09-30T23:37:56.487Z",
+      "note": "live TUI smoke on npm-installed 0.3.46 in a scratch project via pty: /settings modal lists all rows; Plan on then off, Reasoning display expand then back to auto; no external agents used; keryx tree has no new tracked changes"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/814"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T21:03:01.927Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T22:23:36.650Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T22:23:37.067Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T22:48:47.501Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"README or docs site, `commands-by-task` and CHANGELOG describe `/settings`; version bumped to 0.3.45.\" -> \"README or docs site, `commands-by-task` and CHANGELOG describe `/settings`; version bumped to 0.3.46 (0.3.45 was taken by another release on main).\" (0.3.45 already released from main (b0e9609f) while this flow was in progress; version number only, no behavioural change)"
+    },
+    {
+      "at": "2026-09-30T23:25:04.994Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T23:25:05.166Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T23:25:05.333Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-30T23:25:05.505Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-30T23:25:05.677Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: settings-model tests (19+) and settings-state tests; PR #814 merged e357ccc3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:05.843Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: settings-modal tests incl. inputBlocked and two-step Enter; verifier refuted F-001..F-006 at f240da30 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.009Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: settings-actions tests: rows run the existing handlers, no disk write for mode/plan (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.175Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: modal tests: auto needs a second Enter at least 400 ms later (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.343Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: settings-model tests: scope per row and per reasoning source (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.513Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: shell-agent-repl tests for the readline table (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: agent-commands, help-groups, tui-shell tests; sidebar click via settingsOpenDecision (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:25:06.848Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: README, onboarding, modules, commands-by-task, CHANGELOG 0.3.46, package.json 0.3.46 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:37:56.487Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: live TUI smoke on npm-installed 0.3.46 in a scratch project via pty: /settings modal lists all rows; Plan on then off, Reasoning display expand then back to auto; no external agents used; keryx tree has no new tracked changes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T23:37:58.657Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/814 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-30T23:38:00.108Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-30T23:38:04.105Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-30T23:38:04.106Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-30T23:25:05.677Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:05.843Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.008Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.175Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.343Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.513Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.680Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:25:06.847Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:37:56.487Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    },
+    {
+      "at": "2026-09-30T23:38:04.106Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e",
+      "headCommit": "e357ccc3a841662a57fefbdbbbaa02cd32320f15"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-30T23:38:04.105Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "e357ccc3a841662a57fefbdbbbaa02cd32320f15 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "e357ccc3a841662a57fefbdbbbaa02cd32320f15 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:c1f2aea38d86c86d7c85c0d74772bb4c2f24a406457d75525c3ad8c03598b63e"
+    }
+  ],
+  "merged": {
+    "commit": "e357ccc3a841662a57fefbdbbbaa02cd32320f15",
+    "ref": "origin/main",
+    "at": "2026-09-30T23:38:04.106Z"
+  }
+}

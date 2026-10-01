@@ -1,0 +1,605 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "357",
+  "slug": "antigravity-cli-agy-as-an-external-agent",
+  "title": "Antigravity CLI (agy) as an external agent, read-only, under the operator's Google subscription",
+  "status": "done",
+  "createdAt": "2026-09-28T19:13:50.648Z",
+  "updatedAt": "2026-09-28T22:41:50.271Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T21:06:31.606Z",
+      "note": "registry row + list output verified live on the installed 0.3.26: antigravity-cli shows installed, 1.2.12, within the recorded range; registry.test.ts covers binary-missing/available"
+    },
+    "AC2": {
+      "at": "2026-09-28T21:06:31.922Z",
+      "note": "codec/antigravity-cli.test.ts pins argv for fresh, read-only (--sandbox) and resume (--conversation); --dangerously-skip-permissions never emitted"
+    },
+    "AC3": {
+      "at": "2026-09-28T21:06:32.286Z",
+      "note": "codec replays the real read-only-ok.stream.jsonl; unknown events counted as skipped, 0 skipped on both live fixtures"
+    },
+    "AC4": {
+      "at": "2026-09-28T21:06:32.654Z",
+      "note": "one test per outcome row. DEVIATION from the frozen wording: SUCCESS with agy's denied_actions is reported as Denied (blocked on approval), not completed-with-denials - measured live, stricter, and never plain success"
+    },
+    "AC5": {
+      "at": "2026-09-28T21:06:33.004Z",
+      "note": "EXTERNAL_RUNTIME_CREDENTIAL_ALLOW is empty, env test with Google/OpenAI/Anthropic/GitHub keys, source assertions on ~/.gemini/antigravity-cli"
+    },
+    "AC6": {
+      "at": "2026-09-28T21:06:33.367Z",
+      "note": "block-list default + ExternalBlockedError, one-time TTY consent, consent-required off a TTY; enforced on both the command and the model-initiated dispatch path (shared checkExternalAgentVendorGates), tests for each"
+    },
+    "AC8": {
+      "at": "2026-09-28T21:06:33.714Z",
+      "note": "live keryx-mediated run committed as keryx-run-ok.*, docs + requirements status + CHANGELOG + bump 0.3.26 released; CI 18/18 on aa3973c3, npm 0.3.26 published, smoke test clean"
+    },
+    "AC7": {
+      "at": "2026-09-28T22:41:42.205Z",
+      "note": "Sandbox scope tests from PR #788; TUI clause proven by PR #791 (f94862b8): /delegate parse, roster text and JSON, sidebar events, inspector rows for antigravity-cli"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T7"
+    },
+    {
+      "id": "T5",
+      "title": "Registry, codec, event parsing, outcome classification (AC1-AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-28T19:14:29.066Z",
+            "outcome": "started",
+            "detail": "Sonnet implementer in /home/altsay/keryx-agy"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Landed in PR #788 (merged eaac45b1), released as 0.3.26"
+    },
+    {
+      "id": "T6",
+      "title": "Environment, privacy block-list, consent, sandbox scope, TUI (AC5-AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Landed in PR #788 (merged eaac45b1), released as 0.3.26"
+    },
+    {
+      "id": "T7",
+      "title": "Live run through keryx, docs, package status, changelog, bump (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Landed in PR #788 (merged eaac45b1), released as 0.3.26"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T19:13:50.648Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-28T19:14:27.729Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-28T19:14:27.881Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-28T19:14:28.025Z",
+      "event": "task-added",
+      "detail": "T5: Registry, codec, event parsing, outcome classification (AC1-AC4)"
+    },
+    {
+      "at": "2026-09-28T19:14:28.172Z",
+      "event": "task-added",
+      "detail": "T6: Environment, privacy block-list, consent, sandbox scope, TUI (AC5-AC7)"
+    },
+    {
+      "at": "2026-09-28T19:14:28.322Z",
+      "event": "task-added",
+      "detail": "T7: Live run through keryx, docs, package status, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T19:14:28.470Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-28T19:14:28.617Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-28T19:14:28.768Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-28T19:14:28.918Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-28T19:14:29.066Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-agy"
+    },
+    {
+      "at": "2026-09-28T21:05:00.679Z",
+      "event": "completing",
+      "detail": "merged commit: eaac45b189648a9c679d0cfe364e9c1e82744239"
+    },
+    {
+      "at": "2026-09-28T21:05:00.733Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-28T21:05:00.733Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8 | tasks: not done: T5, T6, T7"
+    },
+    {
+      "at": "2026-09-28T21:06:16.157Z",
+      "event": "task-done",
+      "detail": "T5: Registry, codec, event parsing, outcome classification (AC1-AC4)"
+    },
+    {
+      "at": "2026-09-28T21:06:16.496Z",
+      "event": "task-done",
+      "detail": "T6: Environment, privacy block-list, consent, sandbox scope, TUI (AC5-AC7)"
+    },
+    {
+      "at": "2026-09-28T21:06:16.854Z",
+      "event": "task-done",
+      "detail": "T7: Live run through keryx, docs, package status, changelog, bump (AC8)"
+    },
+    {
+      "at": "2026-09-28T21:06:31.606Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: registry row + list output verified live on the installed 0.3.26: antigravity-cli shows installed, 1.2.12, within the recorded range; registry.test.ts covers binary-missing/available (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:31.923Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: codec/antigravity-cli.test.ts pins argv for fresh, read-only (--sandbox) and resume (--conversation); --dangerously-skip-permissions never emitted (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:32.286Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: codec replays the real read-only-ok.stream.jsonl; unknown events counted as skipped, 0 skipped on both live fixtures (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:32.654Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: one test per outcome row. DEVIATION from the frozen wording: SUCCESS with agy's denied_actions is reported as Denied (blocked on approval), not completed-with-denials - measured live, stricter, and never plain success (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:33.004Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: EXTERNAL_RUNTIME_CREDENTIAL_ALLOW is empty, env test with Google/OpenAI/Anthropic/GitHub keys, source assertions on ~/.gemini/antigravity-cli (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:33.367Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: block-list default + ExternalBlockedError, one-time TTY consent, consent-required off a TTY; enforced on both the command and the model-initiated dispatch path (shared checkExternalAgentVendorGates), tests for each (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T21:06:33.714Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: live keryx-mediated run committed as keryx-run-ok.*, docs + requirements status + CHANGELOG + bump 0.3.26 released; CI 18/18 on aa3973c3, npm 0.3.26 published, smoke test clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:41:42.205Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Sandbox scope tests from PR #788; TUI clause proven by PR #791 (f94862b8): /delegate parse, roster text and JSON, sidebar events, inspector rows for antigravity-cli (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:41:42.359Z",
+      "event": "completing",
+      "detail": "merged commit: f94862b8e9b459a5f5de9cc9d77c724f8503c7b9"
+    },
+    {
+      "at": "2026-09-28T22:41:42.387Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-28T22:41:42.387Z",
+      "event": "completion-failed",
+      "detail": "main-merge: f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main | base-branch: violated: this flow recorded base main, but f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main. The merge landed somewhere else. | review: 1 of 5 conditions failed — head-commit (unobserved): round `2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29-r02` ran against aa3973c3ed1da505ced9a99c100190b72820a89e and the completion names merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9. aa3973c3ed1da505ced9a99c100190b72820a89e is not contained in it, and the trees could not be compared: the merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 — `git rev-parse f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}` exited 128: fatal: ambiguous argument 'f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}': unknown revision or path not in the working tree.. So nothing here shows either that the reviewed content is what merged or that it is not — the check could not run, which is not the same as running and failing. Fetch the missing object (`git fetch --unshallow`, or fetch the branch the round ran against), or ingest a round against the merged commit (`keryx review ingest … --head f94862b8e9b459a5f5de9cc9d77c724f8503c7b9`)."
+    },
+    {
+      "at": "2026-09-28T22:41:50.239Z",
+      "event": "completing",
+      "detail": "merged commit: eaac45b189648a9c679d0cfe364e9c1e82744239"
+    },
+    {
+      "at": "2026-09-28T22:41:50.271Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: passed"
+    },
+    {
+      "at": "2026-09-28T22:41:50.271Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T21:05:00.733Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "fail",
+          "detail": "unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "eaac45b189648a9c679d0cfe364e9c1e82744239 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "eaac45b189648a9c679d0cfe364e9c1e82744239 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T5, T6, T7"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T22:41:42.387Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "fail",
+          "detail": "violated: this flow recorded base main, but f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 is not contained in origin/main. The merge landed somewhere else."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — head-commit (unobserved): round `2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29-r02` ran against aa3973c3ed1da505ced9a99c100190b72820a89e and the completion names merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9. aa3973c3ed1da505ced9a99c100190b72820a89e is not contained in it, and the trees could not be compared: the merged commit f94862b8e9b459a5f5de9cc9d77c724f8503c7b9 — `git rev-parse f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}` exited 128: fatal: ambiguous argument 'f94862b8e9b459a5f5de9cc9d77c724f8503c7b9^{tree}': unknown revision or path not in the working tree.. So nothing here shows either that the reviewed content is what merged or that it is not — the check could not run, which is not the same as running and failing. Fetch the missing object (`git fetch --unshallow`, or fetch the branch the round ran against), or ingest a round against the merged commit (`keryx review ingest … --head f94862b8e9b459a5f5de9cc9d77c724f8503c7b9`)."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T22:41:50.271Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "8 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "eaac45b189648a9c679d0cfe364e9c1e82744239 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "eaac45b189648a9c679d0cfe364e9c1e82744239 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "7 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T21:06:31.606Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:31.922Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:32.286Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:32.654Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:33.004Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:33.367Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T21:06:33.714Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T22:41:42.205Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc"
+    },
+    {
+      "at": "2026-09-28T22:41:50.271Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:6c5134e180727023e60d7a12d39a7de5da029755ee2432b01f3165d8e1d133fc",
+      "headCommit": "eaac45b189648a9c679d0cfe364e9c1e82744239"
+    }
+  ],
+  "merged": {
+    "commit": "eaac45b189648a9c679d0cfe364e9c1e82744239",
+    "ref": "origin/main",
+    "at": "2026-09-28T22:41:50.271Z"
+  }
+}

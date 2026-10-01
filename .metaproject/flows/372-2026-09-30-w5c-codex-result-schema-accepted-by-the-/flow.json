@@ -1,0 +1,463 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "372",
+  "slug": "w5c-codex-result-schema-accepted-by-the-",
+  "title": "W5c codex result schema accepted by the OpenAI strict response_format",
+  "status": "done",
+  "createdAt": "2026-09-30T18:47:28.466Z",
+  "updatedAt": "2026-09-30T19:37:55.035Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-30T19:37:28.429Z",
+      "note": "strict-schema.test.ts: closure/required/nullable/removed keywords/no mutation; bun test src/harness/external 657 pass; CI 18/18 on 9993308f"
+    },
+    "AC2": {
+      "at": "2026-09-30T19:37:28.593Z",
+      "note": "dropOptionalNulls tests incl. required-null kept, undeclared-null kept, populated findings through the full schema"
+    },
+    "AC3": {
+      "at": "2026-09-30T19:37:28.756Z",
+      "note": "runtime.test.ts + supervise.test.ts: strict staged file for codex, nulls removed, final message only, exit code from events after own kill, non-zero code before the kill kept; codex-only 10 s settle"
+    },
+    "AC4": {
+      "at": "2026-09-30T19:37:28.922Z",
+      "note": "live codex 0.159.2: strict file accepted in read-only and write runs (no invalid_json_schema), Completed with valid JSON; journal of probes in this session"
+    },
+    "AC5": {
+      "at": "2026-09-30T19:37:29.094Z",
+      "note": "installed 0.3.43, codex 0.159.2: read-only Completed; --write Completed with patch; review shows diff; apply via pty with typed 05e249da024d landed external/bde06625-...; main tree untouched; a second run discarded, patch deleted; older pending runs discarded"
+    },
+    "AC6": {
+      "at": "2026-09-30T19:37:29.260Z",
+      "note": "CHANGELOG 0.3.43 and external-agent-write.md state the strict copy and full validation; check:doc-links 0 broken"
+    },
+    "AC7": {
+      "at": "2026-09-30T19:37:29.430Z",
+      "note": "operator report carries the live results; open: F-003 class_scope limitation question, agy refused, read exposure, version window"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/809"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T18:47:28.466Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T18:47:53.159Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T18:47:53.510Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T18:57:47.691Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"The codex codec is handed the strict document (its own staged file, refs bundled, no sibling `$ref`), claude still gets the inline bundled document and the unchanged full schema is what every result is validated against; a codex run whose final message carries nulls for the optional fields is Completed and its returned output has those nulls removed. [verify: exec `bun test src/harness/external/runtime.test.ts src/harness/external/codec/codex-cli.test.ts`]\" -> \"The codex codec is handed the strict document (its own staged file, refs bundled, no sibling `$ref`), claude still gets the inline bundled document and the unchanged full schema is what every result is validated against; a codex run whose final message carries nulls for the optional fields is Completed and its returned output has those nulls removed; a codex run that narrates in earlier agent messages returns only the final message as its result; a run ended by our own kill after its terminal event keeps the exit code from its events, not the signal exit code, and codex gets a terminal settle window long enough for its teardown. [verify: exec `bun test src/harness/external`]\" (live write probe found two more defects on the same path: codex was killed mid-teardown and its SIGTERM exit code was reported as a failure; narration messages were joined in front of the JSON)"
+    },
+    {
+      "at": "2026-09-30T19:37:28.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: strict-schema.test.ts: closure/required/nullable/removed keywords/no mutation; bun test src/harness/external 657 pass; CI 18/18 on 9993308f (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:28.593Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: dropOptionalNulls tests incl. required-null kept, undeclared-null kept, populated findings through the full schema (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:28.756Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: runtime.test.ts + supervise.test.ts: strict staged file for codex, nulls removed, final message only, exit code from events after own kill, non-zero code before the kill kept; codex-only 10 s settle (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:28.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: live codex 0.159.2: strict file accepted in read-only and write runs (no invalid_json_schema), Completed with valid JSON; journal of probes in this session (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:29.095Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: installed 0.3.43, codex 0.159.2: read-only Completed; --write Completed with patch; review shows diff; apply via pty with typed 05e249da024d landed external/bde06625-...; main tree untouched; a second run discarded, patch deleted; older pending runs discarded (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:29.261Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CHANGELOG 0.3.43 and external-agent-write.md state the strict copy and full validation; check:doc-links 0 broken (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:29.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: operator report carries the live results; open: F-003 class_scope limitation question, agy refused, read exposure, version window (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:37:33.341Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T19:37:37.796Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T19:37:37.974Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-30T19:37:38.153Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-30T19:37:40.721Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/809 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-30T19:37:40.890Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-30T19:37:44.925Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-30T19:37:44.926Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#809 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__809.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 809 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+    },
+    {
+      "at": "2026-09-30T19:37:50.631Z",
+      "event": "completing",
+      "detail": "merged commit: 0e8877023c79522b6c58a8dfeaa37ee41f45e2d2"
+    },
+    {
+      "at": "2026-09-30T19:37:55.033Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-30T19:37:55.035Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/strict-schema.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/strict-schema.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/harness/external"
+    },
+    "AC4": {
+      "kind": "judged"
+    },
+    "AC5": {
+      "kind": "judged"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun run check:doc-links"
+    },
+    "AC7": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the operator report is the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-30T19:37:28.429Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:28.593Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:28.756Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:28.922Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:29.094Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:29.260Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:29.430Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:55.035Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21",
+      "headCommit": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-30T19:37:44.925Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#809 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__809.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 809 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    },
+    {
+      "at": "2026-09-30T19:37:55.033Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:17beb2113875710b46b6075b2215a068e858fee45e078f9ff8fbe3773a74ed21"
+    }
+  ],
+  "merged": {
+    "commit": "0e8877023c79522b6c58a8dfeaa37ee41f45e2d2",
+    "ref": "origin/main",
+    "at": "2026-09-30T19:37:55.034Z"
+  }
+}

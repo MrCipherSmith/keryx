@@ -1,0 +1,516 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "381",
+  "slug": "product-verdicts-g1",
+  "title": "Product module: observation verdicts, outcome slot at flow init, gates G1a and G1b",
+  "status": "done",
+  "createdAt": "2026-09-29T06:29:36.390Z",
+  "updatedAt": "2026-10-01T12:22:19.646Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T07:46:45.811Z",
+      "note": "observation.test.ts: four verdicts parse, the index stores verdict and note; fenced example ignored"
+    },
+    "AC2": {
+      "at": "2026-09-29T07:46:45.968Z",
+      "note": "observation-errors.test.ts: malformed line is a failure naming the flow, index exits 1, the flow stays in open, no double count in staleness"
+    },
+    "AC3": {
+      "at": "2026-09-29T07:46:46.127Z",
+      "note": "open.test.ts and product-open-surface.test.ts: verdict counts in index summary, open header and the /product view; live smoke on 0.3.31 prints observed 0 (helped 0, no effect 0, harmed 0, inconclusive 0)"
+    },
+    "AC4": {
+      "at": "2026-09-29T07:46:46.291Z",
+      "note": "templates.test.ts and extract.test.ts: Outcome criteria section with the hint; untouched hint is no criterion; a real bullet starting with the hint words survives"
+    },
+    "AC5": {
+      "at": "2026-09-29T07:46:46.448Z",
+      "note": "docpack-observation.test.ts: Outcome observations section parsed with the same grammar, malformed line names the package, comments and fences stripped"
+    },
+    "AC6": {
+      "at": "2026-09-29T07:46:46.608Z",
+      "note": "flow-init-intent-note.test.ts: one informational line, exit code unchanged"
+    },
+    "AC7": {
+      "at": "2026-09-29T07:46:46.765Z",
+      "note": "implementation-plan.md holds G1a, G1b and calendar time; grep check passes"
+    },
+    "AC8": {
+      "at": "2026-09-29T07:46:46.930Z",
+      "note": "metrics-and-validation.md holds 310 of 310 and the caption the instrument did not exist; grep check passes"
+    },
+    "AC9": {
+      "at": "2026-09-29T07:46:47.087Z",
+      "note": "never-gates, no-model and bulk-budget tests green; only index and open exist; import-policy ratchet back at its ceiling after routing the helpers through the flow facade"
+    },
+    "AC10": {
+      "at": "2026-09-29T07:46:47.246Z",
+      "note": "live smoke after install: 310 of 310 unchanged; git diff of the PR touches no existing flow directory and no existing package README (only the metrics document added, the plan edited)"
+    },
+    "AC11": {
+      "at": "2026-09-29T07:46:47.412Z",
+      "note": "typecheck clean, product and flow suites green, CI 18/18 on ebe617b9, README, cli-reference, modules page, module page, CHANGELOG 0.3.31 and version bump present"
+    },
+    "AC12": {
+      "at": "2026-09-29T07:46:47.571Z",
+      "note": "journal entry STOP BEFORE G1a written; operator told on the helyx channel; nothing beyond index and open built"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/794"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-29T06:29:36.390Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T06:31:11.476Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T06:31:11.829Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T07:46:45.812Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: observation.test.ts: four verdicts parse, the index stores verdict and note; fenced example ignored (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:45.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: observation-errors.test.ts: malformed line is a failure naming the flow, index exits 1, the flow stays in open, no double count in staleness (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.127Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: open.test.ts and product-open-surface.test.ts: verdict counts in index summary, open header and the /product view; live smoke on 0.3.31 prints observed 0 (helped 0, no effect 0, harmed 0, inconclusive 0) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.291Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: templates.test.ts and extract.test.ts: Outcome criteria section with the hint; untouched hint is no criterion; a real bullet starting with the hint words survives (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.448Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: docpack-observation.test.ts: Outcome observations section parsed with the same grammar, malformed line names the package, comments and fences stripped (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.608Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: flow-init-intent-note.test.ts: one informational line, exit code unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.766Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: implementation-plan.md holds G1a, G1b and calendar time; grep check passes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:46.930Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: metrics-and-validation.md holds 310 of 310 and the caption the instrument did not exist; grep check passes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:47.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: never-gates, no-model and bulk-budget tests green; only index and open exist; import-policy ratchet back at its ceiling after routing the helpers through the flow facade (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:47.246Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: live smoke after install: 310 of 310 unchanged; git diff of the PR touches no existing flow directory and no existing package README (only the metrics document added, the plan edited) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:47.412Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: typecheck clean, product and flow suites green, CI 18/18 on ebe617b9, README, cli-reference, modules page, module page, CHANGELOG 0.3.31 and version bump present (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:47.571Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: journal entry STOP BEFORE G1a written; operator told on the helyx channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T07:46:47.727Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T07:46:47.896Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T07:46:48.145Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T07:46:48.400Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T07:46:50.683Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/794 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-29T07:46:52.257Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-29T07:46:56.800Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-29T07:46:56.801Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-01T12:22:19.646Z",
+      "event": "renumbered",
+      "detail": "363 -> 381: duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/product/observation.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/product/observation-errors.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/product/open.test.ts src/tui/product-open-surface.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/flow/templates.test.ts src/product/extract.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/product/docpack-observation.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/commands/flow-init-intent-note.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "grep -q 'G1a' docs/requirements/keryx-product-module/implementation-plan.md && grep -q 'G1b' docs/requirements/keryx-product-module/implementation-plan.md && grep -q 'calendar time' docs/requirements/keryx-product-module/implementation-plan.md"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "grep -q 'the instrument did not exist' docs/requirements/keryx-product-module/metrics-and-validation.md && grep -q '310 of 310' docs/requirements/keryx-product-module/metrics-and-validation.md"
+    },
+    "AC9": {
+      "kind": "invariant",
+      "check": "bun test src/product/never-gates.test.ts src/product/no-model.test.ts src/product/bulk-budget.test.ts"
+    },
+    "AC10": {
+      "kind": "judged"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun run typecheck && bun test src/product src/flow"
+    },
+    "AC12": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the journal entry and the operator report are the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-29T07:46:45.811Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:45.968Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.127Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.291Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.448Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.608Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.765Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:46.930Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:47.087Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:47.246Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:47.412Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:47.571Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    },
+    {
+      "at": "2026-09-29T07:46:56.801Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32",
+      "headCommit": "6a82a3484bd3ce50e53bf22d9bbf60f13c5bfa62"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T07:46:56.800Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "12 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "6a82a3484bd3ce50e53bf22d9bbf60f13c5bfa62 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "6a82a3484bd3ce50e53bf22d9bbf60f13c5bfa62 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:f3513238395cf928387e592e7fd21a436539b482a4b0a2b7dfc2fddaa61b8e32"
+    }
+  ],
+  "merged": {
+    "commit": "6a82a3484bd3ce50e53bf22d9bbf60f13c5bfa62",
+    "ref": "origin/main",
+    "at": "2026-09-29T07:46:56.801Z"
+  }
+}

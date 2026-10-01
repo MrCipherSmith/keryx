@@ -1,0 +1,654 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "370",
+  "slug": "w5-external-write",
+  "title": "P1 external agent write mode, claude only",
+  "status": "done",
+  "createdAt": "2026-09-30T06:07:09.163Z",
+  "updatedAt": "2026-09-30T09:11:01.519Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-30T07:34:51.509Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC2": {
+      "at": "2026-09-30T07:34:51.682Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC3": {
+      "at": "2026-09-30T07:34:51.857Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC4": {
+      "at": "2026-09-30T07:34:52.036Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC5": {
+      "at": "2026-09-30T07:34:52.220Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC6": {
+      "at": "2026-09-30T07:34:52.404Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC7": {
+      "at": "2026-09-30T07:34:52.577Z",
+      "note": "verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass"
+    },
+    "AC8": {
+      "at": "2026-09-30T08:26:30.772Z",
+      "note": "live smoke on installed 0.3.40 with claude 2.1.280 in a scratch repo: real write run produced a 2-file diff; non-TTY apply and typed 'no' landed nothing; typed hash landed external/<id> from the recorded base, HEAD and working tree unchanged"
+    },
+    "AC9": {
+      "at": "2026-09-30T08:26:42.951Z",
+      "note": "operator report sent via helyx with the live result, claude's real permission flag and what remains for codex/agy"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/805"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Live probe on claude 2.1.280: acceptEdits + Edit/Write tool roster + permission-prompts none writes inside cwd, denies outside, no Bash"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #805 (0.3.40), CI green, review rounds closed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #805 (0.3.40), CI green, review rounds closed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "delivered in PR #805 (0.3.40), CI green, review rounds closed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T06:07:09.163Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T06:07:47.981Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T06:07:52.069Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"A stop: report to the operator with the live result, claude's real permission flag, and what remains for codex/agy. [verify: none]\" -> \"A stop: the report to the operator carries the live result, claude's real permission flag, and what remains for codex and agy. [verify: none — a stop is an absence of work; the operator report is the evidence]\" (none needs a reason after an em dash)"
+    },
+    {
+      "at": "2026-09-30T06:07:52.594Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T06:08:50.084Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T06:45:15.833Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"Docs and README describe write mode, its limits and the landing rule; links valid. [verify: exec `bun run docs:links`]\" -> \"bun run check:doc-links\" (the script is named check:doc-links; docs:links does not exist)"
+    },
+    {
+      "at": "2026-09-30T07:34:51.509Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:51.682Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:51.857Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:52.036Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:52.220Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:52.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T07:34:52.577Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verified on CI green head 9d284869 (PR #805, merged 838e5263); exec checks and tests pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T08:26:30.772Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: live smoke on installed 0.3.40 with claude 2.1.280 in a scratch repo: real write run produced a 2-file diff; non-TTY apply and typed 'no' landed nothing; typed hash landed external/<id> from the recorded base, HEAD and working tree unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T08:26:30.932Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T08:26:31.091Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-30T08:26:31.248Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-30T08:26:33.379Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/805 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-30T08:26:42.952Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: operator report sent via helyx with the live result, claude's real permission flag and what remains for codex/agy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T08:26:43.131Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-30T08:26:47.510Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-30T08:26:47.510Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-30T08:26:51.206Z",
+      "event": "completing",
+      "detail": "merged commit: 838e52635dbe6a9370e03096d938b34cc2822094"
+    },
+    {
+      "at": "2026-09-30T08:26:55.340Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: failed"
+    },
+    {
+      "at": "2026-09-30T08:26:55.341Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-30T08:27:08.249Z",
+      "event": "completing",
+      "detail": "merged commit: 838e52635dbe6a9370e03096d938b34cc2822094"
+    },
+    {
+      "at": "2026-09-30T08:27:13.486Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 3: failed"
+    },
+    {
+      "at": "2026-09-30T08:27:13.488Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-30T09:10:57.505Z",
+      "event": "completing",
+      "detail": "merged commit: 838e52635dbe6a9370e03096d938b34cc2822094"
+    },
+    {
+      "at": "2026-09-30T09:11:01.518Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: passed"
+    },
+    {
+      "at": "2026-09-30T09:11:01.519Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/codec/claude-cli.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/dispatch.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/write-run.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/write-land.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/agents-external-write.test.ts src/cli-reference-coverage.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/tui/external-diff-modal.test.ts src/commands/shell-slash-registry.test.ts"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the operator report is the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-30T07:34:51.509Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:51.682Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:51.857Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:52.036Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:52.220Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:52.404Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T07:34:52.577Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T08:26:30.772Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T08:26:42.951Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T09:11:01.519Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d",
+      "headCommit": "838e52635dbe6a9370e03096d938b34cc2822094"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-30T08:26:47.510Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T08:26:55.340Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T08:27:13.486Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: flow370-pr805-r1#F-001 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-002 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-003 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-004 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-005 (major, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-006 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r1#F-007 (minor, round flow370-pr805-r1): marked fixed at 551e3cdd but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-001 (major, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-002 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | flow370-pr805-r2#F-003 (minor, round flow370-pr805-r2): marked fixed at d7d3c341 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    },
+    {
+      "at": "2026-09-30T09:11:01.518Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "838e52635dbe6a9370e03096d938b34cc2822094 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:2b2711f13634c91bd8607d2cda8a9825ed66bfe31dad43443bc6261a79d35e9d"
+    }
+  ],
+  "merged": {
+    "commit": "838e52635dbe6a9370e03096d938b34cc2822094",
+    "ref": "origin/main",
+    "at": "2026-09-30T09:11:01.519Z"
+  }
+}

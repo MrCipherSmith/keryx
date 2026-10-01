@@ -1,0 +1,3 @@
+# Decisions
+
+- F-001: dismissed-incorrect — refuted by flow357-pr788-verify (execution): At PR head aa3973c3: keryx ctx rg over src/harness/external/ shows the two loose regexes are gone; runtime.ts holds the single exact tag /\(blocked on approval\)/, which only codec/antigravity-cli.ts emits (lines 254 and 303). bun test src/harness/external/antigravity-cli.runtime.test.ts -t 'waiting for approval' -> 1 pass, 0 fail: a codex-cli turn.failed reading 'stream ended while waiting for approval of a patch' stays Error, not Denied. The finding's concern (agent-unscoped wording relabelling another agent's failure) no longer holds. (false_positive, post_flow_feedback).

@@ -1,0 +1,433 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow376-pr817-security",
+    "severity": "major",
+    "problem": "The shell token is sent to whatever listens on the port named in a stale endpoint.json. client.ts target() read endpoint.json on every attempt and checked only isLoopbackAddress; nothing checked that the pid was alive or ours, endpoint.json is removed only on a clean stop, and the token was never rotated.",
+    "impact": "After a serve killed by SIGKILL or OOM, another OS user binding 127.0.0.1:<port> receives the Authorization Bearer shell token on the first attempt and on every retry. With it the squatter can register under an unavailable topic's name and receive the operator's prompts, post into the operator's topics, ack a huge updateId so later lines are dropped, and deregister sessions. Reproduced with a scratch squatting Bun.serve and a dead pid in endpoint.json.",
+    "suggested_fix": "Serve the remote surface on a Unix domain socket in the 0700 remote dir, or use a challenge-response. At minimum refuse in target() when process.kill(pid, 0) fails and mint a fresh shell token on every serve start.",
+    "evidence": "Read src/remote/client.ts (target, post and the stream GET both go through it) and src/remote/service.ts, shell-token.ts at 34bf0f80; reproduced with a scratch script, the squatter received the Bearer token on every retry.",
+    "confidence": "high",
+    "file": "src/remote/client.ts",
+    "line": null,
+    "quote": "    if (!isLoopbackAddress(endpoint.value.address)) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/client.ts",
+      "reported_line": 290
+    },
+    "class_scope": {
+      "sites": [
+        "src/remote/client.ts post() (the shell-side POST sender)",
+        "src/remote/client.ts stream GET sender",
+        "src/remote/bot-api-http.ts (fixed HTTPS host, not affected)"
+      ],
+      "enumeration_method": "keryx ctx rg for fetchImpl( and authorization across src/remote at 34bf0f80; the only shell-side sender is client.ts, and both its calls go through target(), so one fix covers both"
+    },
+    "global_id": "2026-10-01-ingest-817#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2 (worktree keryx-w376): ran `bun test` on review-fixes, client, shell-token, poll-lock, shell-bridge, restart, single-poller, second-serve, token-scope, main-queue and help-groups tests: 147 pass, 0 fail. client.ts target() now calls this.isAlive(endpoint.value.pid) (process.kill(pid, 0); ESRCH and EPERM both refused) before readShellToken, and both post() and the stream GET go through target(). service.ts start() calls mintShellToken after acquiring the poller lock and replaces the file atomically, so a restarted serve rejects every old token. review-fixes.test.ts 'a pid that is not running: no request is made at all, so no token leaves' (pass) records zero fetch calls for start() and reply(); 'a restarted serve rejects the old token, and a running shell re-reads the file and follows' (pass) gets 401 for the old token and a reconnect with the new one. Residual, not part of the reproduced scenario: while the serve pid is alive the token still goes over loopback TCP to whatever answers on the port (no Unix socket or challenge-response); the SIGKILL-then-squat case no longer reproduces.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow376-pr817-security",
+    "severity": "major",
+    "problem": "Telegram update_id was used as a monotonic dedupe key. The hub persisted a highWater and dropped update_id <= highWater, the poller asked for offset highWater + 1, the shell dropped id <= lastCompleted but still acked it, and serve dropped updateId <= completed[session].",
+    "impact": "The Bot API chooses a random update_id after a week without updates. A bot nobody uses for a week is a normal case, and a new id below the persisted mark is either treated by Telegram as confirmed or skipped by the hub or the shell, so every message is lost and nothing reports it.",
+    "suggested_fix": "Send no stored offset (first getUpdates carries none, later ones use the in-process batch), dedupe by exact id over pending ids and a bounded set of recent ids on the hub, the client and serve, and treat a batch holding an id below the mark as a sequence reset.",
+    "evidence": "Read src/remote/hub.ts, inbound.ts, poller.ts, client.ts and http-surface.ts at 34bf0f80: five sites compare an update id with <= against a mark. Depends on Telegram behaviour documented in the Bot API, not reproduced live.",
+    "confidence": "medium",
+    "file": "src/remote/hub.ts",
+    "line": null,
+    "quote": "        if (update.update_id <= this.offset.highWater) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/hub.ts",
+      "reported_line": 404
+    },
+    "class_scope": {
+      "sites": [
+        "src/remote/inbound.ts PollerState highWater (persisted across restarts)",
+        "src/remote/hub.ts receive() drop of update_id <= highWater",
+        "src/remote/poller.ts offset: highWater + 1",
+        "src/remote/client.ts drop of id <= lastCompleted",
+        "src/remote/http-surface.ts drop of updateId <= completed[session]"
+      ],
+      "enumeration_method": "keryx ctx rg for 'updateId <=|update_id <=|<= this\\.|highWater' under src/remote at 34bf0f80; five sites"
+    },
+    "global_id": "2026-10-01-ingest-817#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: no highWater comparison is left in hub.ts, poller.ts or client.ts. PollerState (inbound.ts) keeps a bounded set of exact recent ids; hub.receive() drops only an exact seen id and resets the set when a batch holds an unseen id below the highest (a numbering restart). poller.ts sends no offset on the first call and only the just-accepted batch's max+1 afterwards. client.ts dedupes with completedIds (exact, 256 bound) and serve with per-session exact-id books (http-surface.ts remember/complete/deliver). review-fixes.test.ts 'a line whose id is below one the shell finished still runs; the same id again does not' (targeted run, pass): after ids above, a batch with update_id 1 is delivered and a repeat of it is dropped. The 147-test slice, including restart.test.ts and single-poller.test.ts, passes. Depends on Telegram behaviour, so the real-bot case is covered only by the fake bot API.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "The poller-lock takeover is racy. A serve that has created poller.lock but not yet written its pid looks pid-less to a second serve, which unlinks it and creates its own; two serves that both see a dead holder can unlink each other's fresh file.",
+    "impact": "Two hubs run on the same sessions.json and queues (lost updates, double sends) and one gets a 409 and stops for good. ensureShellToken had the same empty-read window and could tell the second serve to delete the token file under the first.",
+    "suggested_fix": "Write the pid to a temp file and link() it to the lock name, take a stale lock over by renaming it aside and re-checking, and treat a young empty lock as held.",
+    "evidence": "Read src/remote/poll-lock.ts and createOwnerOnlyFileExclusive in src/lib/config-dir.ts at 34bf0f80: open with wx precedes the write of the pid.",
+    "confidence": "high",
+    "file": "src/remote/poll-lock.ts",
+    "line": null,
+    "quote": "      unlinkSync(file);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/poll-lock.ts",
+      "reported_line": 80
+    },
+    "global_id": "2026-10-01-ingest-817#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: poll-lock.ts createWhole() writes the pid to a private staging file and link()s it to poller.lock, so the lock never exists empty; a stale lock is renamed aside, inspected, and put back if what was moved is a live holder's fresh lock; a pid-less lock younger than EMPTY_LOCK_GRACE_MS (5 s) is treated as held. poll-lock.test.ts passes (10 tests), including 'the lock is never visible half-written', 'a young lock with no pid in it is somebody mid-write: held, not taken over' and 'two takers of the same dead lock: the one that loses the race puts the winner's lock back and refuses'. ensureShellToken is gone: shell-token.ts mintShellToken writes through writeOwnerOnlyFileAtomic (temp file plus rename) and is called only after the lock is held, so a second serve neither reads an empty token file nor rotates it.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "The topic is told 'Approval granted.' even when the decision may never reach the shell: the boolean result of stream.write was ignored and no ack exists for approval frames.",
+    "impact": "With a half-open or failed stream the shell times out and denies while the operator reads that approval was granted. Execution still fails closed, but the operator is told the wrong outcome.",
+    "suggested_fix": "Post 'granted' only when write returned true; better, let the shell acknowledge the approval frame.",
+    "evidence": "Read src/remote/http-surface.ts deliverCallback at 34bf0f80: noteDecision is called unconditionally.",
+    "confidence": "high",
+    "file": "src/remote/http-surface.ts",
+    "line": null,
+    "quote": "        void this.noteDecision(sessionId, approval.decision);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/http-surface.ts",
+      "reported_line": 630
+    },
+    "global_id": "2026-10-01-ingest-817#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: http-surface.ts deliverCallback computes told = stream?.write(...) === true and calls noteDecision only when told; without a stream or after a failed write nothing is posted. review-fixes.test.ts 'a decision that could not be handed to the shell is not announced as granted (MINOR-2)' (targeted run, pass) closes the stream, waits for serve to answer 409 to an approval probe, presses Allow, and asserts that 'Approval granted.' is never sent to the topic. The shell still does not acknowledge approval frames, so a write that succeeds into a half-open socket can still be announced; that was the 'better' option in the finding, not the minimum.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "Taking over a topic can silently drop the previous owner's queued lines. The cumulative completed mark was keyed by sessionId and register neither reset nor rebound it.",
+    "impact": "A session with completed lines up to id 1000 that re-registers under the name of an unavailable session with lines 900-950 queued sees deliver resolve at once, the hub acks them, and the queued text vanishes, against AC6.",
+    "suggested_fix": "Reset the mark in register when the topic binding changes, or key it by topic.",
+    "evidence": "Read src/remote/http-surface.ts register and deliver at 34bf0f80: completed is a Map<string, number> never touched by register.",
+    "confidence": "high",
+    "file": "src/remote/http-surface.ts",
+    "line": null,
+    "quote": "  private readonly completed = new Map<string, number>();",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/http-surface.ts",
+      "reported_line": 222
+    },
+    "global_id": "2026-10-01-ingest-817#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: http-surface.ts register() compares the new `name#threadId` binding with this.bound and, on a change, deletes completed[sessionId] and sent[sessionId]; deregister clears all three. The books are now per-session sets of exact ids, not a cumulative mark. review-fixes.test.ts 'a topic that is rebound forgets which ids the old binding finished (MINOR-3)' (targeted run, pass): a session acks update N on topic alpha, re-registers as beta, and a delivery with the same update id N on the new topic is sent as an inbound frame instead of resolving silently.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "answerCallbackQuery was awaited one by one inside the hub's serial lock, each with up to a 30 s timeout.",
+    "impact": "While Telegram is slow, a few button presses block register, heartbeat, sweep and the next getUpdates for minutes, and heartbeats queued behind the lock can make leases look stale.",
+    "suggested_fix": "Fire and forget the answers outside the lock with a short timeout.",
+    "evidence": "Read src/remote/hub.ts receive() at 34bf0f80 and the timeout in bot-api-http.ts.",
+    "confidence": "high",
+    "file": "src/remote/hub.ts",
+    "line": null,
+    "quote": "        await this.api.answerCallbackQuery({ callbackQueryId: id }).catch(() => undefined);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/hub.ts",
+      "reported_line": 419
+    },
+    "global_id": "2026-10-01-ingest-817#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: hub.ts receive() no longer awaits answerCallbackQuery. answerCallback() starts the request, races it with a short ANSWER_CALLBACK_TIMEOUT_MS timer, clears the timer in finally and is never awaited inside the serial lock. review-fixes.test.ts 'an answerCallbackQuery that never returns does not hold up receive' (targeted run, pass): receive() returns inside 500 ms against an api whose answerCallbackQuery never settles.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "Inbound queues had no bound: DurableLog was built without maxEntries, unlike outbound which caps at 200.",
+    "impact": "An allowlisted user keeps writing into an unavailable topic during orphanMs (up to 7 days) and every line stays on disk and in memory.",
+    "suggested_fix": "Add a per-topic cap that drops the oldest and tell the topic.",
+    "evidence": "Read src/remote/inbound.ts at 34bf0f80.",
+    "confidence": "high",
+    "file": "src/remote/inbound.ts",
+    "line": null,
+    "quote": "      log = new DurableLog<InboundEntry>({ file: this.fileFor(bindingKey), parse: parseEntry });",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/inbound.ts",
+      "reported_line": 87
+    },
+    "global_id": "2026-10-01-ingest-817#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: inbound.ts builds the DurableLog with maxEntries: MAX_INBOUND_PER_TOPIC (500), append() returns the count dropped, and hub.receive() raises a delivery-failed event and a status line in the topic naming how many oldest were dropped. review-fixes.test.ts '505 into a topic nobody is reading: the oldest 5 go, the topic is told, the rest are delivered in order' (targeted run, pass): the dropped notice is sent to the thread, and after a hub restart exactly 500 are delivered, first m5 and last m504.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "flow376-pr817-security",
+    "severity": "minor",
+    "problem": "A Telegram line queued while the shell is busy is acked to serve before it runs, and nothing tells the topic if the shell closes or remote control is turned off before the queue drains.",
+    "impact": "Serve has already deleted the entry, so the line is lost without any notice. AC10's exactly-once covers serve crashes, so this is a durability gap rather than an AC failure.",
+    "suggested_fix": "On disable or shell close, reply in the topic listing the dropped queued tg lines, or ack only when a queued line starts running.",
+    "evidence": "Read src/remote/shell-bridge.ts accept and client.ts onLine/ack ordering at 34bf0f80.",
+    "confidence": "high",
+    "file": "src/remote/shell-bridge.ts",
+    "line": null,
+    "quote": "      this.host.runLine(line);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "reported_line": 288
+    },
+    "global_id": "2026-10-01-ingest-817#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: shell-bridge.ts disable() calls host.dropQueuedTelegramLines() before its first await, tells the shell through notice() and, best effort, replies in the topic with the dropped lines before closing; tui-shell.ts wires dropQueuedTelegramLines to dropQueuedBySource(mainQueue, TG_SOURCE) and repaints, and the shell-close path reaches disable() through the finally. shell-bridge.test.ts 'turning off tells the shell and the topic which queued Telegram lines were dropped' and 'turning off with nothing queued says nothing about dropped lines' pass, as does main-queue.test.ts 'dropQueuedBySource splits the Telegram lines out in queue order and keeps the rest'. A crash of the shell process (not a close or an off) still loses queued lines without a notice, which the finding did not claim as in scope.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "major",
+    "problem": "Shell close does not wait for the deregister it started. onDestroy calls disable(), which sets this.client to undefined and awaits close(); the finally then calls disable() again, finds no client and returns false at once without awaiting the first close.",
+    "impact": "If the process ends before the deregister POST lands (SIGHUP, a slow serve), the topic is not deleted at close but only after orphanMs, 10 minutes later: AC1's 'closing the shell deletes it' fails on the real path. The lifecycle test works at hub level and never goes through the TUI close.",
+    "suggested_fix": "Store the in-flight close promise; later disable() calls await it. Add a test where the second disable resolves only after the fake client's close().",
+    "evidence": "Read src/remote/shell-bridge.ts disable and the two call sites in src/tui/tui-shell.ts at 34bf0f80; the test 'a second disable is a no-op' encoded the behaviour.",
+    "confidence": "medium",
+    "file": "src/remote/shell-bridge.ts",
+    "line": null,
+    "quote": "    this.client = undefined;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "reported_line": 244
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts destroy hook void remoteBridge?.disable()",
+        "src/tui/tui-shell.ts finally await remoteBridge?.disable()",
+        "src/tui/tui-shell.ts stopRemoteForSessionSwitch void remoteBridge.disable() then prints the topic is deleted"
+      ],
+      "enumeration_method": "keryx ctx rg 'disable\\(\\)|void .*disable' over src/tui and src/remote at 34bf0f80; the three sites above are the ones that start a close without waiting or wait on an already-started one"
+    },
+    "global_id": "2026-10-01-ingest-817#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: shell-bridge.ts keeps `closing`, the promise of the close in flight; disable() called while it is set awaits it and returns false, and enable() awaits it too. The destroy hook and the finally in tui-shell.ts therefore both wait for the real deregister, and stopRemoteForSessionSwitch now says the topic is 'being deleted' and prints 'the topic is deleted' only after the close resolves. shell-bridge.test.ts 'a second disable while the first is still closing waits for the close, and does not close twice' and 'enable while a close is still running waits for it, so two topics are not alive at once' pass, and 'disable records history first, then deregisters; a second disable after it is a no-op' still passes. The old 'a second disable is a no-op' test no longer encodes the race.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "major",
+    "problem": "/queue edit of a Telegram line silently turns it into a local line: editMainQueue stored only { id, at } and the reinsert built { id, question, displayQuestion } with no source.",
+    "impact": "A line queued as q1 [tg] that is edited and submitted drains as runLine(q, 'operator', undefined): no reply is sent to the topic, the approval wrapper asks locally and the run limit does not apply. The Telegram user was told 'arrived' and then gets nothing.",
+    "suggested_fix": "Keep the removed item's source in pendingQueueEdit and spread it into the reinserted entry, or refuse to edit a [tg] item, with a test that the drained runLine receives tg.",
+    "evidence": "Read src/tui/tui-shell.ts editMainQueue and the reinsert at 34bf0f80.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "      pendingQueueEdit = { id: edited.removed.id, at: index };",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 7390
+    },
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts reinsert after /queue edit (loses source)",
+        "src/tui/tui-shell.ts lease-held push (keeps source)",
+        "src/tui/tui-shell.ts composer-choice push (local lines only)",
+        "src/tui/tui-shell.ts bridge enqueue (sets source)",
+        "src/tui/tui-shell.ts forceMainQueue (passes the whole item)",
+        "src/tui/main-queue.ts removeMainQueueItem and editMainQueueItem (whole items)"
+      ],
+      "enumeration_method": "keryx ctx rg 'mainQueue.push|reinsertMainQueueItem|source: TG_SOURCE' over src/tui at 34bf0f80; only the edit reinsert rebuilds an entry field by field and drops source"
+    },
+    "global_id": "2026-10-01-ingest-817#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: main-queue.ts adds PendingQueueEdit with an optional source, pendingQueueEditFor(removed, at) and reinsertEditedMainQueueItem(), and tui-shell.ts uses them in editMainQueue (pendingQueueEdit = pendingQueueEditFor(edited.removed, index)) and at the reinsert, so the old field-by-field rebuild is gone. main-queue.test.ts 'editing a Telegram line and re-queuing it keeps source tg, so the drained turn is labelled' (targeted run, pass) edits a tg item, requeues it, drains it with drainIdleMainQueue and sees dispatched[0].source === 'tg'; 'editing a typed line does not gain a source, and an absent source stays absent' passes. The tests exercise the helpers; the shell's use of them was confirmed by reading the two call sites.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "AC5 text and behaviour disagree. The frozen AC5 says a second serve does not poll and exits with the reason; service.ts on a 409 detaches, prints a notice, stops the hub and keeps the listener running, and a lock refusal is non-fatal.",
+    "impact": "The docs say 'stops polling for good', which is honest, but the frozen AC says 'exits' and single-poller.test.ts asserts only the poller state. A serve that stays up with a dead remote is a defensible product choice, so this is for the operator to decide.",
+    "suggested_fix": "Amend AC5 via keryx flow ac update, or make serve exit when remote was the only reason it started.",
+    "evidence": "Read src/remote/service.ts and src/commands/serve.ts at 34bf0f80 against the frozen AC5.",
+    "confidence": "high",
+    "file": "src/remote/service.ts",
+    "line": null,
+    "quote": "                surface.detach(reason);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/service.ts",
+      "reported_line": 159
+    },
+    "global_id": "2026-10-01-ingest-817#F-011"
+  },
+  {
+    "id": "F-012",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "AC15's verify test (src/standard/help-groups.test.ts) checked only that every CLI_ROUTES verb and slash command sits in a help group; it had no remote-control string and said nothing about README, cli-reference, wiki, CHANGELOG or the version.",
+    "impact": "Deleting the README section, the CHANGELOG block and the wiki page left the test green. The docs themselves were present and accurate, so this was a gap in the evidence.",
+    "suggested_fix": "Add checks that the four documents mention remote control and that the version is above 0.3.46.",
+    "evidence": "Read src/standard/help-groups.test.ts at 34bf0f80 and ran a mutation by reading: no assertion touches the documents.",
+    "confidence": "high",
+    "file": "src/standard/help-groups.test.ts",
+    "line": null,
+    "quote": "every CLI_ROUTES verb is in exactly one group",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 28
+    },
+    "global_id": "2026-10-01-ingest-817#F-012",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: src/standard/help-groups.test.ts gains a describe 'remote control is documented where operators look' that reads README.md, docs/docs/cli-reference.md, .metaproject/wiki/architecture/remote-control.md and CHANGELOG.md and requires each to mention remote control, requires three cli-reference phrases (token rotation, the 500 cap, the dropped-lines notice), and requires package.json above 0.3.46. Targeted run of help-groups.test.ts: pass (part of the 147). The documents hold 4, 5, 13 and 3 mentions, so deleting a whole section does not by itself fail the mention test; the phrase checks on cli-reference are the stricter ones. It is a mention-level check, not a content check.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "Enable/disable overlap can leave a topic until the orphan timeout. enable() sets this.client before await client.start(); a disable during the register closes the client with name undefined, so close() skips the deregister.",
+    "impact": "If serve already processed the register the topic exists and is cleaned up only by the 10-minute orphan sweep. The window is a few milliseconds on loopback.",
+    "suggested_fix": "Have close() await the in-flight register and then deregister.",
+    "evidence": "Read src/remote/shell-bridge.ts enable/disable and src/remote/client.ts close at 34bf0f80.",
+    "confidence": "medium",
+    "file": "src/remote/client.ts",
+    "line": null,
+    "quote": "    if (this.started && this.name !== undefined) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/client.ts",
+      "reported_line": 195
+    },
+    "global_id": "2026-10-01-ingest-817#F-013",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: client.ts keeps `registering`, the register request in flight, and close() awaits it (catching its error) before checking this.name, so the deregister is sent for a topic the register just created; the connect path also returns without opening a stream when stopped or leaving. review-fixes.test.ts 'the register finishes, then the client deregisters: no orphan topic is left behind' (targeted run, pass) holds the register request open, calls close(), releases it, and asserts a deregister request was made and the hub lists no session.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "A Telegram line queued before a session switch runs in the new session with no reply: stopRemoteForSessionSwitch disabled the bridge but did not purge mainQueue entries with source tg.",
+    "impact": "After /new or /resume the queued tg line drains into the new session as runLine(..., 'tg'), runs as an unlabelled local turn in a different conversation, and its reply goes nowhere.",
+    "suggested_fix": "Drop or flag the tg entries when remote control turns off.",
+    "evidence": "Read src/tui/tui-shell.ts stopRemoteForSessionSwitch at 34bf0f80.",
+    "confidence": "medium",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "      void remoteBridge.disable();",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 5816
+    },
+    "global_id": "2026-10-01-ingest-817#F-014",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: stopRemoteForSessionSwitch calls remoteBridge.disable(), and disable() synchronously invokes the new dropQueuedTelegramLines host hook, which tui-shell.ts implements with dropQueuedBySource(mainQueue, TG_SOURCE): the tg entries leave the shell queue before the session is replaced, and the bridge reports them to the shell and the topic. shell-bridge.test.ts 'turning off tells the shell and the topic which queued Telegram lines were dropped' and main-queue.test.ts 'dropQueuedBySource splits the Telegram lines out in queue order and keeps the rest' pass (targeted run). The session-switch call itself was confirmed by reading, not by a TUI test.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-015",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "The Telegram reply is the last non-empty model round, which can be narration. If the last round of a tool-using turn has no text, the earlier 'Let me look at the files' text is sent as the answer.",
+    "impact": "The topic receives narration as the final answer when a turn is cancelled or ends on a tool-only round.",
+    "suggested_fix": "Keep a round's text only if the round ended with no tool calls, or send a 'no text to show' line when the turn failed or was aborted after the last text.",
+    "evidence": "Read src/remote/shell-bridge.ts assistantText at 34bf0f80 and onAssistantText call sites in agent.ts.",
+    "confidence": "medium",
+    "file": "src/remote/shell-bridge.ts",
+    "line": null,
+    "quote": "    if (text.trim().length > 0) this.lastAssistantText = text;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "reported_line": 314
+    },
+    "global_id": "2026-10-01-ingest-817#F-015",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: shell-bridge.ts toolCall() clears lastAssistantText during a Telegram turn, and tui-shell.ts wraps io.onToolCall to call remoteBridge.toolCall(), so a round that is followed by a tool call is dropped as narration and a turn that ends after a tool-only round sends no stale text. shell-bridge.test.ts 'text followed by a tool call is narration: the reply is the text of the round that ended without one', 'a tool call in a typed turn changes nothing' and 'a long reply is cut with a note; a failed turn without text says so; an empty one says done' pass (targeted run).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "F-016",
+    "reviewer": "flow376-pr817-correctness",
+    "severity": "minor",
+    "problem": "Removing a [tg] queue item with /queue remove N just deletes it and gives the Telegram user no feedback.",
+    "impact": "The topic got an ack, so the line looks delivered, and its author waits for a reply that will never come.",
+    "suggested_fix": "Post one line to the topic saying it was removed from the queue in the shell.",
+    "evidence": "Read src/tui/tui-shell.ts removeMainQueue at 34bf0f80.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": null,
+    "quote": "      mainQueue = removeMainQueueItem(mainQueue, index);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 7398, 7425, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 7382
+    },
+    "global_id": "2026-10-01-ingest-817#F-016",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 4f1326d2: tui-shell.ts removeMainQueue reads the item at the index and, when its source is TG_SOURCE, calls remoteBridge.queuedLineRemoved(question) before removing it; shell-bridge.ts queuedLineRemoved pushes an event and replies in the topic that the message was removed from the queue and will not run. shell-bridge.test.ts 'removing a Telegram line from the shell queue tells its topic' passes (targeted run).",
+      "verifier": "review-verifier"
+    }
+  }
+]

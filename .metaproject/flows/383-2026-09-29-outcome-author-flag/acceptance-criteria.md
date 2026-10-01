@@ -1,0 +1,21 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: `flow.json` gains an optional field `outcomeAuthor` with the values `agent` and `human`; `keryx flow init` accepts `--outcome-author agent|human`, defaults to `agent` when the flag is absent, never writes `human` unless the flag says so, and rejects any other value with a non-zero exit before creating the flow; the flow JSON schema (`keryx flow schema`) lists the field [verify: exec `bun test src/flow/outcome-author-init.test.ts`]
+- AC2: `keryx flow outcome author <id> agent|human --reason "<why>"` changes the field, refuses a missing or empty `--reason` and an unknown value with a non-zero exit, and appends one event line to the flow's `journal.md` naming the old value (or `unknown`), the new value and the reason; setting the value it already has writes no line [verify: exec `bun test src/flow/outcome-author-set.test.ts`]
+- AC3: A flow created with `--outcome-author human` has its `description.md` Outcome criteria section left byte-for-byte as the template writes it, with no example inserted, while a flow created with `agent` or without the flag is created exactly as before [verify: exec `bun test src/flow/outcome-author-template.test.ts`]
+- AC4: `keryx flow status <id>` prints the author line (`agent`, `human` or `unknown` for a flow without the field) and the intent record in the `product index` output carries the same value; a flow.json without the field reads `unknown` in both, is never rewritten by reading, and does not fail any existing flow test [verify: exec `bun test src/flow/outcome-author-status.test.ts src/product/outcome-author.test.ts`]
+- AC5: The TUI shows the author wherever it shows a flow's status or an intent record (flow inspector and the `/product` view), through the same value the CLI prints [verify: exec `bun test src/tui/flow-inspector-outcome-author.test.ts src/tui/product-open-surface.test.ts`]
+- AC6: The flag gates nothing: no completion, freeze, creation or index run changes its result or exit code because of the value, the never-gates, no-model and bulk-budget invariants stay green with unchanged budgets, and the import-policy ratchet stays at its ceiling [verify: invariant `bun test src/product/never-gates.test.ts src/product/no-model.test.ts src/product/bulk-budget.test.ts src/lib/import-policy.live.test.ts`]
+- AC7: `metrics-and-validation.md` and `implementation-plan.md` in `docs/requirements/keryx-product-module/` define G1a as counted in four cells {human, agent} by {real criterion, `not measured` with a reason}, define G1b split by author, state that agent flows measure compliance with the instruction and human flows measure acceptance, that conclusions about acceptance are drawn only from human flows, and that a flow without the field reads `unknown`; the by-hand classification text from 0.3.32 is replaced, not left beside the mechanism [verify: exec `grep -q 'human flows measure acceptance' docs/requirements/keryx-product-module/metrics-and-validation.md && grep -q 'four cells' docs/requirements/keryx-product-module/implementation-plan.md && ! grep -q 'classified by hand' docs/requirements/keryx-product-module/implementation-plan.md`]
+- AC8: `bun run typecheck` is clean, `bun test src/flow src/product` passes, `docs/docs/cli-reference.md` and the flow command help describe `--outcome-author` and `flow outcome author`, the command registry and CLI pins cover the new subcommand, the product module page and README mention the flag, and the CHANGELOG has a 0.3.33 entry with the version bumped [verify: exec `bun run typecheck && bun test src/flow src/product src/cli.test.ts`]
+- AC9: After release the work stops: the journal records that P0 W1 (external agents live) waits for the operator's word, and the live smoke on the installed 0.3.33 shows a flow created with each value, the setter's journal line, and `unknown` on an old flow [verify: none — a stop is an absence of work; the journal entry and the operator report are the evidence]

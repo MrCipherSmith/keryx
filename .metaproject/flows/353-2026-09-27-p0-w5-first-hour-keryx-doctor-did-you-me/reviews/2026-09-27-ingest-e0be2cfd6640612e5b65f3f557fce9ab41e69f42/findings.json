@@ -1,0 +1,226 @@
+[
+  {
+    "id": "L3",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The round-1 fix for L1 adds a central pre-dispatch 'unknown subcommand' guard in src/cli.ts (main()), driven by src/lib/group-subcommands.ts's GROUP_SUBCOMMANDS map. That map includes the 'integrate' group with the closed enum [cursor, claude, opencode, vscode, generic, all] -- the individual editor names commands/integrate.ts's EDITOR_USAGE documents. But commands/integrate.ts's own parseEditors() (lines 51-58) explicitly treats the first positional as a comma-splittable LIST, not a single closed-vocabulary token: 'keryx integrate cursor,claude' is a documented, pre-existing, working invocation that addresses two editors in one call. The new cli.ts guard checks the raw token 'cursor,claude' against the per-editor enum, finds no exact match, and refuses the command with 'Unknown command: cursor,claude...' before integrateCommand ever runs -- breaking a real, currently-working invocation. This is exactly the failure mode group-subcommands.ts's own module doc warns against ('a group is listed here only when its first positional argument is unambiguously a closed, literal subcommand vocabulary... guessing wrong would break real usage, not just a typo') -- 'integrate' does not actually meet that bar for its multi-value form, even though a single editor name does.",
+    "impact": "`keryx integrate cursor,claude`, `keryx integrate cursor,claude,vscode`, and any other comma-joined multi-editor invocation of `keryx integrate` now exits 1 with 'Unknown command: <the whole comma list>. Run `keryx integrate --help` for the list.' and writes NO client config, instead of installing the MCP client config for every named editor. Confirmed as a genuine regression: the identical invocation works correctly on `main` (f2ee4c88) before this fix commit, writing both `.cursor/mcp.json` and `.mcp.json` under `--dry-run`.",
+    "suggested_fix": "Remove `integrate` from GROUP_SUBCOMMANDS in src/lib/group-subcommands.ts (its first positional is a data payload -- one or more editor names -- not a closed subcommand vocabulary, matching the module's own stated exclusion criteria alongside orient/sync/harness/commands/skill-verify-skill), OR make the cli.ts guard comma-aware for this one group before checking membership (split `sub` on ',' and require every part to be in `known`). The former is smaller and matches the module's documented design; the guard's 'unknown subcommand' message for a genuinely bad editor name (`keryx integrate bogus`) still needs to keep working through integrateCommand's OWN existing error path (commands/integrate.ts does not appear to have one currently for an unrecognized editor -- worth checking as part of the fix, but out of scope for this finding, which is about the wrong REFUSAL, not about what happens after a real fix removes it).",
+    "evidence": "bun run src/cli.ts integrate cursor,claude --dry-run at e0be2cfd (worktree /home/altsay/keryx-w5) -> stdout empty, stderr 'Unknown command: cursor,claude. Run `keryx integrate --help` for the list.', exit 1. Identical invocation at main (f2ee4c88, /home/altsay/keryx) -> writes .cursor/mcp.json and .mcp.json dry-run previews, exit 0. src/commands/integrate.ts:51-58 (parseEditors) confirms the comma-split is intentional, documented behaviour, not an accident. src/lib/group-subcommands.ts:182 confirms 'integrate' -> [cursor, claude, opencode, vscode, generic, all]. src/cli.ts:314-320 confirms the guard's membership check (`!known.includes(sub)`) operates on the raw, unsplit token.",
+    "confidence": "high",
+    "file": "src/lib/group-subcommands.ts",
+    "line": null,
+    "quote": "[\"integrate\", [\"cursor\", \"claude\", \"opencode\", \"vscode\", \"generic\", \"all\"]],",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/lib/group-subcommands.ts",
+      "reported_line": 182
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/integrate.ts:51-58 (parseEditors, the caller whose comma-list contract breaks)",
+        "src/cli.ts:314-320 (the guard that wrongly refuses it)"
+      ],
+      "enumeration_method": "Read commands/integrate.ts end to end after noticing group-subcommands.ts's 'integrate' entry looked structurally different from every other entry (a data value drawn from a closed set, joinable, vs. a single verb); confirmed by direct execution on both branches."
+    },
+    "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "`bun run src/cli.ts integrate cursor,claude --dry-run` at e0be2cfd (worktree /home/altsay/keryx-w5) -> stderr 'Unknown command: cursor,claude. Run `keryx integrate --help` for the list.', exit 1, no config written. Identical invocation at main (f2ee4c88, /home/altsay/keryx) -> writes .cursor/mcp.json and .mcp.json dry-run previews, exit 0. Confirmed as a genuine regression introduced by this fix commit, not a pre-existing defect.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e removes the \"integrate\" row from GROUP_SUBCOMMANDS in src/lib/group-subcommands.ts; verified by execution at that head: bun run src/cli.ts integrate cursor,claude --dry-run exits 0 and writes both .cursor/mcp.json and .mcp.json (worktree /home/altsay/keryx-w5)"
+    }
+  },
+  {
+    "id": "T3",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "cli.test.ts's new coverage for the central 'unknown subcommand' guard (describe block for review round 1 L1) proves the negative case (a nonsense token is refused) for all 40 groups via groupsWithKnownSubcommands(), but only two positive real-subcommand invocations are exercised ('keryx health status', 'keryx wiki ask --help'), and neither uses a value shaped any differently from a single bare word.",
+    "impact": "A group whose real first-positional shape is not 'one bare word from the enum' -- as `integrate`'s comma-joined editor list turned out to be -- has no test proving the guard does not wrongly refuse it. This is the exact gap L3 fell through.",
+    "suggested_fix": "Add, per group in GROUP_SUBCOMMANDS, at least one assertion that a REAL subcommand/positional (not just the two hand-picked samples) is not rejected as 'Unknown command' -- and specifically a case for `integrate` exercising its comma-joined form once the L3 fix lands.",
+    "evidence": "Read src/cli.test.ts's full 'keryx <group> <unknown subcommand> (review round 1, L1)' describe block (lines ~286-330 at e0be2cfd): one test.each over all 40 groups for the negative case, and exactly one test naming two groups for the positive case.",
+    "confidence": "high",
+    "file": "src/cli.test.ts",
+    "line": null,
+    "quote": "test(\"a real subcommand of a checked group is unaffected (`keryx health status`, `keryx wiki ask`)\", async () => {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 322
+    },
+    "class_scope": {
+      "sites": [
+        "src/cli.test.ts:286-330"
+      ],
+      "enumeration_method": "Full read of the describe block introduced by round 1's L1 fix."
+    },
+    "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Full read of src/cli.test.ts lines 278-330 (the round-1 L1 describe block): test.each over all 40 groups for the negative case only; exactly one positive-case test naming two groups (health status, wiki ask --help), neither exercising a non-bare-word positional shape.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e adds test \"a comma-joined, path or pattern first positional is never refused as unknown\" in src/cli.test.ts, covering integrate's comma-joined form named by T3; round 3 finding T4 records that the added coverage is partial (3 of 4 cases do not exercise a novel args[1] shape)"
+    }
+  },
+  {
+    "id": "L1",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "AC3 states, without qualification, that 'an unknown command or subcommand prints one line ... to stderr with exit 1, never the full usage'. The round-1 diff only wired formatUnknownCommandMessage/suggestClosest into cli.ts and keryx mcp <sub>; every other group's 'unknown subcommand' branch still dumped its full usage.",
+    "impact": "Typing e.g. `keryx health rn` still dumped the group's entire usage block and gave no 'did you mean' hint.",
+    "suggested_fix": "Route every remaining site through formatUnknownCommandMessage the same way cli.ts/mcp.ts do, or narrow AC3/the CHANGELOG to name exactly which commands were covered.",
+    "evidence": "Round 1 finding, reproduced verbatim at 9a2bbf62.",
+    "confidence": "high",
+    "file": "src/commands/health.ts",
+    "line": 50,
+    "class_scope": {
+      "sites": [
+        "src/commands/agents-external.ts:297",
+        "src/commands/agents.ts:57",
+        "src/commands/agents.ts:154",
+        "src/commands/auth.ts:40",
+        "src/commands/bundle.ts:73",
+        "src/commands/bus.ts:125",
+        "src/commands/ctx.ts:160",
+        "src/commands/dashboard.ts:36",
+        "src/commands/external.ts:154",
+        "src/commands/flow.ts:369",
+        "src/commands/forgetting.ts:50",
+        "src/commands/gdgraph.ts:219",
+        "src/commands/governance.ts:94",
+        "src/commands/health.ts:50",
+        "src/commands/hooks.ts:1275",
+        "src/commands/integrations.ts:57",
+        "src/commands/job.ts:89",
+        "src/commands/memory.ts:94",
+        "src/commands/metrics.ts:190",
+        "src/commands/projects.ts:66",
+        "src/commands/providers.ts:1330",
+        "src/commands/retention.ts:97",
+        "src/commands/review.ts:680",
+        "src/commands/routing.ts:358",
+        "src/commands/routing.ts:397",
+        "src/commands/rules.ts:50",
+        "src/commands/sandbox.ts:182",
+        "src/commands/security-impact-evidence.ts:68",
+        "src/commands/security.ts:135",
+        "src/commands/serve.ts:172",
+        "src/commands/serve.ts:486",
+        "src/commands/serve.ts:650",
+        "src/commands/sessions.ts:160",
+        "src/commands/skills-governance.ts:137",
+        "src/commands/skills.ts:210",
+        "src/commands/skills.ts:1537",
+        "src/commands/stack.ts:23",
+        "src/commands/standard.ts:52",
+        "src/commands/wiki.ts:112",
+        "src/commands/workspace.ts:294",
+        "src/commands/schedule.ts:192",
+        "src/commands/trigger.ts:131"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; round 2 re-verified a 7-site sample by direct execution at e0be2cfd (see verifications)."
+    },
+    "global_id": "2026-09-27-pr-9a2bbf622058f83a34345c5ff5726c3fa7ba42fd#L1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): Re-ran the finding's own evidence invocations at e0be2cfd (worktree /home/altsay/keryx-w5): `bun run src/cli.ts health rn` -> 'Unknown command: rn. Did you mean: run? Run `keryx health --help` for the list.' (exit 1, empty stdout); same one-line/no-dump/exit-1 shape confirmed for `wiki serach`, `memory serach`, `auth logn`, `flow lst`, `providers staus`, `skills isntall`. Read src/cli.ts:303-320 (the new central guard) and src/lib/group-subcommands.ts (40-group table) confirming the mechanism is now general, not limited to cli.ts top level and `mcp`. No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Re-ran the finding's own evidence invocations at e0be2cfd (worktree /home/altsay/keryx-w5): `bun run src/cli.ts health rn` -> 'Unknown command: rn. Did you mean: run? Run `keryx health --help` for the list.' (exit 1, empty stdout); same one-line/no-dump/exit-1 shape confirmed for `wiki serach`, `memory serach`, `auth logn`, `flow lst`, `providers staus`, `skills isntall`. Read src/cli.ts:303-320 (the new central guard) and src/lib/group-subcommands.ts (40-group table) confirming the mechanism is now general, not limited to cli.ts top level and `mcp`. No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L2",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The PR wires /doctor into the agent-command registry but does not update the pre-existing expected-command-list fixtures (agent-commands.test.ts) or fully fix command-registry.test.ts, leaving PR #773's own CI ('typecheck-and-tests') red at the round-1 head.",
+    "impact": "AC8 ('typecheck, lint and every touched test file pass') failing on the PR's own CI at the head under round-1 review.",
+    "suggested_fix": "Update the hardcoded expected command lists to include /doctor in its correct registry position and fix command-registry.test.ts's well-formed check.",
+    "evidence": "Round 1 finding, reproduced verbatim at 9a2bbf62.",
+    "confidence": "high",
+    "file": "src/commands/agent-commands.test.ts",
+    "line": null,
+    "class_scope": {
+      "sites": [
+        "src/commands/agent-commands.test.ts (AGENT_SLASH_COMMANDS + commandsForMode('agent') + filterCommands('/') expectations)",
+        "src/standard/command-registry.test.ts ('every descriptor is well-formed')"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; round 2 re-ran the exact test files at e0be2cfd (see verifications)."
+    },
+    "global_id": "2026-09-27-pr-9a2bbf622058f83a34345c5ff5726c3fa7ba42fd#L2",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): `bun test src/commands/agent-commands.test.ts src/standard/command-registry.coverage.test.ts src/standard/command-registry.test.ts` at e0be2cfd -> 59 pass, 0 fail (the 5 named tests from the round-1 CI failure log all pass). No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "`bun test src/commands/agent-commands.test.ts src/standard/command-registry.coverage.test.ts src/standard/command-registry.test.ts` at e0be2cfd -> 59 pass, 0 fail (the 5 named tests from the round-1 CI failure log all pass). No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T1",
+    "reviewer": "review-testing-practices",
+    "severity": "blocker",
+    "problem": "AC1 requires a test covering both the JSON shape and the exit codes (plural). doctor.test.ts's CLI describe block only ever produced an all-ok/warn report; the exit-1 path was only unit-tested against the extracted, synthetic-input doctorFailed(report) predicate, never through doctorCommand itself.",
+    "impact": "A regression in doctorCommand's exit-code wiring, or in any single check's fail/warn condition, would not be caught by the suite as it stood.",
+    "suggested_fix": "Add a doctor.test.ts case that forces a real fail through doctorCommand/buildDoctorReport and asserts process.exitCode === 1 and the failing check's status.",
+    "evidence": "Round 1 finding, reproduced verbatim at 9a2bbf62.",
+    "confidence": "high",
+    "file": "src/commands/doctor.test.ts",
+    "line": null,
+    "class_scope": {
+      "sites": [
+        "src/commands/doctor.ts: doctorCommand (process.exitCode = 1 wiring, unreached at round 1)",
+        "src/commands/doctor.ts: checkMcp/checkStandard/checkBun/checkProviders and every other check's non-ok branch (unreached at round 1)"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; round 2 confirmed the new DoctorTestOverrides.bunFloor seam now drives doctorCommand end-to-end (see verifications)."
+    },
+    "global_id": "2026-09-27-pr-9a2bbf622058f83a34345c5ff5726c3fa7ba42fd#T1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): Read src/commands/doctor.ts's new DoctorTestOverrides.bunFloor seam (threaded through buildDoctorReport/doctorCommand into checkBun) and doctor.test.ts's new 'a real failing check (bun below an injected floor) sets status: \"fail\" in --json AND exits 1' test, which drives doctorCommand end-to-end with an impossible floor rather than the synthetic doctorFailed(report) predicate the finding named. `bun test src/commands/doctor.test.ts` -> 16 pass, 0 fail. No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Read src/commands/doctor.ts's new DoctorTestOverrides.bunFloor seam (threaded through buildDoctorReport/doctorCommand into checkBun) and doctor.test.ts's new 'a real failing check (bun below an injected floor) sets status: \"fail\" in --json AND exits 1' test, which drives doctorCommand end-to-end with an impossible floor rather than the synthetic doctorFailed(report) predicate the finding named. `bun test src/commands/doctor.test.ts` -> 16 pass, 0 fail. No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T2",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "AC3's edit-distance-2 cutoff is tested with a typo well beyond the boundary and one well within it, but no test pins the exact boundary (distance exactly 2 vs. exactly 3 from the same base word).",
+    "impact": "A future off-by-one in MAX_EDIT_DISTANCE's comparison operator would not be caught by this suite.",
+    "suggested_fix": "Add a boundary-pinning case: two candidates differing from the input by exactly 2 and exactly 3 edits.",
+    "evidence": "Round 1 finding, reproduced verbatim at 9a2bbf62.",
+    "confidence": "medium",
+    "file": "src/lib/suggest.test.ts",
+    "line": null,
+    "global_id": "2026-09-27-pr-9a2bbf622058f83a34345c5ff5726c3fa7ba42fd#T2",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): Read src/lib/suggest.test.ts's two new tests pinning the boundary exactly ('bui' vs 'build' at distance 2 -> suggests; 'bu' vs 'build' at distance 3 -> does not). `bun test src/lib/suggest.test.ts` -> 10 pass, 0 fail. No longer reproduces at this head."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Read src/lib/suggest.test.ts's two new tests pinning the boundary exactly ('bui' vs 'build' at distance 2 -> suggests; 'bu' vs 'build' at distance 3 -> does not). `bun test src/lib/suggest.test.ts` -> 10 pass, 0 fail. No longer reproduces at this head.",
+      "verifier": "review-verifier"
+    }
+  }
+]

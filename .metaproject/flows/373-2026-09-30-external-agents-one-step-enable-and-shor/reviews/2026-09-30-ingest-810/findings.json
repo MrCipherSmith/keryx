@@ -1,0 +1,112 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow373-pr810-review",
+    "severity": "major",
+    "problem": "createLazyRunExternal cached an AVAILABLE hook for the life of the closure together with the config and manifest snapshot taken at first resolution, so `/external-agents off` or `keryx agents external disable` did not revoke later spawn_subagent dispatches in the same shell session. It is the mirror of the enable case the PR fixes.",
+    "impact": "After the operator turns external agents off, a model-issued spawn_subagent could still reach an external agent until the shell restarted: the new disable command silently failed to revoke.",
+    "suggested_fix": "Re-run the capability gate on every dispatch (one config read plus one manifest read) instead of caching, and test that disable revokes the next call.",
+    "evidence": "Read src/harness/run-external-factory.ts createLazyRunExternal: only the unavailable result was uncached; `resolved ??= resolveHook()` kept the hook. Fixed in commit 19f1479d with a test that enables, dispatches, disables and expects Denied.",
+    "confidence": "high",
+    "file": "src/harness/run-external-factory.ts",
+    "line": null,
+    "quote": "    resolved ??= resolveHook();",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 571
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/run-external-factory.ts"
+      ],
+      "enumeration_method": "keryx ctx rg for createLazyRunExternal and createRunExternal across src; createLazyRunExternal is the only place that caches the resolved hook across dispatches"
+    },
+    "global_id": "2026-09-30-ingest-810#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 19f1479d (worktree keryx-w373 head): bun test src/harness/run-external-factory.test.ts + registry test: 65 pass 0 fail; -t 'disable revokes' 1 pass; scratch probe enable->dispatch->disable->dispatch printed second Denied 'the external agent runtime is unavailable: ... disabled; run keryx agents external enable'",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 19f1479d: createLazyRunExternal re-resolves the gate per dispatch; verifier (execution) refuted at 19f1479d"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow373-pr810-review",
+    "severity": "minor",
+    "problem": "The alias table was a plain object literal, so `constructor` or `__proto__` returned an inherited non-string and `??` did not fall through to the typed input.",
+    "impact": "A model-supplied runtime.agent of `constructor` could make canonicalExternalAgentId return a function and reach the vendor gates as a non-string.",
+    "suggested_fix": "Use Object.hasOwn before reading the table, and test the prototype keys.",
+    "evidence": "Read src/harness/external/registry.ts canonicalExternalAgentId. Fixed in commit 19f1479d with tests for constructor, __proto__ and toString.",
+    "confidence": "high",
+    "file": "src/harness/external/registry.ts",
+    "line": null,
+    "quote": "  return EXTERNAL_AGENT_ALIASES[input.trim().toLowerCase()] ?? input;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 155
+    },
+    "global_id": "2026-09-30-ingest-810#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "at 19f1479d (worktree keryx-w373 head): registry.test.ts pass; bun -e canonicalExternalAgentId printed 'constructor string constructor', '__proto__ string __proto__', 'toString string toString'",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 19f1479d: Object.hasOwn in canonicalExternalAgentId; verifier (execution) refuted at 19f1479d"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow373-pr810-review",
+    "severity": "minor",
+    "problem": "toggleManifestEntry re-serialises the manifest with JSON.stringify, so the change is semantic rather than byte-wise: integer-like keys reorder, integers above 2^53 lose precision, CRLF becomes LF, a minified file expands, duplicate keys collapse.",
+    "impact": "A hand-edited, git-tracked manifest can get a noisy diff on enable or disable. The manifest is written by keryx itself and is pretty-printed JSON; invalid JSON is never overwritten and the file mode is kept.",
+    "suggested_fix": "Acceptable as is; a text-level patch of the one boolean would avoid it if hand-edited manifests turn out to matter.",
+    "evidence": "Read src/capability/external-agents.ts toggleManifestEntry: indent and trailing newline are preserved, nothing else is.",
+    "confidence": "high",
+    "file": "src/capability/external-agents.ts",
+    "line": 631,
+    "quote": "  const next = `${JSON.stringify(parsed, null, indent)}${text.endsWith(\"\\n\") ? \"\\n\" : \"\"}`;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 631
+    },
+    "global_id": "2026-09-30-ingest-810#F-003",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: altsay — follow-up: byte-exact manifest patch (operator choice Б, helyx message 174705, 2026-09-30)"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow373-pr810-review",
+    "severity": "minor",
+    "problem": "/external-agents is not on the busy allow-list, so typed during a main turn it is deferred until the turn ends, while /delegate is allowed.",
+    "impact": "An `off` typed mid-run applies after the turn, not immediately. Same behaviour as /external.",
+    "suggested_fix": "None needed: a capability change during a live turn applying at the turn boundary is the existing rule for /external.",
+    "evidence": "Read src/tui/busy-dispatch.ts; the subagent reviewer could not see the tui-shell dispatch site.",
+    "confidence": "medium",
+    "file": "src/tui/busy-dispatch.ts",
+    "line": null,
+    "quote": "busy",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "global_id": "2026-09-30-ingest-810#F-004",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: altsay — follow-up: busy-turn handling of /external-agents (operator reply, helyx message 174712, 2026-09-30)"
+    }
+  }
+]

@@ -1,0 +1,224 @@
+[
+  {
+    "id": "BLOCKER-1",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "runShell (the plain chat-mode readline REPL) has no wrapping try/finally around its main loop; leaveBus()/releaseLease() only run at the /exit branch and at the loop's natural EOF fall-through, so a throw from an unguarded slash-command handler (session-info, /flows, /theme, /compact, /model, /provider) propagates out uncaught, past runWithLeaseChoice (which rethrows anything but SessionLeasedError) and past shellCommand's outer finally (which only closes readlineMcp/rl, never leaseBox/busBox). AC7 claims this is fixed shell-wide; the fix (a wrapping try/finally, present at shell.ts:2473/2902-2906 in the sibling runAgentRepl, explicitly commented 'AC7 (flow 352 audit)') was applied only to runAgentRepl, not to runShell.",
+    "impact": "In keryx shell chat mode (the default without --agent/TUI), a turn or slash command that throws leaves the session lease held and the bus joined for the rest of the process's life. The next `-r` on that session then needs `--take-over`, exactly the regression the release's own CHANGELOG says was fixed.",
+    "suggested_fix": "Wrap runShell's main for-await loop (shell.ts:913-1196) in the same try/finally pattern runAgentRepl now uses: move the two inline leaveBus()/releaseLease() calls (lines 921-924, 1195-1196) into one finally around the loop.",
+    "evidence": "Read src/commands/shell.ts runShell (line 738) end-to-end: no wrapping try/finally around the loop (line 913). Read runAgentRepl (line 1607), confirmed try at 2473 / finally at ~2902-2906 releasing leaveBus()/releaseLease(), with an explicit 'AC7 (flow 352 audit)' comment at line 2462 describing exactly this defect as what was fixed there. Read runWithLeaseChoice (line 633): rethrows anything but SessionLeasedError. Read shellCommand's readline chat-mode branch (else arm, ~4387-4406) and its outer finally (4408-4423): closes readlineMcp/rl only, never leaseBox/busBox. Contrasted with the TUI chat branch (~3867/3960-3982), which does release chatLeaseBox/chatBusBox in its own try/finally.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 913,
+    "quote": "for await (const line of io.lines) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "ac7-runshell-lease-leak-on-throw",
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:939 (loadInspectorWorkspaces/loadInspectorFlows, isSessionInfoCommand branch)",
+        "src/commands/shell.ts:947 (loadSessionLimits)",
+        "src/commands/shell.ts:962 (loadInspectorFlows, isFlowsCommand branch)",
+        "src/commands/shell.ts:972-986 (applyThemeId/persistThemeId, /theme)",
+        "src/commands/shell.ts:1029 (compactSession, /compact)",
+        "src/commands/shell.ts:1049 (makeActive(), /model)",
+        "src/commands/shell.ts:1073 (makeActive(), /provider explicit-name branch)"
+      ],
+      "enumeration_method": "Independently reported by review-logic and review-highload; sites merged from review-highload's enumeration (grep of every leaveBus()/releaseLease() call site in shell.ts, and every unguarded branch inside runShell's loop body), then confirmed directly by the orchestrator reading shell.ts lines 738-1197, 2440-2530, 2860-2910, 3860-3985, 4380-4423."
+    },
+    "global_id": "2026-09-27-branch-33a3591b-1#BLOCKER-1",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #771 (aa530248): runShell try/finally; test shell-bus.test.ts 'a line source that throws mid-loop still leaves the bus and releases the lease'"
+    }
+  },
+  {
+    "id": "MAJOR-1",
+    "reviewer": "review-highload",
+    "severity": "major",
+    "problem": "finishWithBudgetSummary threads the real abort signal into streamWrapUpRound (this commit's AC6 fix) but never checks round.aborted / signal?.aborted after the round settles, unlike its sibling finishWithSubmitResult, which explicitly does (`if (round.aborted || signal?.aborted === true) { return { aborted: true }; }`, commented 'Review F-006').",
+    "impact": "An abort during this specific wrap-up round is misreported: the caller (agent.ts:3502-3509) unconditionally returns finishReason 'no-progress' regardless, any partial assistantText that streamed before the abort is pushed into history as a normal complete turn with no record it was cut off, and an empty result prints '[budget] No wrap-up text from the model. Re-run your request…' for what was actually a user-initiated interruption.",
+    "suggested_fix": "Mirror finishWithSubmitResult: check `round.aborted || signal?.aborted === true` immediately after the streamWrapUpRound call in finishWithBudgetSummary and branch to an interruption-specific outcome instead of falling through to the no-text/no-progress path.",
+    "evidence": "Read agent.ts:3600-3723 (streamWrapUpRound: sets aborted=true at lines 3646/3697, never sets thrownError on that path). Read agent.ts:3729-3840 (finishWithBudgetSummary: post-round checks only round.thrownError at 3822 and round.assistantText.length at 3825, no round.aborted check). Read the sole call site agent.ts:3500-3509 (unconditional `return { finishReason: \"no-progress\" }`). Read the sibling finishWithSubmitResult (~agent.ts:3909-3915): explicit round.aborted check immediately after the same streamWrapUpRound call.",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "line": 3821,
+    "quote": "const round = await streamWrapUpRound(io, deps, request, signal, system);\n  if (round.thrownError !== undefined) {\n    system(`\\n[error] wrap-up failed: ${round.thrownError}\\n`);\n  }\n  if (round.assistantText.length > 0) {",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "dedupe_key": "finish-budget-summary-abort-misreported-as-no-progress",
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts:3729 finishWithBudgetSummary (sole call site agent.ts:3502)"
+      ],
+      "enumeration_method": "grep for finishWithBudgetSummary( across src/commands/agent.ts returned exactly one call site; compared its post-round handling against its structural sibling finishWithSubmitResult. Confirmed directly by the orchestrator reading both functions and the call site."
+    },
+    "global_id": "2026-09-27-branch-33a3591b-1#MAJOR-1",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #771 (aa530248): finishWithBudgetSummary returns {aborted}; test agent.test.ts 'flow 352 review r1 (M-1)'"
+    }
+  },
+  {
+    "id": "MAJOR-2",
+    "reviewer": "review-highload",
+    "severity": "major",
+    "problem": "enrichPageDeep's composed AbortSignal (composed = composeAbortSignals(input.signal, abort.signal), line 314) is disposed on three of its exit paths (lines 376, 414, 425) but not on the function-level catch at line 448. If the awaited Promise.race([turn.then(...), expired, cancelled]) (line 401) rejects because the underlying turn promise itself rejects, the exception reaches this catch with composed.dispose() never called.",
+    "impact": "composeAbortSignals attaches an {once:true} abort listener onto the caller-supplied external signal. src/wiki/enrich.ts's runDeepSingle passes the SAME ctx.input.signal — one shared cancellation signal for the whole wiki-enrich batch run — into every enrichPageDeep call across every page. Each page that hits this uncaught-exception path during a batch leaves one more undisposed listener on that shared, long-lived signal, growing with the number of pages that hit it before the batch signal itself fires.",
+    "suggested_fix": "Call composed.dispose() in the catch block at deep-enrich.ts:448 (idempotent-safe, matching the other three exit paths), or restructure with an outer try/finally that disposes unconditionally on every path.",
+    "evidence": "Read src/wiki/deep-enrich.ts:290-451 in full: composed created line 314, disposed at 376/414/425, NOT disposed in the catch at 448. Read src/wiki/enrich.ts around lines 1155-1262: ctx.input.signal passed to enrichPageDeep at ~1256 and checked repeatedly (1155/1193/1240/1262), consistent with one shared signal across a per-page batch loop. Read src/harness/tool/builtin/spawn-subagent-tool.ts:1725-1888, confirmed composed.dispose() IS called in its own catch (line 1874) — the other production caller of composeAbortSignals does not share this gap.",
+    "confidence": "medium",
+    "file": "src/wiki/deep-enrich.ts",
+    "line": 448,
+    "quote": "  } catch (cause) {\n    return { fallback: true, reason: `deep enrich failed: ${errorMessage(cause)}`, toolCalls };\n  }\n}",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "deep-enrich-composed-signal-dispose-skipped-on-exception",
+    "class_scope": {
+      "sites": [
+        "src/wiki/deep-enrich.ts:213 enrichPageDeep (composed created line 314, undisposed catch line 448)"
+      ],
+      "enumeration_method": "Repo-wide search for composeAbortSignals found exactly 2 non-test production call sites; the other (spawn-subagent-tool.ts) traced and confirmed to dispose on every exit path, leaving this as the sole member of the class. Confirmed directly by the orchestrator."
+    },
+    "global_id": "2026-09-27-branch-33a3591b-1#MAJOR-2",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #771 (aa530248): enrichPageDeep outer catch disposes; test deep-enrich.test.ts 'a turn that throws still removes the abort listener'"
+    }
+  },
+  {
+    "id": "MAJOR-3",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "This commit updated the file's header comment to fold in the AC1 exemption story, implying this module's cross-boundary credential handling is proven 'exactly like the existing line-stream path'. But none of the file's three describe blocks exercise buildExternalChildEnv, isDeniedForMcpChild, or any real environment value — they only grep source text for a literal process.env token and 4 hardcoded identifier strings. The functions this file is about (gatedSuperviseCodexMcpRun/superviseCodexMcpRun) have zero non-test callers anywhere in src/ today.",
+    "impact": "A reader (or a future reviewer citing this file as AC1 evidence) is told this integration point's credential handling is proven, when the only real proof is that supervise-mcp.ts has no caller to leak through yet. Once a caller is wired, a mistake in that wiring (wrong runtimeId, raw process.env, or no scrubbing) would ship with this suite still green.",
+    "suggested_fix": "Either narrow the docstring's claim to what the file actually checks, or add a real assertion once a caller exists: build an env via buildExternalChildEnv with a representative runtimeId and assert it round-trips scrubbed through superviseCodexMcpRun's client.connect call.",
+    "evidence": "Read src/mcp-client/credential-boundary.test.ts in full (91 lines), diffed against pre-commit. Read src/harness/external/supervise-mcp.ts (spawnOptions construction at line 228: env: input.env). keryx ctx rg \"gatedSuperviseCodexMcpRun|superviseCodexMcpRun\" src confirmed every non-test reference lives inside supervise-mcp.ts itself (definition + its own 'a future caller'/'a future task' doc comments) plus one doc-comment mention each in acp-client.ts and mcp-client/client.ts — no production caller anywhere. bun test src/mcp-client/credential-boundary.test.ts passes.",
+    "confidence": "high",
+    "file": "src/mcp-client/credential-boundary.test.ts",
+    "line": 16,
+    "quote": "// `gatedSuperviseCodexMcpRun` in, exactly like `superviseExternalRun`'s own",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 6
+    },
+    "dedupe_key": "credential-boundary-claim-vs-behavior-ac1",
+    "class_scope": {
+      "sites": [
+        "src/mcp-client/credential-boundary.test.ts:6-23 (header comment + all 3 describe blocks)"
+      ],
+      "enumeration_method": "Read the full file (91 lines); grepped the same touched-file list for 'D-01'/'proves' — this unverified-claim pattern is unique to this file. Confirmed directly by the orchestrator via keryx ctx rg re-enumeration of every call site."
+    },
+    "global_id": "2026-09-27-branch-33a3591b-1#MAJOR-3",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-M3 (PR #772)"
+    }
+  },
+  {
+    "id": "MINOR-1",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The shared credential-shape classifier (isDeniedForMcpChild) and its supporting regexes live in src/mcp-servers/spawn-env.ts, a module named/scoped for one specific feature, rather than a neutral shared location; src/harness/external/ (a sibling, independent subsystem) imports a concrete function out of it. env-deny.ts was correctly split out as a new leaf module for the by-name deny lists for exactly this reason, but the shape-classifier function itself was not given the same treatment.",
+    "impact": "A future contributor refactoring or extracting src/mcp-servers/ as a self-contained unit is likely to miss that harness/external depends on one exported function from it.",
+    "suggested_fix": "Move isDeniedForMcpChild and its regex constants into env-deny.ts or a new neutral module (e.g. src/lib/credential-shape.ts); keep MCP-specific by-name lists in spawn-env.ts.",
+    "evidence": "Read src/harness/external/env.ts, src/mcp-servers/spawn-env.ts, and src/harness/external/env-deny.ts in full; confirmed via git diff 33a3591b~1..33a3591b that env-deny.ts was newly extracted in this commit specifically so spawn-env.ts could avoid importing env.ts back, while the shape classifier was left in spawn-env.ts and pulled the other direction.",
+    "confidence": "medium",
+    "file": "src/harness/external/env.ts",
+    "line": 44,
+    "quote": "import { isDeniedForMcpChild } from \"../../mcp-servers/spawn-env\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "credential-classifier-cross-subsystem-import",
+    "global_id": "2026-09-27-branch-33a3591b-1#MINOR-1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-MIN1 (PR #772)"
+    }
+  },
+  {
+    "id": "INFO-1",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "buildExternalChildEnv's own first-pass name/prefix checks are case-sensitive, unlike isDeniedForMcpChild's internal re-checks of the same lists, which uppercase both sides.",
+    "impact": "No current leak: every name in EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS is still caught for a lower/mixed-case variant via isDeniedForMcpChild's case-insensitive fallback. Defense-in-depth note only: safety currently depends on that fallback continuing to re-test these lists.",
+    "suggested_fix": "Uppercase both sides in env.ts's own first-pass checks, or comment at spawn-env.ts's re-checks that env.ts relies on their case-insensitivity.",
+    "evidence": "Read src/harness/external/env.ts lines 108-124 against src/mcp-servers/spawn-env.ts lines 303-330.",
+    "confidence": "medium",
+    "file": "src/harness/external/env.ts",
+    "line": 117,
+    "quote": "if (denied.has(key)) continue;\n    if (EXTERNAL_ENV_PREFIX_SWEEPS.some((prefix) => key.startsWith(prefix))) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "dedupe_key": "external-env-case-sensitivity-defense-in-depth",
+    "global_id": "2026-09-27-branch-33a3591b-1#INFO-1",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-I1 (PR #772)"
+    }
+  },
+  {
+    "id": "INFO-2",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Unanchored substring match — matches the glued shape anywhere inside a longer variable name, not just as the whole name.",
+    "impact": "No concrete false positive found against any real env var name in this codebase or the AC4 test list; theoretical over-match risk only.",
+    "suggested_fix": "Not necessary given current coverage; if revisited, anchor with (^|_)/($|_) like the sibling SECRET_SEGMENT_RE.",
+    "evidence": "Read the regex and traced it against every name in AC4 and the file's own comments; no false-positive site found.",
+    "confidence": "low",
+    "file": "src/mcp-servers/spawn-env.ts",
+    "line": 242,
+    "quote": "const GLUED_SECRET_RE = /(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)|DB(PASS|PWD)/;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "dedupe_key": "spawn-env-glued-regex-unanchored",
+    "global_id": "2026-09-27-branch-33a3591b-1#INFO-2",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-I2 (PR #772)"
+    }
+  },
+  {
+    "id": "INFO-3",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "This AC7 test is a source-text audit (string-index checks on the stringified function body) rather than an executed behavioral assertion.",
+    "impact": "None currently: the equivalent real-behavior guard is independently and directly verified in shell-agent-repl.test.ts's 'a crashing turn still leaves the lease released and the bus joined-then-left' test, which exercises real runAgentRepl() end-to-end. Redundant/supplementary, not load-bearing on its own.",
+    "suggested_fix": "No action required given the redundant runtime test exists.",
+    "evidence": "Read src/commands/shell-bus.test.ts lines 214-248 and cross-referenced shell-agent-repl.test.ts's AC7 describe block.",
+    "confidence": "high",
+    "file": "src/commands/shell-bus.test.ts",
+    "line": 726,
+    "quote": "test(\"/exit and end-of-input both return from inside the loop's try, whose one finally leaves the bus before releasing the lease\", () => {\n    const tryIndex = replBody.indexOf(\"  try {\\n    for (;;) {\");",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": 226
+    },
+    "dedupe_key": "shell-bus-source-text-audit-ac7",
+    "global_id": "2026-09-27-branch-33a3591b-1#INFO-3",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md R-I3 (PR #772)"
+    }
+  }
+]
