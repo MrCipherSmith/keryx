@@ -34,121 +34,121 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Full review: scope, hashes, Stage 1 table, judgement calls, 8 findings, confirmed clean areas, evidence, routing audit."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md.ts",
       "kind": "custom",
       "exists": true,
       "summary": "120000-case superset differential fuzz vs a reconstruction of the pre-T71 patterns, plus 21 named marked-oracle rows."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md-diff.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-md-diff.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Targeted old-vs-new differential on long labels and linked images."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-boundary.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-boundary.ts",
       "kind": "custom",
       "exists": true,
       "summary": "27 shapes across dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput, plus mask-on-raw-bytes rows."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-gates.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-gates.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Enumeration of every branch that consults an attribute, plus the markdown sensitive-value gate and reference-label normalisation."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-srcset.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-srcset.ts",
       "kind": "custom",
       "exists": true,
       "summary": "The srcset candidate split against the decoded value, with and without an allowlist."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-doc.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-doc.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Independent re-derivation of policies.md parity: 77 rows in both directions."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Twelve shapes scaled 12.5 KB to 400 KB with growth exponents."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf2.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-perf2.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Shipped-vs-replaced ladder on the cubic shape, plus a realistic 40 KB payload."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-extra.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T72-extra.ts",
       "kind": "custom",
       "exists": true,
       "summary": "HTMLRewriter decoding-oracle limitation and the real-world badge-row carrier."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-md.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-md.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-md.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-md-diff.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-md-diff.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-md-diff.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-boundary.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-boundary.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-boundary.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-gates.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-gates.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-gates.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-srcset.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-srcset.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-srcset.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-doc.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-doc.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-doc.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-perf.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf2.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-perf2.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-perf2.ts"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T72-extra.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/T72-extra.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw output of T72-extra.ts"

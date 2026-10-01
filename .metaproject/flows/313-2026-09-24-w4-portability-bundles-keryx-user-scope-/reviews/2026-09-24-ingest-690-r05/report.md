@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- **Worktree:** `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `c8d68d62` (checked).
+- **Worktree:** `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `c8d68d62` (checked).
 - **Fixes under review:** `6c781507..c8d68d62` (`pr-690-r5-fixes.diff`): lanes F-A (`94ba146c`), F-B (`5f38eb58`) and F-C (`0401a79e`).
 - **Scope:** the 17 items the brief lists, the specific checks it names, and anything those probes turned up. This is not a full re-audit.
 - **Repo state:** read-only. Nothing was edited, staged, committed or stashed.

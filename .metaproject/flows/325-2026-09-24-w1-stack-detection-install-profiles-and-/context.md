@@ -56,7 +56,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 ## Agent Findings
 
 - Base branch: `feat/agent-platform-expansion`; worktree
-  `/Users/Goodea/goodea/keryx-ape-309-w1`, branch `flow/309-w1`.
+  `~/goodea/keryx-ape-309-w1`, branch `flow/309-w1`.
 - Existing detection: `src/review/stack.ts` (`detectProjectStack`,
   `STACK_TAGS`, fail-open "uncertain always means included", workspaces →
   uncertain). Consumed by `src/commands/review.ts`; keep unchanged.

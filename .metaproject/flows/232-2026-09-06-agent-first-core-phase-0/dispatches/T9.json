@@ -16,19 +16,19 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
       "kind": "report",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/package.json",
-    "/Users/Goodea/goodea/keryx/.metaproject/health.config.json",
-    "/Users/Goodea/goodea/keryx/src/mcp/boundary.test.ts",
-    "/Users/Goodea/goodea/keryx/src/gdskills/install.test.ts"
+    "~/goodea/keryx/package.json",
+    "~/goodea/keryx/.metaproject/health.config.json",
+    "~/goodea/keryx/src/mcp/boundary.test.ts",
+    "~/goodea/keryx/src/gdskills/install.test.ts"
   ],
   "constraints": [
-    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md first. Read local code-verifier SKILL.md and testing context.",
+    "Read ~/goodea/keryx/.metaproject/index.md first. Read local code-verifier SKILL.md and testing context.",
     "Read-only source; only T9 reports/results. No git/flow/AC/dependency changes. No model/network calls. Stats disabled.",
     "Do not review own M01 code for acceptance; this task runs objective integrated checks. Root and independent review handle acceptance.",
     "Root is finishing Shell parser tests/source; coordinate snapshot before full check. T8 writes finished.",
@@ -41,7 +41,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T9-result.json"
   },
   "budget": {
     "max_output_tokens": null

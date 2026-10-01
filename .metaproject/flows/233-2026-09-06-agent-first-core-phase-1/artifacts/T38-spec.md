@@ -1,6 +1,6 @@
 # T38 spec — close the CLI exit-code denylists (F-002)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files: `src/commands/security.ts` and its tests (`src/commands/security.check-input.test.ts`,
 a new `src/commands/security-gate-exit.test.ts`). Read-only: `src/security/*`,
 `src/commands/security-recursive-scan.test.ts` (read to confirm it is

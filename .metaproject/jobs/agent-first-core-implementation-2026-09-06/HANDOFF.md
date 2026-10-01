@@ -4,7 +4,7 @@
 
 ## Главное состояние
 
-- Рабочий каталог: `/Users/Goodea/goodea/keryx`.
+- Рабочий каталог: `~/goodea/keryx`.
 - Ветка: `codex/agent-first-core`.
 - HEAD и локальный `origin/main`: `0bc6418fa1a038f8ec909cf949fecba077acf9a4`. При передаче fetch не выполнялся.
 - Изменения **не закоммичены**. Коммитов реализации, push, PR и merge нет. Не делать reset/clean/checkout с потерей изменений.
@@ -97,7 +97,7 @@ Ownership T26: `src/security/output-validation.ts` и tests, `src/security/detec
 
 ## Порядок возобновления и правила для другого агента
 
-1. Сначала явно прочитать `/Users/Goodea/goodea/keryx/.metaproject/index.md`, затем local flow-orchestrator и узкие routing/testing/wiki/ctx skills. Повторять index gate после worktree switch.
+1. Сначала явно прочитать `~/goodea/keryx/.metaproject/index.md`, затем local flow-orchestrator и узкие routing/testing/wiki/ctx skills. Повторять index gate после worktree switch.
 2. Прочитать этот handoff, docpack README, program/phase-map и flow 232/233 packages. Проверить реальную ветку, dirty tree, status/attempts. Пользователь передаёт существующую работу; не создавать дубликат программы и не перезапускать docpack.
 3. Вся реализация — через local `.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md`. Root оркестрирует, выполняет интеграцию; до трёх workers одновременно. Каждый dispatch самодостаточен, содержит exact root/index-first и валидируется по schema. Младшие доступные модели целесообразны для узких tests/implementation/review.
 4. Flow/task/attempt/AC/status менять **только** `bun src/cli.ts flow …`; не редактировать flow.json/frozen AC. Attempt count — число записанных событий, не число реальных повторов исполнения. Остановка отражена outcome blocked с явной причиной «user pause», flows остались in-progress; это не архитектурная блокировка и не окончание задачи.
@@ -118,7 +118,7 @@ Ownership T26: `src/security/output-validation.ts` и tests, `src/security/detec
 
 ## Готовый текст для передачи
 
-> Продолжи реализацию Keryx в `/Users/Goodea/goodea/keryx`, ветка `codex/agent-first-core`, строго через project-local flow-orchestrator. Сначала прочитай `.metaproject/index.md`, затем `.metaproject/jobs/agent-first-core-implementation-2026-09-06/HANDOFF.md`. Это продолжение 9 существующих flow 232–240, не новая задача. Сохрани dirty tree и ранее существовавшие изменения. Начни с четырёх blocker T24/T26, незавершённого RED T27, review T28 и memo regression T29; затем независимый budget review 232/T16 и полная интеграционная проверка. Оркестрируй сабагентов с раздельным владением файлами, применяй младшие модели для узких задач. Не считать старые PASS текущими, не переписывать specs, не публиковать и не коммитить без отдельного запроса. Статистика отключена. После приёмки фаз 0/1 переходи по phase-map к оставшимся фазам. Keryx должен оставаться model-independent.
+> Продолжи реализацию Keryx в `~/goodea/keryx`, ветка `codex/agent-first-core`, строго через project-local flow-orchestrator. Сначала прочитай `.metaproject/index.md`, затем `.metaproject/jobs/agent-first-core-implementation-2026-09-06/HANDOFF.md`. Это продолжение 9 существующих flow 232–240, не новая задача. Сохрани dirty tree и ранее существовавшие изменения. Начни с четырёх blocker T24/T26, незавершённого RED T27, review T28 и memo regression T29; затем независимый budget review 232/T16 и полная интеграционная проверка. Оркестрируй сабагентов с раздельным владением файлами, применяй младшие модели для узких задач. Не считать старые PASS текущими, не переписывать specs, не публиковать и не коммитить без отдельного запроса. Статистика отключена. После приёмки фаз 0/1 переходи по phase-map к оставшимся фазам. Keryx должен оставаться model-independent.
 
 Routing audit текущей передачи: graph_used: earlier (stale, не использован для новых выводов); wiki_used: earlier; ctx_used: yes; raw_rg_used: no. Новая реализация после просьбы остановиться не выполнялась.
 

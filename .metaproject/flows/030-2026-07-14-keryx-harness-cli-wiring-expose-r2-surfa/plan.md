@@ -20,7 +20,7 @@ Reuse-only; deterministic; deps `{}`.
 | T2/T3/T4 | umbrella | orchestrator | Opus | — |
 
 Orchestrator = Opus. Workers via subagent-dispatch → subagent-result, worktree-guard
-(`cd /Users/Goodea/goodea/keryx`, branch `feature/keryx-harness-cli-wiring`).
+(`cd ~/goodea/keryx`, branch `feature/keryx-harness-cli-wiring`).
 
 ## Steps
 

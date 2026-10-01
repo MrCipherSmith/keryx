@@ -8,7 +8,7 @@ prior reviews and none of T46's probes. Every row below cites a probe I wrote an
 ## Scope
 
 - Branch: `codex/agent-first-core`; base commit `0bc6418fa1a038f8ec909cf949fecba077acf9a4`. All work
-  under review is **uncommitted** in the main checkout `/Users/Goodea/goodea/keryx`; no worktree was
+  under review is **uncommitted** in the main checkout `~/goodea/keryx`; no worktree was
   entered.
 - Artifacts read in full: `T46-spec.md`, `T46-implementation.md`; `T42-review.md` and `T53-review.md`
   on the judgement calls at issue; `T52-implementation.md`; `review-security-code/SKILL.md`,
@@ -382,8 +382,8 @@ do not remove it.
 
 ## Evidence
 
-All logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
-`/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
+All logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
+`~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
 (`T66-enum.ts`, `T66-md-oracle.ts`, `T66-boundary.ts`, `T66-gates.ts`, `T66-fp.ts`).
 
 | Log | SHA-256 |

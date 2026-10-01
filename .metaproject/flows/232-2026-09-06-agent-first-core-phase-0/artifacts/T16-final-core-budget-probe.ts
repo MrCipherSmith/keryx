@@ -14,15 +14,15 @@
  *   C8 maxToolCalls reason wins over an untouched high maxRounds
  *   C9 maxRounds 0 with an interactive picker still issues no request on cancel
  */
-import { runAgentTurn } from "/Users/Goodea/goodea/keryx/src/commands/agent";
-import type { AgentDeps, AgentIO } from "/Users/Goodea/goodea/keryx/src/commands/agent";
-import type { InteractiveTool } from "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/interactive-tools";
+import { runAgentTurn } from "~/goodea/keryx/src/commands/agent";
+import type { AgentDeps, AgentIO } from "~/goodea/keryx/src/commands/agent";
+import type { InteractiveTool } from "~/goodea/keryx/src/harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
   NormalizedRequest,
   ProviderDescription,
   ProviderPort,
-} from "/Users/Goodea/goodea/keryx/src/harness/provider/types";
+} from "~/goodea/keryx/src/harness/provider/types";
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {

@@ -3,7 +3,7 @@ STATUS: DONE_WITH_CONCERNS
 # T28 — Independent review: recursive security scanner (T20) + runGate truthfulness
 
 Reviewer: review-logic + review-security-code (independent; did not author T20).
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`).
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`).
 Stage 1 = specification compliance (executed). Stage 2 = code quality — **not run**, because Stage 1 failed (2 blockers, 2 majors). Per dispatch constraint "Stage1 before Stage2; stop Stage 2 if Stage 1 fails."
 
 Nothing below is taken from the T20 self-report. Every verdict cites a probe I executed on my own synthetic `mkdtemp` fixtures, all of which were removed afterwards.
@@ -16,12 +16,12 @@ SHA-256 recorded at review start and again at review end. **One file drifted**: 
 
 | File | SHA-256 start | SHA-256 end |
 |------|---------------|-------------|
-| `/Users/Goodea/goodea/keryx/src/security/path-scan.ts` | `1247042b5237a2c581c788d0063ab69e25be8cb0e1c803a66a46765ed8b7784d` | *unchanged* |
-| `/Users/Goodea/goodea/keryx/src/security/service.ts` | `95e7786ec7bec39e8bd85845c010b8631405e4c2640eae1b26dfc754a3ef1a77` | **`5ddf3732602c22706d66b93114c7714981dea30b8a8eebda9fa4134201bea9f4`** |
-| `/Users/Goodea/goodea/keryx/src/security/report.ts` | `4bfcecb80107eefd83fc51fb2590538aff7548f7508da522307534eac1bee88b` | *unchanged* |
-| `/Users/Goodea/goodea/keryx/src/commands/security.ts` | `f8ac0cf4f4253ae7ad7cd244343f9567dad4a92bbbad9c5d65ab1e660fee656f` | *unchanged* |
-| `/Users/Goodea/goodea/keryx/src/security/types.ts` | `c46ec47c1f509e4c1bcc57b975f7dd892fa2315d77b92d7e65796444b34d3b2f` | *unchanged* |
-| `/Users/Goodea/goodea/keryx/src/security/schemas.ts` | `8c1455c2f29105c3134f5f2c3df6c6cf6517933d21e5f259b56a72e86fbd919e` | *unchanged* |
+| `~/goodea/keryx/src/security/path-scan.ts` | `1247042b5237a2c581c788d0063ab69e25be8cb0e1c803a66a46765ed8b7784d` | *unchanged* |
+| `~/goodea/keryx/src/security/service.ts` | `95e7786ec7bec39e8bd85845c010b8631405e4c2640eae1b26dfc754a3ef1a77` | **`5ddf3732602c22706d66b93114c7714981dea30b8a8eebda9fa4134201bea9f4`** |
+| `~/goodea/keryx/src/security/report.ts` | `4bfcecb80107eefd83fc51fb2590538aff7548f7508da522307534eac1bee88b` | *unchanged* |
+| `~/goodea/keryx/src/commands/security.ts` | `f8ac0cf4f4253ae7ad7cd244343f9567dad4a92bbbad9c5d65ab1e660fee656f` | *unchanged* |
+| `~/goodea/keryx/src/security/types.ts` | `c46ec47c1f509e4c1bcc57b975f7dd892fa2315d77b92d7e65796444b34d3b2f` | *unchanged* |
+| `~/goodea/keryx/src/security/schemas.ts` | `8c1455c2f29105c3134f5f2c3df6c6cf6517933d21e5f259b56a72e86fbd919e` | *unchanged* |
 
 ### Drift handling for `service.ts`
 
@@ -112,16 +112,16 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-001] `runGate` reports `pass` when no report exists or the report cannot be parsed — blocker
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/service.ts` : 219 : `runGate` (with `readLatestReport`, lines 187-200)
+- **file / line / symbol**: `~/goodea/keryx/src/security/service.ts` : 219 : `runGate` (with `readLatestReport`, lines 187-200)
 - **problem**: `readLatestReport` returns `null` both when `latest.json` is absent (line 190) and when `JSON.parse` throws (line 195) — the two are indistinguishable to the caller. `runGate` then takes the `if (!latest)` branch and returns `{status: "pass", reasons: ["no security report; run \`keryx security scan\` first"]}`. The reason string is honest; the **status is not**, and machines read the status.
 - **impact**: `policies.md` §"Health и security gate" fixes the fold as *"если required check отсутствует/пропущен/не разобран/не завершён — `INCOMPLETE`"* and *"Strict CI принимает только PASS"*. Any CI or agent that gates on `SecurityService.gate().status === "pass"` is signed off as clean by **never having run a scan at all**, or by a scan whose artifact was truncated mid-write. That is the single failure mode a security gate exists to prevent — the absence of evidence is returned as evidence of absence.
-- **reproduction**: `bun /Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts` — cases a, b, b2. Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log`, SUMMARY at line 155.
+- **reproduction**: `bun ~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts` — cases a, b, b2. Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log`, SUMMARY at line 155.
 - **suggested_fix**: make `readLatestReport` return a discriminated outcome (`{kind:"absent"} | {kind:"unparsed", reason} | {kind:"report", report}`) instead of `SecurityReport | null`, and map `absent` and `unparsed` to `status: "incomplete"` in `runGate`, keeping the existing human-readable reason. Do not widen the return type of `runGate` — `"incomplete"` is already in it.
 - **class_scope**: sites = [`src/security/service.ts:189-191` (absent → null), `src/security/service.ts:193-196` (parse failure → null), `src/security/service.ts:216-221` (null → pass), `src/security/service.ts:206-211` (`runReport` same null → gate "pass" report)]. enumeration_method: `bun src/cli.ts ctx rg "runGate|\.gate\(|readLatestReport" src` — `readLatestReport` has exactly two callers (`runReport`, `runGate`), both in `service.ts`; `runGate` has exactly one wiring site (`service.ts:317`) and, per `grep -rn "\.gate(" src/mcp src/commands src/lib`, **zero in-repo consumers today** (every `.gate(` hit is `createCodeHealthService`, a different service). The class is therefore fully contained in `service.ts`, and the blast radius is the published `SecurityService` contract surface rather than a live CLI path — which lowers the urgency, not the correctness.
 
 ### [F-002] `runGate` treats every gate value it does not recognize — including `needs-approval` — as `pass` — blocker
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/service.ts` : 229 : `runGate`
+- **file / line / symbol**: `~/goodea/keryx/src/security/service.ts` : 229 : `runGate`
 - **problem**: the fold is written as a two-value denylist — `if (latest.gate === "fail" || latest.gate === "incomplete") { … }` then an unconditional `return {status: "pass", …}`. `SecurityGate` is `"pass" | "needs-approval" | "incomplete" | "fail"` (`types.ts:68`), so **`needs-approval` falls into the pass branch**. So does a `gate` field that is missing, a bogus string, or a `latest.json` that parsed as an array. `latest` is cast with `as SecurityReport` at line 193 with no shape validation, so nothing upstream catches it either. The emitted reason literally reads `security gate: undefined` in the missing-field case — the code prints the evidence of its own confusion and returns `pass` anyway.
 - **impact**: `needs-approval` is the gate value that exists precisely to stop an unattended write pending a human — `workspace.ts:157` treats it as a hard stop requiring `--acknowledge-security`. Routing it to `pass` through the service contract lets an approval-gated decision be consumed as an approved one. The bogus/missing-field cases mean a corrupted or foreign artifact dropped into `.metaproject/data/security/artifacts/latest.json` is a *clean bill of health*, which makes the artifact an attractive tampering target: the safest write for an attacker is not a forged `pass` report but any malformed byte string.
 - **reproduction**: same probe, cases b3, b4, b5, b6 and e. Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log` lines 172-203.
@@ -130,7 +130,7 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-003] A non-recursive directory scan reports `coverage: complete` and `gate: pass` after scanning nothing — major
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/path-scan.ts` : 194 : `scanContainedPath` / `visit`
+- **file / line / symbol**: `~/goodea/keryx/src/security/path-scan.ts` : 194 : `scanContainedPath` / `visit`
 - **problem**: when `scope.recursive` is false and the target is a directory, `visit` pushes `{status: "skipped", reason: "recursive traversal disabled"}` and returns — **after** the `readdir`, and **without** scanning the directory's own direct children and **without** calling `incomplete()`. So the traversal declares full coverage of a directory it did not open a single file in. `runScanPath` then sees `coverage.status === "complete"` and leaves `computeGate([])`'s `pass` untouched (`service.ts:173-175`).
 - **impact**: `runScanPath(cwd, {recursive: false, targetPath: <dir>})` is a silent, total false pass — the strongest form of the failure AC6 and policies.md are written against. Verified with a live secret in the target: the probe's `corpus/creds.env` held a detectable synthetic AWS key and the result was `gate: "pass"`, `findingCount: 0`, `coverage: complete`, and a subsequent `runGate` on the same cwd returned `pass`. Note the mitigating fact: **no in-repo caller passes `recursive: false` today**, so this is latent rather than live — but it is reachable by any consumer of the exported `runScanPath`, and the option is part of the published option type.
 - **reproduction**: `bun …/T28-gate-probe.ts`, final section "non-recursive directory scan". Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log` lines 239-261.
@@ -139,7 +139,7 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-004] Per-file rows name the canonical target, not the entry that was encountered — major
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/path-scan.ts` : 168 : `scanContainedPath` / `visit` (and the `scanned` row at 227-229)
+- **file / line / symbol**: `~/goodea/keryx/src/security/path-scan.ts` : 168 : `scanContainedPath` / `visit` (and the `scanned` row at 227-229)
 - **problem**: every other `files.push` in the file keys the row on `displayPath` (the path actually walked). Two do not: line 168 (`canonical identity already visited`) and line 228 (`scanned`, via `safePath`) key on `relativePath(ownerRoot, canonical)`. The row therefore describes a different filesystem entry than the one whose outcome it reports.
 - **impact**: the report contradicts what happened, in the one section an operator reads to answer "what was actually covered". Two observed manifestations from a single probe run: (1) `corpus/x` is listed as `skipped (canonical identity already visited)` although `corpus/x` was fully traversed — the entry that was skipped was `corpus/y/toX`; an operator auditing coverage would conclude a directory went unscanned when it did not; (2) `corpus/a/b/c/creds.env` appears **twice**, once `scanned` and once `skipped`, while the symlink that produced the second row, `corpus/dup-creds.env`, appears nowhere — so an in-scope entry has no per-file outcome at all, and the same path carries two contradictory statuses. Gate and coverage are unaffected; this is a truthfulness defect in a committable artifact, not a false pass. It also silently weakens the T20 test at `security-recursive-scan.test.ts:52-54`, whose `secretFiles` filter passes *because* the alias row is folded onto the target's path.
 - **reproduction**: `bun …/T28-scan-probe.ts`, section `P1 recursion/cycle`. Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log` lines 26-68 (`files` and `credsEnvEntries`).
@@ -148,7 +148,7 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-005] `--recursive` is parsed and discarded; the flag cannot be negated — minor
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/commands/security.ts` : 282 : `scanPathArgument` / `handleScan`
+- **file / line / symbol**: `~/goodea/keryx/src/commands/security.ts` : 282 : `scanPathArgument` / `handleScan`
 - **problem**: `scanPathArgument` skips `--recursive` so it is not mistaken for the target path, and `handleScan` (lines 208-219) never reads it and never passes `recursive` to `runScanPath`. `scanContainedPath` defaults to `recursive: true`, so the flag is a no-op: P5 confirmed `--recursive` and no flag give byte-identical `files` and `scope.recursive: true`. This is a change that does nothing, in the review-logic sense.
 - **impact**: low and partly self-documented — `security.ts:982` describes it as "(the default for directory targets)". But the CLI advertises a scan-scope control that has no effect, there is no `--no-recursive`, and the flag is silently accepted on single-file targets too. The real cost is that it makes F-003's dead branch look reachable and reviewed when nothing in the CLI can reach it.
 - **reproduction**: `bun …/T28-scan-probe.ts`, section `P5 flags` (`withFlagFiles` == `withoutFlagFiles`, both `recursive: true`). Raw: `.metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log` lines 209-232.
@@ -156,7 +156,7 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-006] `runGate` / `SecurityService.gate` has no test at all — minor
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/service.ts` : 213 : `runGate`
+- **file / line / symbol**: `~/goodea/keryx/src/security/service.ts` : 213 : `runGate`
 - **problem**: `bun src/cli.ts ctx rg "runGate|gate\(\{ cwd" src/security src/commands` returns no test referencing the *security* gate — every hit is `createCodeHealthService().gate` in `health-incomplete.test.ts`. The security gate fold, including all four branches of F-001/F-002, is unexercised.
 - **impact**: F-001 and F-002 are exactly the defects a three-line table test would have caught, and the T20 self-report's "53 focused tests pass" is compatible with the gate being wrong in every branch. I did verify the T20 recursive claim independently: `bun test src/commands/security-recursive-scan.test.ts` → **3 pass / 0 fail / 18 expect() calls** (raw `…/raw/2026-09-06T13-15-07-546Z_run.log`), so that part of the claim holds; the untested area is the gate, not the traversal.
 - **reproduction**: the `ctx rg` above; raw `.metaproject/data/gdctx/raw/2026-09-06T13-15-22-543Z_rg.log`.
@@ -164,7 +164,7 @@ End-to-end control (same probe): a real `runScanPath` over a tree with an unread
 
 ### [F-007] `coverage.required` is hardcoded `true` — info
 
-- **file / line / symbol**: `/Users/Goodea/goodea/keryx/src/security/path-scan.ts` : 124 : `scanContainedPath`
+- **file / line / symbol**: `~/goodea/keryx/src/security/path-scan.ts` : 124 : `scanContainedPath`
 - **problem**: policies.md lists `required coverage` among the things fixed before the run, alongside scope/excludes/limits, and mentions an "optional skip" that shows a warning and is not signed as passed. `required` is a literal `true` here with no configuration path, so the optional-coverage half of the policy has no representation.
 - **impact**: none today — hardcoding `true` is the conservative direction and every current scan genuinely is required. Recorded so it is not mistaken for an implemented knob later.
 - **reproduction**: `coverage.required: true` in every probe output regardless of flags (raw `…13-13-20-438Z_run.log`).
@@ -189,7 +189,7 @@ Executed and found correct — recorded so a later round does not re-litigate th
 
 ## Evidence
 
-| Probe | Raw log (under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`) | SHA-256 |
+| Probe | Raw log (under `~/goodea/keryx/.metaproject/data/gdctx/raw/`) | SHA-256 |
 |-------|------|---------|
 | Scan probe P1-P6 (`T28-scan-probe.ts`) | `2026-09-06T13-13-20-438Z_run.log` | `687f8e8cd335cdcd892640cd375c11fa5f4bad714e31bc5d0e0be69392aefa83` |
 | Gate probe, 13 cases + E2E + non-recursive (`T28-gate-probe.ts`) | `2026-09-06T13-14-50-693Z_run.log` | `c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077` |
@@ -199,8 +199,8 @@ Executed and found correct — recorded so a later round does not re-litigate th
 | `files.push` / `recursive` enumeration | `2026-09-06T13-16-29-088Z_rg.log` | (rg summary) |
 
 Probe sources (written by this review, read-only w.r.t. production code):
-- `/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts`
-- `/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts`
+- `~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts`
+- `~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts`
 
 All fixtures were created under `mkdtemp` and removed in `finally` blocks; `chmod 000` fixtures are restored to `0600` before removal. No network, no model calls, no git or flow state changes, no real credentials (synthetic AWS *example* key only).
 

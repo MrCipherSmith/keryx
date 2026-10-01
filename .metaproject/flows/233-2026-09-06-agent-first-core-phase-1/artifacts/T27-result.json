@@ -23,25 +23,25 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full implementation report with per-change rationale, acceptance evidence, verification counts, and raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T27-spec.md",
       "kind": "custom",
       "exists": true,
       "summary": "T27 spec context read before implementation."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
       "kind": "custom",
       "exists": true,
       "summary": "Prior T20 report documenting runGate's incomplete-status behavior in service.ts."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "path": "~/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
       "kind": "custom",
       "exists": true,
       "summary": "Trust/completeness/access policy including the PASS/FAIL/INCOMPLETE fold."

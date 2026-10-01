@@ -74,7 +74,7 @@ Stage 1 passes. Stage 2 follows.
 ### [F-001] Unattended no-progress stop reports the round-budget terminal reason while both budgets still have capacity
 
 - **Severity**: major
-- **File**: `/Users/Goodea/goodea/keryx/src/commands/agent.ts:1680`
+- **File**: `~/goodea/keryx/src/commands/agent.ts:1680`
 - **Symbol**: `runAgentTurnCore` — no-progress branch
 - **Problem**: when every tool call in a round is denied by the per-signature attempt guard
   (`MAX_ATTEMPTS_PER_HASH`), the loop returns `finishReason: "no-progress"`, which is correct.
@@ -89,7 +89,7 @@ Stage 1 passes. Stage 2 follows.
   constraint. This is the same class of untruthful budget reporting M10 exists to remove, on the
   one stop path that is not itself a budget stop.
 - **Reproduction**: probe case `C11` in
-  `/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts`
+  `~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts`
   — unattended, `maxRounds: 20`, `maxToolCalls: 50`, a tool that fails identically each round.
   Observed: `providerRequests=4` (16 rounds remaining), `invocations=3` (47 calls remaining),
   `finishReason="no-progress"`, `terminalStateReasons=["budget_exhausted"]`.
@@ -117,7 +117,7 @@ Stage 1 passes. Stage 2 follows.
 ### [F-002] `offerRoundLimitReset`'s contract comment still promises the wrap-up path T19 removed
 
 - **Severity**: minor
-- **File**: `/Users/Goodea/goodea/keryx/src/commands/agent.ts:1712`
+- **File**: `~/goodea/keryx/src/commands/agent.ts:1712`
 - **Symbol**: `offerRoundLimitReset` (doc comment)
 - **Problem**: the comment states that a cancel, a thrown picker, or an unwired picker "falls
   through to the existing `finishWithBudgetSummary` wrap-up unchanged". Under T19 none of them
@@ -137,7 +137,7 @@ Stage 1 passes. Stage 2 follows.
 ### [F-003] `SubagentCompletionStatus` documents `BudgetExhausted` as the round budget only, but the tool-call budget maps there too
 
 - **Severity**: minor
-- **File**: `/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts:70`
+- **File**: `~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts:70`
 - **Symbol**: `SubagentCompletionStatus`
 - **Problem**: the doc says `"BudgetExhausted"` means "the child's OWN `maxRounds` round budget
   ran out … (`runAgentTurn`'s `finishReason: "budget"`)". The mapping at
@@ -157,7 +157,7 @@ Stage 1 passes. Stage 2 follows.
 ### [F-004] The round-ceiling guard is duplicated at the loop tail with no behavioural difference
 
 - **Severity**: minor
-- **File**: `/Users/Goodea/goodea/keryx/src/commands/agent.ts:1695`
+- **File**: `~/goodea/keryx/src/commands/agent.ts:1695`
 - **Symbol**: `runAgentTurnCore` — trailing round guard
 - **Problem**: the block at `:1695-1699` is byte-identical in condition and effect to the
   loop-entry guard at `:1257-1262`, and it is the last statement of the `for (;;)` body. Falling

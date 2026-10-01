@@ -1,6 +1,6 @@
 # T55 spec — three defects T39 found beyond T38/T50's exhaustive-mapping rewrites
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files only: `src/commands/security.ts` (+ its focused tests
 `src/commands/security-gate-exit.test.ts`, `src/commands/security.check-input.test.ts`),
 `src/health/service.ts` (+ its focused test `src/health/service-gate-exit.test.ts`).

@@ -1,6 +1,6 @@
 # T50 spec — close `src/health/service.ts`'s `gate()` exit-code denylist (T48's flagged concern)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned
 files: `src/health/service.ts` and a new focused test under `src/health/`
 (`src/health/service-gate-exit.test.ts`). Read-only, for the sibling style:
 `src/health/types.ts`, `src/health/gate.ts`, `src/commands/health.ts`.

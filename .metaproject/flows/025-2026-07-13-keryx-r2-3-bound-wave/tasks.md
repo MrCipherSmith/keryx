@@ -5,7 +5,7 @@ Task definitions live here; statuses via `keryx flow task done 025 <taskId>`.
 Scope: R2-3 (E-03 §4 AC-R2-3) — SC_R08_BOUND_PARALLEL_WAVE. New `src/harness/extension/
 bound-wave.ts`; additive-only. Reuse W13 planWaves + R2-1 dispatchExtension + W12 inheritBudget
 + W15 registry + W7 evidence + W8 immutable. NO new dep/SDK/network/real-async (`deps {}`).
-Deterministic (injected id/clock). Fail-closed. D-02. Root `/Users/Goodea/goodea/keryx` (branch
+Deterministic (injected id/clock). Fail-closed. D-02. Root `~/goodea/keryx` (branch
 feature/keryx-release2-bound-wave). Worktree-guard. Commits/PR: NO co-authorship.
 
 | ID | Kind | Model | Title / definition |

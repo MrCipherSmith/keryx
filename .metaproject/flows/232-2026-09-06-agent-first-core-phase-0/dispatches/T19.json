@@ -16,26 +16,26 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
       "kind": "custom",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
       "kind": "custom",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
-    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
-    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+    "~/goodea/keryx/src/commands/agent.ts",
+    "~/goodea/keryx/src/commands/agent.test.ts",
+    "~/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+    "~/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
+    "Root ~/goodea/keryx; index first before code/search. Local task-implementer fully; testing context; code searches only keryx ctx rg.",
     "Branch codex/agent-first-core; no git/flow/frozen AC/dependencies/package/lock modifications, stats disabled, auto_commit false. No real models/network.",
     "Explicit target_files ownership only plus same-area focused test files; root owns cross-module integration. No global tests while independent RED work runs.",
     "Write implementation spec before production; preserve initial RED evidence and add targeted GREEN result. Validate typed report/result and security-check artifacts. Do not review own implementation."
@@ -47,7 +47,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-result.json"
   },
   "budget": {
     "max_output_tokens": null

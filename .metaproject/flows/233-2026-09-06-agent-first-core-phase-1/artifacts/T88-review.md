@@ -181,7 +181,7 @@ that preceded this one, closed.
 
 ## Evidence
 
-Every command run from `/Users/Goodea/goodea/keryx` on branch `codex/agent-first-core`. No git state
+Every command run from `~/goodea/keryx` on branch `codex/agent-first-core`. No git state
 change, no flow state change, no dependency change, no network, no model call. Synthetic and reserved
 hosts only (`attacker.invalid`, `ok.example.org`, `cdn.example.org`). Production, test and documentation
 files were read-only; the only files this review wrote are `T88-review.md`, `T88-result.json` and the

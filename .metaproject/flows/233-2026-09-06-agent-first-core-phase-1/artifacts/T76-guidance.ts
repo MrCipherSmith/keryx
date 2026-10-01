@@ -26,7 +26,7 @@ import {
 import { renderSecurityPrePushHook } from "../../../../src/lib/templates";
 import type { SecurityConfig } from "../../../../src/security/types";
 
-const ROOT = "/Users/Goodea/goodea/keryx";
+const ROOT = "~/goodea/keryx";
 const out = (row: Record<string, unknown>) => process.stdout.write(`${JSON.stringify(row)}\n`);
 const MODES = ["advisory", "enforced", "ci", "gateway"] as const;
 

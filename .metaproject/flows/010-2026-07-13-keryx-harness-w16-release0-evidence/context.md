@@ -28,5 +28,5 @@ Collected by `keryx flow init` and enriched for W16. (T1 context.) Release 0 bou
 ## Operational
 - keryx = `bun ./src/cli.ts`; never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker must `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it. Verify file locations after each worker.
+- WORKTREE-GUARD: every writing worker must `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it. Verify file locations after each worker.
 - Order: E-01 (T5) → E-02 (T6) → E-03 (T7, gated on E-02 clean) → verify (T8).

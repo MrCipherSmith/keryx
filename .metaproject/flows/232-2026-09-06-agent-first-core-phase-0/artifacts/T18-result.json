@@ -24,21 +24,21 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-implementation-report.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-implementation-report.json",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Validated task-implementer output with exact scope and verification classification.",
       "hash": "639f08563d77da1b43505e21a3f00e42f4b8e2e3c4f48f2bbe546aeecc4d5512"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-verification.md",
       "kind": "report",
       "exists": true,
       "summary": "Exact lint/test/typecheck evidence, semantic assessment, finding-class inventory, and routing audit.",
       "hash": "865463f7f2b30006cf69ec7a7fcad6f07ed3b2fcf14551d243ac245cc2bf89fa"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-lint-scope.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T18-lint-scope.json",
       "kind": "custom",
       "exists": true,
       "summary": "Immutable initial 90-file/146-finding manifest authored by the orchestrator.",
