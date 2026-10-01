@@ -47,7 +47,7 @@ keryx agents external run gemini-acp --task "..." --write        # allow writes 
 The same gates apply as for every external agent:
 
 - the `externalAgents` capability, which is off by default and turned on with
-  `externalAgents.enabled: true` in the keryx user config;
+  `keryx agents external enable` (`keryx agents external disable` reverses it);
 - a hard disable in CI and under a remote transport;
 - the per-agent config (`externalAgents.agents.gemini-acp`);
 - the nesting depth marker;

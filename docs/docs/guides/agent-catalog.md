@@ -62,29 +62,15 @@ Per-stack generated pairs (a `<stack>-code-auditor` and a `<stack>-build-fixer`
 per stack pack) are not part of this hand-authored initial catalogue — each
 pair is generated only from a stack pack that has already cleared its own
 governance gates, via `keryx agents generate --stack <id> [--check] [--json]`.
-As of flow 317's honest gate run at trials=10 (DeepSeek `deepseek-chat` for
-both the runner and the judge, `--strictness high`, `PACK_MIN_TRIALS` raised
-5 -> 10), `python` and `go` cleared it and each shipped a generated pair.
-`ts-js-node` cleared the gate at trials=5 (marginally, at exactly the 0.8
-floor) but DROPPED OUT at the higher trial count —
-`no-ts-ignore-suppression` fell to 6/10 (0.6), a genuine model-answer-quality
-gap checked against the recorded trials (not a rubric defect) — so it is
-back to `stability: experimental` and its generated pair was removed.
-`react` still fails: `no-disable-hooks-lint` scored 3/10 (0.3), confirming
-rather than reversing the earlier 3/5 finding. Flow 335 (Wave 4 batch 3,
-post-merge with batches 4/5/6) demoted `python` back to `stability:
-experimental` too: `python-testing`'s own trigger-positive-1 no longer
-routes to itself once the fully combined catalog (170 skills, 1006
-triggers) is in place — outranked by `flutter-dart/flutter-testing` on the
-shared "widget" token, a corpus-wide binary-IDF effect (any skill that
-merely contains a shared token lowers its corpus-wide weight, regardless
-of wording) that is not fixable by editing any single pack's content. Its
-generated pair was removed; see `python/agent-refs.json`'s `note` and the
-flow 335 journal for the full diagnosis. `go` remains the only stack with a
-generated pair today: `go-code-auditor` / `go-build-fixer`. See
-`docs/requirements/keryx-agent-platform-expansion/workstreams/
-W1-stack-catalog.md`, "Implementation notes: flow 317 (grader follow-ups)"
-and the flow 335 notes for the full per-scenario breakdown.
+A stack pack ships a generated pair only after it clears the eval gate at
+`strictness: high` with at least 10 trials. Today `go` is the only stack with a
+generated pair: `go-code-auditor` and `go-build-fixer`. `python`, `ts-js-node`
+and `react` are `stability: experimental` and have no generated pair, because
+their packs do not yet pass the gate (a scenario scored below the pass floor,
+or a trigger no longer routes to its own skill in the combined catalog). The
+reasons are recorded in each pack's `agent-refs.json` `note`. See the
+stack-catalog requirements under `docs/requirements/` for the per-scenario
+breakdown.
 
 A project can drop its own files under `.metaproject/agents/<name>.md`. A
 project definition with the same `name` as a bundled one **overrides** it;
@@ -203,7 +189,7 @@ isn't.
 
 ```
 keryx agents list [--stack <id>] [--json]
-keryx agents show <name>
+keryx agents show <name> [--json]
 keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
 ```
@@ -227,7 +213,7 @@ not a refusal at all.
 
 `verify` never re-derives compile/export logic — it assembles named problem
 rows from the same checks `compile`/`export`/`schema` already run, plus a
-few checks that are verify's alone. A definition (or `--name`) can fail with
+few checks that are verify's alone. A definition (or the `<name>` you pass) can fail with
 any of:
 
 - `schema-invalid` — frontmatter fails `validateAgentDefinition`.
@@ -243,7 +229,7 @@ any of:
 - `invalid-source-ref` — `origin.sourceRef` is not a single safe stack-pack
   id (fails closed before the id is ever resolved to a path).
 - `stack-pack-missing` — a `generated` origin's `sourceRef` does not resolve
-  to an existing W1 stack pack.
+  to an existing stack pack.
 - `baseline-in-body` — the body repeats the prompt-defense baseline text the
   compiler already injects once.
 - `no-export-support` — the export-support lookup for a runtime could not be
@@ -251,7 +237,7 @@ any of:
 - `catalog-error` (reported separately, per definition) — the file failed to
   load at all: unreadable, invalid frontmatter, a duplicate name, or a
   file-stem/`name` mismatch.
-- `not-found` — `--name` named nothing in the catalog.
+- `not-found` — the `<name>` you passed matches nothing in the catalog.
 
 Every runtime — `claude`, `codex`, `kiro`, `opencode`, `keryx-shell` — is
 resolved automatically for every checked definition; a definition never
