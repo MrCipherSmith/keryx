@@ -366,6 +366,62 @@ describe("keryx skills update", () => {
     expect(result.imported[0]?.reason).toContain("redacted by the security gate");
     expect(await readFile(path.join(cwd, installed), "utf8")).not.toContain(SECRET);
   });
+
+  describe("a dry run reports what the real run does", () => {
+    test("named skill, injection: would-refuse with the gate's reason, then the real run refuses the same way", async () => {
+      await importOriginal(skill("Original guidance."));
+      await writeFile(path.join(source, "origin.md"), skill(INJECTION), "utf8");
+      const dry = await updateProjectSkills({ projectRoot: cwd, skill: "quality/verifier", dryRun: true });
+      expect(dry.imported[0]).toMatchObject({ status: "would-refuse", security: { refused: true } });
+      const real = await updateProjectSkills({ projectRoot: cwd, skill: "quality/verifier" });
+      expect(real.imported[0]).toMatchObject({ status: "refused" });
+      expect(dry.imported[0]?.reason).toBe(real.imported[0]?.reason);
+    });
+
+    test("injection with --allow-flagged: would-overwrite and the flag in the reason", async () => {
+      await importOriginal(skill("Original guidance."));
+      await writeFile(path.join(source, "origin.md"), skill(INJECTION), "utf8");
+      const dry = await updateProjectSkills({ projectRoot: cwd, skill: "quality/verifier", dryRun: true, allowFlagged: true });
+      expect(dry.imported[0]).toMatchObject({ status: "would-overwrite" });
+      expect(dry.imported[0]?.reason).toContain("would be written because --allow-flagged");
+    });
+
+    test("secret: would-overwrite and says it would be redacted; nothing written", async () => {
+      await importOriginal(skill("Original guidance."));
+      const before = await readFile(path.join(cwd, installed), "utf8");
+      await writeFile(path.join(source, "origin.md"), skill(`key ${SECRET}`), "utf8");
+      const dry = await updateProjectSkills({ projectRoot: cwd, skill: "quality/verifier", dryRun: true });
+      expect(dry.imported[0]).toMatchObject({ status: "would-overwrite", security: { redacted: true } });
+      expect(dry.imported[0]?.reason).toContain("would be redacted by the security gate");
+      expect(await readFile(path.join(cwd, installed), "utf8")).toBe(before);
+    });
+
+    test("clean: plain would-overwrite", async () => {
+      await importOriginal(skill("Original guidance."));
+      await writeFile(path.join(source, "origin.md"), skill("New guidance."), "utf8");
+      const dry = await updateProjectSkills({ projectRoot: cwd, skill: "quality/verifier", dryRun: true });
+      expect(dry.imported[0]).toMatchObject({ status: "would-overwrite" });
+      expect(dry.imported[0]?.reason).toBeUndefined();
+    });
+
+    test("the CLI dry run exits 0 on would-refuse", async () => {
+      await importOriginal(skill("Original guidance."));
+      await writeFile(path.join(source, "origin.md"), skill(INJECTION), "utf8");
+      const original = process.cwd();
+      const log = spyOn(console, "log").mockImplementation(() => {});
+      process.chdir(cwd);
+      const prior = process.exitCode;
+      process.exitCode = 0;
+      try {
+        await runSkillsUpdateCommand(["update", "quality/verifier", "--dry-run"]);
+        expect(process.exitCode ?? 0).toBe(0);
+      } finally {
+        process.chdir(original);
+        process.exitCode = prior;
+        log.mockRestore();
+      }
+    });
+  });
 });
 
 // Review round 1 (flow 362): K-001 .. K-006.
