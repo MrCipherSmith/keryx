@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.52] — 2026-10-01
+### Security
+- **The shell now checks that the process it talks to is `serve`.** Before, nothing authenticated the listener to the shell: if `serve` died without cleanup and another local user bound its loopback port, the shell sent that listener its token and then wrote whatever "ready" pairing answer came back (an attacker's Telegram id as the operator, an attacker's group) into `config.json`. The shell now sends a nonce-bound HMAC of the shell token instead of the token, and `serve` signs every shell-route answer in `x-keryx-serve-proof`. A missing or wrong proof (another process, a tampered body, a replayed answer, a `serve` from before this version) is refused with "restart `keryx serve`" and nothing is written. This covers the seven `/channels` routes and every remote-control call (register, approval, reply, heartbeat, ack, deregister and the stream, whose fake lines and approval decisions a squatter could otherwise feed to the shell). `serve` still accepts the raw token from an older shell.
+### Fixed
+- **A pairing that finished while the modal was closed is resumable.** `/channels` offers Resume instead of starting over, and Resume connects it.
+- **A mistyped token on a second Connect no longer kills an open pairing.** The new token is checked first; the existing pairing is replaced only once the new one is valid.
+- **Turning Topics on no longer strands the pairing.** The group becomes a supergroup with a new id; the pairing follows `migrate_to_chat_id` / `migrate_from_chat_id` and keeps checking the right chat.
+
+[Changes since 0.3.51](https://github.com/MrCipherSmith/keryx/compare/v0.3.51...v0.3.52)
+
 ## [0.3.51] — 2026-10-01
 ### Fixed
 - **`/channels` pairing, review fixes.** A pairing that was cancelled or had expired while Telegram was still answering about the group can no longer come back to ready, and its status answers `no-pairing` once it was closed during the check. The bot being added to the group before the code was sent now works: the group event of the paired operator is kept and used when the code is accepted (events from anybody else are still ignored). The group step has its own 10 minutes from the moment the code is accepted, and the modal shows the time left.

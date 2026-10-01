@@ -1870,6 +1870,14 @@ recorded `serve` process is no longer alive: it reports that remote control is
 unreachable instead. A `serve` that lost the poller lock to another one mints no
 token, and answers `401` to these routes.
 
+**`serve` proves its identity.** The shell sends `ksp1.<nonce>.<HMAC>` (a fresh
+nonce and an HMAC of it with the token) instead of the raw token, and `serve` signs
+each answer in the `x-keryx-serve-proof` header over the nonce, route, status and
+body. A missing or wrong proof (a different process on the port, a tampered body, a
+replayed answer, a `serve` older than this check) fails with code `unverified-serve`
+and the message "restart `keryx serve`"; nothing from that answer is written. The
+raw token from older shells is still accepted by `serve`.
+
 | Route | Description |
 |---|---|
 | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |

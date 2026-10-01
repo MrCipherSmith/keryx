@@ -131,7 +131,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
       return [
         "Telegram: pairing in progress",
         ...machine,
-        "Resume shows the one-time code again; Cancel pairing abandons it and erases the token.",
+        "Resume shows the one-time code again, or connects a pairing that already finished; Cancel pairing abandons it and erases the token.",
       ];
     case "connected":
       return [

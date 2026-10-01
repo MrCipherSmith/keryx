@@ -1572,8 +1572,9 @@ so it raises none.
 
 **Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
 `remote/config.json` exist, `serve` hosts the one Telegram poller and the seven
-`/v1/remote/*` routes, which a `keryx shell` reaches with a local shell token
-(not the serve bearer) to mirror a session into a topic via `/remote-control`.
+`/v1/remote/*` routes, which a `keryx shell` reaches with a nonce-bound HMAC of a
+local shell token (not the serve bearer; `serve` proves itself back with a signed
+answer, `src/remote/shell-token.ts`) to mirror a session into a topic via `/remote-control`.
 Without those files `serve` is unchanged. Tested against a fake Bot API only; see
 [Drive keryx remotely](./guides/drive-keryx-remotely.md#remote-control-from-telegram).
 
