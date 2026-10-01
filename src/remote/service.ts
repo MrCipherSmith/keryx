@@ -116,6 +116,8 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
     }
     let started = false;
     let conflictWhileStarting: string | undefined;
+    // Read by the poller callback below before it is assigned, so it cannot be a const.
+    // eslint-disable-next-line prefer-const
     let mine: RemoteHub | undefined;
     const opened = openRemoteHub({
       ...(options.dir === undefined ? {} : { dir: options.dir }),
