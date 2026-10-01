@@ -8,4 +8,18 @@
 - 2026-10-01T10:03:42.774Z - frozen: 7 criteria; checksum recorded
 - 2026-10-01T10:03:44.505Z - started
 - 2026-10-01T10:03:46.192Z - task-attempt: T5: started (attempt 1) — 366-T5 sonnet
+- 2026-10-01T10:10:51.759Z - task-done: T5: Fix the five causes (preload TMPDIR realpath, resolveGitCommonDir canonical, ps keyword, TOML probe, sandbox detect seam, schedule interpreter) and verify each file locally
+- 2026-10-01T10:36:13.549Z - task-attempt: T4: started (attempt 1) — 366-T4 review round 1 over origin/main..4fe2c269 (CI green on PR #827)
+- 2026-10-01T13:15:09.330Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-01T13:15:16.683Z - ac-confirmed: AC1: test-preload.ts canonicalises TMPDIR/os.tmpdir(); test-preload.test.ts portable subprocess check (23ccdf2b) fails without it; reviewer mutation removing it fails 7 flow-305 tests in review.test.ts plus both preload tests; CI green at 29dfa73d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:19.659Z - ac-confirmed: AC2: resolveGitCommonDir canonicalises the directory part (23ccdf2b); git-worktrees symlinked-checkout and doctor tests fail with the realpath reverted (review round 1). Limit recorded as K-002: a linked worktree of a repo whose .git itself is a symlink still resolves to the target (git prints the realpath), pre-existing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:22.126Z - ac-confirmed: AC3: shell-exec-tool.test.ts F5c uses a ps invocation valid on macOS and Linux; passes locally (darwin) and in CI (linux) at 29dfa73d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:24.394Z - ac-confirmed: AC4: codex control-char round-trip skips with a stated reason where Bun.TOML rejects the escapes; after review fix 29dfa73d a parser-free test runs on every Bun and fails when escaping breaks (verifier mutation) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:26.239Z - ac-confirmed: AC5: planUnattendedSandbox reads /run, /var/run and (after review fix 29dfa73d) /etc/resolv.conf through the detect seam; T14 passes on macOS with a fake Linux fs and fails on the hostIsDir/hostReal revert and the resolv guard mutation (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:28.227Z - ac-confirmed: AC6: pinned-wrapper tests use an interpreter that runs on macOS; reviewer mutation back to a /bin/sh copy fails all 3 pinned #! wrapper tests, so the changed-wrapper refusal no longer passes vacuously (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:31.562Z - ac-confirmed: AC7: CI, Docs and Wiki freshness all success on PR #827 at head 29dfa73d870968694fd018e4738f1c43e57319e4; keryx health run PASS (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T13:15:37.229Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/827
+- 2026-10-01T13:16:11.605Z - completing
+- 2026-10-01T13:16:17.932Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-01T13:16:17.940Z - done: all gates passed
 - 2026-10-01T13:45:04.262Z - renumbered: 366 -> 385: duplicate id with 366-2026-09-29-external-agents-live on main; operator chose to move the later flow (housekeeping, flow 384)
