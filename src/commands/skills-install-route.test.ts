@@ -4,7 +4,40 @@
 // legacy profile id onto the manifest path.
 
 import { expect, test } from "bun:test";
-import { installNeedsManifestPreviewNote, installRoute, valuelessFlagError, valuelessRepeatedFlagError } from "./skills";
+import {
+  installApplyCommand,
+  installNeedsManifestPreviewNote,
+  installRoute,
+  valuelessFlagError,
+  valuelessRepeatedFlagError,
+} from "./skills";
+
+test("AC2: the dry-run apply hint reproduces every plan-shaping flag", () => {
+  expect(
+    installApplyCommand({
+      profile: "core",
+      target: "keryx-shell",
+      withValues: ["capability:mobx", "lang:python"],
+      withoutValues: ["review-core-skills"],
+      includeDeprecated: true,
+    }),
+  ).toBe(
+    "keryx skills install --profile core --target keryx-shell --with capability:mobx --with lang:python " +
+      "--without review-core-skills --include-deprecated",
+  );
+});
+
+test("AC2: the apply hint omits flags that were not passed", () => {
+  expect(
+    installApplyCommand({
+      profile: "core",
+      target: "claude",
+      withValues: [],
+      withoutValues: [],
+      includeDeprecated: false,
+    }),
+  ).toBe("keryx skills install --profile core --target claude");
+});
 
 test("a legacy profile id with no manifest flags at all stays on the legacy path", () => {
   expect(installRoute("minimal", false)).toBe("legacy");

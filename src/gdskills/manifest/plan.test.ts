@@ -304,6 +304,69 @@ test("F15: an unknown --with/--without id fails the plan by name instead of bein
   expect(plan.errors.some((e) => e.includes("also-not-real") && e.includes("--without"))).toBe(true);
 });
 
+test("AC2: an unknown --with id fails and lists the valid ids", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "depcheck",
+    target: "claude",
+    repoRoot: root,
+    with: ["nope"],
+  });
+  expect(plan.ok).toBe(false);
+  const error = plan.errors.find((e) => e.includes('"nope"') && e.includes("--with"));
+  expect(error).toBeDefined();
+  // components plus the modules in this profile's closure
+  expect(error).toContain("valid --with ids");
+  for (const valid of ["lang:x", "rule-a", "skill-b", "skill-c"]) expect(error).toContain(valid);
+  expect(error).not.toContain("hook-a");
+});
+
+test("AC2: --with a module outside the profile's closure fails instead of being silently ignored", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "withhook",
+    target: "keryx-shell",
+    repoRoot: root,
+    matrix: { ...UNSUPPORTED_MATRIX, harnesses: [] },
+    with: ["skill-c"],
+  });
+  expect(plan.ok).toBe(false);
+  const error = plan.errors.find((e) => e.includes('"skill-c"') && e.includes("--with"));
+  expect(error).toBeDefined();
+  expect(error).toContain("cannot change the plan");
+  expect(error).toContain("valid --with ids");
+  expect(error).toContain("lang:x");
+});
+
+test("AC2: --without an id that cannot change the plan fails and lists the valid ids", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "withhook",
+    target: "keryx-shell",
+    repoRoot: root,
+    matrix: { ...UNSUPPORTED_MATRIX, harnesses: [] },
+    without: ["lang:x"], // a real component, but this profile does not declare it
+  });
+  expect(plan.ok).toBe(false);
+  const error = plan.errors.find((e) => e.includes('"lang:x"') && e.includes("--without"));
+  expect(error).toBeDefined();
+  expect(error).toContain("cannot change the plan");
+  expect(error).toContain("valid --without ids");
+  expect(error).toContain("hook-a");
+});
+
+test("AC2: --without of a declared component and of one of its modules is accepted", async () => {
+  const plan = await planInstall({
+    manifest: FIXTURE_MANIFEST,
+    profileId: "depcheck",
+    target: "claude",
+    repoRoot: root,
+    without: ["lang:x", "skill-c"],
+  });
+  expect(plan.errors).toEqual([]);
+  expect(plan.ok).toBe(true);
+});
+
 test("F15: --without a dependency of an otherwise-selected module fails the plan naming the dependency chain", async () => {
   const plan = await planInstall({
     manifest: FIXTURE_MANIFEST,

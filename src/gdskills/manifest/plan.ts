@@ -337,20 +337,6 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
     };
   }
 
-  // F15: an unknown `--with`/`--without` id was previously silently ignored
-  // (it simply never matched anything in the module/component lookups
-  // below) — name it instead of pretending the flag had no effect.
-  for (const id of withList) {
-    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
-      errors.push(`unknown id "${id}" passed to --with (not a module or component id in this manifest)`);
-    }
-  }
-  for (const id of withoutList) {
-    if (manifest.modules[id] === undefined && manifest.components[id] === undefined) {
-      errors.push(`unknown id "${id}" passed to --without (not a module or component id in this manifest)`);
-    }
-  }
-
   if (profile === undefined) {
     return {
       schemaVersion: "1.0.0",
@@ -410,6 +396,34 @@ export async function planInstall(input: PlanInstallInput): Promise<InstallPlan>
   const candidateModuleIds = new Set<string>([...unconditionalModuleIds, ...includedComponentModuleIds]);
 
   const closure = dependencyClosure([...candidateModuleIds], manifest.modules, errors);
+
+  // F15 + flow 365 AC2: an id that is unknown, or that cannot change THIS
+  // profile's plan, fails the plan and names what the planner accepts. A
+  // `--with` module id is only honoured when it is already in the dependency
+  // closure (`forcedModuleIds` is consulted nowhere else), so a module id
+  // outside the closure would be silently ignored — refuse it instead.
+  // `--without` of a module counts any module of a declared component, so
+  // `--without lang:x --without <its module>` is not flagged as redundant.
+  const withValidIds = [...new Set([...Object.keys(manifest.components), ...closure])].sort();
+  const declaredComponentModuleIds = [...declaredComponents].flatMap((id) => manifest.components[id]?.modules ?? []);
+  const withoutValidIds = [
+    ...new Set([...declaredComponents, ...closure, ...declaredComponentModuleIds]),
+  ].sort();
+  const checkIds = (flag: "--with" | "--without", ids: string[], valid: string[]): void => {
+    for (const id of ids) {
+      if (valid.includes(id)) continue;
+      const known = manifest.modules[id] !== undefined || manifest.components[id] !== undefined;
+      errors.push(
+        known
+          ? `id "${id}" passed to ${flag} cannot change the plan for profile "${input.profileId}" ` +
+              `(valid ${flag} ids for this profile: ${valid.join(", ")})`
+          : `unknown id "${id}" passed to ${flag} (valid ${flag} ids for profile "${input.profileId}": ${valid.join(", ")})`,
+      );
+    }
+  };
+  checkIds("--with", withList, withValidIds);
+  checkIds("--without", withoutList, withoutValidIds);
+
   // Dependencies must always be present once something that needs them is
   // included, regardless of defaultInstall.
   for (const id of closure) {
