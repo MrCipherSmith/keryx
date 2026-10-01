@@ -10,12 +10,12 @@
   "title": "Flow housekeeping: unique flow ids across clones, flow folders committed with the code",
   "status": "in-progress",
   "createdAt": "2026-10-01T12:24:44.273Z",
-  "updatedAt": "2026-10-01T12:25:04.477Z",
+  "updatedAt": "2026-10-01T12:29:41.013Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:4f5d7ef6c169f67bc0787e604e53664d44c91026be4c831a78c074487e8c1954",
+  "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -101,6 +101,11 @@
     {
       "at": "2026-10-01T12:25:04.477Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-01T12:29:41.013Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not tracked in git or has uncommitted changes; the green path still completes. Covered by tests for both.\" -> \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not committed in HEAD (flows created from 0.3.53 on carry the opt-in flag, like the owner and tasks gates; a flow without it reports the gate as skipped); the committed path still completes. Covered by tests for pass, fail and skipped.\" (wording made exact before any implementation: committed in HEAD, opt-in per package so no pre-existing flow is blocked retroactively)"
     }
   ],
   "acKinds": {
