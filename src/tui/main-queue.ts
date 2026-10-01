@@ -25,6 +25,13 @@ export interface QueuedMainQuestion {
   id: string;
   question: string;
   displayQuestion: string;
+  /**
+   * Flow 376: where the line came from, when not typed here. `"tg"` is a line
+   * from the remote-control Telegram topic; the drain passes it back to
+   * `runLine` so the turn is labelled and its reply goes back to the topic.
+   * Absent for everything the operator typed.
+   */
+  source?: "tg";
 }
 
 export type QueueCommandAction = "remove" | "edit" | "force";
@@ -117,6 +124,49 @@ export function reinsertMainQueueItem<T extends QueuedMainQuestion>(
   const insertAt = Math.max(0, Math.min(at, next.length));
   next.splice(insertAt, 0, item);
   return next;
+}
+
+/**
+ * What `/queue edit` remembers about the item it pulled out: where it sat and
+ * where it came from. `source` MUST travel with it, or an edited Telegram line
+ * comes back unlabelled and its reply never reaches the topic.
+ */
+export interface PendingQueueEdit {
+  id: string;
+  at: number;
+  source?: "tg";
+}
+
+export function pendingQueueEditFor(removed: QueuedMainQuestion, at: number): PendingQueueEdit {
+  return { id: removed.id, at, ...(removed.source !== undefined ? { source: removed.source } : {}) };
+}
+
+/** Re-queue the edited text where it was, keeping the id and the source of the item it replaces. */
+export function reinsertEditedMainQueueItem<T extends QueuedMainQuestion>(
+  items: readonly T[],
+  edit: PendingQueueEdit,
+  question: string,
+  displayQuestion: string,
+): QueuedMainQuestion[] {
+  return reinsertMainQueueItem<QueuedMainQuestion>(items, edit.at, {
+    id: edit.id,
+    question,
+    displayQuestion,
+    ...(edit.source !== undefined ? { source: edit.source } : {}),
+  });
+}
+
+/** Split out the items that came from `source`: `dropped` in their queue order, `kept` the rest. */
+export function dropQueuedBySource<T extends QueuedMainQuestion>(
+  items: readonly T[],
+  source: "tg",
+): { kept: T[]; dropped: T[] } {
+  const kept: T[] = [];
+  const dropped: T[] = [];
+  for (const item of items) {
+    (item.source === source ? dropped : kept).push(item);
+  }
+  return { kept, dropped };
 }
 
 /**

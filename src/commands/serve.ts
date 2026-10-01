@@ -57,6 +57,7 @@ import {
 import { describeServeStatus, startServeListener } from "../lib/serve-server";
 import { countPending } from "../lib/serve-approvals-store";
 import { assembleSubmitTurn } from "../lib/serve-runner";
+import { openRemoteService } from "../remote/service";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -204,9 +205,19 @@ async function runServe(args: string[]): Promise<void> {
   const runtimeAck = parsed.parsed.flags.has(ACK_FLAG);
   const config = stored === null ? null : overlay(stored, parsed.parsed, port, runtimeAck);
 
+  // Remote control (flow 376): only when a remote config exists. Without one this
+  // is a plain serve — no shell token is minted, no route answers, nothing polls.
+  // A config that is present but wrong is reported and serve carries on without it.
+  const remote = openRemoteService({ onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`) });
+  if (remote.status === "unavailable") {
+    console.log(`  ${style.yellow(symbols.bullet)} remote control is off: ${sanitizeForDisplay(remote.reason)}`);
+  }
+  const remoteService = remote.status === "ready" ? remote.service : undefined;
+
   const outcome = await startServeListener({
     config,
     credential: readServeCredential(),
+    remote: remoteService?.surface,
     // Without this the `no-configuration` refusal cannot tell "nothing is
     // configured" from "the file is there and I could not read it", and the
     // instruction it prints is wrong for two of the three.
@@ -218,6 +229,7 @@ async function runServe(args: string[]): Promise<void> {
     makeSubmitTurn: assembleSubmitTurn,
   });
   if (!outcome.ok) {
+    await remoteService?.stop();
     fail(sanitizeForDisplay(outcome.message));
     if (outcome.reason === "non-loopback-not-acknowledged" && stored !== null) {
       // Security policy requires BOTH halves; say which one is missing rather
@@ -259,6 +271,15 @@ async function runServe(args: string[]): Promise<void> {
   if (!isLoopbackAddress(listener.address)) {
     console.log(`  ${style.yellow(symbols.bullet)} this bind is reachable beyond loopback and there is no TLS in this release`);
   }
+  // After the bind, so the hub never polls for a listener that did not come up.
+  // A refusal (second serve, conflict, non-loopback) is printed by the service and
+  // is not fatal: the listener keeps serving every other route.
+  if (remoteService !== undefined) {
+    const started = await remoteService.start({ address: listener.address, port: listener.port });
+    if (started.ok) {
+      console.log(`    ${style.dim("remote control on: shells register at /v1/remote/*")}`);
+    }
+  }
 
   await new Promise<void>((resolve) => {
     let draining = false;
@@ -268,7 +289,10 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void listener.drain().then(() => {
+      void listener
+        .drain()
+        .then(() => remoteService?.stop())
+        .then(() => {
         console.log(`  ${style.green(symbols.ok)} stopped`);
         resolve();
       });

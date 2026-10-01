@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-10-01T05:05:11.468Z | pages: 96 -->
+<!-- generated: 2026-10-01T06:49:30.340Z | pages: 97 -->
 
 ### Architecture
 
@@ -41,6 +41,7 @@ keryx wiki index
 - [Permission Modes](architecture/permission-modes.md) (accepted) - The interactive agent session (`keryx shell`, supporting both the OpenTUI surface and the readline fallback) exposes three user-selectable permission modes — `ask`, `trust`, and `auto` — that determine whether a mutating tool call prompts for approval before execution. Affected operations include `shell_exec`, `spawn_subagent`, and any tool declaring `risk: "destructive"`.
 - [Project Map](architecture/project-map.md) (accepted)
 - [Quality Map](architecture/quality-map.md) (accepted)
+- [Remote Control (Telegram)](architecture/remote-control.md) (accepted) - `/remote-control <name>` in a full-screen `keryx shell` opens a topic in a Telegram supergroup and mirrors that session into it. A line sent in the topic runs in the shell as if typed there; replies and approval questions go back to the topic. It is off unless two files exist and validate (`remote/bot-token`, `remote/config.json` in the user-global keryx directory) and a shell has turned it on. Verified against an in-process fake Bot API only; no run against real Telegram has been done.
 - [Testing Map](architecture/testing-map.md) (accepted) - This page provides a high-level overview of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as a quick reference for developers and CI/CD pipelines.
 - [Wiki, Graph, and Shared Agent Context](architecture/wiki-graph-sac.md) (accepted) - The project wiki, the code graph, and Shared Agent Context (SAC) form a unified knowledge stack with three distinct owners. Each layer has a clear responsibility:
 

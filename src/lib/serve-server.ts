@@ -22,6 +22,22 @@
 //     .metaproject/memory/lessons/allowlist-not-a-boundary.md, where a check
 //     against a raw string turned out not to be a boundary at all.
 //
+//   * Two principals, two route tables (flow 376, remote control). The serve
+//     bearer credential reaches the routes above and NOTHING under
+//     `/v1/remote/`. The local shell token (a separate secret, created by the
+//     process that owns the Telegram bot, read by shells on the same machine)
+//     reaches ONLY the seven exact `/v1/remote/*` paths and nothing else.
+//     `/v1/remote/*` deliberately does NOT also require the serve bearer: the
+//     shell is a local, same-user process that must not hold the credential
+//     that can run turns and answer approvals, and a route that needed both
+//     secrets would force exactly that. Which principal a caller is falls out
+//     of WHICH token verified, before the URL is read, so the fixed 401 for a
+//     stranger is unchanged. A principal asking for a path outside its own
+//     table gets the ordinary 404 — the same answer as a path that does not
+//     exist — and a remote caller must also arrive over a loopback connection.
+//     A listener with no remote surface cannot authenticate a shell token at
+//     all, so a plain `keryx serve` behaves exactly as before.
+//
 // What this slice deliberately cannot do: run a turn, execute a tool, write
 // anything, or accept a secret. Both routes are reads. (R4d, flow 369, later added
 // the approval routes and made `pendingApprovals` real.)
@@ -379,6 +395,13 @@ export interface ServeContext {
    * store; only the consumer bookkeeping and the visibility filter are missing.
    */
   approvals?: ServeApprovalsRuntime;
+  /**
+   * The remote-control surface (flow 376). Absent, `/v1/remote/*` does not exist
+   * for anyone and no shell token can authenticate.
+   */
+  remote?: ServeRemoteSurface;
+  /** Turns off the transport's idle timeout for the current request (event streams). */
+  untimed?: () => void;
 }
 
 export interface ServeApprovalsRuntime {
@@ -417,8 +440,48 @@ export type { SubmitOutcome as SubmitTurnOutcome } from "./serve-turn";
  */
 const FIXED_ROUTES = new Set(["/v1/status", "/v1/projects", "/v1/turns", "/v1/approvals"]);
 
+/**
+ * The shell channel's routes (the SECOND route table, reachable by the local
+ * shell token only). Every entry is one exact path `/v1/remote/<name>`; the id of
+ * a session is never in the path, so there is nothing to prefix-match and
+ * nothing a `..` could climb out of. The value is the one method the route takes.
+ *
+ * A Map, not an object: `Object.hasOwn`-style lookups on a plain object answer
+ * for `constructor` and `__proto__`, which is a route table that is not closed.
+ */
+const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
+  ["register", "POST"],
+  ["deregister", "POST"],
+  ["heartbeat", "POST"],
+  ["reply", "POST"],
+  ["approval", "POST"],
+  ["ack", "POST"],
+  ["stream", "GET"],
+]);
+
+export type RemoteRouteName = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "ack" | "stream";
+
+/**
+ * What the listener needs from the remote-control side. A structural interface
+ * declared HERE so `lib` never imports `src/remote` (the dependency points the
+ * other way: `src/remote` implements it and `commands/serve.ts` composes).
+ */
+export interface ServeRemoteSurface {
+  /** Constant-time check of a presented bearer value against the local shell token. */
+  verifyShellToken(presented: string): boolean;
+  /**
+   * Handle one authenticated, loopback, method-checked remote request. Owns body
+   * limits and id validation. `untimed` asks the transport not to idle-close a
+   * long-lived response (the event stream).
+   */
+  handle(route: RemoteRouteName, request: Request, io: { untimed: () => void }): Promise<Response>;
+  /** End every open stream; called before the listener closes. */
+  close?(): Promise<void> | void;
+}
+
 type RouteMatch =
   | { route: "fixed"; pathname: string }
+  | { route: "remote"; name: RemoteRouteName }
   | { route: "approval"; approvalId: string }
   | { route: "turn"; turnId: string }
   | { route: "turn-events"; turnId: string }
@@ -429,6 +492,10 @@ function matchRoute(pathname: string): RouteMatch {
     return { route: "fixed", pathname };
   }
   const segments = pathname.split("/");
+  // ["", "v1", "remote", "<name>"] — the name must be one of the seven.
+  if (segments.length === 4 && segments[1] === "v1" && segments[2] === "remote" && REMOTE_ROUTES.has(segments[3] ?? "")) {
+    return { route: "remote", name: segments[3] as RemoteRouteName };
+  }
   // ["", "v1", "turns", "<id>"] and ["", "v1", "turns", "<id>", "events"].
   if (segments.length === 4 && segments[1] === "v1" && segments[2] === "turns") {
     return { route: "turn", turnId: segments[3] ?? "" };
@@ -815,8 +882,16 @@ async function routeServeRequest(request: Request, ctx: ServeContext): Promise<R
   // before authentication would refuse the operator's own valid token because
   // someone else had been guessing from the same address. There is no code path
   // from a successful verification into the throttle at all.
+  //
+  // Both secrets are always checked, in the same order, whichever one the caller
+  // holds, so which principal answered is not visible in the work done. A
+  // listener without a remote surface has no second secret and checks only the
+  // first, exactly as before.
+  const presented = bearerToken(request);
   const credential = ctx.resolveCredential();
-  if (credential.status !== "ok" || !verifyServeToken(bearerToken(request), credential.record)) {
+  const isServeCaller = credential.status === "ok" && verifyServeToken(presented, credential.record);
+  const isShellCaller = ctx.remote !== undefined && ctx.remote.verifyShellToken(presented) && !isServeCaller;
+  if (!isServeCaller && !isShellCaller) {
     const peer = ctx.peer;
     if (ctx.throttle !== undefined && peer !== undefined) {
       // Already serving a cooldown: refuse WITHOUT recording, so a client
@@ -846,7 +921,26 @@ async function routeServeRequest(request: Request, ctx: ServeContext): Promise<R
 
   const pathname = new URL(request.url).pathname;
   const matched = matchRoute(pathname);
-  if (matched.route === "none") {
+
+  // The shell principal has its own table and no other. Anything outside it —
+  // including every route the serve credential reaches — answers the ordinary
+  // 404, before the method is looked at, so the answer does not say which of
+  // those paths exist. A shell caller must also have connected over loopback,
+  // judged from the connection (`ctx.peer`), never from a header.
+  if (isShellCaller) {
+    if (matched.route !== "remote" || ctx.remote === undefined) {
+      return errorResponse(404, "not-found", "Not found.");
+    }
+    if (ctx.peer === undefined || !isLoopbackAddress(ctx.peer)) {
+      return unauthorized();
+    }
+    if (request.method !== REMOTE_ROUTES.get(matched.name)) {
+      return errorResponse(405, "method-not-allowed", "Method not allowed.", { allow: REMOTE_ROUTES.get(matched.name) ?? "POST" });
+    }
+    return ctx.remote.handle(matched.name, request, { untimed: ctx.untimed ?? (() => undefined) });
+  }
+  // The serve credential has no remote routes: they are not in its table.
+  if (matched.route === "none" || matched.route === "remote") {
     return errorResponse(404, "not-found", "Not found.");
   }
 
@@ -961,6 +1055,12 @@ export interface StartServeInput extends ServeStartupInput {
   /** Overrides the user-global config directory (registry + credential store). */
   dir?: string | undefined;
   /**
+   * The remote-control surface, or absent. Absent is a plain `keryx serve`: no
+   * shell token can authenticate and `/v1/remote/*` answers 404. Passed in by
+   * the composition root, never imported here (see `ServeRemoteSurface`).
+   */
+  remote?: ServeRemoteSurface | undefined;
+  /**
    * How the turn runner is assembled for this listener.
    *
    * REQUIRED, and that is the fix rather than an inconvenience. `submitTurn` was
@@ -1055,6 +1155,10 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
           throttle,
           submitTurn,
           approvals: { consumers, wake: () => approvals.wake() },
+          ...(input.remote === undefined ? {} : { remote: input.remote }),
+          // A stream outlives Bun's idle timeout; the remote surface opts the one
+          // request out of it, not the listener.
+          untimed: () => self.timeout(request, 0),
         }),
       // The second half of the boundary, and the SAME function as the first.
       // Without it, Bun's default error page answers, carrying the message and
@@ -1113,6 +1217,13 @@ export async function startServeListener(input: StartServeInput): Promise<StartS
         // It is set anyway because the 503 branch it feeds becomes reachable
         // the moment a route does asynchronous work, which is the next slice.
         state = "draining";
+        // Streams are closed first: `stop(true)` would drop them anyway, but the
+        // remote surface must settle what it holds (pending acks, approvals).
+        try {
+          await input.remote?.close?.();
+        } catch (error) {
+          console.error(`keryx serve: remote surface did not close cleanly: ${error instanceof Error ? error.message : String(error)}`);
+        }
         await server.stop(true);
         state = "stopped";
       },

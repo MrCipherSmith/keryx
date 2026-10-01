@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.3.48] — 2026-10-01
+## [0.3.49] — 2026-10-01
 ### Added
 - **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back and runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.
 - **`keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]`** — every gate `flow complete` would evaluate, through the same code, plus the PR's merge state (`merged`, `open`, `closed`, `not-found`, `no-pr`, `unknown`) and, under each failing gate, the command that fixes it where one is known. It writes nothing: no status change, no completion attempt, no signature, no lock, no spent token. Exits 0 when `flow complete` would pass.
@@ -11,6 +11,26 @@ All notable changes to `keryx` are documented here. The format follows
 ### Changed
 - The GitHub tracker returns the PR's `state` (`OPEN`, `MERGED`, `CLOSED`), which it already fetched. The pull-request gate is unchanged: it still asks for green checks, not a merge.
 - The product index and the governance report read `## Outcome criteria` through one parser.
+
+[Changes since 0.3.48](https://github.com/MrCipherSmith/keryx/compare/v0.3.48...v0.3.49)
+
+## [0.3.48] — 2026-10-01
+### Added
+- **Remote control from Telegram: `/remote-control [name|off|status]`.** In the full-screen shell, `/remote-control <name>` mirrors the session into its own topic of a Telegram supergroup. A line sent in the topic runs as if typed in the shell (shown as `tg ❯` in the transcript and `[tg]` in the queue panel); the reply and any approval question, with Allow and Deny buttons, come back to the topic. `status` shows the state (`off`, `on`, `offline`), the topic, the last heartbeat and recent events; `off` deletes the topic. The sidebar has a remote row and a `/remote-control` modal. The readline shell prints that it is off. **Off by default**: it needs a separate BotFather bot whose token is in `remote/bot-token` in the global keryx directory (mode 600), `remote/config.json` with the supergroup `chatId` and the `allowedUserIds` allowlist, and a supergroup with topics where the bot is an admin with manage topics. Without those files `keryx serve` starts as before and says `remote control is off`.
+- **One Telegram poller, in `keryx serve`.** Shells never talk to Telegram: they reach seven `/v1/remote/*` routes with a local shell token, from loopback. The serve bearer token does not reach those routes and the shell token reaches nothing else. A second `serve` on the same bot token stops on Telegram's conflict answer. A sender outside the allowlist is ignored; only the id and the time go to `rejected.jsonl`.
+- **Long replies are split for Telegram.** A reply over 4096 UTF-16 units goes out as numbered messages `(1/3)`, cut at a line break or a space, with a fenced code block closed and reopened across the cut; emoji are not cut and an empty reply sends nothing. No parse mode is sent, so the text is plain. `bun run src/remote/format-sample.ts` prints samples without a network.
+- **Timeouts.** A topic whose session stops heartbeating is deleted after `orphanMs` (default 10 minutes); a run started from Telegram is interrupted after `runTimeoutMs` (default 30 minutes). Both are optional keys in `remote/config.json`.
+- **Session history records it.** A session driven from a topic keeps the topic and each on/off span: `keryx sessions list` prints a `⇄ remote <topic>` line, `--json` carries a `remote` field, and the `keryx shell -r` picker marks the row `⇄ remote`.
+### Security and delivery
+- **The shell token is minted fresh on every `serve` start, and a shell no longer sends it to a dead endpoint.** The shell re-reads the token on each request and refuses an `endpoint.json` whose recorded `serve` process is gone, so a stale file (or a process that reused its port) never receives it. A `serve` refused the poller lock mints no token and answers `401` on the remote routes. The poller lock and the token file are created whole (no reader sees a half-written one).
+- **Telegram updates are deduplicated by exact id, with no persisted offset.** An id above the highest seen is not a monotonic key: Telegram can restart its numbering, and a stored offset would then swallow every new message. After a restart the poller asks for what is unconfirmed; a batch below the highest seen id is delivered as a numbering reset and logged as a poller-status event.
+- **At most 500 undelivered lines per topic**, with one status line in the topic saying how many were dropped. Button presses are acknowledged in the background with a 5 s bound, so a slow Telegram no longer holds up the next update.
+- **An ack or `Last-Event-ID` is honoured only for an id that was actually sent**; "Approval granted." is posted only if the decision reached the shell's stream; rebinding a topic forgets the finished ids.
+- **Turning remote control off from the shell is honest about what it drops.** A second `/remote-control off` waits for the first one's close instead of answering "already off", and `/new` and `/resume` report that the topic is being deleted. Queued Telegram lines are removed from the shell queue with a notice naming them, and the topic is told before it is deleted. Removing one queued Telegram line with `/queue` tells its topic. `/queue edit` keeps a line's Telegram origin, so its answer still goes to the topic.
+- **The topic gets the final answer, not the narration.** Text written before a tool call stays in the shell; a run that ends without final text sends "Done. There was no text to show." (or "The run failed." on failure).
+### Notes
+- Tested against an in-process fake Bot API. It has not been run against real Telegram: topic creation, the supergroup permissions, button callbacks and the single-poller conflict are as the Bot API documents them, not as observed. Try it with a throwaway bot and group first.
+- Docs: [Remote control from Telegram](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram), [serve in the CLI reference](docs/docs/cli-reference.md#remote-control-from-telegram).
 
 [Changes since 0.3.47](https://github.com/MrCipherSmith/keryx/compare/v0.3.47...v0.3.48)
 

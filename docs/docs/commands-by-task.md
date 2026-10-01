@@ -137,6 +137,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
+| `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
 
 ## External agents, ACP and MCP
 

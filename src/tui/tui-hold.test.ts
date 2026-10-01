@@ -29,7 +29,8 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     // Only origin "operator" pushes to the queue; every other origin (a
     // defensive no-op for task-notification/bus-message) just returns.
     expect(between).toContain('if (origin === "operator")');
-    expect(between).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine });");
+    // Flow 376: a Telegram line keeps its `tg` label through the hold queue.
+    expect(between).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
     expect(between).toContain("paintMainQueue();");
     expect(between).toContain("return;");
     // And it must return BEFORE the echo ever runs — i.e. this whole gate
@@ -45,7 +46,7 @@ describe("held turns: entry-point gates (specification §4.3, AC4)", () => {
     expect(pendingEditIdx).toBeLessThan(choiceIdx);
     const block = source.slice(pendingEditIdx, choiceIdx);
     expect(block).toContain("leaseView()?.held() === true");
-    expect(block).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine });");
+    expect(block).toContain("mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });");
     expect(block).toContain("no side worker while held");
     // The held branch must return BEFORE the composer-choice IIFE below it.
     const heldIdx = block.indexOf("leaseView()?.held() === true");
@@ -120,7 +121,7 @@ describe("held turns: release drains the queue (specification §5.2 step 5, AC4)
     expect(block).toContain("chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement");
     expect(block).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
     expect(block).toContain("paintMainQueue();");
-    expect(block).toContain("runLine(drained.question);");
+    expect(block).toContain('runLine(drained.question, "operator", drained.source);');
   });
 });
 

@@ -70,6 +70,16 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
+import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import {
+  isRemoteControlCommand,
+  labelTelegramLine,
+  mountRemotePanel,
+  openRemoteControl,
+  parseRemoteControlArgs,
+  type RemotePanelHandle,
+  TG_ECHO_MARKER,
+} from "./remote-control-surface";
 // Flow 328, AC7: the modal's `c` key and `/ac` both run the SAME check the
 // CLI does — no separate TUI-only Jev path. Never triggered automatically;
 // only on an explicit key press.
@@ -296,6 +306,7 @@ import {
 } from "./foreground-operation";
 import {
   compactSession,
+  describeRemote,
   exportSessionMarkdown,
   findSession,
   isExternalRunSession,
@@ -303,6 +314,9 @@ import {
   listSessions,
   persistCompacted,
   persistHistory,
+  recordRemoteOff,
+  recordRemoteOn,
+  REMOTE_MARK,
   shortSessionId,
   type SessionHandle,
 } from "../session";
@@ -330,14 +344,16 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
-import type { QueuedMainQuestion } from "./main-queue";
+import type { PendingQueueEdit, QueuedMainQuestion } from "./main-queue";
 import {
   formatMainQueueMarker,
   drainIdleMainQueue,
+  dropQueuedBySource,
   parseQueueCommand,
+  pendingQueueEditFor,
   removeMainQueueItem,
   editMainQueueItem,
-  reinsertMainQueueItem,
+  reinsertEditedMainQueueItem,
 } from "./main-queue";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
@@ -3419,16 +3435,19 @@ export function sessionPickerOptions(
     const updated = formatSessionDate(s.updatedAt);
     const short = shortSessionId(s.id);
     const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
-    const label = withLeaseMarker(`${title}  ·  ${short}`, leaseState(s.id));
+    const remoteMark = s.remote !== undefined ? `  ⇄ ${REMOTE_MARK}` : "";
+    const label = `${withLeaseMarker(`${title}  ·  ${short}`, leaseState(s.id))}${remoteMark}`;
     const messages = `${s.messageCount} ${s.messageCount === 1 ? "message" : "messages"}`;
     // Flow 300 (AC9): a session `keryx agents external run` wrote is another
     // agent's run record — say so, and let the filter find it by `acp:`.
     const external = isExternalRunSession(s) ? `${s.provider} · ` : "";
+    // Flow 376 (AC4): a session driven from Telegram says so, with the intervals.
+    const remote = s.remote !== undefined ? `${describeRemote(s.remote)} · ` : "";
     return {
       value: s.id,
       label,
-      description: `${external}updated ${updated} · created ${created} · ${messages}`,
-      search: `${s.id} ${label} ${s.projectPath} ${s.title} ${created} ${updated} ${external}`.toLowerCase(),
+      description: `${external}${remote}updated ${updated} · created ${created} · ${messages}`,
+      search: `${s.id} ${label} ${s.projectPath} ${s.title} ${created} ${updated} ${external}${remote}`.toLowerCase(),
     };
   });
 }
@@ -3450,8 +3469,8 @@ export function startupSessionChoices(
     },
     ...rows.map((s) => ({
       id: s.id,
-      label: withLeaseMarker(s.title.length > 40 ? `${s.title.slice(0, 37)}…` : s.title, leaseState(s.id)),
-      description: `${shortSessionId(s.id)} · ctx ${s.messageCount} · ${s.updatedAt.slice(0, 16).replace("T", " ")}`,
+      label: `${withLeaseMarker(s.title.length > 40 ? `${s.title.slice(0, 37)}…` : s.title, leaseState(s.id))}${s.remote !== undefined ? `  ⇄ ${REMOTE_MARK}` : ""}`,
+      description: `${shortSessionId(s.id)} · ctx ${s.messageCount} · ${s.updatedAt.slice(0, 16).replace("T", " ")}${s.remote !== undefined ? ` · ${describeRemote(s.remote)}` : ""}`,
     })),
   ];
 }
@@ -3705,6 +3724,14 @@ export async function launchTuiAgentShell(opts: {
   let liveOps: OpsSidebar | undefined;
   let liveSchedules: SchedulesSidebar | undefined;
   let liveReviewsPanel: ReviewsPanelHandle | undefined;
+  // Flow 376: remote control (the Telegram topic). Same nullable-ref/TDZ idiom as
+  // `busWakeController` below: the bridge's host closes over `runLine` and
+  // `mainQueue`, which do not exist yet, while `onDestroy` and the approval/reply
+  // wraps near the top of the shell already need to reach it. Off until the
+  // operator's `/remote-control <name>`; `closeRemote` deregisters (deletes the
+  // topic) on every exit path.
+  let remoteBridge: RemoteBridge | undefined;
+  let liveRemotePanel: RemotePanelHandle | undefined;
   let liveApprovals: ApprovalsSidebar | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
@@ -3802,6 +3829,10 @@ export async function launchTuiAgentShell(opts: {
         disposeExecutionPlanPanel?.();
         liveSchedules?.dispose();
         liveReviewsPanel?.dispose();
+        liveRemotePanel?.dispose();
+        // Closing the shell deregisters: the topic goes with it. Best effort here
+        // (this callback is synchronous); the `finally` below awaits the same call.
+        void remoteBridge?.disable();
         liveApprovals?.dispose();
         liveExternalDiff?.dispose();
         liveOps?.dispose();
@@ -4316,6 +4347,13 @@ export async function launchTuiAgentShell(opts: {
       onOpen: () => showReviews(),
     });
     liveReviewsPanel = reviewsPanel;
+    // Flow 376 (AC12): `Remote: off | <topic> | offline`; a click opens the `/remote-control` modal.
+    const remoteStatus = (): RemoteStatus => remoteBridge?.status() ?? { state: "off", events: [] };
+    liveRemotePanel = mountRemotePanel(otui, r, sidebar, {
+      width: SIDEBAR_TEXT_WIDTH,
+      getStatus: remoteStatus,
+      onOpen: () => showRemoteControl(),
+    });
     // Flow 369 (R4d): one row, only while a remote approval is pending; it polls the
     // approval store itself (that lives in the config dir, not the project).
     const approvals = mountApprovalsSidebar({
@@ -4732,7 +4770,16 @@ export async function launchTuiAgentShell(opts: {
     const baseOnAssistantTextForGuard = io.onAssistantText?.bind(io);
     io.onAssistantText = (text) => {
       guardCollector.onAssistantText(text);
+      // Flow 376: the text a human would read; the bridge keeps the last one of a
+      // Telegram-originated turn as the reply. Tool calls and reasoning never reach here.
+      remoteBridge?.assistantText(text);
       baseOnAssistantTextForGuard?.(text);
+    };
+    // Flow 376: text followed by a tool call is narration, not the answer; the bridge drops it.
+    const baseOnToolCallForRemote = io.onToolCall?.bind(io);
+    io.onToolCall = (name, toolInput) => {
+      remoteBridge?.toolCall();
+      baseOnToolCallForRemote?.(name, toolInput);
     };
     /** AC5: sidebar state — zero rows while off, "on · N checked[, M flagged]" while on. */
     const refreshGuardSidebar = (): void => {
@@ -5058,7 +5105,7 @@ export async function launchTuiAgentShell(opts: {
       );
       return id === "send";
     };
-    io.requestApproval = async (tool, inputJson, meta) => {
+    const requestApprovalLocally: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
       if (meta?.untrustedOrigin === true) {
         // `agent.ts`'s untrusted-content gate asks the human instead of refusing
         // the call outright — this says why the operator is being asked.
@@ -5510,6 +5557,25 @@ export async function launchTuiAgentShell(opts: {
       setBusyPhase("running approved shell");
       return true;
     };
+    // Flow 376 (AC3): while a turn that came from Telegram runs, an approval is asked in the
+    // topic and ONLY there: the person who sent the line is the one who decides, and the
+    // answer feeds the same approval flow (the fingerprint is echoed back, so a mismatch
+    // is still a denial). Anything but an explicit allow - a timeout, a dropped stream, no
+    // client - is a denial. Turns typed here keep the local dock above, untouched.
+    io.requestApproval = async (tool, inputJson, meta) => {
+      const bridge = remoteBridge;
+      if (bridge === undefined || !bridge.telegramTurnActive) {
+        return requestApprovalLocally(tool, inputJson, meta);
+      }
+      const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+      io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
+      setMainAgent("blocked", "approval (telegram)");
+      const decision = await bridge.requestApproval(describeApprovalForTopic(tool, inputJson, meta));
+      setMainAgent("running", decision === "allow" ? "approved (telegram)" : "denied");
+      io.onSystem?.(decision === "allow" ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`);
+      if (decision !== "allow") return false;
+      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+    };
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
@@ -5750,6 +5816,18 @@ export async function launchTuiAgentShell(opts: {
      */
     let splash: SplashLifecycle | undefined = undefined;
 
+    // Flow 376: a topic belongs to the session it was registered for. Switching the live
+    // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
+    // history interval closes on the session that opened it. A no-op while it is off.
+    const stopRemoteForSessionSwitch = (): void => {
+      if (remoteBridge?.active !== true) return;
+      // The close is asynchronous (it deregisters, which deletes the topic): say it is
+      // being turned off now, and that the topic is gone only once it really is.
+      const closing = remoteBridge.disable();
+      io.onSystem?.("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
+      void closing.then(() => io.onSystem?.("◇ remote control off: the topic is deleted.\n"));
+    };
+
     const applyOpened = (
       opened: {
         handle: SessionHandle;
@@ -5762,6 +5840,7 @@ export async function launchTuiAgentShell(opts: {
       if (opened.history.length > 0) {
         splash?.removeIfShown();
       }
+      stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
@@ -6283,6 +6362,7 @@ export async function launchTuiAgentShell(opts: {
       resetSessionSurface();
       // A fresh session is a new trust boundary, like `applyOpened`'s.
       io.trustedMcpTools?.clear();
+      stopRemoteForSessionSwitch();
       liveSession = opened.handle;
       history = [];
       archive = [];
@@ -6426,6 +6506,46 @@ export async function launchTuiAgentShell(opts: {
         .catch(() => {
           io.onSystem?.("The managed reviews could not be read.\n");
         });
+    };
+    // Flow 376: `/remote-control`. Remote control is OFF until this command (or the modal's
+    // `o` key) turns it on; nothing else starts it, `keryx shell -r/-c` included.
+    const enableRemoteControl = async (name?: string): Promise<void> => {
+      const bridge = remoteBridge;
+      if (bridge === undefined) return;
+      const result = await bridge.enable(name);
+      if (result.ok) {
+        io.onSystem?.(`◇ remote control on: topic "${result.name}". Lines sent there run here; closing the shell deletes the topic.\n`);
+      } else {
+        io.onSystem?.(`◇ remote control did not start: ${result.message}\n`);
+      }
+      liveRemotePanel?.refresh();
+    };
+    const disableRemoteControl = async (): Promise<void> => {
+      const turnedOff = (await remoteBridge?.disable()) === true;
+      io.onSystem?.(turnedOff ? "◇ remote control off: the topic is deleted.\n" : "◇ remote control is already off.\n");
+      liveRemotePanel?.refresh();
+    };
+    const showRemoteControl = (): void => {
+      openRemoteControl(otui, chrome, {
+        getStatus: remoteStatus,
+        onToggle: () => {
+          void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
+        },
+        renderer: r,
+        ...inspectorKeys,
+      });
+    };
+    const runRemoteControlCommand = (line: string): void => {
+      const request = parseRemoteControlArgs(line);
+      if (request.action === "invalid") {
+        io.onSystem?.(`${request.message}\n`);
+      } else if (request.action === "status") {
+        showRemoteControl();
+      } else if (request.action === "off") {
+        void disableRemoteControl();
+      } else {
+        void enableRemoteControl(request.name);
+      }
     };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
@@ -7111,7 +7231,7 @@ export async function launchTuiAgentShell(opts: {
     // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
     // this item at its original position instead of opening the recipient
     // selector again (AC5 — edit must preserve position).
-    let pendingQueueEdit: { id: string; at: number } | undefined;
+    let pendingQueueEdit: PendingQueueEdit | undefined;
     // Force can be selected more than once while cancellation is settling.
     // Retain every selection in order; only the first schedules the current
     // operation's settlement handoff (AC3).
@@ -7239,7 +7359,7 @@ export async function launchTuiAgentShell(opts: {
           id: `mq-${item.id}-t`,
           flexGrow: 1,
           minWidth: 0,
-          content: otui.t`${dimChunk(otui, `${formatMainQueueMarker(index)} ${item.displayQuestion}`)}`,
+          content: otui.t`${dimChunk(otui, `${formatMainQueueMarker(index)} ${item.source === TG_SOURCE ? labelTelegramLine(item.displayQuestion) : item.displayQuestion}`)}`,
         });
         row.add(label);
         const force = mainQueueButton("Force", `mq-force-${item.id}`, theme.focus, () => forceMainQueue(index));
@@ -7270,6 +7390,11 @@ export async function launchTuiAgentShell(opts: {
 
     const removeMainQueue = (index: number): void => {
       if (index < 0 || index >= mainQueue.length) return;
+      // A Telegram line that is thrown away would leave its author waiting: tell the topic.
+      const removedItem = mainQueue[index];
+      if (removedItem?.source === TG_SOURCE) {
+        remoteBridge?.queuedLineRemoved(removedItem.question);
+      }
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
     };
@@ -7278,7 +7403,8 @@ export async function launchTuiAgentShell(opts: {
       const edited = editMainQueueItem(mainQueue, index);
       if (edited === undefined) return;
       mainQueue = edited.rest;
-      pendingQueueEdit = { id: edited.removed.id, at: index };
+      // `source` travels with the edit: a Telegram line stays a Telegram line.
+      pendingQueueEdit = pendingQueueEditFor(edited.removed, index);
       input.value = edited.text;
       input.focus();
       paintMainQueue();
@@ -7305,7 +7431,7 @@ export async function launchTuiAgentShell(opts: {
       // showed stays green with the guard deleted.
       void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
         announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
-        run: (next) => runLine(next.question),
+        run: (next) => runLine(next.question, "operator", next.source),
       });
     };
 
@@ -7571,6 +7697,8 @@ export async function launchTuiAgentShell(opts: {
       // `"task-notification"`, and shares the SAME `consecutiveAutoWakes`
       // counter/cap (specification §5.3).
       origin: "operator" | "task-notification" | "bus-message" = "operator",
+      // Flow 376: "tg" = a Telegram line; still an operator line, only labelled.
+      source?: typeof TG_SOURCE,
     ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
@@ -7753,6 +7881,10 @@ export async function launchTuiAgentShell(opts: {
             showReviews();
             return;
           }
+          case "remote-control": {
+            runRemoteControlCommand(line);
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
             return;
@@ -7810,11 +7942,7 @@ export async function launchTuiAgentShell(opts: {
         if (pendingQueueEdit !== undefined) {
           const edit = pendingQueueEdit;
           pendingQueueEdit = undefined;
-          mainQueue = reinsertMainQueueItem(mainQueue, edit.at, {
-            id: edit.id,
-            question: line,
-            displayQuestion: displayLine,
-          });
+          mainQueue = reinsertEditedMainQueueItem(mainQueue, edit, line, displayLine);
           paintMainQueue();
           return;
         }
@@ -7826,7 +7954,7 @@ export async function launchTuiAgentShell(opts: {
         // skipping the Main-queue/Side-1 choice entirely.
         if (leaseView()?.held() === true) {
           const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: line, displayQuestion: displayLine });
+          mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
           paintMainQueue();
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length} (no side worker while held).\n`);
           return;
@@ -7871,7 +7999,7 @@ export async function launchTuiAgentShell(opts: {
               takeForced: () => forceHandoff.takeNext(),
               dispatch: (next) => {
                 paintMainQueue();
-                runLine(next.question);
+                runLine(next.question, "operator", next.source);
               },
             });
           } else {
@@ -8148,6 +8276,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewsCommand(command.name)) {
           showReviews();
+          return;
+        }
+        if (isRemoteControlCommand(command.name)) {
+          runRemoteControlCommand(line);
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {
@@ -8568,7 +8700,7 @@ export async function launchTuiAgentShell(opts: {
       if (leaseView()?.held() === true) {
         if (origin === "operator") {
           const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: line, displayQuestion: displayLine });
+          mainQueue.push({ id, question: line, displayQuestion: displayLine, ...(source !== undefined ? { source } : {}) });
           paintMainQueue();
           io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length}.\n`);
         }
@@ -8578,6 +8710,8 @@ export async function launchTuiAgentShell(opts: {
         id: `ub${uid++}`,
         line: displayLine,
         fullWidth: true,
+        // Flow 376: a line from the Telegram topic says so (`tg ❯ ...`).
+        ...(source === TG_SOURCE ? { marker: TG_ECHO_MARKER } : {}),
       });
       chrome.registerUserPrompt(userEcho, displayLine);
       transcript.add(
@@ -8590,7 +8724,8 @@ export async function launchTuiAgentShell(opts: {
 
       // Hard pre-router: "обогати вики" → list pages + interactive plan, then run
       // wikiEnrich in-process (no model thrash on search_code).
-      if (isWikiEnrichIntent(line)) {
+      // (Not for a line from Telegram: that path opens a local picker nobody there can answer.)
+      if (source === undefined && isWikiEnrichIntent(line)) {
         const startedAt = Date.now();
         const operation = foregroundOperation.begin();
         // The busy flag is `startBusy`/`stopBusy` now (the chrome owns it); the
@@ -8768,7 +8903,7 @@ export async function launchTuiAgentShell(opts: {
                   if (!forceHandoff.isAwaitingSettlement) {
                     const next = forceHandoff.takeNext() ?? mainQueue.shift();
                     paintMainQueue();
-                    if (next !== undefined) runLine(next.question);
+                    if (next !== undefined) runLine(next.question, "operator", next.source);
                   }
                 },
               },
@@ -8786,6 +8921,9 @@ export async function launchTuiAgentShell(opts: {
       sessions.clear();
       deps.resetSubagentBudget?.();
       const operation = foregroundOperation.begin();
+      // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
+      // time limit handled by the bridge; every other turn resets that state.
+      remoteBridge?.turnStarted(source);
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
       // PRIOR turn (abort/error path; the root cause is fixed in
       // `commands/agent.ts`) must never leak stale live-preview text or
@@ -8961,6 +9099,9 @@ export async function launchTuiAgentShell(opts: {
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
+        // Flow 376: the reply of a Telegram-originated turn goes back to the topic
+        // (a no-op for any other turn). Cancelled and failed turns say so there.
+        void remoteBridge?.turnSettled({ failed: turnFailed || turnSignal.aborted });
         if (foregroundOperation.isDisposed) return;
         refreshRewindSidebar();
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
@@ -9053,7 +9194,7 @@ export async function launchTuiAgentShell(opts: {
           const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
           if (next !== undefined) {
-            runLine(next.question);
+            runLine(next.question, "operator", next.source);
           } else {
             // Flow 274 T7 (specification §5.3): "on turn settle, when
             // busInbox still holds wake-eligible messages" — only once there
@@ -9148,7 +9289,62 @@ export async function launchTuiAgentShell(opts: {
         if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
         const drained = forceHandoff.takeNext() ?? mainQueue.shift();
         paintMainQueue();
-        if (drained !== undefined) runLine(drained.question);
+        if (drained !== undefined) runLine(drained.question, "operator", drained.source);
+      },
+    });
+
+    // --- flow 376: remote control (the Telegram topic) -----------------------
+    //
+    // Created here, like `busWakeController`, because the host closes over `runLine` and
+    // `mainQueue`, which exist only now. Creating the bridge starts nothing: remote control
+    // is OFF until `/remote-control <name>` (or the modal's `o`) calls `enable()`. A line
+    // from Telegram enters the session exactly like a typed one: idle, `runLine`; busy, the
+    // ordinary main queue (the same `qN` rows, labelled `[tg]`).
+    remoteBridge = new RemoteBridge({
+      host: {
+        sessionId: () => liveSession.summary.id,
+        project: () => sessionCwd,
+        isBusy: () =>
+          chrome.isBusy() ||
+          foregroundOperation.isActive ||
+          forceHandoff.isAwaitingSettlement ||
+          mainQueue.length > 0 ||
+          leaseView()?.held() === true,
+        runLine: (text) => runLine(text, "operator", TG_SOURCE),
+        enqueue: (text) => {
+          const id = `mq${mainQueueSeq++}`;
+          mainQueue.push({ id, question: text, displayQuestion: summarizeSubmittedLine(text), source: TG_SOURCE });
+          paintMainQueue();
+          io.onSystem?.(`◇ a line from Telegram is queued as q${mainQueue.length}.\n`);
+        },
+        notice: (text) => io.onSystem?.(`${text}\n`),
+        cancelTurn: () => foregroundOperation.cancel("remote run time limit"),
+        recordOn: (name) => {
+          if (!sessionLease.canPersist()) return;
+          try {
+            liveSession = recordRemoteOn(liveSession, name);
+          } catch {
+            // history is best-effort: remote control still works without it
+          }
+        },
+        recordOff: () => {
+          if (!sessionLease.canPersist()) return;
+          try {
+            liveSession = recordRemoteOff(liveSession);
+          } catch {
+            // best-effort, as above
+          }
+        },
+        // Remote control going off: its queued lines have no topic to answer in. Drop
+        // them from the shell queue and hand their text to the bridge, which says so.
+        dropQueuedTelegramLines: () => {
+          const { kept, dropped } = dropQueuedBySource(mainQueue, TG_SOURCE);
+          if (dropped.length === 0) return [];
+          mainQueue = kept;
+          paintMainQueue();
+          return dropped.map((item) => item.question);
+        },
+        onChange: () => liveRemotePanel?.refresh(),
       },
     });
 
@@ -9180,6 +9376,9 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
+    // Flow 376: closing the shell deregisters from serve, which deletes the topic.
+    // Idempotent: the destroy hook above usually started it already.
+    await remoteBridge?.disable();
     // review r1 F9: leave the bus before releasing the lease (specification
     // §5.4's order) — idempotent either way, the exit paths above usually
     // did both already.

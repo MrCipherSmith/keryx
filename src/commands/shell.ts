@@ -110,6 +110,7 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
+import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
 import {
   buildSessionInfoSnapshot,
   formatSessionInfoText,
@@ -264,6 +265,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/doctor",
   "/setup",
   "/reviews",
+  "/remote-control",
   "/theme",
   "/settings",
   "/mode",
@@ -2667,6 +2669,9 @@ export async function runAgentRepl(
         } catch {
           agentIo.onSystem?.("The managed reviews could not be read.\n");
         }
+      } else if (isRemoteControlCommand(command)) {
+        // Flow 376: the readline shell has no remote control; status as text, enabling explained.
+        agentIo.onSystem?.(readlineRemoteControlText(line));
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

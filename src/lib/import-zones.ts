@@ -243,6 +243,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // adapter caller imports it directly, which is why this is a new
   // FACADELESS core zone rather than a bypass of one.
   { segment: "impact-evidence", zone: "core" },
+  // Remote control (flow 376): the serve-side hub that mirrors a shell session
+  // into a Telegram forum topic. It reaches the filesystem only through
+  // `lib/config-dir` and the network only through its single HTTP client file,
+  // and only the shell (`tui/`, `commands/`) imports it, so it is a client-zone leaf.
+  { segment: "remote", zone: "client" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(
