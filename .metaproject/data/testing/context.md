@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-10-01T08:04:16.196Z
+generatedAt: 2026-10-01T08:51:09.149Z
 status: complete
 
 ## Frameworks
@@ -13,7 +13,7 @@ status: complete
 - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
 - `test`: `bun test`
 - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
-- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/commands/sessions`
+- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/remote/ src/commands/sessions`
 - `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers`
 - `test:client:streaming`: `bun test src/harness/provider/`
 - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
@@ -110,7 +110,7 @@ status: complete
 - src/bundle/roundtrip.e2e.test.ts
 - src/bundle/uninstall.test.ts
 
-- ... 1250 more
+- ... 1276 more
 
 ## CI
 

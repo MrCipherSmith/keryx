@@ -10,7 +10,7 @@
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
   "status": "implemented",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T08:42:42.265Z",
+  "updatedAt": "2026-10-01T08:51:09.936Z",
   "source": {
     "type": "description",
     "ref": null
@@ -182,7 +182,7 @@
       "id": "T10",
       "title": "Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -190,7 +190,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -295,6 +296,11 @@
     {
       "at": "2026-10-01T08:42:42.265Z",
       "event": "task-added",
+      "detail": "T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005"
+    },
+    {
+      "at": "2026-10-01T08:51:09.936Z",
+      "event": "task-done",
       "detail": "T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005"
     }
   ],

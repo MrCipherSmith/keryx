@@ -21,3 +21,4 @@
 - 2026-10-01T08:06:03.684Z - owner-set: not set -> MrCipherSmith (named by the user in session on 2026-10-01)
 - 2026-10-01T08:42:41.296Z - task-attempt: T4: failed (attempt 1) — review round 1 (2026-10-01-ingest-821, head c9f31fd9): 1 blocker, 7 major, 5 minor, 2 info
 - 2026-10-01T08:42:42.265Z - task-added: T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005
+- 2026-10-01T08:51:09.936Z - task-done: T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005
