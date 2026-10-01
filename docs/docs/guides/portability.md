@@ -352,15 +352,18 @@ path + description, never rule bodies. Only that block is inserted or
 replaced; anything else in the file, including a *different* managed block
 the same file already carries (for example `GEMINI.md`'s own
 `keryx:instructions` pointer block), is left byte-for-byte untouched.
-These are the tracked team files: unlike the `keryx:index` routing block, which
-goes to `CLAUDE.local.md` / `AGENTS.override.md` by default, `rules-export`
-writes where the harness reads shared instructions, and the change is yours to
+For Claude Code and Codex the block goes where the `keryx:index` routing block
+goes: `CLAUDE.local.md` / `AGENTS.override.md` by default (per developer,
+git-ignored), the tracked `CLAUDE.md` / `AGENTS.md` only when that runtime's
+scope in `agentEntrypoints` is `shared` — see
+[Integrations: rules-export surface](../integrations.md#rules-export-surface).
+The other harnesses' files are tracked team files, and the change is yours to
 commit.
 
 | Harness | File | Confidence |
 |---|---|---|
-| Claude Code | `CLAUDE.md` | verified |
-| Codex | `AGENTS.md` | verified |
+| Claude Code | `CLAUDE.local.md` (scope `shared`: `CLAUDE.md`) | verified |
+| Codex | `AGENTS.override.md` (scope `shared`: `AGENTS.md`) | verified |
 | Gemini CLI | `GEMINI.md` | experimental |
 | GitHub Copilot (coding agent) | `.github/copilot-instructions.md` | experimental |
 | Cursor | `.cursor/rules/keryx-rules.mdc` | experimental |

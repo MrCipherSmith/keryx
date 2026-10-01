@@ -82,6 +82,23 @@ export async function indexHoldsFile(projectRoot: string, relativePath: string):
   return result !== undefined && result.code === 0;
 }
 
+/**
+ * Synchronous twin of "the index or `HEAD` holds `relativePath`", for the
+ * callers that cannot await — the rules-export resolver answers the
+ * synchronous `SurfaceAdapter.relativePathFor`. No git, or no repository,
+ * counts as not tracked.
+ */
+export function trackedInGitSync(projectRoot: string, relativePath: string): boolean {
+  const run = (args: string[]): boolean => {
+    try {
+      return Bun.spawnSync(["git", "--literal-pathspecs", ...args], { cwd: projectRoot, stdout: "ignore", stderr: "ignore" }).exitCode === 0;
+    } catch {
+      return false;
+    }
+  };
+  return run(["ls-files", "--error-unmatch", "--", relativePath]) || run(["cat-file", "-e", headSpec(relativePath)]);
+}
+
 /** `git diff --quiet -- <file>`: true when the working tree copy shows no unstaged change. */
 export async function worktreeFileIsClean(projectRoot: string, relativePath: string): Promise<boolean> {
   const result = await runGit(projectRoot, ["diff", "--quiet", "--", relativePath]);

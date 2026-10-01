@@ -370,15 +370,16 @@ test("a Codex override source reached through a symlink leaving the project is n
     await writeFile(path.join(root, "AGENTS.md"), "# Team\n");
     await symlink(outside, path.join(root, "home"));
 
-    const { targets } = normalizeEntrypointTargets({
-      root: [
-        { runtime: "claude", scope: "shared", path: "CLAUDE.md" },
-        { runtime: "codex", scope: "local", mode: "override", source: "home/.aws/credentials" },
-      ],
-      claudeSettings: { scope: "local" },
-    });
-    const codex = targets.root.find((entry) => entry.runtime === "codex") as CodexLocalRootEntry;
-    expect(codex.source).toBe("home/.aws/credentials");
+    const statedRoot = [
+      { runtime: "claude", scope: "shared", path: "CLAUDE.md" },
+      { runtime: "codex", scope: "local", mode: "override", source: "home/.aws/credentials" },
+    ];
+    // Flow 363 review round 1, F-001: a manifest can no longer name such a
+    // source at all — it is junk. The writers still refuse the symlink for
+    // targets built by hand, which is what the rest of this test drives.
+    expect(normalizeEntrypointTargets({ root: statedRoot, claudeSettings: { scope: "local" } }).ignored).toEqual([statedRoot[1]]);
+    const codex: CodexLocalRootEntry = { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "home/.aws/credentials" };
+    const targets = { root: [{ runtime: "claude" as const, path: "CLAUDE.md", scope: "shared" as const }, codex], claudeSettings: { path: ".claude/settings.local.json", scope: "local" as const } };
 
     const notices: string[] = [];
     await writeCodexLocalTargets(root, targets, { onNotice: (line) => notices.push(line) });

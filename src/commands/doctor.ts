@@ -36,7 +36,7 @@ import { checkGraphStaleness } from "../gdgraph/service";
 import { readWikiFreshnessMetric } from "../health/service";
 import { resolveMainCheckoutRoot } from "../lib/git-worktrees";
 import { gitToplevel } from "../lib/clone-scope";
-import { claudeHooksExpected, inspectEntrypoints, type EntrypointInspection } from "../rules/entrypoint-inspection";
+import { claudeHooksExpected, inspectEntrypoints, rulesBlockFix, rulesBlockKeptReason, type EntrypointInspection } from "../rules/entrypoint-inspection";
 import { CODEX_PROJECT_DOC_MAX_BYTES } from "../rules/entrypoint-writers";
 
 export type DoctorStatus = "ok" | "warn" | "fail";
@@ -347,6 +347,21 @@ export async function checkEntrypoints(cwd: string): Promise<DoctorCheck> {
     warnings.push({
       detail: `${stray.path} carries the managed keryx:index block as an uncommitted edit, but its scope is local — the block belongs in ${localPaths.join(" / ")}`,
       fix: UPDATE_FIX,
+    });
+  }
+  // Flow 363: the opt-in rules-export block, left in a tracked team file by a
+  // keryx before 0.3.47. Committed in HEAD, it is the team's shared choice.
+  // Review round 1, F-005: each runtime's own target, and the fix that clears
+  // the warning — `keryx update` alone where it moves the block.
+  for (const stray of inspection.strayRulesBlocks) {
+    if (!stray.tracked || stray.committed) continue;
+    const prefix = `${stray.path} carries the rules-export keryx:rules block as an uncommitted edit`;
+    warnings.push({
+      detail:
+        stray.kept === undefined
+          ? `${prefix}, but its scope is local — the block belongs in ${stray.localTarget}`
+          : `${prefix}; keryx update leaves it there because ${rulesBlockKeptReason(stray)}`,
+      fix: rulesBlockFix(stray),
     });
   }
   const { gitignoreBlock, strayHooks } = inspection;

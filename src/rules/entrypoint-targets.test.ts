@@ -186,13 +186,60 @@ describe("normalizeEntrypointTargets", () => {
     expect(result.ignored).toHaveLength(2);
   });
 
-  test("a Codex source that leaves the project root falls back to AGENTS.md", () => {
+  test("a Codex source that leaves the project root is junk, and Codex awaits the legacy decision", () => {
+    const hostile = { ...CODEX_LOCAL, source: "../secrets.md" };
+    const result = normalizeEntrypointTargets({ root: [CLAUDE_LOCAL, hostile], claudeSettings: SETTINGS_LOCAL });
+    expect(result.ignored).toEqual([hostile]);
+    expect(result.targets.root[1]).toEqual({ runtime: "codex", path: "AGENTS.md", scope: "shared" });
+    expect(result.legacy).toEqual([{ kind: "root", runtime: "codex", path: "AGENTS.md" }]);
+    expect(result.needsRewrite).toBe(true);
+  });
+
+  // Flow 363 review round 1, F-001: a shared path and a Codex source are write
+  // destinations too (the index block, the rules-export block, the override's
+  // copy). A cloned manifest naming `.env` or the manifest itself must not
+  // make keryx write there.
+  test("a shared entry names only its runtime's team file; any other stated path is junk", () => {
+    for (const statedPath of [".env", ".metaproject/metaproject.json", "package.json", "docs/CLAUDE.md", "AGENTS.md", "CLAUDE.local.md"]) {
+      const hostile = { runtime: "claude", scope: "shared", path: statedPath };
+      const result = normalizeEntrypointTargets({ root: [hostile, CODEX_LOCAL], claudeSettings: SETTINGS_LOCAL });
+      expect(result.ignored).toEqual([hostile]);
+      expect(result.targets.root).toEqual([CODEX_LOCAL, { runtime: "claude", path: "CLAUDE.md", scope: "shared" }]);
+      expect(result.legacy).toEqual([{ kind: "root", runtime: "claude", path: "CLAUDE.md" }]);
+    }
+    const codex = { runtime: "codex", scope: "shared", path: ".env" };
+    expect(normalizeEntrypointTargets({ root: [CLAUDE_LOCAL, codex] }).ignored).toEqual([codex]);
+    // Without a scope, a non-standard path used to be inferred shared: junk as well.
+    const inferred = { runtime: "claude", path: ".env" };
+    expect(normalizeEntrypointTargets({ root: [inferred] }).ignored).toEqual([inferred]);
+  });
+
+  test("a shared entry keeps a legacy spelling of its own team file", () => {
     const result = normalizeEntrypointTargets({
-      root: [CLAUDE_LOCAL, { ...CODEX_LOCAL, source: "../secrets.md" }],
+      root: [
+        { runtime: "claude", scope: "shared", path: "claude.md" },
+        { runtime: "codex", scope: "shared", path: "agents.md" },
+      ],
       claudeSettings: SETTINGS_LOCAL,
     });
-    expect(result.targets.root[1]).toEqual(CODEX_LOCAL);
-    expect(result.needsRewrite).toBe(true);
+    expect(result.ignored).toEqual([]);
+    expect(result.targets.root).toEqual([
+      { runtime: "claude", path: "claude.md", scope: "shared" },
+      { runtime: "codex", path: "agents.md", scope: "shared" },
+    ]);
+  });
+
+  test("a Codex source other than AGENTS.md is junk; a legacy spelling of AGENTS.md is kept", () => {
+    for (const source of ["package.json", ".env", ".metaproject/metaproject.json", "docs/AGENTS.md", "CLAUDE.md"]) {
+      const hostile = { ...CODEX_LOCAL, source };
+      const result = normalizeEntrypointTargets({ root: [CLAUDE_LOCAL, hostile], claudeSettings: SETTINGS_LOCAL });
+      expect(result.ignored).toEqual([hostile]);
+      expect(result.targets.root[1]).toEqual({ runtime: "codex", path: "AGENTS.md", scope: "shared" });
+      expect(result.legacy).toEqual([{ kind: "root", runtime: "codex", path: "AGENTS.md" }]);
+    }
+    const lower = normalizeEntrypointTargets({ root: [CLAUDE_LOCAL, { ...CODEX_LOCAL, source: "agents.md" }], claudeSettings: SETTINGS_LOCAL });
+    expect(lower.ignored).toEqual([]);
+    expect(lower.targets.root[1]).toEqual({ ...CODEX_LOCAL, source: "agents.md" });
   });
 
   // Flow 361 review round 1, F-001: local paths end up in `info/exclude` and
@@ -234,11 +281,15 @@ describe("normalizeEntrypointTargets", () => {
       ],
       claudeSettings: SETTINGS_LOCAL,
     });
-    expect(result.ignored).toEqual([{ runtime: "claude", scope: "shared", path: "CLAUDE.md\n!.env" }]);
-    expect(result.targets.root).toEqual([CODEX_LOCAL, { runtime: "claude", path: "CLAUDE.md", scope: "shared" }]);
+    expect(result.ignored).toEqual([
+      { runtime: "claude", scope: "shared", path: "CLAUDE.md\n!.env" },
+      { runtime: "codex", scope: "local", mode: "override", source: "!AGENTS.md" },
+    ]);
+    expect(result.targets.root).toEqual(sharedEntrypointTargets().root);
     for (const source of ["#notes.md", "AGENTS.md\r", "AGENTS.md\n# keryx:end", "docs/\tAGENTS.md"]) {
-      const codex = normalizeEntrypointTargets({ root: [{ ...CODEX_LOCAL, source }] }).targets.root[0];
-      expect(codex).toEqual(CODEX_LOCAL);
+      const normalized = normalizeEntrypointTargets({ root: [{ ...CODEX_LOCAL, source }] });
+      expect(normalized.ignored).toHaveLength(1);
+      expect(normalized.targets.root.find((entry) => entry.runtime === "codex")).toEqual({ runtime: "codex", path: "AGENTS.md", scope: "shared" });
     }
   });
 

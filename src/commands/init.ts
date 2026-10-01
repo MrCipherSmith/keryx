@@ -118,6 +118,7 @@ import {
   parseDivergenceResolution,
 } from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
+import { moveRulesBlocksOutOfTeamFiles, reinstallRulesExport, rulesBlocksLeavingLocalTargets } from "../rules/rules-export-migration";
 import {
   declaredImportSources,
   ignoredLocalTargetPaths,
@@ -621,6 +622,13 @@ export async function initCommand(args: string[]): Promise<void> {
   await moveClaudeSettingsHooks(projectRoot, claudeSettings.target, (line) => {
     entrypointNotices.push(line);
   });
+  // Flow 363: a rules-export block left in a tracked team file whose scope is
+  // local moves out here, and is installed again once the manifest is written.
+  const movedRulesBlocks = await moveRulesBlocksOutOfTeamFiles(projectRoot, entrypoints.targets, (line) => {
+    entrypointNotices.push(line);
+  });
+  // A block installed in a local target the runtime no longer uses moves to the team file (review round 1, F-002).
+  movedRulesBlocks.push(...(await rulesBlocksLeavingLocalTargets(projectRoot, entrypoints.targets)));
   const syncedAgentRules = await syncAgentRules(projectRoot, metaprojectRoot, {
     enableTasks,
     targets: entrypoints.targets,
@@ -795,6 +803,9 @@ export async function initCommand(args: string[]): Promise<void> {
     path.join(metaprojectRoot, "metaproject.json"),
     manifest,
   );
+  await reinstallRulesExport(projectRoot, movedRulesBlocks, (line) => {
+    entrypointNotices.push(line);
+  });
 
   // Register any opt-in capabilities selected via uniform --<cap>/--no-<cap>
   // flags (ceilings default OFF). No-op with the empty Block 0 registry, so the

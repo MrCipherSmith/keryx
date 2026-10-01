@@ -23,8 +23,10 @@ import {
 import { ensureMetaprojectReference } from "../rules/agent-entrypoints";
 import { defaultEntrypointTargets } from "../rules/entrypoint-targets";
 import { isCodexOverrideStale } from "../rules/entrypoint-writers";
+import { doctorIntegration, installIntegration } from "../integrations/installer";
 import { containFromMetaprojectPath, updateCommand } from "./update";
 import { initCommand } from "./init";
+import { rulesCommand } from "./rules";
 
 // R700-06: throwaway fixture repo helper — mirrors the convention in
 // gdgraph-freshness.test.ts. GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM are both
@@ -1381,6 +1383,320 @@ test("flow 361: an entry-form local manifest whose tracked file still carries a 
     expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
     expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
     expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).toContain(BLOCK_START);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// ---------------------------------------------------------------------------
+// Flow 363: the opt-in rules-export `keryx:rules` block follows the entrypoint
+// targets. `update` keeps it in a regenerated `AGENTS.override.md` (AC4) and
+// moves one an older keryx left in a tracked team file to the local target
+// (AC5), by flow 361's cases.
+// ---------------------------------------------------------------------------
+
+const RULES_START = "<!-- keryx:rules -->";
+
+/** `runtime`'s root entry set to `entry` for one call, as a hand edit of the manifest would. */
+async function withRootEntry(root: string, runtime: string, entry: Record<string, unknown>, body: () => Promise<void>): Promise<void> {
+  const manifestPath = path.join(root, ".metaproject", "metaproject.json");
+  const before = await readFile(manifestPath, "utf8");
+  await switchRootEntry(root, runtime, entry);
+  try {
+    await body();
+  } finally {
+    await writeFile(manifestPath, before, "utf8");
+  }
+}
+
+/** The block exactly where a keryx before 0.3.47 put it: the tracked team file, through the surface itself. */
+async function installRulesIntoTeamFile(root: string, runtime: "claude" | "codex"): Promise<void> {
+  const file = runtime === "claude" ? "CLAUDE.md" : "AGENTS.md";
+  await withRootEntry(root, runtime, { path: file, scope: "shared" }, async () => {
+    const result = await installIntegration(root, runtime, { surfaces: ["rules"] });
+    expect(result.results[0]).toMatchObject({ status: "installed", file });
+  });
+}
+
+test("flow 363 AC4: update and rules sync regenerating AGENTS.override.md keep the installed keryx:rules block, and a second update changes no file", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const root = await entrypointFixture("keryx-update-rules-override-", { "AGENTS.md": agents }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    const install = await installIntegration(root, "codex", { surfaces: ["rules"] });
+    expect(install.results[0]).toMatchObject({ status: "installed", file: "AGENTS.override.md" });
+    const installed = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    const block = installed.slice(installed.indexOf(RULES_START)).trimEnd();
+
+    const revised = `${agents}\n## New section\n\nAdded upstream.\n`;
+    await writeFile(path.join(root, "AGENTS.md"), revised, "utf8");
+    await runEntrypointUpdate(root);
+
+    const regenerated = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(regenerated.endsWith(revised)).toBe(true);
+    expect(countOccurrences(regenerated, RULES_START)).toBe(1);
+    expect(regenerated).toContain(block);
+    // Carried after the index block, ahead of the team text.
+    expect(regenerated.indexOf("<!-- /keryx:index -->")).toBeLessThan(regenerated.indexOf(RULES_START));
+    expect(regenerated.indexOf(RULES_START)).toBeLessThan(regenerated.indexOf("# Team"));
+    // The staleness hash is AGENTS.md's alone.
+    expect(await isCodexOverrideStale(root, LOCAL_CODEX)).toBe(false);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(revised);
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+
+    const again = `${revised}\n## Another\n\nMore upstream text.\n`;
+    await writeFile(path.join(root, "AGENTS.md"), again, "utf8");
+    await rulesCommand(["sync"], root);
+    const synced = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(synced.endsWith(again)).toBe(true);
+    expect(countOccurrences(synced, RULES_START)).toBe(1);
+    expect(synced).toContain(block);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 AC5: one update moves an uncommitted keryx:rules block out of CLAUDE.md and AGENTS.md to the local targets and restores both to HEAD", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-update-rules-move-", { "AGENTS.md": agents, "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    await installRulesIntoTeamFile(root, "claude");
+    await installRulesIntoTeamFile(root, "codex");
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(false);
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(false);
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
+    expect(diffIsQuiet(root, "AGENTS.md")).toBe(true);
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+    expect(output).toContain(`CLAUDE.md: moved the ${RULES_START} block to the local target; the file is back at HEAD.`);
+    expect(output).toContain(`AGENTS.md: moved the ${RULES_START} block to the local target; the file is back at HEAD.`);
+    // Re-rendered at the local targets, once each.
+    const localClaude = await readFile(path.join(root, "CLAUDE.local.md"), "utf8");
+    const override = await readFile(path.join(root, "AGENTS.override.md"), "utf8");
+    expect(countOccurrences(localClaude, RULES_START)).toBe(1);
+    expect(countOccurrences(override, RULES_START)).toBe(1);
+    expect(override.endsWith(agents)).toBe(true);
+    const status = gitForUpdateIdempotency(root, ["status", "--porcelain"]);
+    expect(status).not.toMatch(/ (CLAUDE|AGENTS)\.md$/m);
+
+    const afterFirst = await snapshotTree(root);
+    await runEntrypointUpdate(root);
+    expect(await snapshotTree(root)).toEqual(afterFirst);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 AC5: a CRLF CLAUDE.md with other uncommitted edits loses only the keryx:rules block and stays CRLF", async () => {
+  const claude = "# Claude\r\n\r\nPrefer compact context.\r\n";
+  const root = await entrypointFixture("keryx-update-rules-edits-", { "AGENTS.md": "# Team\n", "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    const edited = `${claude}\r\nMy uncommitted note.\r\n`;
+    await writeFile(path.join(root, "CLAUDE.md"), edited, "utf8");
+    await installRulesIntoTeamFile(root, "claude");
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toContain(RULES_START);
+
+    const output = await runEntrypointUpdate(root);
+
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(edited);
+    expect(output).toContain(`CLAUDE.md: removed the ${RULES_START} block for the local target; your other uncommitted edits in CLAUDE.md are kept`);
+    expect(countOccurrences(await readFile(path.join(root, "CLAUDE.local.md"), "utf8"), RULES_START)).toBe(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 AC5: a keryx:rules block committed in HEAD is left untouched and no local duplicate is written", async () => {
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-update-rules-head-", { "AGENTS.md": "# Team\n", "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    await installRulesIntoTeamFile(root, "claude");
+    gitForUpdateIdempotency(root, ["add", "CLAUDE.md"]);
+    gitForUpdateIdempotency(root, ["commit", "-q", "-m", "team rules block"]);
+    const committed = await readFile(path.join(root, "CLAUDE.md"));
+
+    await runEntrypointUpdate(root);
+
+    expect((await readFile(path.join(root, "CLAUDE.md"))).equals(committed)).toBe(true);
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).not.toContain(RULES_START);
+    // The surface keeps writing where the team keeps the block.
+    const again = await installIntegration(root, "claude", { surfaces: ["rules"] });
+    expect(again.results[0]).toMatchObject({ file: "CLAUDE.md" });
+    expect(await readFile(path.join(root, "CLAUDE.local.md"), "utf8")).not.toContain(RULES_START);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363: init over an existing project moves an uncommitted keryx:rules block the same way", async () => {
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-init-rules-move-", { "AGENTS.md": "# Team\n", "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    await installRulesIntoTeamFile(root, "claude");
+
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(["--yes", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(diffIsQuiet(root, "CLAUDE.md")).toBe(true);
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+    expect(countOccurrences(await readFile(path.join(root, "CLAUDE.local.md"), "utf8"), RULES_START)).toBe(1);
+    expect(logs.join("\n")).toContain(`CLAUDE.md: moved the ${RULES_START} block`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Flow 363 review round 1, F-002: a runtime switched between local and shared
+// takes its installed rules block along — into exactly one file, recorded
+// there, valid for `integrations doctor` (scratchpad/r363/repro3.ts).
+async function expectRulesBlockOnlyIn(root: string, runtime: "claude" | "codex", file: string): Promise<void> {
+  const candidates = runtime === "claude" ? ["CLAUDE.md", "CLAUDE.local.md"] : ["AGENTS.md", "AGENTS.override.md"];
+  for (const candidate of candidates) {
+    const text = existsSync(path.join(root, candidate)) ? await readFile(path.join(root, candidate), "utf8") : "";
+    // The override's copy of AGENTS.md never counts: only keryx's slot ahead of it.
+    const own = candidate === "AGENTS.override.md" ? text.slice(0, Math.max(0, text.indexOf("# Team"))) : text;
+    expect(`${candidate}: ${countOccurrences(own, RULES_START)}`).toBe(`${candidate}: ${candidate === file ? 1 : 0}`);
+  }
+  const record = (await readInstallState(root, runtime))?.installedModules.find((entry) => entry.moduleId === "rules-export");
+  expect(record?.writtenPaths).toEqual([file]);
+  const doctor = await doctorIntegration(root, runtime, { surfaces: ["rules"] });
+  expect(doctor.surfaces.find((entry) => entry.surfaceId === "rules-export")).toMatchObject({ live: "valid", problems: [] });
+}
+
+test("flow 363 review F-002: switching both runtimes from local to shared moves the installed keryx:rules block into the team files", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-update-rules-to-shared-", { "AGENTS.md": agents, "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    expect((await installIntegration(root, "claude", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "CLAUDE.local.md" });
+    expect((await installIntegration(root, "codex", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "AGENTS.override.md" });
+    await switchRootEntry(root, "claude", { path: "CLAUDE.md", scope: "shared" });
+    await switchRootEntry(root, "codex", { path: "AGENTS.md", scope: "shared" });
+
+    await runEntrypointUpdate(root);
+
+    await expectRulesBlockOnlyIn(root, "claude", "CLAUDE.md");
+    await expectRulesBlockOnlyIn(root, "codex", "AGENTS.md");
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+    // CLAUDE.local.md held nothing but keryx's content: both blocks went, and so did the file.
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+
+    // A second update leaves the block where it is. (The imported rule copies
+    // of the team files pick it up on that run — they copy a shared team file
+    // verbatim, as for any block installed under scope shared.)
+    const claudeAfterFirst = await readFile(path.join(root, "CLAUDE.md"), "utf8");
+    const agentsAfterFirst = await readFile(path.join(root, "AGENTS.md"), "utf8");
+    await runEntrypointUpdate(root);
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claudeAfterFirst);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agentsAfterFirst);
+    expect(existsSync(path.join(root, "CLAUDE.local.md"))).toBe(false);
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 review F-002: switching both runtimes from shared to local moves the installed keryx:rules block into the local targets", async () => {
+  const agents = "# Team\n\nUse metaproject rules.\n";
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const shared = { root: [{ runtime: "claude", path: "CLAUDE.md", scope: "shared" }, { runtime: "codex", path: "AGENTS.md", scope: "shared" }], claudeSettings: ENTRY_FORM_DEFAULT.claudeSettings };
+  const root = await entrypointFixture("keryx-update-rules-to-local-", { "AGENTS.md": agents, "CLAUDE.md": claude }, shared);
+  try {
+    await runEntrypointUpdate(root);
+    expect((await installIntegration(root, "claude", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "CLAUDE.md" });
+    expect((await installIntegration(root, "codex", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "AGENTS.md" });
+    await switchRootEntry(root, "claude", LOCAL_CLAUDE);
+    await switchRootEntry(root, "codex", LOCAL_CODEX);
+
+    await runEntrypointUpdate(root);
+
+    await expectRulesBlockOnlyIn(root, "claude", "CLAUDE.local.md");
+    await expectRulesBlockOnlyIn(root, "codex", "AGENTS.override.md");
+    expect(await readFile(path.join(root, "CLAUDE.md"), "utf8")).toBe(claude);
+    expect(await readFile(path.join(root, "AGENTS.md"), "utf8")).toBe(agents);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 review F-002: init switching Claude from local to shared moves the installed keryx:rules block too", async () => {
+  const claude = "# Claude\n\nPrefer compact context.\n";
+  const root = await entrypointFixture("keryx-init-rules-to-shared-", { "AGENTS.md": "# Team\n", "CLAUDE.md": claude }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    expect((await installIntegration(root, "claude", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "CLAUDE.local.md" });
+    await switchRootEntry(root, "claude", { path: "CLAUDE.md", scope: "shared" });
+
+    const { restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(["--yes", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    await expectRulesBlockOnlyIn(root, "claude", "CLAUDE.md");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+test("flow 363 review F-002: rules sync after Codex is switched to shared moves the installed keryx:rules block into AGENTS.md", async () => {
+  const root = await entrypointFixture("keryx-sync-rules-to-shared-", { "AGENTS.md": "# Team\n\nUse metaproject rules.\n", "CLAUDE.md": "# Claude\n" }, ENTRY_FORM_DEFAULT);
+  try {
+    await runEntrypointUpdate(root);
+    expect((await installIntegration(root, "codex", { surfaces: ["rules"] })).results[0]).toMatchObject({ file: "AGENTS.override.md" });
+    await switchRootEntry(root, "codex", { path: "AGENTS.md", scope: "shared" });
+
+    const { restore } = captureUpdateConsoleLog();
+    try {
+      await rulesCommand(["sync"], root);
+    } finally {
+      restore();
+    }
+
+    await expectRulesBlockOnlyIn(root, "codex", "AGENTS.md");
+    expect(existsSync(path.join(root, "AGENTS.override.md"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// Flow 363 review round 1, F-001 (pre-existing since 0.3.45 for the index
+// block): a shared entry naming `.env` is junk, so update writes neither block
+// into it and rewrites the manifest to the standard entry.
+test("flow 363 review F-001: a cloned manifest whose shared entry names .env never gets the index block written into it", async () => {
+  const root = await entrypointFixture(
+    "keryx-update-shared-env-",
+    { "AGENTS.md": "# Team\n", "CLAUDE.md": "# Claude\n", ".gitignore": ".env\n" },
+    { root: [{ runtime: "claude", scope: "shared", path: ".env" }, LOCAL_CODEX], claudeSettings: ENTRY_FORM_DEFAULT.claudeSettings },
+  );
+  try {
+    await writeFile(path.join(root, ".env"), "API_KEY=secret\n", "utf8");
+    await runEntrypointUpdate(root);
+    expect(await readFile(path.join(root, ".env"), "utf8")).toBe("API_KEY=secret\n");
+    const entrypoints = await readEntrypointsManifest(root);
+    expect(JSON.stringify(entrypoints.root)).not.toContain(".env");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
