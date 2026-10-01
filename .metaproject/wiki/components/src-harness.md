@@ -1,6 +1,6 @@
 ---
 Title: Module src/harness
-Version: 1.0.1
+Version: 1.0.2
 Type: component
 Status: accepted
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df
@@ -10,7 +10,6 @@ Summary: `src/harness` groups 4 file(s). Depends on `fixtures/churn-complexity`,
 ```markdown
 ---
 Title: Module src/harness
-Version: 1.0.2
 Type: component
 Status: accepted
 VerifiedAt: 5886c474beb774901805417efb1cc4d1a03935df

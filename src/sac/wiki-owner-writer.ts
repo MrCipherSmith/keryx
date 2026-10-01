@@ -14,13 +14,13 @@
 // Unlike memory, there is no canonical "write real body content" helper to
 // reuse here: `keryx wiki new` (wikiCreatePage, src/wiki/service.ts) only
 // scaffolds a blank title/type template — WikiCreatePageInput has no content
-// field — so this writes directly via the same `writeFileAtomic` proposal
-// records already use, after running the SAME security write seam
+// field — so this writes the page through `writeWikiPage` (atomic, and kept in
+// the page's version history, flow 367), after running the SAME security write seam
 // `keryx wiki collect` runs before publishing a generated page (src/wiki/
 // service.ts, target: "wiki") — a blocked write is refused, not silently sent.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { writeFileAtomic } from "../lib/fs";
+import { openWikiWriteContext, writeWikiPage } from "../wiki/history";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import type { KnowledgeOwner, OwnerReceipt, OwnerWriteFailure, OwnerWriteIntent } from "./guarded-owner-writer";
 import { applyGuardedTargetWrite, ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence, recoverStagedOwnerWrite, targetAbsolutePath } from "./proposal-evidence";
@@ -95,7 +95,10 @@ export function createRealWikiOwnerWriter(cwd: string, opts?: { note?: string; n
   const applyStaged = async (staged: Record<string, unknown>): Promise<{ ok: true } | OwnerWriteFailure> => {
     const relativePath = staged.relativePath as string;
     const content = staged.content as string;
-    await writeFileAtomic(path.join(cwd, ".metaproject", "wiki", relativePath), content);
+    // Through the page history (flow 367): a replay of the same bytes is a no-op,
+    // and an overwrite of an existing page keeps what it replaced.
+    const history = await openWikiWriteContext(cwd, "sac proposal accept");
+    await writeWikiPage(history, path.join(cwd, ".metaproject", "wiki", relativePath), content);
     return { ok: true };
   };
 
