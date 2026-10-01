@@ -13,7 +13,7 @@ import {
   readPageHistory,
   restoreWikiPage,
   restoreWikiRun,
-} from "../wiki/history";
+} from "../wiki/service";
 
 const HISTORY_USAGE = "Usage: keryx wiki history <page> | keryx wiki history --runs [--json]";
 const RESTORE_USAGE =

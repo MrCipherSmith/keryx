@@ -59,6 +59,21 @@ import {
   type WikiValidateResult,
 } from "./types";
 
+// Flow 367: the page history API, through this module's facade, for callers
+// outside `src/wiki` (CLI, sync, the SAC owner-writer).
+export {
+  listWikiRuns,
+  openWikiWriteContext,
+  pageHistoryDir,
+  parseVersionLabel,
+  printWikiUndoHint,
+  readPageHistory,
+  restoreWikiPage,
+  restoreWikiRun,
+  type WikiWriteContext,
+  writeWikiPage,
+} from "./history";
+
 const EXTERNAL_LINK = /^(https?:|mailto:|tel:)/i;
 // The wiki scaffold is graph-driven: by default it covers EVERY module the graph
 // knows (a page per `src/<dir>` with at least MIN_MODULE_FILES files), not an

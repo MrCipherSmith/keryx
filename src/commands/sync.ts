@@ -1,7 +1,7 @@
 import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedModule } from "../sync/provenance";
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
 import { describeSourceGate, HEAD_NOT_REQUESTED, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
-import { openWikiWriteContext, printWikiUndoHint, type WikiWriteContext } from "../wiki/history";
+import type { WikiWriteContext } from "../wiki/service";
 import type { DeletionWindow, RemovalAttribution } from "../forgetting/service";
 import { runInteractiveUnderMaintenanceLock } from "../lib/maintenance-lock";
 
@@ -76,7 +76,8 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
   let anyStale = false;
   // One wiki history run for everything this sync writes or prunes, so a single
   // `keryx wiki restore --run <id>` undoes it (flow 367).
-  const wikiHistory = apply ? await openWikiWriteContext(cwd, "sync --apply") : undefined;
+  const wiki = apply ? await import("../wiki/service") : undefined;
+  const wikiHistory = wiki ? await wiki.openWikiWriteContext(cwd, "sync --apply") : undefined;
   for (const module of SYNCED_MODULES) {
     const provenance = await readProvenance(cwd, module);
     console.log(`## ${module}`);
@@ -248,7 +249,7 @@ async function runSync(cwd: string, args: string[], apply: boolean): Promise<voi
   }
 
   await runForgettingStage(cwd, { apply, at, args, window, graphRebuilt });
-  if (wikiHistory) await printWikiUndoHint(wikiHistory);
+  if (wiki && wikiHistory) await wiki.printWikiUndoHint(wikiHistory);
 
   if (!apply && anyStale) {
     process.exitCode = 0; // advisory; hooks decide what to do with the report

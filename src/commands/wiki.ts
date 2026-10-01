@@ -9,7 +9,7 @@ import {
 import { wikiAsk } from "../wiki/ask";
 import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
 import { migrateMarkers, refreshPages, verifyPages } from "../wiki/refresh";
-import { openWikiWriteContext, printWikiUndoHint, type WikiWriteContext } from "../wiki/history";
+import { openWikiWriteContext, printWikiUndoHint, type WikiWriteContext } from "../wiki/service";
 import { resolveGitHead } from "../sync/provenance";
 import { describeHead } from "../wiki/staleness";
 import { optionValue } from "../lib/args";

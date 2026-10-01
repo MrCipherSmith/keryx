@@ -20,7 +20,7 @@
 // service.ts, target: "wiki") — a blocked write is refused, not silently sent.
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { openWikiWriteContext, writeWikiPage } from "../wiki/history";
+import { openWikiWriteContext, writeWikiPage } from "../wiki/service";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import type { KnowledgeOwner, OwnerReceipt, OwnerWriteFailure, OwnerWriteIntent } from "./guarded-owner-writer";
 import { applyGuardedTargetWrite, ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence, recoverStagedOwnerWrite, targetAbsolutePath } from "./proposal-evidence";
