@@ -15,6 +15,9 @@
 //     400, deleting twice is a 400.
 //   - 429 with retry_after, 5xx and a whole-API outage, injected per method.
 //   - callback queries, with the message the buttons belong to.
+//   - `parse_mode: "HTML"`: the text is checked as strictly as Telegram checks it
+//     (documented tags, balanced, `&` `<` `>` escaped); a malformed text is a 400
+//     "can't parse entities", and the 4096 limit counts the text AFTER parsing.
 //
 // `connect(label)` returns another client over the SAME state: that is how a
 // test models two `keryx serve` processes on one bot token.
@@ -32,6 +35,7 @@ import {
   type SendMessageParams,
   TELEGRAM_MAX_TEXT,
 } from "./types";
+import { checkTelegramHtml } from "./format-html";
 
 export interface FakeTopic {
   messageThreadId: number;
@@ -43,7 +47,9 @@ export interface FakeSentMessage {
   messageId: number;
   chatId: number;
   messageThreadId?: number;
+  /** As sent: Telegram HTML when `parseMode` is "HTML". */
   text: string;
+  parseMode?: "HTML";
   inlineKeyboard?: InlineKeyboard;
   at: number;
 }
@@ -418,7 +424,18 @@ export class FakeBotApi implements BotApi {
     if (params.text.length === 0) {
       throw rejected("sendMessage", 400, "Bad Request: message text is empty");
     }
-    if (params.text.length > TELEGRAM_MAX_TEXT) {
+    let shown = params.text;
+    if (params.parseMode === "HTML") {
+      const checked = checkTelegramHtml(params.text);
+      if (!checked.ok) {
+        throw rejected("sendMessage", 400, `Bad Request: ${checked.reason}`);
+      }
+      shown = checked.text;
+      if (shown.length === 0) {
+        throw rejected("sendMessage", 400, "Bad Request: message text is empty");
+      }
+    }
+    if (shown.length > TELEGRAM_MAX_TEXT) {
       throw rejected("sendMessage", 400, "Bad Request: message is too long");
     }
     if (params.messageThreadId !== undefined && !this.liveTopics.has(params.messageThreadId)) {
@@ -430,6 +447,7 @@ export class FakeBotApi implements BotApi {
       chatId: params.chatId,
       ...(params.messageThreadId === undefined ? {} : { messageThreadId: params.messageThreadId }),
       text: params.text,
+      ...(params.parseMode === undefined ? {} : { parseMode: params.parseMode }),
       ...(params.inlineKeyboard === undefined ? {} : { inlineKeyboard: params.inlineKeyboard }),
       at: this.now(),
     });

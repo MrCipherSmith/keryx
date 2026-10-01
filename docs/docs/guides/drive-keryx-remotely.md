@@ -255,8 +255,18 @@ that it is off.
 - **Long replies are split.** A reply over 4096 characters (Telegram's limit,
   counted in UTF-16 units) goes out as numbered messages, `(1/3)`, `(2/3)`, ...,
   in order. A fenced code block that crosses a boundary is closed and reopened, so
-  each message renders on its own; words and emoji are not cut. Messages carry no
-  parse mode, so plain text is sent and nothing is escaped.
+  each message renders on its own; words and emoji are not cut.
+- **Replies are formatted.** Messages go out as Telegram HTML (`parse_mode`
+  `HTML`): `**bold**`, `*italic*`, `~~strike~~`, `` `code` ``, fenced blocks (with
+  their language), headings, `>` quotes, `-` bullets and `[text](https://...)`
+  links render as such. Only `http` and `https` links become links. Anything
+  ambiguous or unclosed (`snake_case_name`, `a*b*c`, a lone `**`) stays as the
+  literal text, and `&`, `<` and `>` in a reply are escaped, so a reply can never
+  inject a tag. Telegram's 4096-character limit counts the text after it parses
+  the markup, so tags do not use it up. If Telegram still refuses a message's
+  markup (400 "can't parse entities"), that one message is sent again as plain
+  text and `serve` records a `format-fallback` event. Approval prompts are sent as
+  a code block, so what you approve is shown exactly.
 - **Orphans and limits.** If a session stops sending heartbeats, its topic gets a
   notice and is deleted after 10 minutes (`orphanMs`); a heartbeat inside that
   window brings it back. A run started from Telegram is interrupted after 30
