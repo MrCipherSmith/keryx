@@ -98,20 +98,23 @@ describe("AC13: the plan is built from allow lists", () => {
     // A fake Linux filesystem: `/run` is a real directory, `/var/run` is absent.
     // The plan must not depend on the host this test happens to run on (macOS has
     // no `/run`).
+    // `/etc/resolv.conf` is the usual systemd-resolved symlink into the hidden `/run`.
+    const stub = "/run/systemd/resolve/stub-resolv.conf";
     const linuxFs: UnattendedSandboxInput["detect"] = {
-      existsSync: (p) => p === "/usr/bin/bwrap",
+      existsSync: (p) => p === "/usr/bin/bwrap" || p === stub,
       isDir: (p) => p === "/run",
-      realpath: (p) => p,
+      realpath: (p) => (p === "/etc/resolv.conf" ? stub : p),
     };
     const off = planUnattendedSandbox(input({ detect: linuxFs }));
     if (!off.ok) throw new Error(off.reason);
     expect(off.args.join(" ")).toContain("--tmpfs /run");
     expect(off.args.join(" ")).not.toContain("docker.sock");
+    expect(off.args.some((a) => a.includes("resolv"))).toBe(false);
     const on = planUnattendedSandbox(input({ network: true, detect: linuxFs }));
     if (!on.ok) throw new Error(on.reason);
     const resolvIdx = on.args.findIndex((a, i) => a === "--ro-bind" && on.args[i + 1]?.includes("resolv"));
-    // Only when this host's /etc/resolv.conf points into a hidden dir; never a directory.
-    if (resolvIdx >= 0) expect(on.args[resolvIdx + 1]).toMatch(/resolv\.conf$/);
+    expect(resolvIdx).toBeGreaterThanOrEqual(0);
+    expect(on.args.slice(resolvIdx, resolvIdx + 3)).toEqual(["--ro-bind", stub, stub]);
   });
 
   test("dispatch.network: true is the only way to keep the network", () => {

@@ -256,6 +256,7 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   const hidden = new Set<string>();
   const hostIsDir = input.detect?.isDir ?? isDir;
   const hostReal = input.detect?.realpath ?? real;
+  const hostExists = input.detect?.existsSync ?? exists;
   for (const runDir of ["/run", "/var/run"]) {
     if (hostIsDir(runDir) && hostReal(runDir) === path.resolve(runDir)) hidden.add(runDir);
   }
@@ -281,8 +282,8 @@ export function planUnattendedSandbox(input: UnattendedSandboxInput): Unattended
   // directory holding the resolver's sockets. `allowlist` binds NO resolv.conf —
   // the sandbox does its own DNS never; the proxy outside it resolves every name.
   if (fullNetwork) {
-    const resolv = real("/etc/resolv.conf");
-    if (resolv !== "/etc/resolv.conf" && exists(resolv) && !isDir(resolv)) args.push("--ro-bind", resolv, resolv);
+    const resolv = hostReal("/etc/resolv.conf");
+    if (resolv !== "/etc/resolv.conf" && hostExists(resolv) && !hostIsDir(resolv)) args.push("--ro-bind", resolv, resolv);
   }
 
   // Bind back read-only what the run needs, then read-write the worktree and
