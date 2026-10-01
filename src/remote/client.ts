@@ -23,8 +23,11 @@
 // every attempt, so a tampered endpoint file cannot send the shell token anywhere
 // else. The serve named by the file must also be a running process of this user:
 // a serve that was killed leaves its `endpoint.json` behind, and the port may by
-// then belong to someone else, who must not be handed the token. It never logs
-// or returns the token.
+// then belong to someone else, who must not be handed the token. A reused pid can
+// still pass that check, so the raw token is never sent at all (each request
+// carries a bearer derived from it and a fresh nonce) and every answer, the event
+// stream included, must carry serve's proof for that nonce before it is used
+// (F-002). It never logs or returns the token.
 
 import { isLoopbackAddress } from "../lib/serve-config";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
@@ -46,7 +49,10 @@ import {
   type StatusEvent,
 } from "./protocol";
 import { readEndpoint } from "./endpoint";
-import { readShellToken } from "./shell-token";
+import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServeResponseProof } from "./shell-token";
+
+const UNVERIFIED_SERVE_MESSAGE =
+  "the program answering on keryx serve's port did not prove it is the keryx serve this shell trusts; its answer was ignored. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides)";
 
 export interface InboundMeta {
   updateId: number;
@@ -339,14 +345,27 @@ export class RemoteClient {
     return { url: `http://${authority(endpoint.value.address, endpoint.value.port)}${remoteRoutePath(route)}${query}`, token: token.value };
   }
 
+  /**
+   * A non-stream request. The bearer is derived from the token and a fresh nonce (the raw
+   * token never leaves the shell), and the answer is returned only once serve's proof for
+   * that nonce, route, status and body checks out: a listener that is not this serve
+   * (another program on a freed port, or a serve too old to prove itself) gets nothing
+   * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
+   */
   private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | AckBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
-    return this.fetchImpl(url, {
+    const { nonce, bearer } = shellRequestCredential(token);
+    const response = await this.fetchImpl(url, {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.any([AbortSignal.timeout(this.requestTimeoutMs), this.lifetime.signal]),
     });
+    const text = await response.text();
+    if (!verifyServeResponseProof(token, nonce, route, response.status, text, response.headers.get(SERVE_PROOF_HEADER))) {
+      throw new TransientClientError(UNVERIFIED_SERVE_MESSAGE);
+    }
+    return new Response(text, { status: response.status, headers: response.headers });
   }
 
   private async heartbeat(): Promise<void> {
@@ -418,12 +437,19 @@ export class RemoteClient {
     const abort = new AbortController();
     this.streamAbort = abort;
     const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}`);
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "text/event-stream" };
+    const { nonce, bearer } = shellRequestCredential(token);
+    const headers: Record<string, string> = { authorization: `Bearer ${bearer}`, accept: "text/event-stream" };
     if (this.lastCompleted > 0) {
       // "The last line I completed was this one": serve settles that exact id if it is still waiting for it.
       headers["last-event-id"] = String(this.lastCompleted);
     }
     const response = await this.fetchImpl(url, { method: "GET", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
+    // The stream is proven by its headers: every frame after them comes over this same loopback connection.
+    // Unproven, not one frame is read: a forged stream could otherwise feed lines to run and approvals to allow.
+    if (!verifyServeResponseProof(token, nonce, "stream", response.status, "", response.headers.get(SERVE_PROOF_HEADER))) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new TransientClientError(UNVERIFIED_SERVE_MESSAGE);
+    }
     if (!response.ok || response.body === null) {
       await response.text().catch(() => "");
       if (response.status === 404) {

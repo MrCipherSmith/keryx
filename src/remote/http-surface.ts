@@ -63,6 +63,7 @@ import {
   type StatusEvent,
   type StreamEventName,
 } from "./protocol";
+import { derivedBearerNonce, SERVE_PROOF_HEADER } from "./shell-token";
 import { type InlineKeyboard } from "./types";
 
 const MAX_REPLY_CHARS = 20_000;
@@ -77,6 +78,12 @@ const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as co
 export interface RemoteSurfaceOptions {
   /** Constant-time check of the presented bearer against the local shell token. */
   verifyShellToken: (presented: string) => boolean;
+  /**
+   * Serve's proof for one answer to an authenticated shell request (F-002): HMAC over
+   * the request's nonce, the route, the status and the body. Undefined while no
+   * token is minted; then no proof is sent and a current shell refuses the answer.
+   */
+  proveResponse?: (nonce: string, route: string, status: number, body: string) => string | undefined;
   now?: () => number;
   timers?: HubTimers;
   keepaliveMs?: number;
@@ -260,7 +267,37 @@ export class RemoteHttpSurface {
     return this.options.verifyShellToken(presented);
   }
 
+  /**
+   * Answer one request that `lib/serve-server.ts` already authenticated with the shell
+   * token, and sign the answer for the nonce in its bearer, so the shell can tell this
+   * serve from whatever else may hold the port. The event stream is signed over its
+   * headers only (an empty body): the frames that follow arrive on the same loopback
+   * connection the proven headers did.
+   */
   async handle(route: RemoteRoute | ChannelsRoute, request: Request, io: { untimed: () => void }): Promise<Response> {
+    const response = await this.dispatch(route, request, io);
+    const authorization = request.headers.get("authorization") ?? "";
+    const nonce = /^Bearer /i.test(authorization) ? derivedBearerNonce(authorization.slice(7).trim()) : undefined;
+    if (nonce === undefined || this.options.proveResponse === undefined) {
+      return response;
+    }
+    if (route === "stream") {
+      const proof = this.options.proveResponse(nonce, route, response.status, "");
+      if (proof !== undefined) {
+        response.headers.set(SERVE_PROOF_HEADER, proof);
+      }
+      return response;
+    }
+    const body = await response.text();
+    const proof = this.options.proveResponse(nonce, route, response.status, body);
+    const headers = new Headers(response.headers);
+    if (proof !== undefined) {
+      headers.set(SERVE_PROOF_HEADER, proof);
+    }
+    return new Response(body, { status: response.status, headers });
+  }
+
+  private async dispatch(route: RemoteRoute | ChannelsRoute, request: Request, io: { untimed: () => void }): Promise<Response> {
     if (isChannelsRoute(route)) {
       if (this.closed || this.channels === undefined) {
         return fail(503, "remote-unavailable", "channels are not available in this serve");

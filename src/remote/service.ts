@@ -34,7 +34,7 @@ import { localMachineName } from "./naming";
 import { ensureRemoteDir, remoteConfigPath } from "./paths";
 import { acquirePollLock, type AcquirePollLockOptions, type PollLock } from "./poll-lock";
 import { RemoteHttpSurface, type RemoteSurfaceOptions } from "./http-surface";
-import { createShellTokenVerifier, mintShellToken } from "./shell-token";
+import { createShellTokenVerifier, mintShellToken, serveResponseProof } from "./shell-token";
 
 export interface OpenRemoteServiceOptions
   extends Pick<
@@ -71,8 +71,10 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
   const machine = options.machine ?? localMachineName();
   // Set by `start`, once the poller lock is ours and a fresh token has been minted.
   let verifyShellToken: ((presented: string) => boolean) | undefined;
+  let shellToken: string | undefined;
   const surface = new RemoteHttpSurface({
     verifyShellToken: (presented) => verifyShellToken?.(presented) ?? false,
+    proveResponse: (nonce, route, status, body) => (shellToken === undefined ? undefined : serveResponseProof(shellToken, nonce, route, status, body)),
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.timers === undefined ? {} : { timers: options.timers }),
     ...options.surface,
@@ -253,6 +255,7 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
         return refuse(token.reason);
       }
       verifyShellToken = createShellTokenVerifier(token.value);
+      shellToken = token.value;
       try {
         ensureRemoteDir(options.dir);
         const body: RemoteEndpoint = { address: endpoint.address, port: endpoint.port, pid: process.pid };
