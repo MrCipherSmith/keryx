@@ -176,6 +176,25 @@ describe("writeWikiPage", () => {
     }
   });
 
+  test("a failed write never leaves the index pointing at a pruned (deleted) version file", async () => {
+    await seed("components/a.md", "v1\n");
+    await writeWikiPage(ctx("wiki enrich", 2), wikiPath("components/a.md"), "v2\n");
+    await chmod(wikiPath("components/a.md"), 0o444);
+    try {
+      // keep=2 would prune v1 on this write; the write fails, so nothing may be pruned.
+      await expect(writeWikiPage(ctx("wiki enrich", 2), wikiPath("components/a.md"), "v3\n")).rejects.toThrow();
+    } finally {
+      await chmod(wikiPath("components/a.md"), 0o644);
+    }
+    const history = await readPageHistory(root, "components/a.md");
+    for (const row of history!.rows) {
+      if (row.file.endsWith(".md")) {
+        expect(await readFile(path.join(pageHistoryDir(root, "components/a.md"), row.file), "utf8")).toBeDefined();
+      }
+    }
+    expect((await restoreWikiPage(ctx("wiki restore"), "components/a.md", 1)).restoredTo).toBe("v0001");
+  });
+
   test("AC3: retention keeps the newest N stored versions and marks older ones pruned", async () => {
     await seed("components/a.md", "v1\n");
     for (const content of ["v2\n", "v3\n", "v4\n"]) {

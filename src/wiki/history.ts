@@ -264,17 +264,21 @@ async function reconcile(cwd: string, page: string, live: Buffer | null, liveSee
   return { page, rows: [manual, ...existing.rows] };
 }
 
-async function prune(cwd: string, history: WikiPageHistory, keep: number): Promise<WikiPageHistory> {
+/**
+ * Mark versions beyond `keep` as pruned and return the files to delete. Nothing
+ * is deleted here: the caller removes them only after the new index is on disk,
+ * so a write that fails midway never leaves an index pointing at deleted files.
+ */
+function planPrune(history: WikiPageHistory, keep: number): { history: WikiPageHistory; files: string[] } {
   const stored = history.rows.filter((row) => row.file.endsWith(".md"));
-  if (stored.length <= keep) return history;
+  if (stored.length <= keep) return { history, files: [] };
   const drop = new Set(stored.slice(Math.max(1, keep)).map((row) => row.version));
-  const dir = pageHistoryDir(cwd, history.page);
-  for (const row of history.rows) {
-    if (drop.has(row.version)) await rm(path.join(dir, row.file), { force: true });
-  }
   return {
-    page: history.page,
-    rows: history.rows.map((row) => (drop.has(row.version) ? { ...row, file: PRUNED_FILE } : row)),
+    history: {
+      page: history.page,
+      rows: history.rows.map((row) => (drop.has(row.version) ? { ...row, file: PRUNED_FILE } : row)),
+    },
+    files: history.rows.filter((row) => drop.has(row.version)).map((row) => row.file),
   };
 }
 
@@ -299,7 +303,7 @@ async function mutatePage(ctx: WikiWriteContext, absolutePath: string, next: Buf
       sha: next === null ? DELETED_SHA : sha256(next),
       file: next === null ? NO_FILE : await storeVersion(ctx.cwd, page, version, now, next),
     };
-    const history = await prune(ctx.cwd, { page, rows: [row, ...before.rows] }, ctx.keep ?? DEFAULT_HISTORY_KEEP);
+    const { history, files: pruned } = planPrune({ page, rows: [row, ...before.rows] }, ctx.keep ?? DEFAULT_HISTORY_KEEP);
 
     // The page first, the index second. A page write that fails (a read-only
     // page, a full disk) leaves the index as it was, and the new version's
@@ -319,6 +323,7 @@ async function mutatePage(ctx: WikiWriteContext, absolutePath: string, next: Buf
     // A crash here leaves a page that differs from the index's current row;
     // `reconcile` records it next time, and its bytes are already stored above.
     await writeFileAtomic(path.join(dir, INDEX_FILE), renderPageHistoryIndex(history));
+    for (const file of pruned) await rm(path.join(dir, file), { force: true });
     const action: WikiRunEntry["action"] = next === null ? "deleted" : live === null ? "created" : "updated";
     const runsFile = path.join(wikiHistoryRoot(ctx.cwd), RUNS_FILE);
     await appendFile(runsFile, `${JSON.stringify({ runId: ctx.runId, command: ctx.command, page, at: now, action })}\n`, "utf8");
