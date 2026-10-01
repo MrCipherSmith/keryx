@@ -4,8 +4,8 @@
 An append-only record of changes to keryx's own bundled skills
 (`src/gdskills/bundled/skills/**`) and rules (`src/gdskills/bundled/rules/**`)
 that were tried and rejected, with the evidence that sank them. The idea is
-adapted (MIT) from the rejected-change ledger in
-[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills). Its
+adapted (MIT; see THIRD_PARTY_NOTICES.md) from the rejected-change ledger in
+the external skills library. Its
 purpose is to stop the same rejected idea from being re-proposed blindly —
 before authoring a change to a shipped skill, search this ledger for that
 skill and that idea.

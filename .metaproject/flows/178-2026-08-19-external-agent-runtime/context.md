@@ -83,7 +83,7 @@ and the eleven resolved forks with reasoning.
 
 ### Reference implementation studied
 
-`~/bots/helyx` — a production Telegram/Claude Code system on this
+Another agent tool — a production Telegram/Claude Code system on this
 machine. Two patterns: an inverted MCP channel (`channel/`), and a headless
 reviewer (`services/reviewer-service.ts`) whose `ReviewerKind` is
 `"codex" | "provider" | "claude"`. Twelve measured failures from the second are
@@ -107,7 +107,7 @@ its login refusal to stdout with exit code 0.
    `claude -p --output-format stream-json` was never run, and whether
    `--json-schema`, `--input-format stream-json` and `--verbose` compose is
    unknown. The event mapping table in specification §6.2 is assembled from
-   helyx's parser (written against an older Claude version) and the ablation
+   that tool's parser (written against an older Claude version) and the ablation
    script — plausible, unverified.
 4. **`src/capability/` was never opened.** The opt-in gate claim rests on the
    harness README's description of it.

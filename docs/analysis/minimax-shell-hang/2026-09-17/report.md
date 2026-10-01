@@ -208,4 +208,4 @@ R1–R3 — одна доработка провайдерного слоя; п.
 - MiniMax, OpenAI-совместимый API: https://platform.minimax.io/docs/api-reference/text-openai-api
 - DeepSeek, режим рассуждений: https://api-docs.deepseek.com/guides/thinking_mode/
 - Gemini, thought signatures: https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures
-- Утечка `<think>` MiniMax в других клиентах: https://github.com/QwenLM/qwen-code/issues/3387, https://github.com/sst/opencode/issues/3555
+- Утечка `<think>` MiniMax в других клиентах подтверждена публичными issue в сторонних агентах.

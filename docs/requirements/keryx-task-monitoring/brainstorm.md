@@ -3,7 +3,7 @@ Version: 1.0.0
 
 ## Prior art
 
-**Inherited, not re-verified.** The competitor survey below is taken from
+**Inherited, not re-verified.** The survey of other agent harnesses below is taken from
 `docs/requirements/keryx-background-task-execution/brainstorm.md:13-20`, which
 records forks read at `~/sandbox/forks/<name>/` on 2026-09-14. Those trees are
 outside this repository and **this package did not re-read them**. They are
@@ -12,10 +12,10 @@ and no claim here rests on them alone.
 
 | Tool | What it ships for this problem | Recorded at |
 |---|---|---|
-| **Qwen Code** | A separate `monitor` tool with `idle_timeout_ms` | parent brainstorm.md:16 |
-| **Grok Build** | A separate `monitor` tool plus `/loop`/scheduler | parent brainstorm.md:14 |
+| **Harness B** | A separate `monitor` tool with `idle_timeout_ms` | parent brainstorm.md:16 |
+| **Harness A** | A separate `monitor` tool plus `/loop`/scheduler | parent brainstorm.md:14 |
 | **Codex** | No monitor: a yielding PTY session continued via `write_stdin` | parent brainstorm.md:13 |
-| **Gemini CLI / Crush / Cline / Continue / OpenCode** | No monitor and no scheduler in what was surveyed | parent brainstorm.md:15-20 |
+| **Gemini CLI and harnesses C–F** | No monitor and no scheduler in what was surveyed | parent brainstorm.md:15-20 |
 
 The reading that matters: a `monitor` tool is **not** universal prior art. Two of
 eight surveyed tools ship one, and both ship it alongside an execution model
@@ -124,7 +124,7 @@ today, polling `shell_task_output`, is legal and correct (it is in
 `REPEATABLE_TOOL_NAMES`, `src/commands/agent.ts:462`) but costs a model round
 per poll.
 
-- Rejected: a **separate `monitor` tool** (the Qwen/Grok shape) — a fourth task
+- Rejected: a **separate `monitor` tool** (the harness A/B shape) — a fourth task
   tool whose job overlaps `shell_task_wait` almost entirely; the difference is
   one predicate, so it belongs as a field, not a tool.
 - Rejected: **doing nothing and letting the model poll** — a defensible outcome,
@@ -221,7 +221,7 @@ documentation work in [prd.md](prd.md) S4.
 | Alternative | Why rejected |
 |---|---|
 | Build all of D-08 as written | Two of its three implied capabilities were made unnecessary by P0–P2; building them now would be inheriting a scope rather than deciding one. |
-| A `monitor` tool mirroring Qwen/Grok | Two of eight surveyed tools ship one, both without exactly-once completion delivery. The overlap with `shell_task_wait` is everything but the predicate. |
+| A `monitor` tool mirroring harnesses A/B | Two of eight surveyed tools ship one, both without exactly-once completion delivery. The overlap with `shell_task_wait` is everything but the predicate. |
 | Streaming with a filter applied at the stream | Still N injections per turn; the filter belongs at the *wait*, where it produces one result, not at the stream. |
 | A scheduler honouring the auto-wake cap | Stops after five firings; not a scheduler. |
 | A scheduler exempt from the auto-wake cap | Deletes the only rail against unattended token burn. |

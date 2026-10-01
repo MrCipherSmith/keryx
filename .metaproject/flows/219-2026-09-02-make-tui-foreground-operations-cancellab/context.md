@@ -12,7 +12,7 @@
 ## Live Reproduction
 
 - Session: `eb5de48c-4bf1-454a-994c-d487fa69fce4`
-- Project: `~/Presight/Vantage/vantage-frontend`
+- Project: a consumer project checkout
 - Symptom: wiki enrichment held the TUI busy; `/interrupt` and Queue → Force did not stop it, and subsequent input was offered Queue/Side-1 again.
 - The observed run later completed 53 pages with no reported failures; the defect is cancellation/lifecycle behavior, not the final enrichment result.
 

@@ -30,8 +30,8 @@ would produce the same rows.
 | # | Check | Command | Expected |
 |---|---|---|---|
 | 1 | keryx under measurement is the branch build, not the global one | `harness/bin/keryx --version` | the branch version, **not** the global `main` build |
-| 2 | Target commit present | `git -C ~/bots/helyx cat-file -e bfad745b` | exit 0 |
-| 3 | Graph builds in a worktree | `keryx gdgraph build` in a fresh worktree | `267 nodes, 656 edges` for `helyx` |
+| 2 | Target commit present | `git -C <target-project> cat-file -e bfad745b` | exit 0 |
+| 3 | Graph builds in a worktree | `keryx gdgraph build` in a fresh worktree | `267 nodes, 656 edges` for `<target-project>` |
 | 4 | Sandbox launcher, **if C4 is in scope** | `keryx harness exec --allow-real-subprocess -- /bin/echo hi` | not `blocked` |
 | 5 | Every prompt file resolves | `ls prompts/<case>.txt` for each case in the batch | present |
 
@@ -126,7 +126,7 @@ memory or expectation. Three rules that run 2 needed:
    existing cases and prompts; needs only the second target prepared and the
    report stating plainly that the subject is measuring itself.
 3. **C4**, in the form D1–D3 settle on.
-4. **P1/P3 regression** — A3 and A4 against `helyx` again, but only *after* the
+4. **P1/P3 regression** — A3 and A4 against `<target-project>` again, but only *after* the
    v2 remediation lands, and read as a before/after of the fix rather than as a
    fresh measurement.
 5. **E1/E2/E4** if D4 chose (b), after the multi-turn driver exists.

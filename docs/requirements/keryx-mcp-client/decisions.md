@@ -19,14 +19,14 @@ codec runs `claude -p` (or the streaming-input equivalent) — the exact mode
 this restriction targets. This is not a keryx design gap; it is a vendor-side
 restriction outside keryx's control. Revisit if/when Anthropic changes it.
 
-## D-02: Keep push; do not adopt helyx's pull pattern
+## D-02: Keep push; do not adopt the pull pattern
 
 **Decision.** Reaffirm `keryx-external-agent-runtime` D-03's choice of push
 (keryx spawns the CLI headless) over pull (a human starts the CLI
 interactively; keryx attaches as a server the CLI pulls work from).
 
-**Reasoning.** The reference implementation studied for that decision, helyx,
-has a working pull-mode pattern (`channel/`, "Pattern 1") where permission
+**Reasoning.** The reference implementation studied for that decision
+has a working pull-mode pattern ("Pattern 1") where permission
 requests are forwarded to a human via Telegram through a custom
 `notifications/claude/channel/permission_request` notification. It genuinely
 works — but only because the CLI runs interactively (a human/tmux supervisor

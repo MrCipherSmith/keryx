@@ -9,7 +9,7 @@ out to `npm install`/`git clone` under the hood.
 
 **Reasoning.** A thin wrapper is cheaper to write but does not close the
 actual gap: an operator without `bun` installed still ends up needing it.
-opencode's studied pattern — the one this work is modeled on — specifically
+The studied install pattern — the one this work is modeled on — specifically
 avoids that: its install script IS the whole install, no runtime
 dependency survives it. Confirmed technically viable before committing:
 Bun cross-compiles `--compile` binaries for macOS/Linux from one machine
@@ -98,8 +98,8 @@ Homebrew core.
 maintenance commitment, no build-from-source-only exceptions without
 justification) that is a separate, larger undertaking from proving the
 standalone-binary foundation works at all. A personal tap ships immediately
-once the binary exists and is the same mechanism opencode's own studied
-README lists as one of its 10+ channels — not a lesser version of the same
+once the binary exists and is the same mechanism the studied
+pattern lists as one of its 10+ channels — not a lesser version of the same
 idea, a normal one.
 
 ## D-04: Additive install script, existing paths unchanged

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "074",
   "slug": "opentui-sidebar",
-  "title": "OpenTUI opencode-style sidebar + expandable reasoning (/think) + timestamps + always-on token counter",
+  "title": "OpenTUI status sidebar + expandable reasoning (/think) + timestamps + always-on token counter",
   "status": "done",
   "createdAt": "2026-07-20T13:05:24.773Z",
   "updatedAt": "2026-08-31T10:39:09.188Z",

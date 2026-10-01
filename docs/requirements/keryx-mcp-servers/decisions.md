@@ -3,29 +3,27 @@ Version: 0.1.0
 
 Numbering is local to this package.
 
-## D-01: Grok Build is the parity target, not OpenCode
+## D-01: One model bridge, not per-tool registration
 
-**Decision.** Behavioral reference is Grok Build's MCP client: namespaced
+**Decision.** The MCP consumer surface is: a namespaced
 `server__tool` catalog, model access via `search_tool` / `use_tool`, CLI
 `mcp add|list|remove|enable|disable|doctor`, stdio + HTTP, OAuth, compat
 import of editor configs.
 
-Parity is behavioural, not literal: Grok's consumer modal is `/mcps`, and
-keryx uses `/mcp` for it instead (D-04). Grok has only the consumer side, so
-`/mcp` was free for it; keryx has both and must say which is which.
+The consumer view is `/mcp` (D-04). Keryx has both the consumer and the
+publisher side and must say which is which.
 
-**Reasoning.** The operator request is "keryx should work like grok-build."
-OpenCode (and Kilocode on the same runtime) register every MCP tool as a
+**Reasoning.** The operator asked for keryx to consume user-configured MCP
+servers the way other agent CLIs do. Some other harnesses register every MCP tool as a
 native model tool (`server_tool`). That dumps a changing, often large list
 into `AgentDeps.tools` every session and busts any chance of a stable
-tool-definition prefix. Grok Build omits MCP FQNs from the advertised list
-on purpose (`tool_definitions_builtins_only` drops names containing `__`)
-and keeps KV cache stable. Keryx's interactive loop already takes a static
-`InteractiveTool[]`; the Grok shape maps onto that seam without inventing a
+tool-definition prefix. Keeping MCP FQNs out of the advertised list (a two-tool bridge) keeps the
+KV cache stable. Keryx's interactive loop already takes a static
+`InteractiveTool[]`; a two-tool bridge maps onto that seam without inventing a
 dynamic provider-tool rewrite.
 
-**Rejected.** OpenCode's per-tool registration as v1. Resources-as-three-
-synthetic-tools (OpenCode) and Crush/Gemini FQN styles (`mcp_`, `mcp__`)
+**Rejected.** Per-tool registration as v1. Resources-as-three-
+synthetic-tools and Gemini-style FQNs (`mcp_`, `mcp__`)
 are also rejected for v1.
 
 ## D-02: New package and `src/mcp-servers/`, not a v2 of `keryx-mcp-client`
@@ -99,9 +97,9 @@ The risk was already recorded in `prd.md` under *"`/mcp` vs `/mcps`
 confusion"*, with rewriting the installer copy as the mitigation. Renaming the
 installer is the same mitigation carried to its conclusion.
 
-Grok's consumer modal being `/mcps` is not a reason for keryx: Grok has only
-the consumer side, so `/mcp` was free and `/mcps` was a stylistic choice. Keryx
-has both sides and must say which is which.
+A `/mcps` spelling for the consumer view is not a reason for keryx: a tool
+with only the consumer side can use either freely. Keryx has both sides and
+must say which is which.
 
 **Cost, corrected 2026-09-09.** 116 references across `docs/`, `README.md`,
 `src/` and `.metaproject/` — `serve` 65, `install` 39, `uninstall` 12, measured
@@ -120,7 +118,7 @@ proves the binary split is unworkable. Unknown / write-shaped tools are
 `destructive`.
 
 **Reasoning.** `keryx-mcp-client` D-05 already traced approval to
-`resolveApprovalDecision`. A new `MCPTool` risk (Grok's `AccessKind::MCPTool`)
+`resolveApprovalDecision`. A new `MCPTool` risk class
 would require permission-mode, TUI prompts, and tests across `ask`/`trust`/
 `auto` for one feature. Fail-closed mapping onto `destructive` reuses
 ADR-0010's trust-mode escalation. Credentials and SAC-review floors already
@@ -131,10 +129,9 @@ cannot be lifted.
 **Decision.** `--transport sse` and `type: "sse"` use
 `StreamableHTTPClientTransport`. No separate SSE client in v1.
 
-**Reasoning.** Grok Build's docs mention SSE; its `start_mcp_server` matches
-`Http` and `Sse` to the same HTTP transport
-(`xai-grok-mcp/src/servers.rs`). Claiming a real SSE stack would overstate
-parity. If a live host later requires SDK `SSEClientTransport`, that is a
+**Reasoning.** In the reference behaviour studied, SSE is a label that maps
+to the same HTTP transport. Claiming a real SSE stack would overstate what
+keryx ships. If a live host later requires SDK `SSEClientTransport`, that is a
 spec revision with a named probe, not a silent extra.
 
 ## D-07: OAuth is in v1 for interactive shells; headless fails closed
@@ -143,8 +140,8 @@ spec revision with a named probe, not a silent extra.
 `mcp-credentials.json`. Non-TTY / unattended / `keryx serve` never opens a
 browser; status is `needs_auth`. Headers and env remain the automation path.
 
-**Reasoning.** Grok Build's hosted examples (Linear, Sentry, Mixpanel) are
-OAuth. Omitting OAuth is not Grok parity. Opening a browser from
+**Reasoning.** Common hosted MCP servers (Linear, Sentry, Mixpanel) are
+OAuth. Omitting OAuth would leave them unusable. Opening a browser from
 `keryx serve` would violate that package's "no secrets on the remote
 surface" and hang unattended runs.
 
@@ -155,8 +152,8 @@ children where it already exists (no leaking `KERYX_` secrets into the
 child beyond an allowlist), but do not wrap them in Seatbelt/bubblewrap
 unless the operator opts in.
 
-**Reasoning.** Grok Build: "Sandbox does not special-case MCP. Stdio
-children inherit the agent process." Keryx interactive `shell_exec` sandbox
+**Reasoning.** In the reference behaviour studied, the sandbox does not
+special-case MCP: stdio children inherit the agent process. Keryx interactive `shell_exec` sandbox
 is already opt-in because default-on breaks npm/bun caches. MCP stdio
 servers are typically `npx`/`uvx` and need network + caches. Default-on
 containment would make every first-run `npx` server look `failed`. Remote
@@ -171,8 +168,8 @@ does not edit `.cursor/mcp.json`.
 
 **Reasoning.** `src/mcp/client-config.ts` already has a `_keryxManaged`
 sentinel so keryx-as-server install never clobbers user MCP entries. The
-inverse must hold: consuming those entries must not rewrite them. Grok
-Build's merge priority (native > Claude > Cursor > `.mcp.json`) is copied.
+inverse must hold: consuming those entries must not rewrite them. Merge
+priority is native > Claude > Cursor > `.mcp.json`.
 
 ## D-10: No new `src/capability/` ceiling
 
@@ -182,8 +179,8 @@ providers are the precedent, not `gdskills.external-agents`.
 **Reasoning.** External agents spawn a vendor CLI under a subscription and
 are hard-disabled in CI/remote. MCP servers are tools the operator added,
 closer to SearXNG. A ceiling would mean `keryx init --mcp-servers` plus a
-manifest bit before Playwright works — unlike Grok, where adding a server
-is sufficient. `keryx serve-mcp` remains its own `modules.mcp.enabled` flag;
+manifest bit before Playwright works, where adding a server should be
+sufficient. `keryx serve-mcp` remains its own `modules.mcp.enabled` flag;
 that flag is inbound and is not reused here.
 
 ## D-11: Subagents do not inherit MCP in v1
@@ -191,7 +188,8 @@ that flag is inbound and is not reused here.
 **Decision.** `spawn_subagent` children keep today's tool list. No
 `mcpInheritance`.
 
-**Reasoning.** Grok Build does inherit connections. Keryx child tools are
+**Reasoning.** Inheriting connections is possible (other agent CLIs do it),
+but keryx child tools are
 explicitly assembled in `spawn-subagent-tool.ts` (`builtinReadOnlyTools` +
 metaproject + spawn). Silently appending `search_tool`/`use_tool` would
 give children network-equivalent reach the parent never budgeted and would
@@ -220,7 +218,7 @@ cause: a `.` in the tool name (`sac.read`, `gdgraph.find`, `wiki.ask`,
 `health.gate`, …). More than half of a server's surface disappeared, and the
 server was ours.
 
-**Why the regex is nonetheless right.** It is not arbitrary parity with Grok.
+**Why the regex is nonetheless right.** It is not an arbitrary choice.
 Provider tool-name limits are real, and Anthropic's own API rejects a `.` in
 a tool name. Loosening the pattern would move the failure from load time,
 where `doctor` explains it, to call time, where the provider rejects the
@@ -252,7 +250,7 @@ numeric suffix (`a_b_2`) was rejected: it invents a name that exists
 neither on the server nor in any config, so the operator has nothing to
 match it against.
 
-decided-by: altsay (operator), 2026-09-11, in the helyx channel — shown
+decided-by: altsay (operator), 2026-09-11, in the operator chat channel — shown
 both questions with options and a recommendation, answered with the
 recommendation on each and confirmed in text.
 

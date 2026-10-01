@@ -732,7 +732,7 @@ export async function createShellChrome(
   r.on(otui.CliRenderEvents.SELECTION, onSelection);
 
   // --- header -------------------------------------------------------------
-  // grok-style: identity on the left, a caller-owned meta slot on the right.
+  // Identity on the left, a caller-owned meta slot on the right.
   const header = new otui.BoxRenderable(r, {
     id: "header",
     flexShrink: 0,
@@ -939,7 +939,7 @@ export async function createShellChrome(
     return false;
   };
 
-  // Live `/` command dropdown (Pi/grok-style): a Select filtered as the composer
+  // Live `/` command dropdown: a Select filtered as the composer
   // changes.
   const menu = new otui.SelectRenderable(r, {
     id: "menu",
@@ -1368,9 +1368,9 @@ export async function createShellChrome(
   // A model-generated "what to do next" shown as the composer placeholder while
   // it is empty. Tab/Right fills it in without submitting; typing dismisses it.
   // AC14 (flow 268): Enter does NOT accept it — a bare Enter on an empty
-  // composer is always a no-op upstream, suggestion or not. Mirrors
-  // qwen-code's InputForm followup mechanism (placeholder swap + tab/right
-  // accept + dismiss on input), minus the enter-accepts variant.
+  // composer is always a no-op upstream, suggestion or not. The mechanism
+  // is a placeholder swap + tab/right accept + dismiss on input, without an
+  // enter-accepts variant.
   const defaultPlaceholder = opts.placeholder;
   let suggestion: string | null = null;
   const syncPlaceholder = (): void => {

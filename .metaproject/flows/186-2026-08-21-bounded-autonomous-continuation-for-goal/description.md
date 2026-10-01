@@ -1,8 +1,8 @@
 # Bounded autonomous continuation for `/goal` (SLATE-27)
 
-Status: implemented (PR #378). Written from a comparative survey of
-`/goal`-equivalent mechanisms in 13 competitor coding-agent CLIs
-(`~/sandbox/forks`), not from an issue or user bug report.
+Status: implemented (PR #378). Written from a survey of comparable
+`/goal`-equivalent mechanisms in other coding-agent CLIs, not from an issue
+or user bug report.
 
 **SLATE-27, not SLATE-22 (renumbered 2026-08-21, before opening the PR)**:
 this flow originally self-assigned SLATE-22, verified against a repo-wide
@@ -29,11 +29,10 @@ actually achieved is never checked by anything other than the model's own
 narrative — there is no loop, and nothing re-drives the agent toward the
 stated objective if the first turn leaves it unfinished.
 
-Three of the 13 surveyed competitors — qwen-code, grok-build, and
-deepseek-harness — independently built exactly this missing piece: a bounded,
+Several of the surveyed tools independently built exactly this missing piece: a bounded,
 multi-round autonomous continuation loop that does **not** trust the model's
 own "I'm done" claim, verifying it against evidence, an adversarial
-re-check, or an authority proof before stopping. None of the three have
+re-check, or an authority proof before stopping. None of them have
 anything resembling keryx's SAC — durable, cross-session, human-reviewed
 project memory. The two capabilities are complementary, and keryx currently
 only has one of them.
@@ -58,19 +57,14 @@ An opt-in `/goal <text> --auto [N]` mode that:
 - adds exactly one thing none of that existing machinery does today: before
   the loop actually stops, one `spawn_subagent` (`read_only` mode, already
   a real tool) verifier call checks the claimed outcome against the current
-  repo state and reports `{achieved, gaps}` — the minimal version of what
-  qwen-code's evidence-catalog and grok-build's skeptic-subagent both do,
-  right-sized to keryx's existing tools rather than a new subsystem;
+  repo state and reports `{achieved, gaps}` — the minimal version of the
+  evidence-catalog and skeptic-subagent designs seen elsewhere, right-sized to keryx's existing tools rather than a new subsystem;
 - is capped by round count and never changes who approves an individual
   tool call — `resolveApprovalDecision` still gates every write inside every
   round exactly as it does today;
 - is armed only for the current attempt (`SlateSessionRef`, in-memory) —
-  a resumed or forked session never silently inherits an unattended loop,
-  mirroring deepseek-harness's `GoalActivation` authority boundary in
-  keryx's own terms.
-
-Full comparative research this proposal is drawn from:
-`docs/requirements/goal-continuation/competitor-survey.md`.
+  a resumed or forked session never silently inherits an unattended loop —
+  an activation authority boundary in keryx's own terms.
 
 ## Out Of Scope
 
@@ -80,8 +74,8 @@ Full comparative research this proposal is drawn from:
 - No cross-session autonomous resumption. An armed `--auto` loop does not
   survive a process restart, a `keryx sessions fork`, or a `/resume` —
   consistent with `SlateSessionRef.opened` already not surviving those today.
-- Not a general adversarial multi-skeptic committee (grok-build's full
-  design) — one verifier call per stop attempt for v1, not N parallel ones.
+- Not a general adversarial multi-skeptic committee (as other tools
+  build it) — one verifier call per stop attempt for v1, not N parallel ones.
 - No change to approval-mode semantics, `resolveApprovalDecision`, or the
   write-gating boundary anywhere.
 - No chat-mode meaning — mirrors `/goal` itself being `AGENT_ONLY`

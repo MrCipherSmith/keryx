@@ -72,8 +72,8 @@ const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
  * ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falling
  * **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
  * is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)), i.e. the
- * agent finds the fix and then destroys it. Aider's `max_reflections = 3` and
- * OpenHands' critic bound the same shape.
+ * agent finds the fix and then destroys it. A bound of three repair rounds is
+ * the common response to that shape.
  *
  * `/goal --auto` is a **continuation** loop. Each round advances a course toward
  * a goal and the loop ends on a positive `isCourseDone` signal, not on "the

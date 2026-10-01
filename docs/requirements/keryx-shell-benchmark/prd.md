@@ -120,7 +120,7 @@ and both are honoured in the grading:
 
 ## Recommendation
 
-Run it, on `helyx` first, with the catalog fixed at this package's version before
+Run it, on `<target-project>` first, with the catalog fixed at this package's version before
 any execution. Publish whatever comes out. The value of this exercise is entirely
 in the fact that the answer is not known in advance — a benchmark whose result is
 decided beforehand is a press release with extra steps.

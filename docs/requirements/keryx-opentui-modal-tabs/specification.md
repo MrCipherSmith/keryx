@@ -74,9 +74,10 @@ inside one `openModal` call.
   steps as tab bodies (`Providers` / `Models`) instead of stacked
   full-screen `overlayBox` calls.
 
-## Grok reference (behavior to copy, not code)
+## Reference behaviour
 
-Observed from Grok Build user-guide (not from keryx source):
+The host pattern Keryx adopts (observed in another agent CLI's documentation,
+not from keryx source):
 
 - One **extensions modal**, four entry commands, each selecting a tab.
 - `/status` is an inspect modal with **Status** / **Context** (and
@@ -84,7 +85,7 @@ Observed from Grok Build user-guide (not from keryx source):
 - Steal-Esc: overlays dismiss before composer/clear/rewind.
 - `/settings` and `/config-agents` are the same overlay class.
 
-Keryx must copy the **host pattern**, not Grok's catalog contents.
+Keryx adopts the **host pattern**, not any other tool's catalog contents.
 
 ## Current keryx baseline (do not regress)
 

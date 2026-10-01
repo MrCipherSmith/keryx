@@ -5,9 +5,9 @@ Version: 0.1.0
 
 Add a real standalone-binary release artifact and native package-manager
 channels (Homebrew, and similarly-shaped channels for other platforms) on
-top of it, closing the specific gap named in a prior comparative research
-pass: keryx has no zero-runtime-prerequisite install path, while opencode's
-studied pattern (a single install script auto-detecting OS/arch/libc and
+top of it, closing the specific gap named in a prior research
+pass: keryx has no zero-runtime-prerequisite install path, while the studied
+pattern (a single install script auto-detecting OS/arch/libc and
 fetching a prebuilt binary from GitHub Releases, plus 10+ parallel
 package-manager channels) does.
 
@@ -54,7 +54,7 @@ decisions.md D-01's amendment for the full record.
 | [prd.md](prd.md) | Problem, goal, users, requirements, success criteria, risks, recommendation. |
 | [specification.md](specification.md) | Build pipeline, artifact matrix, channel-by-channel plan, acceptance criteria. |
 | [decisions.md](decisions.md) | Adopted decisions: standalone-binary foundation over thin wrappers; single-runner cross-compile. |
-| [brainstorm.md](brainstorm.md) | opencode's studied pattern, current-state findings, the optional-dependency bundling question. |
+| [brainstorm.md](brainstorm.md) | The studied install pattern, current-state findings, the optional-dependency bundling question. |
 
 ## Scope
 
@@ -72,7 +72,7 @@ decisions.md D-01's amendment for the full record.
 
 ## Non-goals (this version)
 
-- Windows. Not requested; opencode's own Windows story was not researched to
+- Windows. Not requested; the studied pattern's Windows story was not researched to
   the depth this package needs, and keryx's own sandbox/OS-integration work
   (`keryx-os-sandbox`) is macOS-full/Linux-partial today — a Windows binary
   with no corresponding sandbox story is a bigger, separate decision.

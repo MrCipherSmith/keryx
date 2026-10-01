@@ -13,14 +13,14 @@ but once a command runs it has the **full permissions of the user**: a
 prompt-injection that yields an approved-looking command can read `~/.ssh`, write
 outside the workspace, or exfiltrate over the network.
 
-Surveying the field (Codex CLI, grok-build, Claude Code vs opencode, pi) there
+Surveying the field (Codex CLI, Claude Code and other agent harnesses) there
 are two paradigms: real OS-kernel isolation, or approval-only (explicitly *not* a
 security boundary). For a prod v1 that permits any auto/semi-autonomous shell
 execution, approval-only is insufficient.
 
 ## Decision
 
-Adopt the **grok-build / Codex model**: wrap each approved command in the
+Adopt the **Codex model**: wrap each approved command in the
 platform OS-sandbox launcher right before the single real spawn, enforced by the
 kernel regardless of what the model chose to run.
 
@@ -55,7 +55,7 @@ real path.
   listed secrets, or reach the network under the default profile — verified on
   real macOS by the flag-gated live smoke.
 - Negative: `sandbox-exec` is formally deprecated by Apple (accepted — Codex /
-  Claude Code / grok-build all rely on it). Linux requires `bubblewrap`
+  Claude Code rely on it). Linux requires `bubblewrap`
   installed (`apt/dnf install bubblewrap`); Ubuntu 24.04 needs an AppArmor userns
   profile for `bwrap`.
 - The pure builders (profile/seatbelt/bwrap/wrap) are deterministic and fully
@@ -66,9 +66,9 @@ real path.
 - **`@anthropic-ai/sandbox-runtime`** (Anthropic's extracted primitives) — ready
   made, but an npm dependency; would need optional-dep + ADR-0005 pinning. Kept
   as a fallback, not chosen.
-- **microVM (pi/Gondolin) / full container** — stronger but heavy; offered as an
+- **microVM / full container** — stronger but heavy; offered as an
   optional external wrapper, not the default.
-- **Approval-only (opencode/pi default)** — rejected as insufficient for prod.
+- **Approval-only (the default in some other harnesses)** — rejected as insufficient for prod.
 
 ## Deferred to v1.x
 

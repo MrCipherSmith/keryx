@@ -53,34 +53,33 @@ optional compatibility packages after the project-native contracts stabilize.
 
 ## Research-Derived Design Inputs
 
-### From Pi
+### Small core and session discipline
 
-Pi documents a minimal core extended through TypeScript extensions, skills,
-prompts, themes, packages, SDK, and JSONL/RPC. Its session design uses an
-append-only tree, stable entry ids, compaction, branch summarization, and
-streamed events. Keryx should adopt the durable event/session discipline while
-making project artifacts and policy first-class.
+A minimal core extended through extensions, skills, prompts and a JSONL/RPC
+surface, with sessions as an append-only tree, stable entry ids, compaction,
+branch summarization, and streamed events. Keryx should adopt the durable
+event/session discipline while making project artifacts and policy first-class.
 
-### From OpenCode
+### Roles, tools and permissions
 
-OpenCode documents primary agents and subagents, tool permissions with
-`allow`/`ask`/`deny`, custom tools, plugins, MCP servers, and project/global
-configuration. Keryx should adopt the separation between role, tool, and
-permission, but store the authoritative policy in `.metaproject/`.
+Primary agents and subagents, tool permissions with `allow`/`ask`/`deny`,
+custom tools, plugins, MCP servers, and project/global configuration. Keryx
+should adopt the separation between role, tool, and permission, but store the
+authoritative policy in `.metaproject/`.
 
-### From oh-my-claude
+### Gated completion
 
-The quality harness demonstrates that “done” must be a gated state. It uses
-intent classification, specialist routing, pre/post compaction hooks, reviewer
-sequences, and hard stop gates. Keryx should implement these as typed runtime
-policies and evidence gates instead of shell overlays tied to one client.
+"Done" must be a gated state: intent classification, specialist routing,
+pre/post compaction hooks, reviewer sequences, and hard stop gates. Keryx should
+implement these as typed runtime policies and evidence gates instead of shell
+overlays tied to one client.
 
-### From oh-my-claudecode
+### Staged team execution
 
-The project demonstrates staged team execution, parallel workers, adaptive
-roles, persistent loops, replay/state artifacts, and explicit warnings against
-competing loop authorities. Keryx should add bounded waves and child sessions
-only after the single-agent loop is reliable.
+Staged team execution, parallel workers, adaptive roles, persistent loops,
+replay/state artifacts, and explicit warnings against competing loop
+authorities. Keryx should add bounded waves and child sessions only after the
+single-agent loop is reliable.
 
 ## Selected Decisions
 

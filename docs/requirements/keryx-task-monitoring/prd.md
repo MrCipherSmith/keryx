@@ -187,6 +187,6 @@ otherwise.
 | Gap | Impact | Tracked |
 |---|---|---|
 | Whether polling actually costs enough rounds to justify F1 is **unmeasured**. No instrumentation counts `shell_task_output` calls per turn today. | The entire case for Recommendation 3 rests on a plausible cost, not a measured one. | metrics M1; the human decision listed in brainstorm.md §Open questions. |
-| The competitor prior art for `monitor` (Qwen, Grok) is **inherited, not re-verified** by this package. | The forks were read on 2026-09-14 for the parent package and are outside this repository; nothing here re-read them. | brainstorm.md §Prior art, which marks them as inherited. |
+| The prior art from other harnesses for `monitor` (harnesses A and B) is **inherited, not re-verified** by this package. | The forks were read on 2026-09-14 for the parent package and are outside this repository; nothing here re-read them. | brainstorm.md §Prior art, which marks them as inherited. |
 | R3's cost on the output hot path is unknown until built. | A regression here would show up as TUI repaint lag on a chatty task. | metrics M6. |
 | This package does not touch on-disk output. | Output beyond the 2 MiB ring is still gone, so a condition that appeared and was evicted cannot be matched retrospectively. | The parent package's D-18; unchanged. |

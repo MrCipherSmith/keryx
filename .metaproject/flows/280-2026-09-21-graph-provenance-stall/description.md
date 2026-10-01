@@ -26,7 +26,7 @@ gate says "the graph is behind HEAD", and no command moves the record.
 - `keryx sync --apply` printed `gdgraph: up to date (built at dd188942)` and the
   wiki baseline refusal above.
 
-`~/bots/helyx` did not hit it: its commit also changed source files, so
+Another repository did not hit it: its commit also changed source files, so
 the diff stage rebuilt the graph and advanced provenance to the new HEAD.
 
 ## Expected

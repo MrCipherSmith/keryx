@@ -4,8 +4,8 @@ Version: 0.1.1
 ## Purpose
 
 Define a reusable **modal + tab strip** presentation layer for the OpenTUI
-shell. Grok Build's pager treats `/hooks`, `/plugins`, `/marketplace`, and
-`/skills` as one modal opened on different tabs; `/status` and `/model`
+shell. A common agent-CLI pattern treats `/hooks`, `/plugins`, `/marketplace`,
+and `/skills` as one modal opened on different tabs; `/status` and `/model`
 are the same class of overlay. This package is the shared chrome those
 surfaces share. Shipped callers: `/status` and `/flows`.
 

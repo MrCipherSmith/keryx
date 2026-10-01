@@ -194,7 +194,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): install-binary.sh verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Verifier: refuted by execution over five cases on merged main."
+      "evidence": "decided-by: altsay (operator, 2026-09-03, via the operator chat channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): install-binary.sh verifies the sha256 digest GitHub records for the asset and fails closed on every branch that cannot establish one. Verifier: refuted by execution over five cases on merged main."
     }
   },
   {
@@ -216,7 +216,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "decided-by: altsay (operator, 2026-09-03, via helyx-channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): orient, metrics and workspace added to the usage banner, and a new guard requiring the banner to name every reference-documented verb found health, providers and sync as well. Verifier: refuted by execution on merged main."
+      "evidence": "decided-by: altsay (operator, 2026-09-03, via the operator chat channel) — asked whether to defer as out-of-scope or repair, and answered repair. Fixed in 47d1cab1 (#442): orient, metrics and workspace added to the usage banner, and a new guard requiring the banner to name every reference-documented verb found health, providers and sync as well. Verifier: refuted by execution on merged main."
     }
   }
 ]

@@ -46,7 +46,7 @@ shell's own tools and error handling working against the model:
 ## Out of Scope
 
 - The system prompt (`buildAgentSystemInstruction`). K-006 (hunting the commit in
-  git history) is unconfirmed until the arena compares grok-build on the same task,
+  git history) is unconfirmed until the arena compares another agent harness on the same task,
   and K-007 (not committing to an answer) is a prompt change the operator deferred.
   Consequence recorded as a follow-up: the prompt names tools statically, so in a
   project without `.metaproject/` it will mention tools the roster no longer offers.

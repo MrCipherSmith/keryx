@@ -11,9 +11,9 @@ guarded-mutation path, evidence ledger and completion gate can accept."
 
 Separately, keryx exposes its own tools over MCP (`src/mcp/server.ts`) so
 *other* agents can use keryx — but nothing in keryx's own agent loop can
-connect *out* to an MCP server. Six of the seven peer coding-agent harnesses
-profiled in a prior comparative research pass (Cline, Codex, dsh, Gemini CLI,
-Grok-Build, OpenCode) ship a working MCP client; keryx does not.
+connect *out* to an MCP server. Most peer coding-agent harnesses
+profiled in a prior research pass (Codex and Gemini CLI among them) ship a
+working MCP client; keryx does not.
 
 These two gaps turn out to be the same gap. `codex mcp-server` — confirmed via
 independent public sources, not assumed — propagates its own internal

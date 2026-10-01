@@ -96,7 +96,7 @@ describe("the PR description is a typed field, not a naming convention", () => {
 
 describe("cross_repo can describe a producer that has not merged", () => {
   const merged = {
-    repo: "vantage-backend",
+    repo: "acme-backend",
     state: "merged",
     sha: "f5219d5d4",
     reason: "DQ report payload: which halves are null vs 0",
@@ -105,7 +105,7 @@ describe("cross_repo can describe a producer that has not merged", () => {
   };
 
   const open = {
-    repo: "vantage-backend",
+    repo: "acme-backend",
     state: "open",
     pr: "https://github.com/o/backend/pull/98",
     branch: "feat/new-timeout",
@@ -126,7 +126,7 @@ describe("cross_repo can describe a producer that has not merged", () => {
         baseContext({
           cross_repo: [
             {
-              repo: "vantage-backend",
+              repo: "acme-backend",
               state: "unavailable",
               reason: "the DQ payload shape",
               facts: ["not readable from this checkout; dependent findings held at info"],
@@ -200,7 +200,7 @@ describe("a finding can name the repository its evidence lives in", () => {
   test("repo validates on the reviewer-side schema", async () => {
     expect(
       await errorsFor(
-        report({ repo: "vantage-backend", file: "src/config.ts", line: 42 }),
+        report({ repo: "acme-backend", file: "src/config.ts", line: 42 }),
         FINDING,
       ),
     ).toEqual([]);
@@ -223,7 +223,7 @@ describe("a finding can name the repository its evidence lives in", () => {
         id: "F-001",
         reviewer: "review-backend",
         severity: "info",
-        repo: "vantage-backend",
+        repo: "acme-backend",
         file: "src/config.ts",
         line: 42,
         problem: "the client assumes a 5s producer timeout",

@@ -12,11 +12,11 @@
 
 The interactive shell (`keryx shell`, chat + `--agent`) renders through
 `node:readline` in line mode. It cannot present a live, as-you-type interface —
-most concretely the Pi/grok-style `/` command dropdown — because a keystroke-driven
+most concretely a full-screen-TUI-style `/` command dropdown — because a keystroke-driven
 overlay fights readline (the flow-048 status-bar removal established this ceiling).
 The flow-059 Phase 0 spike evaluated **OpenTUI** (`@opentui/core`) as the render/
 input layer and returned a GO verdict: prebuilt native binary (no Zig at install),
-MIT, a `split-footer` screen mode matching the Pi/grok layout, all required
+MIT, a `split-footer` screen mode matching the target layout, all required
 primitives (`InputRenderable`, `SelectRenderable`, `ScrollBoxRenderable`,
 `BoxRenderable`, `TextRenderable`, `MarkdownRenderable`), and a headless test
 harness (`@opentui/core/testing`) that makes the TUI unit-testable without a TTY.

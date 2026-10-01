@@ -136,7 +136,7 @@ registry path in resolveTarget) survives remove-skill.test.ts and skills-remove.
   "reviewer": "review-logic",
   "severity": "major",
   "problem": "metadata.flags entries are taken verbatim.",
-  "impact": "flags: [vantage], ['--Vantage '] and 'flags: --vantage --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
+  "impact": "flags: [acme], ['--Acme '] and 'flags: --acme --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
   "suggested_fix": "Normalise entries and drop those not matching ^--[a-z][a-z0-9-]*$ with a visible warning.",
   "evidence": "Reproduced by the logic probe and review-verifier f006.ts with a control case.",
   "confidence": "high",

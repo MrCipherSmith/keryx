@@ -3,7 +3,7 @@
 Status: formalized
 Source: user feedback on the flow-031/032 shell UI (screenshots): a large empty
 block appears between the header and the first prompt, and the layout wants more
-breathing room "like grok".
+breathing room.
 
 ## Problem
 

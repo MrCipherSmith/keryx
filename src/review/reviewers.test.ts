@@ -313,23 +313,23 @@ describe("project reviewer triggers", () => {
   describe("metadata.flags", () => {
     // F-006: three spellings of one flag were three flags, so none was shared,
     // `familyFlags` stayed empty, and the one reviewer spelled correctly was
-    // dispatched under `--vantage` without its path gate.
+    // dispatched under `--acme` without its path gate.
     test("three spellings of one flag are one flag, and it is a family flag for all three", async () => {
-      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: vantage\n");
-      await writeProjectReviewer("review-b", 'description: Reviews b.\nmetadata:\n  flags: ["--Vantage "]\n');
-      await writeProjectReviewer("review-c", 'description: Reviews c.\nmetadata:\n  flags: "--vantage"\n');
+      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: acme\n");
+      await writeProjectReviewer("review-b", 'description: Reviews b.\nmetadata:\n  flags: ["--Acme "]\n');
+      await writeProjectReviewer("review-c", 'description: Reviews c.\nmetadata:\n  flags: "--acme"\n');
       const inventory = await collectReviewers(cwd);
       expect(inventory.project.map((reviewer) => [reviewer.name, reviewer.flags, reviewer.familyFlags, reviewer.flagWarnings])).toEqual([
-        ["review-a", ["--vantage"], ["--vantage"], []],
-        ["review-b", ["--vantage"], ["--vantage"], []],
-        ["review-c", ["--vantage"], ["--vantage"], []],
+        ["review-a", ["--acme"], ["--acme"], []],
+        ["review-b", ["--acme"], ["--acme"], []],
+        ["review-c", ["--acme"], ["--acme"], []],
       ]);
     });
 
     test("an entry is split on commas and whitespace", async () => {
-      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: --vantage --house,ui\n");
+      await writeProjectReviewer("review-a", "description: Reviews a.\nmetadata:\n  flags: --acme --house,ui\n");
       const [reviewer] = (await collectReviewers(cwd)).project;
-      expect(reviewer?.flags).toEqual(["--vantage", "--house", "--ui"]);
+      expect(reviewer?.flags).toEqual(["--acme", "--house", "--ui"]);
     });
 
     test("a YAML block list is read for flags and for paths", async () => {
@@ -525,8 +525,8 @@ describe("project reviewer triggers", () => {
       "description: Reviews things.\n",
       [
         "Graph: `skills/shared/graphify-lookup.md`. Present: `skills/shared/here.md`.",
-        "Schema: `skills/vantage-review/reviewer-finding.schema.json`. Index: `.metaproject/rules/README.md`.",
-        "Rule: `~/.vantage-frontend/rules/core/x.mdc` and `/opt/overlay/rules/core/y.mdc`.",
+        "Schema: `skills/acme-review/reviewer-finding.schema.json`. Index: `.metaproject/rules/README.md`.",
+        "Rule: `~/.acme-frontend/rules/core/x.mdc` and `/opt/overlay/rules/core/y.mdc`.",
         "Prose path `src/core/flow/CLAUDE.md` and a rule `core/absent.mdc` are not this list's business.",
         "",
       ].join("\n"),
@@ -537,9 +537,9 @@ describe("project reviewer triggers", () => {
     expect(reviewer?.unresolvedReferences).toEqual([
       { ref: "/opt/overlay/rules/core/y.mdc", reason: "non-portable" },
       { ref: "rules/README.md", reason: "missing" },
+      { ref: "skills/acme-review/reviewer-finding.schema.json", reason: "missing" },
       { ref: "skills/shared/graphify-lookup.md", reason: "missing" },
-      { ref: "skills/vantage-review/reviewer-finding.schema.json", reason: "missing" },
-      { ref: "~/.vantage-frontend/rules/core/x.mdc", reason: "non-portable" },
+      { ref: "~/.acme-frontend/rules/core/x.mdc", reason: "non-portable" },
     ]);
     // An absolute rule path is not a `dir/name.mdc` reference, so it never was in here.
     expect(reviewer?.unresolvedRules).toEqual(["core/absent.mdc"]);
@@ -547,13 +547,13 @@ describe("project reviewer triggers", () => {
     const rendered = renderReviewerInventoryMarkdown(inventory);
     expect(rendered).toContain("## references that do not resolve");
     expect(rendered).toContain("- review-house-refs: `skills/shared/graphify-lookup.md` — missing (.metaproject/skills/shared/graphify-lookup.md)");
-    expect(rendered).toContain("- review-house-refs: `~/.vantage-frontend/rules/core/x.mdc` — non-portable");
+    expect(rendered).toContain("- review-house-refs: `~/.acme-frontend/rules/core/x.mdc` — non-portable");
   });
 });
 
 describe("descriptionPathTriggers", () => {
   test("expands an optional suffix and strips list punctuation", () => {
-    expect(descriptionPathTriggers("Vantage src/**/*.ts(x) changes, src/**/*.css, src/theme/**.")).toEqual([
+    expect(descriptionPathTriggers("Acme src/**/*.ts(x) changes, src/**/*.css, src/theme/**.")).toEqual([
       "src/**/*.ts",
       "src/**/*.tsx",
       "src/**/*.css",
@@ -570,7 +570,7 @@ describe("descriptionPathTriggers", () => {
     // list where one entry happens to be a single file.
     expect(
       descriptionPathTriggers(
-        "Dispatched by vantage-review for --vantage, --vantage-temporal, --all, or changes under " +
+        "Dispatched by acme-review for --acme, --acme-temporal, --all, or changes under " +
           "src/utils/date-*.ts, src/utils/temporal-*.ts, src/utils/column-zone.ts, src/core/formatters/**, " +
           "src/core/view-zone/**, or src/wrappers/ag-grid/**.",
       ),
@@ -587,7 +587,7 @@ describe("descriptionPathTriggers", () => {
   test("a cited document is not a trigger", () => {
     expect(
       descriptionPathTriggers(
-        "performance rules from src/core/flow/CLAUDE.md. Dispatched by vantage-review for --vantage-flow, --all, or src/core/flow/** changes.",
+        "performance rules from src/core/flow/CLAUDE.md. Dispatched by acme-review for --acme-flow, --all, or src/core/flow/** changes.",
       ),
     ).toEqual(["src/core/flow/**"]);
     expect(descriptionPathTriggers("Reviews stores. Standards: core/reviewing.mdc, `core/mobx-store-template.mdc`.")).toEqual([]);
@@ -637,7 +637,7 @@ describe("descriptionPathTriggers", () => {
       "Uses acme/overlay and MrCipherSmith/keryx as sources.",
       "Since 0.3.40/0.3.41, v1.2/v1.3 and 2026/09.30.",
       "Names (e.g./i.e. aliases), e.g/i.e, and/or. read/write. client/server.",
-      "An absolute /opt/overlay/rules/x.json or ~/.vantage/config.json is not repo-relative.",
+      "An absolute /opt/overlay/rules/x.json or ~/.acme/config.json is not repo-relative.",
       "a=b/c.ts, src//x.ts, ./src/x.ts, ../x.ts",
       // The bundled review-jev-* descriptions: keryx's own config, cited as a precondition.
       "Runs when `review.jev.docs: true` in .metaproject/tasks.config.json and a credential is resolvable.",
