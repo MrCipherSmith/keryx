@@ -147,6 +147,9 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       if (params.messageThreadId !== undefined) {
         body.message_thread_id = params.messageThreadId;
       }
+      if (params.parseMode !== undefined) {
+        body.parse_mode = params.parseMode;
+      }
       if (params.inlineKeyboard !== undefined) {
         body.reply_markup = { inline_keyboard: params.inlineKeyboard };
       }

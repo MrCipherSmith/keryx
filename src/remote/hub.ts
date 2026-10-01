@@ -18,6 +18,7 @@
 import { redactSensitiveText } from "../security/service";
 import { SESSION_LEASE_HEARTBEAT_MS, SESSION_LEASE_STALE_MS } from "../session/lease";
 import type { RemoteConfig } from "./config";
+import { sendHtml } from "./format-html";
 import { InboundQueues, type InboundEntry, inboundEntryId, MAX_INBOUND_PER_TOPIC, PollerState } from "./inbound";
 import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
@@ -75,6 +76,7 @@ export type RemoteEventType =
   | "update-unrouted"
   | "delivery-failed"
   | "outbound-dropped"
+  | "format-fallback"
   | "poller-status";
 
 export interface RemoteEvent {
@@ -195,6 +197,7 @@ export class RemoteHub {
       ...(options.dir === undefined ? {} : { dir: options.dir }),
       now: this.now,
       onDrop: (entry, reason) => this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
+      onFallback: (entry) => this.event("format-fallback", `Telegram refused the formatting; sent as plain text${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
     });
     this.journal = new RejectedJournal({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.offset = new PollerState(options.dir === undefined ? {} : { dir: options.dir });
@@ -349,7 +352,7 @@ export class RemoteHub {
 
   /** One message to the General topic of the group, sent now (not queued): the caller reports the outcome. */
   async sendGeneral(text: string): Promise<void> {
-    await this.api.sendMessage({ chatId: this.config.chatId, text });
+    await sendHtml(this.api, { chatId: this.config.chatId, text }, () => this.event("format-fallback", "Telegram refused the formatting; sent as plain text (General)"));
   }
 
   heartbeat(sessionId: string): Promise<HeartbeatResult> {

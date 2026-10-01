@@ -10,6 +10,9 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import type { FakeSentMessage } from "./fake-bot-api";
+import { formatReply } from "./format";
+import { checkTelegramHtml, renderTelegramHtml } from "./format-html";
+import { asCodeBlock } from "./http-surface";
 import { approvalCallbackData, parseApprovalCallback } from "./protocol";
 import { call, makeRig, type Rig } from "./remote.http.test-helpers";
 import { OWNER_ID, settle, STRANGER_ID, until } from "./remote.test-helpers";
@@ -59,6 +62,9 @@ describe("approval through the topic", () => {
     const decision = client.requestApproval("Run `bun test`?", 10_000);
     const buttons = await untilButtons(threadId);
     expect(buttons.message.text).toContain("Run `bun test`?");
+    // The prompt goes out as a code block, so what the operator approves is shown verbatim.
+    expect(buttons.message.parseMode).toBe("HTML");
+    expect(buttons.message.text).toContain("<pre>");
     expect(parseApprovalCallback(buttons.allow)).toMatchObject({ decision: "allow" });
     expect(parseApprovalCallback(buttons.deny)).toMatchObject({ decision: "deny" });
 
@@ -67,6 +73,64 @@ describe("approval through the topic", () => {
     await until(() => textsIn(threadId).includes("Approval granted."), "the follow-up in the topic");
     // The press was answered to Telegram, so the button stops spinning.
     await until(() => rig.api.answeredCallbacks.length >= 1, "answerCallbackQuery");
+  });
+
+  // Whatever the approval text holds, the operator sees it as ONE literal pre block: no link, no bold, no closing fence.
+  const HOSTILE: Array<[string, string]> = [
+    ["16 backticks", "`".repeat(16) + "\n[x](https://evil.example) **b**\n" + "`".repeat(16)],
+    ["40 backticks", "x" + "`".repeat(40) + "\n[x](https://evil.example)\n**b**"],
+    ["a fence closer and a tilde fence", "```\n[x](https://evil.example)\n~~~~~~~~~~~~~~~~~~~~\n**b**\n````````````````````"],
+    ["CRLF line endings", "rm -rf /\r\n```\r\n[x](https://evil.example)\r\n**b**"],
+    ["a quote and a heading", "> [x](https://evil.example)\n# **b**\n- `a`"],
+  ];
+
+  for (const [name, prompt] of HOSTILE) {
+    test(`a hostile approval prompt (${name}) stays a single literal pre`, async () => {
+      rig = makeRig();
+      await rig.startServe();
+      const { client, threadId } = await session("sess-ap-9001", "release");
+      const decision = client.requestApproval(prompt, 10_000);
+      const buttons = await untilButtons(threadId);
+      const html = buttons.message.text;
+      expect(buttons.message.parseMode).toBe("HTML");
+      expect(html.match(/<pre>/g)).toHaveLength(1);
+      expect(html.match(/<\/pre>/g)).toHaveLength(1);
+      expect(html.startsWith("Approval needed:\n<pre>")).toBe(true);
+      expect(html.endsWith("</pre>")).toBe(true);
+      expect(html).not.toContain("<a ");
+      expect(html).not.toContain("<b>");
+      expect(html).not.toContain("<i>");
+      const checked = checkTelegramHtml(html);
+      expect(checked.ok).toBe(true);
+      if (checked.ok) {
+        expect(checked.text).toContain("[x](https://evil.example)");
+        expect(checked.text).toContain("**b**");
+      }
+      press(threadId, buttons.deny, OWNER_ID, buttons.message.messageId);
+      expect(await decision).toBe("deny");
+    });
+  }
+
+  test("asCodeBlock gives one pre for any prompt, also when it is long enough to split", () => {
+    const prompts = [
+      "`".repeat(16),
+      "`".repeat(40) + " [x](https://evil.example)",
+      "~".repeat(40) + "\n" + "`".repeat(9) + "\n**b**",
+      "".padEnd(10, " "),
+      "line [x](https://evil.example) **b** `c`\n".repeat(400),
+    ];
+    for (const prompt of prompts) {
+      const parts = formatReply(`Approval needed:\n${asCodeBlock(prompt)}`);
+      expect(parts.length).toBeGreaterThan(0);
+      for (const part of parts) {
+        const html = renderTelegramHtml(part);
+        expect(checkTelegramHtml(html).ok).toBe(true);
+        expect(html.match(/<pre>/g)).toHaveLength(1);
+        expect(html).not.toContain("<a ");
+        expect(html).not.toContain("<b>");
+        expect(html.endsWith("</pre>") || /<\/pre>$/.test(html.trimEnd())).toBe(true);
+      }
+    }
   });
 
   test("Deny denies", async () => {

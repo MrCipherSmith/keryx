@@ -89,6 +89,8 @@ export interface SendMessageParams {
   text: string;
   messageThreadId?: number;
   inlineKeyboard?: InlineKeyboard;
+  /** Left out: plain text. "HTML": `text` is Telegram HTML (see `format-html.ts`). */
+  parseMode?: "HTML";
 }
 
 export interface BotApi {

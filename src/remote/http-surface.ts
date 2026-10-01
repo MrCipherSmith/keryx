@@ -548,7 +548,8 @@ export class RemoteHttpSurface {
       expiresAt,
       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),
     });
-    const sent = await hub.send(sessionId, `Approval needed:\n${redactSensitiveText(value.prompt)}`, {
+    // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.
+    const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}`, {
       keyboard: [
         [
           { text: "Allow", callback_data: approvalCallbackData(approvalId, "allow") },
@@ -786,4 +787,20 @@ export class RemoteHttpSurface {
       }
     }
   }
+}
+
+/** The longest backtick run left in a code block: the fence is one longer, and stays under the renderer's fence limit. */
+const MAX_BACKTICK_RUN = 8;
+
+/**
+ * `text` in a fenced block that renders as one literal `<pre>` whatever `text` holds.
+ * The fence is one backtick longer than any run inside, so no line can close it; a
+ * run too long for a fence the renderer accepts is cut with zero-width spaces first.
+ */
+export function asCodeBlock(text: string): string {
+  // An empty block would not render as a pre, so a blank prompt shows a placeholder.
+  const safe = (text.trim().length === 0 ? "(empty)" : text).replace(/\r\n?/g, "\n").replace(/`{9,}/g, (run) => (run.match(/`{1,8}/g) as string[]).join("​"));
+  const longest = Math.max(0, ...(safe.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = "`".repeat(Math.max(3, Math.min(longest, MAX_BACKTICK_RUN) + 1));
+  return `${fence}\n${safe}\n${fence}`;
 }

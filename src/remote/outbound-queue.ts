@@ -10,6 +10,11 @@
 //   - Any other 4xx (the topic is gone, the bot was kicked) will never succeed:
 //     the entry is dropped and reported rather than blocking the queue forever.
 //
+// Text is stored as the plain Markdown-ish text `formatReply` produced and rendered
+// to Telegram HTML only when it is sent (`sendHtml`). If Telegram refuses the markup
+// (400 "can't parse entities") that one part is resent once as plain text and
+// `onFallback` records it; a restart never sees stale HTML on disk.
+//
 // A crash between a successful send and its ack resends that one message on the
 // next start. Telegram offers no idempotency key, so outbound is at-least-once.
 
@@ -19,6 +24,7 @@ import { redactSensitiveText } from "../security/service";
 import { DurableLog, type LoadReport } from "./durable-log";
 import { ensureRemoteDir, OUTBOUND_FILE } from "./paths";
 import { formatReply } from "./format";
+import { sendHtml } from "./format-html";
 import { type BotApi, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 export const OUTBOUND_MAX_ENTRIES = 200;
@@ -56,6 +62,8 @@ export interface OutboundQueueOptions {
   maxEntries?: number;
   /** Called for an entry that was discarded: bound overflow or a permanent refusal. */
   onDrop?: (entry: OutboundEntry, reason: string) => void;
+  /** Called when Telegram refused the HTML of an entry and it was resent as plain text. */
+  onFallback?: (entry: OutboundEntry) => void;
   /** Default retry delay for a network or server error. */
   retryDelayMs?: number;
 }
@@ -87,6 +95,7 @@ export class OutboundQueue {
   private readonly now: () => number;
   private readonly log: DurableLog<OutboundEntry>;
   private readonly onDrop: (entry: OutboundEntry, reason: string) => void;
+  private readonly onFallback: (entry: OutboundEntry) => void;
   private readonly retryDelayMs: number;
   private blockedUntil = 0;
   private flushing: Promise<FlushResult> | undefined;
@@ -95,6 +104,7 @@ export class OutboundQueue {
     this.api = options.api;
     this.now = options.now;
     this.onDrop = options.onDrop ?? (() => undefined);
+    this.onFallback = options.onFallback ?? (() => undefined);
     this.retryDelayMs = options.retryDelayMs ?? 5_000;
     const directory = ensureRemoteDir(options.dir);
     this.log = new DurableLog<OutboundEntry>({
@@ -177,12 +187,16 @@ export class OutboundQueue {
         return { sent, dropped, remaining: this.log.size, retryInMs: wait, stoppedBy: "rate limited" };
       }
       try {
-        await this.api.sendMessage({
-          chatId: entry.chatId,
-          text: entry.text,
-          ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
-          ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
-        });
+        await sendHtml(
+          this.api,
+          {
+            chatId: entry.chatId,
+            text: entry.text,
+            ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
+            ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
+          },
+          () => this.onFallback(entry),
+        );
         this.log.ack(entry.id);
         sent += 1;
       } catch (error) {
