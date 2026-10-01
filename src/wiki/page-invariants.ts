@@ -11,11 +11,17 @@
 //   and some entries are attestations written by tools);
 // - `Version` is never lower than the newest changelog entry's version;
 // - a front-matter key the page had is never dropped;
-// - a managed Reference block the page had is never dropped.
+// - a managed Reference block the page had is never dropped;
+// - no section is duplicated by a write.
 //
 // Writers keep them by construction (`preserveEnrichInvariants`,
 // `mergeGeneratedSections`) and then check: a page that still violates one is
 // not written.
+//
+// Every reader here works on LF text and skips fenced code blocks, so a CRLF
+// page or a `## Changelog` shown inside a fence is read for what it is; the
+// writers hand the result back in the page's own line endings (review r1
+// L-004, L-005, T-003).
 
 import { findManagedBlock, replaceManagedBlock } from "./managed-block";
 
@@ -35,14 +41,15 @@ export interface InvariantViolation {
 export interface ChangelogEntry {
   /** The entry as written, trimmed: its bullet line plus continuation lines. */
   text: string;
-  /** The `x.y.z` the entry starts with, when it has one. */
+  /** The version the entry starts with, when it has one. */
   version: string | null;
 }
 
 const CHANGELOG_HEADING = /^##\s+Changelog\s*$/i;
 const SECTION_HEADING = /^#{1,2}\s/;
+const H2 = /^##\s+(.+?)\s*$/;
 const ENTRY_START = /^[-*]\s+/;
-const ENTRY_VERSION = /^[-*]\s+v?(\d+\.\d+\.\d+)\b/;
+const ENTRY_VERSION = /^[-*]\s+v?(\d+\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?)\b/;
 /** Legacy pages carry metadata as plain `Key: value` lines under the H1. */
 const LEGACY_META_KEYS = new Set([
   "title",
@@ -58,15 +65,60 @@ const LEGACY_META_KEYS = new Set([
 ]);
 
 // ---------------------------------------------------------------------------
+// Text: LF lines, and which of them sit inside a fenced code block.
+// ---------------------------------------------------------------------------
+
+function toLf(text: string): string {
+  return text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+}
+
+/** `lfText` in the line endings `like` uses. */
+function inEolOf(like: string, lfText: string): string {
+  return like.includes("\r\n") ? lfText.replace(/\n/g, "\r\n") : lfText;
+}
+
+function lines(markdown: string): string[] {
+  return toLf(markdown).split("\n");
+}
+
+/** True for every line inside a ``` / ~~~ fence, the fence lines included. */
+function fencedLines(all: readonly string[]): boolean[] {
+  const mask: boolean[] = [];
+  let open: { char: string; length: number } | null = null;
+  for (const line of all) {
+    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (open === null) {
+      if (fence) open = { char: fence[1]![0]!, length: fence[1]!.length };
+      mask.push(fence !== null);
+      continue;
+    }
+    mask.push(true);
+    if (fence && fence[1]![0] === open.char && fence[1]!.length >= open.length && fence[2]!.trim() === "") {
+      open = null;
+    }
+  }
+  return mask;
+}
+
+/** Index of the first line at or after `from` matching `test` outside any fence. */
+function findLine(all: readonly string[], mask: readonly boolean[], test: (line: string) => boolean, from = 0): number {
+  for (let index = from; index < all.length; index += 1) {
+    if (!mask[index] && test(all[index]!)) return index;
+  }
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
 // Versions.
 // ---------------------------------------------------------------------------
 
+/** `x.y.z`, `x.y` (patch 0) or either with a `-pre`/`+build` suffix (ignored). */
 function versionParts(version: string): [number, number, number] | null {
-  const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version.trim());
-  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+  const match = /^v?(\d+)\.(\d+)(?:\.(\d+))?(?:[-+][0-9A-Za-z.-]+)?$/.exec(version.trim());
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3] ?? 0)] : null;
 }
 
-/** Semver-style compare of `x.y.z`; an unparseable version sorts lowest. */
+/** Semver-style compare; an unparseable version sorts lowest. */
 export function compareVersions(a: string | null, b: string | null): number {
   const left = a === null ? null : versionParts(a);
   const right = b === null ? null : versionParts(b);
@@ -89,10 +141,6 @@ export function bumpPatch(version: string | null): string {
 // between the H1 and the first `##` heading.
 // ---------------------------------------------------------------------------
 
-function lines(markdown: string): string[] {
-  return markdown.replace(/^\uFEFF/, "").split("\n");
-}
-
 /** Line range [start, end) holding the page's metadata, or null. */
 function metadataRange(all: string[]): { start: number; end: number; yaml: boolean } | null {
   let first = 0;
@@ -103,7 +151,7 @@ function metadataRange(all: string[]): { start: number; end: number; yaml: boole
     }
     return null;
   }
-  const firstSection = all.findIndex((line) => /^##\s/.test(line));
+  const firstSection = findLine(all, fencedLines(all), (line) => /^##\s/.test(line));
   return { start: first, end: firstSection < 0 ? all.length : firstSection, yaml: false };
 }
 
@@ -133,14 +181,19 @@ export function pageVersion(markdown: string): string | null {
   return null;
 }
 
-/** Set `Version`, inside the metadata only. A page without one is left as it is. */
-export function setPageVersion(markdown: string, version: string): string {
+/**
+ * Set the Version value inside the metadata only, keeping the key's own
+ * spelling and quoting (`version: "1.0.0"` stays lower-case and quoted). A page
+ * without one is left as it is. Expects LF text.
+ */
+function setPageVersion(markdown: string, version: string): string {
   const all = markdown.split("\n");
   const range = metadataRange(all);
   if (range === null) return markdown;
   for (let index = range.start; index < range.end; index += 1) {
-    if (/^Version:/i.test(all[index]!)) {
-      all[index] = `Version: ${version}`;
+    const match = /^(Version:\s*)(["']?)[^"'\s]*(["']?)(.*)$/i.exec(all[index]!);
+    if (match) {
+      all[index] = `${match[1]}${match[2]}${version}${match[3]}${match[4]}`;
       return all.join("\n");
     }
   }
@@ -151,18 +204,13 @@ export function setPageVersion(markdown: string, version: string): string {
 // Changelog.
 // ---------------------------------------------------------------------------
 
-/** Line range [heading, end) of the `## Changelog` section, or null. */
+/** Line range [heading, end) of the `## Changelog` section outside fences, or null. */
 function changelogRange(all: string[]): { heading: number; end: number } | null {
-  const heading = all.findIndex((line) => CHANGELOG_HEADING.test(line.trim()));
+  const mask = fencedLines(all);
+  const heading = findLine(all, mask, (line) => CHANGELOG_HEADING.test(line.trim()));
   if (heading < 0) return null;
-  let end = all.length;
-  for (let index = heading + 1; index < all.length; index += 1) {
-    if (SECTION_HEADING.test(all[index]!)) {
-      end = index;
-      break;
-    }
-  }
-  return { heading, end };
+  const next = findLine(all, mask, (line) => SECTION_HEADING.test(line), heading + 1);
+  return { heading, end: next < 0 ? all.length : next };
 }
 
 /** The page's changelog entries in page order, or null when it has no section. */
@@ -170,6 +218,7 @@ export function parseChangelog(markdown: string): ChangelogEntry[] | null {
   const all = lines(markdown);
   const range = changelogRange(all);
   if (range === null) return null;
+  const mask = fencedLines(all);
   const entries: ChangelogEntry[] = [];
   let current: string[] | null = null;
   const flush = (): void => {
@@ -178,8 +227,12 @@ export function parseChangelog(markdown: string): ChangelogEntry[] | null {
     entries.push({ text, version: ENTRY_VERSION.exec(text)?.[1] ?? null });
     current = null;
   };
-  for (const line of all.slice(range.heading + 1, range.end)) {
-    if (ENTRY_START.test(line)) {
+  for (let index = range.heading + 1; index < range.end; index += 1) {
+    const line = all[index]!;
+    if (mask[index]) {
+      // A code block inside an entry belongs to it; one between entries is not one.
+      if (current !== null) current.push(line);
+    } else if (ENTRY_START.test(line)) {
       flush();
       current = [line];
     } else if (line.trim() === "") {
@@ -207,26 +260,42 @@ export function nextPageVersion(markdown: string): string {
   return bumpPatch(compareVersions(newest, current) > 0 ? newest : current);
 }
 
-/** Insert `entry` as the newest changelog line, creating the section when missing. */
-export function prependChangelogEntry(markdown: string, entry: string): string {
+/**
+ * Insert `entry` as the newest changelog entry, creating the section when
+ * missing. It goes directly above the first existing entry — never after an
+ * intro sentence or onto the next heading — with a blank line after it only
+ * when the page already separates its entries with one (review r1 L-007).
+ * Expects LF text.
+ */
+function prependChangelogEntry(markdown: string, entry: string): string {
   const all = markdown.split("\n");
   const range = changelogRange(all);
   if (range === null) return `${markdown.replace(/\s+$/, "")}\n\n## Changelog\n\n${entry}\n`;
-  let insert = range.heading + 1;
-  while (insert < all.length && all[insert]!.trim() === "") insert += 1;
-  const nextIsEntry = insert < range.end && ENTRY_START.test(all[insert]!);
-  // Keep the page's own spacing: a blank line between entries when it uses one.
-  const spaced = nextIsEntry && insert + 1 < all.length && all[insert + 1]!.trim() === "";
-  all.splice(insert, 0, ...(spaced ? [entry, ""] : [entry]));
+  const mask = fencedLines(all);
+  const first = findLine(all, mask, (line) => ENTRY_START.test(line), range.heading + 1);
+  if (first >= 0 && first < range.end) {
+    let after = first + 1;
+    while (after < range.end && all[after]!.trim() !== "" && !ENTRY_START.test(all[after]!)) after += 1;
+    let next = after;
+    while (next < range.end && all[next]!.trim() === "") next += 1;
+    const spaced = after < range.end && all[after]!.trim() === "" && next < range.end && ENTRY_START.test(all[next]!);
+    all.splice(first, 0, ...(spaced ? [entry, ""] : [entry]));
+    return all.join("\n");
+  }
+  // No entry yet: after whatever the section says, set off by blank lines.
+  let insert = range.end;
+  while (insert > range.heading + 1 && all[insert - 1]!.trim() === "") insert -= 1;
+  // A blank line after the entry only if one is not there already.
+  all.splice(insert, 0, "", entry, ...(insert < all.length && all[insert]!.trim() !== "" ? [""] : []));
   return all.join("\n");
 }
 
 /**
  * Replace `target`'s changelog with `source`'s, byte for byte: whatever the
  * target says in its own changelog (a model's rewrite, nothing at all) is
- * discarded. When `source` has none, the target's is removed too.
+ * discarded. When `source` has none, the target's is removed too. Expects LF.
  */
-export function restoreChangelog(target: string, source: string): string {
+function restoreChangelog(target: string, source: string): string {
   const sourceLines = source.split("\n");
   const sourceRange = changelogRange(sourceLines);
   const section = sourceRange === null ? null : sourceLines.slice(sourceRange.heading, sourceRange.end);
@@ -240,6 +309,54 @@ export function restoreChangelog(target: string, source: string): string {
   }
   if (section === null) return target;
   return `${target.replace(/\s+$/, "")}\n\n${section.join("\n")}\n`;
+}
+
+// ---------------------------------------------------------------------------
+// Sections.
+// ---------------------------------------------------------------------------
+
+interface Section {
+  heading: string;
+  /** Line index of the heading in the LF text it was read from. */
+  start: number;
+  /** Lines from the heading to the line before the next heading, trailing blanks dropped. */
+  lines: string[];
+}
+
+function sectionsOf(markdown: string): Section[] {
+  const all = lines(markdown);
+  const mask = fencedLines(all);
+  const sections: Section[] = [];
+  for (let index = 0; index < all.length; index += 1) {
+    const match = mask[index] ? null : H2.exec(all[index]!);
+    if (!match) continue;
+    let end = findLine(all, mask, (line) => SECTION_HEADING.test(line), index + 1);
+    if (end < 0) end = all.length;
+    const body = all.slice(index, end);
+    while (body.length > 1 && body[body.length - 1]!.trim() === "") body.pop();
+    sections.push({ heading: match[1]!, start: index, lines: body });
+  }
+  return sections;
+}
+
+/**
+ * The generator's Reference heading, and the shortened `## Reference` an
+ * enricher leaves (six pages of one real wiki). Nothing looser: a hand-written
+ * `## Reference implementation notes` is prose, not the generated section
+ * (review r1 L-006).
+ */
+function isReferenceHeading(heading: string): boolean {
+  return /^reference(\s*\(from code graph\))?$/i.test(heading.trim());
+}
+
+/** `##` headings by count; both Reference spellings count as one heading. */
+function sectionCounts(markdown: string): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const section of sectionsOf(markdown)) {
+    const heading = isReferenceHeading(section.heading) ? "Reference" : section.heading;
+    counts.set(heading, (counts.get(heading) ?? 0) + 1);
+  }
+  return counts;
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +395,7 @@ export function checkPageInvariants(before: string, after: string): InvariantVio
     }
   }
 
-  if (findManagedBlock(before).kind === "present" && findManagedBlock(after).kind !== "present") {
+  if (findManagedBlock(toLf(before)).kind === "present" && findManagedBlock(toLf(after)).kind !== "present") {
     violations.push({ kind: "managed-block-dropped", detail: "the managed Reference block (keryx:reference markers) was dropped or damaged" });
   }
 
@@ -289,16 +406,6 @@ export function checkPageInvariants(before: string, after: string): InvariantVio
     }
   }
   return violations;
-}
-
-/** `##` headings by count; every Reference variant counts as one heading. */
-function sectionCounts(markdown: string): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const match of markdown.matchAll(/^##\s+(.+?)\s*$/gm)) {
-    const heading = /^reference\b/i.test(match[1]!) ? "Reference" : match[1]!;
-    counts.set(heading, (counts.get(heading) ?? 0) + 1);
-  }
-  return counts;
 }
 
 export function describeViolations(violations: readonly InvariantViolation[]): string {
@@ -317,7 +424,7 @@ export function describeViolations(violations: readonly InvariantViolation[]): s
  * merely contains code blocks is returned unchanged.
  */
 export function unwrapFencedReply(reply: string): string {
-  const trimmed = reply.trim();
+  const trimmed = toLf(reply).trim();
   const open = /^```(?:markdown|md)?[ \t]*\n/i.exec(trimmed);
   if (!open || !/\n```[ \t]*$/.test(trimmed)) return reply;
   const inner = trimmed.slice(open[0].length, trimmed.lastIndexOf("\n```"));
@@ -327,58 +434,38 @@ export function unwrapFencedReply(reply: string): string {
 }
 
 function leadingYamlBlock(markdown: string): string | null {
-  const text = markdown.replace(/^\uFEFF/, "");
-  if (!text.startsWith("---\n")) return null;
-  const close = text.indexOf("\n---", 3);
+  if (!markdown.startsWith("---\n")) return null;
+  const close = markdown.indexOf("\n---", 3);
   if (close < 0) return null;
-  const lineEnd = text.indexOf("\n", close + 4);
-  return text.slice(0, lineEnd < 0 ? text.length : lineEnd + 1);
+  const lineEnd = markdown.indexOf("\n", close + 4);
+  return markdown.slice(0, lineEnd < 0 ? markdown.length : lineEnd + 1);
 }
 
 /**
  * Make an enriched page keep everything that is not prose, from `original`:
  * its front matter (Status included), its managed Reference block, and its
  * changelog byte for byte, plus one new entry for this write and the Version
- * that entry names. The model only ever changes prose.
+ * that entry names. The model only ever changes prose. The result uses the
+ * original's line endings.
  */
 export function preserveEnrichInvariants(original: string, enriched: string, entryNote: string): string {
-  let next = enriched;
-  const originalMeta = leadingYamlBlock(original);
+  const source = toLf(original);
+  let next = toLf(enriched);
+  const originalMeta = leadingYamlBlock(source);
   const enrichedMeta = leadingYamlBlock(next);
   if (originalMeta !== null && enrichedMeta !== null) {
-    next = `${originalMeta}${next.replace(/^\uFEFF/, "").slice(enrichedMeta.length)}`;
+    next = `${originalMeta}${next.slice(enrichedMeta.length)}`;
   }
 
-  const block = findManagedBlock(original);
+  const block = findManagedBlock(source);
   if (block.kind === "present" && findManagedBlock(next).kind === "present") {
     next = replaceManagedBlock(next, block.block.content) ?? next;
   }
 
-  next = restoreChangelog(next, original);
-  const version = nextPageVersion(original);
+  next = restoreChangelog(next, source);
+  const version = nextPageVersion(source);
   next = setPageVersion(next, version);
-  return prependChangelogEntry(next, `- ${version} - ${entryNote}`);
-}
-
-interface Section {
-  heading: string;
-  /** Lines from the heading to the line before the next `##` heading, trailing blanks dropped. */
-  lines: string[];
-}
-
-function sectionsOf(markdown: string): Section[] {
-  const all = markdown.split("\n");
-  const sections: Section[] = [];
-  for (let index = 0; index < all.length; index += 1) {
-    const match = /^##\s+(.+?)\s*$/.exec(all[index]!);
-    if (!match) continue;
-    let end = index + 1;
-    while (end < all.length && !SECTION_HEADING.test(all[end]!)) end += 1;
-    const body = all.slice(index, end);
-    while (body.length > 1 && body[body.length - 1]!.trim() === "") body.pop();
-    sections.push({ heading: match[1]!, lines: body });
-  }
-  return sections;
+  return inEolOf(original, prependChangelogEntry(next, `- ${version} - ${entryNote}`));
 }
 
 /**
@@ -418,7 +505,7 @@ function withAddedLines(fresh: readonly string[], existingBody: readonly string[
 
 /** Sections the page itself declares generator-owned ("regenerated by `--force`"). */
 function isDeclaredGenerated(heading: string): boolean {
-  return /^reference\b/i.test(heading) || /^related wiki$/i.test(heading);
+  return isReferenceHeading(heading) || /^related wiki$/i.test(heading);
 }
 
 /**
@@ -426,7 +513,8 @@ function isDeclaredGenerated(heading: string): boolean {
  * keeping every other byte of `existing`: front matter, prose sections, the
  * changelog. A managed Reference block is replaced inside its markers. Returns
  * `existing` unchanged when no generated section differs; otherwise the result
- * carries one new changelog entry and the Version it names.
+ * carries one new changelog entry and the Version it names, in the existing
+ * page's line endings.
  *
  * Reference and Related Wiki are regenerated on every page: the page text
  * itself declares them generator-owned. The data sections of a map page
@@ -439,21 +527,25 @@ function isDeclaredGenerated(heading: string): boolean {
  * lost prose is not.
  */
 export function mergeGeneratedSections(existing: string, generated: string, entryNote: string): string {
-  const generatedSections = sectionsOf(generated);
-  const fresh = new Map(generatedSections.map((section) => [section.heading.toLowerCase(), section]));
-  const enriched = sectionsOf(existing).some(
+  const source = toLf(existing);
+  const generatedLf = toLf(generated);
+  const fresh = new Map(sectionsOf(generatedLf).map((section) => [section.heading.toLowerCase(), section]));
+  const enriched = sectionsOf(source).some(
     (section) => !fresh.has(section.heading.toLowerCase()) && !/^changelog$/i.test(section.heading),
   );
-  let next = existing;
-  for (const heading of generatedSectionHeadings(generated)) {
+  let next = source;
+  for (const heading of generatedSectionHeadings(generatedLf)) {
     const replacement = fresh.get(heading.toLowerCase())!;
+    const sameHeading = isReferenceHeading(heading)
+      ? (text: string): boolean => isReferenceHeading(text)
+      : (text: string): boolean => text.toLowerCase() === heading.toLowerCase();
+    const current = sectionsOf(next).find((section) => sameHeading(section.heading));
     if (!isDeclaredGenerated(heading)) {
       if (enriched) continue;
-      const current = sectionsOf(next).find((section) => section.heading.toLowerCase() === heading.toLowerCase());
       if (current?.lines.some((line) => /^###\s/.test(line))) continue;
     }
     const block = findManagedBlock(next);
-    if (/^reference\b/i.test(heading) && block.kind === "present") {
+    if (isReferenceHeading(heading) && block.kind === "present") {
       // A block edited by hand is left alone, as `wiki refresh` does without --force.
       if (!block.block.handEdited && block.block.content.trim() !== replacement.lines.join("\n").trim()) {
         next = replaceManagedBlock(next, replacement.lines.join("\n")) ?? next;
@@ -461,26 +553,12 @@ export function mergeGeneratedSections(existing: string, generated: string, entr
       continue;
     }
     const all = next.split("\n");
-    // Reference is matched loosely, as `managed-block.ts` does: an enricher
-    // shortens "Reference (from code graph)" to "Reference" (six pages of one
-    // real wiki), and an exact match then appended a second Reference section.
-    const sameHeading = /^reference\b/i.test(heading)
-      ? (text: string): boolean => /^reference\b/i.test(text)
-      : (text: string): boolean => text.toLowerCase() === heading.toLowerCase();
-    const start = all.findIndex((line) => {
-      const match = /^##\s+(.+?)\s*$/.exec(line);
-      return match !== null && sameHeading(match[1]!);
-    });
-    if (start >= 0) {
-      let end = start + 1;
-      while (end < all.length && !SECTION_HEADING.test(all[end]!)) end += 1;
-      let contentEnd = end;
-      while (contentEnd > start + 1 && all[contentEnd - 1]!.trim() === "") contentEnd -= 1;
+    if (current) {
       const regenerated = /^related wiki$/i.test(heading)
-        ? withAddedLines(replacement.lines, all.slice(start + 1, contentEnd))
+        ? withAddedLines(replacement.lines, current.lines.slice(1))
         : replacement.lines;
-      if (all.slice(start, contentEnd).join("\n") === regenerated.join("\n")) continue;
-      all.splice(start, contentEnd - start, ...regenerated);
+      if (current.lines.join("\n") === regenerated.join("\n")) continue;
+      all.splice(current.start, current.lines.length, ...regenerated);
       next = all.join("\n");
       continue;
     }
@@ -493,7 +571,7 @@ export function mergeGeneratedSections(existing: string, generated: string, entr
       next = all.join("\n");
     }
   }
-  if (next === existing) return existing;
-  const version = nextPageVersion(existing);
-  return prependChangelogEntry(setPageVersion(next, version), `- ${version} - ${entryNote}`);
+  if (next === source) return existing;
+  const version = nextPageVersion(source);
+  return inEolOf(existing, prependChangelogEntry(setPageVersion(next, version), `- ${version} - ${entryNote}`));
 }

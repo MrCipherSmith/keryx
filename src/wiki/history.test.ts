@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { mergeWikiConfig } from "./config";
@@ -10,6 +10,7 @@ import {
   pageHistoryDir,
   parsePageHistoryIndex,
   readPageHistory,
+  readWikiRuns,
   renderPageHistoryIndex,
   restoreWikiPage,
   restoreWikiRun,
@@ -20,6 +21,10 @@ import {
 
 let root: string;
 let clock: number;
+
+// A 0o444 page is only unwritable for a non-root user on a POSIX filesystem;
+// as root, or on Windows, the read-only tests would assert nothing (review r1 T-007).
+const canMakeReadOnly = process.platform !== "win32" && process.getuid?.() !== 0;
 
 function ctx(command: string, keep?: number): WikiWriteContext {
   return createWikiWriteContext(root, command, {
@@ -160,7 +165,7 @@ describe("writeWikiPage", () => {
     expect(await live("components/a.md")).toBe("one\n");
   });
 
-  test("a read-only page is refused, not replaced, and the history is left as it was", async () => {
+  test.skipIf(!canMakeReadOnly)("a read-only page is refused, not replaced, and the history is left as it was", async () => {
     await seed("components/a.md", "one\n");
     await writeWikiPage(ctx("wiki enrich"), wikiPath("components/a.md"), "two\n");
     const before = await readFile(path.join(pageHistoryDir(root, "components/a.md"), "index.md"), "utf8");
@@ -176,7 +181,7 @@ describe("writeWikiPage", () => {
     }
   });
 
-  test("a failed write never leaves the index pointing at a pruned (deleted) version file", async () => {
+  test.skipIf(!canMakeReadOnly)("a failed write never leaves the index pointing at a pruned (deleted) version file", async () => {
     await seed("components/a.md", "v1\n");
     await writeWikiPage(ctx("wiki enrich", 2), wikiPath("components/a.md"), "v2\n");
     await chmod(wikiPath("components/a.md"), 0o444);
@@ -337,6 +342,106 @@ describe("restore", () => {
     await writeFile(path.join(pageHistoryDir(root, "components/a.md"), history!.rows[1]!.file), "tampered\n", "utf8");
     await expect(restoreWikiPage(ctx("wiki restore"), "components/a.md", 1)).rejects.toThrow("sha256");
     expect(await live("components/a.md")).toBe("v2\n");
+  });
+});
+
+describe("review round 1 fixes", () => {
+  const indexOf = (page: string): string => path.join(pageHistoryDir(root, page), "index.md");
+
+  test("S-001: a crafted index row naming a file outside the history folder is neither pruned nor restored", async () => {
+    await seed("components/a.md", "v1\n");
+    await writeWikiPage(ctx("wiki enrich"), wikiPath("components/a.md"), "v2\n");
+    await writeFile(path.join(root, "victim.md"), "must survive\n", "utf8");
+    await writeFile(path.join(root, "secret.md"), "secret\n", "utf8");
+    // Point v1 at a file two levels above the history folder.
+    const index = await readFile(indexOf("components/a.md"), "utf8");
+    const crafted = index.replace(/\[v0001\]\([^)]+\)/, "[v0001](../../../../../victim.md)");
+    await writeFile(indexOf("components/a.md"), crafted, "utf8");
+
+    // keep=1 would prune v1 on this write: the traversal row must not be deleted.
+    await writeWikiPage(ctx("wiki enrich", 1), wikiPath("components/a.md"), "v3\n");
+    expect(await readFile(path.join(root, "victim.md"), "utf8")).toBe("must survive\n");
+
+    const history = await readPageHistory(root, "components/a.md");
+    expect(history!.rows.find((row) => row.version === 1)!.file).not.toContain("victim");
+    await expect(restoreWikiPage(ctx("wiki restore"), "components/a.md", 1)).rejects.toThrow("no stored copy");
+  });
+
+  test("S-006: a command label cannot break the index table or open a code span", () => {
+    const label = createWikiWriteContext(root, "wiki enrich --prompt `a | b`\nnext").command;
+    expect(label).toBe("wiki enrich --prompt 'a b' next");
+  });
+
+  test("S-002: a page key with .. segments is refused before any path is built", async () => {
+    await expect(restoreWikiPage(ctx("wiki restore"), "../../secret.md")).rejects.toThrow("not a wiki page path");
+    expect(() => pageHistoryDir(root, "components/../../x.md")).toThrow("not a wiki page path");
+    expect(() => pageHistoryDir(root, "/etc/passwd")).toThrow("not a wiki page path");
+  });
+
+  test("S-003: the history tree ignores itself for git, whatever the project's gitignore says", async () => {
+    await writeWikiPage(ctx("wiki collect"), wikiPath("components/a.md"), "a\n");
+    expect(await readFile(path.join(wikiHistoryRoot(root), ".gitignore"), "utf8")).toMatch(/^\*$/m);
+  });
+
+  test("S-004: the index is bounded; old rows go once their copies are pruned", async () => {
+    await seed("components/a.md", "0\n");
+    for (let index = 1; index <= 10; index += 1) {
+      await writeWikiPage({ ...ctx("wiki enrich", 3), maxIndexRows: 6 }, wikiPath("components/a.md"), `${index}\n`);
+    }
+    const history = await readPageHistory(root, "components/a.md");
+    expect(history!.rows.length).toBe(6);
+    expect(history!.rows[0]!.version).toBe(11);
+    expect(history!.rows.filter((row) => row.file.endsWith(".md")).length).toBe(3);
+  });
+
+  test("S-004: runs.jsonl is trimmed to its newest half once it passes 2 MB", async () => {
+    await mkdir(wikiHistoryRoot(root), { recursive: true });
+    const filler = `${JSON.stringify({ runId: "run-old", command: "x", page: "components/old.md", at: "2026-01-01T00:00:00.000Z", action: "updated" })}\n`;
+    await writeFile(path.join(wikiHistoryRoot(root), "runs.jsonl"), filler.repeat(Math.ceil((2 * 1024 * 1024) / filler.length) + 10), "utf8");
+
+    const run = ctx("wiki enrich");
+    await writeWikiPage(run, wikiPath("components/a.md"), "a\n");
+
+    const { size } = await stat(path.join(wikiHistoryRoot(root), "runs.jsonl"));
+    expect(size).toBeLessThan(2 * 1024 * 1024);
+    expect((await listWikiRuns(root)).some((entry) => entry.runId === run.runId)).toBe(true);
+  });
+
+  test("L-002: restore --run reports a page it cannot restore and still restores the rest", async () => {
+    await seed("components/a.md", "a before\n");
+    await seed("components/b.md", "b before\n");
+    const run = ctx("wiki enrich");
+    await writeWikiPage(run, wikiPath("components/a.md"), "a after\n");
+    await writeWikiPage(run, wikiPath("components/b.md"), "b after\n");
+    // Prune a's pre-run copy by writing it twice more with keep=1, then put the run's bytes back.
+    await writeWikiPage(ctx("wiki enrich", 1), wikiPath("components/a.md"), "a later\n");
+    await writeWikiPage(ctx("wiki enrich", 1), wikiPath("components/a.md"), "a after\n");
+
+    const result = await restoreWikiRun(ctx("wiki restore"), run.runId, { force: true });
+
+    expect(result.conflicts.map((conflict) => conflict.page)).toEqual(["components/a.md"]);
+    expect(result.restored.map((outcome) => outcome.page)).toEqual(["components/b.md"]);
+    expect(await live("components/b.md")).toBe("b before\n");
+  });
+
+  test.skipIf(!canMakeReadOnly)("L-009: a page the run logged but could not write is a conflict on restore, not an abort", async () => {
+    await seed("components/a.md", "a\n");
+    await seed("components/b.md", "b before\n");
+    const run = ctx("wiki enrich");
+    await writeWikiPage(run, wikiPath("components/b.md"), "b after\n");
+    await chmod(wikiPath("components/a.md"), 0o444);
+    try {
+      await expect(writeWikiPage(run, wikiPath("components/a.md"), "a after\n")).rejects.toThrow();
+    } finally {
+      await chmod(wikiPath("components/a.md"), 0o644);
+    }
+    expect((await readWikiRuns(root)).filter((entry) => entry.runId === run.runId).map((entry) => entry.page).sort())
+      .toEqual(["components/a.md", "components/b.md"]);
+
+    const result = await restoreWikiRun(ctx("wiki restore"), run.runId);
+    expect(result.restored.map((outcome) => outcome.page)).toEqual(["components/b.md"]);
+    expect(result.conflicts.map((conflict) => conflict.page)).toEqual(["components/a.md"]);
+    expect(await live("components/a.md")).toBe("a\n");
   });
 });
 

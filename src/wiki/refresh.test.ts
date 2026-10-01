@@ -164,6 +164,48 @@ describe("refreshPages", () => {
     expect(changelogLines[0]).toContain("1.0.1 - Reference refreshed");
   });
 
+  test("T-009 flow 367: a page whose Version is behind its newest changelog entry is refreshed to a Version above that entry", async () => {
+    const { cwd, pagePath } = await project(
+      [
+        "# src/mod",
+        "Version: 1.0.0",
+        "Type: component",
+        "Status: accepted",
+        "",
+        "## Overview",
+        "",
+        "Prose the machine must never touch.",
+        "",
+        "## Reference (from code graph)",
+        "",
+        "### Public API",
+        "",
+        "- stale",
+        "",
+        "## Related Wiki",
+        "",
+        "- [Index](../index.md)",
+        "",
+        "## Changelog",
+        "",
+        "- 1.3.0 - Edited by a tool that did not bump Version.",
+        "- 1.0.0 - Written by hand.",
+        "",
+      ].join("\n"),
+    );
+    await migrateMarkers(cwd);
+
+    const result = await refreshPages({ cwd, head: { kind: "resolved" as const, commit: SHA }, checkStaleness: FRESH });
+
+    expect(result.refreshed).toBe(1);
+    const after = await readFile(pagePath, "utf8");
+    // One patch above the changelog's 1.3.0, not above the stale Version 1.0.0.
+    expect(after).toContain("Version: 1.3.1");
+    expect(after).not.toContain("Version: 1.0.1");
+    expect(after).toContain("- 1.3.1 - Reference refreshed");
+    expect(after).toContain("- 1.3.0 - Edited by a tool that did not bump Version.");
+  });
+
   test("AC9: an already-current page is not rewritten at all", async () => {
     const { cwd, pagePath } = await project();
     await migrateMarkers(cwd);

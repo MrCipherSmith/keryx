@@ -1823,7 +1823,19 @@ async function validatePageInvariants(
       });
     }
 
-    const previous = await readPreviousVersion(cwd, toPosixPath(page.relativePath), content).catch(() => null);
+    let previous: string | null;
+    try {
+      previous = await readPreviousVersion(cwd, toPosixPath(page.relativePath), content);
+    } catch (error) {
+      // An unreadable history is a defect of its own, not the same fact as
+      // "no history yet" (review r1 L-010).
+      issues.push({
+        page: page.relativePath,
+        kind: "metadata",
+        message: `page history unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      });
+      continue;
+    }
     if (previous === null) continue;
     for (const violation of checkPageInvariants(previous, content)) {
       if (violation.kind === "version-behind-changelog") continue; // reported above

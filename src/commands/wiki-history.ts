@@ -59,8 +59,13 @@ export async function runHistoryCommand(args: string[]): Promise<void> {
       return;
     }
     process.stdout.write(await readFile(path.join(pageHistoryDir(cwd, page), "index.md"), "utf8"));
-  } catch {
-    console.error(`no history recorded for ${page} — keryx records one the first time it writes the page`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(
+      message.startsWith("not a wiki page path") || message.startsWith("history index")
+        ? `wiki history: ${message}`
+        : `no history recorded for ${page} — keryx records one the first time it writes the page`,
+    );
     process.exitCode = 1;
   }
 }

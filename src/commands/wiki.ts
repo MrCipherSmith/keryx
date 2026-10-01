@@ -934,7 +934,8 @@ History:
   enrich, refresh, verify, migrate-markers, restore, and keryx sync --apply) first records the page's
   current bytes in .metaproject/data/gdwiki/history/<page>/ — plain .md files plus an
   index.md — and prints the run id to undo it with. Retention: the newest 20 stored
-  versions per page (history.keep in .metaproject/wiki.config.json).
+  versions per page (history.keep in .metaproject/wiki.config.json); the folder
+  ignores itself for git.
   Not covered: an edit made outside keryx is only captured when the next keryx write
   to that page finds it (two hand edits in a row keep only the last); a script that
   writes pages directly is the same case; history is local to this machine, and

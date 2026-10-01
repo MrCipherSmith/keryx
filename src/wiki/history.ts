@@ -22,7 +22,7 @@
 // and the wiki index. Nothing here archives: every version is an `.md` file.
 
 import { createHash, randomBytes } from "node:crypto";
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, toPosix, withFileLock, writeFileAtomic } from "../lib/fs";
 import { loadWikiConfig } from "./config";
@@ -32,6 +32,11 @@ export const DEFAULT_HISTORY_KEEP = 20;
 const INDEX_FILE = "index.md";
 const RUNS_FILE = "runs.jsonl";
 const PRUNED_FILE = "(pruned)";
+const INVALID_FILE = "(invalid)";
+/** Index rows kept per page; rows past it are dropped once their copy is pruned. */
+const MAX_INDEX_ROWS = 200;
+/** `runs.jsonl` is trimmed to its newest half once it passes this size. */
+const MAX_RUNS_BYTES = 2 * 1024 * 1024;
 const NO_FILE = "-";
 const DELETED_SHA = "(deleted)";
 const NO_RUN = "-";
@@ -44,6 +49,8 @@ export interface WikiWriteContext {
   runId: string;
   /** Stored versions kept per page; older version files are pruned. */
   keep?: number;
+  /** Index rows kept per page (default MAX_INDEX_ROWS). */
+  maxIndexRows?: number;
   now?: () => Date;
 }
 
@@ -99,8 +106,9 @@ export function createWikiWriteContext(
   options: { keep?: number; now?: () => Date } = {},
 ): WikiWriteContext {
   const now = options.now ?? (() => new Date());
-  // The label lands in a markdown table cell: no pipes, no line breaks, bounded.
-  const label = command.replace(/[|\r\n]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+  // The label lands in a markdown table cell: no pipes, no line breaks, no
+  // backticks to open a code span across cells (review r1 S-006), bounded.
+  const label = command.replace(/[|\r\n]+/g, " ").replace(/`/g, "'").replace(/\s+/g, " ").trim().slice(0, 160);
   return {
     cwd,
     command: label,
@@ -124,12 +132,50 @@ export function wikiPageKey(cwd: string, absolutePath: string): string {
   return toPosix(relative);
 }
 
+/**
+ * A page key is a wiki-relative posix path. One arriving from argv or from
+ * `runs.jsonl` is checked here, because every path below is joined from it: a
+ * `..` segment would point a read, a restore or a delete outside the wiki and
+ * history roots (review r1 S-002).
+ */
+function assertPageKey(page: string): string {
+  const segments = page.split("/");
+  if (
+    page.length === 0 ||
+    page.includes("\\") ||
+    path.isAbsolute(page) ||
+    segments.some((segment) => segment === "" || segment === "." || segment === "..")
+  ) {
+    throw new Error(`not a wiki page path: ${page}`);
+  }
+  return page;
+}
+
 export function pageHistoryDir(cwd: string, page: string): string {
-  return path.join(wikiHistoryRoot(cwd), ...page.replace(/\.md$/i, "").split("/"));
+  return path.join(wikiHistoryRoot(cwd), ...assertPageKey(page).replace(/\.md$/i, "").split("/"));
 }
 
 function pagePath(cwd: string, page: string): string {
-  return path.join(wikiRootPath(cwd), ...page.split("/"));
+  return path.join(wikiRootPath(cwd), ...assertPageKey(page).split("/"));
+}
+
+/** A version file name as keryx writes it: `vNNNN-<timestamp>.md`, nothing else. */
+const VERSION_FILE = /^v\d+-[0-9A-Za-z-]+\.md$/;
+
+/**
+ * The path of one stored version. `file` is read back from an `index.md` that
+ * anyone can edit, so it is held to the shape keryx writes and must resolve
+ * inside the page's history folder — otherwise a crafted row could make a
+ * prune delete, or a restore read, any `.md` file reachable by `..` (review r1
+ * S-001).
+ */
+function versionFilePath(cwd: string, page: string, file: string): string {
+  const dir = pageHistoryDir(cwd, page);
+  const target = path.join(dir, file);
+  if (!VERSION_FILE.test(file) || path.dirname(target) !== dir) {
+    throw new Error(`history index names an invalid version file for ${page}: ${file}`);
+  }
+  return target;
 }
 
 function sha256(content: Buffer): string {
@@ -191,13 +237,16 @@ export function parsePageHistoryIndex(markdown: string, page: string): WikiPageH
     const match = ROW.exec(line);
     if (!match) continue;
     const link = /^\[v\d+\]\((.+)\)$/.exec(match[6]!);
+    const file = link ? link[1]! : match[6]!;
     rows.push({
       version: Number(match[1]),
       at: match[2]!,
       by: match[3]!,
       run: match[4]!,
       sha: match[5]!,
-      file: link ? link[1]! : match[6]!,
+      // Only a name keryx could have written is kept as a file reference; any
+      // other value (a path, a traversal) is treated as no stored copy.
+      file: file.endsWith(".md") && !VERSION_FILE.test(file) ? INVALID_FILE : file,
     });
   }
   rows.sort((a, b) => b.version - a.version);
@@ -269,22 +318,82 @@ async function reconcile(cwd: string, page: string, live: Buffer | null, liveSee
  * is deleted here: the caller removes them only after the new index is on disk,
  * so a write that fails midway never leaves an index pointing at deleted files.
  */
-function planPrune(history: WikiPageHistory, keep: number): { history: WikiPageHistory; files: string[] } {
-  const stored = history.rows.filter((row) => row.file.endsWith(".md"));
-  if (stored.length <= keep) return { history, files: [] };
+function planPrune(
+  history: WikiPageHistory,
+  keep: number,
+  maxRows = MAX_INDEX_ROWS,
+): { history: WikiPageHistory; files: string[] } {
+  const stored = history.rows.filter((row) => VERSION_FILE.test(row.file));
   const drop = new Set(stored.slice(Math.max(1, keep)).map((row) => row.version));
+  const rows = history.rows.map((row) => (drop.has(row.version) ? { ...row, file: PRUNED_FILE } : row));
+  // The index itself is bounded too (review r1 S-004): past MAX_INDEX_ROWS the
+  // oldest rows go, and by then their copies are long pruned.
   return {
-    history: {
-      page: history.page,
-      rows: history.rows.map((row) => (drop.has(row.version) ? { ...row, file: PRUNED_FILE } : row)),
-    },
+    history: { page: history.page, rows: rows.slice(0, Math.max(keep + 1, maxRows)) },
     files: history.rows.filter((row) => drop.has(row.version)).map((row) => row.file),
   };
+}
+
+/**
+ * The history tree must never be committed (a commit of it would carry every
+ * enrich run's page copies into the branch), and the project's gitignore block
+ * is only as current as its last `keryx update` (review r1 S-003). So the tree
+ * ignores itself: a `.gitignore` of `*` at its root, written once.
+ */
+async function ensureHistoryRoot(cwd: string): Promise<void> {
+  const root = wikiHistoryRoot(cwd);
+  const ignore = path.join(root, ".gitignore");
+  if (await readBufferOrNull(ignore)) return;
+  await mkdir(root, { recursive: true });
+  await writeFile(ignore, "# keryx wiki page history (flow 367): local undo state, never committed.\n*\n", "utf8");
+}
+
+/** True when `file` exists, is non-empty and its last byte is not `\n`. */
+async function endsWithoutNewline(file: string): Promise<boolean> {
+  let handle;
+  try {
+    handle = await open(file, "r");
+  } catch (error) {
+    if (isNotFound(error)) return false;
+    throw error;
+  }
+  try {
+    const { size } = await handle.stat();
+    if (size === 0) return false;
+    const last = Buffer.alloc(1);
+    await handle.read(last, 0, 1, size - 1);
+    return last[0] !== 0x0a;
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Append one line to `runs.jsonl`. A single short append to a file opened for
+ * appending needs no lock between pages; only trimming does: once the log
+ * passes MAX_RUNS_BYTES it is cut to its newest half under a lock, so it cannot
+ * grow without bound (review r1 S-004). An append racing that rare trim can be
+ * lost; the page's own history index still has its row.
+ */
+async function appendRun(cwd: string, entry: WikiRunEntry): Promise<void> {
+  const root = wikiHistoryRoot(cwd);
+  const file = path.join(root, RUNS_FILE);
+  // After a torn last line (an append cut short) the file does not end in a
+  // newline, and this entry would be glued onto the fragment and lost with it.
+  const lead = (await endsWithoutNewline(file)) ? "\n" : "";
+  await appendFile(file, `${lead}${JSON.stringify(entry)}\n`, "utf8");
+  if ((await stat(file)).size <= MAX_RUNS_BYTES) return;
+  await withFileLock(path.join(root, ".runs.lock"), async () => {
+    if ((await stat(file)).size <= MAX_RUNS_BYTES) return;
+    const lines = (await readFile(file, "utf8")).split("\n").filter((line) => line.trim().length > 0);
+    await writeFileAtomic(file, `${lines.slice(Math.floor(lines.length / 2)).join("\n")}\n`);
+  });
 }
 
 async function mutatePage(ctx: WikiWriteContext, absolutePath: string, next: Buffer | null): Promise<WikiWriteResult> {
   const page = wikiPageKey(ctx.cwd, absolutePath);
   const dir = pageHistoryDir(ctx.cwd, page);
+  await ensureHistoryRoot(ctx.cwd);
   return withFileLock(path.join(path.dirname(dir), `.${path.basename(dir)}.lock`), async () => {
     const live = await readBufferOrNull(absolutePath);
     if (next === null ? live === null : live !== null && live.equals(next)) {
@@ -303,9 +412,19 @@ async function mutatePage(ctx: WikiWriteContext, absolutePath: string, next: Buf
       sha: next === null ? DELETED_SHA : sha256(next),
       file: next === null ? NO_FILE : await storeVersion(ctx.cwd, page, version, now, next),
     };
-    const { history, files: pruned } = planPrune({ page, rows: [row, ...before.rows] }, ctx.keep ?? DEFAULT_HISTORY_KEEP);
+    const { history, files: pruned } = planPrune(
+      { page, rows: [row, ...before.rows] },
+      ctx.keep ?? DEFAULT_HISTORY_KEEP,
+      ctx.maxIndexRows,
+    );
+    const action: WikiRunEntry["action"] = next === null ? "deleted" : live === null ? "created" : "updated";
 
-    // The page first, the index second. A page write that fails (a read-only
+    // The run log first (review r1 L-009): a page this run is about to change
+    // must be findable by `restore --run` even if what follows fails. A logged
+    // page that then was not written shows up there as a conflict, not a loss.
+    await appendRun(ctx.cwd, { runId: ctx.runId, command: ctx.command, page, at: now, action });
+
+    // Then the page, then the index. A page write that fails (a read-only
     // page, a full disk) leaves the index as it was, and the new version's
     // file is removed again. Written in place, not by rename, so a page's own
     // permissions still apply: a read-only page is refused, not replaced.
@@ -317,16 +436,13 @@ async function mutatePage(ctx: WikiWriteContext, absolutePath: string, next: Buf
         await writeFile(absolutePath, next);
       }
     } catch (error) {
-      if (row.file.endsWith(".md")) await rm(path.join(dir, row.file), { force: true });
+      if (VERSION_FILE.test(row.file)) await rm(versionFilePath(ctx.cwd, page, row.file), { force: true });
       throw error;
     }
     // A crash here leaves a page that differs from the index's current row;
     // `reconcile` records it next time, and its bytes are already stored above.
     await writeFileAtomic(path.join(dir, INDEX_FILE), renderPageHistoryIndex(history));
-    for (const file of pruned) await rm(path.join(dir, file), { force: true });
-    const action: WikiRunEntry["action"] = next === null ? "deleted" : live === null ? "created" : "updated";
-    const runsFile = path.join(wikiHistoryRoot(ctx.cwd), RUNS_FILE);
-    await appendFile(runsFile, `${JSON.stringify({ runId: ctx.runId, command: ctx.command, page, at: now, action })}\n`, "utf8");
+    for (const file of pruned) await rm(versionFilePath(ctx.cwd, page, file), { force: true });
     return { changed: true, action };
   });
 }
@@ -405,10 +521,10 @@ export async function printWikiUndoHint(ctx: WikiWriteContext, log: (line: strin
 
 async function readVersionContent(cwd: string, page: string, row: WikiVersionRow): Promise<Buffer | null> {
   if (row.sha === DELETED_SHA) return null;
-  if (!row.file.endsWith(".md")) {
+  if (!VERSION_FILE.test(row.file)) {
     throw new Error(`${versionLabel(row.version)} of ${page} has no stored copy (${row.file})`);
   }
-  const content = await readFile(path.join(pageHistoryDir(cwd, page), row.file));
+  const content = await readFile(versionFilePath(cwd, page, row.file));
   if (sha256(content) !== row.sha) {
     throw new Error(`${versionLabel(row.version)} of ${page} does not match its recorded sha256`);
   }
@@ -420,9 +536,13 @@ async function readVersionContent(cwd: string, page: string, row: WikiVersionRow
  * did: the newest recorded version with different content, counted from the
  * OLDEST recorded occurrence of the live content. So after a restore (the live
  * page equals an earlier version again) the page is judged against what came
- * before that earlier version, not against the damage the restore undid. A
- * page changed since its last recorded version is judged against that version.
- * Null when there is no history, or that version was a deletion or is pruned.
+ * before that earlier version, not against the damage the restore undid.
+ *
+ * Null when the live content is not in the history at all: the page was
+ * changed outside keryx since, which is as likely a deliberate edit as damage,
+ * and nothing records it until keryx next writes the page — judging it would
+ * report an error nobody can clear (review r1 L-001). Null also when there is
+ * no history, or that version was a deletion or is pruned.
  */
 export async function readPreviousVersion(cwd: string, page: string, live: string): Promise<string | null> {
   const history = await readPageHistory(cwd, page);
@@ -432,8 +552,9 @@ export async function readPreviousVersion(cwd: string, page: string, live: strin
   history.rows.forEach((row, index) => {
     if (row.sha === liveSha) oldestMatch = index;
   });
+  if (oldestMatch < 0) return null;
   const previous = history.rows.slice(oldestMatch + 1).find((row) => row.sha !== liveSha);
-  if (!previous || previous.sha === DELETED_SHA || !previous.file.endsWith(".md")) return null;
+  if (!previous || previous.sha === DELETED_SHA || !VERSION_FILE.test(previous.file)) return null;
   return (await readVersionContent(cwd, page, previous))?.toString("utf8") ?? null;
 }
 
@@ -500,22 +621,38 @@ export async function restoreWikiRun(
   if (pages.length === 0) throw new Error(`no pages recorded for ${runId} (list runs with \`keryx wiki history --runs\`)`);
   const result: WikiRunRestoreResult = { runId, restored: [], conflicts: [] };
   for (const page of pages) {
-    const history = await readPageHistory(ctx.cwd, page);
-    const fromRun = history?.rows.filter((row) => row.run === runId) ?? [];
-    if (history === null || fromRun.length === 0) {
-      result.conflicts.push({ page, reason: "no version from this run in the page history" });
-      continue;
+    // One page that cannot be restored (its target version pruned, its history
+    // unreadable, a bad key in the log) is reported and the rest still go back
+    // — never an abort half way with nothing said (review r1 L-002).
+    try {
+      const outcome = await restorePageFromRun(ctx, page, runId, options.force === true);
+      if ("reason" in outcome) result.conflicts.push(outcome);
+      else result.restored.push(outcome);
+    } catch (error) {
+      result.conflicts.push({ page, reason: error instanceof Error ? error.message : String(error) });
     }
-    const newest = fromRun[0]!;
-    const oldest = fromRun[fromRun.length - 1]!;
-    const live = await readBufferOrNull(pagePath(ctx.cwd, page));
-    const liveSha = live === null ? DELETED_SHA : sha256(live);
-    if (!options.force && (history.rows[0]!.version !== newest.version || liveSha !== newest.sha)) {
-      result.conflicts.push({ page, reason: "changed after this run (use --force to restore anyway)" });
-      continue;
-    }
-    const before = history.rows.find((row) => row.version < oldest.version) ?? ABSENT;
-    result.restored.push(await restoreTo(ctx, page, before));
   }
   return result;
+}
+
+async function restorePageFromRun(
+  ctx: WikiWriteContext,
+  page: string,
+  runId: string,
+  force: boolean,
+): Promise<WikiRestoreOutcome | { page: string; reason: string }> {
+  const history = await readPageHistory(ctx.cwd, page);
+  const fromRun = history?.rows.filter((row) => row.run === runId) ?? [];
+  if (history === null || fromRun.length === 0) {
+    return { page, reason: "no version from this run in the page history" };
+  }
+  const newest = fromRun[0]!;
+  const oldest = fromRun[fromRun.length - 1]!;
+  const live = await readBufferOrNull(pagePath(ctx.cwd, page));
+  const liveSha = live === null ? DELETED_SHA : sha256(live);
+  if (!force && (history.rows[0]!.version !== newest.version || liveSha !== newest.sha)) {
+    return { page, reason: "changed after this run (use --force to restore anyway)" };
+  }
+  const before = history.rows.find((row) => row.version < oldest.version) ?? ABSENT;
+  return restoreTo(ctx, page, before);
 }
