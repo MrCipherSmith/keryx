@@ -79,6 +79,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "enrich",
       "context",
       "backlinks",
+      "history",
+      "restore",
     ],
   ],
   // commands/stack.ts:18

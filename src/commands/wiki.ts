@@ -9,6 +9,7 @@ import {
 import { wikiAsk } from "../wiki/ask";
 import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
 import { migrateMarkers, refreshPages, verifyPages } from "../wiki/refresh";
+import { openWikiWriteContext, printWikiUndoHint, type WikiWriteContext } from "../wiki/service";
 import { resolveGitHead } from "../sync/provenance";
 import { describeHead } from "../wiki/staleness";
 import { optionValue } from "../lib/args";
@@ -109,6 +110,18 @@ export async function wikiCommand(args: string[]): Promise<void> {
     return;
   }
 
+  if (command === "history") {
+    const { runHistoryCommand } = await import("./wiki-history");
+    await runHistoryCommand(args.slice(1));
+    return;
+  }
+
+  if (command === "restore") {
+    const { runRestoreCommand } = await import("./wiki-history");
+    await runRestoreCommand(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown wiki command: ${command}`);
   printHelp();
   process.exitCode = 1;
@@ -164,15 +177,23 @@ async function runNew(args: string[]): Promise<void> {
     return;
   }
 
+  const history = await historyFor("new", args);
   const result = await wikiCreatePage({
     cwd: process.cwd(),
     type,
     slug,
     title: optionValue(args, "--title"),
     force: args.includes("--force"),
+    history,
   });
 
   console.log(`Created ${result.type} page: ${result.path}`);
+  await printWikiUndoHint(history);
+}
+
+/** One history run per CLI invocation, labelled with the command as typed. */
+function historyFor(subcommand: string, args: string[]): Promise<WikiWriteContext> {
+  return openWikiWriteContext(process.cwd(), ["wiki", subcommand, ...args].join(" "));
 }
 
 async function runIndex(): Promise<void> {
@@ -190,12 +211,14 @@ async function runCollect(args: string[]): Promise<void> {
   }
 
   const since = optionValue(args, "--since");
+  const history = await historyFor("collect", args);
   const result = await wikiCollect({
     cwd: process.cwd(),
     force: args.includes("--force"),
     changed: args.includes("--changed"),
     ...(since ? { since } : {}),
     ...(limit ? { limit } : {}),
+    history,
   });
 
   console.log("# gdwiki collect");
@@ -206,7 +229,13 @@ async function runCollect(args: string[]): Promise<void> {
   console.log(`index: ${result.index.path}`);
   console.log("");
   for (const page of result.pages) {
-    console.log(`- ${page.action}: ${page.path} (${page.source})`);
+    const why = page.invariantReason ? ` — REFUSED, would break: ${page.invariantReason}` : "";
+    console.log(`- ${page.action}: ${page.path} (${page.source})${why}`);
+  }
+  // Flow 367 AC9: a page left alone to protect its changelog/Version/front
+  // matter is a failure the caller must see, not a quiet skip.
+  if (result.pages.some((page) => page.invariantReason !== undefined)) {
+    process.exitCode = 1;
   }
 
   // Enrichment work-front: component pages still in draft (prose not written).
@@ -224,6 +253,8 @@ async function runCollect(args: string[]): Promise<void> {
     }
     if (drafts.length > 10) console.log(`  - … +${drafts.length - 10} more`);
   }
+  console.log("");
+  await printWikiUndoHint(history);
 }
 
 /**
@@ -732,7 +763,9 @@ async function runEnrich(args: string[]): Promise<void> {
   const concurrency = concurrencyRaw !== undefined ? Number.parseInt(concurrencyRaw, 10) : undefined;
   const maxOutputTokens = maxTokensRaw !== undefined ? Number.parseInt(maxTokensRaw, 10) : undefined;
 
+  const history = await historyFor("enrich", args);
   const result = await wikiEnrich({
+    history,
     cwd: process.cwd(),
     ...(page ? { page } : {}),
     all: args.includes("--all"),
@@ -783,6 +816,8 @@ async function runEnrich(args: string[]): Promise<void> {
         : "- no draft pages to enrich (use --force for accepted, or --page <slug> for one page)",
     );
   }
+  console.log("");
+  await printWikiUndoHint(history);
   process.exitCode = result.failed > 0 ? 1 : 0;
 }
 
@@ -883,6 +918,29 @@ Usage:
   keryx wiki verify --page <path> | --baseline
                                   # stamp provenance; refuses to stamp the corpus silently
   keryx wiki migrate-markers      # one-off: wrap existing Reference sections in markers
+  keryx wiki history <page>       # every version of a page: when, by which command and run
+  keryx wiki history --runs [--json]
+                                  # runs that changed pages, newest first
+  keryx wiki restore <page> [--version vNNNN]
+                                  # put one page back (default: the version before current)
+  keryx wiki restore --run <run-id> [--force]
+                                  # undo everything one run changed: changed pages go back,
+                                  # created pages are deleted, deleted pages return. A page
+                                  # changed again after the run is a CONFLICT and is left
+                                  # alone unless --force.
+
+History:
+  Every command above that writes or deletes a page or index.md (new, index, collect,
+  enrich, refresh, verify, migrate-markers, restore, and keryx sync --apply) first records the page's
+  current bytes in .metaproject/data/gdwiki/history/<page>/ — plain .md files plus an
+  index.md — and prints the run id to undo it with. Retention: the newest 20 stored
+  versions per page (history.keep in .metaproject/wiki.config.json); the folder
+  ignores itself for git.
+  Not covered: an edit made outside keryx is only captured when the next keryx write
+  to that page finds it (two hand edits in a row keep only the last); a script that
+  writes pages directly is the same case; history is local to this machine, and
+  deleting .metaproject/data/ deletes it. .sections.json (the section registry) and
+  templates/page.md (written only when missing) have no history.
 
 Page types:
   architecture, domain-model, business-rule, user-scenario,
@@ -946,12 +1004,14 @@ async function runRefreshCommand(args: string[]): Promise<void> {
   const cwd = process.cwd();
   const page = optionValue(args, "--page");
   const head = await currentHead(cwd);
+  const history = await historyFor("refresh", args);
   const result = await refreshPages({
     cwd,
     ...(page ? { page } : {}),
     force: args.includes("--force"),
     dryRun: args.includes("--dry-run"),
     head,
+    history,
   });
 
   if (args.includes("--json")) {
@@ -997,6 +1057,7 @@ async function runRefreshCommand(args: string[]): Promise<void> {
     }
     process.stdout.write("Run `keryx gdgraph build` to refresh the source, then re-run.\n");
   }
+  await printWikiUndoHint(history);
 }
 
 /**
@@ -1009,6 +1070,7 @@ async function runVerifyCommand(args: string[]): Promise<void> {
   const cwd = process.cwd();
   const page = optionValue(args, "--page");
   const head = await currentHead(cwd);
+  const history = await historyFor("verify", args);
   let stamped;
   try {
     stamped = await verifyPages({
@@ -1016,6 +1078,7 @@ async function runVerifyCommand(args: string[]): Promise<void> {
       ...(page ? { page } : {}),
       head,
       baseline: args.includes("--baseline"),
+      history,
     });
   } catch (error) {
     process.stdout.write(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -1038,12 +1101,14 @@ async function runVerifyCommand(args: string[]): Promise<void> {
   for (const entry of stamped) {
     process.stdout.write(`  ${entry.path}\n`);
   }
+  await printWikiUndoHint(history);
 }
 
 /** `keryx wiki migrate-markers` — one-off, idempotent, authors no content. */
 async function runMigrateMarkersCommand(args: string[]): Promise<void> {
   const cwd = process.cwd();
-  const result = await migrateMarkers(cwd, { dryRun: args.includes("--dry-run") });
+  const history = await historyFor("migrate-markers", args);
+  const result = await migrateMarkers(cwd, { dryRun: args.includes("--dry-run"), history });
 
   if (args.includes("--json")) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
@@ -1060,4 +1125,5 @@ async function runMigrateMarkersCommand(args: string[]): Promise<void> {
   for (const entry of result.skippedNoSection) {
     process.stdout.write(`  no section ${entry}\n`);
   }
+  await printWikiUndoHint(history);
 }

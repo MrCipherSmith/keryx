@@ -17,7 +17,7 @@
 // integration test to confirm T7's wiring actually calls `enrichPageDeep`.
 
 import { expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadGraph } from "../gdgraph/query";
@@ -202,7 +202,11 @@ function batchAwareProviderFactory(calls: NormalizedRequest[]): ProviderFactory 
 
 test("AC1 — explicit rlm.enabled:false produces identical output to absent config (RLM-off parity)", async () => {
   const rootA = await seedRlmRoot(); // no wiki.config.json at all
-  const rootB = await seedRlmRoot();
+  // One seeding, copied: two separate `wiki collect` runs would stamp their own
+  // timestamps into each page's 0.1.0 changelog entry, and parity would then
+  // need a normalising regex. A copy is byte-identical until the config differs.
+  const rootB = path.join(await mkdtemp(path.join(tmpdir(), "gd-wiki-rlm-copy-")), "root");
+  await cp(rootA, rootB, { recursive: true });
   await writeWikiConfig(rootB, { rlm: { enabled: false } });
   const GOOD_PAGE = `---\nTitle: Enriched\nStatus: draft\n---\n\n# Enriched\n\nFull prose body with enough text for validation checks to pass cleanly.\n`;
   const factory: ProviderFactory = () => stubProvider(GOOD_PAGE);
@@ -217,6 +221,7 @@ test("AC1 — explicit rlm.enabled:false produces identical output to absent con
       expect(page.nodeHash).toBeUndefined();
       expect(page.deepToolCalls).toBeUndefined();
     }
+    expect(resultA.pages.length).toBeGreaterThan(0);
     for (const page of resultA.pages) {
       const contentA = await readFile(path.join(rootA, ".metaproject", "wiki", page.path), "utf8");
       const contentB = await readFile(path.join(rootB, ".metaproject", "wiki", page.path), "utf8");
@@ -224,7 +229,7 @@ test("AC1 — explicit rlm.enabled:false produces identical output to absent con
     }
   } finally {
     await rm(rootA, { recursive: true, force: true });
-    await rm(rootB, { recursive: true, force: true });
+    await rm(path.dirname(rootB), { recursive: true, force: true });
   }
 });
 

@@ -145,7 +145,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     promptTemplate: "wiki/enrich.prompt.md",
     json: true,
     read: false,
-    sideEffects: ["writes wiki/** page bodies", "calls a model provider"],
+    sideEffects: [
+      "writes wiki/** page bodies",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+      "calls a model provider",
+    ],
   },
   {
     module: "gdwiki",
@@ -221,6 +225,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "rewrites the managed Reference block of affected pages (preserved, not rewritten, when the source graph is in error)",
       "bumps page Version and appends one Changelog line for each page actually rewritten",
       "stamps VerifiedAt and VerifiedScope on refreshed pages ONLY when the code graph is demonstrably current (resolveWikiSourceGate); otherwise the stamp is left exactly as it was",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
     ],
   },
   {
@@ -235,7 +240,10 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["writes VerifiedAt and VerifiedScope into page frontmatter"],
+    sideEffects: [
+      "writes VerifiedAt and VerifiedScope into page frontmatter",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+    ],
   },
   {
     module: "gdwiki",
@@ -248,7 +256,43 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
-    sideEffects: ["inserts marker comments around the Reference section of pages that have one"],
+    sideEffects: [
+      "inserts marker comments around the Reference section of pages that have one",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
+    ],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki history",
+    summary: "Show every recorded version of a wiki page, or list the runs that changed pages (flow 367).",
+    intent: ["история страницы вики", "wiki history", "версии страницы вики", "какие прогоны меняли вики"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path; prints that page's history index" },
+      { name: "runs", type: "bool", required: false, desc: "list runs that changed pages, newest first" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
+  },
+  {
+    module: "gdwiki",
+    command: "wiki restore",
+    summary: "Put a wiki page back to an earlier version, or undo every page one run changed (flow 367).",
+    intent: ["откати вики", "wiki restore", "верни страницу вики", "отмени enrich", "undo wiki run"],
+    args: [
+      { name: "page", type: "string", required: false, desc: "wiki-relative page path to restore" },
+      { name: "version", type: "string", required: false, desc: "vNNNN to restore the page to; default is the version before the current one" },
+      { name: "run", type: "string", required: false, desc: "run id whose changes to undo (see `wiki history --runs`)" },
+      { name: "force", type: "bool", required: false, desc: "with --run: also restore pages changed again after that run" },
+      { name: "json", type: "bool", required: false, desc: "structured result" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "rewrites, deletes or recreates wiki pages; the restore is itself recorded in each page's history, so it can be undone",
+      "writes .metaproject/data/gdwiki/history/**",
+    ],
   },
   // ---- memory -----------------------------------------------------------
   {
@@ -995,6 +1039,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     // freshness` and `wiki refresh` above.
     sideEffects: [
       "writes .metaproject/wiki/**",
+      "records each changed page's prior version in .metaproject/data/gdwiki/history/** (undo: wiki restore --run)",
       "writes .metaproject/data/gdwiki/.provenance.json, but only when the code graph is demonstrably current (resolveWikiSourceGate)",
     ],
   },

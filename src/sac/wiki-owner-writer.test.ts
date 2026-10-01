@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { pageHistoryDir, readPageHistory, readWikiRuns } from "../wiki/history";
 import { createRealWikiOwnerWriter } from "./wiki-owner-writer";
 import { proposalNotePath } from "./proposal-evidence";
 import type { OwnerWriteIntent } from "./guarded-owner-writer";
@@ -79,6 +80,45 @@ describe("createRealWikiOwnerWriter.persist", () => {
     expect(written).toContain("Status: accepted");
     expect(written).toContain("WorktreePort is the real create/remove/merge seam.");
     expect(written).toContain("./.metaproject/workspaces/workspace-a/session-evidence/session-a.md");
+  });
+
+  test("W9 flow 367: the created decision page is recorded in the page history with its exact bytes", async () => {
+    await seedProposal("# History check\n\n## user\n\nWhat changed?\n\n## assistant\n\nPage history wired.\n");
+    const writer = createRealWikiOwnerWriter(cwd, { note: "Recorded through writeWikiPage." });
+    const result = await writer.persist({ ...baseIntent, owner: "wiki" });
+    if (!("receiptRef" in result)) throw new Error(`expected a receipt, got ${JSON.stringify(result)}`);
+
+    const page = "decisions/sac-proposal-a.md";
+    const live = await readFile(path.join(cwd, ".metaproject", "wiki", page));
+    const history = await readPageHistory(cwd, page);
+    // The page is new, so there is no prior content to keep: exactly one version.
+    expect(history).not.toBeNull();
+    expect(history!.rows).toHaveLength(1);
+    const row = history!.rows[0]!;
+    expect(row.version).toBe(1);
+    expect(row.by).toBe("sac proposal accept");
+    expect(row.sha).toBe(createHash("sha256").update(live).digest("hex"));
+    const stored = await readFile(path.join(pageHistoryDir(cwd, page), row.file));
+    expect(stored.equals(live)).toBe(true);
+    expect((await readWikiRuns(cwd)).map((entry) => [entry.page, entry.action])).toEqual([[page, "created"]]);
+  });
+
+  test("W9 flow 367: a pre-existing page at the target path is never silently overwritten", async () => {
+    // The harness allows pre-seeding `decisions/sac-<id>.md`; `applyGuardedTargetWrite`
+    // refuses bytes it cannot account for, so the overwrite case does not reach
+    // `writeWikiPage` through `persist` — the page and its history must stay as they were.
+    await seedProposal("# Overwrite check\n\n## user\n\nQ\n\n## assistant\n\nA\n");
+    const pagePath = path.join(cwd, ".metaproject", "wiki", "decisions", "sac-proposal-a.md");
+    await mkdir(path.dirname(pagePath), { recursive: true });
+    const handWritten = Buffer.from("# Hand-written page\n\nNot written by the SAC writer.\n", "utf8");
+    await writeFile(pagePath, handWritten);
+
+    const writer = createRealWikiOwnerWriter(cwd);
+    const result = await writer.persist({ ...baseIntent, owner: "wiki" });
+
+    expect("receiptRef" in result).toBe(false);
+    expect((await readFile(pagePath)).equals(handWritten)).toBe(true);
+    expect(await readPageHistory(cwd, "decisions/sac-proposal-a.md")).toBeNull();
   });
 
   test("refuses to write when the evidence file's content no longer matches its recorded hash", async () => {
