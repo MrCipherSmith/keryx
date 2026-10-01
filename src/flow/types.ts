@@ -546,11 +546,12 @@ export type FlowCheckIssue = {
 };
 /**
  * Something `flow check` reports that does NOT fail it (flow 384). `untracked`:
- * the flow folder is not in `HEAD`.
+ * the flow folder is not in `HEAD`. `branch-duplicate-id`: a remote branch other
+ * than the default one holds a different flow under the same number.
  */
 export type FlowCheckWarning = {
   flow: string;
-  kind: "untracked";
+  kind: "untracked" | "branch-duplicate-id";
   message: string;
 };
 export type FlowCheckResult = {

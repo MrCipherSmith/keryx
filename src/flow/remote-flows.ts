@@ -24,7 +24,8 @@ export const MAX_REFS = 500;
 /** `git ls-tree` runs in parallel up to this many at a time. */
 const CONCURRENCY = 8;
 
-export type RemoteFlowDir = { ref: string; dir: string };
+/** `primary`: the ref is `<remote>/main`, `<remote>/master` or what `<remote>/HEAD` points at: where flows end up, not a branch that may be stale. */
+export type RemoteFlowDir = { ref: string; dir: string; primary: boolean };
 
 export type GitResult = { code: number; stdout: string };
 
@@ -84,6 +85,13 @@ export async function showPrefix(cwd: string): Promise<string | null> {
 
 export type RefEntry = { tip: string; ref: string; symref: string };
 
+function rankOfRef(ref: string, headTargets: ReadonlySet<string>): number {
+  if (/^refs\/remotes\/[^/]+\/(main|master)$/.test(ref)) {
+    return 0;
+  }
+  return headTargets.has(ref) ? 1 : 2;
+}
+
 /**
  * Order refs so the ones that decide a flow number survive the cap: first
  * `<remote>/main` and `<remote>/master`, then the branch each `<remote>/HEAD`
@@ -93,12 +101,7 @@ export type RefEntry = { tip: string; ref: string; symref: string };
  */
 export function orderRemoteRefs(entries: readonly RefEntry[], max: number = MAX_REFS): string[] {
   const headTargets = new Set(entries.map((entry) => entry.symref).filter((symref) => symref.length > 0));
-  const rank = (ref: string): number => {
-    if (/^refs\/remotes\/[^/]+\/(main|master)$/.test(ref)) {
-      return 0;
-    }
-    return headTargets.has(ref) ? 1 : 2;
-  };
+  const rank = (ref: string): number => rankOfRef(ref, headTargets);
   const candidates = entries
     .filter((entry) => entry.ref.startsWith("refs/remotes/") && !entry.ref.endsWith("/HEAD") && entry.symref === "")
     .sort((a, b) => rank(a.ref) - rank(b.ref) || (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
@@ -118,7 +121,7 @@ export function orderRemoteRefs(entries: readonly RefEntry[], max: number = MAX_
 }
 
 /** Remote-tracking refs to read, in the order `orderRemoteRefs` gives. */
-async function remoteRefs(cwd: string): Promise<string[]> {
+async function remoteRefs(cwd: string): Promise<Array<{ ref: string; primary: boolean }>> {
   const result = await runGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname) %(symref)", "refs/remotes/"]);
   if (result === undefined || result.code !== 0) {
     return [];
@@ -131,7 +134,8 @@ async function remoteRefs(cwd: string): Promise<string[]> {
     }
     entries.push({ tip, ref, symref: symref ?? "" });
   }
-  return orderRemoteRefs(entries);
+  const headTargets = new Set(entries.map((entry) => entry.symref).filter((symref) => symref.length > 0));
+  return orderRemoteRefs(entries).map((ref) => ({ ref, primary: rankOfRef(ref, headTargets) < 2 }));
 }
 
 async function flowDirsOnRef(cwd: string, ref: string, flowsPath: string): Promise<string[]> {
@@ -168,12 +172,16 @@ export async function knownRemoteFlowDirs(cwd: string): Promise<RemoteFlowDir[]>
       while (next < refs.length) {
         const index = next;
         next += 1;
-        const ref = refs[index];
-        if (ref === undefined) {
+        const entry = refs[index];
+        if (entry === undefined) {
           continue;
         }
-        const short = ref.slice("refs/remotes/".length);
-        found[index] = (await flowDirsOnRef(cwd, ref, flowsPath)).map((dir) => ({ ref: short, dir }));
+        const short = entry.ref.slice("refs/remotes/".length);
+        found[index] = (await flowDirsOnRef(cwd, entry.ref, flowsPath)).map((dir) => ({
+          ref: short,
+          dir,
+          primary: entry.primary,
+        }));
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, refs.length) }, () => worker()));

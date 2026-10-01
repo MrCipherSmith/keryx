@@ -1711,26 +1711,40 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // flow with the same id; the same name on every ref is just the one flow.
       // Each ref is judged on its own: a branch holding this very folder does not
       // hide another branch that holds the same number under another name.
+      // Only a clash with the default branch (main, master, what <remote>/HEAD
+      // points at) fails the check: any other remote branch may be stale, cut
+      // before a renumbering, and would make every real clone report dozens of
+      // false duplicates. Those are warnings; `flow init` still skips their numbers.
+      const warnings: FlowCheckResult["warnings"] = [];
       const remoteDirs = await knownRemoteFlowDirs(cwd);
       if (remoteDirs.length > 0) {
         for (const dir of allDirs) {
-          const clash = remoteDirs.find(
+          const clashes = remoteDirs.filter(
             (entry) => entry.dir !== dir && flowNumberOfDir(entry.dir) === Number(flowIdOf(dir)),
           );
-          if (clash) {
+          const primary = clashes.find((entry) => entry.primary);
+          const other = clashes[0];
+          if (primary) {
             issues.push({
               flow: dir,
               kind: "duplicate-id",
               message:
-                `flow id ${flowIdOf(dir)} is also used on ${clash.ref} by a different flow (${safeDirName(clash.dir)})` +
+                `flow id ${flowIdOf(dir)} is also used on ${primary.ref} by a different flow (${safeDirName(primary.dir)})` +
                 ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
+            });
+          } else if (other) {
+            warnings.push({
+              flow: dir,
+              kind: "branch-duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${other.ref} by a different flow (${safeDirName(other.dir)});` +
+                ` ignore it if that branch is stale, otherwise renumber one of them before it merges`,
             });
           }
         }
       }
       // Flow 384: a folder that is not in HEAD is a warning, never a failure: it
       // is the state every flow is in between `flow init` and its first commit.
-      const warnings: FlowCheckResult["warnings"] = [];
       const inHead = await flowFoldersInHead(cwd, allDirs).catch(() => {
         // HEAD could not be read: say nothing rather than call every folder untracked.
         return null;

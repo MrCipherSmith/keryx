@@ -26,9 +26,9 @@ test("reads the flow folders held by remote-tracking refs, naming the ref", asyn
 
   const found = await knownRemoteFlowDirs(root);
 
-  expect(found).toContainEqual({ ref: "origin/main", dir: "005-2026-10-01-alpha" });
-  expect(found).toContainEqual({ ref: "origin/main", dir: "007-2026-10-01-beta" });
-  expect(found).toContainEqual({ ref: "origin/feature", dir: "012-2026-10-02-gamma" });
+  expect(found).toContainEqual({ ref: "origin/main", dir: "005-2026-10-01-alpha", primary: true });
+  expect(found).toContainEqual({ ref: "origin/main", dir: "007-2026-10-01-beta", primary: true });
+  expect(found).toContainEqual({ ref: "origin/feature", dir: "012-2026-10-02-gamma", primary: false });
   expect(await remoteFlowNumbers(root)).toEqual([5, 7, 12]);
 });
 
@@ -67,7 +67,7 @@ test("a remote's HEAD symbolic ref is skipped; the branch it points at is read o
 
   const found = await knownRemoteFlowDirs(root);
 
-  expect(found).toEqual([{ ref: "origin/main", dir: "003-2026-10-01-one" }]);
+  expect(found).toEqual([{ ref: "origin/main", dir: "003-2026-10-01-one", primary: true }]);
 });
 
 test("a project in a non-ASCII subdirectory reads remote folders with no stray quote", async () => {
@@ -77,7 +77,7 @@ test("a project in a non-ASCII subdirectory reads remote folders with no stray q
 
   const found = await knownRemoteFlowDirs(path.join(root, "проект"));
 
-  expect(found).toEqual([{ ref: "origin/main", dir: "007-2026-10-01-beta" }]);
+  expect(found).toEqual([{ ref: "origin/main", dir: "007-2026-10-01-beta", primary: true }]);
 });
 
 test("control characters are stripped from a folder name before it is printed", () => {
