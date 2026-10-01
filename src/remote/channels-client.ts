@@ -210,6 +210,11 @@ export class ChannelsClient {
     return result;
   }
 
+  /** Ask serve to start the hub again from the files already on disk (the channel is configured but not running). */
+  reload(): Promise<ChannelsResult<ChannelsReloadResponse>> {
+    return this.call<ChannelsReloadResponse>("channels-reload", (body) => typeof body.state === "string");
+  }
+
   /** The token written for a pairing that did not become a connection: nothing is kept, so it goes. */
   private dropUnusedToken(): void {
     if (!fileExists(remoteConfigPath(this.options.dir))) {

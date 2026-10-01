@@ -1883,8 +1883,10 @@ token, and answers `401` to these routes.
 ### Remote control from Telegram
 
 Configuration for the Telegram transport inside `keryx serve`. It is **off unless
-both files exist and validate**; without them `serve` prints
-`remote control is off: <reason>` and behaves exactly as before. Both live under
+both files exist and validate**; with neither of them `serve` prints
+`channels ready: connect Telegram from the shell with /channels` and behaves exactly
+as before. `remote control is off: <reason>` is printed only for an invalid config
+or a start that was refused. Both live under
 `remote/` in the user-global keryx directory (`~/.local/share/keryx/` on
 Linux and macOS, `%APPDATA%\keryx` on Windows):
 

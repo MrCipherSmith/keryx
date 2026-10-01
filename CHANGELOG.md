@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.51] — 2026-10-01
+### Fixed
+- **`/channels` pairing, review fixes.** A pairing that was cancelled or had expired while Telegram was still answering about the group can no longer come back to ready, and its status answers `no-pairing` once it was closed during the check. The bot being added to the group before the code was sent now works: the group event of the paired operator is kept and used when the code is accepted (events from anybody else are still ignored). The group step has its own 10 minutes from the moment the code is accepted, and the modal shows the time left.
+- **Disconnect and Test wait for a Telegram start that is still in flight**, so a Disconnect pressed mid-start can no longer leave a running hub with nothing on disk.
+- **A reconnect to another group no longer reuses topics recorded for the old one.** Records whose group differs from the configured one are forgotten when the hub starts.
+- **`/channels` in the "configured, but not running" state has a Retry button** next to Disconnect, which starts Telegram again from the saved token and config and shows the result. Esc is ignored while the modal is working, so its outcome is seen.
+### Notes
+- Docs: `remote control is off: <reason>` is printed only for an invalid config or a refused start; with no files `serve` prints `channels ready: connect Telegram from the shell with /channels`.
+
+[Changes since 0.3.50](https://github.com/MrCipherSmith/keryx/compare/v0.3.50...v0.3.51)
+
 ## [0.3.50] — 2026-10-01
 ### Added
 - **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back (Escape or any other key cancels), checks again against the live flow, and only if nothing changed runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.

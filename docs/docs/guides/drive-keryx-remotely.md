@@ -136,10 +136,12 @@ buttons, comes back to the same topic. It is a client of this listener, not a
 second bot runtime: the shell never talks to Telegram.
 
 **It is off by default**, at two levels. `keryx serve` starts remote control only
-when both files below exist and are valid; without them it prints
-`remote control is off: <reason>` and serves exactly as before, offering only the
-local `/channels` routes that connect it. And a shell only
-mirrors a session after you type `/remote-control <name>` in it.
+when both files below exist and are valid. With neither file it prints
+`channels ready: connect Telegram from the shell with /channels` and serves exactly
+as before, offering only the local `/channels` routes that connect it. A config that
+is invalid, or a start Telegram refused, prints `remote control is off: <reason>`
+instead. And a shell only mirrors a session after you type `/remote-control <name>`
+in it.
 
 ### Connect from the shell (recommended)
 
@@ -153,12 +155,16 @@ Make a separate bot with BotFather and a supergroup with topics enabled, then ru
    the allowlist; the code expires after 10 minutes and works once, so someone else
    writing to the bot cannot claim it.
 3. Add the bot to your group as an administrator with the manage topics right. The
-   group id is taken from that event. If the group has no topics or the bot lacks
-   the right, the modal says which.
+   group id is taken from that event, and a bot that is already in the group is
+   picked up too. This step has its own 10 minutes, counted from the moment the
+   code is accepted, and the modal shows how many are left. If the group has no
+   topics or the bot lacks the right, the modal says which.
 4. A test message arrives in the group's General topic and the channel reads
    Connected. `serve` starts using it without a restart.
 
-**Test** sends another message naming this machine. **Disconnect** asks `serve` to
+**Test** sends another message naming this machine. When the files are saved but
+`serve` could not start Telegram (the modal reads "configured, but not running"),
+**Retry** starts it again from them without erasing anything. **Disconnect** asks `serve` to
 delete every topic and stop polling, then erases the token and the config; if
 `serve` is not running it erases the files and says that the existing topics stay in
 the group. The connection belongs to the machine: any shell can connect or

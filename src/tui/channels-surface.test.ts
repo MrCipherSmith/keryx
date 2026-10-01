@@ -48,7 +48,7 @@ function pairing(partial: Partial<PairingResponse> & Pick<PairingResponse, "stat
 }
 
 function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; files?: { tokenFile: boolean; configFile: boolean } } = {}) {
-  const calls = { startPairing: [] as string[], pairingStatus: 0, cancel: 0, connectFinish: [] as { userId: number; chatId: number }[], test: 0, disconnect: 0 };
+  const calls = { startPairing: [] as string[], pairingStatus: 0, cancel: 0, connectFinish: [] as { userId: number; chatId: number }[], test: 0, disconnect: 0, reload: 0 };
   const fake = {
     calls,
     status: initial.status ?? ok(status("not-connected")),
@@ -56,6 +56,7 @@ function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; 
     start: ok(pairing({ state: "waiting-for-user", code: "K7Q-2MX", botUsername: "keryx_demo_bot" })) as ChannelsResult<PairingResponse>,
     pairingNow: ok(pairing({ state: "waiting-for-user", code: "K7Q-2MX", botUsername: "keryx_demo_bot" })) as ChannelsResult<PairingResponse>,
     testResult: ok({ schemaVersion: "1", delivered: true as const, machine: "devbox" }) as ChannelsResult<{ schemaVersion: string; delivered: true; machine: string }>,
+    reloadResult: ok({ schemaVersion: "1", state: "connected" as const }) as ChannelsResult<{ schemaVersion: string; state: string }>,
     disconnectResult: ok({ deleted: 3, remaining: 0, topicsDeleted: true, erased: true, message: "Disconnected: 3 topics deleted, 0 remaining. The token was erased." }) as ChannelsResult<ChannelsDisconnectResult>,
   };
   const api: ChannelsApi = {
@@ -82,6 +83,13 @@ function fakeClient(initial: { status?: ChannelsResult<ChannelsStatusResponse>; 
     test: async () => {
       calls.test += 1;
       return fake.testResult;
+    },
+    reload: async () => {
+      calls.reload += 1;
+      if (fake.reloadResult.ok) {
+        fake.status = ok(status("connected"));
+      }
+      return fake.reloadResult as never;
     },
     disconnect: async () => {
       calls.disconnect += 1;
@@ -650,6 +658,71 @@ otuiTest("sidebar: the Telegram row follows refresh() and update(), and a click 
   } finally {
     panel.dispose();
     expect(timer.active()).toBe(0);
+    h.destroy();
+  }
+});
+
+otuiTest("off: Retry starts Telegram again from the saved files and reports the result", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok(status("off", { reason: "Telegram refused the saved token." })), files: { tokenFile: true, configFile: true } });
+  fake.reloadResult = fail("cannot-connect", "Telegram is unreachable.") as never;
+  const modal = await openModalFor(h, api);
+  try {
+    let frame = h.captureCharFrame();
+    expect(frame).toContain("Retry");
+    expect(frame).toContain("Disconnect");
+
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(1);
+    frame = h.captureCharFrame();
+    expect(frame).toContain("Telegram did not start: Telegram is unreachable.");
+    expect(frame).toContain("configured, but not running");
+
+    fake.reloadResult = ok({ schemaVersion: "1", state: "connected" }) as never;
+    await h.mockInput.pressEnter();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(2);
+    frame = h.captureCharFrame();
+    expect(frame).toContain("Telegram is running again.");
+    expect(frame).toContain("Telegram: connected");
+    expect(fake.calls.disconnect).toBe(0);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
+otuiTest("working: Esc is swallowed, the modal stays until the call finishes", async () => {
+  const h = await mountChrome(OTUI!, { height: 40 });
+  const { api, fake } = fakeClient({ status: ok(status("off", { reason: "Telegram refused the saved token." })), files: { tokenFile: true, configFile: true } });
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const slow: ChannelsApi = {
+    ...api,
+    reload: async () => {
+      await gate;
+      return api.reload();
+    },
+  };
+  const modal = await openModalFor(h, slow);
+  try {
+    await h.mockInput.pressEnter();
+    await settle(h, 6);
+    expect(h.captureCharFrame()).toContain("Starting Telegram again");
+    await h.mockInput.pressEscape();
+    // a lone Esc is held back briefly by the terminal parser before it is delivered
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    await settle(h, 6);
+    expect(h.captureCharFrame()).toContain("Starting Telegram again");
+    release();
+    await settle(h, 8);
+    expect(fake.calls.reload).toBe(1);
+    expect(h.captureCharFrame()).toContain("Telegram is running again.");
+  } finally {
+    modal?.close();
     h.destroy();
   }
 });

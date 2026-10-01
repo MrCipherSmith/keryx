@@ -58,6 +58,7 @@ async function makeHost(api: FakeBotApi, extra: Partial<ChannelsHost> = {}) {
     stopHub: async () => {
       calls.stop += 1;
     },
+    settle: async () => undefined,
     openApi: () => ({ ok: true, api }),
     ...extra,
   };
@@ -130,5 +131,65 @@ test("a reload that cannot start leaves the running hub alone", async () => {
   expect(await errorCode(response)).toBe("cannot-connect");
   expect(calls.stop).toBe(0);
   expect(calls.start).toBe(0);
+  await controller.stop();
+});
+
+test("a disconnect issued while a start is in flight waits for it and then stops the hub that came up", async () => {
+  const api = new FakeBotApi();
+  let running: RemoteHub | undefined;
+  let finishStart: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    finishStart = resolve;
+  });
+  let starting: Promise<unknown> = Promise.resolve();
+  const deleted = { count: 0 };
+  const fakeHub = {
+    deleteAllTopics: async () => {
+      deleted.count += 1;
+      return { deleted: 1, remaining: 0 };
+    },
+  } as unknown as RemoteHub;
+  const { host, calls } = await makeHost(api, {
+    hub: () => running,
+    startHub: async () => {
+      starting = (async () => {
+        await gate;
+        running = fakeHub;
+      })();
+      await starting;
+      return { ok: true };
+    },
+    stopHub: async () => {
+      calls.stop += 1;
+      running = undefined;
+    },
+    settle: async () => {
+      await starting;
+    },
+  });
+  const controller = new ChannelsController({ host });
+  void host.startHub();
+  const disconnect = controller.handle("channels-disconnect", request);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(calls.stop).toBe(0);
+
+  finishStart();
+  const response = await disconnect;
+
+  expect(response.status).toBe(200);
+  expect(deleted.count).toBe(1);
+  expect(calls.stop).toBe(1);
+  expect(running).toBeUndefined();
+  await controller.stop();
+});
+
+test("a pairing closed while its status is being checked answers no-pairing, not a stale snapshot", async () => {
+  const api = new FakeBotApi();
+  const { host } = await makeHost(api);
+  const controller = new ChannelsController({ host });
+  expect((await controller.handle("channels-pair", request)).status).toBe(200);
+  const checking = controller.handle("channels-pairing", request);
+  await controller.handle("channels-cancel", request);
+  expect((await checking).status).toBe(404);
   await controller.stop();
 });
