@@ -1570,7 +1570,14 @@ profile is refused. A turn whose decision is
 denied at expiry rather than auto-approved; the stock listener registers no tools,
 so it raises none.
 
-**Key files.** `src/commands/serve.ts`, `src/lib/serve-*.ts`.
+**Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
+`remote/config.json` exist, `serve` hosts the one Telegram poller and the seven
+`/v1/remote/*` routes, which a `keryx shell` reaches with a local shell token
+(not the serve bearer) to mirror a session into a topic via `/remote-control`.
+Without those files `serve` is unchanged. Tested against a fake Bot API only; see
+[Drive keryx remotely](./guides/drive-keryx-remotely.md#remote-control-from-telegram).
+
+**Key files.** `src/commands/serve.ts`, `src/lib/serve-*.ts`, `src/remote/*`.
 
 **Dependencies / integrations.** The harness (`runOffline`), the project registry
 that remote entry addresses projects by (`projects`).

@@ -184,8 +184,14 @@ person answers over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or locall
 with `keryx approvals` (see [Answer a remote approval](guides/answer-remote-approvals.md)).
 Unanswered approvals deny at expiry. But the stock listener registers no tools, so
 it raises no approvals today; they become reachable when a tool registry is
-injected into the turn. The Telegram or web card, session-wide grants from a
-remote answer, and approvals for unattended trigger runs are not built.
+injected into the turn. A Telegram or web card for these approvals, session-wide
+grants from a remote answer, and approvals for unattended trigger runs are not
+built. (A `keryx shell` session driven from a Telegram topic with `/remote-control`
+has its own Allow/Deny buttons in the topic; that path has been exercised only
+against a fake Bot API, not real Telegram. In that path a topic holds at most 500
+undelivered lines, and a pure-collision batch after Telegram renumbers its updates,
+one whose ids are all ones already seen, cannot be told from a redelivery and is
+dropped.)
 
 Boundaries that hold:
 

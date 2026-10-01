@@ -1000,6 +1000,26 @@ compared at startup, and a weaker profile refuses to bind at all. See
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md) for routes and
 setup.
 
+### Remote control from Telegram (opt-in, off by default)
+
+`/remote-control` in a running shell mirrors that session into its own topic of a
+Telegram supergroup: you send a line from your phone and it runs as if typed
+there, the reply and any approval question come back to the topic. Nothing
+happens until you set three things up: a separate bot made with BotFather, its
+token in `remote/bot-token` in the global keryx directory with mode 600; the
+Telegram user id that may use it, in the allowlist file `remote/config.json`; and
+a supergroup with topics enabled where that bot is an admin with the manage topics
+right. The Telegram transport is the single poller inside `keryx serve` — shells
+talk to `serve` over loopback with a local shell token (new on every `serve`
+start, and never sent to an endpoint whose `serve` is gone), they never poll
+Telegram themselves, and a second `keryx serve` does not poll while the first one
+runs. At most 500 lines wait per topic, and turning it off tells the topic which
+queued lines will not run.
+Without the config files `serve` starts as before, with remote control off. This
+has been verified against a fake Bot API only; no run against real Telegram has
+been done yet. Setup and limits:
+[drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram).
+
 ## CI integration
 
 CI can publish normalized, committable artifacts that humans and agents read

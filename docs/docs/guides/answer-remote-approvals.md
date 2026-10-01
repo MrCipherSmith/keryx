@@ -6,7 +6,10 @@ detaches (`202`), and a person answers somewhere else: a chat bridge over HTTP,
 or `keryx approvals` / `/approvals` on the machine that runs the listener.
 
 This page is the contract a chat bridge speaks. It does not cover rendering the
-approval as a Telegram card or a web page; that is the client's job.
+approval as a Telegram card or a web page; that is the client's job. (The
+Telegram buttons a `/remote-control` session shows are a separate path, over the
+shell-token routes, not these; see
+[Remote control from Telegram](drive-keryx-remotely.md#remote-control-from-telegram).)
 
 ## Read this before you build on it
 
@@ -160,7 +163,9 @@ policy-gated.
 
 ## Not covered
 
-- The Telegram or web card that renders an approval.
+- The Telegram or web card that renders an approval raised over `GET /v1/approvals`.
+  A shell session driven from a Telegram topic has its own Allow/Deny card; that is
+  not this surface.
 - Session-wide grants from a remote answer. A remote `allow` never sets one.
 - Approvals for unattended trigger runs.
 
