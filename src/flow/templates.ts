@@ -144,9 +144,10 @@ tracker reporting.
   committed) / \`flow renumber <dir> --to <id> --reason "<why>"\` (refuses an id a
   known remote branch uses)
 
-The flow folder is committed in the same PR as the code and again at closing:
-\`flow complete\` fails the \`folder-committed\` gate when the folder is not
-committed (flows created from 0.3.53 on).
+The flow folder is committed in the same PR as the code; the commit at closing is
+a rule to follow, not one the gate checks. \`flow complete\` fails the
+\`folder-committed\` gate only when the folder's \`flow.json\` is not in \`HEAD\`
+(flows created from 0.3.53 on).
 
 Spend, confirmations, signatures and gate outcomes across flows:
 \`keryx governance report\`. Recurring or one-off unattended agent turns:
@@ -390,8 +391,9 @@ whose status is \`implemented\`.
    \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not; and,
    for a flow created from 0.3.53 on, the flow folder committed (the
    \`folder-committed\` gate fails until \`git add .metaproject/flows/<dir> &&
-   git commit\` has run). The flow folder is committed in the same PR as the
-   code and again at closing. A
+   git commit\` has run; the gate checks only that \`flow.json\` is in \`HEAD\`). The
+   flow folder is committed in the same PR as the code; the commit at closing
+   is a rule to follow, not one the gate checks. A
    flow created with \`--require-confirmation\` needs one more gate: run
    \`keryx flow confirm <id>\` in your own terminal first (a typed challenge
    mints a short-lived, single-use token - it proves an interactive step ran

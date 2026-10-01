@@ -695,9 +695,11 @@ by `flow init`; flows created before flow 289 report it `skipped` rather than be
 retroactively blocked) — fails while `flow.owner` is unset, (5) folder-committed — **opt-in per
 package** (`gates.folderCommitted`, written by `flow init` from 0.3.53; older packages
 report it `skipped`, as does a non-git directory) — fails while the flow folder is not in
-`HEAD`. The flow folder is committed in the same PR as the code and again at closing.
-`flow init` and `flow renumber` avoid numbers used on known remote branches
-(`src/flow/remote-flows.ts`, remote-tracking refs only, no network), and `flow check`
+`HEAD`. The flow folder is committed in the same PR as the code; the commit at closing
+is a rule to follow, and the gate requires only that `flow.json` is in `HEAD` before
+closing. `flow init` and `flow renumber` avoid numbers used on known remote branches
+(`src/flow/remote-flows.ts`: up to 500 remote-tracking refs, no network; a never-fetched
+ref is invisible and the repair is `flow renumber`), and `flow check`
 reports a clash with a remote branch as `duplicate-id` and an uncommitted folder as a
 non-failing `untracked` warning. `passed = gates.every(g
 => g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and

@@ -3828,8 +3828,9 @@ or `flow owner set`).
 
 ### The folder-committed gate
 
-The flow folder is committed in the same PR as the code, and again at closing.
-`flow complete` enforces it: the `folder-committed` gate fails when
+The flow folder is committed in the same PR as the code, and the commit at
+closing is a rule to follow, not one the gate checks. The gate requires one
+thing before closing: `flow complete` fails the `folder-committed` gate when
 `.metaproject/flows/<dir>/flow.json` is not in `HEAD`, with the reason
 `flow folder <dir> is not committed. Commit it (git add .metaproject/flows/<dir> && git commit) in the PR that carries the code, then run flow complete again`.
 
@@ -3846,7 +3847,10 @@ come from a clone-local ledger, so a second clone, or a branch you have not
 fetched, can hand out a number the first one already used. The ledger now also
 reserves every number held by a **known remote branch**: the remote-tracking
 refs (`refs/remotes/*`) this clone already has, read with `git ls-tree` and no
-network. `flow renumber --to <id>` refuses an id used on such a branch.
+network. Up to 500 remote-tracking refs are read (`<remote>/main`,
+`<remote>/master` and the `<remote>/HEAD` target first); a ref this clone never
+fetched is invisible, and the repair for a clash it causes is `flow renumber`.
+Only folders named `NNN-...` (exactly three digits, then a dash) count. `flow renumber --to <id>` refuses an id used on such a branch.
 `flow check` reports a clash that already happened (see below). When the repository
 has no remotes, no refs, or is not a git repository, all of this reads as "nothing
 known" and changes nothing.

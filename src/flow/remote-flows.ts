@@ -15,8 +15,12 @@ import path from "node:path";
 // cannot read — each answers "nothing known", never an error. A guard that
 // throws would block `flow init` for a reason the operator cannot act on.
 
-/** Remote-tracking refs inspected per call; a clone with more is not a normal clone. */
-const MAX_REFS = 200;
+/**
+ * Remote-tracking refs inspected per call. A clone with more is not a normal
+ * clone; the refs that decide a number (`<remote>/main`, `<remote>/master`, the
+ * branch `<remote>/HEAD` points at) are read first, so the cap never drops them.
+ */
+export const MAX_REFS = 500;
 /** `git ls-tree` runs in parallel up to this many at a time. */
 const CONCURRENCY = 8;
 
@@ -43,6 +47,32 @@ export function lines(text: string): string[] {
     .filter((line) => line.length > 0);
 }
 
+/**
+ * The entries of NUL-terminated git output (`-z`). Without `-z` git C-quotes a
+ * non-ASCII or control-character path, which would never equal the path that
+ * was asked for; with it every path is the raw bytes. Nothing is trimmed: a
+ * path may legitimately start or end with a space.
+ */
+export function nulSplit(text: string): string[] {
+  return text.split("\0").filter((entry) => entry.length > 0);
+}
+
+/**
+ * A folder name from another branch, safe to print: control characters (C0,
+ * DEL, C1, so ESC too) are removed. `-z` hands over the raw name, and a name
+ * that carries a terminal escape must not reach an operator's screen intact.
+ */
+export function safeDirName(dir: string): string {
+  let out = "";
+  for (const char of dir) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code > 0x1f && (code < 0x7f || code > 0x9f)) {
+      out += char;
+    }
+  }
+  return out;
+}
+
 /** `<cwd relative to the repository root>/`, or "" at the root. null when `cwd` is not in a repository. */
 export async function showPrefix(cwd: string): Promise<string | null> {
   const result = await runGit(cwd, ["rev-parse", "--show-prefix"]);
@@ -52,47 +82,68 @@ export async function showPrefix(cwd: string): Promise<string | null> {
   return result.stdout.trim();
 }
 
-/** Remote-tracking refs with distinct tips, `<remote>/HEAD` symbolic refs excluded. */
-async function remoteRefs(cwd: string): Promise<string[]> {
-  const result = await runGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname)", "refs/remotes/"]);
-  if (result === undefined || result.code !== 0) {
-    return [];
-  }
+export type RefEntry = { tip: string; ref: string; symref: string };
+
+/**
+ * Order refs so the ones that decide a flow number survive the cap: first
+ * `<remote>/main` and `<remote>/master`, then the branch each `<remote>/HEAD`
+ * points at, then everything else alphabetically. `<remote>/HEAD` itself is
+ * dropped, and so is a ref whose tip an earlier one already has (two branches at
+ * one commit hold the same folders: asking once is enough). Truncated to `max`.
+ */
+export function orderRemoteRefs(entries: readonly RefEntry[], max: number = MAX_REFS): string[] {
+  const headTargets = new Set(entries.map((entry) => entry.symref).filter((symref) => symref.length > 0));
+  const rank = (ref: string): number => {
+    if (/^refs\/remotes\/[^/]+\/(main|master)$/.test(ref)) {
+      return 0;
+    }
+    return headTargets.has(ref) ? 1 : 2;
+  };
+  const candidates = entries
+    .filter((entry) => entry.ref.startsWith("refs/remotes/") && !entry.ref.endsWith("/HEAD") && entry.symref === "")
+    .sort((a, b) => rank(a.ref) - rank(b.ref) || (a.ref < b.ref ? -1 : a.ref > b.ref ? 1 : 0));
   const seenTips = new Set<string>();
   const refs: string[] = [];
-  for (const line of lines(result.stdout)) {
-    const space = line.indexOf(" ");
-    if (space < 0) {
+  for (const entry of candidates) {
+    if (seenTips.has(entry.tip)) {
       continue;
     }
-    const tip = line.slice(0, space);
-    const ref = line.slice(space + 1);
-    // Refs come from git itself, but `ls-tree <ref>` would read a leading dash
-    // as an option, so one is refused rather than escaped.
-    if (ref.startsWith("-") || !ref.startsWith("refs/remotes/") || ref.endsWith("/HEAD")) {
-      continue;
-    }
-    // Two branches at one commit hold the same folders: asking once is enough.
-    if (seenTips.has(tip)) {
-      continue;
-    }
-    seenTips.add(tip);
-    refs.push(ref);
-    if (refs.length >= MAX_REFS) {
+    seenTips.add(entry.tip);
+    refs.push(entry.ref);
+    if (refs.length >= max) {
       break;
     }
   }
   return refs;
 }
 
-async function flowDirsOnRef(cwd: string, ref: string, flowsPath: string): Promise<string[]> {
-  const result = await runGit(cwd, ["ls-tree", "-d", "--name-only", "--full-tree", ref, "--", `${flowsPath}/`]);
+/** Remote-tracking refs to read, in the order `orderRemoteRefs` gives. */
+async function remoteRefs(cwd: string): Promise<string[]> {
+  const result = await runGit(cwd, ["for-each-ref", "--format=%(objectname) %(refname) %(symref)", "refs/remotes/"]);
   if (result === undefined || result.code !== 0) {
     return [];
   }
-  return lines(result.stdout)
+  const entries: RefEntry[] = [];
+  for (const line of lines(result.stdout)) {
+    const [tip, ref, symref] = line.split(" ");
+    if (tip === undefined || ref === undefined) {
+      continue;
+    }
+    entries.push({ tip, ref, symref: symref ?? "" });
+  }
+  return orderRemoteRefs(entries);
+}
+
+async function flowDirsOnRef(cwd: string, ref: string, flowsPath: string): Promise<string[]> {
+  const result = await runGit(cwd, ["ls-tree", "-z", "-d", "--name-only", "--full-tree", ref, "--", `${flowsPath}/`]);
+  if (result === undefined || result.code !== 0) {
+    return [];
+  }
+  // Exactly the shape `listFlowDirs` accepts locally: three digits, then a dash.
+  // A folder name on another branch is untrusted input (`2026-notes`, `9999-x`).
+  return nulSplit(result.stdout)
     .map((entry) => path.posix.basename(entry))
-    .filter((name) => /^\d+-/.test(name));
+    .filter((name) => /^\d{3}-/.test(name));
 }
 
 /**

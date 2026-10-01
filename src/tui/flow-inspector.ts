@@ -139,7 +139,7 @@ export function formatFlowDetailLines(item: FlowInspectorItem): string[] {
     ...(item.interrupted ? [`         ${item.interrupted}`] : []),
     ...(item.uncommitted ? [`         note: ${item.uncommitted}`] : []),
     ...(item.hygiene?.notes ?? []).map((note) => `         ${note}`),
-    `Dir     ${item.dir}`,
+    `Dir      ${item.dir}`,
     `Tasks    ${item.tasksDone}/${item.tasksTotal}`,
     `PR       ${item.prUrl ?? "—"}`,
     `Source   ${item.source}`,

@@ -8,7 +8,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createFlowService } from "./service";
 import { writeCleanReviewPackage } from "./review-fixtures";
-import { addRemoteRef, commitAll, gitRepo } from "./remote-fixtures";
+import { addRemoteRef, commitAll, git, gitRepo } from "./remote-fixtures";
+import { flowFoldersInHead } from "./folder-committed";
 import type { FlowService, FlowServiceDeps, FlowState, TrackerAdapter } from "./types";
 
 const ROOTS: string[] = [];
@@ -130,6 +131,38 @@ test("flow check does not report a folder the remote branch holds under the SAME
 
   expect(result.issues.filter((entry) => entry.kind === "duplicate-id")).toEqual([]);
   expect(result.ok).toBe(true);
+});
+
+test("flow check reports a clash on another ref even when one ref holds this folder under its own name", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { dir } = await service.init({ cwd: root, title: "Local side" });
+  const localDir = path.basename(dir);
+  const id = localDir.slice(0, 3);
+  await addRemoteRef(root, "origin/feat", [localDir]);
+  await addRemoteRef(root, "origin/main", [`${id}-2026-09-30-someone-else`]);
+
+  const result = await service.check({ cwd: root });
+
+  const issue = result.issues.find((entry) => entry.kind === "duplicate-id");
+  expect(issue?.flow).toBe(localDir);
+  expect(issue?.message).toContain("origin/main");
+  expect(issue?.message).toContain(`${id}-2026-09-30-someone-else`);
+});
+
+test("a control character in a remote folder name never reaches the check message", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { dir } = await service.init({ cwd: root, title: "Local side" });
+  const localDir = path.basename(dir);
+  const id = localDir.slice(0, 3);
+  await addRemoteRef(root, "origin/main", [`${id}-evil\u001b[2Jname`]);
+
+  const result = await service.check({ cwd: root });
+
+  const issue = result.issues.find((entry) => entry.kind === "duplicate-id");
+  expect(issue?.message).toContain(`${id}-evil[2Jname`);
+  expect(issue?.message).not.toContain("\u001b");
 });
 
 // --- check: the untracked warning --------------------------------------------
@@ -258,4 +291,64 @@ test("outside a git repository the gate is skipped, not failed", async () => {
   const gate = result.gates.find((entry) => entry.name === "folder-committed");
   expect(gate?.status).toBe("skipped");
   expect(gate?.detail).toContain("not a git repository");
+});
+
+// --- HEAD reading: unborn, unreadable, detached, project in a subdirectory ------
+
+test("a HEAD that exists but does not hold flow.json: check warns and the gate fails", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { id, dir } = await driveToGates(root, service);
+  await git(root, ["commit", "--allow-empty", "-q", "-m", "empty"]);
+
+  const checked = await service.check({ cwd: root });
+  expect(checked.ok).toBe(true);
+  expect(checked.warnings.map((warning) => warning.kind)).toEqual(["untracked"]);
+
+  const result = await service.complete({ cwd: root, id });
+  expect(result.gates.find((entry) => entry.name === "folder-committed")?.status).toBe("fail");
+  expect(result.passed).toBe(false);
+  expect(dir.length).toBeGreaterThan(0);
+});
+
+test("a detached HEAD reads the committed folder the same way", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { dir } = await service.init({ cwd: root, title: "Detached" });
+  await commitAll(root);
+  await git(root, ["checkout", "-q", "--detach"]);
+
+  expect([...((await flowFoldersInHead(root, [path.basename(dir)])) ?? [])]).toEqual([path.basename(dir)]);
+  expect((await service.check({ cwd: root })).warnings).toEqual([]);
+});
+
+test("an unreadable HEAD tree is an error, never 'nothing committed': no warnings, and the gate cannot pass", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { id, dir } = await driveToGates(root, service);
+  await commitAll(root);
+  const tree = await git(root, ["rev-parse", "HEAD^{tree}"]);
+  await rm(path.join(root, ".git", "objects", tree.slice(0, 2), tree.slice(2)), { force: true });
+
+  await expect(flowFoldersInHead(root, [dir])).rejects.toThrow("could not read HEAD tree");
+  expect((await service.check({ cwd: root })).warnings).toEqual([]);
+  const result = await service.complete({ cwd: root, id });
+  expect(result.gates.find((entry) => entry.name === "folder-committed")?.status).toBe("fail");
+  expect(result.passed).toBe(false);
+});
+
+test("a project in a non-ASCII subdirectory of the repository reads its committed folder as committed", async () => {
+  const root = await repo();
+  const project = path.join(root, "проект");
+  await mkdir(path.join(project, ".metaproject"), { recursive: true });
+  const service = makeService();
+  const { dir } = await service.init({ cwd: project, title: "Nested" });
+  const localDir = path.basename(dir);
+
+  expect((await service.check({ cwd: project })).warnings.map((warning) => warning.kind)).toEqual(["untracked"]);
+
+  await commitAll(root);
+
+  expect((await service.check({ cwd: project })).warnings).toEqual([]);
+  expect([...((await flowFoldersInHead(project, [localDir])) ?? [])]).toEqual([localDir]);
 });

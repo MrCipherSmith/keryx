@@ -44,16 +44,17 @@ export async function commitAll(root: string, message = "seed"): Promise<void> {
 
 /**
  * Create `refs/remotes/<name>` at a commit whose tree holds exactly
- * `.metaproject/flows/<dir>/flow.json` for each folder in `dirs`.
+ * `<prefix>.metaproject/flows/<dir>/flow.json` for each folder in `dirs`
+ * (`prefix` is `""` or a project subdirectory such as `proj/`).
  */
-export async function addRemoteRef(root: string, name: string, dirs: string[]): Promise<void> {
+export async function addRemoteRef(root: string, name: string, dirs: string[], prefix = ""): Promise<void> {
   const scratch = await mkdtemp(path.join(tmpdir(), "keryx-remote-fixture-"));
   const blobFile = path.join(scratch, "flow.json");
   await writeFile(blobFile, "{}\n", "utf8");
   const blob = await git(root, ["hash-object", "-w", blobFile]);
   const env = { GIT_INDEX_FILE: path.join(scratch, "index") };
   for (const dir of dirs) {
-    await git(root, ["update-index", "--add", "--cacheinfo", `100644,${blob},.metaproject/flows/${dir}/flow.json`], env);
+    await git(root, ["update-index", "--add", "--cacheinfo", `100644,${blob},${prefix}.metaproject/flows/${dir}/flow.json`], env);
   }
   const tree = await git(root, ["write-tree"], env);
   const commit = await git(root, ["commit-tree", tree, "-m", `remote ${name}`], env);
