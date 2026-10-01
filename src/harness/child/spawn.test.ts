@@ -401,6 +401,7 @@ function makeSpyFlowService(
     acReseal: notImplemented("acReseal", calls),
     implemented: notImplemented("implemented", calls),
     complete: notImplemented("complete", calls),
+    checkComplete: notImplemented("checkComplete", calls),
     confirmMint: notImplemented("confirmMint", calls),
     recover: notImplemented("recover", calls),
     block: notImplemented("block", calls),

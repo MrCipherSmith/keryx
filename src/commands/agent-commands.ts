@@ -204,7 +204,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
     // background run and the report modal all need the OpenTUI surface.
     name: "/governance",
-    description: "Show the last governance report, or run one in the background",
+    description: "Flows with summary and effect — check and complete them; the governance report",
     modes: AGENT_ONLY,
   },
   {

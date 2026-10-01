@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.50] — 2026-10-01
+### Added
+- **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back (Escape or any other key cancels), checks again against the live flow, and only if nothing changed runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.
+- **`keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]`** — every gate `flow complete` would evaluate, through the same code, plus the PR's merge state (`merged`, `open`, `closed`, `not-found`, `no-pr`, `unknown`) and, under each failing gate, the command that fixes it where one is known. It writes nothing: no status change, no completion attempt, no signature, no lock, no spent token. Exits 0 when `flow complete` would pass, 1 when it would not, 2 when the check could not run (with `--json`, an `{"error":{"message"}}` object).
+- **`keryx governance report` prints `summary:` and `effect:` under every flow**, and `latest.json` carries them as `summary` and `effect`. A report stored before this version still loads and reads `not recorded` for both.
+### Changed
+- The GitHub tracker returns the PR's `state` (`OPEN`, `MERGED`, `CLOSED`), which it already fetched. The pull-request gate is unchanged: it still asks for green checks, not a merge.
+- The product index and the governance report read `## Outcome criteria` bullets through one parser; the governance report also reads a section written as prose or a numbered list, which the product index still does not count as a criterion.
+
+[Changes since 0.3.49](https://github.com/MrCipherSmith/keryx/compare/v0.3.49...v0.3.50)
+
 ## [0.3.49] — 2026-10-01
 ### Added
 - **`/channels`: connect Telegram to a machine from the shell.** The modal lists Telegram; when it is not connected there is one button, Connect, and when it is, Test and Disconnect. Connect asks for the bot token only (hidden, paste works, never in the transcript, history or logs). Your Telegram user id comes from a one-time pairing code (10 minutes, single use) sent to the bot in a private chat, and the group id from adding the bot to the group as an administrator; the modal says when the group has no topics or the bot lacks the manage topics right. No id, path or timeout is typed, and nothing is hard-coded. Test sends one message naming the machine to the General topic; Disconnect deletes every topic, stops polling and erases the token and the config (with `serve` down it erases the files and says the topics stay in the group). A sidebar row shows the state, a menu entry opens the modal, and the readline shell prints the state and how to connect. Use one bot per machine; the group can be shared. Sessions still opt in one by one with `/remote-control`.

@@ -5,7 +5,7 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import { OUTCOME_HINT, fencedLines, flowStatementFrom, proseOutsideFences, readOutcomeAuthor, sectionOf, statementFrom } from "../flow/service";
+import { fencedLines, flowStatementFrom, outcomeBulletsFrom, proseOutsideFences, readOutcomeAuthor, sectionOf, statementFrom } from "../flow/service";
 import { OUTCOME_VERDICTS } from "./types";
 import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
 
@@ -20,18 +20,8 @@ const LEADING_DATE = /^(\d{4}-\d{2}-\d{2}(?:T[\d:.]+Z?)?)\b[ \t:,-]*/;
 
 /** Bullets of an `Outcome criteria` section, each continuation line folded into its bullet. */
 export function outcomeCriterionFrom(markdown: string): string | null {
-  const body = sectionOf(markdown, /^outcome criteri(?:a|on)$/i);
-  if (body === null) return null;
-  const bullets: string[] = [];
-  for (const line of body.split(/\r?\n/)) {
-    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
-    // Only the exact template line is skipped: a real bullet that starts with the same words is a criterion.
-    if ((bullet?.[1] ?? line).trim() === OUTCOME_HINT) continue;
-    if (bullet !== null) bullets.push((bullet[1] ?? "").trim());
-    else if (line.trim().length > 0 && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
-  }
-  const usable = bullets.filter((bullet) => bullet.length > 0);
-  return usable.length === 0 ? null : usable.join(" | ");
+  const bullets = outcomeBulletsFrom(markdown);
+  return bullets === null || bullets.length === 0 ? null : bullets.join(" | ");
 }
 
 /** True when a criterion names something that can be looked at; a `not measured` line admits there is nothing. */

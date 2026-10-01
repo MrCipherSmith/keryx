@@ -589,6 +589,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   },
   {
     module: "tasks",
+    command: "flow check-complete",
+    summary:
+      "Evaluate every gate `flow complete` would, through the same code, and report the PR's merge state " +
+      "(merged, open, closed, not-found, no-pr, unknown) and, per failing gate, the command that would fix it. " +
+      "Writes nothing: no status change, no completion attempt, no signature, no spent token. Exits 0 when " +
+      "`flow complete` would pass, 1 when it would not, 2 when the check could not run (with --json: an " +
+      "`{\"error\":{\"message\"}}` object).",
+    intent: ["можно ли закрыть флоу", "проверь закрытие флоу", "flow check-complete", "can this flow be completed", "check flow completion"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "merged", type: "string", required: false, desc: "commit sha for a direct-merge handoff, as `flow complete --merged` takes it" },
+      { name: "confirm-token", type: "string", required: false, desc: "a token minted by `flow confirm`; checked, never spent" },
+      { name: "json", type: "bool", required: false, desc: "print the check as JSON" },
+    ],
+    json: true,
+    read: true,
+    sideEffects: [],
+  },
+  {
+    module: "tasks",
     command: "flow confirm",
     summary:
       "OPERATOR-ONLY — not for agents to run. A person mints, in their own terminal, the completion confirmation " +

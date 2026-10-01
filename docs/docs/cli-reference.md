@@ -805,9 +805,29 @@ Refusals print their code and exit non-zero (except where noted):
   opens the report modal. `/governance` does the same from the keyboard.
 
   The modal shows the stored report's `generated_at`, filters and
-  `all_projects`, above `latest.md` wrapped to the panel. `↑/↓` and `j/k` scroll
-  one line, `PgUp/PgDn` scroll one page, `r` re-runs the report in the
-  background and refreshes the modal when it finishes, and `Esc` closes it. A
+  `all_projects` above two tabs (`←/→` switches them).
+
+  **Flows** (the tab it opens on) lists the current project's flows, open ones
+  first and newest first, each with its `summary:` (expected outcome, tasks done,
+  tasks still open) and `effect:` (the first bullet of `## Outcome criteria` in
+  its `description.md`, or `not stated` with the reason). `↑/↓` and `j/k` move
+  the selection. On an open flow, `c` runs the read-only completion check — the
+  same thing as `keryx flow check-complete` — and shows the PR's merge state and
+  every gate, with the command that fixes each failing one. The action row under
+  the list does what its key does when clicked. Once a check passed, the PR is
+  merged (or a direct merge was verified) and the flow has not changed since,
+  `d` asks you to type the flow id and press Enter, naming the checked-out
+  branch; any other key cancels. Then it runs `flow complete`, signed as the CLI
+  signs it with no `--signed-by` (`KERYX_ACTOR`, else the git identity), shows
+  the result, and re-runs the report. A flow created with
+  `--require-confirmation` is pointed at `keryx flow confirm` in a terminal
+  instead: the modal never mints a token. Check and complete run in the shell's
+  own process and never start an agent turn. A stored `--all-projects` report
+  lists only the current project here.
+
+  **Report** shows `latest.md` wrapped to the panel. `↑/↓` and `j/k` scroll
+  one line, `PgUp/PgDn` scroll one page. On either tab `r` re-runs the report in
+  the background and refreshes the modal when it finishes, and `Esc` closes it. A
   malformed or unreadable stored report is never rebuilt behind your back:
   clicking the `unreadable` row or `/governance` opens the modal, which gives
   the reason and offers `r` to rebuild it. A report
@@ -2670,6 +2690,14 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
   fail, skipped), from `FlowState.completionAttempts` (flow 291). Absent on
   every completion attempt made before flow 291, which reports `gate
   outcomes: not recorded` rather than inferring anything.
+- **Summary and effect** (flow 364), from `description.md` and the task list,
+  with no model. `summary:` is the first sentence of `## Expected Outcome`
+  (else `## Problem`), tasks done of all, and the tasks still open. `effect:`
+  is the first bullet of `## Outcome criteria` (with `(+N more)` when there are
+  more) — the same parser `keryx product index` uses. `effect: not stated`
+  names why: no such section, only the template hint, or `description.md`
+  unreadable. In `latest.json` they are `summary` and `effect`; a report stored
+  before them reads `not recorded` for both.
 
 Per project (`.metaproject/data/trigger/runs.jsonl`):
 
@@ -3534,6 +3562,7 @@ Every `ac` subcommand refuses an argument it does not use — an extra positiona
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `check-complete <id>` | `--merged <commit>`, `--confirm-token <token>`, `--json` | Evaluate every gate `complete` would, through the same function, and write nothing: no status change, no `completionAttempts` entry, no signature, no lock, no spent token. Also reports whether `complete` could start from the flow's status, and the PR's merge state from the tracker: `merged`, `open`, `closed`, `not-found`, `no-pr`, or `unknown` whenever the tracker did not say (with `--merged`, `merged` means the `main-merge` gate passed). Under each failing gate it names the command that fixes it where one is known, such as `keryx flow ac confirm <id> AC2`. The merge state is reported beside the gates, not as one: the pull-request gate asks for green checks. Exits 0 when `complete` would pass, 1 when it would not, and 2 when the check could not run (an unknown id, say); with `--json` that case prints `{"error":{"message":...}}`. The `/governance` modal's `c` runs the same check. |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
 | `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
