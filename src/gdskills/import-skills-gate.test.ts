@@ -1,8 +1,16 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { importProjectSkills, renderImportProjectSkillsMarkdown, updateProjectSkills } from "./import-skills";
+import {
+  importProjectSkills,
+  renderImportProjectSkillsMarkdown,
+  runSkillsImportCommand,
+  runSkillsUpdateCommand,
+  updateProjectSkills,
+} from "./import-skills";
+import { runImportReviewers } from "../review/import-reviewers";
+import * as guardModule from "../security/guard";
 import type { ImportProjectSkillsResult } from "./import-skills";
 import { PROJECT_SKILLS_CATALOG_PATH, PROJECT_SKILLS_MANIFEST_PATH } from "./project-skills";
 import type { SecurityMode } from "../security/types";
@@ -357,5 +365,236 @@ describe("keryx skills update", () => {
     expect(result.imported[0]).toMatchObject({ status: "updated" });
     expect(result.imported[0]?.reason).toContain("redacted by the security gate");
     expect(await readFile(path.join(cwd, installed), "utf8")).not.toContain(SECRET);
+  });
+});
+
+// Review round 1 (flow 362): K-001 .. K-006.
+
+/** A project whose security module is off. */
+async function disableSecurity(): Promise<void> {
+  await writeFile(
+    path.join(cwd, PROJECT_SKILLS_MANIFEST_PATH),
+    `${JSON.stringify({ modules: { gdskills: {}, security: { enabled: false } } }, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+describe("K-001: the security module is disabled", () => {
+  beforeEach(async () => {
+    await disableSecurity();
+  });
+
+  test("a SKILL.md with injection text is refused, nothing is written, and the reason names the import's own check", async () => {
+    await writeReviewer("review-bad", INJECTION);
+    const result = await importAll();
+    expect(result.imported[0]).toMatchObject({ name: "review-bad", status: "refused" });
+    expect(result.imported[0]?.reason).toContain("security module is disabled");
+    expect(result.imported[0]?.reason).toContain("import ran its own injection check");
+    expect(result.imported[0]?.security).toMatchObject({ refused: true });
+    expect(await exists(".metaproject/project-skills/review/review-bad/SKILL.md")).toBe(false);
+    expect(await readFile(path.join(cwd, PROJECT_SKILLS_MANIFEST_PATH), "utf8")).not.toContain("review-bad");
+    expect(JSON.stringify(result)).not.toContain("Ignore all previous");
+  });
+
+  test("a dry run says would-refuse", async () => {
+    await writeReviewer("review-bad", INJECTION);
+    const result = await importAll({ dryRun: true });
+    expect(result.imported[0]).toMatchObject({ status: "would-refuse" });
+  });
+
+  test("a rule with injection text is refused and not written", async () => {
+    await reviewerWithRule("review-inj", "house/inj.mdc", `# inj\n\n${INJECTION}\n`);
+    const result = await importAll();
+    expect(result.rules[0]).toMatchObject({ ref: "house/inj.mdc", status: "refused" });
+    expect(result.rules[0]?.reason).toContain("security module is disabled");
+    expect(await exists(`${RULES}/house/inj.mdc`)).toBe(false);
+  });
+
+  test("--allow-flagged writes it, and says so", async () => {
+    await writeReviewer("review-bad", INJECTION);
+    const result = await importAll({ allowFlagged: true });
+    expect(result.imported[0]).toMatchObject({ status: "imported" });
+    expect(result.imported[0]?.reason).toContain("written because --allow-flagged");
+  });
+
+  test("clean text still imports normally", async () => {
+    await reviewerWithRule("review-fine", "house/fine.mdc", "# fine\n");
+    const result = await importAll();
+    expect(result.imported[0]).toMatchObject({ status: "imported" });
+    expect(result.imported[0]).not.toHaveProperty("security");
+    expect(result.rules[0]).toMatchObject({ status: "imported" });
+    expect(await exists(".metaproject/project-skills/review/review-fine/SKILL.md")).toBe(true);
+  });
+});
+
+describe("K-002: a rule cited only by refused packages", () => {
+  test("is not written and is reported skipped; a dry run agrees", async () => {
+    await writeReviewer("review-bad", `Standard: \`house/clean.mdc\`.\n\n${INJECTION}`);
+    await writeRule("house/clean.mdc", "# clean\n");
+    const dry = await importAll({ dryRun: true });
+    expect(dry.rules[0]).toMatchObject({ ref: "house/clean.mdc", status: "skipped", reason: "cited only by a refused package" });
+    const real = await importAll();
+    expect(real.rules[0]).toMatchObject({ ref: "house/clean.mdc", status: "skipped", reason: "cited only by a refused package" });
+    expect(await exists(`${RULES}/house/clean.mdc`)).toBe(false);
+    expect(renderImportProjectSkillsMarkdown(real)).toContain("house/clean.mdc: skipped — cited only by a refused package");
+  });
+
+  test("a rule also cited by an imported package is written as before", async () => {
+    await writeReviewer("review-bad", `Standard: \`house/shared.mdc\`.\n\n${INJECTION}`);
+    await writeReviewer("review-fine", "Standard: `house/shared.mdc`.");
+    await writeRule("house/shared.mdc", "# shared\n");
+    const result = await importAll();
+    expect(result.rules[0]).toMatchObject({ ref: "house/shared.mdc", status: "imported" });
+    expect(await exists(`${RULES}/house/shared.mdc`)).toBe(true);
+  });
+});
+
+describe("K-003: exit code of a run with a refused row", () => {
+  const originalCwd = process.cwd();
+  let printed: string[];
+  let logSpy: ReturnType<typeof spyOn>;
+
+  beforeEach(() => {
+    process.chdir(cwd);
+    process.exitCode = 0;
+    printed = [];
+    logSpy = spyOn(console, "log").mockImplementation((...parts: unknown[]) => {
+      printed.push(parts.join(" "));
+    });
+  });
+
+  afterEach(() => {
+    logSpy.mockRestore();
+    process.chdir(originalCwd);
+    process.exitCode = 0;
+  });
+
+  async function twoPackages(): Promise<void> {
+    await writeReviewer("review-bad", INJECTION);
+    await writeReviewer("review-fine", "Plain guidance.");
+  }
+
+  test("skills import: a real run exits 1 after printing every row", async () => {
+    await twoPackages();
+    await runSkillsImportCommand(["import", "--from", source, "--module", "review", "--only", "*"]);
+    expect(process.exitCode).toBe(1);
+    expect(printed.join("\n")).toContain("review-bad: refused");
+    expect(printed.join("\n")).toContain("review-fine: imported");
+  });
+
+  test("skills import --json: exits 1 and prints the rows", async () => {
+    await twoPackages();
+    await runSkillsImportCommand(["import", "--from", source, "--module", "review", "--only", "*", "--json"]);
+    expect(process.exitCode).toBe(1);
+    const parsed = JSON.parse(printed.join("\n")) as ImportProjectSkillsResult;
+    expect(parsed.imported.map((row) => row.status).sort()).toEqual(["imported", "refused"]);
+  });
+
+  test("skills import: a dry run exits 0 on would-refuse", async () => {
+    await twoPackages();
+    await runSkillsImportCommand(["import", "--from", source, "--module", "review", "--only", "*", "--dry-run"]);
+    expect(printed.join("\n")).toContain("would-refuse");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("skills import: a clean run exits 0", async () => {
+    await writeReviewer("review-fine", "Plain guidance.");
+    await runSkillsImportCommand(["import", "--from", source, "--module", "review", "--only", "*"]);
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("review import: a real run exits 1, a dry run 0", async () => {
+    await twoPackages();
+    await runImportReviewers(["--from", source, "--only", "*", "--dry-run"]);
+    expect(process.exitCode).toBe(0);
+    await runImportReviewers(["--from", source, "--only", "*"]);
+    expect(process.exitCode).toBe(1);
+    expect(printed.join("\n")).toContain("review-fine: imported");
+  });
+
+  test("skills update: a real run that refuses exits 1, a dry run 0", async () => {
+    const file = path.join(source, "origin.md");
+    const skill = (body: string): string => `---\nname: verifier\nmetadata:\n  category: quality\n---\n\n# Verifier\n\n${body}\n`;
+    await writeFile(file, skill("Original."), "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: file, module: "quality", name: "verifier" });
+    await writeFile(file, skill(INJECTION), "utf8");
+    await runSkillsUpdateCommand(["update", "--all", "--dry-run"]);
+    expect(process.exitCode).toBe(0);
+    await runSkillsUpdateCommand(["update", "--all"]);
+    expect(process.exitCode).toBe(1);
+    expect(printed.join("\n")).toContain("verifier: refused");
+  });
+});
+
+describe("K-004: the gate reads the bytes that are written, once, before any write", () => {
+  let gateSpy: ReturnType<typeof spyOn>;
+  let gated: string[];
+
+  beforeEach(() => {
+    gated = [];
+    const original = guardModule.guardOutput;
+    gateSpy = spyOn(guardModule, "guardOutput").mockImplementation(async (input) => {
+      gated.push(input.content);
+      return original(input);
+    });
+  });
+
+  afterEach(() => {
+    gateSpy.mockRestore();
+  });
+
+  test("an import gates a SKILL.md once, and writes exactly the text it gated", async () => {
+    await writeReviewer("review-fine", "Plain guidance.");
+    await importAll();
+    // (`createProjectSkill`'s own scaffold write is gated too; it carries no package text.)
+    const ofPackage = gated.filter((text) => text.includes("Plain guidance."));
+    expect(ofPackage).toHaveLength(1);
+    expect(await readFile(path.join(cwd, ".metaproject/project-skills/review/review-fine/SKILL.md"), "utf8")).toBe(ofPackage[0] ?? "");
+  });
+
+  test("an update gates once and writes exactly the text it gated", async () => {
+    const file = path.join(source, "origin.md");
+    const skill = (body: string): string => `---\nname: verifier\nmetadata:\n  category: quality\n---\n\n# Verifier\n\n${body}\n`;
+    await writeFile(file, skill("Original."), "utf8");
+    await importProjectSkills({ projectRoot: cwd, from: file, module: "quality", name: "verifier" });
+    await writeFile(file, skill("Changed."), "utf8");
+    gated.length = 0;
+    await updateProjectSkills({ projectRoot: cwd, all: true });
+    const ofPackage = gated.filter((text) => text.includes("Changed."));
+    expect(ofPackage).toHaveLength(1);
+    expect(await readFile(path.join(cwd, ".metaproject/project-skills/quality/verifier/SKILL.md"), "utf8")).toBe(ofPackage[0] ?? "");
+  });
+
+  test("a refused --force import leaves the installed SKILL.md and registry untouched", async () => {
+    await writeReviewer("review-x", "Plain guidance.");
+    await importAll();
+    const installed = path.join(cwd, ".metaproject/project-skills/review/review-x/SKILL.md");
+    const before = await readFile(installed, "utf8");
+    const manifestBefore = await readFile(path.join(cwd, PROJECT_SKILLS_MANIFEST_PATH), "utf8");
+    await writeReviewer("review-x", INJECTION);
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", only: ["*"], force: true });
+    expect(result.imported[0]).toMatchObject({ status: "refused" });
+    expect(await readFile(installed, "utf8")).toBe(before);
+    expect(await readFile(path.join(cwd, PROJECT_SKILLS_MANIFEST_PATH), "utf8")).toBe(manifestBefore);
+  });
+});
+
+describe("K-006: the --allow-flagged hint", () => {
+  test("an enforced-mode secret refusal does not print it", async () => {
+    await enableSecurity("enforced");
+    await writeReviewer("review-sec", `key ${SECRET}`);
+    const text = renderImportProjectSkillsMarkdown(await importAll());
+    expect(text).toContain("review-sec: refused");
+    expect(text).not.toContain("--allow-flagged");
+  });
+
+  test("an injection refusal prints it", async () => {
+    await writeReviewer("review-bad", INJECTION);
+    expect(renderImportProjectSkillsMarkdown(await importAll())).toContain("--allow-flagged");
+  });
+
+  test("a rule's injection would-refuse prints it too", async () => {
+    await reviewerWithRule("review-inj", "house/inj.mdc", `# inj\n\n${INJECTION}\n`);
+    expect(renderImportProjectSkillsMarkdown(await importAll({ dryRun: true }))).toContain("--allow-flagged");
   });
 });

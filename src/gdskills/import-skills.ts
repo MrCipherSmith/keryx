@@ -30,7 +30,8 @@ import {
 } from "./project-skills";
 import { flagCarriers, flagStatus, PROJECT_REVIEWER_MODULE, projectReviewerFlags } from "./project-reviewers";
 import { reviewerFlagReport, reviewerFlags, reviewerPathGate, type PathTriggerSource } from "./reviewer-triggers";
-import { formatGuardWarning, guardOutput, prepareOutputForPersistence } from "../security/guard";
+import { detectInjection } from "../security/detect/injection";
+import { formatGuardWarning, guardOutput, isSecurityEnabled, prepareOutputForPersistence } from "../security/guard";
 import type { SecurityAction, SecurityCategory } from "../security/types";
 
 const BUNDLED_NAMES = new Set(BUNDLED_GDSKILLS.map((entry) => entry.name));
@@ -167,7 +168,9 @@ export type ImportedRule = {
     | "would-import-project"
     | "unresolved"
     | "refused"
-    | "would-refuse";
+    | "would-refuse"
+    /** Cited only by packages the gate refused: not written, nothing to read it. */
+    | "skipped";
   /** The skills that cite it. */
   citedBy: string[];
   origin?: string;
@@ -239,11 +242,15 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
   // Rules are resolved for skipped skills too: re-running an import over a
   // project that already has the skills is how a project imported before this
   // step existed gets the rules its reviewers cite.
+  const refusedPackages = new Set(
+    plans.flatMap((plan) => ("row" in plan && isRefusedStatus(plan.row.status) ? [plan.row.name] : [])),
+  );
   const ruleDecisions = await decideReferencedRules(
     options,
     sources
       .filter((source) => !skippedAsDeprecated(source))
       .filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
+    refusedPackages,
   );
   await refuseUncontainedWrites(label, options.projectRoot, [
     ...plans.flatMap((plan) => ("write" in plan ? projectSkillWritePaths(plan.write.module, plan.write.name, "single") : [])),
@@ -400,10 +407,7 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
     result.imported.some((row) => isRefusedStatus(row.status)) ||
     result.rules.some((rule) => isRefusedStatus(rule.status))
   ) {
-    lines.push(
-      REFUSED_NOTE,
-      "",
-    );
+    lines.push(refusedNote(result), "");
   }
   if (result.rules.length > 0) {
     lines.push("## rules the skills cite", "");
@@ -967,11 +971,32 @@ type WriteGate = Extract<GateVerdict, { kind: "write" }>;
 
 const isString = (value: string | undefined): value is string => value !== undefined;
 
-const REFUSED_NOTE =
-  "A refused file was not written. A prompt-injection refusal can be overridden after you read the file: run the command again with --allow-flagged.";
+const REFUSED_NOTE = "A refused file was not written.";
+
+const ALLOW_FLAGGED_HINT =
+  "A prompt-injection refusal can be overridden after you read the file: run the command again with --allow-flagged.";
 
 function isRefusedStatus(status: string): boolean {
   return status === "refused" || status === "would-refuse";
+}
+
+/** The note under a result with a refusal; the --allow-flagged hint only when that flag could change a refusal. */
+function refusedNote(result: ImportProjectSkillsResult): string {
+  const refused = [...result.imported, ...result.rules].filter((row) => isRefusedStatus(row.status));
+  const overridable = refused.some((row) =>
+    row.security?.findings.some((finding) => finding.policyId.startsWith("prompt-injection.")),
+  );
+  return overridable ? `${REFUSED_NOTE} ${ALLOW_FLAGGED_HINT}` : REFUSED_NOTE;
+}
+
+/**
+ * A real run that refused a file fails, after every row has been printed. A dry
+ * run only predicts (`would-refuse`) and exits 0.
+ */
+export function exitNonZeroOnRefusal(result: ImportProjectSkillsResult): void {
+  if ([...result.imported, ...result.rules].some((row) => row.status === "refused")) {
+    process.exitCode = 1;
+  }
 }
 
 /** A row for a package or rule the run wrote, or would write: not a skip, not a refusal. */
@@ -992,11 +1017,26 @@ async function gateText(
     source: "untrusted-external",
     path: target,
   });
-  const findings = guard.decision.findings;
-  const warning = formatGuardWarning(guard.decision);
-  const summary = findings.map(({ policyId, category, action }) => ({ policyId, category, action }));
+  let findings: { policyId: string; category: SecurityCategory; action: SecurityAction }[] = guard.decision.findings.map(
+    ({ policyId, category, action }) => ({ policyId, category, action }),
+  );
+  let action = guard.decision.action;
+  let warning = formatGuardWarning(guard.decision);
+  // With the security module disabled the guard returns no findings at all, so
+  // the import would write instruction text verbatim. The import's refusal does
+  // not depend on the module: it runs the deterministic injection detector
+  // itself. (A secret keeps the floor redaction the guard applies in any case.)
+  if (guard.allowed && !(await isSecurityEnabled(projectRoot))) {
+    const own = detectInjection(text);
+    if (own.length > 0) {
+      findings = own.map(({ policyId, category }) => ({ policyId, category, action: "warn" as const }));
+      action = "warn";
+      warning = `[security] the security module is disabled, so the import ran its own injection check: ${own.length} finding(s) (prompt-injection:${own.length})`;
+    }
+  }
+  const summary = findings;
   const security = (redacted: boolean, refused: boolean): ImportSecurity => ({
-    action: guard.decision.action,
+    action,
     findings: summary,
     redacted,
     refused,
@@ -1067,7 +1107,8 @@ function plannedSkillText(
       `Version: ${version}`,
       `Target: ${header.name}`,
       `Module: ${header.module}`,
-      `Origin: ${header.origin}`,
+      // `createProjectSkill` records the origin trimmed.
+      `Origin: ${header.origin.trim()}`,
       `Origin Hash: ${hashOriginContent(content)}`,
       `Imported At: ${new Date().toISOString()}`,
       "Status: active",
@@ -1186,14 +1227,7 @@ async function writeOne(
     ...versionOption(source.content),
     format: "single",
   });
-  const verdict = await overwriteImportedSkill(options.projectRoot, created, source.content, options.allowFlagged === true);
-  if (verdict.kind !== "write") {
-    return refusedSkillRow(
-      { name: source.name, module: source.module, path: created.skillPath, origin: source.origin },
-      verdict,
-      false,
-    );
-  }
+  await writeGatedSkill(options.projectRoot, created, gate);
 
   return {
     name: source.name,
@@ -1202,7 +1236,7 @@ async function writeOne(
     path: created.skillPath,
     origin: source.origin,
     wired: wiringNote(source.module),
-    ...mergeNotes(notes, gateRowParts(verdict, false)),
+    ...mergeNotes(notes, gateRowParts(gate, false)),
   };
 }
 
@@ -1294,14 +1328,7 @@ async function writeUpdate(
     ...versionOption(content),
     format: "single",
   });
-  const verdict = await overwriteImportedSkill(options.projectRoot, created, content, options.allowFlagged === true);
-  if (verdict.kind !== "write") {
-    return refusedSkillRow(
-      { name: entry.name, module: entry.module, path: created.skillPath, origin },
-      verdict,
-      false,
-    );
-  }
+  await writeGatedSkill(options.projectRoot, created, gate);
   return {
     name: entry.name,
     module: entry.module,
@@ -1309,32 +1336,26 @@ async function writeUpdate(
     path: created.skillPath,
     origin,
     wired: wiringNote(entry.module),
-    ...mergeNotes({}, gateRowParts(verdict, false)),
+    ...mergeNotes({}, gateRowParts(gate, false)),
   };
 }
 
 /**
- * Stamp the scaffold's header onto the source and write what the gate lets
- * through. Planning already ran the gate on the same text, so a refusal here is
- * not expected; if it happens anyway (the header differs from the planned one
- * in a way the gate reads) nothing more is written and the verdict is returned,
- * never thrown.
+ * Write the SKILL.md over the scaffold `createProjectSkill` just made: the text
+ * planning already put through the gate, byte for byte.
+ *
+ * There is no second gate here, and none is needed. The scaffold is only the
+ * source of the keryx header, whose values are the package's own name, module,
+ * origin, version and hash plus a timestamp: `plannedSkillText` stamps those
+ * same values, so the planned text is the text this would have been. Re-reading
+ * the scaffold and gating a second time could only ever disagree with the first
+ * verdict after `createProjectSkill` had already written the scaffold, the
+ * registry entry and the catalog row (and overwritten an installed SKILL.md on
+ * --force or update). Writing the gated bytes makes "gated" and "written" one
+ * text, and a refusal happens before the first write.
  */
-async function overwriteImportedSkill(
-  projectRoot: string,
-  created: CreateProjectSkillResult,
-  source: string,
-  allowFlagged: boolean,
-): Promise<GateVerdict> {
-  const relative = toPosix(path.join(created.skillPath, "SKILL.md"));
-  const scaffold = await readFile(path.join(projectRoot, relative), "utf8");
-  const header = extractImportHeader(scaffold, parseSkillFrontmatter(source).metadataVersion);
-  const stamped = stampImportHeader(source, header);
-  const verdict = await gateText(projectRoot, stamped, relative, allowFlagged);
-  if (verdict.kind === "write") {
-    await writeContained(projectRoot, relative, verdict.content);
-  }
-  return verdict;
+async function writeGatedSkill(projectRoot: string, created: CreateProjectSkillResult, gate: WriteGate): Promise<void> {
+  await writeContained(projectRoot, toPosix(path.join(created.skillPath, "SKILL.md")), gate.content);
 }
 
 /**
@@ -1683,10 +1704,19 @@ async function writePlacedRule(
 async function decideReferencedRules(
   options: ImportProjectSkillsOptions,
   sources: ImportSource[],
+  refusedPackages: ReadonlySet<string>,
 ): Promise<RuleDecision[]> {
   const bundledRules = bundledRulesSourcePath();
   const decisions: RuleDecision[] = [];
   for (const citation of collectRuleCitations(sources)) {
+    // A rule only refused packages cite has no reader: it is not written. One an
+    // imported (or skipped-as-existing) package cites too is decided as ever.
+    if (citation.citedBy.every((name) => refusedPackages.has(name))) {
+      decisions.push({
+        row: { ref: citation.ref, citedBy: citation.citedBy, status: "skipped", reason: "cited only by a refused package" },
+      });
+      continue;
+    }
     decisions.push(await decideRule(options, citation, bundledRules));
   }
   return decisions;
@@ -1789,9 +1819,10 @@ export async function runSkillsImportCommand(args: string[]): Promise<void> {
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
-    return;
+  } else {
+    console.log(renderImportProjectSkillsMarkdown(result));
   }
-  console.log(renderImportProjectSkillsMarkdown(result));
+  exitNonZeroOnRefusal(result);
 }
 
 /** Write content the security gate flags instead of refusing it; spelled the same on every command that imports. */
@@ -1814,9 +1845,10 @@ export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify(result, null, 2));
-    return;
+  } else {
+    console.log(renderImportProjectSkillsMarkdown(result));
   }
-  console.log(renderImportProjectSkillsMarkdown(result));
+  exitNonZeroOnRefusal(result);
 }
 
 /** The security-gate paragraph of the import, review import and update help. */
@@ -1827,8 +1859,12 @@ row is \`refused\` (\`would-refuse\` on a dry run) with the gate's own summary,
 nothing is written, and the other packages and rules go on. After reading the
 file, --allow-flagged writes it anyway and the row says it was flagged and written
 because of the flag. It does not override a block by the project's security mode:
-under mode enforced a secret is refused either way. --json rows carry a
-\`security\` object.`;
+under mode enforced a secret is refused either way. With the security module
+disabled the import runs the injection check itself, so injection text is refused
+there too (the row says the module is disabled); a secret is still masked. A rule
+cited only by refused packages is not written (\`skipped — cited only by a refused
+package\`). A real run that refused anything exits 1 after printing every row; a
+dry run (\`would-refuse\`) exits 0. --json rows carry a \`security\` object.`;
 
 export function printSkillsImportHelp(): void {
   console.log(`keryx skills import

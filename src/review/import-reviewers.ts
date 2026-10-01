@@ -1,6 +1,7 @@
 import { optionValue } from "../lib/args";
 import {
   ALLOW_FLAGGED_FLAG,
+  exitNonZeroOnRefusal,
   importProjectSkills,
   onlyOption,
   SECURITY_GATE_HELP,
@@ -67,9 +68,10 @@ export async function runImportReviewers(args: string[]): Promise<void> {
   });
   if (args.includes("--json")) {
     console.log(JSON.stringify({ ...result, inventory: await collectReviewers(process.cwd()) }, null, 2));
-    return;
+  } else {
+    console.log(renderImportProjectSkillsMarkdown(result));
   }
-  console.log(renderImportProjectSkillsMarkdown(result));
+  exitNonZeroOnRefusal(result);
 }
 
 export function printImportHelp(): void {
