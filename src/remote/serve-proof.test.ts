@@ -165,6 +165,40 @@ describe("a listener that is not serve, behind a live pid", () => {
   });
 });
 
+describe("a redirect from the listener", () => {
+  test("is never followed: the shell asks for manual redirects on every call, so a 307 cannot replay a request at the real serve", async () => {
+    r = await makeChannelsRig();
+    const seen: Array<string | undefined> = [];
+    const redirecting = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(init?.redirect);
+      return new Response(null, { status: 307, headers: { location: "http://127.0.0.1:1/v1/remote/channels-disconnect" } });
+    }) as typeof fetch;
+    hijackEndpoint(r.rig.dir, 45_998);
+    const client = new ChannelsClient({ dir: r.rig.dir, fetchImpl: redirecting });
+    expect(await client.status()).toMatchObject({ ok: false, code: "unverified-serve" });
+    expect(await client.startPairing(BOT_TOKEN)).toMatchObject({ ok: false, code: "unverified-serve" });
+    expect(seen.length).toBeGreaterThanOrEqual(2);
+    expect(seen.every((mode) => mode === "manual")).toBe(true);
+
+    rig = makeRig();
+    await rig.startServe();
+    hijackEndpoint(rig.dir, 45_998);
+    const modes: Array<string | undefined> = [];
+    const remote = rig.makeClient({
+      sessionId: "sess-pf-redirect",
+      project: "/work/app",
+      onLine: () => undefined,
+      fetchImpl: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        modes.push(init?.redirect);
+        return new Response(null, { status: 307, headers: { location: "http://127.0.0.1:1/" } });
+      }) as typeof fetch,
+    });
+    await remote.start();
+    expect(modes.length).toBeGreaterThan(0);
+    expect(modes.every((mode) => mode === "manual")).toBe(true);
+  });
+});
+
 describe("answers that did not come from serve as sent", () => {
   /** A fetch that goes to the real serve, then lets `alter` rewrite what came back. */
   function relaying(alter: (route: string, response: Response) => Promise<Response>): typeof fetch {

@@ -89,6 +89,8 @@ export class Pairing {
   private expiresAt: number;
   private readonly ttlMs: number;
   private readonly earlyGroups = new Map<number, BotUpdate>();
+  // Basic group -> supergroup moves seen before the code: replayed after the group events, so the candidate ends on the new id.
+  private earlyMigrations: BotUpdate[] = [];
   private userId: number | undefined;
   private chatId: number | undefined;
   private chatTitle: string | undefined;
@@ -198,8 +200,12 @@ export class Pairing {
   /** Look at the group again (the operator has just changed its settings). */
   async recheck(): Promise<void> {
     if (this.state === "waiting-for-group" && this.candidate !== undefined) {
-      const chatId = this.candidate;
-      await this.enqueue(() => this.inspectGroup(chatId));
+      // Read the candidate when the work runs, not now: a queued migration may move it in between.
+      await this.enqueue(async () => {
+        if (this.state === "waiting-for-group" && this.candidate !== undefined) {
+          await this.inspectGroup(this.candidate);
+        }
+      });
     }
   }
 
@@ -300,16 +306,33 @@ export class Pairing {
       .sendMessage({ chatId: message.chat.id, text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator." })
       .catch(() => undefined);
     const early = [...this.earlyGroups.values()];
+    const earlyMoves = this.earlyMigrations;
     this.earlyGroups.clear();
+    this.earlyMigrations = [];
     for (const event of early) {
       if (this.state !== "waiting-for-group") {
         break;
       }
       await this.takeGroup(event);
     }
+    // After the groups, in the order they arrived: a move only applies to the candidate the groups settled on.
+    for (const event of earlyMoves) {
+      if (this.state !== "waiting-for-group") {
+        break;
+      }
+      await this.takeMigration(event);
+    }
   }
 
   private rememberGroupEvent(update: BotUpdate): void {
+    const message = update.message;
+    if (message !== undefined && (typeof message.migrate_to_chat_id === "number" || typeof message.migrate_from_chat_id === "number")) {
+      this.earlyMigrations.push(update);
+      if (this.earlyMigrations.length > EARLY_GROUP_EVENTS) {
+        this.earlyMigrations.shift();
+      }
+      return;
+    }
     const change = update.my_chat_member;
     if (change === undefined) {
       return;
@@ -347,7 +370,9 @@ export class Pairing {
   /**
    * Turning Topics on converts a basic group into a supergroup with a NEW chat id: Telegram sends a
    * service message with `migrate_to_chat_id` on the old chat and `migrate_from_chat_id` on the new one.
-   * Only a move away from the candidate the paired user nominated counts, so nobody else can steer it.
+   * The sender is not checked. The guard is the candidate match: a `migrate_to_chat_id` counts only when it
+   * arrives in the candidate chat (`chat.id === candidate`), and a `migrate_from_chat_id` only when it names
+   * the candidate. A move from any other chat is ignored; the new chat is then inspected like any group.
    */
   private async takeMigration(update: BotUpdate): Promise<void> {
     const message = update.message;

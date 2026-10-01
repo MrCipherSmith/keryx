@@ -249,6 +249,13 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): Remot
           return refuse(lock.reason);
         }
       }
+      // The previous serve's endpoint goes before the new token exists: a shell reads the token and then the
+      // endpoint, so it can never hold the new token while the endpoint still names an old (possibly squatted) port.
+      try {
+        unlinkSync(endpointPath(options.dir));
+      } catch {
+        // Nothing left over.
+      }
       // Every start rotates the token: whatever an earlier serve handed out stops working here.
       const token = mintShellToken(options.dir);
       if (!token.ok) {

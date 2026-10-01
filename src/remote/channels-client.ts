@@ -275,6 +275,9 @@ export class ChannelsClient {
 
   /** The one place a URL is built, and the one place the loopback rule is enforced. */
   private target(route: ChannelsRoute): { url: string; token: string } {
+    // Token first, endpoint second: serve removes the old endpoint before it mints a token, so a new token
+    // is never paired with an endpoint left over from an earlier serve.
+    const token = readShellToken(this.options.dir);
     const endpoint = readEndpoint(this.options.dir);
     if (!endpoint.ok) {
       throw new ServeDown("serve-down", `keryx serve is not running (${endpoint.reason})`);
@@ -285,7 +288,6 @@ export class ChannelsClient {
     if (!this.isAlive(endpoint.value.pid)) {
       throw new ServeDown("serve-down", `keryx serve is not running (pid ${endpoint.value.pid} is gone); start it with \`keryx serve\``);
     }
-    const token = readShellToken(this.options.dir);
     if (!token.ok) {
       throw new ServeDown("serve-down", `keryx serve is not accepting the shell yet (${token.reason})`);
     }
@@ -302,6 +304,7 @@ export class ChannelsClient {
     const post = CHANNELS_ROUTE_METHODS[route] === "POST";
     const response = await this.fetchImpl(url, {
       method: post ? "POST" : "GET",
+      redirect: "manual",
       headers: post ? { authorization: `Bearer ${bearer}`, "content-type": "application/json" } : { authorization: `Bearer ${bearer}` },
       ...(post ? { body: "{}" } : {}),
       signal: AbortSignal.timeout(route === "channels-disconnect" ? this.requestTimeoutMs * DISCONNECT_TIMEOUT_FACTOR : this.requestTimeoutMs),

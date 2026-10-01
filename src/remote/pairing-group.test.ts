@@ -170,6 +170,22 @@ describe("a basic group that Topics turn into a supergroup (F-102)", () => {
     expect(pairing.snapshot().chatId).toBe(GROUP);
   });
 
+  test("the group event and the migration both arrive before the code: the candidate ends on the new id", async () => {
+    const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
+    const pairing = await openPairing(api);
+    api.pushMyChatMember({ fromId: OPERATOR, chatId: OLD_GROUP, type: "group", title: "Basic" });
+    api.pushMigration({ fromId: OPERATOR, oldChatId: OLD_GROUP, newChatId: GROUP });
+    await settle();
+    await settle();
+    expect(pairing.snapshot().state).toBe("waiting-for-user");
+    expect(api.callCount("getChat")).toBe(0);
+
+    api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+    await until(() => pairing.snapshot().state === "ready", "the new supergroup to be accepted after the replay");
+    expect(pairing.snapshot().chatId).toBe(GROUP);
+    expect(pairing.snapshot().problems).toEqual([]);
+  });
+
   test("a migration of some other chat does not move the candidate", async () => {
     const api = new FakeBotApi({ chatId: GROUP, botId: BOT_ID });
     const pairing = await pairedOperator(api);

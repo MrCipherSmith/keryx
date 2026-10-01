@@ -325,6 +325,9 @@ export class RemoteClient {
 
   /** The one place a URL is built, and the one place the loopback rule is enforced. */
   private target(route: RemoteRoute, query = ""): { url: string; token: string } {
+    // The token is read before the endpoint: serve removes the old endpoint before it mints a token, so a
+    // new token can never be paired with an endpoint left over from an earlier serve.
+    const token = readShellToken(this.options.dir);
     const endpoint = readEndpoint(this.options.dir);
     if (!endpoint.ok) {
       throw new TransientClientError(endpoint.reason);
@@ -338,7 +341,6 @@ export class RemoteClient {
         `the serve named in the endpoint file (pid ${endpoint.value.pid}) is not running as this user; refusing to send the shell token to whatever listens on that port`,
       );
     }
-    const token = readShellToken(this.options.dir);
     if (!token.ok) {
       throw new TransientClientError(token.reason);
     }
@@ -357,6 +359,7 @@ export class RemoteClient {
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
       method: "POST",
+      redirect: "manual",
       headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.any([AbortSignal.timeout(this.requestTimeoutMs), this.lifetime.signal]),
@@ -443,7 +446,7 @@ export class RemoteClient {
       // "The last line I completed was this one": serve settles that exact id if it is still waiting for it.
       headers["last-event-id"] = String(this.lastCompleted);
     }
-    const response = await this.fetchImpl(url, { method: "GET", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
+    const response = await this.fetchImpl(url, { method: "GET", redirect: "manual", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
     // The stream is proven by its headers: every frame after them comes over this same loopback connection.
     // Unproven, not one frame is read: a forged stream could otherwise feed lines to run and approvals to allow.
     if (!verifyServeResponseProof(token, nonce, "stream", response.status, "", response.headers.get(SERVE_PROOF_HEADER))) {

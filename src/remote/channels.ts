@@ -179,14 +179,16 @@ export class ChannelsController {
   private reload(): Promise<Response> {
     this.generation += 1;
     return this.exclusive(async () => {
-      await this.dropPairing();
       // Check the files first: a running hub is only stopped when the new ones can start, so a bad reload leaves the old channel working.
       const config = loadRemoteConfig(this.host.dir);
       const token = loadBotToken(this.host.dir);
       if (!config.ok || !token.ok) {
+        // The pairing is left alone too: a second shell holding a stale snapshot must not kill a live pairing with a reload that cannot succeed.
         const reason = !config.ok ? config.reason : !token.ok ? token.reason : "";
         return fail(422, "cannot-connect", this.host.hub() === undefined ? reason : `${reason} The running channel was left as it was.`);
       }
+      // Only now is the pairing consumed (connectFinish writes the files first, then reloads), and its poller ends before the hub starts.
+      await this.dropPairing();
       if (this.host.hub() !== undefined) {
         await this.host.stopHub("reloading remote control");
       }

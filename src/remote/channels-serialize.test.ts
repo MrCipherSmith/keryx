@@ -267,16 +267,56 @@ test("F-109: a token Telegram rejects leaves the pairing in progress untouched a
 });
 
 test("F-109: a valid new token replaces the pairing, and the old poller is gone before the new one runs", async () => {
-  const first = new FakeBotApi();
-  const second = new FakeBotApi();
-  let current: FakeBotApi = first;
-  const { host } = await makeHost(first, { openApi: () => ({ ok: true, api: current }) });
+  // ONE bot (one token): the two pairings are two clients over the same state, so a second getUpdates
+  // while the first is still in flight is a 409 and would fail the new pairing.
+  const api = new FakeBotApi();
+  const clients = [api.connect("first"), api.connect("second")];
+  let opened = 0;
+  const { host } = await makeHost(api, { openApi: () => ({ ok: true, api: clients[Math.min(opened++, clients.length - 1)]! }) });
+  const controller = new ChannelsController({ host, pairing: fastPairing });
+  let most = 0;
+  const sampler = setInterval(() => {
+    most = Math.max(most, api.activePollers());
+  }, 1);
+  try {
+    expect((await controller.handle("channels-pair", request)).status).toBe(200);
+    await until(() => api.callCount("getUpdates", "first") > 0, "the first pairing to poll");
+
+    expect((await controller.handle("channels-pair", request)).status).toBe(200);
+    await until(() => api.callCount("getUpdates", "second") > 0, "the new pairing to poll");
+    // Give the new poller a few rounds: a conflict with a poller that was not ended first shows up as a failed pairing.
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(api.callCount("getMe", "first")).toBe(1);
+    expect(api.callCount("getMe", "second")).toBe(1);
+    expect(most).toBeLessThanOrEqual(1);
+    expect(await pairingSnapshot(controller)).toEqual({ status: 200, state: "waiting-for-user" });
+    const calls = api.calls.filter((call) => call.method === "getUpdates");
+    expect(calls.at(-1)?.label).toBe("second");
+  } finally {
+    clearInterval(sampler);
+    await controller.stop();
+  }
+});
+
+test("a reload whose files do not validate leaves a live pairing running", async () => {
+  const api = new FakeBotApi();
+  // Nothing on disk: the reload cannot succeed, as when a second shell with a stale "off" snapshot presses Retry.
+  const { host, calls } = await makeHost(api);
   const controller = new ChannelsController({ host, pairing: fastPairing });
   expect((await controller.handle("channels-pair", request)).status).toBe(200);
-  await until(() => first.activePollers() === 1, "the first pairing to poll");
+  await until(() => api.activePollers() === 1, "the pairing to poll");
 
-  current = second;
-  expect((await controller.handle("channels-pair", request)).status).toBe(200);
-  await until(() => first.activePollers() === 0 && second.activePollers() === 1, "only the new pairing to poll");
+  const response = await controller.handle("channels-reload", request);
+
+  expect(response.status).toBe(422);
+  expect(await errorCode(response)).toBe("cannot-connect");
+  expect(calls.start).toBe(0);
+  expect(await statusState(controller)).toBe("pairing");
+  expect(await pairingSnapshot(controller)).toEqual({ status: 200, state: "waiting-for-user" });
+  expect(api.activePollers()).toBe(1);
+  // Its code still works.
+  api.pushPrivateMessage({ fromId: OPERATOR, text: CODE });
+  await until(async () => (await pairingSnapshot(controller)).state === "waiting-for-group", "the code to still pair the operator");
   await controller.stop();
 });
