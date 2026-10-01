@@ -1328,7 +1328,7 @@ test("`flow init` opts every new package into both the task and the review gate"
   await fresh();
   const service = createFlowService(makeDeps());
   const { flow } = await service.init({ cwd: ROOT, title: "Opt-in check" });
-  expect(flow.gates).toEqual({ tasks: true, review: true, owner: true });
+  expect(flow.gates).toEqual({ tasks: true, review: true, owner: true, folderCommitted: true });
 });
 
 test("the gate runs where the specification puts it: seventh, after owner", async () => {
@@ -1350,6 +1350,7 @@ test("the gate runs where the specification puts it: seventh, after owner", asyn
     "base-branch",
     "tasks",
     "owner",
+    "folder-committed",
     "review",
     "health",
     // Flow 299: evaluated when the attempt starts, reported last.

@@ -563,7 +563,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "flow complete",
     summary:
       "Run the completion gates (acceptance criteria, pull-request or main-merge, base branch, tasks, owner, " +
-      'review) and close the flow when every gate passes; otherwise returns it to in-progress. Records a ' +
+      'folder committed, review) and close the flow when every gate passes; otherwise returns it to in-progress. Records a ' +
       'signature; `--signed-by` (falling back to KERYX_ACTOR, then the local git identity, then "unknown") is ' +
       "never proof a human signed.",
     intent: ["заверши флоу", "flow complete", "close flow", "complete flow"],

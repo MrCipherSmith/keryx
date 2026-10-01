@@ -142,6 +142,8 @@ import {
   reservedIds,
   resolveAllocationScope,
 } from "./allocation";
+import { flowFoldersInHead } from "./folder-committed";
+import { flowNumberOfDir, knownRemoteFlowDirs, remoteFlowNumbers, safeDirName } from "./remote-flows";
 import {
   renderAcceptanceCriteria,
   renderDescription,
@@ -231,6 +233,8 @@ function prMergeState(pr: PrObservation, gates: readonly GateOutcome[]): PrMerge
 const UNCONFIRMED_PREFIX = "unconfirmed: ";
 /** The pull-request gate's detail when the flow recorded no PR. */
 const NO_PR_DETAIL = "no PR recorded";
+/** Start of the folder-committed gate's failure detail; `completionFixHint` reads the folder name back through it. */
+const FOLDER_UNCOMMITTED_PREFIX = "flow folder ";
 
 /**
  * Whether `complete` can start from this status (flow 364, review A-001): the
@@ -270,6 +274,14 @@ export function completionFixHint(gate: GateOutcome, flowId: string): string | u
       return "keryx health run";
     case "confirmation":
       return `keryx flow confirm ${flowId} (in a terminal)`;
+    case "folder-committed": {
+      // The gate's own detail names the folder; a gate that could not be
+      // evaluated says something else and has no one-command fix.
+      const dir = gate.detail.startsWith(FOLDER_UNCOMMITTED_PREFIX)
+        ? gate.detail.slice(FOLDER_UNCOMMITTED_PREFIX.length).split(" ")[0]
+        : undefined;
+      return dir ? `git add .metaproject/flows/${dir} && git commit` : undefined;
+    }
     default:
       return undefined;
   }
@@ -583,6 +595,16 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
     // blocked by a concept it predates.
     gates.push(ownerGate(flow));
 
+    // Gate 3c: folder-committed (flow 384). Same opt-in shape: `gates.folderCommitted`,
+    // set by `flow init`. The folder travels in the pull request that carries the
+    // code; one that never reached a commit leaves its number free for every other
+    // clone to take. Caught like every gate that reads the outside world.
+    try {
+      gates.push(await folderCommittedGate(cwd, dir, flow));
+    } catch {
+      gates.push(unevaluableGate("folder-committed"));
+    }
+
     // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
     // basis, and never allowed to pass on absence: a condition that could not
     // be observed fails, because a gate that passes because nothing was
@@ -706,7 +728,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // scope, so a sibling worktree cannot mint the same id (flow 116).
       const scope = await resolveAllocationScope(input.cwd);
       return withFileLock(scope.lockPath, async () => {
-        const id = await nextFlowId(input.cwd, await reservedIds(scope));
+        // Flow 384: the ledger only knows what THIS clone handed out. A number
+        // already spent by a flow folder on a known remote branch is reserved
+        // too, so a second clone or an unfetched-branch gap cannot reuse it.
+        const id = await nextFlowId(input.cwd, [
+          ...(await reservedIds(scope)),
+          ...(await remoteFlowNumbers(input.cwd)),
+        ]);
         const date = now().slice(0, 10);
         const slug = slugify(input.slug ?? title);
         const dir = `${id}-${date}-${slug}`;
@@ -732,6 +760,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             tasks: true,
             review: true,
             owner: true,
+            folderCommitted: true,
             ...(input.requireConfirmation === true || (await readRequireConfirmationDefault(input.cwd))
               ? { confirmation: true }
               : {}),
@@ -1620,6 +1649,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               "Pick a fresh number (see .metaproject/flows/id-map.json).",
           );
         }
+        // Flow 384: a number another branch already uses would only move the
+        // collision to the next merge.
+        const remoteUse = (await knownRemoteFlowDirs(cwd)).find(
+          (entry) => flowNumberOfDir(entry.dir) === Number(to),
+        );
+        if (remoteUse) {
+          throw new Error(
+            `Flow id ${to} is already used on ${remoteUse.ref} (${safeDirName(remoteUse.dir)}) and cannot be reused. ` +
+              "Pick a fresh number.",
+          );
+        }
 
         const toDir = `${to}${fromDir.slice(3)}`;
         // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
@@ -1664,6 +1704,46 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               `duplicate flow id ${id}, shared with ${group.filter((other) => other !== dir).join(", ")}` +
               ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
           });
+        }
+      }
+      // Flow 384: the same rule across clones. A local folder whose number a
+      // known remote branch holds under a DIFFERENT folder name is a different
+      // flow with the same id; the same name on every ref is just the one flow.
+      // Each ref is judged on its own: a branch holding this very folder does not
+      // hide another branch that holds the same number under another name.
+      const remoteDirs = await knownRemoteFlowDirs(cwd);
+      if (remoteDirs.length > 0) {
+        for (const dir of allDirs) {
+          const clash = remoteDirs.find(
+            (entry) => entry.dir !== dir && flowNumberOfDir(entry.dir) === Number(flowIdOf(dir)),
+          );
+          if (clash) {
+            issues.push({
+              flow: dir,
+              kind: "duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${clash.ref} by a different flow (${safeDirName(clash.dir)})` +
+                ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
+            });
+          }
+        }
+      }
+      // Flow 384: a folder that is not in HEAD is a warning, never a failure: it
+      // is the state every flow is in between `flow init` and its first commit.
+      const warnings: FlowCheckResult["warnings"] = [];
+      const inHead = await flowFoldersInHead(cwd, allDirs).catch(() => {
+        // HEAD could not be read: say nothing rather than call every folder untracked.
+        return null;
+      });
+      if (inHead !== null) {
+        for (const dir of allDirs) {
+          if (!inHead.has(dir)) {
+            warnings.push({
+              flow: dir,
+              kind: "untracked",
+              message: `flow folder ${dir} is not committed: commit it in the same PR as the code`,
+            });
+          }
         }
       }
       for (const dir of allDirs) {
@@ -1754,7 +1834,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           });
         }
       }
-      return { ok: issues.length === 0, issues };
+      return { ok: issues.length === 0, issues, warnings };
     },
   };
 }
@@ -1824,7 +1904,8 @@ function unevaluableGate(
     | "confirmation"
     | "main-merge"
     | "pull-request"
-    | "base-branch",
+    | "base-branch"
+    | "folder-committed",
 ): GateOutcome {
   return {
     name,
@@ -2036,6 +2117,40 @@ function ownerGate(flow: FlowState): GateOutcome {
     };
   }
   return { name: "owner", status: "pass", detail: `owner: ${flow.owner.value}` };
+}
+
+/**
+ * The folder-committed gate (flow 384). Opt-in per package: `gates.folderCommitted`
+ * is written by `flow init`, so flows created from 0.3.53 on are covered and no
+ * earlier package is retroactively failed (it reports `skipped`). Passes when the
+ * flow folder's `flow.json` is in `HEAD`; fails with the command that fixes it
+ * when it is not; `skipped` outside a git repository, where there is no HEAD to
+ * read.
+ */
+async function folderCommittedGate(cwd: string, dir: string, flow: FlowState): Promise<GateOutcome> {
+  if (!flow.gates?.folderCommitted) {
+    return {
+      name: "folder-committed",
+      status: "skipped",
+      detail:
+        "folder-committed gate not enabled for this package (created before the gate); " +
+        "flows created by this keryx version opt in automatically",
+    };
+  }
+  const committed = await flowFoldersInHead(cwd, [dir]);
+  if (committed === null) {
+    return { name: "folder-committed", status: "skipped", detail: "not a git repository; nothing to compare the flow folder with" };
+  }
+  if (!committed.has(dir)) {
+    return {
+      name: "folder-committed",
+      status: "fail",
+      detail:
+        `${FOLDER_UNCOMMITTED_PREFIX}${dir} is not committed. Commit it (git add .metaproject/flows/${dir} && git commit) ` +
+        "in the PR that carries the code, then run flow complete again",
+    };
+  }
+  return { name: "folder-committed", status: "pass", detail: `${dir} is committed in HEAD` };
 }
 
 /**

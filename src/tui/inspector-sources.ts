@@ -40,6 +40,7 @@ import {
 import { buildCatchUp, type CatchUpItem, type CatchUpReport } from "../sac/catch-up";
 import { readSlate } from "../session/slate";
 import { listSessions, sessionDir } from "../session";
+import { formatHygieneTags, loadFlowHygiene, type FlowHygiene } from "./flow-hygiene";
 
 export type WorkspaceInfo = {
   id: string;
@@ -80,6 +81,12 @@ export type FlowInspectorItem = {
    * words, as `keryx flow status`. Informational; absent otherwise.
    */
   uncommitted?: string | undefined;
+  /**
+   * Flow 384, AC7: what `keryx flow check` finds wrong with this folder — a
+   * number a remote branch also uses (`dup id`) or a folder not in HEAD
+   * (`not committed`). Absent when nothing is wrong.
+   */
+  hygiene?: FlowHygiene | undefined;
   /** Flow 328, AC7: the flow's last CACHED check-ac markers, or absent when nothing has been cached yet ("not run"). */
   acMarkers?: readonly AcMarker[];
   /** When the cached markers were computed. */
@@ -318,6 +325,15 @@ export async function loadInspectorFlows(cwd: string): Promise<FlowInspectorItem
         if (text !== undefined) done.item.uncommitted = text;
       }
     }
+    // Flow 384, AC7: one `flow check` pass for the whole list.
+    const hygiene = await loadFlowHygiene(cwd);
+    if (hygiene.size > 0) {
+      for (const item of items) {
+        // `item.dir` is the project-relative path; the check keys by folder name.
+        const found = hygiene.get(item.dir.slice(item.dir.lastIndexOf("/") + 1));
+        if (found !== undefined) item.hygiene = found;
+      }
+    }
     return sortFlowsNewestFirst(items);
   } catch {
     return [];
@@ -420,6 +436,6 @@ export function formatSessionFlowLines(flows: readonly FlowInspectorItem[]): str
   }
   return flows.map(
     (flow) =>
-        `${flow.id}  ${flow.interrupted ? `${flow.status} (interrupted)` : flow.status}  ${flow.tasksDone}/${flow.tasksTotal}  ${flow.title}`,
+        `${flow.id}  ${flow.interrupted ? `${flow.status} (interrupted)` : flow.status}  ${flow.tasksDone}/${flow.tasksTotal}  ${flow.title}${formatHygieneTags(flow.hygiene)}`,
   );
 }

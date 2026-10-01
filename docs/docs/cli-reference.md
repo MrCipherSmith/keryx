@@ -3550,7 +3550,7 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. The new id skips every number a known remote branch already uses, and the package opts into the [folder-committed gate](#the-folder-committed-gate) (`gates.folderCommitted`). Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
@@ -3571,14 +3571,14 @@ keryx flow schema [--out <path>]
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the folder-committed gate](#the-folder-committed-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
 | `check-complete <id>` | `--merged <commit>`, `--confirm-token <token>`, `--json` | Evaluate every gate `complete` would, through the same function, and write nothing: no status change, no `completionAttempts` entry, no signature, no lock, no spent token. Also reports whether `complete` could start from the flow's status, and the PR's merge state from the tracker: `merged`, `open`, `closed`, `not-found`, `no-pr`, or `unknown` whenever the tracker did not say (with `--merged`, `merged` means the `main-merge` gate passed). Under each failing gate it names the command that fixes it where one is known, such as `keryx flow ac confirm <id> AC2`. The merge state is reported beside the gates, not as one: the pull-request gate asks for green checks. Exits 0 when `complete` would pass, 1 when it would not, and 2 when the check could not run (an unknown id, say); with `--json` that case prints `{"error":{"message":...}}`. The `/governance` modal's `c` runs the same check. |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
 | `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
-| `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
-| `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. |
+| `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. A local folder whose number a known remote branch (a remote-tracking ref) holds under a **different** folder name fails as `duplicate-id`; the message names the ref and ends with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. A flow folder that is not committed (not in `HEAD`) is a **warning**, never a failure: after the normal output it prints `flow folder <dir> is not committed: commit it in the same PR as the code`, and the exit code is unchanged. Both are silent outside a git repository. `flow list` and the TUI (`/governance` flow list and detail) tag the same flows `dup id` / `not committed`. |
+| `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. Refuses an id a known remote branch uses (`Flow id <id> is already used on <ref> (<dir>) and cannot be reused`). |
 | `repair-reviews` | — | Re-point review records (`manifest.json`, `scope.md`, `findings.json`, review-note links) of flows renumbered before `renumber` rewrote them, by replaying `id-map.json` against each flow's current directory. Idempotent. |
 | `schema` | `--out <path>` | Emit the flow JSON schema. |
 
@@ -3826,6 +3826,35 @@ For an opted-in flow, `complete` fails the owner gate — with the reason
 — while `flow.owner` is absent, and passes it once one is set (`flow init --owner`
 or `flow owner set`).
 
+### The folder-committed gate
+
+The flow folder is committed in the same PR as the code, and the commit at
+closing is a rule to follow, not one the gate checks. The gate requires one
+thing before closing: `flow complete` fails the `folder-committed` gate when
+`.metaproject/flows/<dir>/flow.json` is not in `HEAD`, with the reason
+`flow folder <dir> is not committed. Commit it (git add .metaproject/flows/<dir> && git commit) in the PR that carries the code, then run flow complete again`.
+
+Like `tasks`, `review` and `owner`, the gate is **opt-in per package**
+(`gates.folderCommitted`, written by `flow init`): flows created from 0.3.53 on
+carry the flag; an older package reports the gate `skipped` and is never
+retroactively blocked. The gate is also `skipped` outside a git repository and
+when git cannot answer. It checks the committed `HEAD`, not the index, so a
+staged-but-uncommitted folder still fails. It sits after the owner gate and
+before the review gate in the gate list.
+
+`flow init` and `flow renumber` also avoid clashes across branches. Flow ids
+come from a clone-local ledger, so a second clone, or a branch you have not
+fetched, can hand out a number the first one already used. The ledger now also
+reserves every number held by a **known remote branch**: the remote-tracking
+refs (`refs/remotes/*`) this clone already has, read with `git ls-tree` and no
+network. Up to 500 remote-tracking refs are read (`<remote>/main`,
+`<remote>/master` and the `<remote>/HEAD` target first); a ref this clone never
+fetched is invisible, and the repair for a clash it causes is `flow renumber`.
+Only folders named `NNN-...` (exactly three digits, then a dash) count. `flow renumber --to <id>` refuses an id used on such a branch.
+`flow check` reports a clash that already happened (see below). When the repository
+has no remotes, no refs, or is not a git repository, all of this reads as "nothing
+known" and changes nothing.
+
 ### The owner and completion signatures
 
 A flow can name an **owner** — the human accountable for it — and `ac confirm`/
@@ -3963,7 +3992,7 @@ Every `flow complete` invocation — pass or fail — appends one entry to
 `FlowState.completionAttempts`: the outcome (`pass`, `fail`, or `skipped`) and
 detail of every gate that attempt evaluated, whether the attempt passed
 overall, and the acceptance-criteria checksum in force at the time. Unlike
-`gates.owner`/`gates.review`/`gates.tasks`, this is not opt-in — it is written
+`gates.owner`/`gates.review`/`gates.tasks`/`gates.folderCommitted`, this is not opt-in — it is written
 on every attempt from every flow, starting the moment this field shipped — and
 it does not bump `schemaVersion`. A `flow.json` written before this field
 existed simply has no `completionAttempts`; `keryx governance report` reads

@@ -93,6 +93,11 @@ export function flowStateSchema(): Record<string, unknown> {
             description:
               "Written by `flow init`. When true, `flow complete` fails the owner gate with a named reason while no owner is set, and passes it once one is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`.",
           },
+          folderCommitted: {
+            type: "boolean",
+            description:
+              "flow 384: written by `flow init`. When true, `flow complete` fails the folder-committed gate while the flow folder's flow.json is not in HEAD, and passes it once it is. Absent on packages created before the gate existed, which report the gate `skipped` rather than `fail`.",
+          },
           confirmation: {
             type: "boolean",
             description:
@@ -346,6 +351,7 @@ export function flowStateSchema(): Record<string, unknown> {
               "review",
               "base-branch",
               "owner",
+              "folder-committed",
               "confirmation",
             ],
           },

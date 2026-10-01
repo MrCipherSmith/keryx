@@ -260,6 +260,40 @@ otuiTest("flow 364 AC3: the modal opens on Flows — open flows first, each with
   }
 });
 
+otuiTest("flow 384 AC7: a flow whose number a remote branch also uses, or whose folder is not committed, carries a tag, and the selected entry the check's own line", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow();
+  const { actions } = fakeActions();
+  let asked = 0;
+  const dupMessage = "flow id 364 is also used on origin/main by a different flow (364-2026-09-30-other) — repair with: keryx flow renumber 364-2026-10-01-fixture-364 --to <free id> --reason \"<why>\"";
+  actions.hygiene = async () => {
+    asked += 1;
+    return new Map([
+      ["364-2026-10-01-fixture-364", { tags: ["dup id" as const], notes: [dupMessage] }],
+      ["003-2026-10-01-fixture-003", { tags: ["not committed" as const], notes: ["flow folder 003-2026-10-01-fixture-003 is not committed: commit it in the same PR as the code"] }],
+    ]);
+  };
+  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: actions });
+  try {
+    await modal!.ready;
+    const lines = modal!.allFlowLines();
+    expect(lines[0]).toBe("▸ 364 implemented  Fixture 364  [dup id]");
+    expect(lines.some((line) => line.includes("003 done") && line.endsWith("[not committed]"))).toBe(true);
+    // Selected entry: the check's own message, so the tag is explained where it is read.
+    expect(lines.join("\n").replace(/\s+/g, " ")).toContain("flow id 364 is also used on origin/main by a different flow");
+    expect(lines.join("\n")).not.toContain("is not committed: commit it");
+    h.mockInput.pressArrow("down");
+    await settle(h);
+    expect(modal!.allFlowLines().join("\n").replace(/\s+/g, " ")).toContain("is not committed: commit it in the same PR as the code");
+    // Computed once for the list, not once per paint or per keypress.
+    expect(asked).toBe(1);
+  } finally {
+    modal?.close();
+    h.destroy();
+  }
+});
+
 otuiTest("flow 364 AC5-AC7: c checks, d asks for the id typed back, Enter closes and re-runs the report", async () => {
   const otui = OTUI!;
   const h = await mountChrome(otui);
