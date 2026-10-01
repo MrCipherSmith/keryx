@@ -9,10 +9,11 @@
 // bespoke bookkeeping layer.
 
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { readInstallState } from "./install-state";
 import { installIntegration } from "./installer";
-import { HARNESS_ADAPTERS, getHarnessAdapter } from "./registry";
+import { HARNESS_ADAPTERS, getHarnessAdapter, surfaceRelativePath } from "./registry";
 import type { SurfaceAdapter } from "./types";
 
 const RULES_EXPORT_SURFACE_ID = "rules-export";
@@ -82,7 +83,10 @@ export async function renderRulesForHarnesses(
       continue;
     }
 
-    const file = surface.settingsFile ? surface.settingsFile(root) : undefined;
+    // Flow 363: the file THIS project gives the surface — Claude's and Codex's
+    // follow `agentEntrypoints` — or none at all (Codex with mode `skip`).
+    const relativePath = surfaceRelativePath(surface, root);
+    const file = relativePath === undefined ? undefined : path.join(root, ...relativePath.split("/"));
     let before: string | undefined;
     if (!opts.dryRun && file && (await pathExists(file))) {
       const read = await readTargetFileSafely(file);
@@ -90,7 +94,7 @@ export async function renderRulesForHarnesses(
         results.push({
           harness: harnessId,
           status: "failed",
-          ...(surface.relativePath ? { file: surface.relativePath } : {}),
+          ...(relativePath ? { file: relativePath } : {}),
           messages: [read.message],
         });
         continue;
@@ -103,13 +107,9 @@ export async function renderRulesForHarnesses(
       ...(opts.dryRun !== undefined ? { dryRun: opts.dryRun } : {}),
     });
 
+    const fileField = relativePath ? { file: relativePath } : {};
     if (installResult.errors.length > 0) {
-      results.push({
-        harness: harnessId,
-        status: "failed",
-        ...(surface.relativePath ? { file: surface.relativePath } : {}),
-        messages: installResult.errors,
-      });
+      results.push({ harness: harnessId, status: "failed", ...fileField, messages: installResult.errors });
       continue;
     }
 
@@ -118,24 +118,21 @@ export async function renderRulesForHarnesses(
       results.push({
         harness: harnessId,
         status: "failed",
-        ...(surface.relativePath ? { file: surface.relativePath } : {}),
+        ...fileField,
         messages: surfaceResult?.errors ?? [`no rules-export result recorded for "${harnessId}"`],
       });
       continue;
     }
 
-    let status: RulesExportResult["status"] = "installed";
+    // No file for this harness in this project: nothing was written, and the
+    // surface's warning says why.
+    let status: RulesExportResult["status"] = file ? "installed" : "unchanged";
     if (!opts.dryRun && file) {
       let after: string | undefined;
       if (await pathExists(file)) {
         const read = await readTargetFileSafely(file);
         if (!read.ok) {
-          results.push({
-            harness: harnessId,
-            status: "failed",
-            ...(surface.relativePath ? { file: surface.relativePath } : {}),
-            messages: [read.message],
-          });
+          results.push({ harness: harnessId, status: "failed", ...fileField, messages: [read.message] });
           continue;
         }
         after = read.content;
@@ -143,12 +140,7 @@ export async function renderRulesForHarnesses(
       status = after === before ? "unchanged" : "installed";
     }
 
-    results.push({
-      harness: harnessId,
-      status,
-      ...(surface.relativePath ? { file: surface.relativePath } : {}),
-      messages: surfaceResult.warnings,
-    });
+    results.push({ harness: harnessId, status, ...fileField, messages: surfaceResult.warnings });
   }
 
   return results;

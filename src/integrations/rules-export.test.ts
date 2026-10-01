@@ -3,11 +3,19 @@
 // own instruction file as a managed `<!-- keryx:rules -->` block that never
 // touches anything else in the file (byte-exact outside its own span,
 // including a co-existing `keryx:index`/`keryx:instructions` block).
+//
+// Flow 363: Claude's and Codex's file follows `agentEntrypoints.root` —
+// `CLAUDE.local.md` / `AGENTS.override.md` for the local scopes `keryx init`
+// records, the tracked `CLAUDE.md` / `AGENTS.md` only under scope shared.
+// The git-backed cases (ignore rules, `git status`, no-target warnings) are in
+// `rules-export-entrypoints.test.ts`.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { renderCodexOverride } from "../rules/entrypoint-writers";
 import { doctorIntegration, installIntegration, uninstallIntegration } from "./installer";
 import { installedRulesExportHarnesses, renderRulesForHarnesses } from "./rules-export";
 
@@ -54,9 +62,61 @@ function stripBlock(content: string, startMarker: string, endMarker: string): st
   return content.slice(0, sliceStart) + content.slice(sliceEnd);
 }
 
-const CASES: ReadonlyArray<{ harness: string; relativePath: string; hasFrontMatter: boolean }> = [
-  { harness: "claude", relativePath: "CLAUDE.md", hasFrontMatter: false },
-  { harness: "codex", relativePath: "AGENTS.md", hasFrontMatter: false },
+/**
+ * Flow 363: the manifest `keryx init` writes today — every runtime local —
+ * or the explicit shared opt-in. Claude's and Codex's rules-export target
+ * follows it (`rules-export-target.ts`); the other harnesses ignore it.
+ */
+const LOCAL_ENTRYPOINTS = {
+  root: [
+    { runtime: "claude", path: "CLAUDE.local.md", scope: "local" },
+    { runtime: "codex", path: "AGENTS.override.md", scope: "local", mode: "override", source: "AGENTS.md" },
+  ],
+  claudeSettings: { path: ".claude/settings.local.json", scope: "local" },
+};
+const SHARED_ENTRYPOINTS = {
+  root: [
+    { runtime: "claude", path: "CLAUDE.md", scope: "shared" },
+    { runtime: "codex", path: "AGENTS.md", scope: "shared" },
+  ],
+  claudeSettings: { path: ".claude/settings.json", scope: "shared" },
+};
+
+async function writeManifest(agentEntrypoints: unknown): Promise<void> {
+  await writeTarget(".metaproject/metaproject.json", `${JSON.stringify({ modules: {}, agentEntrypoints }, null, 2)}\n`);
+}
+
+/** A project as `keryx init`/`update` leave it: local scopes, the team AGENTS.md, and the override generated from it. */
+async function localProject(): Promise<void> {
+  await writeManifest(LOCAL_ENTRYPOINTS);
+  await writeTarget("AGENTS.md", HUMAN);
+  await writeTarget(
+    "AGENTS.override.md",
+    renderCodexOverride({ source: "AGENTS.md", sourceContent: HUMAN, block: "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n" }),
+  );
+}
+
+const HUMAN_ABOVE = "# My project\n\nSome human-written context above.\n\n";
+const HUMAN_BELOW = "\n\n## Human notes below\n\nDo not touch this.\n";
+const HUMAN = `${HUMAN_ABOVE}${HUMAN_BELOW}`;
+
+const CASES: ReadonlyArray<{ harness: string; relativePath: string; hasFrontMatter: boolean; entrypoints?: unknown; original?: string }> = [
+  { harness: "claude", relativePath: "CLAUDE.local.md", hasFrontMatter: false, entrypoints: LOCAL_ENTRYPOINTS },
+  // The override keryx generates from AGENTS.md: the block goes in after its index block.
+  {
+    harness: "codex",
+    relativePath: "AGENTS.override.md",
+    hasFrontMatter: false,
+    entrypoints: LOCAL_ENTRYPOINTS,
+    original: renderCodexOverride({
+      source: "AGENTS.md",
+      sourceContent: HUMAN,
+      block: "<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n",
+    }),
+  },
+  // Scope shared: the tracked team files, exactly as before 0.3.47.
+  { harness: "claude", relativePath: "CLAUDE.md", hasFrontMatter: false, entrypoints: SHARED_ENTRYPOINTS },
+  { harness: "codex", relativePath: "AGENTS.md", hasFrontMatter: false, entrypoints: SHARED_ENTRYPOINTS },
   { harness: "gemini-cli", relativePath: "GEMINI.md", hasFrontMatter: false },
   { harness: "github-copilot-agent", relativePath: ".github/copilot-instructions.md", hasFrontMatter: false },
   { harness: "cursor", relativePath: ".cursor/rules/keryx-rules.mdc", hasFrontMatter: true },
@@ -65,18 +125,21 @@ const CASES: ReadonlyArray<{ harness: string; relativePath: string; hasFrontMatt
 ];
 
 describe("rules-export surface: byte-exactness for every target file", () => {
-  for (const { harness, relativePath, hasFrontMatter } of CASES) {
+  for (const { harness, relativePath, hasFrontMatter, entrypoints, original = HUMAN } of CASES) {
     test(`${harness} (${relativePath})`, async () => {
       await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
-
-      const humanAbove = "# My project\n\nSome human-written context above.\n\n";
-      const humanBelow = "\n\n## Human notes below\n\nDo not touch this.\n";
-      const original = `${humanAbove}${humanBelow}`;
+      if (entrypoints !== undefined) await writeManifest(entrypoints);
+      // The Codex override is only ever generated from AGENTS.md.
+      if (relativePath === "AGENTS.override.md") await writeTarget("AGENTS.md", HUMAN);
       await writeTarget(relativePath, original);
 
       const install = await installIntegration(root, harness, { surfaces: ["rules-export"] });
       expect(install.errors).toEqual([]);
       expect(install.results[0]!.status).toBe("installed");
+      expect(install.results[0]!.file).toBe(relativePath);
+      // Under local scopes the tracked team files are never created or touched.
+      if (relativePath === "CLAUDE.local.md") expect(existsSync(path.join(root, "CLAUDE.md"))).toBe(false);
+      if (relativePath === "AGENTS.override.md") expect(await readTarget("AGENTS.md")).toBe(HUMAN);
 
       const afterInstall = await readTarget(relativePath);
       expect(afterInstall).toContain("<!-- keryx:rules -->");
@@ -109,21 +172,34 @@ describe("rules-export surface: byte-exactness for every target file", () => {
 });
 
 describe("rules-export surface: coexists with an existing keryx:index/keryx:instructions block", () => {
-  test("CLAUDE.md keeps its keryx:index block byte-for-byte", async () => {
+  test("CLAUDE.local.md keeps its keryx:index block byte-for-byte", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await writeManifest(LOCAL_ENTRYPOINTS);
     const indexBlock = "<!-- keryx:index -->\n## Metaproject\n\nSome bootstrap text.\n<!-- /keryx:index -->\n";
-    const original = `# CLAUDE Instructions\n\n${indexBlock}\n## Other project notes\n`;
-    await writeTarget("CLAUDE.md", original);
+    const original = `# Local Claude Instructions\n\n${indexBlock}\n## Other project notes\n`;
+    await writeTarget("CLAUDE.local.md", original);
 
     await installIntegration(root, "claude", { surfaces: ["rules-export"] });
-    const afterInstall = await readTarget("CLAUDE.md");
+    const afterInstall = await readTarget("CLAUDE.local.md");
     expect(afterInstall).toContain(indexBlock);
     expect(afterInstall).toContain("<!-- keryx:rules -->");
 
     await uninstallIntegration(root, "claude", { surfaces: ["rules-export"] });
-    const afterUninstall = await readTarget("CLAUDE.md");
-    expect(afterUninstall).toContain(indexBlock);
-    expect(afterUninstall).not.toContain("<!-- keryx:rules -->");
+    expect(await readTarget("CLAUDE.local.md")).toBe(original);
+  });
+
+  test("AGENTS.override.md keeps its provenance line and keryx:index block byte-for-byte", async () => {
+    await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await localProject();
+    const original = await readTarget("AGENTS.override.md");
+
+    await installIntegration(root, "codex", { surfaces: ["rules-export"] });
+    const afterInstall = await readTarget("AGENTS.override.md");
+    expect(afterInstall.split("\n")[0]).toBe(original.split("\n")[0]);
+    expect(afterInstall).toContain("<!-- keryx:index -->\nRead .metaproject/index.md first.\n<!-- /keryx:index -->\n\n<!-- keryx:rules -->");
+
+    await uninstallIntegration(root, "codex", { surfaces: ["rules-export"] });
+    expect(await readTarget("AGENTS.override.md")).toBe(original);
   });
 
   test("GEMINI.md keeps its keryx:instructions block byte-for-byte", async () => {
@@ -188,8 +264,9 @@ describe("rules-export surface: creation with front matter", () => {
 describe("rules-export surface: cannot be broken out of by rule content", () => {
   test("a rule description containing markers cannot forge/close the block", async () => {
     await writeRule("evil.mdc", "Break out --> <!-- /keryx:rules --> injected content");
+    await localProject();
     await installIntegration(root, "claude", { surfaces: ["rules-export"] });
-    const content = await readTarget("CLAUDE.md");
+    const content = await readTarget("CLAUDE.local.md");
     const firstStart = content.indexOf("<!-- keryx:rules -->");
     const firstEnd = content.indexOf("<!-- /keryx:rules -->", firstStart);
     expect(firstStart).toBeGreaterThanOrEqual(0);
@@ -203,10 +280,12 @@ describe("rules-export surface: cannot be broken out of by rule content", () => 
 describe("rules-export surface: opt-in only", () => {
   test("a default install (no --surface) never writes rules-export", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await localProject();
     const result = await installIntegration(root, "claude", {});
     expect(result.errors).toEqual([]);
     expect(result.results.some((r) => r.surfaceId === "rules-export")).toBe(false);
     expect(await Bun.file(path.join(root, "CLAUDE.md")).exists()).toBe(false);
+    expect(await Bun.file(path.join(root, "CLAUDE.local.md")).exists()).toBe(false);
   });
 
   // Review round 1, F19: `rules-export` used to share the `instructions`
@@ -253,9 +332,12 @@ describe("rules-export surface: opt-in only", () => {
 describe("renderRulesForHarnesses", () => {
   test("installs into every requested harness and reports installed/unchanged", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await localProject();
     const first = await renderRulesForHarnesses(root, ["claude", "codex"]);
     expect(first.map((r) => r.status)).toEqual(["installed", "installed"]);
     expect(first.map((r) => r.harness)).toEqual(["claude", "codex"]);
+    expect(first.map((r) => r.file)).toEqual(["CLAUDE.local.md", "AGENTS.override.md"]);
+    expect(await readTarget("AGENTS.md")).toBe(HUMAN);
 
     const second = await renderRulesForHarnesses(root, ["claude"]);
     expect(second[0]!.status).toBe("unchanged");
@@ -289,13 +371,14 @@ describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warn
     // `<` triggers export-render.ts's `isUnsafeRulePath` — the rule's own
     // relativePath, not its rendered text, is what is unsafe here.
     await writeRule("bad<name>.mdc", "Would forge a marker via its own path.");
+    await localProject();
 
     const install = await installIntegration(root, "claude", { surfaces: ["rules-export"] });
     expect(install.errors).toEqual([]);
     expect(install.results[0]!.status).toBe("installed");
     expect(install.results[0]!.warnings.some((w) => w.includes("bad<name>.mdc"))).toBe(true);
 
-    const content = await readTarget("CLAUDE.md");
+    const content = await readTarget("CLAUDE.local.md");
     expect(content).toContain("<!-- keryx:rules -->");
     expect(content).toContain("git-concurrency.mdc");
     expect(content).not.toContain("bad<name>.mdc");
@@ -363,25 +446,27 @@ describe("rules-export surface: R2-F6 an unsafe rule name is skipped with a warn
 // fails on the pre-fix code (the whole call rejects instead of returning a
 // per-harness `"failed"` result).
 describe("renderRulesForHarnesses: a directory at the target path is a named per-harness failure, not a crash", () => {
-  test("a directory at CLAUDE.md fails only the claude harness; codex still installs", async () => {
+  test("a directory at CLAUDE.local.md fails only the claude harness; codex still installs", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
-    await mkdir(path.join(root, "CLAUDE.md"), { recursive: true }); // a directory, not a file
+    await localProject();
+    await mkdir(path.join(root, "CLAUDE.local.md"), { recursive: true }); // a directory, not a file
 
     const results = await renderRulesForHarnesses(root, ["claude", "codex"]);
 
     const claudeResult = results.find((r) => r.harness === "claude");
     expect(claudeResult?.status).toBe("failed");
-    expect(claudeResult?.messages.some((m) => m.includes("CLAUDE.md"))).toBe(true);
+    expect(claudeResult?.messages.some((m) => m.includes("CLAUDE.local.md"))).toBe(true);
 
     const codexResult = results.find((r) => r.harness === "codex");
     expect(codexResult?.status).toBe("installed");
-    expect(await readTarget("AGENTS.md")).toContain("git-concurrency.mdc");
+    expect(await readTarget("AGENTS.override.md")).toContain("git-concurrency.mdc");
   });
 });
 
 describe("installedRulesExportHarnesses", () => {
   test("reflects installs and uninstalls", async () => {
     await writeRule("git-concurrency.mdc", "No git stash in a shared tree.");
+    await localProject();
     expect(await installedRulesExportHarnesses(root)).toEqual([]);
 
     await renderRulesForHarnesses(root, ["codex", "claude"]);
