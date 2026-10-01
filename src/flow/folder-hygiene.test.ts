@@ -150,6 +150,51 @@ test("flow check reports a clash on another ref even when one ref holds this fol
   expect(issue?.message).toContain(`${id}-2026-09-30-someone-else`);
 });
 
+test("a clash with a non-default remote branch is a warning, not a failure", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { dir } = await service.init({ cwd: root, title: "Local side" });
+  const localDir = path.basename(dir);
+  const id = localDir.slice(0, 3);
+  await addRemoteRef(root, "origin/main", ["900-2026-09-01-unrelated"]);
+  await addRemoteRef(root, "origin/stale-branch", [`${id}-2026-09-30-old-cut`]);
+
+  const result = await service.check({ cwd: root });
+
+  expect(result.issues.filter((entry) => entry.kind === "duplicate-id")).toEqual([]);
+  expect(result.ok).toBe(true);
+  const warning = result.warnings.find((entry) => entry.kind === "branch-duplicate-id");
+  expect(warning?.flow).toBe(localDir);
+  expect(warning?.message).toContain("origin/stale-branch");
+  expect(warning?.message).toContain(`${id}-2026-09-30-old-cut`);
+});
+
+test("the branch origin/HEAD points at counts as the default branch even when it is not main", async () => {
+  const root = await repo();
+  const service = makeService();
+  const { dir } = await service.init({ cwd: root, title: "Local side" });
+  const localDir = path.basename(dir);
+  const id = localDir.slice(0, 3);
+  await addRemoteRef(root, "origin/develop", [`${id}-2026-09-30-on-develop`]);
+  await git(root, ["symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/develop"]);
+
+  const result = await service.check({ cwd: root });
+
+  const issue = result.issues.find((entry) => entry.kind === "duplicate-id");
+  expect(issue?.flow).toBe(localDir);
+  expect(issue?.message).toContain("origin/develop");
+});
+
+test("flow init still skips a number only a non-default branch holds", async () => {
+  const root = await repo();
+  await mkFlowDir(root, "001-2026-09-01-a");
+  await addRemoteRef(root, "origin/stale-branch", ["005-2026-09-30-old-cut"]);
+
+  const { flow } = await makeService().init({ cwd: root, title: "After the branch" });
+
+  expect(Number(flow.id)).toBeGreaterThanOrEqual(6);
+});
+
 test("a control character in a remote folder name never reaches the check message", async () => {
   const root = await repo();
   const service = makeService();

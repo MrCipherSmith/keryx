@@ -700,7 +700,8 @@ is a rule to follow, and the gate requires only that `flow.json` is in `HEAD` be
 closing. `flow init` and `flow renumber` avoid numbers used on known remote branches
 (`src/flow/remote-flows.ts`: up to 500 remote-tracking refs, no network; a never-fetched
 ref is invisible and the repair is `flow renumber`), and `flow check`
-reports a clash with a remote branch as `duplicate-id` and an uncommitted folder as a
+reports a clash with the default branch as `duplicate-id` (a clash with any other remote
+branch is a non-failing `branch-duplicate-id` warning) and an uncommitted folder as a
 non-failing `untracked` warning. `passed = gates.every(g
 => g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
 `complete` each append a signature (who, when, what was signed, and the identity's

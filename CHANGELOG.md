@@ -3,6 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.54] — 2026-10-01
+### Fixed
+- **`flow check` no longer fails a clone over stale remote branches.** 0.3.53 judged every remote-tracking ref alike, so a fresh clone of this repository reported about thirty `duplicate-id` failures against old branches cut before earlier renumberings (and `flow list` tagged those flows `dup id`). Only a clash with the default branch (`<remote>/main`, `<remote>/master`, the `<remote>/HEAD` target) fails the check now; a clash with any other remote branch is a warning (`flow id <n> is also used on <ref> by a different flow (...); ignore it if that branch is stale, otherwise renumber one of them before it merges`) and does not change the exit code or the `dup id` tag. `flow init` and `flow renumber --to` still reserve numbers held by every known remote branch.
+
+[Changes since 0.3.53](https://github.com/MrCipherSmith/keryx/compare/v0.3.53...v0.3.54)
+
 ## [0.3.53] — 2026-10-01
 ### Added
 - **Flow ids no longer clash with other branches.** Flow ids come from a clone-local ledger, so a second clone or an unfetched branch could hand out a number another branch already used (on 2026-10-01 `origin/main` held 360-365 that differed from the local 360-365). `flow init` now reserves every number held by a known remote branch (the remote-tracking refs this clone has, read without a network, up to 500 refs, `<remote>/main` first; a branch that was never fetched is invisible, and `flow renumber` is the repair), `flow renumber --to` refuses such an id, and `flow check` fails a local folder whose number a remote branch holds under a different folder name as `duplicate-id`, naming the ref and ending with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. No remotes, no refs or no git means nothing is known and nothing changes.
