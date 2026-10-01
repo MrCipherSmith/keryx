@@ -2,15 +2,15 @@
 
 ## Stats
 
-- Source files indexed: 2505
+- Source files indexed: 2507
 - Imported asset files indexed: 11
-- Total nodes: 2516
-- Edges: 8396
-- Import edges: 8279
+- Total nodes: 2518
+- Edges: 8439
+- Import edges: 8322
 - Asset edges: 27
 - Unresolved imports: 90
 - Import resolution: 98.9%
-- Skipped generated/static directories: 20
+- Skipped generated/static directories: 17
 
 ## Top Modules
 
@@ -23,7 +23,7 @@
 | review | 113 |
 | gdskills | 96 |
 | security | 75 |
-| flow | 71 |
+| flow | 72 |
 | sac | 61 |
 | wiki | 61 |
 | learning | 57 |
@@ -35,7 +35,7 @@
 | acp | 41 |
 | metrics | 39 |
 | bus | 35 |
-| integrations | 33 |
+| integrations | 35 |
 
 ## Unresolved By Type
 
@@ -53,7 +53,6 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
 - `bench/jev-review/fixtures/conform-project/.metaproject`
 - `dist`
@@ -63,7 +62,6 @@
 - `fixtures/temporal/.metaproject`
 - `node_modules`
 - `src/bundle/fixtures/roundtrip/project/.metaproject`
-- `src/lib/dist`
 - `src/security/audit-harness/fixtures/agents/.metaproject`
 - `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
 - `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
@@ -71,7 +69,6 @@
 - `src/security/audit-harness/fixtures/hook-injection/.claude`
 - `src/security/audit-harness/fixtures/hook-suppression/.claude`
 - `src/security/audit-harness/fixtures/permissive-settings/.claude`
-- `vscode-extension/node_modules`
 
 ## Generated Files
 

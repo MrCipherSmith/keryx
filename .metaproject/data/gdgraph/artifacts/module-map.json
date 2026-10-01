@@ -674,6 +674,7 @@
     "src/flow/base-branch-gate.test.ts",
     "src/flow/check-ac.test.ts",
     "src/flow/check-ac.ts",
+    "src/flow/check-complete.test.ts",
     "src/flow/completion-attempts.test.ts",
     "src/flow/completion-never-stuck.test.ts",
     "src/flow/confirm-floors.test.ts",
@@ -896,6 +897,8 @@
   "governance": [
     "src/governance/accountability.ts",
     "src/governance/aggregate.ts",
+    "src/governance/flow-narrative.test.ts",
+    "src/governance/flow-narrative.ts",
     "src/governance/report.test.ts",
     "src/governance/report.ts",
     "src/governance/service.ts",
@@ -1374,6 +1377,8 @@
     "src/integrations/owner.test.ts",
     "src/integrations/registry.test.ts",
     "src/integrations/registry.ts",
+    "src/integrations/rules-export-entrypoints.test.ts",
+    "src/integrations/rules-export-target.ts",
     "src/integrations/rules-export.test.ts",
     "src/integrations/rules-export.ts",
     "src/integrations/service.ts",
@@ -1865,13 +1870,6 @@
     "src/product/store.ts",
     "src/product/types.ts"
   ],
-  "protocol": [
-    "src/protocol/envelope.ts",
-    "src/protocol/errors.ts",
-    "src/protocol/index.ts",
-    "src/protocol/protocol.test.ts",
-    "src/protocol/version.ts"
-  ],
   "retention": [
     "src/retention/auto-sweep.test.ts",
     "src/retention/auto-sweep.ts",
@@ -2020,6 +2018,7 @@
   "rules": [
     "src/rules/agent-entrypoints.test.ts",
     "src/rules/agent-entrypoints.ts",
+    "src/rules/codex-override.ts",
     "src/rules/distill.test.ts",
     "src/rules/distill.ts",
     "src/rules/entrypoint-inspection.ts",
@@ -2034,7 +2033,8 @@
     "src/rules/export-render.ts",
     "src/rules/managed-index-block.test.ts",
     "src/rules/managed-index-block.ts",
-    "src/rules/marker-matching.ts"
+    "src/rules/marker-matching.ts",
+    "src/rules/rules-export-migration.ts"
   ],
   "sac": [
     "src/sac/catch-up.test.ts",

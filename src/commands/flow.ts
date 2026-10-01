@@ -310,7 +310,7 @@ async function readGitUserEmail(cwd: string): Promise<string | undefined> {
  * value sources, so the two commands' different flag-parsing rules never
  * have to agree with each other, only each with its own caller.
  */
-async function signerIdentityArgs(
+export async function signerIdentityArgs(
   cwd: string,
   signedBy: string | undefined,
 ): Promise<{ signedBy: string | undefined; signedByEnv: string | undefined; gitIdentity: string | undefined }> {

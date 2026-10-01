@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.48] — 2026-10-01
+### Added
+- **`/governance` opens on a list of flows you can act on.** The modal has a Flows tab before the report: the current project's flows, open ones first, each with a summary (its expected outcome, tasks done, the tasks still open) and its stated effect — the bullets of `## Outcome criteria` in `description.md`, or `effect: not stated` with the reason. On an open flow, `c` checks whether it can be completed; once a check passed and the PR is merged, `d` asks for the flow id typed back and runs the real `flow complete`, then re-runs the report so the list shows the result. A flow created with `--require-confirmation` is pointed at `keryx flow confirm` in a terminal instead; the modal never mints a token. The report itself is the second tab, unchanged.
+- **`keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]`** — every gate `flow complete` would evaluate, through the same code, plus the PR's merge state (`merged`, `open`, `closed`, `not-found`, `no-pr`, `unknown`) and, under each failing gate, the command that fixes it where one is known. It writes nothing: no status change, no completion attempt, no signature, no lock, no spent token. Exits 0 when `flow complete` would pass.
+- **`keryx governance report` prints `summary:` and `effect:` under every flow**, and `latest.json` carries them as `summary` and `effect`. A report stored before this version still loads and reads `not recorded` for both.
+### Changed
+- The GitHub tracker returns the PR's `state` (`OPEN`, `MERGED`, `CLOSED`), which it already fetched. The pull-request gate is unchanged: it still asks for green checks, not a merge.
+- The product index and the governance report read `## Outcome criteria` through one parser.
+
+[Changes since 0.3.47](https://github.com/MrCipherSmith/keryx/compare/v0.3.47...v0.3.48)
+
 ## [0.3.47] — 2026-10-01
 ### Changed
 - **The opt-in `rules-export` block no longer edits `CLAUDE.md` or `AGENTS.md` by default.** `keryx integrations install --runtime claude|codex --surface rules` and `keryx bundle import --render-for` used to write the `<!-- keryx:rules -->` block into the tracked `CLAUDE.md` and `AGENTS.md` — the one keryx writer 0.3.45 left behind. It now goes where the `keryx:index` block goes, by `agentEntrypoints.root`: `CLAUDE.local.md` and the keryx-generated `AGENTS.override.md` under scope local (the default), `CLAUDE.md` and `AGENTS.md` only under scope `shared`. After installing it for both runtimes with the default scopes, `git status` lists neither `CLAUDE.md` nor `AGENTS.md`. A local file git does not ignore yet (a fresh clone before `keryx update`) is added to `.git/info/exclude` first, through the same writer `update` uses.

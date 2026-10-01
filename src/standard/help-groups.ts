@@ -505,7 +505,8 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "slash",
     name: "/governance",
     group: "Automation",
-    summary: "Show the last governance report, or run one in the background.",
+    summary:
+      "Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background.",
   },
   {
     kind: "slash",

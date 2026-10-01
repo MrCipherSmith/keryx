@@ -13,7 +13,7 @@ import path from "node:path";
 import { flowCommand } from "../commands/flow";
 import { writeCleanReviewPackage } from "./review-fixtures";
 import { completionFixHint, createFlowService } from "./service";
-import type { FlowService, FlowServiceDeps, TrackerAdapter } from "./types";
+import type { FlowService, FlowServiceDeps, PrMergeState, TrackerAdapter } from "./types";
 
 let ROOT = "";
 const HEAD = "1234abcd1234abcd1234abcd1234abcd1234abcd";
@@ -162,7 +162,7 @@ test("AC4: merge state comes from the tracker, and is `unknown` whenever the tra
   };
   const service = await fresh({ tracker });
   const { id } = await readyFlow(service);
-  const cases: Array<[TrackerAdapter, string]> = [
+  const cases: Array<[TrackerAdapter, PrMergeState]> = [
     [fakeTracker({ state: "OPEN" }), "open"],
     [fakeTracker({ state: "CLOSED" }), "closed"],
     [fakeTracker({ state: null }), "unknown"],

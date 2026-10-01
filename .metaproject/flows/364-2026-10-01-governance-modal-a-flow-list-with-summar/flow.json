@@ -10,7 +10,7 @@
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
   "status": "in-progress",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T07:30:16.506Z",
+  "updatedAt": "2026-10-01T07:44:30.137Z",
   "source": {
     "type": "description",
     "ref": null
@@ -87,7 +87,7 @@
       "id": "T5",
       "title": "Governance data: effect and summary per flow, in the JSON and markdown report",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -95,13 +95,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Read-only completion check: shared gate evaluation, PR merge state, flow check-complete CLI",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -109,7 +110,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -202,6 +204,16 @@
     {
       "at": "2026-10-01T07:30:16.506Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-01T07:44:29.160Z",
+      "event": "task-done",
+      "detail": "T5: Governance data: effect and summary per flow, in the JSON and markdown report"
+    },
+    {
+      "at": "2026-10-01T07:44:30.137Z",
+      "event": "task-done",
+      "detail": "T6: Read-only completion check: shared gate evaluation, PR merge state, flow check-complete CLI"
     }
   ],
   "acKinds": {

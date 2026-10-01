@@ -249,6 +249,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     ],
     governance: [
       "\nEach flow also shows its acceptance coverage: how many criteria are runnable\n(exec or invariant) of all of them. A flow frozen before verification kinds\nexisted reads as fully unclassified, not as zero criteria.\n",
+      // Flow 364: the summary and stated effect per flow.
+      "\nEach flow also shows a summary (its expected outcome, tasks done, tasks still\nopen) and its stated effect (the Outcome criteria in description.md), or says\nthe effect is not stated. In keryx shell, /governance lists the flows and can\ncheck and complete an open one.\n",
     ],
     flow: [
       "  keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)\n",
@@ -257,6 +259,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       // also documents `flow init --outcome-author`.
       '  keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)\n',
       "  `flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag is absent) or `human`, and `human` only when the flag says so — never inferred from a git identity, an owner or the environment. A flow without the field reads `unknown`. The flag labels a sample and gates nothing.\n",
+      // Flow 364: the read-only completion check.
+      "  keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)\n",
     ],
   };
 
