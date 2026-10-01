@@ -5,6 +5,7 @@ import { writeFileAtomic } from "../lib/fs";
 import {
   CONFIRMATION_CAVEAT,
   acCriterionKnown,
+  completionFixHint,
   confirmPreconditionError,
   createFlowService,
   describeAcKind,
@@ -49,6 +50,7 @@ import type {
   FlowServiceDeps,
   FlowSignature,
   FlowStatus,
+  GateOutcome,
   TaskDisposition,
   TaskKind,
 } from "../flow/types";
@@ -355,6 +357,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runImplemented(args.slice(1));
       case "complete":
         return await runComplete(args.slice(1));
+      case "check-complete":
+        return await runCheckComplete(args.slice(1));
       case "confirm":
         return await runConfirm(args.slice(1));
       case "recover":
@@ -1209,6 +1213,58 @@ export function completionSignatureNotes(signature: FlowSignature): string[] {
   return notes;
 }
 
+function printGateOutcomes(gates: readonly GateOutcome[], hint?: (gate: GateOutcome) => string | undefined): void {
+  for (const gate of gates) {
+    const mark =
+      gate.status === "pass"
+        ? style.green(symbols.ok)
+        : gate.status === "skipped"
+          ? style.gray(symbols.off)
+          : style.red(symbols.cross);
+    // A failing gate has to say WHICH condition failed and for which findings —
+    // one line per condition rather than one line per gate, because the review
+    // gate reports five and a single wrapped line hides four of them.
+    const [first = "", ...rest] = gate.detail.split(" | ");
+    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
+    for (const [index, line] of rest.entries()) {
+      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
+    }
+    const fix = gate.status === "fail" ? hint?.(gate) : undefined;
+    if (fix !== undefined) console.log(`      ${style.cyan(symbols.arrow)} ${fix}`);
+  }
+}
+
+/**
+ * `keryx flow check-complete <id> [--merged <commit>] [--json]` (flow 364,
+ * AC4): every gate `flow complete` would evaluate, plus the PR's merge state,
+ * with nothing written. Exit 0 when `complete` would pass, 1 otherwise.
+ */
+async function runCheckComplete(args: string[]): Promise<void> {
+  const id = requireId(args);
+  const result = await getService().checkComplete({
+    cwd: process.cwd(),
+    id,
+    mergedCommit: optionValue(args, "--merged"),
+    confirmToken: optionValue(args, "--confirm-token"),
+  });
+  process.exitCode = result.passed ? 0 : 1;
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  heading(
+    result.passed
+      ? `${style.green(symbols.ok)} flow check-complete ${result.id}: would pass`
+      : `${style.yellow(symbols.cross)} flow check-complete ${result.id}: would not pass`,
+  );
+  const transitionMark = result.transition.allowed ? style.green(symbols.ok) : style.red(symbols.cross);
+  console.log(`  ${transitionMark} status ${style.dim(`(${result.transition.detail})`)}`);
+  const mergeMark = result.merge.state === "merged" ? style.green(symbols.ok) : style.yellow(symbols.off);
+  console.log(`  ${mergeMark} merge ${style.dim(`(${result.merge.state}: ${result.merge.detail})`)}`);
+  printGateOutcomes(result.gates, (gate) => completionFixHint(gate, result.id));
+  note("Nothing was written: no status change, no completion attempt, no signature, no spent token.");
+}
+
 async function runComplete(args: string[]): Promise<void> {
   const id = requireId(args);
   const cwd = process.cwd();
@@ -1226,22 +1282,7 @@ async function runComplete(args: string[]): Promise<void> {
       ? `${style.green(symbols.ok)} flow complete: DONE`
       : `${style.yellow(symbols.cross)} flow complete: returned to in-progress`,
   );
-  for (const gate of result.gates) {
-    const mark =
-      gate.status === "pass"
-        ? style.green(symbols.ok)
-        : gate.status === "skipped"
-          ? style.gray(symbols.off)
-          : style.red(symbols.cross);
-    // A failing gate has to say WHICH condition failed and for which findings —
-    // one line per condition rather than one line per gate, because the review
-    // gate reports five and a single wrapped line hides four of them.
-    const [first = "", ...rest] = gate.detail.split(" | ");
-    console.log(`  ${mark} ${gate.name} ${style.dim(`(${first}${rest.length === 0 ? ")" : ""}`)}`);
-    for (const [index, line] of rest.entries()) {
-      console.log(`      ${style.dim(`${line}${index === rest.length - 1 ? ")" : ""}`)}`);
-    }
-  }
+  printGateOutcomes(result.gates);
   if (result.passed) {
     const signature = result.flow.signatures?.at(-1);
     if (signature) {
@@ -1520,6 +1561,7 @@ function printHelp(): void {
     "keryx flow check-ac <id> [--diff <ref>|--pr <n>] [--json] [--refresh]   (ADVISORY: Jev vs. the frozen criteria; never changes flow state)",
     "keryx flow implemented <id> --pr <url>",
     'keryx flow complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"] [--confirm-token <token>]',
+    "keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)",
     "keryx flow confirm <id> [--merged]   (mint a completion confirmation token; needs a terminal and a typed challenge)",
     'keryx flow recover <id> --reason "<why>"   (move a flow left in `completing` back to `in-progress`)',
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',

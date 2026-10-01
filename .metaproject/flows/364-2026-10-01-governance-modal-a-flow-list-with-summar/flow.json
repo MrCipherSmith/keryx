@@ -1,0 +1,233 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "364",
+  "slug": "governance-modal-a-flow-list-with-summar",
+  "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T07:20:34.139Z",
+  "updatedAt": "2026-10-01T07:30:16.506Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0b2fac4bffe8fb019b7e2b3126014219167c2280b7c74c78c33e0cd3503e9db2",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Governance data: effect and summary per flow, in the JSON and markdown report",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Read-only completion check: shared gate evaluation, PR merge state, flow check-complete CLI",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Governance modal: Flows tab with selection, check and close actions, Report tab kept",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Tests for extraction, no-write check, merge mapping, close visibility and input guard",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Docs: CLI reference for flow check-complete, /governance keys, CHANGELOG",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T07:20:34.139Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T07:22:40.568Z",
+      "event": "task-added",
+      "detail": "T5: Governance data: effect and summary per flow, in the JSON and markdown report"
+    },
+    {
+      "at": "2026-10-01T07:22:45.910Z",
+      "event": "task-added",
+      "detail": "T6: Read-only completion check: shared gate evaluation, PR merge state, flow check-complete CLI"
+    },
+    {
+      "at": "2026-10-01T07:22:46.795Z",
+      "event": "task-added",
+      "detail": "T7: Governance modal: Flows tab with selection, check and close actions, Report tab kept"
+    },
+    {
+      "at": "2026-10-01T07:22:47.601Z",
+      "event": "task-added",
+      "detail": "T8: Tests for extraction, no-write check, merge mapping, close visibility and input guard"
+    },
+    {
+      "at": "2026-10-01T07:22:48.379Z",
+      "event": "task-added",
+      "detail": "T9: Docs: CLI reference for flow check-complete, /governance keys, CHANGELOG"
+    },
+    {
+      "at": "2026-10-01T07:30:13.032Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T07:30:16.506Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    }
+  }
+}

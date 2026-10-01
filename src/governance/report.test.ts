@@ -945,3 +945,28 @@ test("N8: reserved → still OPEN (in flight, or killed and never resolved): 'op
   expect(markdown).toContain("1 run(s) total (1 open)");
   expect(markdown).toContain("1 open reservation(s) totaling $1.5 (reserved, not spent); 1 run(s) total (included in the project's trigger spend above — not additive)");
 });
+
+// --- Flow 364 (AC1): effect and summary, read from each flow's description.md --
+
+test("flow 364 AC1: each flow carries its stated effect and summary; a missing description is `unreadable`, not empty", async () => {
+  await writeFlowFixture("301-2026-01-01-with-effect", {
+    status: "in-progress",
+    tasks: [
+      { id: "T1", title: "Context", kind: "context", status: "done" },
+      { id: "T2", title: "Build it", kind: "implement", status: "todo" },
+    ] as FlowState["tasks"],
+  });
+  await writeFile(
+    path.join(flowDirPath("301-2026-01-01-with-effect"), "description.md"),
+    "# T\n\n## Expected Outcome\n\nFlows close from the report.\n\n## Outcome criteria\n\n- Effect (MrCipherSmith): simple flow control.\n",
+    "utf8",
+  );
+  await writeFlowFixture("302-2026-01-01-no-description");
+
+  const report = await buildGovernanceReport({ cwd: ROOT, filters: {}, allProjects: false, now: () => new Date() });
+  const [withEffect, noDescription] = report.projects[0]?.flows ?? [];
+  expect(withEffect?.effect).toEqual({ stated: true, text: "Effect (MrCipherSmith): simple flow control.", bullets: ["Effect (MrCipherSmith): simple flow control."] });
+  expect(withEffect?.summary).toEqual({ statement: "Flows close from the report.", tasksDone: 1, tasksTotal: 2, openTasks: ["T2 Build it"] });
+  expect(noDescription?.effect).toEqual({ stated: false, reason: "unreadable" });
+  expect(noDescription?.summary?.statement).toBeNull();
+});

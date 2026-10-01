@@ -221,6 +221,34 @@ export type FlowGovernance = {
   acceptance: FlowAcceptance;
   /** Flow 297 (AC1, AC2): unattended trigger-dispatch runs this flow named, plus their denials and open reservations. */
   dispatch: FlowDispatch;
+  /** Flow 364 (AC1): the stated effect. Optional: a report stored before it existed has none, read as "not recorded". */
+  effect?: FlowEffect | undefined;
+  /** Flow 364 (AC1): what the flow delivers and where its tasks stand. Optional for the same reason as `effect`. */
+  summary?: FlowWorkSummary | undefined;
+};
+
+/**
+ * Flow 364 (AC1): the effect the flow's author stated — the bullets of
+ * `description.md`'s `## Outcome criteria` section, read with the same parser
+ * the product index uses. The untouched template hint is not an effect.
+ * `stated: false` names why there is none, so "no section", "only the hint"
+ * and "could not read the file" are three facts, not one empty string.
+ */
+export type FlowEffect =
+  | { stated: true; text: string; bullets: string[] }
+  | { stated: false; reason: "no-section" | "hint-only" | "unreadable" };
+
+/**
+ * Flow 364 (AC1): a one-line account of the flow, derived without a model:
+ * the first sentence of Expected outcome (else Problem), done/total tasks, and
+ * the titles of the tasks still open. `statement` is `null` when the
+ * description states neither or cannot be read.
+ */
+export type FlowWorkSummary = {
+  statement: string | null;
+  tasksDone: number;
+  tasksTotal: number;
+  openTasks: string[];
 };
 
 /**

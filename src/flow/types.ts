@@ -360,6 +360,13 @@ export interface TrackerAdapter {
      * rather than treating an unread value as a match.
      */
     baseRefName?: string | null | undefined;
+    /**
+     * The PR's own state as the tracker names it (`OPEN`, `MERGED`, `CLOSED`
+     * for GitHub). Optional for the same reason as `headSha`; `undefined`/`null`
+     * means UNKNOWN, which a completion check reports as `unknown`, never as
+     * merged (flow 364, AC4).
+     */
+    state?: string | null | undefined;
   }>;
   comment(ref: TrackerRef, body: string): Promise<boolean>;
 }
@@ -472,6 +479,32 @@ export type FlowCompleteResult = {
   passed: boolean;
   issueComment: string | null; // suggested/posted comment body
   commented: boolean;
+};
+
+/** Flow 364 (AC4): where the flow's PR stands; `unknown` whenever the tracker did not say. */
+export type PrMergeState = "merged" | "open" | "closed" | "not-found" | "no-pr" | "unknown";
+
+export type PrMergeReading = { state: PrMergeState; detail: string };
+
+/**
+ * Flow 364 (AC4): a read-only completion check. `gates` are exactly what
+ * `complete` would record; `transition` says whether `complete` would even
+ * start from this status. `passed` is both together. `merge` is reported
+ * beside the gates, never folded into them: the pull-request gate asks for
+ * green checks, not a merge.
+ */
+export type FlowCompletionCheck = {
+  id: string;
+  status: FlowStatus;
+  /** The flow's `updatedAt` at the time of the check, so a caller can tell when a check went stale. */
+  updatedAt: string;
+  checkedAt: string;
+  transition: { allowed: boolean; detail: string };
+  merge: PrMergeReading;
+  gates: GateOutcome[];
+  passed: boolean;
+  /** The flow opted into a confirmation token (`gates.confirmation`); one is minted only by `keryx flow confirm`. */
+  confirmationRequired: boolean;
 };
 
 export type FlowConfirmMintResult = {
@@ -658,6 +691,17 @@ export interface FlowService {
     /** A token minted by `keryx flow confirm` (flow 299). Only checked when `gates.confirmation` is set. */
     confirmToken?: string | undefined;
   }): Promise<FlowCompleteResult>;
+  /**
+   * Evaluate every gate `complete` would, through the same function, and write
+   * nothing (flow 364, AC4): no status transition, no `completionAttempts`
+   * entry, no signature, no lock, no spent token.
+   */
+  checkComplete(input: {
+    cwd: string;
+    id: string;
+    mergedCommit?: string | undefined;
+    confirmToken?: string | undefined;
+  }): Promise<FlowCompletionCheck>;
   /**
    * Mint a completion confirmation token (flow 299, AC1). The service checks the
    * flow's state; the CLI verb adds the terminal and typed-challenge

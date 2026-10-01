@@ -76,8 +76,10 @@ export { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
 export {
   OUTCOME_HINT,
   fencedLines,
+  flowDeliveryStatementFrom,
   flowStatementFrom,
   intentNoteForNewFlow,
+  outcomeBulletsFrom,
   proseOutsideFences,
   sectionOf,
   statementFrom,
@@ -150,6 +152,8 @@ import type { NextTaskDecision } from "./machine";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
+  FlowCompletionCheck,
+  PrMergeReading,
   FlowConfirmMintResult,
   FlowIdMapEntry,
   FlowInitInput,
@@ -175,6 +179,82 @@ import type {
 async function deriveAcKinds(cwd: string, dir: string, flowId: string): Promise<Record<string, AcKindRecord>> {
   const { report } = buildAcKindReport(flowId, await readFile(acPath(cwd, dir), "utf8"));
   return { ...report.criteria };
+}
+
+/** What the pull-request gate saw of the flow's PR (flow 364, AC4). */
+type PrObservation =
+  | { kind: "no-pr" }
+  | { kind: "merged-commit" }
+  | { kind: "tracker-unavailable" }
+  | { kind: "unevaluable" }
+  | { kind: "observed"; exists: boolean; state: string | null };
+
+type CompletionGateEvaluation = {
+  gates: GateOutcome[];
+  confirmationToken: StoredConfirmationToken | undefined;
+  evaluatedHeadCommit: string | undefined;
+  pr: PrObservation;
+};
+
+/**
+ * The merge state a completion check reports (flow 364, AC4). `merged`
+ * requires the tracker to have said so, or a direct-merge commit the
+ * `main-merge` gate passed; anything the tracker did not say is `unknown`.
+ */
+function prMergeState(pr: PrObservation, gates: readonly GateOutcome[]): PrMergeReading {
+  switch (pr.kind) {
+    case "no-pr":
+      return { state: "no-pr", detail: "no PR recorded on the flow" };
+    case "merged-commit": {
+      const merge = gates.find((gate) => gate.name === "main-merge");
+      return merge?.status === "pass"
+        ? { state: "merged", detail: `direct merge: ${merge.detail}` }
+        : { state: "unknown", detail: `direct merge not verified: ${merge?.detail ?? "main-merge gate missing"}` };
+    }
+    case "tracker-unavailable":
+      return { state: "unknown", detail: "tracker unavailable (is `gh` installed and authenticated?)" };
+    case "unevaluable":
+      return { state: "unknown", detail: "the tracker call failed" };
+    case "observed": {
+      if (!pr.exists) return { state: "not-found", detail: "the tracker found no such PR" };
+      const state = pr.state?.toUpperCase();
+      if (state === "MERGED") return { state: "merged", detail: "PR merged" };
+      if (state === "OPEN") return { state: "open", detail: "PR open, not merged" };
+      if (state === "CLOSED") return { state: "closed", detail: "PR closed without merging" };
+      return { state: "unknown", detail: pr.state === null ? "the tracker did not report a PR state" : `unrecognised PR state: ${pr.state}` };
+    }
+  }
+}
+
+/**
+ * The command that would fix a failing completion gate, where one is known
+ * (flow 364, AC5); `undefined` for a passing or skipped gate and for a gate
+ * whose remedy is not one command. Shared by `flow check-complete` and the
+ * governance modal so both name the same fix.
+ */
+export function completionFixHint(gate: GateOutcome, flowId: string): string | undefined {
+  if (gate.status !== "fail") return undefined;
+  switch (gate.name) {
+    case "acceptance-criteria": {
+      const unconfirmed = /^unconfirmed: (.+)$/.exec(gate.detail)?.[1]?.split(", ") ?? [];
+      const first = unconfirmed[0];
+      if (first === undefined) return undefined;
+      const more = unconfirmed.length > 1 ? ` (then ${unconfirmed.slice(1).join(", ")})` : "";
+      return `keryx flow ac confirm ${flowId} ${first} --note "<evidence>"${more}`;
+    }
+    case "pull-request":
+      return gate.detail === "no PR recorded" ? `keryx flow implemented ${flowId} --pr <url>` : undefined;
+    case "tasks":
+      return `keryx flow next ${flowId}`;
+    case "owner":
+      return `keryx flow owner set ${flowId} --owner "<name>" --reason "<why>"`;
+    case "health":
+      return "keryx health run";
+    case "confirmation":
+      return `keryx flow confirm ${flowId} (in a terminal)`;
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -319,6 +399,220 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
     assertTransition(flow.status, "in-progress");
     flow.status = "in-progress";
     return save(cwd, dir, flow, event, detail);
+  }
+
+  /**
+   * Every completion gate, in the order `complete()` records them (flow 364,
+   * AC4). `complete()` and `checkComplete()` both call this, so a check can
+   * never drift from what a completion would decide. Writes nothing: every
+   * gate only reads (`flow.json`, the criteria file, review records, the
+   * latest health and security reports, the tracker), and the confirmation
+   * token is only checked here — `complete()` spends it on its passing path.
+   */
+  async function evaluateCompletionGates(
+    cwd: string,
+    dir: string,
+    flow: FlowState,
+    mergedCommit: string | undefined,
+    confirmToken: string | undefined,
+  ): Promise<CompletionGateEvaluation> {
+    const gates: GateOutcome[] = [];
+
+    // Gate 1: acceptance criteria (checksum + confirmations).
+    try {
+      await assertAcIntact(cwd, dir, flow);
+      const criteria = await readAcCriteria(cwd, dir);
+      const missing = criteria.filter((criterion) => !flow.acConfirmed[criterion]);
+      gates.push(
+        missing.length === 0 && criteria.length > 0
+          ? { name: "acceptance-criteria", status: "pass", detail: `${criteria.length} confirmed` }
+          : {
+              name: "acceptance-criteria",
+              status: "fail",
+              detail: criteria.length === 0 ? "no criteria found" : `unconfirmed: ${missing.join(", ")}`,
+            },
+      );
+    } catch {
+      // T45 already made this arm block (`status: "fail"`); T47 closes the
+      // remaining leak-safety gap by routing it through the same
+      // caught-value-free helper the health/security arms use below,
+      // instead of interpolating the caught error's message verbatim
+      // (which can carry a filesystem path or file content).
+      gates.push(unevaluableGate("acceptance-criteria"));
+    }
+
+    // Confirmation token (flow 299, AC2). Opt-in per flow, like `owner`.
+    // EVALUATED here, when the attempt starts, so a slow health gate cannot
+    // expire a token that was valid when completion began; REPORTED last,
+    // after every gate the specification already orders. The token is spent
+    // only on `complete()`'s passing path.
+    let confirmationToken: StoredConfirmationToken | undefined;
+    let confirmationOutcome: GateOutcome;
+    try {
+      const confirmation = await confirmationGate(
+        cwd,
+        dir,
+        flow,
+        confirmToken,
+        completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
+        deps.now(),
+      );
+      confirmationOutcome = confirmation.outcome;
+      confirmationToken = confirmation.stored;
+    } catch {
+      confirmationOutcome = unevaluableGate("confirmation");
+    }
+
+    // The commit the PULL-REQUEST GATE observed, when one is known —
+    // captured here from that gate's own `prStatus()` call (not re-fetched)
+    // so a completion signature can name it (AC4) without an extra tracker
+    // call. `mergedCommit` is the direct-merge case; otherwise it is filled
+    // in below from the PR's own head SHA, if the pull-request gate
+    // observes one.
+    //
+    // This is NOT a claim that every gate below saw the same head: the
+    // base-branch gate and the review gate each read the PR head (or the
+    // round's recorded head) independently, via their own calls. A push
+    // landing mid-`complete()` can make them observe a different commit
+    // than the one recorded here. `headCommit` on the signature names only
+    // what the pull-request gate saw.
+    let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
+    // Flow 364 (AC4): what the pull-request gate saw of the PR, for the merge
+    // state a check reports. Read from the same call, never a second one.
+    let pr: PrObservation;
+
+    // Gate 2: pull request, or an explicit proof that the implementation
+    // commit is already contained in origin/main (direct-merge handoff).
+    // Flow 299 (AC5): caught. A throw here used to escape with the flow
+    // saved as `completing` and no attempt on the record.
+    if (mergedCommit) {
+      pr = { kind: "merged-commit" };
+      try {
+        const merge = deps.mainMergeGate
+          ? await deps.mainMergeGate(cwd, mergedCommit)
+          : await verifyCommitOnMain(cwd, mergedCommit);
+        gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
+      } catch {
+        gates.push(unevaluableGate("main-merge"));
+      }
+    } else if (!flow.pr.url) {
+      pr = { kind: "no-pr" };
+      gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
+    } else {
+      pr = { kind: "unevaluable" };
+      try {
+        if (deps.tracker && (await deps.tracker.detect())) {
+          const status = await deps.tracker.prStatus(flow.pr.url);
+          pr = { kind: "observed", exists: status.exists, state: status.state ?? null };
+          if (typeof status.headSha === "string" && status.headSha !== "") {
+            evaluatedHeadCommit ??= status.headSha;
+          }
+          gates.push(
+            status.exists && status.checksGreen === true
+              ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
+              : {
+                  name: "pull-request",
+                  status: "fail",
+                  detail: !status.exists ? "PR not found" : "PR checks not green",
+                },
+          );
+        } else {
+          pr = { kind: "tracker-unavailable" };
+          gates.push({
+            name: "pull-request",
+            status: "skipped",
+            detail: "tracker unavailable; verify PR checks manually",
+          });
+        }
+      } catch {
+        gates.push(unevaluableGate("pull-request"));
+      }
+    }
+
+    // Gate 2b: base branch. Asks the one question the others do not — where
+    // was this SUPPOSED to land — against the base the flow recorded rather
+    // than wherever the pull request points now.
+    //
+    // Placed after the merge evidence because it consumes it, and reported
+    // even when the flow named no base, as `not recorded`. Silence there
+    // would be indistinguishable from a pass. Caught for the same reason as
+    // gate 2 (flow 299, AC5).
+    try {
+      gates.push(
+        await baseBranchCondition(
+          cwd,
+          flow,
+          mergedCommit ?? undefined,
+          flow.pr.url && deps.tracker && (await deps.tracker.detect())
+            ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
+            : undefined,
+          commitContainedIn,
+        ),
+      );
+    } catch {
+      gates.push(unevaluableGate("base-branch"));
+    }
+
+    // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
+    // 24 packages completed before this gate existed while carrying an open
+    // task, and turning it on retroactively would invalidate them. They lack
+    // the flag, so the gate reports `skipped` and never fails them.
+    gates.push(taskGate(flow));
+
+    // Gate 3b: owner (flow 289, AC5). Same opt-in shape as `tasks`/`review`:
+    // `gates.owner`, set by `flow init`. A package without the flag reports
+    // `skipped`, never `fail` — no pre-existing package is retroactively
+    // blocked by a concept it predates.
+    gates.push(ownerGate(flow));
+
+    // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
+    // basis, and never allowed to pass on absence: a condition that could not
+    // be observed fails, because a gate that passes because nothing was
+    // recorded is the exact failure this gate was added to remove.
+    try {
+      gates.push(
+        await reviewGate({
+          cwd,
+          flowDir: dir,
+          flow,
+          tracker: deps.tracker,
+          ...(deps.externalCommentsGate ? { externalCommentsGate: deps.externalCommentsGate } : {}),
+          ...(mergedCommit ? { mergedCommit } : {}),
+        }),
+      );
+    } catch {
+      // A gate that cannot run has not passed. `skipped` is reserved for "this
+      // package did not opt in" and for an explicit configuration opt-out; an
+      // unexpected error is a failure — recorded via the same caught-value-free
+      // helper the health/security arms use, not by interpolating the caught
+      // error's message (which can carry a filesystem path or file content).
+      gates.push(unevaluableGate("review"));
+    }
+
+    // Gate 5: code health.
+    try {
+      const health = await deps.healthGate(cwd);
+      gates.push(healthGateOutcome(health));
+    } catch {
+      gates.push(unevaluableGate("health"));
+    }
+
+    // Gate 6: security (§11). Omitted entirely when the module is disabled
+    // (dep returns null), so advisory `flow complete` is never regressed.
+    // Advisory -> pass (informational); enforced/ci -> may fail.
+    if (deps.securityGate) {
+      try {
+        const security = await deps.securityGate(cwd);
+        if (security) {
+          gates.push({ name: "security", status: security.status, detail: security.detail });
+        }
+      } catch {
+        gates.push(unevaluableGate("security"));
+      }
+    }
+
+    gates.push(confirmationOutcome);
+    return { gates, confirmationToken, evaluatedHeadCommit, pr };
   }
 
   // Serialize load-mutate-save on one flow so concurrent agents cannot lose
@@ -957,6 +1251,38 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    async checkComplete({ cwd, id, mergedCommit, confirmToken }): Promise<FlowCompletionCheck> {
+      // No lock: the lock is a file, and a check writes nothing. A completion
+      // running at the same moment can make this read stale, which is what
+      // `updatedAt` on the result is for.
+      const { dir, flow } = await load(cwd, id);
+      const merged = Boolean(mergedCommit);
+      const allowed = flow.status === "implemented" || (flow.status === "in-progress" && merged);
+      const transition = allowed
+        ? { allowed, detail: `${flow.status} → completing` }
+        : {
+            allowed,
+            detail:
+              flow.status === "done"
+                ? "already done"
+                : flow.status === "in-progress"
+                  ? `in-progress: record the PR first (\`keryx flow implemented ${flow.id} --pr <url>\`), or pass a merged commit`
+                  : `"${flow.status}" cannot move to completing; complete runs from "implemented" (or "in-progress" with a merged commit)`,
+          };
+      const evaluation = await evaluateCompletionGates(cwd, dir, flow, mergedCommit ?? undefined, confirmToken);
+      return {
+        id: flow.id,
+        status: flow.status,
+        updatedAt: flow.updatedAt,
+        checkedAt: now(),
+        transition,
+        merge: prMergeState(evaluation.pr, evaluation.gates),
+        gates: evaluation.gates,
+        passed: allowed && evaluation.gates.every((gate) => gate.status !== "fail"),
+        confirmationRequired: flow.gates?.confirmation === true,
+      };
+    },
+
     async complete({
       cwd,
       id,
@@ -985,194 +1311,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // without re-checking the criteria (`returnToInProgress`), because a
       // tamper is exactly what it is recording. A dead process is what
       // `flow recover` is for.
-      const gates: GateOutcome[] = [];
-
-      // Gate 1: acceptance criteria (checksum + confirmations).
-      try {
-        await assertAcIntact(cwd, dir, flow);
-        const criteria = await readAcCriteria(cwd, dir);
-        const missing = criteria.filter((criterion) => !flow.acConfirmed[criterion]);
-        gates.push(
-          missing.length === 0 && criteria.length > 0
-            ? { name: "acceptance-criteria", status: "pass", detail: `${criteria.length} confirmed` }
-            : {
-                name: "acceptance-criteria",
-                status: "fail",
-                detail: criteria.length === 0 ? "no criteria found" : `unconfirmed: ${missing.join(", ")}`,
-              },
-        );
-      } catch {
-        // T45 already made this arm block (`status: "fail"`); T47 closes the
-        // remaining leak-safety gap by routing it through the same
-        // caught-value-free helper the health/security arms use below,
-        // instead of interpolating the caught error's message verbatim
-        // (which can carry a filesystem path or file content).
-        gates.push(unevaluableGate("acceptance-criteria"));
-      }
-
-      // Confirmation token (flow 299, AC2). Opt-in per flow, like `owner`.
-      // EVALUATED here, when the attempt starts, so a slow health gate cannot
-      // expire a token that was valid when completion began; REPORTED last,
-      // after every gate the specification already orders. The token is spent
-      // only on the passing path below.
-      let confirmationToken: StoredConfirmationToken | undefined;
-      let confirmationOutcome: GateOutcome;
-      try {
-        const confirmation = await confirmationGate(
-          cwd,
-          dir,
-          flow,
-          confirmToken,
-          completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
-          deps.now(),
-        );
-        confirmationOutcome = confirmation.outcome;
-        confirmationToken = confirmation.stored;
-      } catch {
-        confirmationOutcome = unevaluableGate("confirmation");
-      }
-
-      // The commit the PULL-REQUEST GATE observed, when one is known —
-      // captured here from that gate's own `prStatus()` call (not re-fetched)
-      // so a completion signature can name it (AC4) without an extra tracker
-      // call. `mergedCommit` is the direct-merge case; otherwise it is filled
-      // in below from the PR's own head SHA, if the pull-request gate
-      // observes one.
       //
-      // This is NOT a claim that every gate below saw the same head: the
-      // base-branch gate and the review gate each read the PR head (or the
-      // round's recorded head) independently, via their own calls. A push
-      // landing mid-`complete()` can make them observe a different commit
-      // than the one recorded here. `headCommit` on the signature names only
-      // what the pull-request gate saw.
-      let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
-
-      // Gate 2: pull request, or an explicit proof that the implementation
-      // commit is already contained in origin/main (direct-merge handoff).
-      // Flow 299 (AC5): caught. A throw here used to escape with the flow
-      // saved as `completing` and no attempt on the record.
-      if (mergedCommit) {
-        try {
-          const merge = deps.mainMergeGate
-            ? await deps.mainMergeGate(cwd, mergedCommit)
-            : await verifyCommitOnMain(cwd, mergedCommit);
-          gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
-        } catch {
-          gates.push(unevaluableGate("main-merge"));
-        }
-      } else if (!flow.pr.url) {
-        gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
-      } else {
-        try {
-          if (deps.tracker && (await deps.tracker.detect())) {
-            const pr = await deps.tracker.prStatus(flow.pr.url);
-            if (typeof pr.headSha === "string" && pr.headSha !== "") {
-              evaluatedHeadCommit ??= pr.headSha;
-            }
-            gates.push(
-              pr.exists && pr.checksGreen === true
-                ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
-                : {
-                    name: "pull-request",
-                    status: "fail",
-                    detail: !pr.exists ? "PR not found" : "PR checks not green",
-                  },
-            );
-          } else {
-            gates.push({
-              name: "pull-request",
-              status: "skipped",
-              detail: "tracker unavailable; verify PR checks manually",
-            });
-          }
-        } catch {
-          gates.push(unevaluableGate("pull-request"));
-        }
-      }
-
-      // Gate 2b: base branch. Asks the one question the others do not — where
-      // was this SUPPOSED to land — against the base the flow recorded rather
-      // than wherever the pull request points now.
-      //
-      // Placed after the merge evidence because it consumes it, and reported
-      // even when the flow named no base, as `not recorded`. Silence there
-      // would be indistinguishable from a pass. Caught for the same reason as
-      // gate 2 (flow 299, AC5).
-      try {
-        gates.push(
-          await baseBranchCondition(
-            cwd,
-            flow,
-            mergedCommit ?? undefined,
-            flow.pr.url && deps.tracker && (await deps.tracker.detect())
-              ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
-              : undefined,
-            commitContainedIn,
-          ),
-        );
-      } catch {
-        gates.push(unevaluableGate("base-branch"));
-      }
-
-      // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
-      // 24 packages completed before this gate existed while carrying an open
-      // task, and turning it on retroactively would invalidate them. They lack
-      // the flag, so the gate reports `skipped` and never fails them.
-      gates.push(taskGate(flow));
-
-      // Gate 3b: owner (flow 289, AC5). Same opt-in shape as `tasks`/`review`:
-      // `gates.owner`, set by `flow init`. A package without the flag reports
-      // `skipped`, never `fail` — no pre-existing package is retroactively
-      // blocked by a concept it predates.
-      gates.push(ownerGate(flow));
-
-      // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
-      // basis, and never allowed to pass on absence: a condition that could not
-      // be observed fails, because a gate that passes because nothing was
-      // recorded is the exact failure this gate was added to remove.
-      try {
-        gates.push(
-          await reviewGate({
-            cwd,
-            flowDir: dir,
-            flow,
-            tracker: deps.tracker,
-            ...(deps.externalCommentsGate ? { externalCommentsGate: deps.externalCommentsGate } : {}),
-            ...(mergedCommit ? { mergedCommit } : {}),
-          }),
-        );
-      } catch {
-        // A gate that cannot run has not passed. `skipped` is reserved for "this
-        // package did not opt in" and for an explicit configuration opt-out; an
-        // unexpected error is a failure — recorded via the same caught-value-free
-        // helper the health/security arms use, not by interpolating the caught
-        // error's message (which can carry a filesystem path or file content).
-        gates.push(unevaluableGate("review"));
-      }
-
-      // Gate 5: code health.
-      try {
-        const health = await deps.healthGate(cwd);
-        gates.push(healthGateOutcome(health));
-      } catch {
-        gates.push(unevaluableGate("health"));
-      }
-
-      // Gate 6: security (§11). Omitted entirely when the module is disabled
-      // (dep returns null), so advisory `flow complete` is never regressed.
-      // Advisory -> pass (informational); enforced/ci -> may fail.
-      if (deps.securityGate) {
-        try {
-          const security = await deps.securityGate(cwd);
-          if (security) {
-            gates.push({ name: "security", status: security.status, detail: security.detail });
-          }
-        } catch {
-          gates.push(unevaluableGate("security"));
-        }
-      }
-
-      gates.push(confirmationOutcome);
+      // Flow 364 (AC4): the gates are evaluated by the same function `checkComplete()` calls.
+      const { gates, confirmationToken, evaluatedHeadCommit } = await evaluateCompletionGates(
+        cwd,
+        dir,
+        flow,
+        mergedCommit ?? undefined,
+        confirmToken,
+      );
 
       const passed = gates.every((gate) => gate.status !== "fail");
 

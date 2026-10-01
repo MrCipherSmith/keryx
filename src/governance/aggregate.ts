@@ -3,8 +3,10 @@
 // (`flow.json`, review manifests, the trigger ledger) and writes nothing
 // (AC5).
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { readAcKindRecords } from "../flow/ac-kinds";
-import { flowIdOf, listFlowDirs, readAcCriteria, readFlow } from "../flow/store";
+import { flowIdOf, flowsRoot, listFlowDirs, readAcCriteria, readFlow } from "../flow/store";
 import { readTriggerRuns, type TriggerRunsRead } from "../trigger/record";
 import {
   collectFlowDispatch,
@@ -13,6 +15,7 @@ import {
   summarizeReviewSpend,
 } from "./spend";
 import { summarizeAcceptance, summarizeConfirmations, summarizeGateOutcomes } from "./accountability";
+import { summarizeEffect, summarizeWork } from "./flow-narrative";
 import type { FlowGovernance, GovernanceFilters, PolicyDecisionsSummary, ProjectGovernance } from "./types";
 
 /**
@@ -54,6 +57,14 @@ export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead
         criteriaInFile = undefined;
       }
     }
+    // Flow 364: the effect and summary are read from the description; an
+    // unreadable file is its own state, never an empty effect.
+    let description: string | undefined;
+    try {
+      description = await readFile(path.join(flowsRoot(cwd), dir, "description.md"), "utf8");
+    } catch {
+      description = undefined;
+    }
     flows.push({
       id: flow.id,
       dir,
@@ -68,6 +79,8 @@ export async function collectFlowGovernance(cwd: string, ledger: TriggerRunsRead
       gateOutcomes: summarizeGateOutcomes(flow),
       acceptance: summarizeAcceptance(flow, criteriaInFile),
       dispatch: collectFlowDispatch(ledger, flow.id),
+      effect: summarizeEffect(description),
+      summary: summarizeWork(flow, description),
     });
   }
   return flows;
