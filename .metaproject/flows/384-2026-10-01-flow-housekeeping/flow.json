@@ -8,17 +8,46 @@
   "id": "384",
   "slug": "flow-housekeeping",
   "title": "Flow housekeeping: unique flow ids across clones, flow folders committed with the code",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-10-01T12:24:44.273Z",
-  "updatedAt": "2026-10-01T12:29:41.013Z",
+  "updatedAt": "2026-10-01T14:14:55.224Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T14:14:00.320Z",
+      "note": "second clone at 07fe9a43 with npm 0.3.54: flow check 'All flows are consistent' (28 branch warnings), flow folders in git 370 = product index 370 flows; real duplicate 366 renumbered to 385 in PR #838, stale-branch noise fixed in PR #837"
+    },
+    "AC2": {
+      "at": "2026-10-01T14:14:00.506Z",
+      "note": "src/flow/folder-hygiene.test.ts: remote 005 gives next >= 6, plus stale-branch number skipped; smoke from npm 0.3.53 init skipped 007"
+    },
+    "AC3": {
+      "at": "2026-10-01T14:14:00.691Z",
+      "note": "src/flow/check-complete.test.ts and folder-hygiene.test.ts cover pass, fail, skipped; smoke from npm 0.3.53 showed fail then pass"
+    },
+    "AC4": {
+      "at": "2026-10-01T14:14:00.870Z",
+      "note": "folder-hygiene.test.ts: default-branch clash fails duplicate-id naming flow renumber, same name not reported, non-default branch warns (PR #837)"
+    },
+    "AC5": {
+      "at": "2026-10-01T14:14:01.048Z",
+      "note": "PR #834 committed the untracked flow folders and id-map.json records 360-365 renumbering; flow 384 own folder committed at closing"
+    },
+    "AC6": {
+      "at": "2026-10-01T14:14:01.231Z",
+      "note": "CHANGELOG 0.3.53 and 0.3.54, cli-reference.md, modules.md, templates.ts and both flow-orchestrator SKILL.md copies"
+    },
+    "AC7": {
+      "at": "2026-10-01T14:14:01.412Z",
+      "note": "src/tui/flow-hygiene.test.ts and src/commands/flow-check-hygiene.test.ts render [dup id] and [not committed]; smoke showed the tags"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/835"
   },
   "owner": {
     "value": "altsay",
@@ -32,7 +61,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -40,14 +69,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -55,14 +85,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -70,14 +101,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -85,7 +117,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -106,6 +139,80 @@
       "at": "2026-10-01T12:29:41.013Z",
       "event": "ac-updated",
       "detail": "AC3: \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not tracked in git or has uncommitted changes; the green path still completes. Covered by tests for both.\" -> \"`keryx flow complete` refuses with a message that names the folder and the fix when the flow folder is not committed in HEAD (flows created from 0.3.53 on carry the opt-in flag, like the owner and tasks gates; a flow without it reports the gate as skipped); the committed path still completes. Covered by tests for pass, fail and skipped.\" (wording made exact before any implementation: committed in HEAD, opt-in per package so no pre-existing flow is blocked retroactively)"
+    },
+    {
+      "at": "2026-10-01T14:14:00.320Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: second clone at 07fe9a43 with npm 0.3.54: flow check 'All flows are consistent' (28 branch warnings), flow folders in git 370 = product index 370 flows; real duplicate 366 renumbered to 385 in PR #838, stale-branch noise fixed in PR #837 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:00.506Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/flow/folder-hygiene.test.ts: remote 005 gives next >= 6, plus stale-branch number skipped; smoke from npm 0.3.53 init skipped 007 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:00.691Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: src/flow/check-complete.test.ts and folder-hygiene.test.ts cover pass, fail, skipped; smoke from npm 0.3.53 showed fail then pass (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:00.870Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: folder-hygiene.test.ts: default-branch clash fails duplicate-id naming flow renumber, same name not reported, non-default branch warns (PR #837) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:01.048Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #834 committed the untracked flow folders and id-map.json records 360-365 renumbering; flow 384 own folder committed at closing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:01.231Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CHANGELOG 0.3.53 and 0.3.54, cli-reference.md, modules.md, templates.ts and both flow-orchestrator SKILL.md copies (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:01.412Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: src/tui/flow-hygiene.test.ts and src/commands/flow-check-hygiene.test.ts render [dup id] and [not committed]; smoke showed the tags (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T14:14:07.971Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/835 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-01T14:14:33.673Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T14:14:33.989Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T14:14:34.336Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T14:14:34.664Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T14:14:50.224Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T14:14:55.222Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-01T14:14:55.224Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -130,5 +237,160 @@
     "AC7": {
       "kind": "unclassified"
     }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T14:14:00.320Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:00.506Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:00.691Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:00.870Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:01.048Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:01.231Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:01.412Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    },
+    {
+      "at": "2026-10-01T14:14:55.224Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56",
+      "headCommit": "ed35e4fbe526b48f7ac0c46c0690a7d360aa8a3e"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T14:14:55.222Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "7 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "ed35e4fbe526b48f7ac0c46c0690a7d360aa8a3e is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "ed35e4fbe526b48f7ac0c46c0690a7d360aa8a3e is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:26e75b56ce041db683a751a4e6e26bbbd67a5720cb528c1f6612ee2f2be08e56"
+    }
+  ],
+  "merged": {
+    "commit": "ed35e4fbe526b48f7ac0c46c0690a7d360aa8a3e",
+    "ref": "origin/main",
+    "at": "2026-10-01T14:14:55.223Z"
   }
 }
