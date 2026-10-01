@@ -74,6 +74,11 @@ export interface RemoteBridgeHost {
   /** Session history (AC4): remote control went on for this session / went off. */
   recordOn(name: string): void;
   recordOff(): void;
+  /**
+   * Remote control is going off: remove the Telegram-labelled lines still waiting in
+   * the shell's queue (they have no topic to answer in) and return their text.
+   */
+  dropQueuedTelegramLines?(): string[];
   /** Something the display shows changed. */
   onChange?(): void;
 }
@@ -157,6 +162,8 @@ export class RemoteBridge {
   private lastAssistantText = "";
   private runTimer: ReturnType<typeof setTimeout> | undefined;
   private timedOut = false;
+  /** The close of the client being turned off, while it runs. */
+  private closing: Promise<void> | undefined;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
@@ -201,6 +208,7 @@ export class RemoteBridge {
 
   /** Turn remote control on. The only way it ever starts. */
   async enable(name?: string): Promise<EnableResult> {
+    if (this.closing !== undefined) await this.closing;
     if (this.client !== undefined) {
       return {
         ok: false,
@@ -237,8 +245,16 @@ export class RemoteBridge {
     return result;
   }
 
-  /** Turn it off: deregisters, which deletes the topic. Safe when already off. */
+  /**
+   * Turn it off: deregisters, which deletes the topic. Safe when already off. A
+   * second call while the first is still closing waits for it (and returns false):
+   * "off" is only true once the topic is actually gone.
+   */
   async disable(): Promise<boolean> {
+    if (this.closing !== undefined) {
+      await this.closing;
+      return false;
+    }
     const client = this.client;
     if (client === undefined) return false;
     this.client = undefined;
@@ -247,7 +263,30 @@ export class RemoteBridge {
     // History first, before anything awaits: a host that is about to swap its session
     // (`/new`, `/resume`) calls this and must close the interval on the session it opened.
     this.host.recordOff();
-    await client.close().catch(() => undefined);
+    // Lines from Telegram that never got to run are dropped with the topic; say so,
+    // here and (best effort, the topic is about to go) in the topic itself.
+    const dropped = this.host.dropQueuedTelegramLines?.() ?? [];
+    if (dropped.length > 0) {
+      this.host.notice(
+        `remote control off: ${dropped.length} queued Telegram line${dropped.length === 1 ? "" : "s"} dropped (${dropped.map((line) => `"${preview(line)}"`).join(", ")}).`,
+      );
+    }
+    const shutdown = (async () => {
+      if (dropped.length > 0) {
+        await client
+          .reply(
+            `Remote control is turning off. ${dropped.length} message${dropped.length === 1 ? "" : "s"} you sent will not run: ${dropped.map((line) => `"${preview(line)}"`).join(", ")}.`,
+          )
+          .catch(() => false);
+      }
+      await client.close().catch(() => undefined);
+    })();
+    this.closing = shutdown;
+    try {
+      await shutdown;
+    } finally {
+      if (this.closing === shutdown) this.closing = undefined;
+    }
     this.push("status", "off");
     return true;
   }
@@ -312,6 +351,30 @@ export class RemoteBridge {
   assistantText(text: string): void {
     if (!this.tgTurn) return;
     if (text.trim().length > 0) this.lastAssistantText = text;
+  }
+
+  /**
+   * A tool call started. Assistant text is reported once per model round, BEFORE that
+   * round's tool calls run, so text followed by a call is narration ("let me look"),
+   * not the answer: drop it. The reply is the text of a round that ended without a
+   * tool call.
+   */
+  toolCall(): void {
+    if (!this.tgTurn) return;
+    this.lastAssistantText = "";
+  }
+
+  /**
+   * A line that came from Telegram was removed from the shell's queue by the
+   * operator, so it will never run. Tell the topic, or its author waits for a reply.
+   */
+  queuedLineRemoved(line: string): void {
+    const client = this.client;
+    if (client === undefined) return;
+    this.push("line", `Telegram line removed from the queue: ${preview(line)}`);
+    void client
+      .reply(`Your message "${preview(line)}" was removed from the queue in the shell, so it will not run.`)
+      .catch(() => false);
   }
 
   /** The turn finished (or was cancelled). Sends the reply for a Telegram turn. */

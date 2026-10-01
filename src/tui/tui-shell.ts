@@ -344,14 +344,16 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
-import type { QueuedMainQuestion } from "./main-queue";
+import type { PendingQueueEdit, QueuedMainQuestion } from "./main-queue";
 import {
   formatMainQueueMarker,
   drainIdleMainQueue,
+  dropQueuedBySource,
   parseQueueCommand,
+  pendingQueueEditFor,
   removeMainQueueItem,
   editMainQueueItem,
-  reinsertMainQueueItem,
+  reinsertEditedMainQueueItem,
 } from "./main-queue";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
@@ -4773,6 +4775,12 @@ export async function launchTuiAgentShell(opts: {
       remoteBridge?.assistantText(text);
       baseOnAssistantTextForGuard?.(text);
     };
+    // Flow 376: text followed by a tool call is narration, not the answer; the bridge drops it.
+    const baseOnToolCallForRemote = io.onToolCall?.bind(io);
+    io.onToolCall = (name, toolInput) => {
+      remoteBridge?.toolCall();
+      baseOnToolCallForRemote?.(name, toolInput);
+    };
     /** AC5: sidebar state — zero rows while off, "on · N checked[, M flagged]" while on. */
     const refreshGuardSidebar = (): void => {
       clearTranscriptChildren(sbGuard);
@@ -5813,8 +5821,11 @@ export async function launchTuiAgentShell(opts: {
     // history interval closes on the session that opened it. A no-op while it is off.
     const stopRemoteForSessionSwitch = (): void => {
       if (remoteBridge?.active !== true) return;
-      void remoteBridge.disable();
-      io.onSystem?.("◇ remote control turned off: the session changed, and its Telegram topic is deleted. Turn it on again with /remote-control <name>.\n");
+      // The close is asynchronous (it deregisters, which deletes the topic): say it is
+      // being turned off now, and that the topic is gone only once it really is.
+      const closing = remoteBridge.disable();
+      io.onSystem?.("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
+      void closing.then(() => io.onSystem?.("◇ remote control off: the topic is deleted.\n"));
     };
 
     const applyOpened = (
@@ -7220,7 +7231,7 @@ export async function launchTuiAgentShell(opts: {
     // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
     // this item at its original position instead of opening the recipient
     // selector again (AC5 — edit must preserve position).
-    let pendingQueueEdit: { id: string; at: number } | undefined;
+    let pendingQueueEdit: PendingQueueEdit | undefined;
     // Force can be selected more than once while cancellation is settling.
     // Retain every selection in order; only the first schedules the current
     // operation's settlement handoff (AC3).
@@ -7379,6 +7390,11 @@ export async function launchTuiAgentShell(opts: {
 
     const removeMainQueue = (index: number): void => {
       if (index < 0 || index >= mainQueue.length) return;
+      // A Telegram line that is thrown away would leave its author waiting: tell the topic.
+      const removedItem = mainQueue[index];
+      if (removedItem?.source === TG_SOURCE) {
+        remoteBridge?.queuedLineRemoved(removedItem.question);
+      }
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
     };
@@ -7387,7 +7403,8 @@ export async function launchTuiAgentShell(opts: {
       const edited = editMainQueueItem(mainQueue, index);
       if (edited === undefined) return;
       mainQueue = edited.rest;
-      pendingQueueEdit = { id: edited.removed.id, at: index };
+      // `source` travels with the edit: a Telegram line stays a Telegram line.
+      pendingQueueEdit = pendingQueueEditFor(edited.removed, index);
       input.value = edited.text;
       input.focus();
       paintMainQueue();
@@ -7925,11 +7942,7 @@ export async function launchTuiAgentShell(opts: {
         if (pendingQueueEdit !== undefined) {
           const edit = pendingQueueEdit;
           pendingQueueEdit = undefined;
-          mainQueue = reinsertMainQueueItem(mainQueue, edit.at, {
-            id: edit.id,
-            question: line,
-            displayQuestion: displayLine,
-          });
+          mainQueue = reinsertEditedMainQueueItem(mainQueue, edit, line, displayLine);
           paintMainQueue();
           return;
         }
@@ -9321,6 +9334,15 @@ export async function launchTuiAgentShell(opts: {
           } catch {
             // best-effort, as above
           }
+        },
+        // Remote control going off: its queued lines have no topic to answer in. Drop
+        // them from the shell queue and hand their text to the bridge, which says so.
+        dropQueuedTelegramLines: () => {
+          const { kept, dropped } = dropQueuedBySource(mainQueue, TG_SOURCE);
+          if (dropped.length === 0) return [];
+          mainQueue = kept;
+          paintMainQueue();
+          return dropped.map((item) => item.question);
         },
         onChange: () => liveRemotePanel?.refresh(),
       },

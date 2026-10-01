@@ -108,7 +108,7 @@ describe("restart", () => {
     expect(h.deliveries.map((d) => d.line)).toEqual(["first while away", "second while away"]);
   });
 
-  test("an update at or below the stored offset that Telegram serves again is not delivered twice", async () => {
+  test("an update id seen before the restart that Telegram serves again is not delivered twice", async () => {
     h = makeHarness();
     const first = h.makeHub();
     const reg = await first.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
@@ -125,7 +125,7 @@ describe("restart", () => {
     expect(h.deliveries).toHaveLength(1);
   });
 
-  test("the poller resumes from the stored offset", async () => {
+  test("the poller asks for whatever is unconfirmed after a restart: it sends no offset, because a stored one would be a guess about Telegram numbering", async () => {
     h = makeHarness();
     const offsets: (number | undefined)[] = [];
     const client = h.api.connect("recorder");
@@ -148,7 +148,32 @@ describe("restart", () => {
     const second = h.makeHub({ api: recording });
     await second.start();
     await until(() => offsets.length > 0, "first poll after restart");
-    expect(offsets[0]).toBe(update.update_id + 1);
+    expect(update.update_id).toBeGreaterThan(0);
+    expect(offsets[0]).toBeUndefined();
+  });
+
+  test("Telegram restarts its numbering below what was seen: the new lower ids are delivered, not swallowed", async () => {
+    h = makeHarness();
+    const first = h.makeHub();
+    const reg = await first.register({ sessionId: "sess-one-0001", project: "/w/app", name: "release" });
+    if (!reg.ok) throw new Error("register failed");
+    await first.start();
+    const high = h.api.pushMessage({ fromId: OWNER_ID, text: "before the reset", threadId: reg.threadId });
+    await until(() => h.deliveries.length === 1, "delivery");
+    await first.stop();
+
+    // A new bot token, a restored bot or a Telegram-side reset: the next ids start low again.
+    const second = h.makeHub();
+    const low = { ...high, update_id: 1 };
+    await second.receive([low]);
+    await h.clock.advance(1_000);
+    await second.idle();
+    expect(h.deliveries.map((d) => d.line)).toEqual(["before the reset", "before the reset"]);
+    expect(second.events().some((e) => e.type === "poller-status")).toBe(true);
+    // The same low id again is a redelivery now, and is dropped.
+    await second.receive([low]);
+    await second.idle();
+    expect(h.deliveries).toHaveLength(2);
   });
 
   test("unsent outbound text survives a restart and is sent by the next hub", async () => {

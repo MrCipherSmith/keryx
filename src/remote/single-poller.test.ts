@@ -78,7 +78,7 @@ describe("single poller per token", () => {
 
     const poller = new UpdatePoller({
       api,
-      sink: { highWater: () => 0, accept: async () => undefined },
+      sink: { accept: async () => undefined },
     });
     poller.start();
     await poller.whenStopped();
@@ -105,7 +105,7 @@ describe("single poller per token", () => {
       );
     };
     const api = createHttpBotApi({ token: FAKE_TOKEN, baseUrl: "http://bot-api.invalid", fetchImpl: stub as typeof fetch });
-    const poller = new UpdatePoller({ api, sink: { highWater: () => 0, accept: async () => undefined } });
+    const poller = new UpdatePoller({ api, sink: { accept: async () => undefined } });
     poller.start();
     await poller.whenStopped();
 
@@ -120,9 +120,8 @@ describe("single poller per token", () => {
 describe("poller loop", () => {
   const update = (id: number): BotUpdate => ({ update_id: id });
 
-  test("asks for the offset after the sink's high-water mark and advances only after accept", async () => {
+  test("sends no offset on the first call, confirms exactly what the sink accepted, then sends none again", async () => {
     const offsets: (number | undefined)[] = [];
-    let mark = 10;
     let served = 0;
     const controller = { stop: undefined as undefined | (() => Promise<void>) };
     const api = {
@@ -130,24 +129,16 @@ describe("poller loop", () => {
         offsets.push(params.offset);
         served += 1;
         if (served === 1) return [update(11), update(12)];
-        // Abort from inside the call (stop() aborts first); do not await it, the loop is awaiting us.
-        void controller.stop?.();
+        if (served >= 3) void controller.stop?.();
         return [];
       },
     } as unknown as ConstructorParameters<typeof UpdatePoller>[0]["api"];
-    const poller = new UpdatePoller({
-      api,
-      sink: {
-        highWater: () => mark,
-        accept: async (updates) => {
-          mark = Math.max(...updates.map((u) => u.update_id));
-        },
-      },
-    });
+    const poller = new UpdatePoller({ api, sink: { accept: async () => undefined } });
     controller.stop = () => poller.stop();
     poller.start();
     await poller.whenStopped();
-    expect(offsets.slice(0, 2)).toEqual([11, 13]);
+    // No persisted offset: a restart asks for whatever is unconfirmed, whatever its numbering.
+    expect(offsets.slice(0, 3)).toEqual([undefined, 13, undefined]);
   });
 
   test("a sink that throws does not advance the offset: the same updates are served again", async () => {
@@ -155,7 +146,6 @@ describe("poller loop", () => {
     api.pushMessage({ fromId: OWNER_ID, text: "one", threadId: 1 });
     let attempts = 0;
     const seen: number[][] = [];
-    let mark = 0;
     const sleeps: number[] = [];
     const poller = new UpdatePoller({
       api,
@@ -166,12 +156,10 @@ describe("poller loop", () => {
       },
       backoffMs: [7],
       sink: {
-        highWater: () => mark,
         accept: async (updates) => {
           attempts += 1;
           seen.push(updates.map((u) => u.update_id));
           if (attempts === 1) throw new Error("disk full");
-          mark = Math.max(...updates.map((u) => u.update_id));
         },
       },
     });
@@ -193,7 +181,7 @@ describe("poller loop", () => {
         sleeps.push(ms);
         await settle();
       },
-      sink: { highWater: () => 0, accept: async () => undefined },
+      sink: { accept: async () => undefined },
     });
     poller.start();
     await until(() => api.callCount("getUpdates") >= 2, "second call after the wait");
@@ -214,7 +202,7 @@ describe("poller loop", () => {
         sleeps.push(ms);
         await settle();
       },
-      sink: { highWater: () => 0, accept: async () => undefined },
+      sink: { accept: async () => undefined },
     });
     poller.start();
     await until(() => api.callCount("getUpdates") >= 4, "recovery");

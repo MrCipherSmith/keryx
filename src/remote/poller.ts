@@ -7,17 +7,23 @@
 // goes to state `conflict`, makes no further call, and exposes a reason that
 // names the conflict (never the token).
 //
-// The loop only moves data: it asks for updates at the sink's confirmed offset,
-// hands them to the sink and, once the sink has made them durable, asks again
-// with the offset advanced. All persistence is the sink's job.
+// The loop only moves data: it asks for updates, hands them to the sink and, once
+// the sink has made them durable, asks again with an offset that confirms them to
+// Telegram. All persistence is the sink's job.
+//
+// The offset is never a stored number. `update_id` is not a monotonic key we may
+// trust across time: Telegram can restart its numbering (a reset of the bot's
+// update queue), and a persisted high-water mark would then make a healthy bot
+// look dead, silently dropping every message. So the first call after a start
+// carries NO offset (Telegram re-serves whatever it has not yet been told we hold,
+// and the sink drops repeats by exact id), and an offset is sent only to confirm a
+// batch the sink has just accepted.
 
 import { redactSensitiveText } from "../security/service";
 import { type BotApi, type BotUpdate, isBotApiError } from "./types";
 
 export interface UpdateSink {
-  /** Highest update id already persisted; the next call asks for `highWater + 1`. */
-  highWater(): number;
-  /** Persist the updates and advance the high-water mark. Throw to have them re-served. */
+  /** Persist the updates. Throw to have them re-served. A repeat of an id already held must be dropped by the sink. */
   accept(updates: BotUpdate[]): Promise<void>;
 }
 
@@ -119,14 +125,18 @@ export class UpdatePoller {
 
   private async run(signal: AbortSignal): Promise<void> {
     let failures = 0;
+    // The offset that confirms the batch the sink last accepted; set only for the next call.
+    let confirm: number | undefined;
     while (!signal.aborted) {
       let updates: BotUpdate[];
       try {
         updates = await this.api.getUpdates({
-          offset: this.sink.highWater() + 1,
+          ...(confirm === undefined ? {} : { offset: confirm }),
           timeoutSec: this.timeoutSec,
           signal,
         });
+        // That call carried the confirmation (or had none to carry).
+        confirm = undefined;
       } catch (error) {
         if (signal.aborted) {
           return;
@@ -154,12 +164,13 @@ export class UpdatePoller {
       }
       try {
         await this.sink.accept(updates);
+        confirm = Math.max(...updates.map((update) => update.update_id)) + 1;
         failures = 0;
         if (this.current.reason !== undefined) {
           this.set({ state: "running" });
         }
       } catch (error) {
-        // Not persisted, so the offset did not move: Telegram serves them again.
+        // Not persisted, so they are not confirmed: Telegram serves them again.
         failures += 1;
         this.set({ state: "running", reason: describe(error) });
         await this.sleep(this.backoffMs[Math.min(failures, this.backoffMs.length) - 1] ?? 1_000, signal);

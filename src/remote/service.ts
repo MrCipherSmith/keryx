@@ -15,6 +15,9 @@
 //   - One poller per bot token: a lock file refuses a second serve on this
 //     machine without it ever calling getUpdates, and a 409 from Telegram (another
 //     machine) stops this hub.
+//   - A fresh shell token on every start, minted only AFTER the poller lock is held,
+//     so a second serve that is about to be refused cannot rotate the token under
+//     the one that is running. Until then the surface accepts no shell token.
 
 import { unlinkSync } from "node:fs";
 import { isLoopbackAddress } from "../lib/serve-config";
@@ -26,7 +29,7 @@ import { endpointPath, type RemoteEndpoint } from "./endpoint";
 import { ensureRemoteDir, remoteConfigPath } from "./paths";
 import { acquirePollLock, type AcquirePollLockOptions, type PollLock } from "./poll-lock";
 import { RemoteHttpSurface, type RemoteSurfaceOptions } from "./http-surface";
-import { createShellTokenVerifier, ensureShellToken } from "./shell-token";
+import { createShellTokenVerifier, mintShellToken } from "./shell-token";
 
 export interface OpenRemoteServiceOptions
   extends Pick<
@@ -65,13 +68,11 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): OpenR
   if (!config.ok) {
     return { status: "unavailable", reason: config.reason };
   }
-  const token = ensureShellToken(options.dir);
-  if (!token.ok) {
-    return { status: "unavailable", reason: token.reason };
-  }
   const notice = options.onNotice ?? (() => undefined);
+  // Set by `start`, once the poller lock is ours and a fresh token has been minted.
+  let verifyShellToken: ((presented: string) => boolean) | undefined;
   const surface = new RemoteHttpSurface({
-    verifyShellToken: createShellTokenVerifier(token.value),
+    verifyShellToken: (presented) => verifyShellToken?.(presented) ?? false,
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.timers === undefined ? {} : { timers: options.timers }),
     ...options.surface,
@@ -132,6 +133,12 @@ export function openRemoteService(options: OpenRemoteServiceOptions = {}): OpenR
             return refuse(lock.reason);
           }
         }
+        // Every start rotates the token: whatever an earlier serve handed out stops working here.
+        const token = mintShellToken(options.dir);
+        if (!token.ok) {
+          return refuse(token.reason);
+        }
+        verifyShellToken = createShellTokenVerifier(token.value);
         const opened = openRemoteHub({
           ...(options.dir === undefined ? {} : { dir: options.dir }),
           ...(options.api === undefined ? {} : { api: options.api }),

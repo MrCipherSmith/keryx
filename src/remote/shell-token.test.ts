@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { readConfigFile } from "../lib/config-dir";
 import { fileMode, makeRemoteDir } from "./remote.test-helpers";
-import { createShellTokenVerifier, ensureShellToken, readShellToken, shellTokenPath } from "./shell-token";
+import { createShellTokenVerifier, mintShellToken, readShellToken, shellTokenPath } from "./shell-token";
 
 const dirs: string[] = [];
 function freshDir(): string {
@@ -19,33 +19,28 @@ afterEach(() => {
   }
 });
 
-describe("ensureShellToken (serve side)", () => {
+describe("mintShellToken (serve side, once per start)", () => {
   test("creates the file owner-only and returns a long random token", () => {
     const dir = freshDir();
-    const made = ensureShellToken(dir);
+    const made = mintShellToken(dir);
     expect(made.ok).toBe(true);
     expect(fileMode(shellTokenPath(dir))).toBe(0o600);
     expect(made.ok && made.value.length).toBeGreaterThanOrEqual(32);
   });
 
-  test("keeps what is there: a restart does not invalidate shells that already hold the token", () => {
+  test("a fresh token on every mint: a serve that restarts invalidates every old token", () => {
     const dir = freshDir();
-    const first = ensureShellToken(dir);
-    const second = ensureShellToken(dir);
-    expect(first.ok && second.ok && first.value === second.value).toBe(true);
-  });
-
-  test("deleting the file is the rotation", () => {
-    const dir = freshDir();
-    const first = ensureShellToken(dir);
-    rmSync(shellTokenPath(dir));
-    const second = ensureShellToken(dir);
+    const first = mintShellToken(dir);
+    const second = mintShellToken(dir);
     expect(first.ok && second.ok && first.value !== second.value).toBe(true);
+    // And the file holds the new one: a shell that re-reads gets it.
+    const read = readShellToken(dir);
+    expect(read.ok && second.ok && read.value === second.value).toBe(true);
   });
 
   test("is not the serve bearer and not stored beside it", () => {
     const dir = freshDir();
-    ensureShellToken(dir);
+    mintShellToken(dir);
     expect(shellTokenPath(dir)).not.toBe(dir);
     expect(shellTokenPath(dir)).toContain("remote");
   });
@@ -62,14 +57,14 @@ describe("readShellToken (shell side)", () => {
 
   test("reads what serve wrote", () => {
     const dir = freshDir();
-    const made = ensureShellToken(dir);
+    const made = mintShellToken(dir);
     const read = readShellToken(dir);
     expect(read.ok && made.ok && read.value === made.value).toBe(true);
   });
 
   test("refuses a file readable by group or others, without echoing the token", () => {
     const dir = freshDir();
-    const made = ensureShellToken(dir);
+    const made = mintShellToken(dir);
     chmodSync(shellTokenPath(dir), 0o644);
     const read = readShellToken(dir);
     expect(read.ok).toBe(false);
@@ -79,13 +74,16 @@ describe("readShellToken (shell side)", () => {
 
   test("refuses a file that does not hold a token, without echoing it", () => {
     const dir = freshDir();
-    ensureShellToken(dir);
+    mintShellToken(dir);
     writeFileSync(shellTokenPath(dir), "secret value with spaces!\n", { mode: 0o600 });
     const read = readShellToken(dir);
     expect(read.ok).toBe(false);
     expect(read.ok === false && read.reason).not.toContain("secret value");
-    // And the file is not the one serve would trust: ensure refuses it as well.
-    expect(ensureShellToken(dir).ok).toBe(false);
+    // Minting does not trust what is there: it replaces it.
+    const minted = mintShellToken(dir);
+    const reread = readShellToken(dir);
+    expect(minted.ok && reread.ok && minted.value === reread.value).toBe(true);
+    writeFileSync(shellTokenPath(dir), "secret value with spaces!\n", { mode: 0o600 });
     expect(readConfigFile(shellTokenPath(dir)).ok).toBe(true);
   });
 });

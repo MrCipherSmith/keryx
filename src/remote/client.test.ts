@@ -10,7 +10,7 @@ import { RemoteClient, type ClientStatus } from "./client";
 import { endpointPath } from "./endpoint";
 import { makeRig, type Rig } from "./remote.http.test-helpers";
 import { until } from "./remote.test-helpers";
-import { ensureShellToken } from "./shell-token";
+import { mintShellToken } from "./shell-token";
 
 const cleanups: (() => Promise<void> | void)[] = [];
 afterEach(async () => {
@@ -31,7 +31,7 @@ describe("where the shell token may go", () => {
   for (const address of ["10.0.0.5", "192.168.1.20", "0.0.0.0", "example.invalid", "::ffff:8.8.8.8", "127.0.0.1.evil.test"]) {
     test(`an endpoint file naming ${address} is refused before any request is made`, async () => {
       const dir = scratchDir();
-      expect(ensureShellToken(dir).ok).toBe(true);
+      expect(mintShellToken(dir).ok).toBe(true);
       writeOwnerOnlyFileAtomic(endpointPath(dir), `${JSON.stringify({ address, port: 4455, pid: process.pid })}\n`);
       const calls: string[] = [];
       const statuses: ClientStatus[] = [];
@@ -60,7 +60,7 @@ describe("where the shell token may go", () => {
 
   test("loopback literals, v4 and v6, are accepted by the rule", async () => {
     const dir = scratchDir();
-    expect(ensureShellToken(dir).ok).toBe(true);
+    expect(mintShellToken(dir).ok).toBe(true);
     for (const address of ["127.0.0.1", "127.0.0.2", "::1", "[::1]"]) {
       writeOwnerOnlyFileAtomic(endpointPath(dir), `${JSON.stringify({ address, port: 4455, pid: process.pid })}\n`);
       const urls: string[] = [];

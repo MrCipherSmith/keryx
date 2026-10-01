@@ -31,7 +31,7 @@ interface FakeClient extends RemoteClientLike {
   heartbeat: number | undefined;
 }
 
-function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs?: number } = {}) {
+function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs?: number; closeGate?: Promise<void>; queuedTelegram?: string[] } = {}) {
   const calls: string[] = [];
   const state = { busy: opts.busy ?? false, now: 1_000_000 };
   const host: RemoteBridgeHost = {
@@ -44,6 +44,12 @@ function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs
     cancelTurn: () => calls.push("cancel"),
     recordOn: (n) => calls.push(`on:${n}`),
     recordOff: () => calls.push("off"),
+    dropQueuedTelegramLines: () => {
+      const dropped = opts.queuedTelegram ?? [];
+      opts.queuedTelegram = [];
+      if (dropped.length > 0) calls.push(`dropped:${dropped.length}`);
+      return dropped;
+    },
     onChange: () => calls.push("change"),
   };
   let client!: FakeClient;
@@ -81,6 +87,8 @@ function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs
         },
         close: async () => {
           calls.push("close");
+          await opts.closeGate;
+          calls.push("closed");
           fake.closed += 1;
         },
         reply: async (text: string) => {
@@ -139,7 +147,7 @@ test("a failed start leaves remote control off, records no history and reports t
   expect(h.bridge.status().events.at(-1)).toMatchObject({ kind: "error" });
 });
 
-test("disable records history first, then deregisters; a second disable is a no-op", async () => {
+test("disable records history first, then deregisters; a second disable after it is a no-op", async () => {
   const h = harness();
   await h.bridge.enable();
   h.calls.length = 0;
@@ -149,6 +157,118 @@ test("disable records history first, then deregisters; a second disable is a no-
   expect(h.bridge.status().state).toBe("off");
   expect(await h.bridge.disable()).toBe(false);
   expect(h.client().closed).toBe(1);
+});
+
+test("a second disable while the first is still closing waits for the close, and does not close twice", async () => {
+  let release!: () => void;
+  const closeGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const h = harness({ closeGate });
+  await h.bridge.enable();
+  const first = h.bridge.disable();
+  let secondDone = false;
+  const second = h.bridge.disable().then((result) => {
+    secondDone = true;
+    return result;
+  });
+  await new Promise((r) => setTimeout(r, 20));
+  // The topic is not deleted yet, so "off" is not true yet: the second caller is still waiting.
+  expect(h.calls).toContain("close");
+  expect(h.calls).not.toContain("closed");
+  expect(secondDone).toBe(false);
+  release();
+  expect(await first).toBe(true);
+  expect(await second).toBe(false);
+  expect(h.calls).toContain("closed");
+  expect(h.client().closed).toBe(1);
+});
+
+test("enable while a close is still running waits for it, so two topics are not alive at once", async () => {
+  let release!: () => void;
+  const closeGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const h = harness({ closeGate });
+  await h.bridge.enable();
+  const closing = h.bridge.disable();
+  const again = h.bridge.enable();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(h.calls.filter((c) => c === "start")).toHaveLength(1);
+  release();
+  await closing;
+  expect((await again).ok).toBe(true);
+  expect(h.calls.filter((c) => c === "start")).toHaveLength(2);
+});
+
+test("turning off tells the shell and the topic which queued Telegram lines were dropped", async () => {
+  const h = harness({ queuedTelegram: ["fix the build", "and then deploy"] });
+  await h.bridge.enable();
+  await h.bridge.disable();
+  const notice = h.calls.find((c) => c.startsWith("notice:"));
+  expect(notice).toContain("2 queued Telegram lines dropped");
+  expect(notice).toContain("fix the build");
+  expect(h.client().replies).toHaveLength(1);
+  expect(h.client().replies[0]).toContain("will not run");
+  expect(h.client().replies[0]).toContain("and then deploy");
+  // The topic is told before it is deleted.
+  expect(h.calls.indexOf("close")).toBeGreaterThan(h.calls.indexOf("dropped:2"));
+});
+
+test("turning off with nothing queued says nothing about dropped lines", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  await h.bridge.disable();
+  expect(h.calls.some((c) => c.startsWith("notice:"))).toBe(false);
+  expect(h.client().replies).toEqual([]);
+});
+
+test("text followed by a tool call is narration: the reply is the text of the round that ended without one", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.turnStarted(TG_SOURCE);
+  h.bridge.assistantText("Let me look at the build.");
+  h.bridge.toolCall();
+  await h.bridge.turnSettled({ failed: true });
+  // The aborted turn had only narration: it is not sent as if it were the answer.
+  expect(h.client().replies).toEqual(["The run failed. The details are in the shell."]);
+
+  h.bridge.turnStarted(TG_SOURCE);
+  h.bridge.assistantText("Let me look at the build.");
+  h.bridge.toolCall();
+  await h.bridge.turnSettled({ failed: false });
+  expect(h.client().replies[1]).toBe("Done. There was no text to show.");
+
+  h.bridge.turnStarted(TG_SOURCE);
+  h.bridge.assistantText("Let me look at the build.");
+  h.bridge.toolCall();
+  h.bridge.assistantText("The build passes.");
+  await h.bridge.turnSettled({ failed: false });
+  expect(h.client().replies[2]).toBe("The build passes.");
+});
+
+test("a tool call in a typed turn changes nothing", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.turnStarted(undefined);
+  h.bridge.toolCall();
+  await h.bridge.turnSettled({ failed: false });
+  expect(h.client().replies).toEqual([]);
+});
+
+test("removing a Telegram line from the shell queue tells its topic", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.queuedLineRemoved("deploy to prod");
+  await Promise.resolve();
+  expect(h.client().replies).toHaveLength(1);
+  expect(h.client().replies[0]).toContain("deploy to prod");
+  expect(h.client().replies[0]).toContain("removed from the queue");
+  expect(h.bridge.status().events.at(-1)?.text).toContain("removed from the queue");
+  // And with remote control off there is nobody to tell.
+  await h.bridge.disable();
+  h.bridge.queuedLineRemoved("never mind");
+  expect(h.client().replies).toHaveLength(1);
 });
 
 test("an idle shell runs a Telegram line like a typed line", async () => {

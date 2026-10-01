@@ -1,8 +1,10 @@
 // The single-poller lock: one `keryx serve` polls a bot token per machine.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, rmSync, writeFileSync } from "node:fs";
-import { acquirePollLock, pollerLockPath } from "./poll-lock";
+import { existsSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { acquirePollLock, EMPTY_LOCK_GRACE_MS, pollerLockPath } from "./poll-lock";
+import { ensureRemoteDir } from "./paths";
 import { fileMode, makeRemoteDir } from "./remote.test-helpers";
 
 const dirs: string[] = [];
@@ -44,11 +46,67 @@ describe("acquirePollLock", () => {
     expect(takeover.ok).toBe(true);
   });
 
-  test("a lock file with no pid in it is taken over", () => {
+  test("a lock file with no pid in it is taken over once it is old", () => {
     const dir = freshDir();
     acquirePollLock({ dir, pid: 41_006 });
     writeFileSync(pollerLockPath(dir), "garbage\n", { mode: 0o600 });
+    const old = new Date(Date.now() - EMPTY_LOCK_GRACE_MS - 1_000);
+    utimesSync(pollerLockPath(dir), old, old);
     expect(acquirePollLock({ dir, pid: 41_007, isAlive: () => true }).ok).toBe(true);
+    expect(readFileSync(pollerLockPath(dir), "utf8").trim()).toBe("41007");
+  });
+
+  test("a young lock with no pid in it is somebody mid-write: held, not taken over", () => {
+    const dir = freshDir();
+    ensureRemoteDir(dir);
+    writeFileSync(pollerLockPath(dir), "", { mode: 0o600 });
+    const second = acquirePollLock({ dir, pid: 41_011, isAlive: () => false });
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.reason).toContain("creating");
+    }
+    // The file is untouched.
+    expect(readFileSync(pollerLockPath(dir), "utf8")).toBe("");
+  });
+
+  test("the lock is never visible half-written: it holds a whole pid the moment it exists", () => {
+    const dir = freshDir();
+    const lock = acquirePollLock({ dir, pid: 41_012 });
+    expect(lock.ok).toBe(true);
+    expect(readFileSync(pollerLockPath(dir), "utf8")).toBe("41012\n");
+    // No staging file is left behind.
+    const left = readdirSync(path.dirname(pollerLockPath(dir))).filter((name) => name.includes(".new") || name.includes(".stale"));
+    expect(left).toEqual([]);
+  });
+
+  test("two takers of the same dead lock: the one that loses the race puts the winner's lock back and refuses", () => {
+    const dir = freshDir();
+    ensureRemoteDir(dir);
+    writeFileSync(pollerLockPath(dir), "41100\n", { mode: 0o600 });
+    let winner: ReturnType<typeof acquirePollLock> | undefined;
+    let raced = false;
+    // B has read the dead holder and is deciding it is dead; inside that decision A takes the lock over.
+    const second = acquirePollLock({
+      dir,
+      pid: 41_102,
+      isAlive: (pid) => {
+        if (pid === 41_100) {
+          if (!raced) {
+            raced = true;
+            winner = acquirePollLock({ dir, pid: 41_101, isAlive: (other) => other !== 41_100 });
+          }
+          return false;
+        }
+        return true;
+      },
+    });
+    expect(winner?.ok).toBe(true);
+    expect(second.ok).toBe(false);
+    if (!second.ok) {
+      expect(second.holderPid).toBe(41_101);
+    }
+    // The winner's lock is still the lock.
+    expect(readFileSync(pollerLockPath(dir), "utf8").trim()).toBe("41101");
   });
 
   test("release removes the file, and only for the owner", () => {

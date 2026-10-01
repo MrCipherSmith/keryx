@@ -185,7 +185,22 @@ that it is off.
 - **Two secrets, two route tables.** The `/v1/remote/*` routes (`register`,
   `deregister`, `heartbeat`, `reply`, `approval`, `ack`, and `GET stream`) accept
   the shell token only, from a loopback connection. The serve bearer token does
-  not reach them, and the shell token reaches nothing else.
+  not reach them, and the shell token reaches nothing else. The shell token is
+  new every time `serve` starts and the shell re-reads it on each request, so
+  restarting `serve` needs nothing from you; a shell will not send it to an
+  endpoint whose `serve` process is no longer running, and says remote control
+  is unreachable instead.
+- **Nothing is replayed or lost across a restart of `serve`.** No Telegram offset
+  is stored; `serve` drops an update id it has already seen, and a lower id than
+  ones seen (Telegram restarted its numbering) is delivered, not swallowed. At most
+  500 lines can wait undelivered in one topic; past that the topic gets a status
+  line with the count.
+- **Only the final answer goes to the topic.** Text the model writes before a tool
+  call is narration and stays in the shell.
+- **Turning it off is explicit about what is dropped.** Queued Telegram lines are
+  removed from the shell queue, the shell prints which, and the topic is told
+  before it is deleted. Removing one queued line with `/queue` tells its topic
+  too; `/queue edit` keeps its origin so the answer still goes to Telegram.
 - **Long replies are split.** A reply over 4096 characters (Telegram's limit,
   counted in UTF-16 units) goes out as numbered messages, `(1/3)`, `(2/3)`, ...,
   in order. A fenced code block that crosses a boundary is closed and reopened, so

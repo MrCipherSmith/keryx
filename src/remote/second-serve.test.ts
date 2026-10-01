@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("a second serve on the same bot token", () => {
-  test("the poller lock is held: it starts, says why, serves other routes and answers 503 on remote ones", async () => {
+  test("the poller lock is held: it starts, says why, serves other routes, refuses remote ones and leaves the first serve token alone", async () => {
     rig = makeRig();
     const first = await rig.startServe();
     expect(rig.notices).toEqual([]);
@@ -29,13 +29,15 @@ describe("a second serve on the same bot token", () => {
 
     // The listener of the second serve is fine for everything but remote control.
     expect((await call(second.origin, second.serveToken, "GET", "/v1/status")).status).toBe(200);
+    // A serve that does not poll mints no shell token of its own (it must not rotate the one the
+    // running serve handed out), so the token in the file is not accepted here: remote routes answer
+    // 401, and the reason the operator was told is the notice above.
     const refused = await call(second.origin, second.shellToken, "POST", "/v1/remote/register", { sessionId: "sess-ss-0001", project: "/work/app", name: "release" });
-    expect(refused.status).toBe(503);
-    expect(refused.body).toEqual({ error: { code: "remote-unavailable", message: expect.any(String) } });
-    // The 503 carries the same reason the operator was told.
-    const reason = (rig.notices[0] ?? "").replace("remote control is off: ", "");
-    expect(reason).not.toBe("");
-    expect((refused.body as { error: { message: string } }).error.message).toContain(reason);
+    expect(refused.status).toBe(401);
+    expect(JSON.stringify(refused.body)).not.toContain(second.shellToken);
+    // And it did not rotate the token the first serve handed out.
+    const accepted = await call(first.origin, first.shellToken, "POST", "/v1/remote/heartbeat", { sessionId: "sess-ss-nobody" });
+    expect(accepted.status).not.toBe(401);
 
     // The first serve is untouched: still polling, still the one the shells find.
     expect(first.service.hub()).toBeDefined();

@@ -18,7 +18,7 @@ import { handleServeRequest, type ServeRemoteSurface } from "../lib/serve-server
 import { AUTH_FAILURE_LIMIT } from "../lib/serve-throttle";
 import { remoteRoutePath, REMOTE_ROUTE_METHODS, type RemoteRoute } from "./protocol";
 import { call, makeRig, type Rig } from "./remote.http.test-helpers";
-import { ensureShellToken } from "./shell-token";
+import { mintShellToken } from "./shell-token";
 
 let rig: Rig | undefined;
 afterEach(async () => {
@@ -165,7 +165,7 @@ describe("a plain serve (no remote control configured)", () => {
       expect({ route, status: answer.status }).toEqual({ route, status: 404 });
     }
     // A shell token that exists on disk (a serve with remote control wrote it earlier) opens nothing here.
-    const minted = ensureShellToken(rig.dir);
+    const minted = mintShellToken(rig.dir);
     if (!minted.ok) {
       throw new Error(minted.reason);
     }

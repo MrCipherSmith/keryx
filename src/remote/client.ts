@@ -5,21 +5,26 @@
 // `requestApproval`. Everything else is this file's problem:
 //
 //   - it finds serve by `endpoint.json` and authenticates with the local shell
-//     token, both RE-READ on every connection attempt, so a serve that restarted
-//     on another port, or rotated the token, is followed without the shell doing
-//     anything;
+//     token, both RE-READ on every request and every connection attempt, so a serve
+//     that restarted on another port, or minted a new token (serve does on every
+//     start), is followed without the shell doing anything;
 //   - it registers (again, after every reconnect: the same session and name give
 //     back the same topic), heartbeats at the lease cadence, and keeps the SSE
 //     stream open with exponential backoff and `Last-Event-ID`;
-//   - an inbound line is run through `onLine` exactly once (it dedupes by update
-//     id) and acknowledged only after `onLine` resolved;
+//   - an inbound line is run through `onLine` exactly once (it dedupes by EXACT
+//     update id over a bounded window of recent ones, never by a high-water
+//     mark: Telegram may restart its numbering) and acknowledged only after
+//     `onLine` resolved;
 //   - `requestApproval` fails closed: anything but an explicit allow from the
 //     topic, including a timeout, a refusal and a dropped stream, is a deny.
 //
 // The only network this file performs is to the serve address read from
 // `endpoint.json`, and that address must be a loopback address: it is checked on
 // every attempt, so a tampered endpoint file cannot send the shell token anywhere
-// else. It never logs or returns the token.
+// else. The serve named by the file must also be a running process of this user:
+// a serve that was killed leaves its `endpoint.json` behind, and the port may by
+// then belong to someone else, who must not be handed the token. It never logs
+// or returns the token.
 
 import { isLoopbackAddress } from "../lib/serve-config";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
@@ -76,6 +81,8 @@ export interface RemoteClientOptions {
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
   /** Timeout for the non-stream requests. */
   requestTimeoutMs?: number;
+  /** Test seam: is the serve process named in `endpoint.json` running, as this user? */
+  isAlive?: (pid: number) => boolean;
 }
 
 export type StartResult =
@@ -97,6 +104,25 @@ const DEFAULT_BACKOFF_INITIAL_MS = 250;
 const DEFAULT_BACKOFF_MAX_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_EARLY_DECISIONS = 32;
+/** How many recently completed update ids the shell remembers, to drop a redelivery without running it again. */
+const MAX_COMPLETED_IDS = 256;
+
+/**
+ * Whether a process we may signal exists. ESRCH is a dead serve; EPERM is a live
+ * process of ANOTHER user (a pid that was reused, or a squatter). Neither is a
+ * serve of ours, so both are refused.
+ */
+function ownProcessIsAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function abortableSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -127,6 +153,7 @@ export class RemoteClient {
   private readonly backoffMaxMs: number;
   private readonly sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   private readonly requestTimeoutMs: number;
+  private readonly isAlive: (pid: number) => boolean;
   private readonly lifetime = new AbortController();
   private streamAbort: AbortController | undefined;
   private runLoop: Promise<void> | undefined;
@@ -136,8 +163,13 @@ export class RemoteClient {
   private stopped = false;
   private leaving = false;
   private streamOpen = false;
+  /** The most recent update id this shell finished; sent as `Last-Event-ID`. Never a filter. */
   private lastCompleted = 0;
+  /** Exact ids finished recently (insertion ordered, bounded): what a redelivery is checked against. */
+  private readonly completedIds = new Set<number>();
   private readonly inFlight = new Set<number>();
+  /** The register request in flight, so `close` can wait for it and deregister what it created. */
+  private registering: Promise<void> | undefined;
   private inboundChain: Promise<void> = Promise.resolve();
   private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly earlyDecisions = new Map<string, ApprovalDecision>();
@@ -158,6 +190,7 @@ export class RemoteClient {
     this.backoffMaxMs = options.backoff?.maxMs ?? DEFAULT_BACKOFF_MAX_MS;
     this.sleep = options.sleep ?? abortableSleep;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.isAlive = options.isAlive ?? ownProcessIsAlive;
   }
 
   get connected(): boolean {
@@ -192,6 +225,9 @@ export class RemoteClient {
       return;
     }
     this.leaving = true;
+    // A register still in flight may be creating the topic right now: let it
+    // finish, so there is something to deregister instead of an orphan topic.
+    await this.registering?.catch(() => undefined);
     if (this.started && this.name !== undefined) {
       await this.post("deregister", { sessionId: this.options.sessionId }).catch(() => undefined);
     }
@@ -290,6 +326,12 @@ export class RemoteClient {
     if (!isLoopbackAddress(endpoint.value.address)) {
       throw new FatalClientError("non-loopback-endpoint", "the serve endpoint is not a loopback address; refusing to send the shell token there");
     }
+    if (!this.isAlive(endpoint.value.pid)) {
+      // A killed serve leaves its endpoint file behind and the port may be someone else's by now.
+      throw new TransientClientError(
+        `the serve named in the endpoint file (pid ${endpoint.value.pid}) is not running as this user; refusing to send the shell token to whatever listens on that port`,
+      );
+    }
     const token = readShellToken(this.options.dir);
     if (!token.ok) {
       throw new TransientClientError(token.reason);
@@ -361,13 +403,24 @@ export class RemoteClient {
 
   /** One connection: register, open the stream, read it until it ends. True once the stream said ready. */
   private async connectOnce(): Promise<boolean> {
-    await this.register();
+    const registering = this.register();
+    this.registering = registering;
+    try {
+      await registering;
+    } finally {
+      if (this.registering === registering) {
+        this.registering = undefined;
+      }
+    }
+    if (this.stopped || this.leaving) {
+      return false;
+    }
     const abort = new AbortController();
     this.streamAbort = abort;
     const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}`);
     const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "text/event-stream" };
     if (this.lastCompleted > 0) {
-      // Cumulative: "I have completed everything up to this id".
+      // "The last line I completed was this one": serve settles that exact id if it is still waiting for it.
       headers["last-event-id"] = String(this.lastCompleted);
     }
     const response = await this.fetchImpl(url, { method: "GET", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
@@ -477,8 +530,9 @@ export class RemoteClient {
 
   private async handleInbound(event: InboundEvent): Promise<void> {
     const id = event.updateId;
-    if (id <= this.lastCompleted) {
+    if (this.completedIds.has(id)) {
       // Already done (a redelivery after a lost ack or a serve restart): say so again, run nothing.
+      // By exact id: a LOWER id than one seen before is not a repeat (Telegram may restart its numbering).
       await this.ack(id);
       return;
     }
@@ -494,7 +548,14 @@ export class RemoteClient {
       return;
     }
     this.inFlight.delete(id);
-    this.lastCompleted = Math.max(this.lastCompleted, id);
+    this.lastCompleted = id;
+    this.completedIds.add(id);
+    if (this.completedIds.size > MAX_COMPLETED_IDS) {
+      const oldest = this.completedIds.values().next().value;
+      if (oldest !== undefined) {
+        this.completedIds.delete(oldest);
+      }
+    }
     await this.ack(id);
   }
 

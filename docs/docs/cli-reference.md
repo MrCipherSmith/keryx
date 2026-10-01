@@ -1826,6 +1826,13 @@ creates under `remote/` in the user-global directory — and **not** the serve
 bearer token. A caller presenting the wrong one of the two gets the same `404` as
 for a path that does not exist. Bodies are limited to 64 KiB.
 
+The shell token is **minted fresh every time `serve` starts**, after the poller
+lock is taken, and the shell re-reads it on every request, so a restart of `serve`
+needs no action in the shell. A shell does not send it to an endpoint whose
+recorded `serve` process is no longer alive: it reports that remote control is
+unreachable instead. A `serve` that lost the poller lock to another one mints no
+token, and answers `401` to these routes.
+
 | Route | Description |
 |---|---|
 | `POST /v1/remote/register` | A shell asks for a topic for its session. Idempotent per session. |
@@ -1861,6 +1868,25 @@ the same token stops on Telegram's conflict answer and does not poll again. Turn
 it on per session from the shell with [`/remote-control`](#shell-behavior). The
 walk-through, including what is not yet verified against real Telegram, is in
 [Drive keryx remotely](guides/drive-keryx-remotely.md#remote-control-from-telegram).
+
+Delivery and limits worth knowing:
+
+- **No offset is persisted.** After a restart the poller asks Telegram for what is
+  still unconfirmed, and `serve` drops an update whose exact id it has already
+  seen (a bounded recent set). An id that is *lower* than ones already seen is not
+  treated as old: Telegram can restart its numbering, so such a batch is
+  delivered and a poller-status event records the reset.
+- **At most 500 undelivered lines wait per topic.** Past that a line is dropped
+  and the topic gets one status line saying how many.
+- **Turning remote control off from the shell** tells the topic which queued
+  Telegram lines will not run, then deletes it. Removing one queued Telegram line
+  with `/queue` tells its topic as well. A line edited with `/queue edit` keeps
+  its Telegram origin, so its answer still goes to the topic.
+- **Only the final answer is sent.** Text a model writes before a tool call is
+  narration and stays in the shell; the topic gets the text of the round that
+  ended without one.
+- **Button presses are acknowledged in the background**; a slow Telegram does not
+  hold up the next update.
 
 ### Boundaries
 

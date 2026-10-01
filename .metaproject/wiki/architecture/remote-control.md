@@ -28,6 +28,16 @@ Describes:
 
 A second `keryx serve` on the same bot token receives Telegram's conflict answer and stops polling for good.
 
+The shell token is minted fresh on every serve start (`shell-token.ts`, `mintShellToken`), after the poller lock (`poll-lock.ts`, created whole by link, so no reader sees a half-written lock) is held; a serve refused the lock mints none and answers 401 on its remote routes. `client.ts` re-reads the token on every request and refuses to send it to an `endpoint.json` whose recorded pid is not alive.
+
+### Delivery
+
+No `getUpdates` offset is persisted. `poller.ts` sends none on the first call, then confirms `max+1` after the sink accepted a batch. `RemoteHub.receive` dedupes by exact update id over a bounded recent set (`inbound.ts`, 1000 ids); an unseen id below the highest seen is a numbering reset, which clears the set and emits a `poller-status` event. Each topic keeps at most 500 undelivered lines (`MAX_INBOUND_PER_TOPIC`); a dropped line is counted into one status line. `answerCallbackQuery` is fire-and-forget with a 5 s bound. On the surface side (`http-surface.ts`) an ack or `Last-Event-ID` is honoured only for an id that was actually sent.
+
+### Shell side
+
+`shell-bridge.ts` sends a reply only from the round that ended without tool calls (`toolCall()` clears narration). `disable()` is single-flight: a second call waits for the close in progress, and `enable()` waits as well. On disable the queued Telegram lines are dropped from the shell queue and named to the shell and, best effort, to the topic; removing one queued line does the same for that line.
+
 ### Authorization
 
 `config.json` carries `allowedUserIds`. A message or button press from any other id is dropped; only the id and the time are journaled to `rejected.jsonl`, never the content. Updates from another chat, from the General topic or from an unbound topic are ignored.

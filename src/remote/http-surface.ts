@@ -10,12 +10,14 @@
 //     and retries; `redeliver` is called the moment a stream connects.
 //   - With a stream it writes an `inbound` frame and waits for `POST /ack`. The
 //     wait is bounded (`ackTimeoutMs`); a timeout rejects and the hub retries.
-//   - `Last-Event-ID` on a reconnect is a CUMULATIVE acknowledgement: everything at
-//     or below it was completed by the shell, so a redelivery at or below it
-//     resolves at once without being sent again. Per-topic order is ascending, so
-//     a cumulative mark can never skip a line.
-//   - The shell dedupes by update id as well, so a retry after a lost ack cannot
-//     run a line twice.
+//   - `Last-Event-ID` on a reconnect acknowledges that ONE id, exactly as an ack
+//     would. Nothing here treats an update id as an ordering key: Telegram can
+//     restart its numbering, and a "completed up to N" mark would then swallow
+//     every new line below N. Completed ids are remembered by exact value (a
+//     bounded set per session), and an ack or Last-Event-ID is honoured only for
+//     an id this surface actually sent to that session.
+//   - The shell dedupes by exact update id as well, so a retry after a lost ack
+//     cannot run a line twice.
 //
 // Approvals fail closed at every seam: the server only accepts a press for an id
 // it generated, for that session, before its expiry, and a stream that ends drops
@@ -63,6 +65,8 @@ import { type InlineKeyboard } from "./types";
 
 const MAX_REPLY_CHARS = 20_000;
 const MAX_PENDING_APPROVALS_PER_SESSION = 8;
+/** How many exact update ids a session's `completed` and `sent` books each remember. */
+const MAX_REMEMBERED_IDS_PER_SESSION = 512;
 const MAX_PROJECT_NAME_CHARS = 128;
 // eslint-disable-next-line no-control-regex -- rejecting control characters is the point
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
@@ -219,7 +223,12 @@ export class RemoteHttpSurface {
   private readonly ackTimeoutMs: number;
   private readonly newApprovalId: () => string;
   private readonly streams = new Map<string, ShellStream>();
-  private readonly completed = new Map<string, number>();
+  /** Per session: the exact update ids the shell finished (bounded). */
+  private readonly completed = new Map<string, Set<number>>();
+  /** Per session: the exact update ids written to its stream (bounded). Only these can be acknowledged. */
+  private readonly sent = new Map<string, Set<number>>();
+  /** Per session: which topic it is bound to, so a rebinding forgets the old topic's ids. */
+  private readonly bound = new Map<string, string>();
   private readonly pendingAcks = new Map<string, Map<number, PendingAck>>();
   private readonly approvals = new Map<string, PendingApproval>();
 
@@ -312,6 +321,13 @@ export class RemoteHttpSurface {
     }
     const result = await hub.register(checked);
     if (result.ok) {
+      const binding = `${result.name}#${result.threadId}`;
+      if (this.bound.get(checked.sessionId) !== binding) {
+        // A different topic: ids that were completed on the old one say nothing about this one.
+        this.completed.delete(checked.sessionId);
+        this.sent.delete(checked.sessionId);
+        this.bound.set(checked.sessionId, binding);
+      }
       return ok({ name: result.name, threadId: result.threadId, reused: result.reused, runTimeoutMs: hub.limits().runTimeoutMs });
     }
     const status = result.code === "name-taken" ? 409 : result.code === "invalid-name" ? 400 : 502;
@@ -353,6 +369,8 @@ export class RemoteHttpSurface {
     // The shell is leaving: its stream and everything pending for it go first.
     this.streams.get(sessionId)?.end("closing");
     this.completed.delete(sessionId);
+    this.sent.delete(sessionId);
+    this.bound.delete(sessionId);
     const result = await hub.deregister(sessionId);
     return ok({ existed: result.existed });
   }
@@ -548,34 +566,49 @@ export class RemoteHttpSurface {
 
   // ---- delivery (the hub's consumer) ---------------------------------------
 
-  private completedUpTo(sessionId: string): number {
-    return this.completed.get(sessionId) ?? 0;
+  private remember(book: Map<string, Set<number>>, sessionId: string, updateId: number): void {
+    let ids = book.get(sessionId);
+    if (ids === undefined) {
+      ids = new Set();
+      book.set(sessionId, ids);
+    }
+    ids.delete(updateId);
+    ids.add(updateId);
+    while (ids.size > MAX_REMEMBERED_IDS_PER_SESSION) {
+      const oldest = ids.values().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      ids.delete(oldest);
+    }
   }
 
-  /** Record a cumulative acknowledgement and settle every pending delivery at or below it. */
+  /**
+   * The shell finished this exact update. Honoured only for an id this surface
+   * sent to the session (or is waiting on): a made-up id settles nothing and
+   * poisons nothing. Settles that one pending delivery.
+   */
   private complete(sessionId: string, updateId: number): void {
-    if (updateId > this.completedUpTo(sessionId)) {
-      this.completed.set(sessionId, updateId);
-    }
     const pending = this.pendingAcks.get(sessionId);
-    if (pending === undefined) {
+    const waiting = pending?.get(updateId);
+    if (waiting === undefined && this.sent.get(sessionId)?.has(updateId) !== true) {
       return;
     }
-    for (const [id, entry] of [...pending.entries()]) {
-      if (id <= updateId) {
-        this.timers.clearTimeout(entry.timer);
-        pending.delete(id);
-        entry.resolve();
-      }
+    this.remember(this.completed, sessionId, updateId);
+    if (pending === undefined || waiting === undefined) {
+      return;
     }
+    this.timers.clearTimeout(waiting.timer);
+    pending.delete(updateId);
+    waiting.resolve();
     if (pending.size === 0) {
       this.pendingAcks.delete(sessionId);
     }
   }
 
   private deliver(sessionId: string, line: string, meta: DeliverMeta): Promise<void> {
-    if (meta.updateId <= this.completedUpTo(sessionId)) {
-      // The shell already finished this one (a redelivery after a lost ack or a restart).
+    if (this.completed.get(sessionId)?.has(meta.updateId) === true) {
+      // The shell already finished this exact update (a redelivery after a lost ack or a restart).
       return Promise.resolve();
     }
     const stream = this.streams.get(sessionId);
@@ -612,6 +645,8 @@ export class RemoteHttpSurface {
       this.timers.clearTimeout(entry.timer);
       perSession.delete(meta.updateId);
       reject(new Error("the shell stream closed before the line was sent"));
+    } else {
+      this.remember(this.sent, sessionId, meta.updateId);
     }
     return promise;
   }
@@ -626,8 +661,11 @@ export class RemoteHttpSurface {
       if (entry !== undefined && entry.sessionId === sessionId && entry.expiresAt > this.now()) {
         this.dropApproval(approval.approvalId);
         const event: ApprovalEvent = { updateId: callback.updateId, approvalId: approval.approvalId, decision: approval.decision };
-        stream?.write(encodeSseEvent("approval", event, callback.updateId));
-        void this.noteDecision(sessionId, approval.decision);
+        // Say "granted" only if the shell was actually told: a decision that went nowhere is not one.
+        const told = stream?.write(encodeSseEvent("approval", event, callback.updateId)) === true;
+        if (told) {
+          void this.noteDecision(sessionId, approval.decision);
+        }
       }
       return Promise.resolve();
     }

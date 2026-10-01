@@ -4,17 +4,18 @@
 // reach `/v1/remote/*` on the listener of the SAME machine and nothing else; a
 // serve bearer reaches every other route and not these. Neither grants the other.
 //
-// Lifecycle: `keryx serve` creates the file if it is absent (`O_EXCL`, mode 600,
-// in `<user-global dir>/remote/`) and otherwise keeps what is there, so a shell
-// that outlives a serve restart still holds a valid token. Deleting the file is
-// the rotation: the next serve start mints a fresh one and the shells re-read it
-// on their next connection attempt. The token is 32 random bytes; it is never
-// logged and never appears in an error message.
+// Lifecycle: `keryx serve` mints a FRESH token on every start (32 random bytes,
+// mode 600, in `<user-global dir>/remote/`) and replaces the file atomically, so a
+// reader sees the old token or the new one, never a half-written file. A token
+// that leaked, or that belonged to a serve that died, therefore stops working the
+// next time a serve starts. Shells re-read the file on every request and every
+// reconnect, so they follow the rotation without doing anything. The token is
+// never logged and never appears in an error message.
 
 import { createHash, randomBytes } from "node:crypto";
 import { statSync } from "node:fs";
 import path from "node:path";
-import { createOwnerOnlyFileExclusive, readConfigFile } from "../lib/config-dir";
+import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { constantTimeEqual } from "../lib/serve-credential";
 import type { Loaded } from "./config";
 import { ensureRemoteDir, remoteDirPath } from "./paths";
@@ -49,12 +50,21 @@ function readValidated(file: string): Loaded<string> {
   return { ok: true, value: token };
 }
 
-/** Serve side: create the token if absent, then read it. Two serves racing converge on the winner's. */
-export function ensureShellToken(dir?: string): Loaded<string> {
+/**
+ * Serve side: mint a new token and replace the file with it, whatever was there.
+ * Call it only once this serve owns the poller lock, so a second serve that is
+ * about to be refused cannot rotate the token under the one that is running.
+ */
+export function mintShellToken(dir?: string): Loaded<string> {
   ensureRemoteDir(dir);
   const file = shellTokenPath(dir);
-  createOwnerOnlyFileExclusive(file, `${randomBytes(32).toString("base64url")}\n`);
-  return readValidated(file);
+  const token = randomBytes(32).toString("base64url");
+  try {
+    writeOwnerOnlyFileAtomic(file, `${token}\n`);
+  } catch {
+    return { ok: false, reason: `could not write the shell token at ${file}` };
+  }
+  return { ok: true, value: token };
 }
 
 /** Shell side: read only, never create. The shell must not mint a secret serve does not know. */

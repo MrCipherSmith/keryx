@@ -18,7 +18,7 @@
 import { redactSensitiveText } from "../security/service";
 import { SESSION_LEASE_HEARTBEAT_MS, SESSION_LEASE_STALE_MS } from "../session/lease";
 import type { RemoteConfig } from "./config";
-import { InboundQueues, type InboundEntry, inboundEntryId, PollerState } from "./inbound";
+import { InboundQueues, type InboundEntry, inboundEntryId, MAX_INBOUND_PER_TOPIC, PollerState } from "./inbound";
 import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
 import { OutboundQueue } from "./outbound-queue";
@@ -122,6 +122,8 @@ export interface RemoteSessionInfo {
 }
 
 const MAX_EVENTS = 50;
+/** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
+const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
 
 function describeError(error: unknown): string {
   return redactSensitiveText(error instanceof Error ? error.message : String(error));
@@ -194,7 +196,7 @@ export class RemoteHub {
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
     this.poller = new UpdatePoller({
       api: this.api,
-      sink: { highWater: () => this.offset.highWater, accept: (updates) => this.receive(updates) },
+      sink: { accept: (updates) => this.receive(updates) },
       ...(options.pollTimeoutSec === undefined ? {} : { timeoutSec: options.pollTimeoutSec }),
       ...(options.pollSleep === undefined ? {} : { sleep: options.pollSleep }),
       ...(options.pollBackoffMs === undefined ? {} : { backoffMs: options.pollBackoffMs }),
@@ -392,35 +394,85 @@ export class RemoteHub {
 
   // ---- messages from Telegram ----------------------------------------------
 
-  /** The poller's sink: persist, then advance the offset, then deliver. */
+  /**
+   * The poller's sink: persist, then remember the ids, then deliver. Returning
+   * is what lets the poller confirm the batch to Telegram.
+   *
+   * A repeat is recognised by exact id, never by "at or below the highest": an id
+   * we have never taken is new however low it is. A batch holding such an id while
+   * we remember higher ones is a sequence restart (Telegram renumbered), and the
+   * ids remembered from the old sequence are forgotten rather than allowed to
+   * swallow new messages.
+   */
   receive(updates: BotUpdate[]): Promise<void> {
     return this.serial(async () => {
       const touched = new Set<string>();
       const callbacks: string[] = [];
-      let highest = this.offset.highWater;
+      const dropped = new Map<string, number>();
       const ordered = [...updates].sort((a, b) => a.update_id - b.update_id);
+      const top = this.offset.highest;
+      if (ordered.some((update) => update.update_id < top && !this.offset.seen(update.update_id))) {
+        this.offset.reset();
+        this.event("poller-status", `update numbering restarted (an id below ${top}); treating this batch as new`);
+      }
+      const taken: number[] = [];
       for (const update of ordered) {
-        highest = Math.max(highest, update.update_id);
-        if (update.update_id <= this.offset.highWater) {
+        if (this.offset.seen(update.update_id)) {
           continue;
         }
+        taken.push(update.update_id);
         const routed = this.route(update);
         if (routed === undefined) {
           continue;
         }
         touched.add(routed.key);
+        if (routed.dropped > 0) {
+          dropped.set(routed.key, (dropped.get(routed.key) ?? 0) + routed.dropped);
+        }
         if (routed.callbackQueryId !== undefined) {
           callbacks.push(routed.callbackQueryId);
         }
       }
-      // Everything above is on disk; only now may the offset move.
-      this.offset.advance(highest);
+      // Everything above is on disk; only now are the ids remembered (and so the batch confirmable).
+      this.offset.record(taken);
+      for (const [key, count] of dropped) {
+        const record = this.registry.byNameKey(key);
+        if (record !== undefined) {
+          this.event("delivery-failed", `topic ${record.threadId}: ${count} oldest queued message${count === 1 ? "" : "s"} dropped (cap ${MAX_INBOUND_PER_TOPIC})`);
+          this.queueStatus(
+            record,
+            `This topic already held ${MAX_INBOUND_PER_TOPIC} messages the session has not taken, so the ${count} oldest ${count === 1 ? "was" : "were"} dropped. Send fewer messages, or bring the session back.`,
+          );
+        }
+      }
+      if (dropped.size > 0) {
+        await this.flushOutbound();
+      }
       for (const id of callbacks) {
-        await this.api.answerCallbackQuery({ callbackQueryId: id }).catch(() => undefined);
+        this.answerCallback(id);
       }
       for (const key of touched) {
         void this.dispatch(key);
       }
+    });
+  }
+
+  /**
+   * Tell Telegram a button press was seen. Fire and forget, with a short timeout:
+   * this runs inside the serial lock's turn and a slow Bot API must never hold up
+   * the poller or the lifecycle, so nothing waits for it.
+   */
+  private answerCallback(callbackQueryId: string): void {
+    let timer: unknown;
+    const timeout = new Promise<void>((resolve) => {
+      timer = this.timers.setTimeout(resolve, ANSWER_CALLBACK_TIMEOUT_MS);
+    });
+    const answered = this.api.answerCallbackQuery({ callbackQueryId }).then(
+      () => undefined,
+      () => undefined,
+    );
+    void Promise.race([answered, timeout]).finally(() => {
+      this.timers.clearTimeout(timer);
     });
   }
 
@@ -552,7 +604,7 @@ export class RemoteHub {
   }
 
   /** Persist one update into its topic's queue. Returns where it went, or undefined when dropped. */
-  private route(update: BotUpdate): { key: string; callbackQueryId?: string } | undefined {
+  private route(update: BotUpdate): { key: string; dropped: number; callbackQueryId?: string } | undefined {
     const message = update.message;
     const query = update.callback_query;
     const fromId = message?.from?.id ?? query?.from.id;
@@ -578,18 +630,18 @@ export class RemoteHub {
       if (typeof message.text !== "string" || message.text.length === 0) {
         return undefined;
       }
-      this.inbound.append(key, { ...base, kind: "text", text: message.text });
-      return { key };
+      const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text });
+      return { key, dropped: appended.dropped };
     }
     if (query?.data === undefined) {
       return undefined;
     }
-    this.inbound.append(key, {
+    const appended = this.inbound.append(key, {
       ...base,
       kind: "callback",
       callback: { id: query.id, data: query.data, ...(query.message === undefined ? {} : { messageId: query.message.message_id }) },
     });
-    return { key, callbackQueryId: query.id };
+    return { key, dropped: appended.dropped, callbackQueryId: query.id };
   }
 
   private dispatch(key: string): Promise<void> {
