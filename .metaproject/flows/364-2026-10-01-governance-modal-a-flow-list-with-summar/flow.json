@@ -10,7 +10,7 @@
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
   "status": "in-progress",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T07:44:30.137Z",
+  "updatedAt": "2026-10-01T08:03:01.007Z",
   "source": {
     "type": "description",
     "ref": null
@@ -28,7 +28,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -36,14 +36,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -51,14 +52,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -66,7 +68,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -117,7 +120,7 @@
       "id": "T7",
       "title": "Governance modal: Flows tab with selection, check and close actions, Report tab kept",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -128,13 +131,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Tests for extraction, no-write check, merge mapping, close visibility and input guard",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -146,13 +150,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Docs: CLI reference for flow check-complete, /governance keys, CHANGELOG",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T7"
@@ -163,7 +168,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -214,6 +220,36 @@
       "at": "2026-10-01T07:44:30.137Z",
       "event": "task-done",
       "detail": "T6: Read-only completion check: shared gate evaluation, PR merge state, flow check-complete CLI"
+    },
+    {
+      "at": "2026-10-01T08:02:51.807Z",
+      "event": "task-done",
+      "detail": "T7: Governance modal: Flows tab with selection, check and close actions, Report tab kept"
+    },
+    {
+      "at": "2026-10-01T08:02:52.635Z",
+      "event": "task-done",
+      "detail": "T8: Tests for extraction, no-write check, merge mapping, close visibility and input guard"
+    },
+    {
+      "at": "2026-10-01T08:02:53.387Z",
+      "event": "task-done",
+      "detail": "T9: Docs: CLI reference for flow check-complete, /governance keys, CHANGELOG"
+    },
+    {
+      "at": "2026-10-01T08:02:59.535Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T08:03:00.322Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T08:03:01.007Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ],
   "acKinds": {

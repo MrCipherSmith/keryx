@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 2507
+- Source files indexed: 2510
 - Imported asset files indexed: 11
-- Total nodes: 2518
-- Edges: 8439
-- Import edges: 8322
+- Total nodes: 2521
+- Edges: 8452
+- Import edges: 8335
 - Asset edges: 27
 - Unresolved imports: 90
 - Import resolution: 98.9%
@@ -18,7 +18,7 @@
 |---|---:|
 | harness | 386 |
 | commands | 303 |
-| tui | 246 |
+| tui | 249 |
 | lib | 191 |
 | review | 113 |
 | gdskills | 96 |

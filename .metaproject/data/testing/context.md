@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-20T12:46:26.198Z
+generatedAt: 2026-10-01T08:02:54.384Z
 status: complete
 
 ## Frameworks
@@ -13,11 +13,11 @@ status: complete
 - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
 - `test`: `bun test`
 - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
-- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/commands/sessions`
+- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/rewind/ src/commands/sessions`
 - `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers`
 - `test:client:streaming`: `bun test src/harness/provider/`
 - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
-- `test:core`: `bun test src/cli src/core src/shell-source-audits.test.ts src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/`
+- `test:core`: `bun test src/cli src/core src/impact-evidence/ src/shell-source-audits.test.ts src/acp/ src/assets/ src/bundle/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/governance/ src/product/ src/health/ src/integrations/ src/job/ src/learning/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/rules/ src/sac/ src/security/ src/stack/ src/standard/ src/sync/ src/testing/ src/trigger/ src/wiki/ scripts/`
 - `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
@@ -29,6 +29,14 @@ status: complete
 
 ## Test Files
 
+- bench/jev-review/adapters/ci-triage.test.ts
+- bench/jev-review/adapters/registry.test.ts
+- bench/jev-review/adapters/review-conform.test.ts
+- bench/jev-review/build-dataset.test.ts
+- bench/jev-review/cost-cap.test.ts
+- bench/jev-review/metrics.test.ts
+- bench/jev-review/report.test.ts
+- bench/jev-review/run.test.ts
 - fixtures/change-impacted-test/src/alpha.extra.test.ts
 - fixtures/change-impacted-test/src/alpha.test.ts
 - fixtures/change-impacted-test/src/beta.test.ts
@@ -48,69 +56,61 @@ status: complete
 - scripts/sandbox-deep-probe-redaction.test.ts
 - scripts/stress/keryx-shell-stress.test.ts
 - scripts/typecheck.test.ts
+- src/acp/agent-io.test.ts
+- src/acp/cancel-list-load.process.test.ts
+- src/acp/capability-matrix.process.test.ts
+- src/acp/client-requests.test.ts
+- src/acp/commands.test.ts
+- src/acp/concurrent-turns.process.test.ts
+- src/acp/conformance.process.test.ts
+- src/acp/dispatch.test.ts
+- src/acp/framing.test.ts
+- src/acp/hook-notices.test.ts
+- src/acp/mcp-servers.process.test.ts
+- src/acp/models.test.ts
+- src/acp/permission.process.test.ts
+- src/acp/permission.test.ts
+- src/acp/project-tools.process.test.ts
+- src/acp/prompt-content.test.ts
+- src/acp/protocol.test.ts
+- src/acp/roster.test.ts
+- src/acp/server-mcp.test.ts
+- src/acp/server-models.test.ts
+- src/acp/session-mcp.test.ts
+- src/acp/session.test.ts
+- src/agents/baseline.test.ts
 - src/agents/bootstrap.test.ts
+- src/agents/bundled-agent-files.test.ts
+- src/agents/catalog.test.ts
+- src/agents/compile.content-hash.test.ts
+- src/agents/compile.format-safety.test.ts
+- src/agents/compile.model-tier.test.ts
+- src/agents/compile.spawn-subagent.test.ts
+- src/agents/export.test.ts
+- src/agents/frontmatter.test.ts
+- src/agents/generate.test.ts
+- src/agents/schema.test.ts
+- src/agents/tools.test.ts
+- src/agents/verify.test.ts
 - src/assets/command.test.ts
 - src/assets/resolver.test.ts
 - src/assets/seed.test.ts
-- src/bus/ac10-child-env.test.ts
-- src/bus/agent-tools.test.ts
-- src/bus/client-ack.test.ts
-- src/bus/client.test.ts
-- src/bus/delivery.integration.test.ts
-- src/bus/display.test.ts
-- src/bus/enabled.test.ts
-- src/bus/flow-isolation.test.ts
-- src/bus/inbox.test.ts
-- src/bus/leases.test.ts
-- src/bus/log.process.test.ts
-- src/bus/log.test.ts
-- src/bus/paths.test.ts
-- src/bus/pause.test.ts
-- src/bus/peer-notification.test.ts
-- src/bus/presence.test.ts
-- src/bus/prune.test.ts
-- src/bus/schema.test.ts
-- src/bus/send.test.ts
-- src/capability/external-agents.test.ts
-- src/capability/golden-rule.test.ts
-- src/capability/no-optional-imports.test.ts
-- src/capability/reference.test.ts
-- src/capability/seam.test.ts
-- src/capability/tui-layout.test.ts
-- src/capability/wiring.test.ts
-- src/cli-reference-coverage.test.ts
-- src/cli.test.ts
-- src/commands/agent-approval-binding.test.ts
-- src/commands/agent-approval-context-p0.test.ts
-- src/commands/agent-approval-context.test.ts
-- src/commands/agent-bus-notification.test.ts
-- src/commands/agent-commands.confusable.test.ts
-- src/commands/agent-commands.test.ts
-- src/commands/agent-destructive-gate.test.ts
-- src/commands/agent-instruction-roster.test.ts
-- src/commands/agent-permission-mode.test.ts
-- src/commands/agent-task-notification.test.ts
-- src/commands/agent-tool-call-budget.test.ts
-- src/commands/agent.context-guard.test.ts
-- src/commands/agent.error-hint.test.ts
-- src/commands/agent.test.ts
-- src/commands/agents-external.test.ts
-- src/commands/agents.monitor.test.ts
-- src/commands/auth.test.ts
-- src/commands/bus.test.ts
-- src/commands/ctx.rg-argv.test.ts
-- src/commands/ctx.test.ts
-- src/commands/dashboard.test.ts
-- src/commands/forgetting.test.ts
-- src/commands/gdgraph-display-truth.test.ts
-- src/commands/gdgraph.test.ts
-- src/commands/goal-command.test.ts
-- src/commands/harness-exec-extension-wave.test.ts
-- src/commands/harness-exec-restricted.smoke.test.ts
-- src/commands/harness-exec.smoke.test.ts
-- src/commands/harness-network-posture.test.ts
+- src/bundle/applied-state.test.ts
+- src/bundle/apply.test.ts
+- src/bundle/archive.test.ts
+- src/bundle/audit.test.ts
+- src/bundle/export.test.ts
+- src/bundle/external.test.ts
+- src/bundle/hook-audit.e2e.test.ts
+- src/bundle/inspect.test.ts
+- src/bundle/manifest.test.ts
+- src/bundle/own-repo-roundtrip.test.ts
+- src/bundle/paths.test.ts
+- src/bundle/plan.test.ts
+- src/bundle/roundtrip.e2e.test.ts
+- src/bundle/uninstall.test.ts
 
-- ... 762 more
+- ... 1250 more
 
 ## CI
 
