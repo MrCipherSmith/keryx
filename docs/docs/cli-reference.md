@@ -87,7 +87,7 @@ verb's usage, and `keryx --help` ends with every group's full subcommand list.
 | [`providers`](#providers) | Configured model providers: list, live status, connection test, removal, cross-family review eligibility. |
 | [`routing`](#routing) | Category-to-model routing table, the model-profile catalogue, and measured task cost. |
 | [`external`](#external) | Keep private work in-house: block listed external providers and models before any network call. |
-| [`serve`](#serve) | Loopback-bound HTTP entry over the agent harness (opt-in, off by default). |
+| [`serve`](#serve) | HTTP entry over the agent harness, binding to loopback by default (opt-in, off by default). |
 | [`approvals`](#approvals) | Answer, from this machine, a call a remote turn is waiting on (list, allow, deny). |
 | [`acp`](#acp) | Serve the harness to an editor over the Agent Client Protocol (newline-delimited JSON-RPC on stdio). |
 | [`bus`](#bus) | Agent bus across this clone's worktrees: peers and leases, the log, messages, pause and resume. |
@@ -1873,7 +1873,7 @@ the default `on` state costs no permanent sidebar space, the same idiom
 
 ## serve
 
-An **opt-in, off-by-default** loopback-bound HTTP entry over the same agent
+An **opt-in, off-by-default** HTTP entry that binds to loopback by default, over the same agent
 harness `keryx shell` drives. It exists so a bot, a browser workspace, or a
 third-party embedding becomes a client of one surface rather than a second
 agent runtime with its own copy of session state.

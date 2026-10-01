@@ -453,7 +453,7 @@ Commands:
   status    Show local Metaproject status
   modules   View and toggle Metaproject modules (interactive)
   projects  Inspect the user-global registry of initialized projects
-  serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
+  serve     Authenticated HTTP entry, loopback by default (off by default; read-only routes)
   approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard

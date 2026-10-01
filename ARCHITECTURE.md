@@ -135,8 +135,8 @@ parent.
 - `keryx integrations` installs hooks and instruction blocks into the host
   harnesses listed in `src/integrations/registry.ts`, described by a capability
   matrix that CI checks for drift.
-- `keryx serve` is an authenticated, loopback HTTP entry for remote turns. It is
-  off until configured.
+- `keryx serve` is an authenticated HTTP entry for remote turns that binds to loopback by
+  default. It is off until configured.
 
 ## Invariants
 

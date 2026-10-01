@@ -179,7 +179,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx sandbox` | Report OS sandbox launcher availability and the per-capability containment matrix. |
 | `keryx modules` | View and toggle Metaproject modules (interactive). |
 | `keryx projects` | Inspect the user-global registry of initialized projects. |
-| `keryx serve` | Loopback-bound authenticated HTTP entry (off by default; read-only routes). |
+| `keryx serve` | Authenticated HTTP entry, loopback by default (off by default; read-only routes). |
 | `keryx rules` | Sync root AGENTS.md/CLAUDE.md into high-priority project rules. |
 | `keryx harness` | Run a single provider turn (harness run) and print structured events. |
 | `keryx version` | Check whether a newer npm release is available. |

@@ -702,7 +702,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "serve",
     group: "Maintenance and diagnostics",
-    summary: "Loopback-bound authenticated HTTP entry (off by default; read-only routes).",
+    summary: "Authenticated HTTP entry, loopback by default (off by default; read-only routes).",
   },
   {
     kind: "cli",

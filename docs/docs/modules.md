@@ -1566,7 +1566,7 @@ artifact write to the owning module.
 
 ## serve
 
-**Purpose.** A loopback-bound HTTP entry over the harness, so a bot or another
+**Purpose.** An HTTP entry (loopback by default) over the harness, so a bot or another
 product can drive turns. Opt-in and off until started; not a manifest module.
 
 **CLI surface.** `serve` with the flags in the

@@ -16,7 +16,7 @@ in the code; the [CLI reference](cli-reference.md#harness) has every flag; the
 | Interactive | `keryx shell` | A terminal UI (or readline) with tools, sessions and approval prompts |
 | CLI | `keryx harness run\|exec\|extension\|wave\|replay` | Scriptable and CI-facing: one prompt or one contained command per invocation |
 | JSON lines | `runViaRpc` in `src/harness/rpc.ts` | The same run framed as JSON envelopes, for embedding rather than a CLI verb |
-| Loopback HTTP | `keryx serve` | Authenticated and loopback-bound; a bot or a browser drives turns |
+| HTTP | `keryx serve` | Authenticated; binds to loopback by default; a bot or a browser drives turns |
 
 The CLI and JSON-lines doors share one run function, so a transport cannot
 upgrade a decision: framing carries data, and the policy engine decides. The
@@ -143,7 +143,7 @@ with three modes: `ask` (the default: shell commands, subagents and destructive
 calls ask first), `trust` (only destructive calls ask) and `auto` (nothing asks
 except a command touching Keryx's own credential files, which no mode
 auto-approves). Set it with `keryx shell --trust` or `--auto`, or with `/mode`
-inside a session. [Choose an approval mode](guides/permission-modes.md) is the
+inside a session. The `--auto` launch flag starts the session in auto directly, without the confirmation `/mode auto` shows. [Choose an approval mode](guides/permission-modes.md) is the
 full reference.
 
 The modes never reach `harness run`, `harness exec`, `keryx serve` or the MCP

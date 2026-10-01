@@ -24,7 +24,7 @@ under `.metaproject/` and in one per-user config directory, and external tools
 
 Two HTTP surfaces exist, and both are **off until you start them**:
 `keryx serve-mcp --http` (localhost only, behind a capability switch) and
-`keryx serve` (loopback-bound remote entry into the agent harness).
+`keryx serve` (remote entry into the agent harness, loopback by default).
 
 ```mermaid
 flowchart LR
@@ -43,7 +43,7 @@ flowchart LR
   A -->|"hooks, MCP (opt-in)"| W
   K -->|"scans; writes only what a command owns"| R
   W -.->|"committed with the code"| R
-  S -->|"loopback HTTP, off by default"| E["keryx serve clients<br/>bot · browser"]
+  S -->|"HTTP, loopback by default, off until started"| E["keryx serve clients<br/>bot · browser"]
 ```
 
 ## Code zones
@@ -135,7 +135,7 @@ keryx <verb> ...  →  src/cli.ts main()  →  CLI_ROUTES[verb]  →  src/comman
 | **sandbox** | `src/harness/process/sandbox/` | `sandbox` | Seatbelt and bubblewrap launchers, the allowlist proxy, credential masking. |
 | **bus** | `src/bus/` | `bus` | Presence, leases and an inbox across the worktrees of one clone. |
 | **sac** | `src/sac/` | `workspace` | Shared Agent Context: workspaces, proposals and a review gate. Opt-in, experimental. |
-| **serve** | `src/commands/serve.ts`, `src/lib/serve-*.ts` | `serve`, `approvals`, `projects` | Loopback remote entry, durable approvals, the user-global project registry. |
+| **serve** | `src/commands/serve.ts`, `src/lib/serve-*.ts` | `serve`, `approvals`, `projects` | Remote entry (loopback by default), durable approvals, the user-global project registry. |
 | **trigger** | `src/trigger/` | `trigger`, `schedule` | Declared automation and scheduled unattended runs with a spend ledger. |
 | **governance** | `src/governance/`, `src/product/`, `src/metrics/` | `governance`, `product`, `metrics` | Read-only reports: spend, confirmations, gate outcomes, intents, run metrics. |
 | **data lifecycle** | `src/retention/`, `src/forgetting/` | `retention`, `forgetting` | Bounds on growing stores and a trail of observed removals. |

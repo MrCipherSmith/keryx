@@ -154,7 +154,7 @@ See [schedule](cli-reference.md#schedule) in the CLI reference.
 
 ## Remote approvals apply only where tools are registered
 
-`keryx serve` accepts turns over a loopback-bound, authenticated HTTP listener.
+`keryx serve` accepts turns over an authenticated HTTP listener that binds to loopback by default.
 A turn whose policy decision is `ask` becomes a durable pending approval that a
 person answers once over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or
 locally with `keryx approvals`. Unanswered approvals deny at expiry. The stock

@@ -1,7 +1,7 @@
 # Drive keryx from a bot or another product
 
 `keryx serve` is a second door into the same agent harness `keryx shell` uses —
-a loopback HTTP listener, so a Telegram bot or a browser workspace becomes a
+an HTTP listener that binds to loopback by default, so a Telegram bot or a browser workspace becomes a
 client of one surface instead of a second integration with its own copy of
 session state.
 
