@@ -7,12 +7,12 @@ protects users of the tool; this document covers how to report a vulnerability
 
 ## Supported Versions
 
-| Version           | Supported          |
-| ------------------ | ------------------ |
-| latest `0.2.x`      | :white_check_mark: |
+| Version             | Supported          |
+| ------------------- | ------------------ |
+| latest `0.3.x`      | :white_check_mark: |
 | any earlier release | :x:                |
 
-The project is pre-1.0 and releases frequently (`0.2.157` as of this writing);
+The project is pre-1.0 and releases frequently (`0.3.46` as of this writing);
 there is no long-term-support branch. Security fixes land on the latest
 release. Please upgrade to the latest version before reporting.
 
@@ -20,13 +20,10 @@ release. Please upgrade to the latest version before reporting.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Report privately through one of these channels:
-
-1. **GitHub Security Advisories** (preferred) — use
-   ["Report a vulnerability"](https://github.com/MrCipherSmith/keryx/security/advisories/new)
-   on the repository's Security tab. This keeps the report private until a fix
-   is available.
-2. **Email** — contact `<security contact>`.
+Report privately through
+[GitHub private vulnerability reporting](https://github.com/MrCipherSmith/keryx/security/advisories/new)
+("Report a vulnerability" on the repository's Security tab). This keeps the
+report private until a fix is available.
 
 Please include:
 
@@ -47,8 +44,24 @@ disclosure.
 ## Scope
 
 In scope: vulnerabilities in the `keryx` CLI, its runtime, and the code in this
-repository — for example command injection, path traversal, unsafe file writes,
-or bypasses of the built-in `security` module's guarantees.
+repository. Because `keryx` is a tool that runs agents, the areas that matter
+most are:
+
+- **Command execution** — bypasses of the permission modes, the policy engine,
+  the structural command guard, or the OS sandbox; command injection.
+- **Secrets handling** — leaks of credentials or personal data through logs,
+  artifacts, session records, or output; unsafe permissions on files holding
+  credentials; bypasses of redaction.
+- **Network egress** — a model call or other network request made without the
+  opt-in the documentation describes, or an allowlist that does not hold.
+- **MCP and remote entry** — authentication or authorization bypass in
+  `keryx serve`, `keryx serve-mcp`, or the ACP server; exposure beyond loopback
+  without acknowledgement.
+- Path traversal, unsafe file writes, and bypasses of the `security` module's
+  guarantees.
+
+The [security model](https://mrciphersmith.github.io/keryx/concepts/security-model/)
+describes what each layer is meant to guarantee and what it does not.
 
 Out of scope: vulnerabilities in optional dependencies that are not enabled by
 default (`web-tree-sitter`, `@modelcontextprotocol/sdk`, or an explicitly

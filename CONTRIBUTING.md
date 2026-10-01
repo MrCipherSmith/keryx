@@ -45,10 +45,13 @@ bun ./src/cli.ts status
 | `bun run build`     | Bundle the CLI to `./dist`                    |
 | `bun run typecheck` | Type-check with `tsc --noEmit`                |
 | `bun test`          | Run the test suite                            |
-| `bun run check`     | Full gate: `lint && typecheck && typecheck:scripts && test` |
+| `bun run lint`      | Lint with ESLint                              |
+| `bun run check`     | Full gate: lint, typecheck, typecheck:scripts and the whole test suite |
+| `bun run check:core` | The offline, model-free subset CI runs on every pull request |
+| `bun run check:doc-links` | Verify Markdown links in `docs/` and the root files |
 
 Run `bun run check` before opening a pull request. It is the same gate reviewers
-expect to pass.
+expect to pass, and the release workflow runs it before publishing.
 
 ## Tests
 
@@ -89,9 +92,30 @@ Common types: `feat`, `fix`, `docs`, `refactor`, `chore`, `test`.
 
 If your change affects behavior, update the relevant docs:
 
-- User-facing behavior: `README.md`
-- Current behavior reference: `docs/docs/`
-- Intended design / specifications: `docs/requirements/`
+- Product overview and quickstart: `README.md`
+- User documentation and the CLI reference: `docs/docs/`
+- Intended design and specifications: `docs/requirements/`
+- Shape of the code: `ARCHITECTURE.md`
+
+The documentation site lives in `docs/docs/` and is built with MkDocs Material:
+
+```bash
+pip install -r requirements-docs.txt
+mkdocs serve
+```
+
+CI builds the site with `mkdocs build --strict` and runs the link check
+(`bun run check:doc-links`), so a broken link fails the pull request. Run the same two commands locally before you
+push a docs change.
+
+When you write user documentation:
+
+- Describe shipped behaviour and check every command and flag against
+  `keryx <command> --help`.
+- Do not put internal tracking identifiers (flow, task or review-round numbers)
+  in pages for users.
+- Use a retired command spelling only in a "was, now" row;
+  `bun run check:retired-spellings` fails otherwise.
 
 ## Reporting Bugs and Requesting Features
 

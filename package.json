@@ -1,16 +1,21 @@
 {
   "name": "@mrciphersmith/keryx",
   "version": "0.3.50",
-  "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
+  "description": "One project-local brain for your AI agents and your team. Code graph, wiki, memory, tests and task flows in .metaproject/, plus a sandboxed agent shell.",
   "private": false,
   "publishConfig": {
     "access": "public"
   },
   "license": "MIT",
   "type": "module",
+  "homepage": "https://mrciphersmith.github.io/keryx/",
+  "bugs": {
+    "url": "https://github.com/MrCipherSmith/keryx/issues"
+  },
+  "author": "MrCipherSmith",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/MrCipherSmith/keryx.git"
+    "url": "git+https://github.com/MrCipherSmith/keryx.git"
   },
   "keywords": [
     "ai-agents",
