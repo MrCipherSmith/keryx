@@ -110,6 +110,7 @@
 
 import { createHash } from "node:crypto";
 import { familyKey, parseModelVersion } from "./model-version";
+import { frontmatterScalar } from "./skill-frontmatter";
 
 /** The three tiers a skill may declare. Ascending capability. */
 export const MODEL_TIERS = ["light", "standard", "deep"] as const;
@@ -1495,26 +1496,14 @@ function toDispatchDecision(assignment: TierAssignment, resolved: TierResolution
 /** Frontmatter key a SKILL.md uses to declare its tier. */
 export const SKILL_TIER_KEY = "model_tier";
 
-/** Extract the YAML frontmatter block of a SKILL.md, or `undefined`. */
-function frontmatterOf(markdown: string): string | undefined {
-  if (!markdown.startsWith("---")) return undefined;
-  const end = markdown.indexOf("\n---", 3);
-  if (end === -1) return undefined;
-  return markdown.slice(3, end);
-}
-
 /**
- * Read a skill's declared tier from its frontmatter. `undefined` when absent or
- * unrecognised — an undeclared skill runs on the session model, which is the same
- * safe default as an unknown provider.
+ * Read a skill's declared tier from its frontmatter, through the shared reader
+ * (`./skill-frontmatter`). `undefined` when absent or unrecognised — an
+ * undeclared skill runs on the session model, which is the same safe default as
+ * an unknown provider.
  */
 export function parseSkillModelTier(markdown: string): ModelTier | undefined {
-  const block = frontmatterOf(markdown);
-  if (block === undefined) return undefined;
-  const match = new RegExp(`^${SKILL_TIER_KEY}:\\s*(.+)$`, "m").exec(block);
-  const raw = match?.[1];
-  if (raw === undefined) return undefined;
-  return parseModelTier(raw.trim().replace(/^["']|["'],?$/g, ""));
+  return parseModelTier(frontmatterScalar(markdown, SKILL_TIER_KEY));
 }
 
 /**

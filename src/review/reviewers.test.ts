@@ -495,6 +495,8 @@ describe("project reviewer triggers", () => {
     expect(rendered).toContain("`.metaproject/rules/project/<dir>/<name>.mdc` is resolved before `.metaproject/rules/<dir>/<name>.mdc`");
     // The commands that really overwrite rules/core; there is no `keryx install`.
     expect(rendered).toContain("`keryx init`, `keryx update` and `keryx skills install` overwrite");
+    // …except the manifest form of `skills install`, which skips unrecorded files.
+    expect(rendered).toContain("the manifest form of `skills install`, with `--target`, skips existing files it did not record");
     expect(rendered).not.toContain("`keryx install`");
   });
 

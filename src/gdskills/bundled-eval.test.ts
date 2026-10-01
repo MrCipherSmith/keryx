@@ -1957,6 +1957,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     );
   });
 
+  test("a CRLF file and a BOM file read their frontmatter as an LF file does", () => {
+    // The shared reader treats `\r\n` as `\n` and ignores a leading BOM; the
+    // evaluator's own parse used to read both as "no frontmatter block".
+    const root = mkdtempSync(path.join(tmpdir(), "keryx-bundled-eval-crlf-"));
+    try {
+      writeSkill(root, "quality", "control-lf", CONTROL_SKILL);
+      writeSkill(root, "quality", "control-crlf", CONTROL_SKILL.replace(/\n/g, "\r\n"));
+      writeSkill(root, "quality", "control-bom", String.fromCharCode(0xfeff) + CONTROL_SKILL);
+      const frontmatterFindings = evaluateBundledTree(root)
+        .findings.filter((finding) => finding.check.startsWith("frontmatter:"))
+        .map((finding) => `${finding.skill}: ${finding.check}`);
+      // Name uniqueness fires between the copies; that is not what is asserted.
+      expect(frontmatterFindings.filter((entry) => !entry.endsWith("frontmatter:name-unique"))).toEqual([]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("a SKILL.md whose compatible_harnesses omits claude is rejected; a harness build that omits it is not", () => {
     const found = findingsFor("harness-excludes-claude").filter(
       (finding) => finding.check === "frontmatter:harness-claude",
