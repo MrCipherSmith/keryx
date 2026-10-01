@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-09-30T20:51:22.863Z - flow created
+- 2026-09-30T20:52:09.440Z - frozen: 8 criteria; checksum recorded
+- 2026-09-30T20:52:09.782Z - started
+- 2026-09-30T22:17:55.657Z - task-done: T1: Collect remaining context
+- 2026-09-30T22:17:55.820Z - task-done: T2: Implement per plan
+- 2026-09-30T22:17:55.976Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-30T22:17:56.141Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-30T22:18:02.386Z - ac-confirmed: AC1: PR #810: enable toggles user flag and manifest entry only; tests in external-agents.test.ts; live smoke on 0.3.44 from npm (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:02.548Z - ac-confirmed: AC2: PR #810: disable reverses enable, idempotent; live smoke round trip printed 'set to false' / 'set to true' and 'already on' on repeat (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:02.709Z - ac-confirmed: AC3: PR #810: canonicalExternalAgentId at entry points (delegate, agents external, spawn_subagent); registry tests incl. prototype keys; live run with 'claude' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:02.875Z - ac-confirmed: AC4: PR #810: aliases resolved before per-agent config lookup; run-external-factory tests; review F-001/F-002 fixed in 19f1479d (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:03.038Z - ac-confirmed: AC5: PR #810: ENABLE_HINT in every capability refusal; live smoke disabled run showed 'run keryx agents external enable (in the shell: /external-agents on)' (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:03.200Z - ac-confirmed: AC6: PR #810: /external-agents on|off slash command (agent-commands, tui-shell), /delegate refusal names it; F-004 documents busy deferral (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:03.366Z - ac-confirmed: AC7: PR #810: README, cli-reference, commands-by-task regenerated, CHANGELOG 0.3.44, package.json 0.3.44; mkdocs --strict green (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:03.528Z - ac-confirmed: AC8: live smoke 2026-09-30 with keryx 0.3.44 installed from npm: enable then 'run claude' in scratch project returned Completed with file contents; keryx repo tracked tree clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T22:18:10.245Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/810 (warning: PR is not a draft)
+- 2026-09-30T22:18:11.683Z - completing
+- 2026-09-30T22:18:15.357Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-30T22:18:15.357Z - completion-failed: review: 2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-30-ingest-810#F-003 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-30-ingest-810#F-004 (minor, round 2026-09-30-ingest-810): `dismissed-wont-fix` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | verifier-stats (violated): round `2026-09-30-ingest-810` ran with `verification_mode: annotate` and received 0 claims while retaining 4 finding(s) at or above `minor` (2026-09-30-ingest-810#F-001, 2026-09-30-ingest-810#F-002, 2026-09-30-ingest-810#F-003, 2026-09-30-ingest-810#F-004). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`.
+- 2026-09-30T22:22:42.881Z - completing: merged commit: 51497ac58de5ee8e277a946f8f369fa6e07c6d92
+- 2026-09-30T22:22:47.325Z - completion-attempt-recorded: attempt 2: failed
+- 2026-09-30T22:22:47.326Z - completion-failed: review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-30-ingest-810#F-001 (major, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-30-ingest-810#F-002 (minor, round 2026-09-30-ingest-810): marked fixed at 19f1479d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge
+- 2026-09-30T22:23:02.502Z - completing: merged commit: 51497ac58de5ee8e277a946f8f369fa6e07c6d92
+- 2026-09-30T22:23:07.135Z - completion-attempt-recorded: attempt 3: passed
+- 2026-09-30T22:23:07.137Z - done: all gates passed

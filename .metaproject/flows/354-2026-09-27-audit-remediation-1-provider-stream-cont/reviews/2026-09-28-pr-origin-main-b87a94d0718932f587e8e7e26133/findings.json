@@ -1,0 +1,157 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The OpenAI-compat adapter never reads an in-band `{\"error\":{...}}` SSE envelope that is NOT attached to a pending tool call. When the stream ends in that state, the generator emits neither a `provider_error` nor a `model_end` — the async iterable simply ends with no terminal event at all.",
+    "impact": "Pre-existing behavior, unchanged by this diff, explicitly out of AC1's scope, and pinned/documented by the new stream-contract.test.ts itself as a known, deferred gap.",
+    "suggested_fix": "No action required for this PR. Worth a follow-up flow item if compat gateways are observed sending in-band error envelopes outside a tool-call context in production.",
+    "evidence": "src/harness/provider/stream-contract.test.ts ~lines 170-191 (test 'compat: CURRENT (unchanged, documented gap) ...'); openai-compat-provider.ts post-loop branch ~1295-1351; bun test src/harness/provider/stream-contract.test.ts -> 12 pass.",
+    "confidence": "high",
+    "file": "src/harness/provider/compat/openai-compat-provider.ts",
+    "line": null,
+    "quote": null,
+    "global_id": "2026-09-28-pr-origin-main-b87a94d0718932f587e8e7e26133#review-logic-F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun test src/harness/provider/stream-contract.test.ts (from /home/altsay/keryx-ar1) -> 12 pass, 0 fail, 40 expect() calls. Read the exact test at stream-contract.test.ts:170-185, named \"compat: CURRENT (unchanged, documented gap) — an in-band {error} envelope is not read at all; the stream ends with no terminal event whatsoever, not even a generic malformed\". Its body sends a bare `data: {\"error\":{...}}` SSE frame with no pending tool call and asserts `expect(providerErrors(events)).toHaveLength(0)` and `expect(events.some((e) => e.kind === \"model_end\")).toBe(false)` — exactly the claimed 'no provider_error, no model_end' shape.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md L-16, decided-by: altsay (operator, helyx 2026-09-28)"
+    }
+  },
+  {
+    "id": "F-001",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "estimateTaskCostUsd applies OPENAI_CACHED_INPUT_DISCOUNT (documented OpenAI-specific) to any cacheReadTokens value with no check on which provider produced it, even though providerId is in scope one line above the call.",
+    "impact": "NormalizedUsage.cacheReadTokens is a provider-agnostic field; a future adapter populating it would be silently billed at OpenAI's rate even if its real discount differs. No live bug today since only OpenAI populates the field.",
+    "suggested_fix": "Gate the discount on provider identity (pass providerId through to estimateTaskCostUsd), or move to a per-provider discount lookup table analogous to priceInputPerMillion/priceOutputPerMillion.",
+    "evidence": "src/tui/tui-shell.ts:1334-1350 (estimateTaskCostUsd) and :1374-1408 (recordTurnTaskCostBestEffort); keryx ctx rg cacheReadTokens confirms only openai-provider.ts writes it.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1390,
+    "quote": "const costUsd = estimateTaskCostUsd(profile, input.inputTokens, input.outputTokens, input.cacheReadTokens);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 1390
+    },
+    "global_id": "2026-09-28-pr-origin-main-b87a94d0718932f587e8e7e26133#review-architecture-F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Read src/tui/tui-shell.ts:1334-1348 (estimateTaskCostUsd): signature is (profile, inputTokens, outputTokens, cacheReadTokens?) — no providerId parameter, and it applies the hardcoded OPENAI_CACHED_INPUT_DISCOUNT (declared line 1324, doc-commented as OpenAI-specific) to cacheReadTokens unconditionally. Read recordTurnTaskCostBestEffort (1374-1408): input.providerId is destructured and used one line above at 1389 (profileKey(input.providerId, input.modelId)), then line 1390 calls estimateTaskCostUsd(profile, input.inputTokens, input.outputTokens, input.cacheReadTokens) — providerId is in scope but never passed or gated on.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "086f358a - estimateTaskCostUsd(profile, providerId, ...) now gates OPENAI_CACHED_INPUT_DISCOUNT on providerId being openai/openai-codex (tui-shell.ts:1334-1350); other providers billed at the full input rate. Test (pass): tui-shell.test.ts 'recordTurnTaskCostBestEffort: a non-OpenAI provider's cacheReadTokens are billed at the full input rate, not discounted'."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "This diff adds cacheReadTokens support only to the native OpenAI adapter's mergeUsage, not to the structurally identical OpenAI-compat adapter's mergeUsage, even though this file's own doc comment records that x.ai returns an equivalent cached_tokens field.",
+    "impact": "Cost accounting for OpenAI-compatible gateways reporting cached_tokens (x.ai and potentially others) still drops the cache-discount signal. Not introduced by this diff (mergeUsage untouched by the diff hunks).",
+    "suggested_fix": "Follow-up: read the compat gateway's cached-token usage field and populate cacheReadTokens the same way L-11 did for the native adapter, once the F-001 provider-discount-rate gating is resolved.",
+    "evidence": "keryx ctx rg 'prompt_tokens_details|cached_tokens|mergeUsage' src/harness/provider/compat/openai-compat-provider.ts; doc comment lines 79-81 citing x.ai's cached_tokens:512; mergeUsage body (232-250) has no such handling.",
+    "confidence": "medium",
+    "file": "src/harness/provider/compat/openai-compat-provider.ts",
+    "line": 232,
+    "quote": "function mergeUsage(\n  promptTokens: number | undefined,\n  completionTokens: number | undefined,\n  totalTokens: number | undefined,\n): NormalizedUsage {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 232
+    },
+    "global_id": "2026-09-28-pr-origin-main-b87a94d0718932f587e8e7e26133#review-architecture-F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'cached_tokens|cacheReadTokens|x\\.ai' src/harness/provider/compat/openai-compat-provider.ts -> 3 matches, all at lines 79-81/257, none touching mergeUsage. Read mergeUsage at lines 232-250: signature is (promptTokens, completionTokens, totalTokens) — no cacheReadTokens parameter and no such field ever set on the returned NormalizedUsage. Read doc comment at lines 79-81 documenting x.ai's cached_tokens:512 field. Both claims confirmed by direct inspection.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "086f358a - compat mergeUsage (openai-compat-provider.ts:232-259) now takes cacheReadTokens and reads usage.prompt_tokens_details.cached_tokens (line ~1148). Test (pass): openai-compat-provider.test.ts 'review r1 (item 4): usage.prompt_tokens_details.cached_tokens populates the normalized usage cacheReadTokens'."
+    }
+  },
+  {
+    "id": "F-001",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "The sequential tool-loop's new try/catch (AC4, flow 354 L-12) converts any exception thrown by executeCall into a per-call isError:true tool result instead of letting it reject runAgentTurn's promise as it did before.",
+    "impact": "trigger-dispatch.ts's dispatchLocked and trigger-agent-task.ts's runLocked both use the caught/rethrown error from runAgentTurn as their unattended run's ONLY crash signal, gating whether the run is recorded completed/failed. A tool-execution exception can now go completely unrecorded if the turn otherwise finishes cleanly.",
+    "suggested_fix": "Have runAgentTurn/RunAgentTurnResult surface that at least one executeCall exception was caught this turn, and have dispatchLocked/runLocked fold that into their own crashed/why computation instead of relying solely on the outer catch around runAgentTurn.",
+    "evidence": "trigger-dispatch.ts:786,858,866-873,909,918-937; trigger-agent-task.ts:499,567; RunAgentTurnResult (agent.ts:699-725) has no exception-count field; blast-radius.json lists both files at hop 1 via agent.ts.",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "line": null,
+    "quote": "result = { output: `${call.name} failed: ${err instanceof Error ? err.message : String(err)}`, isError: true, };",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 3339
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/trigger-dispatch.ts:858",
+        "src/commands/trigger-agent-task.ts:567"
+      ],
+      "enumeration_method": "rg 'runAgentTurn\\(' -g '!*.test.ts' src -> 9 non-test call sites; read every call site's surrounding try/catch — trigger-dispatch.ts and trigger-agent-task.ts are the only two using the caught error as a correctness-affecting outcome classifier."
+    },
+    "global_id": "2026-09-28-pr-origin-main-b87a94d0718932f587e8e7e26133#review-regression-F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Read trigger-dispatch.ts: crashed declared undefined at line 786, only assigned in catch (858-859) around await runAgentTurn (854). Same pattern in trigger-agent-task.ts (declared 499, assigned 567-568 around 565-566). Read RunAgentTurnResult (agent.ts:699-725): only finishReason/budgetStop/submittedResult/submitResultError, no exception-count field. Empirically settled via a throwaway Bun test at /tmp/probe-runagentturn-result.test.ts (deleted after use, never added to worktree/repo) reproducing the repo's own AC4/L-12 throwing-tool scenario and logging the full returned result object: printed 'RESULT KEYS: []', 'RESULT JSON: {}', 'RESULT FULL: {}' — the object is completely empty after a caught tool exception, proving no caller-visible signal exists.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "086f358a - RunAgentTurnResult.caughtToolErrors filled by the sequential boundary (agent.ts ~3382-3395) and both concurrent floors in runConcurrentSpawnBatch (agent.ts ~4165-4172, ~4227-4234), folded into crashed in trigger-dispatch.ts:869-873 and trigger-agent-task.ts:582-587. Tests (all pass at 086f358a): agent.test.ts 'AC4 (flow 354, L-12): a throwing tool.invoke in the SEQUENTIAL loop degrades...' and 'review r1 (item 1): a throwing spawn_subagent call in the CONCURRENT batch own defensive floor also lands in caughtToolErrors'; trigger-dispatch.test.ts and trigger-agent-task.test.ts 'review r1 (item 1, MAJOR regression): a tool that throws is recorded as a crashed/failed run, not a silent completion'."
+    }
+  },
+  {
+    "id": "F-001",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The deleted shell-bus.test.ts source-text audit (R-I3) checked that leaveBus() runs before releaseLease() in the shared finally. Its replacement runtime test only asserts both handles end up undefined, never their order.",
+    "impact": "The PR's claim that the replacement is 'strictly stronger' is inaccurate on this dimension. A future edit swapping the two calls' order (currently correct) would pass every remaining test while silently reintroducing the original race.",
+    "suggested_fix": "Add an order assertion to the runtime test (e.g. a shared sequence counter), or correct the three places claiming full equivalence (test comment, findings.md R-I3 row, CHANGELOG.md).",
+    "evidence": "shell-agent-repl.test.ts:821-865 (no order assertion); shell.ts:2950-2955 (leaveBus(); releaseLease(); order correct but unguarded); findings.md R-I3 row and CHANGELOG.md both assert 'stronger'/'already covered'.",
+    "confidence": "high",
+    "file": "src/commands/shell-agent-repl.test.ts",
+    "line": 863,
+    "quote": "expect(leaseBox.current).toBeUndefined();\n    expect(busBox.current).toBeUndefined();",
+    "locator": {
+      "state": "derived",
+      "method": "whitespace-normalised",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/shell-agent-repl.test.ts:790-865",
+        "docs/requirements/keryx-audit-remediation/findings.md (R-I3 row)",
+        "CHANGELOG.md (0.3.18 R-I3 entry)"
+      ],
+      "enumeration_method": "Read full diff for shell-bus.test.ts deletion, read replacement test in full, then keryx ctx rg 'R-I3' across findings.md and CHANGELOG.md."
+    },
+    "global_id": "2026-09-28-pr-origin-main-b87a94d0718932f587e8e7e26133#review-testing-practices-F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun test src/commands/shell-agent-repl.test.ts -t \"AC7\" (from /home/altsay/keryx-ar1) -> 6 pass, 0 fail, 10 expect() calls, including the target test. Read test body at shell-agent-repl.test.ts:821-865: only expect(leaseBox.current).toBeUndefined() and expect(busBox.current).toBeUndefined() (863-864) — no order/sequence assertion. Read shell.ts:2950-2955: production finally runs leaveBus(); releaseLease(); in that order — correct today but unguarded by this test.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "086f358a - shell-agent-repl.test.ts's AC7 test wraps the real BusClient.leave() to record whether the lease is still held when it fires, asserting leaseStillHeldWhenBusLeft to be true, proving leaveBus() runs before releaseLease(). Test (pass, 6/6 in describe block): 'a crashing turn still leaves the lease released and the bus joined-then-left, same as EOF/exit, and leaves the bus BEFORE releasing the lease'."
+    }
+  }
+]
