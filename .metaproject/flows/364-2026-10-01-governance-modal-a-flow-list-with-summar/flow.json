@@ -10,7 +10,7 @@
   "title": "Governance modal: a flow list with summary, stated effect, a check button and a close button",
   "status": "implemented",
   "createdAt": "2026-10-01T07:20:34.139Z",
-  "updatedAt": "2026-10-01T08:04:06.087Z",
+  "updatedAt": "2026-10-01T08:42:42.265Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,8 +79,14 @@
       "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T08:42:41.295Z",
+            "outcome": "failed",
+            "detail": "review round 1 (2026-10-01-ingest-821, head c9f31fd9): 1 blocker, 7 major, 5 minor, 2 info"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -171,6 +177,20 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -261,6 +281,21 @@
       "at": "2026-10-01T08:04:06.087Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T08:06:03.684Z",
+      "event": "owner-set",
+      "detail": "not set -> MrCipherSmith (named by the user in session on 2026-10-01)"
+    },
+    {
+      "at": "2026-10-01T08:42:41.296Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 1) — review round 1 (2026-10-01-ingest-821, head c9f31fd9): 1 blocker, 7 major, 5 minor, 2 info"
+    },
+    {
+      "at": "2026-10-01T08:42:42.265Z",
+      "event": "task-added",
+      "detail": "T10: Fix review round 1: L-006 router entry, L-001 digit confirmation, L-002 effect reasons, L-003 live staleness, T-001..T-007 tests, A-001..A-003, L-005"
     }
   ],
   "acKinds": {
@@ -288,5 +323,10 @@
     "AC8": {
       "kind": "unclassified"
     }
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
   }
 }
