@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T10:45:43.739Z",
+  "updatedAt": "2026-10-01T10:54:53.836Z",
   "source": {
     "type": "description",
     "ref": null
@@ -481,17 +481,24 @@
       "id": "T21",
       "title": "Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T17"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:47:12.485Z",
+            "outcome": "started",
+            "detail": "367-T21 round-1 fixes"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -782,6 +789,16 @@
       "at": "2026-10-01T10:45:43.739Z",
       "event": "task-depends-set",
       "detail": "T18: dependsOn T17, T21 (was T16, T17) — review round 2 runs after the round-1 fixes"
+    },
+    {
+      "at": "2026-10-01T10:47:12.485Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 367-T21 round-1 fixes"
+    },
+    {
+      "at": "2026-10-01T10:54:53.836Z",
+      "event": "task-done",
+      "detail": "T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies"
     }
   ],
   "acKinds": {

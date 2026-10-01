@@ -130,3 +130,25 @@ flow-id collision (main has its own 363 — renumber at merge); rebase onto main
 - 2026-10-01T10:45:38.325Z - task-attempt: T18: failed (attempt 2) — round 1: 0 blocker, 3 major, 19 minor, 8 info
 - 2026-10-01T10:45:38.653Z - task-added: T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies
 - 2026-10-01T10:45:43.739Z - task-depends-set: T18: dependsOn T17, T21 (was T16, T17) — review round 2 runs after the round-1 fixes
+- 2026-10-01T10:47:12.485Z - task-attempt: T21: started (attempt 1) — 367-T21 round-1 fixes
+- 2026-10-01T10:54:53.836Z - task-done: T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies
+
+## 2026-10-01 — AC10 search record (after T21)
+
+Command, run at the T21 commit over README.md, README.ru.md, docs/docs/**,
+ARCHITECTURE.md, SUPPORT.md, ROADMAP.md, CONTRIBUTING.md, SECURITY.md:
+
+`git grep -n -I -i -E 'flow [0-9]{2,3}\b|\bW[0-9]+\b|R[0-9]+-F|SLATE-[0-9]|\bD-[0-9]|/Users/|/home/[a-z]|tsaitler|altsay|@gmail|competitor|inspired by'`
+excluding the `W3-self-learning` link target, the `--flow 12` example id and
+the `/home/you` placeholder → 0 hits.
+
+`git grep -c -E '\bAC[0-9]+\b'` over the same READMEs and docs/docs excluding
+cli-reference.md and modules/managed-work.md (where `ACn` is the flow
+feature's own vocabulary) → 0 files.
+
+No comparison page exists (nav and file list checked by T17). External
+product names remain only in compatibility/provider tables, install commands,
+env-var and file names (owner decision 1).
+
+Merge of origin/main 0.3.51 into the branch (5b578c81) instead of a second
+rebase: replaying the branch onto main re-raised already-resolved conflicts.
