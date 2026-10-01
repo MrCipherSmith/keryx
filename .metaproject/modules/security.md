@@ -49,7 +49,8 @@ refreshed by `update` without touching `data/security`.
   failing or needs-approval gate (not only a secret or critical finding).
   Installed as a `# keryx:security-pre-push` managed block that coexists with
   the testing pre-push block and any user-authored hook content.
-- Agent guard (`.claude/settings.json`, opt out with `--no-security-agent-hook`):
+- Agent guard (`.claude/settings.local.json`, or the tracked `.claude/settings.json`
+  when `agentEntrypoints.claudeSettings` has scope `shared`; opt out with `--no-security-agent-hook`):
   adds `UserPromptSubmit` → `keryx security check-input` and
   `PreToolUse`(Write|Edit) → `keryx security check-output`. Merged under a
   `_keryxManaged: ["security-agent-hooks"]` sentinel so all pre-existing keys

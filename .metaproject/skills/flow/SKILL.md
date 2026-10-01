@@ -96,13 +96,15 @@ permission bridge.
 A line-stream agent (`claude-cli`, `codex-cli`) is a DIFFERENT thing:
 `run` refuses it outright ("speaks the one-way line stream. Delegate to it
 from `keryx shell` with /delegate"). There is no ACP permission bridge and
-no patch capture for it — this release implements `worktree-write` for the
-ACP transport only; a dispatch that asks for `worktree-write` on a
-line-stream agent is REFUSED fail-closed with a distinguishable
-`not-implemented` reason everywhere keryx dispatches one (the internal
-`runtime` block, and `keryx shell`'s /delegate) — never silently accepted
-and its writes discarded. It stays `read-only`, contained by the same
-disposable worktree as every external run.
+no patch capture for it in those paths — `worktree-write` is implemented for
+the ACP transport, and for `claude-cli` and `codex-cli` only through the
+operator's own `keryx agents external run <id> --write`, which captures the
+diff for human review. A dispatch that asks for `worktree-write` on a
+line-stream agent anywhere else (the internal `runtime` block, and
+`keryx shell`'s /delegate) is REFUSED fail-closed with a distinguishable
+`not-implemented` reason — never silently accepted and its writes
+discarded. There it stays `read-only`, contained by the same disposable
+worktree as every external run.
 
 See `docs/docs/guides/acp-client.md` for the full ACP contract, including the
 output size bounds (a stderr-only flood and an output flood both end the run

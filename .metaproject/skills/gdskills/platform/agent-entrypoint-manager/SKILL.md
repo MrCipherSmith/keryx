@@ -1,6 +1,6 @@
 ---
 name: agent-entrypoint-manager
-description: "Use when AGENTS.md or CLAUDE.md needs its managed Metaproject block added, refreshed, or kept idempotent. NOT for: splitting an oversized entrypoint into rules and project-skills (see agent-entrypoint-distiller)."
+description: "Use when AGENTS.md or CLAUDE.md needs its managed Metaproject block added, refreshed, or kept idempotent — the block lives in CLAUDE.local.md / AGENTS.override.md unless scope is shared. NOT for: splitting an oversized entrypoint into rules and project-skills (see agent-entrypoint-distiller)."
 ---
 
 # agent-entrypoint-manager
@@ -17,8 +17,8 @@ Maintain AGENTS.md, CLAUDE.md, and local-first Metaproject references.
 
 ## Workflow
 
-1. Find existing root agent entrypoints.
-2. Keep managed Metaproject blocks idempotent.
+1. Find existing root agent entrypoints and the block targets `agentEntrypoints.root` names: `CLAUDE.local.md` and `AGENTS.override.md` (scope `local`, the default; Codex mode `override` or `skip`), or `CLAUDE.md` / `AGENTS.md` (scope `shared`).
+2. Keep managed Metaproject blocks idempotent: refresh them with `keryx update` or `keryx rules sync`, which also moves a block out of a tracked entrypoint and regenerates `AGENTS.override.md` from `AGENTS.md` — never write a bare block there.
 3. Ensure local `.metaproject/index.md` and skill catalog are first-class references.
 
 ## Local-First Rules

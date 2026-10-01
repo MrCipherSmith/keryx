@@ -2,64 +2,76 @@
 
 ## Stats
 
-- Source files indexed: 1648
-- Imported asset files indexed: 4
-- Total nodes: 1652
-- Edges: 5007
-- Import edges: 4932
-- Asset edges: 12
-- Unresolved imports: 63
-- Import resolution: 98.7%
-- Skipped generated/static directories: 9
+- Source files indexed: 2505
+- Imported asset files indexed: 11
+- Total nodes: 2516
+- Edges: 8396
+- Import edges: 8279
+- Asset edges: 27
+- Unresolved imports: 90
+- Import resolution: 98.9%
+- Skipped generated/static directories: 20
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 286 |
-| commands | 191 |
-| tui | 140 |
-| lib | 127 |
+| harness | 386 |
+| commands | 303 |
+| tui | 246 |
+| lib | 191 |
+| review | 113 |
+| gdskills | 96 |
+| security | 75 |
+| flow | 71 |
 | sac | 61 |
-| wiki | 60 |
-| mcp-servers | 53 |
-| gdskills | 52 |
+| wiki | 61 |
+| learning | 57 |
+| mcp-servers | 56 |
+| scripts | 54 |
+| gdgraph | 52 |
 | health | 52 |
-| security | 52 |
-| scripts | 50 |
-| gdgraph | 48 |
-| memory | 45 |
-| review | 44 |
-| flow | 39 |
-| metrics | 38 |
+| memory | 49 |
+| acp | 41 |
+| metrics | 39 |
 | bus | 35 |
-| fixtures | 31 |
-| acp | 27 |
-| mcp | 27 |
+| integrations | 33 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| relative-code | 49 |
-| package | 7 |
+| relative-code | 69 |
+| package | 13 |
 | . | 2 |
 | .js | 2 |
 | .css | 1 |
 | .scanner | 1 |
 | .scan-helper | 1 |
+| .ts | 1 |
 
 ## Skipped Directories
 
 - `.claude`
 - `.git`
 - `.metaproject`
+- `bench/jev-review/fixtures/conform-project/.metaproject`
 - `dist`
 - `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
+- `src/bundle/fixtures/roundtrip/project/.metaproject`
+- `src/lib/dist`
+- `src/security/audit-harness/fixtures/agents/.metaproject`
+- `src/security/audit-harness/fixtures/baseline-indefinite/.metaproject`
+- `src/security/audit-harness/fixtures/baseline-tampered/.metaproject`
+- `src/security/audit-harness/fixtures/hook-exfil/.claude`
+- `src/security/audit-harness/fixtures/hook-injection/.claude`
+- `src/security/audit-harness/fixtures/hook-suppression/.claude`
+- `src/security/audit-harness/fixtures/permissive-settings/.claude`
+- `vscode-extension/node_modules`
 
 ## Generated Files
 
