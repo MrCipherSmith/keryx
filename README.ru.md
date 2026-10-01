@@ -1,4 +1,4 @@
-<!-- synced-with: README.md @ 03265812 -->
+<!-- synced-with: README.md @ 7882f9a9 -->
 
 <p align="center">
   <picture>
@@ -149,6 +149,7 @@ keryx gdgraph affected src/price.ts
 | Решить, что агенту можно делать без спроса | [Choose an approval mode](https://mrciphersmith.github.io/keryx/guides/permission-modes/) |
 | Проводить ревью и сохранять его запись | [Review with a durable record](https://mrciphersmith.github.io/keryx/guides/review-with-a-record/) |
 | Запускать Keryx в CI | [Run keryx in CI](https://mrciphersmith.github.io/keryx/guides/run-in-ci/) |
+| Управлять запущенной сессией из чата на телефоне (по желанию; подключение через `/channels`) | [Drive keryx remotely](https://mrciphersmith.github.io/keryx/guides/drive-keryx-remotely/#remote-control-from-telegram) |
 | Найти команду | [CLI reference](https://mrciphersmith.github.io/keryx/cli-reference/) |
 
 ## Статус

@@ -138,6 +138,7 @@ describes the workspace.
 | Choose how much an agent may do unasked | [Choose an approval mode](https://mrciphersmith.github.io/keryx/guides/permission-modes/) |
 | Review changes and keep the record | [Review with a durable record](https://mrciphersmith.github.io/keryx/guides/review-with-a-record/) |
 | Run Keryx in CI | [Run keryx in CI](https://mrciphersmith.github.io/keryx/guides/run-in-ci/) |
+| Drive a running session from a chat on your phone (opt-in; connect with `/channels`) | [Drive keryx remotely](https://mrciphersmith.github.io/keryx/guides/drive-keryx-remotely/#remote-control-from-telegram) |
 | Look up a command | [CLI reference](https://mrciphersmith.github.io/keryx/cli-reference/) |
 
 ## Status

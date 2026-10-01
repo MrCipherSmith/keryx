@@ -74,22 +74,22 @@ documentation; `experimental` means it should be checked on a live install.
 ## Numbers
 
 Every figure below was produced by the commands after the table, run on
-1 October 2026 in a checkout of `main` at commit `0b6f4384`. Run them yourself; the
+1 October 2026 in a checkout of `main` at version 0.3.50. Run them yourself; the
 figures grow with every merge.
 
 | Figure | Value |
 |---|---|
-| Commits | 1,696 |
+| Commits | 1,729 |
 | First commit | 2026-07-10 |
-| Merged pull requests | 270 |
+| Merged pull requests | 271 |
 | Release tags | 195 |
-| Flows (of which done) | 341 (305) |
-| Tasks across flows | 2,871 |
-| Flows with review rounds | 122 |
-| Review rounds | 279 |
-| TypeScript source files, not tests | 1,114 files, 371,926 lines |
-| Test files | 1,363 |
-| Test lines under `src/` | 380,694 |
+| Flows (of which done) | 343 (305) |
+| Tasks across flows | 2,900 |
+| Flows with review rounds | 123 |
+| Review rounds | 280 |
+| TypeScript source files, not tests | 1,117 files, 372,992 lines |
+| Test files | 1,367 |
+| Test lines under `src/` | 381,842 |
 | Wiki pages | 97 |
 | Bundled skills | 78 workflow skills; 92 stack skills in 23 stack packs |
 | Project rules | 41 |
@@ -107,8 +107,8 @@ keryx flow list | grep -cE '^ *[0-9]+ \[done\]'
 keryx flow list | grep -oE 'tasks [0-9]+/[0-9]+' | awk -F/ '{s+=$2} END{print s}'
 find .metaproject/flows -mindepth 2 -maxdepth 2 -type d -name reviews | wc -l
 find .metaproject/flows -mindepth 3 -maxdepth 3 -type d -path '*/reviews/*' | wc -l
-git ls-files 'src/*.ts' ':!:*.test.ts' | wc -l
-git ls-files -z 'src/*.ts' ':!:*.test.ts' | xargs -0 cat | wc -l
+git ls-files 'src/*.ts' | grep -v '\.test\.ts$' | wc -l
+git ls-files 'src/*.ts' | grep -v '\.test\.ts$' | tr '\n' '\0' | xargs -0 cat | wc -l
 git ls-files '*.test.ts' | wc -l
 git ls-files -z 'src/*.test.ts' | xargs -0 cat | wc -l
 keryx wiki status | grep 'total pages'
