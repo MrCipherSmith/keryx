@@ -118,3 +118,15 @@ flow-id collision (main has its own 363 — renumber at merge); rebase onto main
 - 2026-10-01T10:10:23.705Z - task-done: T14: Showcase README, README.ru.md, hero/OG assets
 - 2026-10-01T10:10:56.819Z - task-done: T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests
 - 2026-10-01T10:14:38.603Z - renumbered: 363 -> 367: id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch
+- 2026-10-01T10:14:50.389Z - task-attempt: T16: started (attempt 1) — 367-T16 verification after rebase onto main
+- 2026-10-01T10:14:50.696Z - task-attempt: T17: started (attempt 1) — 367-T17 verification after rebase onto main
+- 2026-10-01T10:27:53.307Z - task-done: T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript
+- 2026-10-01T10:27:53.610Z - task-added: T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark
+- 2026-10-01T10:28:11.518Z - task-depends-set: T17: dependsOn T16, T20 (was T14, T15) — verification re-runs after the T20 fixes
+- 2026-10-01T10:28:11.826Z - task-attempt: T20: started (attempt 1) — 367-T20
+- 2026-10-01T10:30:21.825Z - task-done: T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark
+- 2026-10-01T10:31:20.495Z - task-done: T17: Strict build, link check, retired spellings, internal-id and external-name scan
+- 2026-10-01T10:31:24.690Z - task-attempt: T18: started (attempt 1) — 367-T18 review round 1
+- 2026-10-01T10:45:38.325Z - task-attempt: T18: failed (attempt 2) — round 1: 0 blocker, 3 major, 19 minor, 8 info
+- 2026-10-01T10:45:38.653Z - task-added: T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies
+- 2026-10-01T10:45:43.739Z - task-depends-set: T18: dependsOn T17, T21 (was T16, T17) — review round 2 runs after the round-1 fixes

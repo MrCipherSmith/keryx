@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T10:14:38.603Z",
+  "updatedAt": "2026-10-01T10:45:43.739Z",
   "source": {
     "type": "description",
     "ref": null
@@ -352,34 +352,50 @@
       "id": "T16",
       "title": "Run README quickstart and tutorial verbatim in a fresh dir; save transcript",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T14"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:14:50.389Z",
+            "outcome": "started",
+            "detail": "367-T16 verification after rebase onto main"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "27/27 commands exit 0; artifacts/quickstart-transcript-T16.txt"
     },
     {
       "id": "T17",
       "title": "Strict build, link check, retired spellings, internal-id and external-name scan",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
-        "T14",
-        "T15"
+        "T16",
+        "T20"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:14:50.696Z",
+            "outcome": "started",
+            "detail": "367-T17 verification after rebase onto main"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "mkdocs --strict exit 0, llms.txt built, check-docs-nav 0 orphans, check-doc-links 0/2047 broken, retired spellings 0 undeclared, typecheck 0, 184/184 docs+help tests, AC10 scan clean (journal)"
     },
     {
       "id": "T18",
@@ -387,12 +403,23 @@
       "kind": "review",
       "status": "todo",
       "dependsOn": [
-        "T16",
-        "T17"
+        "T17",
+        "T21"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-10-01T10:31:24.690Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 1"
+          },
+          {
+            "at": "2026-10-01T10:45:38.324Z",
+            "outcome": "failed",
+            "detail": "round 1: 0 blocker, 3 major, 19 minor, 8 info"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -426,6 +453,45 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:28:11.826Z",
+            "outcome": "started",
+            "detail": "367-T20"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -656,6 +722,66 @@
       "at": "2026-10-01T10:14:38.603Z",
       "event": "renumbered",
       "detail": "363 -> 367: id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch"
+    },
+    {
+      "at": "2026-10-01T10:14:50.389Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 367-T16 verification after rebase onto main"
+    },
+    {
+      "at": "2026-10-01T10:14:50.696Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 367-T17 verification after rebase onto main"
+    },
+    {
+      "at": "2026-10-01T10:27:53.307Z",
+      "event": "task-done",
+      "detail": "T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript"
+    },
+    {
+      "at": "2026-10-01T10:27:53.610Z",
+      "event": "task-added",
+      "detail": "T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark"
+    },
+    {
+      "at": "2026-10-01T10:28:11.518Z",
+      "event": "task-depends-set",
+      "detail": "T17: dependsOn T16, T20 (was T14, T15) — verification re-runs after the T20 fixes"
+    },
+    {
+      "at": "2026-10-01T10:28:11.826Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 367-T20"
+    },
+    {
+      "at": "2026-10-01T10:30:21.825Z",
+      "event": "task-done",
+      "detail": "T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark"
+    },
+    {
+      "at": "2026-10-01T10:31:20.495Z",
+      "event": "task-done",
+      "detail": "T17: Strict build, link check, retired spellings, internal-id and external-name scan"
+    },
+    {
+      "at": "2026-10-01T10:31:24.690Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 367-T18 review round 1"
+    },
+    {
+      "at": "2026-10-01T10:45:38.325Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 2) — round 1: 0 blocker, 3 major, 19 minor, 8 info"
+    },
+    {
+      "at": "2026-10-01T10:45:38.653Z",
+      "event": "task-added",
+      "detail": "T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies"
+    },
+    {
+      "at": "2026-10-01T10:45:43.739Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T17, T21 (was T16, T17) — review round 2 runs after the round-1 fixes"
     }
   ],
   "acKinds": {
