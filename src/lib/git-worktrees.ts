@@ -31,9 +31,12 @@ export async function resolveGitCommonDir(cwd: string): Promise<string | undefin
     const absolute = path.isAbsolute(out) ? out : path.resolve(cwd, out);
     // Git prints a symlinked path from the main checkout (relative to a cwd
     // that may sit behind a symlink) but a realpath from a linked worktree;
-    // canonicalise so both agree.
+    // canonicalise so both agree. Only the DIRECTORY part is canonicalised: if
+    // `.git` itself is a symlink (`<repo>/.git -> /elsewhere/repo.git`), a
+    // whole-path realpath would follow it and `dirname` would then name
+    // `/elsewhere` instead of the checkout.
     try {
-      return await realpath(absolute);
+      return path.join(await realpath(path.dirname(absolute)), path.basename(absolute));
     } catch {
       return absolute;
     }
