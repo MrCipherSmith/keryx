@@ -265,21 +265,23 @@ export function openGovernanceReport(
     }
   };
   const reload = async (): Promise<void> => {
-    const [nextRead, nextMd, nextHygiene] = await Promise.all([
+    // Informational: it starts with the report read but never delays the first paint,
+    // and a failure here is an empty map, never a blocked list.
+    const hygieneLoad = Promise.resolve()
+      .then((): Promise<FlowHygieneMap> | FlowHygieneMap => flowActions().hygiene?.() ?? new Map())
+      .catch((): FlowHygieneMap => new Map());
+    const [nextRead, nextMd] = await Promise.all([
       readLatest(options.cwd).catch((error: unknown): GovernanceReportRead => ({
         state: "malformed",
         reason: error instanceof Error ? error.message : String(error),
       })),
       readMarkdown(options.cwd),
-      // Informational: a failure here is an empty map, never a blocked list.
-      Promise.resolve()
-        .then((): Promise<FlowHygieneMap> | FlowHygieneMap => flowActions().hygiene?.() ?? new Map())
-        .catch((): FlowHygieneMap => new Map()),
     ]);
-    hygiene = nextHygiene;
     read = nextRead;
     markdown = nextRead.state === "present" ? nextMd : undefined;
     revealSelection();
+    paint();
+    hygiene = await hygieneLoad;
     paint();
   };
 
