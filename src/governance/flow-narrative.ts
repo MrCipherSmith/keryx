@@ -21,13 +21,48 @@ export function summarizeEffect(description: string | undefined): FlowEffect {
   if (first !== undefined) return { stated: true, text: first, bullets };
   // Review L-002: no `-`/`*` bullets is not "only the hint". A numbered list or
   // prose is still a stated effect; only the untouched hint, or nothing, is not.
-  const lines = proseOutsideFences(sectionOf(description, /^outcome criteri(?:a|on)$/i) ?? "")
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
-    .filter((line) => line.length > 0);
-  const stated = lines.filter((line) => line !== OUTCOME_HINT).map((line) => line.replace(/^\d+[.)]\s+/, ""));
-  if (stated.length > 0) return { stated: true, text: stated[0] ?? "", bullets: stated };
-  return { stated: false, reason: lines.length > 0 ? "hint-only" : "empty-section" };
+  const { entries, sawHint } = proseEntries(proseOutsideFences(sectionOf(description, /^outcome criteri(?:a|on)$/i) ?? ""));
+  if (entries.length > 0) return { stated: true, text: entries[0] ?? "", bullets: entries };
+  return { stated: false, reason: sawHint ? "hint-only" : "empty-section" };
+}
+
+/**
+ * Numbered items and prose paragraphs of a section, continuation lines folded
+ * in. Headings, blockquotes, empty list markers and the template hint are not
+ * statements (review round 2, defect 1).
+ */
+function proseEntries(body: string): { entries: string[]; sawHint: boolean } {
+  const entries: string[] = [];
+  let sawHint = false;
+  let open = false;
+  for (const raw of body.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.length === 0) {
+      open = false;
+      continue;
+    }
+    const unquoted = line.replace(/^>\s*/, "").replace(/^[-*]\s+/, "");
+    if (unquoted === OUTCOME_HINT) {
+      sawHint = true;
+      open = false;
+      continue;
+    }
+    if (/^#{1,6}(\s|$)/.test(line) || line.startsWith(">") || /^[-*]$/.test(line)) {
+      open = false;
+      continue;
+    }
+    const numbered = /^\d+[.)]\s+(.*)$/.exec(line);
+    if (numbered !== null) {
+      entries.push(numbered[1] ?? "");
+      open = true;
+    } else if (open && entries.length > 0) {
+      entries[entries.length - 1] += ` ${line}`;
+    } else {
+      entries.push(line);
+      open = true;
+    }
+  }
+  return { entries: entries.filter((entry) => entry.length > 0), sawHint };
 }
 
 export function summarizeWork(flow: Pick<FlowState, "tasks">, description: string | undefined): FlowWorkSummary {

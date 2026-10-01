@@ -61,6 +61,16 @@ describe("summarizeEffect", () => {
       bullets: ["Fewer manual commands.", "Faster closing."],
     });
     expect(summarizeEffect("## Outcome criteria\n\n## Out of Scope\n")).toEqual({ stated: false, reason: "empty-section" });
+    // Review round 2, defect 1: markers, headings and quotes are not statements; a numbered item's continuation folds in.
+    expect(summarizeEffect("## Outcome criteria\n\n- \n")).toEqual({ stated: false, reason: "empty-section" });
+    expect(summarizeEffect(`## Outcome criteria\n\n${OUTCOME_HINT}\n- \n`)).toEqual({ stated: false, reason: "hint-only" });
+    expect(summarizeEffect(`## Outcome criteria\n\n> ${OUTCOME_HINT}\n`)).toEqual({ stated: false, reason: "hint-only" });
+    expect(summarizeEffect("## Outcome criteria\n\n### Metric\n")).toEqual({ stated: false, reason: "empty-section" });
+    expect(summarizeEffect("## Outcome criteria\n\n1. p95 under\n   2s on the dashboard\n")).toEqual({
+      stated: true,
+      text: "p95 under 2s on the dashboard",
+      bullets: ["p95 under 2s on the dashboard"],
+    });
     expect(renderEffectLine({ stated: false, reason: "empty-section" })).toBe("effect: not stated (the Outcome criteria section is empty)");
   });
 

@@ -109,7 +109,9 @@ export function flowDeliveryStatementFrom(description: string): string | null {
  * The bullets of an `Outcome criteria` section, each continuation line folded
  * into its bullet; `null` when there is no such section. The untouched
  * `OUTCOME_HINT` is skipped, so a section holding only the hint yields `[]`.
- * One parser for the product index and the governance report.
+ * The product index and the governance report read bullets through this one
+ * function; the governance report alone also reads a section written as prose
+ * or a numbered list, which the product index does not count as a criterion.
  */
 export function outcomeBulletsFrom(markdown: string): string[] | null {
   const body = sectionOf(markdown, /^outcome criteri(?:a|on)$/i);

@@ -318,7 +318,12 @@ export function openGovernanceReport(
   const runClose = (id: string): void => {
     const offeredOn = checks.get(id);
     const flow = flows().find((candidate) => candidate.id === id);
-    if (offeredOn === undefined || flow === undefined) return;
+    if (offeredOn === undefined || flow === undefined) {
+      // The confirmation is already gone; say why nothing happened.
+      if (flow !== undefined) errors.set(id, "not completed: press c to check again first");
+      paint();
+      return;
+    }
     closingId = id;
     errors.delete(id);
     closeResults.delete(id);
@@ -413,9 +418,10 @@ export function openGovernanceReport(
     },
     renderTab: (tabId, body, ctx) => {
       width = ctx.width;
-      // A tab switch (possible only while the keyboard is blocked) cancels a
-      // pending confirmation rather than hiding it on the other tab.
-      confirming = undefined;
+      // Leaving the Flows tab (a tab-strip click, or a key while the keyboard
+      // is blocked) cancels a pending confirmation rather than hiding it there.
+      // A re-mount of the Flows tab itself — a theme change does that — keeps it.
+      if (tabId !== "flows") confirming = undefined;
       const parent = body as { add(child: unknown): void };
       headerNode = new core.TextRenderable(r as never, { id: "gov-header", content: "" }) as never;
       parent.add(headerNode);

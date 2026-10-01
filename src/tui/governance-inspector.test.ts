@@ -490,6 +490,45 @@ otuiTest("review T-005: the action row is clickable — check, then confirm — 
   }
 });
 
+otuiTest("review round 2: a theme change keeps a pending confirmation; leaving the Flows tab cancels it", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  const cwd = await projectWithOpenFlow();
+  const { actions, calls } = fakeActions();
+  const before = getThemeId();
+  const modal = openGovernanceReport(otui.core, h.chrome, { cwd, runner: createGovernanceRunner({ cwd }), onKeypress: keypressSource(h.renderer), flowActions: actions });
+  try {
+    await modal!.ready;
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    h.mockInput.pressKey("d");
+    await settle(h);
+    h.mockInput.pressKey("3");
+    applyThemeId(before === "groknight" ? "grokday" : "groknight");
+    await settle(h);
+    expect(modal!.actionLine()).toContain("— 3 (any other key cancels)");
+    for (const key of ["6", "4"]) h.mockInput.pressKey(key);
+    h.mockInput.pressEnter();
+    await settle(h);
+    await modal!.settled();
+    expect(calls).toEqual(["check 364", "check 364", "close 364"]);
+    h.mockInput.pressKey("c");
+    await settle(h);
+    await modal!.settled();
+    h.mockInput.pressKey("d");
+    await settle(h);
+    modal!.setTab("report");
+    modal!.setTab("flows");
+    await settle(h);
+    expect(modal!.actionLine()).not.toContain("Close flow");
+  } finally {
+    applyThemeId(before);
+    modal?.close();
+    h.destroy();
+  }
+});
+
 otuiTest("AC10: a /theme switch recolours the open report modal", async () => {
   const otui = OTUI!;
   const h = await mountChrome(otui);
