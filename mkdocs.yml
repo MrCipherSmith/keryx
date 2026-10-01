@@ -78,13 +78,10 @@ extra:
 
 plugins:
   - search
-  # `onboarding.md` and `complete-setup-and-agent-workflows.md` still exist, so
-  # nothing is redirected yet. When the setup-pages task (T12) retires them it
-  # adds:
-  #   onboarding.md: getting-started/quickstart.md
-  #   complete-setup-and-agent-workflows.md: guides/set-up-a-project.md
   - redirects:
-      redirect_maps: {}
+      redirect_maps:
+        onboarding.md: getting-started/quickstart.md
+        complete-setup-and-agent-workflows.md: guides/set-up-a-project.md
   - llmstxt:
       markdown_description: >-
         Keryx is a project-local brain for AI agents and teams: a
@@ -135,13 +132,6 @@ markdown_extensions:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
-
-# `onboarding.md` and `complete-setup-and-agent-workflows.md` are not in the nav:
-# they are being split into the Getting started and Guides pages and then
-# retired. They stay in the build so existing links keep resolving until then.
-not_in_nav: |
-  onboarding.md
-  complete-setup-and-agent-workflows.md
 
 nav:
   # `README.md` is deliberately absent. MkDocs maps a directory's `README.md`

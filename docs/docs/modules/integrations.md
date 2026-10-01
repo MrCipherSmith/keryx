@@ -60,6 +60,8 @@ There are four separate ways to connect an agent. They do not depend on each oth
 
 **Integrations** come from one registry. Each agent is described once, as capability flags on named surfaces: `block` (guard shell and search calls), `prompt-gate` (screen prompts), `inject-context` (add orientation at turn start), `instructions`, `agents`, `rules`, and a few surfaces only the Keryx shell has. `install` applies each surface in a fixed order and records what it wrote. `doctor` compares that record with the live file and names the drift. `uninstall` removes only the entries Keryx tagged and leaves yours alone. Use `--surface` to act on one surface and `--dry-run` to preview. See [Integrations and adapters](../integrations.md) for install state and the generated capability matrix.
 
+<!-- retired-spellings-ok: line — the retired spelling is named here on purpose, to say it is retired -->
+
 **`integrate`** registers Keryx as an MCP server in a project-local client config (`cursor`, `claude`, `opencode`, `vscode`, `generic`, or `all`) and sets `modules.mcp.enabled=true`. `vscode` is opt-in and not part of `all`. **`serve-mcp`** is the server it points at: stdio by default, `--http` for a localhost-only HTTP/SSE transport, and `--read-only` to hide every tool that changes something. Both need the optional MCP SDK, and the module stays off until you integrate. The old `keryx mcp serve` spelling is retired.
 
 **`agents bootstrap`** writes a standing instruction block into a runtime's user-level file, outside any project. The runtimes are `claude`, `opencode`, `zcode`, `codex` and `antigravity`. Run `status` first and `install --dry-run` before you write.

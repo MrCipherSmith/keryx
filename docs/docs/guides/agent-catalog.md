@@ -140,7 +140,7 @@ regardless of what the definition asked for. The `policy` sidecar's
 implies are **advisory** — nothing in `spawn_subagent` currently consumes
 them, so a `workspace-write` definition naming `shell_exec` or requesting
 `isolation: worktree` gets a `general`-mode child, not a child with that
-specific tool allowlist or that specific isolation. This is a deliberate D-2
+specific tool allowlist or that specific isolation. This is a deliberate
 boundary (a definition is a *producer* of `spawn_subagent` inputs, not a new
 execution path) rather than an oversight, but it means the sidecar describes
 intent, not a guarantee. `keryx agents show <name>` and `keryx agents export

@@ -1,5 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { Glob } from "bun";
 import { expect, test } from "bun:test";
+import { orphans, parseMkdocs } from "../scripts/check-docs-nav";
 import {
   CLI_ROUTES,
   USAGE_BODY,
@@ -26,7 +29,6 @@ import { securityCommand } from "./commands/security";
 // verb added without a section fails here rather than shipping.
 
 const CLI_REFERENCE = new URL("../docs/docs/cli-reference.md", import.meta.url);
-const DOCS_INDEX = new URL("../docs/docs/index.md", import.meta.url);
 const MKDOCS = new URL("../mkdocs.yml", import.meta.url);
 
 // Verbs that are deliberately not their own section, each with the reason.
@@ -434,39 +436,23 @@ test("skills eval/judge-check/stocktake --help print dedicated help and do nothi
   expect(stocktakeHelp).toContain("keryx skills stocktake");
 });
 
-test("the docs index lists exactly the guides the mkdocs nav publishes", async () => {
-  const [index, mkdocs] = await Promise.all([readFile(DOCS_INDEX, "utf8"), readFile(MKDOCS, "utf8")]);
+// The docs index is a landing page with cards and the nav is grouped, so
+// neither "the index lists exactly the nav" test applies any more. The invariant
+// that matters is the one `scripts/check-docs-nav.ts` enforces in CI: every nav
+// entry is a real page, and every page is in the nav or declared `not_in_nav` /
+// `exclude_docs`. Asserted here against the real tree so `bun test` catches it
+// before CI does.
+test("every mkdocs nav page exists and every docs page is in the nav or declared out of it", async () => {
+  const mkdocs = await readFile(MKDOCS, "utf8");
+  const cfg = parseMkdocs(mkdocs);
 
-  const navGuides = new Set(Array.from(mkdocs.matchAll(/guides\/([a-z0-9-]+\.md)/g), (m) => m[1]));
-  const indexGuides = new Set(Array.from(index.matchAll(/guides\/([a-z0-9-]+\.md)/g), (m) => m[1]));
+  // Scrape guard: a parser that silently finds nothing would pass vacuously.
+  expect(cfg.nav.size).toBeGreaterThan(30);
 
-  // Same scrape guard as above.
-  expect(navGuides.size).toBeGreaterThan(5);
+  const base = new URL(`../${cfg.docsDir}/`, import.meta.url);
+  const files = [...new Glob("**/*.md").scanSync({ cwd: fileURLToPath(base) })];
 
-  expect([...indexGuides].sort()).toEqual([...navGuides].sort());
-});
-
-// Flow 302 (AC7): the guides test above only ever covered `guides/*.md` — the
-// nine top-level pages (architecture, harness, modules, cli-reference, …)
-// were never checked against the nav at all, so one could be added to
-// `mkdocs.yml` and never linked from the index, or removed from the index
-// and left dangling in the nav, with nothing here noticing either way.
-test("the docs index lists exactly the top-level pages the mkdocs nav publishes", async () => {
-  const [index, mkdocs] = await Promise.all([readFile(DOCS_INDEX, "utf8"), readFile(MKDOCS, "utf8")]);
-
-  // Nav entries for top-level pages are indented exactly two spaces (nested
-  // "Guides:" entries are indented six); `index.md` is the current page and
-  // never links to itself, so it is excluded from the expectation.
-  const navPages = new Set(
-    Array.from(mkdocs.matchAll(/^ {2}- [^\n]*: ([a-z0-9-]+\.md)$/gm), (m) => m[1]).filter(
-      (name): name is string => name !== undefined && name !== "index.md",
-    ),
-  );
-
-  // Same scrape guard as above.
-  expect(navPages.size).toBeGreaterThan(5);
-
-  const indexPages = new Set(Array.from(index.matchAll(/\(\.\/([a-z0-9-]+\.md)\)/g), (m) => m[1]));
-
-  expect([...indexPages].sort()).toEqual([...navPages].sort());
+  expect(orphans(files, cfg)).toEqual([]);
+  expect([...cfg.nav].filter((f) => !files.includes(f))).toEqual([]);
+  expect(cfg.nav.has("index.md")).toBe(true);
 });

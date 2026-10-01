@@ -11,18 +11,15 @@ Requirements: `git` and `bun` (>= 1.3.14).
 # unrelated project (github.com/actionhero/keryx). The executable is `keryx`.
 npm install -g @mrciphersmith/keryx
 
-# Or straight from the repository:
-bun install -g github:MrCipherSmith/keryx
-
 keryx init
 ```
 
-`init` is interactive by default (pass `--yes` to accept defaults). It scaffolds `.metaproject/`, enables the nine default modules, wires agent routing (a block in the gitignored `CLAUDE.local.md` / `AGENTS.override.md`, leaving your tracked `AGENTS.md`/`CLAUDE.md` alone), and writes the `metaproject.json` manifest. See [onboarding.md](./onboarding.md) for project-local installs, the local-dev workflow, and the full first-run walkthrough.
+`init` is interactive by default (pass `--yes` to accept defaults). It scaffolds `.metaproject/`, enables the nine default modules, wires agent routing (a block in the gitignored `CLAUDE.local.md` / `AGENTS.override.md`, leaving your tracked `AGENTS.md`/`CLAUDE.md` alone), and writes the `metaproject.json` manifest. See [getting-started/install.md](./getting-started/install.md) for the other install paths and [getting-started/quickstart.md](./getting-started/quickstart.md) for the first-run walkthrough.
 
 ## Documentation map
 
-- **[onboarding.md](./onboarding.md)** — Install paths (global / project-local / from source), first-run walkthrough, the typical build loop, and TTY/CI behavior.
-- **[complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md)** — End-to-end global installation, full project setup, command catalog, copy-ready operational scripts, and reusable agent prompts.
+- **[getting-started/quickstart.md](./getting-started/quickstart.md)** — Install paths (see also `install.md`), first-run walkthrough, and the typical build loop.
+- **[guides/set-up-a-project.md](./guides/set-up-a-project.md)** — End-to-end project setup, with copy-ready agent prompts in `guides/agent-prompts.md`.
 - **[agent-installation-playbook.md](./agent-installation-playbook.md)** — Autonomous Gherkin scenarios for installation, runtime configuration, optional capabilities, validation, repair, and structured handoff.
 - **[architecture.md](./architecture.md)** — System overview, the four-layer pattern, the two invariants, cross-module data flows, and external integrations.
 - **[harness.md](./harness.md)** — The agent runtime, feature by feature: the four doors, providers, sessions and forking, the policy engine, OS containment, evidence and the completion gate, child agents, record and replay — and what it does not do yet.

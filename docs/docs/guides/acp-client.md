@@ -235,7 +235,7 @@ before trusting a run:
   the network to reach its model and its own credential directory under
   `$HOME`.
 - **The disposable worktree is the real containment**, as it is for every
-  external agent (decision D-08). Whatever the agent writes with its own tools
+  external agent. Whatever the agent writes with its own tools
   lands in a throwaway `git worktree` checkout that is removed on every exit
   path, including a timeout, a crash and a spawn failure. The operator's project
   tree is never touched. The tests check this with a hash of the project tree

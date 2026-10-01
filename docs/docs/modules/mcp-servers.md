@@ -70,6 +70,8 @@ Keryx also refuses to follow a redirect, because a custom credential header woul
 
 ## Status
 
+<!-- retired-spellings-ok: line — the retired spelling is named here on purpose, to say it is retired -->
+
 Stable for stdio and remote HTTP servers, project and user scope, trust, `doctor` and OAuth login. Importing servers you already configured in another editor is not available. The retired `keryx mcp serve`, `install` and `uninstall` spellings still work but print a deprecation line and point at [`serve-mcp` and `integrate`](integrations.md).
 
 ## Reference

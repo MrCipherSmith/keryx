@@ -20,7 +20,7 @@
 // that file (search "SLATE-11's terminal state"). `renderTerminalStateBlock`
 // is the KERYX_INSTALLATION_RESULT-style sentinel text block SLATE-11 emits
 // via `io.onSystem`/`io.write` for human/log visibility (see
-// docs/docs/agent-installation-playbook.md:290-309 for the pattern this
+// the "Structured handoff contract" section of docs/docs/agent-installation-playbook.md for the pattern this
 // mirrors) — pinned sentinel line: `KERYX_TERMINAL_STATE`.
 
 import { expect, test } from "bun:test";

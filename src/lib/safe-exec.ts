@@ -83,7 +83,7 @@ function hasSafeExecArgv(execArgv: readonly string[]): boolean {
  * true) — a future Bun version, or a non-Bun `node` on PATH some install
  * path resolves to, might.
  *
- * TRADE-OFF, documented here and in docs/docs/onboarding.md's "Environment
+ * TRADE-OFF, documented here and in docs/docs/concepts/security-model.md's "Environment
  * isolation": this is fail-safe, not value-aware. A user who genuinely
  * exports one of these in their own shell (not via a project `.env`) has it
  * dropped from the re-exec'd child too. Opt back in with

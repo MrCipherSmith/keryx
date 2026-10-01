@@ -1098,6 +1098,8 @@ connects *to* (see [MCP servers in the shell](modules/mcp-servers.md)).
 | `integrate <cursor\|claude\|opencode\|vscode\|generic\|all> [--dry-run]` | write the project-scoped client config and set `modules.mcp.enabled=true` |
 | `integrate --remove <editor>` | remove only the managed keryx client entry |
 
+<!-- retired-spellings-ok: line — the retired spelling is named here on purpose, to say it is retired -->
+
 The `keryx mcp serve`, `mcp install` and `mcp uninstall` spellings are retired in
 favour of these.
 

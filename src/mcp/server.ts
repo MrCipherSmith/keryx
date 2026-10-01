@@ -38,7 +38,7 @@ export class McpSdkMissingError extends Error {
   constructor(cause?: unknown) {
     super(
       [
-        "The Model Context Protocol SDK is not installed, but `mcp serve` requires it.",
+        "The Model Context Protocol SDK is not installed, but `serve-mcp` requires it.",
         "",
         "Install it (it is an optional dependency):",
         "  bun add @modelcontextprotocol/sdk",

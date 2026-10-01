@@ -14,7 +14,7 @@ and a renamed command keeps working under its old spelling for a while.
 | Status | What it covers |
 | --- | --- |
 | Stable | The nine default modules (code graph, compact command output, wiki, skills, health, testing, memory, task flows, security), `keryx shell`, model providers, flows, review packages. |
-| Experimental | Shared Agent Context, some review-service checks, per-runtime context hooks for some agents, one editor adapter. |
+| Experimental | Shared Agent Context; the review-service checks for scenarios, docs and comments; per-runtime context hooks for some agents; the seven agent integration adapters marked `experimental` in the integration registry (`keryx integrations matrix` lists them). |
 | Opt-in | The MCP server, Shared Agent Context, external agent CLIs, the remote HTTP entry. Off until you enable them. |
 
 Stable means the behaviour is tested and documented and changes are announced,
