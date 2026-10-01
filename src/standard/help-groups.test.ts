@@ -323,3 +323,28 @@ describe("remote control is documented where operators look", () => {
     expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_046);
   });
 });
+
+// Flow 377: `/channels` is told in the same places, and the version is above 0.3.48.
+describe("/channels is documented where operators look", () => {
+  const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/commands-by-task.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`${file} mentions /channels`, () => {
+      expect(read(file)).toContain("/channels");
+    });
+  }
+
+  test("package.json is above 0.3.48, the version before /channels", () => {
+    const [major = 0, minor = 0, patch = 0] = (JSON.parse(read("package.json")) as { version: string }).version
+      .split(".")
+      .map((part) => Number.parseInt(part, 10));
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_048);
+  });
+});

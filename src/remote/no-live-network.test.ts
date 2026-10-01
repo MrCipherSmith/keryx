@@ -5,7 +5,9 @@
 //   - client.ts is the shell's client of the LOCAL serve: it may call fetch, but
 //     only against an address read from endpoint.json that it has checked is a
 //     loopback address, and it never names the Telegram host.
-//   - Non-test sources other than those two import no socket-level node module
+//   - channels-client.ts (flow 377) is the shell's client of the channels plane of the
+//     same serve, held to the same rule as client.ts.
+//   - Non-test sources other than those three import no socket-level node module
 //     and call no global fetch (nor WebSocket, XMLHttpRequest, Bun.serve,
 //     Bun.connect, Bun.listen).
 //   - Only bot-api-http.ts may name the Telegram host, comments included.
@@ -22,6 +24,8 @@ import path from "node:path";
 const REMOTE_DIR = import.meta.dir;
 const THE_CLIENT = "bot-api-http.ts";
 const THE_LOCAL_CLIENT = "client.ts";
+const THE_CHANNELS_CLIENT = "channels-client.ts";
+const LOCAL_CLIENTS = [THE_LOCAL_CLIENT, THE_CHANNELS_CLIENT];
 const TELEGRAM_HOST = ["api", "telegram", "org"].join(".");
 const NETWORK_MODULES = ["http", "https", "http2", "net", "tls", "dgram", "dns", "dns/promises", "child_process", "worker_threads", "cluster"];
 
@@ -151,7 +155,7 @@ describe("src/remote cannot reach the network except through its one client", ()
 
   test("non-test sources other than the client import no socket module and call no global fetch", () => {
     const offenders = production
-      .filter((entry) => entry.name !== THE_CLIENT && entry.name !== THE_LOCAL_CLIENT)
+      .filter((entry) => entry.name !== THE_CLIENT && !LOCAL_CLIENTS.includes(entry.name))
       .map((entry) => ({ file: entry.name, violations: productionViolations(entry.text) }))
       .filter((entry) => entry.violations.length > 0);
     expect(offenders).toEqual([]);
@@ -162,21 +166,24 @@ describe("src/remote cannot reach the network except through its one client", ()
     expect(importedSpecifiers(stripComments(client?.text ?? "")).filter(isNetworkSpecifier)).toEqual([]);
   });
 
-  test("the local client imports no socket module, and builds its one URL only after the loopback check", () => {
-    const local = production.find((entry) => entry.name === THE_LOCAL_CLIENT);
-    const code = stripComments(local?.text ?? "");
-    expect(importedSpecifiers(code).filter(isNetworkSpecifier)).toEqual([]);
-    // The one place a URL is built is `target`, and the check sits in it.
-    expect(code.match(/`http:\/\//g)?.length).toBe(1);
-    const target = code.slice(code.indexOf("private target("), code.indexOf("private async post("));
-    expect(target).toContain("isLoopbackAddress(");
-    expect(target.indexOf("isLoopbackAddress(")).toBeLessThan(target.indexOf("`http://"));
-    // No other network primitive, and no other host.
-    for (const pattern of GLOBAL_NETWORK_CALLS) {
-      expect(pattern.test(code)).toBe(false);
-    }
-    expect(code).not.toContain("https://");
-  });
+  for (const clientName of LOCAL_CLIENTS) {
+    test(`${clientName} imports no socket module, and builds its one URL only after the loopback check`, () => {
+      const local = production.find((entry) => entry.name === clientName);
+      expect(local).toBeDefined();
+      const code = stripComments(local?.text ?? "");
+      expect(importedSpecifiers(code).filter(isNetworkSpecifier)).toEqual([]);
+      // The one place a URL is built is `target`, and the check sits in it.
+      expect(code.match(/`http:\/\//g)?.length).toBe(1);
+      const target = code.slice(code.indexOf("private target("), code.indexOf("private async post("));
+      expect(target).toContain("isLoopbackAddress(");
+      expect(target.indexOf("isLoopbackAddress(")).toBeLessThan(target.indexOf("`http://"));
+      // No other network primitive, and no other host.
+      for (const pattern of GLOBAL_NETWORK_CALLS) {
+        expect(pattern.test(code)).toBe(false);
+      }
+      expect(code).not.toContain("https://");
+    });
+  }
 
   test("only the client names the Telegram host", () => {
     const naming = files.filter((entry) => entry.text.includes(TELEGRAM_HOST)).map((entry) => entry.name);

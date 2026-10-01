@@ -955,6 +955,23 @@ Refusals print their code and exit non-zero (except where noted):
   readline shell (`--no-tui`) can only print that it is off. Each time it is
   turned on or off is recorded in the session's history (see
   [sessions](#sessions)).
+- `/channels [status]` connects Telegram to this machine, from any shell. The modal
+  lists Telegram: when it is not connected there is one button, Connect; when it is,
+  Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in
+  the transcript, history or logs) and writes `remote/bot-token` and
+  `remote/config.json` itself, mode 600. It then shows a one-time code (valid 10
+  minutes, single use); the first private message to the bot carrying it adds that
+  sender to the allowlist. Add the bot to your group as an administrator with the
+  manage topics right and the group id is taken from that event; the modal says what
+  is missing (a group without topics, a bot without the right). Test sends one
+  message naming this machine to the General topic and shows delivered or the
+  reason. Disconnect asks `serve` to delete every topic and stop polling, then
+  erases the token and config; with `serve` down it erases the files and says the
+  existing topics stay in the group. The sidebar row reads `Telegram: off | pairing
+  | connected | serve down`; the readline shell (`--no-tui`) prints the state and
+  how to connect from the full-screen shell. `serve` offers these routes on
+  loopback whether or not Telegram is configured, and the bot token never goes in
+  a request. Use one bot per machine.
 - `keryx shell` supports a hard stop for a running main turn via
   `/interrupt`.
 - Session history is durable during a turn: user input and tool results save
@@ -1885,7 +1902,8 @@ Linux and macOS, `%APPDATA%\keryx` on Windows):
 
 The transport is the single Telegram poller in `keryx serve`; a second `serve` on
 the same token stops on Telegram's conflict answer and does not poll again. Turn
-it on per session from the shell with [`/remote-control`](#shell-behavior). The
+it on per session from the shell with [`/remote-control`](#shell-behavior), and
+connect the bot from the shell with `/channels` instead of writing the two files. The
 walk-through, including what is not yet verified against real Telegram, is in
 [Drive keryx remotely](guides/drive-keryx-remotely.md#remote-control-from-telegram).
 

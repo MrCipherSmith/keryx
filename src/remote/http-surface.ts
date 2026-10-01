@@ -50,6 +50,8 @@ import {
   MIN_APPROVAL_TIMEOUT_MS,
   parseApprovalCallback,
   approvalCallbackData,
+  CHANNELS_ROUTE_METHODS,
+  type ChannelsRoute,
   REMOTE_ROUTE_METHODS,
   REMOTE_SCHEMA_VERSION,
   type RegisterBody,
@@ -83,18 +85,18 @@ export interface RemoteSurfaceOptions {
   approvalIds?: () => string;
 }
 
-function ok(body: Record<string, unknown>, status = 200): Response {
+export function ok(body: Record<string, unknown>, status = 200): Response {
   return new Response(`${JSON.stringify({ schemaVersion: REMOTE_SCHEMA_VERSION, ...body })}\n`, { status, headers: JSON_HEADERS });
 }
 
-function fail(status: number, code: string, message: string, headers: Record<string, string> = {}): Response {
+export function fail(status: number, code: string, message: string, headers: Record<string, string> = {}): Response {
   return new Response(`${JSON.stringify({ error: { code, message } })}\n`, { status, headers: { ...JSON_HEADERS, ...headers } });
 }
 
-type BodyResult = { ok: true; value: Record<string, unknown> } | { ok: false; response: Response };
+export type BodyResult = { ok: true; value: Record<string, unknown> } | { ok: false; response: Response };
 
 /** Read a bounded JSON object. Refuses on the declared length, the media type, and the bytes actually received. */
-async function readJsonBody(request: Request): Promise<BodyResult> {
+export async function readJsonBody(request: Request): Promise<BodyResult> {
   const declared = request.headers.get("content-length");
   if (declared !== null && Number(declared) > MAX_REMOTE_BODY_BYTES) {
     return { ok: false, response: fail(413, "payload-too-large", "The request body is too large.") };
@@ -212,9 +214,17 @@ interface PendingApproval {
   timer: unknown;
 }
 
+/** Answers the channels routes (flow 377); they work whether or not a hub is running. */
+export type ChannelsHandler = (route: ChannelsRoute, request: Request) => Promise<Response>;
+
+function isChannelsRoute(route: string): route is ChannelsRoute {
+  return Object.hasOwn(CHANNELS_ROUTE_METHODS, route);
+}
+
 export class RemoteHttpSurface {
   readonly consumer: RemoteConsumer;
   private hub: RemoteHub | undefined;
+  private channels: ChannelsHandler | undefined;
   private unavailableReason = "remote control is not running in this serve";
   private closed = false;
   private readonly now: () => number;
@@ -250,7 +260,16 @@ export class RemoteHttpSurface {
     return this.options.verifyShellToken(presented);
   }
 
-  async handle(route: RemoteRoute, request: Request, io: { untimed: () => void }): Promise<Response> {
+  async handle(route: RemoteRoute | ChannelsRoute, request: Request, io: { untimed: () => void }): Promise<Response> {
+    if (isChannelsRoute(route)) {
+      if (this.closed || this.channels === undefined) {
+        return fail(503, "remote-unavailable", "channels are not available in this serve");
+      }
+      if (request.method !== CHANNELS_ROUTE_METHODS[route]) {
+        return fail(405, "method-not-allowed", "Method not allowed.", { allow: CHANNELS_ROUTE_METHODS[route] });
+      }
+      return this.channels(route, request);
+    }
     const hub = this.hub;
     if (this.closed || hub === undefined) {
       return fail(503, "remote-unavailable", this.unavailableReason);
@@ -293,6 +312,11 @@ export class RemoteHttpSurface {
   }
 
   // ---- composition ---------------------------------------------------------
+
+  /** The channels controller: its routes answer even while no hub is running. */
+  setChannels(handler: ChannelsHandler): void {
+    this.channels = handler;
+  }
 
   /** The hub is up: routes begin answering. */
   attach(hub: RemoteHub): void {

@@ -26,7 +26,7 @@
 //     bearer credential reaches the routes above and NOTHING under
 //     `/v1/remote/`. The local shell token (a separate secret, created by the
 //     process that owns the Telegram bot, read by shells on the same machine)
-//     reaches ONLY the seven exact `/v1/remote/*` paths and nothing else.
+//     reaches ONLY the exact `/v1/remote/*` paths of the table below and nothing else.
 //     `/v1/remote/*` deliberately does NOT also require the serve bearer: the
 //     shell is a local, same-user process that must not hold the credential
 //     that can run turns and answer approvals, and a route that needed both
@@ -457,9 +457,31 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["approval", "POST"],
   ["ack", "POST"],
   ["stream", "GET"],
+  // The channels plane (flow 377): connect Telegram, test it, disconnect it.
+  ["channels-status", "GET"],
+  ["channels-pair", "POST"],
+  ["channels-pairing", "GET"],
+  ["channels-cancel", "POST"],
+  ["channels-reload", "POST"],
+  ["channels-test", "POST"],
+  ["channels-disconnect", "POST"],
 ]);
 
-export type RemoteRouteName = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "ack" | "stream";
+export type RemoteRouteName =
+  | "register"
+  | "deregister"
+  | "heartbeat"
+  | "reply"
+  | "approval"
+  | "ack"
+  | "stream"
+  | "channels-status"
+  | "channels-pair"
+  | "channels-pairing"
+  | "channels-cancel"
+  | "channels-reload"
+  | "channels-test"
+  | "channels-disconnect";
 
 /**
  * What the listener needs from the remote-control side. A structural interface
@@ -492,7 +514,7 @@ function matchRoute(pathname: string): RouteMatch {
     return { route: "fixed", pathname };
   }
   const segments = pathname.split("/");
-  // ["", "v1", "remote", "<name>"] — the name must be one of the seven.
+  // ["", "v1", "remote", "<name>"] — the name must be one of the closed table above.
   if (segments.length === 4 && segments[1] === "v1" && segments[2] === "remote" && REMOTE_ROUTES.has(segments[3] ?? "")) {
     return { route: "remote", name: segments[3] as RemoteRouteName };
   }

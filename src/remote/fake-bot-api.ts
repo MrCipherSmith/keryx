@@ -23,6 +23,9 @@ import {
   type BotApi,
   BotApiError,
   type BotCallbackQuery,
+  type BotChatInfo,
+  type BotChatMemberInfo,
+  type BotIdentity,
   type BotUpdate,
   type GetUpdatesParams,
   type InlineKeyboard,
@@ -56,6 +59,9 @@ export interface FakeBotApiOptions {
   firstUpdateId?: number;
   firstThreadId?: number;
   now?: () => number;
+  /** The bot's own user id and username (getMe). */
+  botId?: number;
+  botUsername?: string;
 }
 
 type FakeMethod =
@@ -64,7 +70,10 @@ type FakeMethod =
   | "createForumTopic"
   | "deleteForumTopic"
   | "editForumTopic"
-  | "answerCallbackQuery";
+  | "answerCallbackQuery"
+  | "getMe"
+  | "getChat"
+  | "getChatMember";
 
 interface Fault {
   error: BotApiError;
@@ -94,6 +103,12 @@ export class FakeBotApi implements BotApi {
   private readonly liveTopics = new Map<number, FakeTopic>();
   private readonly faults = new Map<FakeMethod, Fault[]>();
   private down = false;
+  private tokenRejected = false;
+  private forum = true;
+  private botCanManageTopics = true;
+  private botStatus = "administrator";
+  private readonly botId: number;
+  private readonly botUsername: string;
   private readonly inFlightPollers = new Set<string>();
   private readonly waiters = new Set<() => void>();
   private readonly defaultClient: FakeBotClient;
@@ -103,6 +118,8 @@ export class FakeBotApi implements BotApi {
     this.updateSeq = options.firstUpdateId ?? 1000;
     this.threadSeq = options.firstThreadId ?? 100;
     this.now = options.now ?? Date.now;
+    this.botId = options.botId ?? 777000111;
+    this.botUsername = options.botUsername ?? "keryx_fake_bot";
     this.defaultClient = this.connect("default");
   }
 
@@ -118,7 +135,54 @@ export class FakeBotApi implements BotApi {
       deleteForumTopic: (params) => this.deleteTopicFor(label, params),
       editForumTopic: (params) => this.editTopicFor(label, params),
       answerCallbackQuery: (params) => this.answerFor(label, params),
+      getMe: () => this.getMeFor(label),
+      getChat: (params) => this.getChatFor(label, params),
+      getChatMember: (params) => this.getChatMemberFor(label, params),
     };
+  }
+
+  /** A private message to the bot: the chat is the sender's own. */
+  pushPrivateMessage(input: { fromId: number; text: string; forwarded?: boolean }): BotUpdate {
+    const message = {
+      message_id: ++this.messageSeq,
+      from: { id: input.fromId },
+      chat: { id: input.fromId, type: "private" },
+      date: Math.floor(this.now() / 1000),
+      text: input.text,
+      ...(input.forwarded === true ? { forward_origin: { type: "user", date: 1 }, forward_date: 1 } : {}),
+    };
+    return this.enqueueUpdate({ message });
+  }
+
+  /** The bot's membership of a chat changed (Telegram's `my_chat_member`). */
+  pushMyChatMember(input: { fromId: number; chatId?: number; status?: string; type?: string; title?: string }): BotUpdate {
+    return this.enqueueUpdate({
+      my_chat_member: {
+        chat: { id: input.chatId ?? this.chatId, type: input.type ?? "supergroup", ...(input.title === undefined ? {} : { title: input.title }) },
+        from: { id: input.fromId },
+        date: Math.floor(this.now() / 1000),
+        old_chat_member: { status: "left" },
+        new_chat_member: { status: input.status ?? "member" },
+      },
+    });
+  }
+
+  /** Every call answers 401, as Telegram does for a token it does not know. */
+  setTokenRejected(rejected: boolean): void {
+    this.tokenRejected = rejected;
+  }
+
+  /** Whether the group has topics enabled. */
+  setForum(forum: boolean): void {
+    this.forum = forum;
+  }
+
+  /** The bot's right to manage topics, and its status in the group. */
+  setBotRights(rights: { canManageTopics: boolean; status?: string }): void {
+    this.botCanManageTopics = rights.canManageTopics;
+    if (rights.status !== undefined) {
+      this.botStatus = rights.status;
+    }
   }
 
   /** Simulate an operator or an attacker writing in a topic. */
@@ -230,6 +294,18 @@ export class FakeBotApi implements BotApi {
     return this.defaultClient.answerCallbackQuery(params);
   }
 
+  getMe(): Promise<BotIdentity> {
+    return this.defaultClient.getMe();
+  }
+
+  getChat(params: { chatId: number }): Promise<BotChatInfo> {
+    return this.defaultClient.getChat(params);
+  }
+
+  getChatMember(params: { chatId: number; userId: number }): Promise<BotChatMemberInfo> {
+    return this.defaultClient.getChatMember(params);
+  }
+
   // ---- implementation -----------------------------------------------------
 
   private enqueueUpdate(body: Omit<BotUpdate, "update_id">): BotUpdate {
@@ -247,6 +323,9 @@ export class FakeBotApi implements BotApi {
 
   private begin(method: FakeMethod, label: string): void {
     this.calls.push({ method, label });
+    if (this.tokenRejected) {
+      throw rejected(method, 401, "Unauthorized");
+    }
     if (this.down) {
       throw new BotApiError("network", `${method}: request failed (fake API is down)`);
     }
@@ -317,7 +396,7 @@ export class FakeBotApi implements BotApi {
 
   private async sendMessageFor(label: string, params: SendMessageParams): Promise<{ message_id: number }> {
     this.begin("sendMessage", label);
-    if (params.chatId !== this.chatId) {
+    if (params.chatId !== this.chatId && params.chatId <= 0) {
       throw rejected("sendMessage", 400, "Bad Request: chat not found");
     }
     if (params.text.length === 0) {
@@ -370,6 +449,30 @@ export class FakeBotApi implements BotApi {
     }
     topic.name = params.name;
     this.renamedTopics.push({ messageThreadId: params.messageThreadId, name: params.name });
+  }
+
+  private async getMeFor(label: string): Promise<BotIdentity> {
+    this.begin("getMe", label);
+    return { id: this.botId, username: this.botUsername };
+  }
+
+  private async getChatFor(label: string, params: { chatId: number }): Promise<BotChatInfo> {
+    this.begin("getChat", label);
+    if (params.chatId !== this.chatId) {
+      throw rejected("getChat", 400, "Bad Request: chat not found");
+    }
+    return { id: this.chatId, type: "supergroup", title: "Keryx", is_forum: this.forum };
+  }
+
+  private async getChatMemberFor(label: string, params: { chatId: number; userId: number }): Promise<BotChatMemberInfo> {
+    this.begin("getChatMember", label);
+    if (params.chatId !== this.chatId) {
+      throw rejected("getChatMember", 400, "Bad Request: chat not found");
+    }
+    if (params.userId === this.botId) {
+      return { status: this.botStatus, can_manage_topics: this.botCanManageTopics };
+    }
+    return { status: "member" };
   }
 
   private async answerFor(label: string, params: { callbackQueryId: string; text?: string }): Promise<void> {

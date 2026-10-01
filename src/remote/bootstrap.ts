@@ -26,6 +26,7 @@ export interface OpenRemoteHubOptions
     | "onEvent"
     | "onPollerStatus"
     | "beforeAck"
+    | "machine"
   > {
   /** Replaces the real HTTP client; tests pass the in-process fake here. The token is then not read. */
   api?: BotApi;
@@ -36,26 +37,39 @@ export interface OpenRemoteHubOptions
 
 export type OpenRemoteHubResult = { ok: true; hub: RemoteHub } | { ok: false; reason: string };
 
+export type OpenBotApiResult = { ok: true; api: BotApi } | { ok: false; reason: string };
+
+/** The Bot API client for this machine's token file, or the injected one (tests). The token never leaves this closure. */
+export function openBotApi(options: Pick<OpenRemoteHubOptions, "api" | "fetchImpl" | "baseUrl" | "dir">): OpenBotApiResult {
+  if (options.api !== undefined) {
+    return { ok: true, api: options.api };
+  }
+  const token = loadBotToken(options.dir);
+  if (!token.ok) {
+    return { ok: false, reason: token.reason };
+  }
+  return {
+    ok: true,
+    api: createHttpBotApi({
+      token: token.value,
+      ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
+      ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
+    }),
+  };
+}
+
 export function openRemoteHub(options: OpenRemoteHubOptions): OpenRemoteHubResult {
   const config = loadRemoteConfig(options.dir);
   if (!config.ok) {
     return { ok: false, reason: config.reason };
   }
-  let api = options.api;
-  if (api === undefined) {
-    const token = loadBotToken(options.dir);
-    if (!token.ok) {
-      return { ok: false, reason: token.reason };
-    }
-    api = createHttpBotApi({
-      token: token.value,
-      ...(options.fetchImpl === undefined ? {} : { fetchImpl: options.fetchImpl }),
-      ...(options.baseUrl === undefined ? {} : { baseUrl: options.baseUrl }),
-    });
+  const opened = openBotApi(options);
+  if (!opened.ok) {
+    return { ok: false, reason: opened.reason };
   }
   const { api: _api, fetchImpl: _fetch, baseUrl: _base, ...rest } = options;
   void _api;
   void _fetch;
   void _base;
-  return { ok: true, hub: new RemoteHub({ ...rest, api, config: config.value }) };
+  return { ok: true, hub: new RemoteHub({ ...rest, api: opened.api, config: config.value }) };
 }

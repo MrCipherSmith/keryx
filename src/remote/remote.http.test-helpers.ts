@@ -58,7 +58,12 @@ export interface Rig {
 
 const FAST_SLEEP = (): Promise<void> => new Promise<void>((resolve) => setTimeout(resolve, 1));
 
-export function makeRig(): Rig {
+export interface RigOptions {
+  /** False: no remote config is written, as on a machine where Telegram was never connected. Default true. */
+  configured?: boolean;
+}
+
+export function makeRig(rigOptions: RigOptions = {}): Rig {
   const base = realpathSync(mkdtempSync(path.join(tmpdir(), "keryx-remote-http-")));
   const dir = path.join(base, "config");
   mkdirSync(dir, { recursive: true });
@@ -66,9 +71,11 @@ export function makeRig(): Rig {
   if (!issued.ok) {
     throw new Error("fixture could not issue a serve token");
   }
-  const saved = saveRemoteConfig(testConfig({ chatId: FAKE_CHAT_ID }), dir);
-  if (!saved.ok) {
-    throw new Error(`fixture could not save the remote config: ${saved.reason}`);
+  if (rigOptions.configured !== false) {
+    const saved = saveRemoteConfig(testConfig({ chatId: FAKE_CHAT_ID }), dir);
+    if (!saved.ok) {
+      throw new Error(`fixture could not save the remote config: ${saved.reason}`);
+    }
   }
   const api = new FakeBotApi();
   const notices: string[] = [];
@@ -83,7 +90,7 @@ export function makeRig(): Rig {
     events,
     serveTokenFor: () => issued.token,
     async startServe(options = {}) {
-      const opened = options.remote === false ? undefined : openRemoteService({
+      const service = options.remote === false ? undefined : openRemoteService({
         dir,
         api: options.api ?? api,
         pollTimeoutSec: 1,
@@ -93,10 +100,6 @@ export function makeRig(): Rig {
         onEvent: (event) => events.push(event),
         ...options.service,
       });
-      if (opened !== undefined && opened.status !== "ready") {
-        throw new Error(`remote service is ${opened.status}`);
-      }
-      const service = opened?.service;
       const outcome = await startServeListener({
         config: defaultServeConfig(issued.record.id, { port: 0, profile: "remote-read-only" }),
         credential: { status: "ok", record: issued.record },

@@ -10,6 +10,7 @@ Summary: "Remote control mirrors a `keryx shell` session into a Telegram topic t
 Describes:
   - src/remote/**
   - src/tui/remote-control-surface.ts
+  - src/tui/channels-surface.ts
   - src/lib/serve-server.ts
   - src/commands/serve.ts
   - src/session/store.ts
@@ -53,6 +54,10 @@ No `getUpdates` offset is persisted. `poller.ts` sends none on the first call, t
 ### History
 
 A session driven from a topic records `remote: { name, intervals: [{ on, off? }] }` in its summary (`src/session/store.ts`). `keryx sessions list` prints a `⇄ remote <topic>` line, `--json` carries the field, and the `keryx shell -r` picker marks the row `⇄ remote`.
+
+### Connecting from the shell (`/channels`)
+
+`channels.ts` and `pairing.ts` in `src/remote/` are the serve side; `channels-client.ts` is the shell side and `src/tui/channels-surface.ts` the modal, sidebar row and readline text, all drawn from one snapshot. `serve` always mints the shell token on a loopback listener and answers seven `/v1/remote/channels-*` routes (`status`, `pair`, `pairing`, `cancel`, `reload`, `test`, `disconnect`), even with no config. The bot token never travels over HTTP: the shell writes `remote/bot-token` and `remote/config.json` itself (atomic, mode 600), then asks `serve` to reload without a restart. Pairing runs inside the single poller: a one-time code (10 minutes, single use) in a private message adds the sender to the allowlist, and the `my_chat_member` event of the bot being added to a group gives the group id, after which `serve` checks that it is a forum and the bot may manage topics. Test posts to General naming the host; Disconnect has `serve` delete every topic and stop, then the shell erases the files, or erases them alone and reports that topics remain when `serve` is down. One bot per machine.
 
 ## Explicitly out of scope
 

@@ -71,6 +71,15 @@ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { ChannelsClient } from "../remote/channels-client";
+import {
+  type ChannelsPanelHandle,
+  isChannelsCommand,
+  loadChannelsSnapshot,
+  mountChannelsPanel,
+  openChannels,
+  parseChannelsArgs,
+} from "./channels-surface";
 import {
   isRemoteControlCommand,
   labelTelegramLine,
@@ -3732,6 +3741,9 @@ export async function launchTuiAgentShell(opts: {
   // topic) on every exit path.
   let remoteBridge: RemoteBridge | undefined;
   let liveRemotePanel: RemotePanelHandle | undefined;
+  // Flow 377: the Telegram connection of this machine (`/channels`), shared by every shell.
+  let liveChannelsPanel: ChannelsPanelHandle | undefined;
+  const channelsClient = new ChannelsClient();
   let liveApprovals: ApprovalsSidebar | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
@@ -3830,6 +3842,7 @@ export async function launchTuiAgentShell(opts: {
         liveSchedules?.dispose();
         liveReviewsPanel?.dispose();
         liveRemotePanel?.dispose();
+        liveChannelsPanel?.dispose();
         // Closing the shell deregisters: the topic goes with it. Best effort here
         // (this callback is synchronous); the `finally` below awaits the same call.
         void remoteBridge?.disable();
@@ -4353,6 +4366,12 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
       onOpen: () => showRemoteControl(),
+    });
+    // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
+    liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
+      width: SIDEBAR_TEXT_WIDTH,
+      load: () => loadChannelsSnapshot(channelsClient),
+      onOpen: () => showChannels(),
     });
     // Flow 369 (R4d): one row, only while a remote approval is pending; it polls the
     // approval store itself (that lives in the config dir, not the project).
@@ -6547,6 +6566,29 @@ export async function launchTuiAgentShell(opts: {
         void enableRemoteControl(request.name);
       }
     };
+    // Flow 377: `/channels`. The modal talks to `keryx serve` through the client; the bot token
+    // is typed into the modal's own hidden entry (never the composer) and goes to the token file.
+    const showChannels = (): void => {
+      openChannels(otui, chrome, {
+        client: channelsClient,
+        renderer: r,
+        ...inspectorKeys,
+        onPaste: (handler) => {
+          r._internalKeyInput.onInternal("paste", handler);
+          return () => r._internalKeyInput.offInternal("paste", handler);
+        },
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+        onChanged: (next) => liveChannelsPanel?.update(next),
+      });
+    };
+    const runChannelsCommand = (line: string): void => {
+      const request = parseChannelsArgs(line);
+      if (request.action === "invalid") {
+        io.onSystem?.(`${request.message}\n`);
+        return;
+      }
+      showChannels();
+    };
     const showGame = (line: string): void => {
       const timeoutMatch = /\/game\s+(\d+)/.exec(line);
       openGamesModal(otui, chrome, {
@@ -7885,6 +7927,10 @@ export async function launchTuiAgentShell(opts: {
             runRemoteControlCommand(line);
             return;
           }
+          case "channels": {
+            runChannelsCommand(line);
+            return;
+          }
           case "schedules": {
             routeSchedulesCommand(line, true, schedules);
             return;
@@ -8280,6 +8326,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isRemoteControlCommand(command.name)) {
           runRemoteControlCommand(line);
+          return;
+        }
+        if (isChannelsCommand(command.name)) {
+          runChannelsCommand(line);
           return;
         }
         if (routeSchedulesCommand(line, false, schedules)) {

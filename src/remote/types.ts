@@ -13,10 +13,39 @@ export interface BotMessage {
   /** Set for a message sent inside a forum topic. */
   message_thread_id?: number;
   from?: BotUser;
-  chat: { id: number };
+  chat: { id: number; type?: string };
   /** Unix seconds. */
   date: number;
   text?: string;
+  /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
+  forward_origin?: unknown;
+  forward_date?: number;
+}
+
+/** The part of a Telegram `my_chat_member` update the pairing reads: who changed the bot's membership, and where. */
+export interface BotChatMemberUpdate {
+  chat: { id: number; type?: string; title?: string };
+  from: BotUser;
+  date: number;
+  old_chat_member: { status: string };
+  new_chat_member: { status: string };
+}
+
+export interface BotIdentity {
+  id: number;
+  username?: string;
+}
+
+export interface BotChatInfo {
+  id: number;
+  type: string;
+  title?: string;
+  is_forum?: boolean;
+}
+
+export interface BotChatMemberInfo {
+  status: string;
+  can_manage_topics?: boolean;
 }
 
 export interface BotCallbackQuery {
@@ -31,6 +60,7 @@ export interface BotUpdate {
   update_id: number;
   message?: BotMessage;
   callback_query?: BotCallbackQuery;
+  my_chat_member?: BotChatMemberUpdate;
 }
 
 export interface InlineButton {
@@ -64,6 +94,10 @@ export interface BotApi {
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;
   answerCallbackQuery(params: { callbackQueryId: string; text?: string }): Promise<void>;
+  /** Who the token belongs to; a bad token is a `rejected` error (401). */
+  getMe(): Promise<BotIdentity>;
+  getChat(params: { chatId: number }): Promise<BotChatInfo>;
+  getChatMember(params: { chatId: number; userId: number }): Promise<BotChatMemberInfo>;
 }
 
 export type BotApiErrorKind =

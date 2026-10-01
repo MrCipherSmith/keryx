@@ -322,12 +322,12 @@ describe("the HTTP client's request and error mapping (against an injected stand
   }
   const ok = (result: unknown): Response => new Response(JSON.stringify({ ok: true, result }), { status: 200 });
 
-  test("getUpdates sends the offset and asks only for messages and button presses", async () => {
+  test("getUpdates sends the offset and asks only for messages, button presses and the bot's own membership changes", async () => {
     const { api, seen } = client(() => ok([{ update_id: 7 }]));
     const updates = await api.getUpdates({ offset: 7, timeoutSec: 25, limit: 50 });
     expect(updates).toEqual([{ update_id: 7 }]);
     expect(seen[0]?.url).toBe(`http://bot-api.invalid/bot${TOKEN}/getUpdates`);
-    expect(seen[0]?.body).toEqual({ timeout: 25, offset: 7, limit: 50, allowed_updates: ["message", "callback_query"] });
+    expect(seen[0]?.body).toEqual({ timeout: 25, offset: 7, limit: 50, allowed_updates: ["message", "callback_query", "my_chat_member"] });
   });
 
   test("topic and message calls use Telegram's field names", async () => {
