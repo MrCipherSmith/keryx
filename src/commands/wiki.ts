@@ -824,7 +824,7 @@ async function runBacklinks(args: string[]): Promise<void> {
   }
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`keryx wiki
 
 Usage:
@@ -844,7 +844,7 @@ Usage:
                          # defaults: drafts only; provider/model from auth.json; validate on;
                          # concurrency 1 (raise for parallel page swarm)
                          # rewrites prose only — Status is always left exactly as it was
-                         # before the run; enrich can never itself accept a page (issue #391)
+                         # before the run; enrich can never itself accept a page
   keryx wiki sections [--json]
   keryx wiki sections resolve "<pageId>#<sectionId>" [--json]
   keryx wiki sections sync [--dry-run] [--accept-reoccupation <ref>[,<ref>…]] [--json]

@@ -29,15 +29,15 @@
 
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";
-import { initCommand } from "./commands/init";
-import { ctxCommand } from "./commands/ctx";
-import { gdgraphCommand } from "./commands/gdgraph";
-import { wikiCommand } from "./commands/wiki";
+import { initCommand, printInitHelp } from "./commands/init";
+import { ctxCommand, printHelp as printCtxHelp } from "./commands/ctx";
+import { gdgraphCommand, printHelp as printGdgraphHelp } from "./commands/gdgraph";
+import { printHelp as printWikiHelp, wikiCommand } from "./commands/wiki";
 import { orientCommand } from "./commands/orient";
 import { syncCommand } from "./commands/sync";
 import { printSkillsHelpFor, skillVerifySkillCommand, skillsCommand } from "./commands/skills";
 import { healthCommand } from "./commands/health";
-import { testCommand } from "./commands/test";
+import { printHelp as printTestHelp, testCommand } from "./commands/test";
 import { memoryCommand } from "./commands/memory";
 import { flowCommand, printFlowHelp } from "./commands/flow";
 import { jobCommand } from "./commands/job";
@@ -47,13 +47,13 @@ import { standardCommand } from "./commands/standard";
 import { commandsCommand } from "./commands/commands";
 import { securityCommand } from "./commands/security";
 import { sandboxCommand } from "./commands/sandbox";
-import { mcpCommand } from "./commands/mcp";
+import { mcpCommand, printMcpHelp } from "./commands/mcp";
 import { printServeMcpHelp, serveMcpCommand } from "./commands/serve-mcp";
-import { integrateCommand } from "./commands/integrate";
+import { integrateCommand, printIntegrateHelp } from "./commands/integrate";
 import { integrationsCommand } from "./commands/integrations";
 import { stackCommand } from "./commands/stack";
 import { statusCommand } from "./commands/status";
-import { harnessCommand } from "./commands/harness";
+import { HARNESS_PROVIDER_OPTIONS, harnessCommand } from "./commands/harness";
 import { shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { acpCommand } from "./commands/acp";
@@ -62,12 +62,12 @@ import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
 import { approvalsCommand } from "./commands/approvals";
-import { updateCommand } from "./commands/update";
+import { printHelp as printUpdateHelp, updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
 import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
-import { workspaceCommand } from "./commands/workspace";
+import { printWorkspaceHelp, workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
 import { routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
@@ -156,7 +156,8 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   "serve-mcp": serveMcpCommand,
   integrate: integrateCommand,
   integrations: integrationsCommand,
-  // Retired spelling of the two verbs above; kept working, kept thin.
+  // The MCP client (servers keryx connects to); `mcp serve|install|uninstall`
+  // are retired spellings of the two verbs above, kept working and thin.
   mcp: mcpCommand,
   harness: harnessCommand,
   shell: shellCommand,
@@ -231,12 +232,13 @@ export function groupsWithKnownSubcommands(): readonly string[] {
 }
 
 /**
- * The usage body `printHelp` (`cli.ts`) prints — and the single source
- * {@link groupUsage} reads a group's own lines from. Hoisted rather than
- * duplicated: a second copy of this text would drift from the one operators
- * actually read.
+ * The hand-written part of {@link USAGE_BODY}: one usage line (with flags) per
+ * common invocation, and the one-line description of every verb. It is NOT
+ * the list of subcommands — that is derived (see {@link formatSubcommandIndex}),
+ * because a hand-kept copy here drifted to a fraction of what the handlers
+ * dispatch (`wiki` listed 5 of 15, `review` 5 of 31).
  */
-export const USAGE_BODY = `Usage:
+const USAGE_LINES = `Usage:
   keryx                                        Show CLI usage
   keryx help [group|command]                   Grouped command help by task (--help/-h keep this flat usage)
   keryx doctor [--json]                        One page: version, Bun floor, ripgrep, sandbox, providers, MCP, integrations, standard, worktrees, graph/wiki freshness
@@ -249,8 +251,10 @@ export const USAGE_BODY = `Usage:
                                                Agent Client Protocol agent server over stdio
   keryx bus list [--json] | log [--since <seq>] [--limit N] [--json] | send <@name|@all> [--kind <k>] [--reply-to <id>] <text> | prune
                                                Agent bus: peers, events and messages shared across this clone's worktrees
+  keryx bus pause <@name|@all> --reason <text> [--scope turns|git-publish|advisory] [--ttl 30m] [--json]
+  keryx bus resume <leaseId> [--json]           End a pause lease
   keryx version check [--json]                 Check npm latest (advisory; never installs)
-  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
+  keryx harness run --provider <${HARNESS_PROVIDER_OPTIONS.join("|")}> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
                      [--allowed-domains a,b] [--mask-env NAME@host] [--tls-terminate] [--mask-mode auto|manual|off] [--auto-mask] -- <path> [args...]
   keryx harness extension --spec <path>
@@ -259,7 +263,7 @@ export const USAGE_BODY = `Usage:
                                                Validate a recorded run's log against a fixture (no re-execution)
   keryx init [--yes] [--no-gdgraph] [--no-gdctx] [--no-gdwiki] [--no-gdskills] [--gdskills-profile recommended] [--no-health] [--no-testing] [--no-memory] [--no-gdgraph-hook] [--no-gdskills-hook] [--no-health-hook] [--no-testing-post-commit-hook] [--no-testing-pre-push-hook]
   keryx status
-  keryx modules [status | enable <name> | disable <name>]
+  keryx modules [status | list | interactive | enable|on <name> | disable|off <name>]
   keryx projects [list [--json] | register <path> | forget <id>]
   keryx serve [--bind <addr>] [--port <n>] [--profile <name>] [--acknowledge-non-loopback]
   keryx serve status [--json]
@@ -267,7 +271,7 @@ export const USAGE_BODY = `Usage:
   keryx serve config init|set|show
   keryx approvals list [--all] [--json] | allow <id> | deny <id>
                                                Answer, from this machine, a call a remote turn is waiting on (once, that call only)
-  keryx update [--skip-runtime] [--hooks]
+  keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]
   keryx dashboard build
   keryx dashboard open
   keryx dash
@@ -286,6 +290,7 @@ export const USAGE_BODY = `Usage:
   keryx routing trust
   keryx routing profile list [--json]
   keryx routing profile set <provider>/<model> --tier|--price-in|--price-out|--context|--priority <value>
+  keryx routing stats [--json]                 Measured task cost per provider, model and category
   keryx external on [--project] | off [--project]
                                                Block/allow sending private work (code, diffs, CI logs, prompts) to Jev/TypeSafe and other listed providers/models
   keryx external status [--json]              Effective on/off, source, Jev credential availability, and what is blocked right now
@@ -306,6 +311,12 @@ export const USAGE_BODY = `Usage:
   keryx gdgraph query <cycles|orphans>
   keryx gdgraph affected <file>
   keryx ctx status
+  keryx ctx diff [--staged|--stat|<revision>]
+  keryx ctx rg "<pattern>" [path] [--json] [--all]
+  keryx ctx read <file> [--mode outline|compact|full]
+  keryx ctx run -- <command...>
+  keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]
+  keryx ctx install-hook|uninstall-hook [--runtime <id|all>]
   keryx wiki status
   keryx wiki new <type> <slug> --title "<title>"
   keryx wiki collect [--force] [--limit <n>]
@@ -370,6 +381,11 @@ export const USAGE_BODY = `Usage:
   keryx integrations uninstall --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--dry-run] [--json]
   keryx integrations doctor --runtime <id>[,<id>...|all] [--surface <flag|id>]... [--json]
   keryx integrations matrix [--check] [--write] [--json] [--file <path>]
+  keryx mcp list [--json]                      MCP servers keryx connects to, and where each is configured
+  keryx mcp add <name> -- <command…> | add <name> --transport http <url>
+  keryx mcp remove|enable|disable|trust|untrust <name>
+  keryx mcp doctor [name] [--json]
+  keryx mcp auth|logout <name>
   keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
@@ -468,7 +484,7 @@ Commands:
   serve-mcp Expose Metaproject services over the Model Context Protocol (opt-in)
   integrate Wire this project into an editor or agent as an MCP server
   integrations Install/uninstall/audit Keryx's hooks and instructions in another coding agent, and the generated capability matrix
-  mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement
+  mcp       The MCP servers keryx connects to (list, add, trust, doctor, auth); mcp serve/install are retired spellings of serve-mcp/integrate
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
@@ -481,6 +497,51 @@ Commands:
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
   learn     Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune
 `;
+
+/** Groups listed in the derived index under another name. */
+const SUBCOMMAND_INDEX_ALIASES: ReadonlySet<string> = new Set(["session"]);
+
+/** Spellings `keryx mcp` still accepts but that name a replacement verb. */
+const MCP_RETIRED_SUBCOMMANDS: ReadonlySet<string> = new Set(["install", "uninstall", "serve"]);
+
+/**
+ * Every group's full first-level subcommand vocabulary, derived from the same
+ * table the dispatcher validates against ({@link knownSubcommandsFor}), so the
+ * help cannot list fewer subcommands than the CLI accepts. Pure.
+ */
+export function formatSubcommandIndex(width = 100): string {
+  const nameWidth = 14;
+  const lines = ["Subcommands (run keryx <group> --help for usage):"];
+  for (const group of [...groupsWithKnownSubcommands()].sort()) {
+    if (SUBCOMMAND_INDEX_ALIASES.has(group)) continue;
+    const all = (knownSubcommandsFor(group) ?? []).filter((name) => name !== "help");
+    const current = group === "mcp" ? all.filter((name) => !MCP_RETIRED_SUBCOMMANDS.has(name)) : all;
+    const words = [...current];
+    if (group === "mcp") words.push(`(retired: ${all.filter((name) => MCP_RETIRED_SUBCOMMANDS.has(name)).join(" ")})`);
+    let line = `  ${group.padEnd(nameWidth)}`;
+    const indent = " ".repeat(nameWidth + 2);
+    let first = true;
+    for (const word of words) {
+      if (!first && line.length + 1 + word.length > width) {
+        lines.push(line);
+        line = `${indent}${word}`;
+      } else {
+        line = first ? `${line}${word}` : `${line} ${word}`;
+      }
+      first = false;
+    }
+    lines.push(line);
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * The usage body `printHelp` (`cli.ts`) prints — and the single source
+ * {@link groupUsage} reads a group's own lines from. Hoisted rather than
+ * duplicated: a second copy of this text would drift from the one operators
+ * actually read.
+ */
+export const USAGE_BODY = `${USAGE_LINES}\n${formatSubcommandIndex()}`;
 
 /**
  * Does this argument list ask for help?
@@ -603,6 +664,15 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["learn", () => printLearnHelp()],
   ["review", printReviewHelpFor],
   ["skills", printSkillsHelpFor],
+  ["mcp", () => printMcpHelp()],
+  ["integrate", () => printIntegrateHelp()],
+  ["init", () => printInitHelp()],
+  ["update", () => printUpdateHelp()],
+  ["gdgraph", () => printGdgraphHelp()],
+  ["ctx", () => printCtxHelp()],
+  ["wiki", () => printWikiHelp()],
+  ["test", () => printTestHelp()],
+  ["workspace", () => printWorkspaceHelp()],
 ]);
 
 /**
@@ -648,14 +718,14 @@ export function groupUsage(command: string, usage: string = USAGE_BODY): string 
  * as a directly callable function — extracted from `main`'s own interception
  * branch (flow 303 AC4, "keryx help <command> prints that command's
  * full usage (the existing rich group help where one exists)") rather than
- * duplicated. The FOUR rich group helps (flow, trigger, serve-mcp,
- * governance — AC5) win first; `agents`/`shell` (`DEEP_HELP_GROUPS`) answer
+ * duplicated. The rich group helps ({@link RICH_GROUP_HELP}) win first; `agents`/`shell` (`DEEP_HELP_GROUPS`) answer
  * their own `--help` safely (proven by `shell-cli-validation.test.ts` and
  * `cli.test.ts`'s agents case — see the doc comment on `DEEP_HELP_GROUPS`),
  * so their route is invoked directly with exactly the token that reaches it
  * when an operator types `keryx <command> --help`; every other verb falls
- * back to its `groupUsage` slice of `USAGE_BODY`, same as before this
- * extraction.
+ * back to its `groupUsage` slice of `USAGE_BODY`, followed by the group's
+ * full subcommand list from {@link knownSubcommandsFor}, so a group's help
+ * never lists fewer subcommands than its dispatch accepts.
  *
  * `rest` is what followed the verb on the command line. It is passed to the
  * rich help only, to choose WHICH help text is printed; no route is ever
@@ -675,5 +745,11 @@ export async function printCommandHelp(command: string, rest: readonly string[] 
     }
   }
   const usage = groupUsage(command);
-  console.log(usage === undefined ? `keryx ${VERSION}\n\n${USAGE_BODY}` : `keryx ${command} — usage:\n\n${usage}\n`);
+  if (usage === undefined) {
+    console.log(`keryx ${VERSION}\n\n${USAGE_BODY}`);
+    return;
+  }
+  const subcommands = knownSubcommandsFor(command)?.filter((name) => name !== "help");
+  const index = subcommands === undefined || subcommands.length === 0 ? "" : `\nSubcommands: ${subcommands.join(" ")}\n`;
+  console.log(`keryx ${command} — usage:\n\n${usage}\n${index}`);
 }

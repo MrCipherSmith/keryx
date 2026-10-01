@@ -178,8 +178,9 @@ Examples:
 function printJudgeCheckHelp(): void {
   console.log(`keryx skills judge-check
 
-Proves a skill's judge-graded scenarios are hard to game: runs the canned empty/echo/known-wrong/
-injection/stuffed/known-right answers through the live judge and exits 1 on any mismatch.
+Proves a skill's judge-graded scenarios are hard to game: runs the eight canned answers
+(empty, echo, vague, known-wrong, subtle-wrong, injection, stuffed, known-right) through the
+live judge and exits 1 on any mismatch.
 --record saves the verdicts for offline replay.
 
 Usage:

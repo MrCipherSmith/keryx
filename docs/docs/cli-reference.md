@@ -14,18 +14,18 @@ keryx <command> [args] [flags]
 
 | Global flag | Alias | Effect |
 |---|---|---|
-| `--help` | `-h` | Print the top-level usage block. Also works (per subcommand) as `keryx <command> --help`. |
+| `--help` | `-h` | Print the top-level usage block, which ends with every group's full subcommand list. Also works per command as `keryx <command> --help`, which lists every subcommand that command accepts. |
 | `--version` | `-v` | Print the installed version and exit. |
 
 Running `keryx` with no command, or with `--help`/`-h`, prints the usage
-block. An unknown top-level command (flow 353, AC3) prints exactly one line
+block. An unknown top-level command prints exactly one line
 to stderr — `Unknown command: <x>. Did you mean: <up to 3 close matches>?
 Run \`keryx --help\` for the list.`, the "Did you mean" clause omitted when
 nothing is within edit distance 2 — and exits with code `1`. It never prints
 the full usage block; that used to go to **stdout** on this same error path.
 
 An unknown SUBCOMMAND of a group with a verified subcommand vocabulary
-(flow 353 review round 1) gets the identical one-line treatment, but naming
+ gets the identical one-line treatment, but naming
 that group's own help — `keryx health rn` → `Unknown command: rn. Did you
 mean: run? Run \`keryx health --help\` for the list.` Covers roughly forty
 groups (`modules`, `providers`, `wiki`, `health`, `memory`, `flow`, `mcp`,
@@ -65,44 +65,68 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 
 ### Top-level commands
 
+Every verb `keryx` dispatches, grouped roughly in the order a new project meets
+them. Each links to its own section below; `keryx <verb> --help` prints the
+verb's usage, and `keryx --help` ends with every group's full subcommand list.
+
 | Command | Purpose |
 |---|---|
-| `help` | Grouped command help by task — `keryx help [group|command]`. |
-| `doctor` | One-page health check with a fix hint per line; `--json` for `{checks:[...]}`. |
-| `shell` | Start the interactive TUI agent shell (sessions are per-project). |
-| `version` | Check whether the installed Keryx version has a newer npm release. |
-| `sessions` | List, fork, export, or locate agent sessions for the current project. |
-| `bus` | Agent bus across this clone's worktrees: list peers and leases, read the log, send a message, prune. |
-| `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`, `replay`). |
-| `init` | Initialize `.metaproject/` in the current project. |
-| `status` | Show local Metaproject status. |
-| `modules` | View, enable, or disable workspace modules. |
-| `projects` | Manage the user-global project registry that remote entry addresses projects by. |
-| `serve` | Loopback-bound HTTP entry over the agent harness (opt-in, off by default). |
-| `metrics` | Collect, validate, and report execution-observability metrics. |
-| `update` | Refresh managed service files without touching data artifacts. |
-| `sync` | Reconcile graph, wiki and memory with the current code; optional git hooks keep them in step. |
-| `commands` | The agent-facing command registry: descriptors, and natural-language intent resolution. |
-| `dashboard` / `dash` | Build or open the project admin dashboard. |
-| `gdgraph` | Build and query the code dependency graph. |
-| `ctx` | Run compact, token-aware context commands and save raw output. |
-| `wiki` | Manage the local project knowledge base. |
-| `skills` | Manage bundled and project working skills. |
-| `skill-verify-skill` | Alias for `skills verify`. |
-| `health` | Aggregate code-quality signals and run the quality gate. |
-| `test` | Analyze testing context and normalize test reports. |
-| `memory` | Store and search long-term project memory. |
-| `flow` | Agent-first work lifecycle (Task Manager). |
-| `product` | The product's intent as a derived index (`index`), and intents closed in code that nobody looked back at (`open`). |
-| `review` | Create and complete durable managed review packages. |
-| `rules` | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
-| `standard` | Validate the workspace against the Metaproject Standard and report capabilities. |
-| `agents` | Manage the optional global Metaproject bootstrap for agent runtimes. |
-| `orient` | Emit or install bounded Metaproject + graph + wiki startup context. |
-| `security` | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
-| `mcp` | Expose Metaproject services over the Model Context Protocol (opt-in, off by default). SAC tools are stdio-only. |
-| `acp` | Serve the harness to an editor over the Agent Client Protocol (newline-delimited JSON-RPC on stdio). |
-| `workspace` | Shared Agent Context: create/list/show workspaces, FWK overview/read, propose/review, collaboration overview, policy-readiness. Not listed by `keryx commands`. |
+| [`help`](#help) | Grouped command help by task — `keryx help [group\|command]`. |
+| [`doctor`](#doctor) | One-page health check with a fix hint per line; `--json` for `{checks:[...]}`. |
+| [`setup`](#setup) | Print the Metaproject preparation guide (`init`, `refresh`, `repair`); does not run it. |
+| [`version`](#version) | Check whether the installed Keryx version has a newer npm release. |
+| [`init`](#init) | Initialize `.metaproject/` in the current project. |
+| [`status`](#status) | Show local Metaproject status. |
+| [`update`](#update) | Refresh managed service files without touching data artifacts. |
+| [`modules`](#modules) | View, enable, or disable workspace modules. |
+| [`projects`](#projects) | Manage the user-global project registry that remote entry addresses projects by. |
+| [`shell`](#shell) | Start the interactive TUI agent shell (sessions are per-project). |
+| [`sessions`](#sessions) | List, fork, export, or locate agent sessions for the current project (`session` is an alias). |
+| [`harness`](#harness) | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`, `replay`). |
+| [`auth`](#auth) | Subscription login and logout for the providers that support it, and credential status. |
+| [`providers`](#providers) | Configured model providers: list, live status, connection test, removal, cross-family review eligibility. |
+| [`routing`](#routing) | Category-to-model routing table, the model-profile catalogue, and measured task cost. |
+| [`external`](#external) | Keep private work in-house: block listed external providers and models before any network call. |
+| [`serve`](#serve) | Loopback-bound HTTP entry over the agent harness (opt-in, off by default). |
+| [`approvals`](#approvals) | Answer, from this machine, a call a remote turn is waiting on (list, allow, deny). |
+| [`acp`](#acp) | Serve the harness to an editor over the Agent Client Protocol (newline-delimited JSON-RPC on stdio). |
+| [`bus`](#bus) | Agent bus across this clone's worktrees: peers and leases, the log, messages, pause and resume. |
+| [`gdgraph`](#gdgraph) | Build and query the code dependency graph. |
+| [`ctx`](#ctx) | Run compact, token-aware context commands and save raw output. |
+| [`wiki`](#wiki) | Manage the local project knowledge base. |
+| [`memory`](#memory) | Store and search long-term project memory. |
+| [`orient`](#orient) | Emit or install bounded Metaproject + graph + wiki startup context. |
+| [`sync`](#sync) | Reconcile graph, wiki and memory with the current code; optional git hooks keep them in step. |
+| [`skills`](#skills) | Manage bundled and project working skills. |
+| [`skill-verify-skill`](#skill-verify-skill) | Alias for `skills verify`. |
+| [`rules`](#rules) | Sync/distill root AGENTS.md/CLAUDE.md into project rules. |
+| [`learn`](#learn) | Self-learning loop: observe, extract, review, accept or reject, apply, promote, graduate, prune. |
+| [`stack`](#stack) | Deterministic, offline stack detection. |
+| [`health`](#health) | Aggregate code-quality signals and run the quality gate. |
+| [`test`](#test) | Analyze testing context and normalize test reports. |
+| [`metrics`](#metrics) | Collect, validate, and report execution-observability metrics. |
+| [`flow`](#flow) | Agent-first work lifecycle (Task Manager). |
+| [`job`](#job) | Agent-first job packages: state, steps and documents. |
+| [`review`](#review) | Managed review packages, report-only review, and the opt-in Jev reviewers. |
+| [`product`](#product) | The product's intent as a derived index (`index`), and intents closed in code that nobody looked back at (`open`). |
+| [`governance`](#governance) | Read-only report over recorded spend, confirmations, signatures and gate outcomes. |
+| [`trigger`](#trigger) | Fire one declared project trigger (git hook, cron line, CI job): one pass, one exit code. |
+| [`schedule`](#schedule) | Scheduled agent tasks in the background: add (with confirmation), list, pause, resume, run, remove. |
+| [`hooks`](#hooks) | Keryx shell lifecycle hooks: list, validate, test, trust, enable or disable. |
+| [`standard`](#standard) | Validate the workspace against the Metaproject Standard and report capabilities. |
+| [`commands`](#commands) | The agent-facing command registry: descriptors, and natural-language intent resolution. |
+| [`agents`](#agents) | The agent-definition catalog (`list`, `show`, `export`, `verify`, `generate`), optional global bootstrap instructions, the external-agent runtime, and the agent monitor. |
+| [`security`](#security) | Policy-based scanning, redaction, guardrails, and audit reports for agent input/output and artifacts. |
+| [`sandbox`](#sandbox) | Report OS sandbox launcher availability and the per-capability containment matrix. |
+| [`serve-mcp`](#serve-mcp) | Run keryx as an MCP server, exposing Metaproject services to an editor or agent (opt-in). |
+| [`integrate`](#integrate) | Wire this project into an editor or agent's MCP client config, pointing at `serve-mcp`. |
+| [`integrations`](#integrations) | Install, uninstall and audit Keryx's hooks and instructions in another coding agent; the capability matrix. |
+| [`mcp`](#mcp) | The MCP servers keryx connects to (`list`, `add`, `trust`, `doctor`, `auth`, …). `mcp serve`/`install`/`uninstall` are retired spellings of `serve-mcp`/`integrate`. |
+| [`workspace`](#workspace) | Shared Agent Context: workspaces, FWK overview/read, propose/review, hand-offs, catch-up. Not listed by `keryx commands`. |
+| [`bundle`](#bundle) | Portable bundles of skills, rules, agents, memory and hooks across scopes and harnesses. |
+| [`retention`](#retention) | Bound stores that grow without bound (gdctx raw logs and artifacts, write-conflict sidecars). |
+| [`forgetting`](#forgetting) | Read the deletion trail: was this removed, or did it never exist? |
+| [`dashboard`](#dashboard-and-dash) / `dash` | Build or open the project admin dashboard. |
 
 ### Optional dependencies and graceful degradation
 
@@ -112,14 +136,14 @@ that dependency or asset is absent, the command **degrades gracefully**: it warn
 once, falls back to the deterministic built-in path, and still exits `0` (for
 example `memory index --embeddings` builds the lexical index only, and
 `security eval --with-model` silently uses the pure detector path). The single
-sanctioned exception is **`mcp serve`**, which hard-fails with an actionable
+sanctioned exception is **`serve-mcp`**, which hard-fails with an actionable
 message when the optional MCP SDK is not installed.
 
 ---
 
 ## help
 
-Grouped command help by task, added by flow 303. Separate from `--help`/`-h`
+Grouped command help by task. Separate from `--help`/`-h`
 and a bare `keryx`, which keep printing the flat usage block above unchanged.
 
 ```
@@ -134,10 +158,11 @@ keryx help [group|command]
 - `keryx help <group>` — a group slug (`start-here`, `connect`,
   `look-and-feel`, `shell-work`, `project-knowledge`, `managed-work`,
   `automation`, `external-agents`, `maintenance`) — prints just that group.
-- `keryx help <command>` prints that command's full usage: the same rich
-  help `keryx <command> --help` prints today (`flow`, `trigger`, `serve-mcp`
-  and `governance` keep their own richer help; every other verb gets its
-  `USAGE_BODY` usage block). `keryx help <slash-command>` (e.g.
+- `keryx help <command>` prints that command's full usage: the same help
+  `keryx <command> --help` prints. Commands with their own detailed help
+  (for example `flow`, `review`, `skills`, `trigger`, `ctx`, `wiki`, `init`,
+  `update`, `mcp` and `workspace`) print it; every other command prints its
+  lines from the top-level usage block followed by its full subcommand list. `keryx help <slash-command>` (e.g.
   `keryx help /theme`) explains a `keryx shell` command, since those have no
   standalone CLI form.
 - An unknown group, command or slash-command name exits non-zero and
@@ -154,7 +179,7 @@ already on the "Connect a model provider" tab.
 
 ## doctor
 
-One page: is this environment set up correctly. Added by flow 353 (P0 W5).
+One page: is this environment set up correctly.
 
 ```
 keryx doctor [--json]
@@ -247,6 +272,9 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
             [--tui|--no-tui] [--debug] [--name <name>] [--guard]
+            [--permission-mode ask|trust|auto | --ask | --trust | --auto]
+            [--deny-tools <a,b>] [-p|--print <prompt>]
+            [--events-file <path>] [--events-max-field <n>]
 ```
 
 | Flag | Description |
@@ -261,8 +289,15 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
-| `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
+| `--name <name>` | Set this shell's bus name. Names are lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 | `--guard` | Turn on the turn guard for this session only (TUI, agent mode; off by default). `/guard on` turns it on for every future session too. |
+| `--permission-mode <mode>` | Agent permissions for this session: `ask`, `trust` or `auto`. Ignored in chat mode. |
+| `--ask` / `--trust` / `--auto` | Shortcuts for `--permission-mode`; the last flag wins. |
+| `--deny-tools <a,b>` | Withhold these tools from the session entirely (comma-separated tool names). |
+| `-p`, `--print <prompt>` | Run one agent turn on this prompt and exit, without an interactive session. |
+| `--events-file <path>` | Append an NDJSON transcript of the run (turns, tools, usage) to this file. |
+| `--events-max-field <n>` | Per-field character cap in that transcript (default `4000`). |
+| `--help`, `-h` | Show the shell's usage without starting a session. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
@@ -343,7 +378,10 @@ current state); the setting lives in
 Inspect the append-only agent sessions recorded for the current project.
 
 ```
-keryx sessions list | fork <id> | export <id> | path
+keryx sessions list [--json]
+keryx sessions fork <id> [--title "<t>"] [--json]
+keryx sessions export <id>
+keryx sessions path
 ```
 
 | Subcommand | Description |
@@ -772,13 +810,13 @@ Refusals print their code and exit non-zero (except where noted):
   A missing figure stays `—`; the bar never invents a 128k window.
   **Workspaces** and **Flow** tabs appear only when the session actually
   referenced a SAC workspace or a flow (`runLink.sessionId` or an
-  explicit `flow 154` / `/flows 154` mention). `c` copies the session id.
+  explicit `flow 12` / `/flows 12` mention). `c` copies the session id.
   Readline / `--no-tui` prints the same rows. `/session-info` and `/info`
   are **not** aliases.
 - `/flows` lists project flows, newest first (highest id, then `updatedAt`).
   In the TUI, the List tab uses `↑/↓` to move the selection; Enter or `→`
   opens Detail. On Detail, `↑/↓` scroll the body instead — `[`/`]` (or
-  `p`/`n`) switch to the adjacent flow. `/flows 154` (id, padded id, or slug)
+  `p`/`n`) switch to the adjacent flow. `/flows 12` (id, padded id, or slug)
   opens one package directly. Readline prints the list, or one package when
   given an argument. `/status` and `/flows` remain usable even while the main
   turn is busy.
@@ -1112,10 +1150,12 @@ keryx harness replay --record <path> [--fixture <path>] [--write-fixture <path>]
 |---|---|
 | `run` | Execute one prompt through the run loop against the named provider and model. `fake` is a deterministic in-process provider, which is what makes the loop testable without a network. |
 
-`--provider` accepts `anthropic`, `ollama`, `fake`, and the OpenAI-compatible
-gateways — `openrouter`, `deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`,
-`moonshot`, `grok`. `keryx shell` offers the same set through its picker, which
-lists each provider with the environment variable it reads.
+`--provider` accepts `fake`, the native providers `anthropic`, `openai`,
+`gemini` and `ollama`, and the OpenAI-compatible gateways — `openrouter`,
+`deepseek`, `zai`, `zai-coding`, `cerebras`, `groq`, `rapid-mlx`, `moonshot`,
+`grok` and `github-copilot`. `keryx harness run --help` prints the exact list
+for the installed version. `keryx shell` offers the same set through its
+picker, which lists each provider with the environment variable it reads.
 
 Operator-defined OpenAI-compatible providers can be added on top of that list
 by registering them in `~/.local/share/keryx/llm-providers.json`; the
@@ -1246,13 +1286,16 @@ the `metaproject.json` manifest. Re-running `init` over an existing workspace
 updates managed files but never clobbers seeded user files or `data/`.
 
 ```
-keryx init [--yes] [module flags] [hook flags] [capability flags]
+keryx init [--yes] [module flags] [hook flags] [capability flags] [--preview|--dry-run] [--accept-version|--keep-existing]
 ```
 
 | Flag | Description |
 |---|---|
 | `--yes`, `-y` | Non-interactive: accept every module default (enabled) instead of prompting. |
 | `--help`, `-h` | Print `init` usage and exit. |
+| `--preview`, `--dry-run` | Print the lifecycle plan (create/update/skip/conflict, with base digests) and write nothing. |
+| `--accept-version` | Publish this version's content over lifecycle files a different version left divergent. |
+| `--keep-existing` | Leave divergent lifecycle files alone and record that this run did not publish them. |
 | `--gdskills-profile <profile>` | Set the gdskills install profile (`minimal`, `recommended`, `full`, `custom`); defaults to `recommended`. |
 
 **Module flags** — each of the 9 modules is enabled by default; pass its
@@ -1291,7 +1334,9 @@ flag touches the manifest:
 
 | Flag | Enables capability |
 |---|---|
-| `--mcp` / `--no-mcp` | The opt-in MCP server module (`mcp serve`). Interactively, `init` also offers this as a question (default No); `--mcp`/`--no-mcp` set it non-interactively. Wire a client config afterwards with `mcp install`. |
+| `--mcp` / `--no-mcp` | The opt-in MCP server module (`keryx serve-mcp`). Interactively, `init` also offers this as a question (default No); `--mcp`/`--no-mcp` set it non-interactively. Wire a client config afterwards with `keryx integrate`. |
+| `--sac` / `--no-sac` | The opt-in Shared Agent Context module (`keryx workspace`). |
+| `--external-agents` | The external agent runtime (vendor CLIs driven by `keryx agents external`). |
 | `--treesitter` / `--no-treesitter` | The gdgraph tree-sitter symbol layer (optional `web-tree-sitter` dependency). |
 | `--testing-tia` / `--no-testing-tia` | The testing coverage-map test-impact analysis (drives map-first `test run --changed`). |
 
@@ -1338,15 +1383,18 @@ View and toggle Metaproject modules. Enabling or disabling a module re-runs
 `init` with the appropriate `--no-<module>` flags to add or remove its scaffold.
 
 ```
-keryx modules [status | enable <name> | disable <name>]
+keryx modules status | list
+keryx modules enable <name> | on <name>
+keryx modules disable <name> | off <name>
+keryx modules [interactive | -i]
 ```
 
 | Subcommand | Description |
 |---|---|
-| `status` (alias `list`) | Print each module and whether it is enabled. Also the default in a non-interactive (non-TTY) context. |
-| `enable <name>` (alias `on`) | Enable a module by its `metaproject.json` key and re-scaffold it. |
-| `disable <name>` (alias `off`) | Disable a module and drop it from the workspace. |
-| _(no argument)_ / `interactive` / `-i` | Interactively toggle modules on/off, then apply via `init`. |
+| `keryx modules status` (alias `keryx modules list`) | Print each module and whether it is enabled. Also the default in a non-interactive (non-TTY) context. |
+| `keryx modules enable <name>` (alias `keryx modules on`) | Enable a module by its `metaproject.json` key and re-scaffold it. |
+| `keryx modules disable <name>` (alias `keryx modules off`) | Disable a module and drop it from the workspace. |
+| _(no argument)_ / `keryx modules interactive` / `-i` | Interactively toggle modules on/off, then apply via `init`. |
 
 Module names are the manifest keys: `gdgraph`, `gdctx`, `gdwiki`, `gdskills`,
 `health`, `testing`, `memory`, `tasks`, `security`.
@@ -1361,7 +1409,9 @@ registers a project into it automatically; nothing on the machine knew the
 project set before this registry existed.
 
 ```
-keryx projects [list [--json] | register <path> | forget <id>]
+keryx projects list [--json]
+keryx projects register <path>
+keryx projects forget <id>
 ```
 
 | Subcommand | Flags | Description |
@@ -1457,11 +1507,11 @@ your own subscription remain the final account-specific check.
 ## providers
 
 Report over the **provider configuration** — the built-in OpenAI-compatible
-registry plus the operator-defined entries in `llm-providers.json` — plus, since
-flow 304, `test` and `remove`: the CLI form of the `/connect` row buttons
+registry plus the operator-defined entries in `llm-providers.json` — plus
+`test` and `remove`: the CLI form of the `/connect` row buttons
 ("Test connection" and "Disconnect"). `list` and `cross-family` stay read-only
 and network-free, exactly as before; `test` makes ONE network call (the live
-`/models` probe), `status` (flow 309) reads or refreshes the live model
+`/models` probe), `status` reads or refreshes the live model
 catalog, and `remove` writes to disk only after confirmation.
 
 ```
@@ -1469,20 +1519,20 @@ keryx providers list [--json]
 keryx providers status [--json] [--refresh]
 keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
 keryx providers test <name> [--json]
-keryx providers remove <name> [--yes]
+keryx providers remove <name> [--yes] [--json]
 ```
 
 Bare `keryx providers` (no subcommand) prints the same output as
-`keryx providers status` (flow 353, AC7) — the summary an operator typing
+`keryx providers status` — the summary an operator typing
 the bare noun actually wants. `keryx providers --help` still prints usage.
 
 | Subcommand | Flags | Description |
 |---|---|---|
 | `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. Read-only, network-free. |
-| `status` | `--json`, `--refresh` | The **live provider catalog** (flow 309): per connected provider, its status (`ok` / `auth-failed` / `unreachable` / `timeout` / `not-supported`), its live model count (or the curated offline count, clearly marked, when the live fetch failed), its balance when the provider exposes one (OpenRouter, DeepSeek — never a guessed number), and how old that reading is. An unconnected provider is never probed and never listed. A fresh cache (already refreshed by `keryx shell` starting up, `/connect`, or `providers test`) answers immediately; `--refresh` forces a fresh probe of every connected provider now. |
+| `status` | `--json`, `--refresh` | The **live provider catalog**: per connected provider, its status (`ok` / `auth-failed` / `unreachable` / `timeout` / `not-supported`), its live model count (or the curated offline count, clearly marked, when the live fetch failed), its balance when the provider exposes one (OpenRouter, DeepSeek — never a guessed number), and how old that reading is. An unconnected provider is never probed and never listed. A fresh cache (already refreshed by `keryx shell` starting up, `/connect`, or `providers test`) answers immediately; `--refresh` forces a fresh probe of every connected provider now. |
 | `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
 | `test` | `<name>`, `--json` | Run that provider's live model-list probe (the same one `/connect` uses to decide what's "connected") and report `ok` with the model count, or the humanized failure reason. Exits non-zero on a failed probe. Also updates that provider's entry in the `status` catalog. |
-| `remove` | `<name>`, `--yes` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
+| `remove` | `<name>`, `--yes`, `--json` | **Disconnect** that provider: remove its saved API key, its OAuth grant, or its `llm-providers.json` entry (together with any saved base-URL/model-param override) — whichever one it actually has. Asks for confirmation on a terminal; refuses without one unless `--yes`. A provider whose only credential is an environment variable you exported yourself is refused outright — the command names the exact variable to `unset`. Disconnecting removes only keryx's LOCAL copy of the credential: an OAuth grant is deleted from `auth.json` with no vendor revoke call, and a removed API key simply stops being read (the key itself stays valid at the vendor until you revoke it there yourself). |
 
 ### Live provider catalog
 
@@ -1535,12 +1585,12 @@ recorded as cross-family when both sides in fact ran the same vendor.
 
 ## routing
 
-The **routing table** — flow 305 — maps a task category to a model, so
+The **routing table** maps a task category to a model, so
 different kinds of work land on different providers/models without running
 `/model` before every turn. Two config layers, same precedence pattern as
-`security.config.json`, plus flow 327's automatically-built **derived**
+`security.config.json`, plus an automatically-built **derived**
 layer: **explicit per-call override > per-project `routing.config.json` >
-per-user entry (shell config) > derived (flow 327, below) > session
+per-user entry (shell config) > derived (below) > session
 default**.
 
 Categories (PRD `docs/requirements/keryx-jev-router/PRD.md` §4): `default`,
@@ -1613,7 +1663,7 @@ confirmed pick writes immediately to the per-user layer. `t` on the list side
 shows the project file's entries and arms an approval; `y` confirms, any
 other key cancels.
 
-### Model profiles and the derived default table (flow 327)
+### Model profiles and the derived default table
 
 Keryx records what it honestly knows about each connected model — strength
 tier, input/output price per million tokens, and context length — in a
@@ -1718,7 +1768,7 @@ profiles:
 `keryx routing list` shows a derived category as
 `auto (derived from <provider>'s models) -> …`.
 
-### Real task cost (flow 341)
+### Real task cost
 
 The step-down rule above assumes a lighter model is cheaper per task. That is
 not always true: a lighter model can burn more tokens finishing the same task
@@ -1751,7 +1801,7 @@ shows the per-task cost next to a `derived` row once it is known:
 
 ## external
 
-Flow 346 — the **EXTERNAL switch**: keeps private work (code, diffs, CI-log
+The **EXTERNAL switch** keeps private work (code, diffs, CI-log
 excerpts, prompts, rule text) in-house by blocking every call to
 Jev/TypeSafe and any other listed provider/model before any network I/O.
 Two config layers, same "project wins" precedence every other project-vs-
@@ -1977,11 +2027,11 @@ same list is `/approvals`. The client contract for a chat bridge is
 
 Refresh managed "service" files (templates, manifests, skills, hooks, dashboard)
 to match the current runtime, without ever writing under `.metaproject/data/`.
-Also self-updates the runtime it was launched from and backfills newly added
-modules. Errors with exit code `1` if `.metaproject/` does not exist.
+Also self-updates a managed runtime clone when one is found (an npm or binary
+install has none, so that step is skipped) and backfills newly added modules. Errors with exit code `1` if `.metaproject/` does not exist.
 
 ```
-keryx update [--skip-runtime] [--hooks] [--no-tasks]
+keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]
 ```
 
 | Flag | Description |
@@ -1989,6 +2039,10 @@ keryx update [--skip-runtime] [--hooks] [--no-tasks]
 | `--skip-runtime` | Skip the git fetch/checkout that self-updates the vendored runtime. |
 | `--hooks` | After refreshing, run every executable in `.metaproject/hooks/post-update.d`. Without it, a hint is printed instead. |
 | `--no-tasks` | Do not auto-enable (backfill) the tasks/flow module on pre-tasks workspaces. |
+| `--preview`, `--dry-run` | Print the lifecycle plan (create/update/skip/conflict, with base digests) and write nothing. |
+| `--accept-version` | Publish this version's content over lifecycle files a different version left divergent. |
+| `--keep-existing` | Leave divergent lifecycle files alone and record that this run did not publish them. |
+| `--yes` | Skip the stale-worktree prune confirmation prompt (for CI). |
 | `--help`, `-h` | Print `update` usage and exit. |
 
 `update` also moves keryx's own edits out of tracked files. A legacy
@@ -2107,21 +2161,24 @@ alongside the valid ones.
 
 ```
 keryx trigger run <name>        # perform exactly one pass of <name>'s action
+keryx trigger run --schedule <name>   # one pass of a local `keryx schedule` entry
 keryx trigger install           # write a git hook block for every event-fired entry
 keryx trigger uninstall         # remove those hook blocks
 keryx trigger list              # list declared entries: enabled state, fire, action, hook status
 keryx trigger status [<name>]   # show the last recorded outcome for one or every entry
 keryx trigger schedule <name>   # print the cron line / systemd timer unit (real OnCalendar=) for a schedule entry
+keryx trigger resolve <runId> --spent <usd>   # close a killed run's spend reservation
 ```
 
 | Subcommand | Description |
 |---|---|
-| `run <name>` | Resolve `<name>` against `.metaproject/triggers.json` and perform exactly one pass of its action. |
+| `run <name>` | Resolve `<name>` against `.metaproject/triggers.json` and perform exactly one pass of its action. With `--schedule <name>`, resolve a local scheduled agent task (`keryx schedule`) instead. |
 | `install` | Write a managed hook block (`# keryx:trigger-<name>:begin/end`) into `post-merge`/`post-commit`/`post-checkout` for every declared, event-fired entry — `enabled` or not, so re-enabling one later takes effect on its next fire without reinstalling. No `.git` directory: prints and does nothing. |
 | `uninstall` | Remove those blocks. Every other managed block in the same hook file is untouched. |
 | `list` | List every declared entry — name, enabled state, what fires it, what it does, and whether its hook is installed — plus every rejected entry and why it was refused. |
 | `status [<name>]` | Print the last recorded outcome for one entry, or every entry, read from the run record (below). |
 | `schedule <name>` | Print the cron line and the systemd service/timer pair for a schedule-fired entry, with a real `OnCalendar=` translated from the cron and a project-unique unit name. Installs nothing. `keryx schedule add` installs a timer for you. |
+| `resolve <runId>` | `--spent <usd>` (required): close the spend reservation of a run that was killed before it recorded its cost. See **Cost** below. |
 | `--help`, `-h` | Print `trigger` usage and exit. |
 
 **Exit codes.** Non-zero only when the action itself failed (for a dispatch:
@@ -2295,8 +2352,6 @@ call chain, so `sync --apply` building the graph, or a triggered `reconcile`
 running `sync --apply`, never waits on itself. A dispatching `flow-next` does
 **not** hold it while the agent runs — the agent's own `keryx gdgraph build`
 must be able to take it — and uses its own per-flow dispatch lock instead.
-(Flow 286 described its trigger lock as the one the interactive commands take;
-until this change they took none.)
 
 **Installing hooks.** `install`'s blocks live beside the ones `keryx sync
 install-hooks` (its `keryx-sync` block) and `keryx update` (its
@@ -2680,17 +2735,17 @@ Per flow (`.metaproject/flows/<id>/flow.json` and its `reviews/*/manifest.json`)
   recorded cost, some did not) reports the sum together with a
   `rounds_with_cost`/`rounds_total` count, never silently dropping the gap.
 - **Confirmations and signatures** — who confirmed each acceptance criterion
-  and who signed completion, joined from `acConfirmed` and `signatures`
-  (flow 289), with each identity's basis (`stated`, `derived`, `unknown`)
+  and who signed completion, joined from `acConfirmed` and `signatures`,
+  with each identity's basis (`stated`, `derived`, `unknown`)
   shown beside the name. A `derived`/`unknown` identity is never presented as
-  a verified confirmation. A flow with no `signatures` field at all — every
-  flow completed before flow 289 — reports `confirmations: not recorded
+  a verified confirmation. A flow with no `signatures` field at all — one
+  completed before completion signing existed — reports `confirmations: not recorded
   (predates signing)`.
 - **Gate outcomes** — every `flow complete` attempt's gate results (pass,
-  fail, skipped), from `FlowState.completionAttempts` (flow 291). Absent on
-  every completion attempt made before flow 291, which reports `gate
-  outcomes: not recorded` rather than inferring anything.
-- **Summary and effect** (flow 364), from `description.md` and the task list,
+  fail, skipped), from `FlowState.completionAttempts`. Absent on
+  completion attempts made before gate outcomes were recorded, which report
+  `gate outcomes: not recorded` rather than inferring anything.
+- **Summary and effect**, from `description.md` and the task list,
   with no model. `summary:` is the first sentence of `## Expected Outcome`
   (else `## Problem`), tasks done of all, and the tasks still open. `effect:`
   is the first bullet of `## Outcome criteria` (with `(+N more)` when there are
@@ -2703,7 +2758,7 @@ Per project (`.metaproject/data/trigger/runs.jsonl`):
 
 - **Trigger spend** — USD summed over every fired-trigger run whose cost was
   recorded, plus the count of CLOSED runs whose cost was not recorded (never
-  folded into the sum as `$0`), plus — since flow 300 — the open spend
+  folded into the sum as `$0`), plus the open spend
   reservations (`openReservations`, `openReservedUsd` in the JSON; "N open
   reservation(s) totaling $X (reserved, not spent …)" in the markdown). An open
   reservation is a run whose dispatch reserved spend and has no closing record
@@ -2723,11 +2778,11 @@ Per project (`.metaproject/data/trigger/runs.jsonl`):
   reports `not recorded` with the reason.
 - **Policy decisions** — an INTERACTIVE session's own allow/ask/deny decisions
   have no durable record in this build, so this section always reads `not
-  recorded` with that reason. An UNATTENDED dispatch run is different: flow 290
+  recorded` with that reason. An UNATTENDED dispatch run is different: keryx
   records every such run's denials, and this report reads them — see "Dispatch
   runs" below, not this line.
 
-Per flow, also from `runs.jsonl` (flow 297):
+Per flow, also from `runs.jsonl`:
 
 - **Dispatch runs** — every unattended `flow-next` dispatch run that named
   this flow (`TriggerDispatchRecord.flow`), joined by `runId`: the trigger,
@@ -2893,7 +2948,7 @@ keryx bundle verify --external-imports [--json]
 keryx bundle uninstall <bundleId> --target-scope <scope> [--dry-run] [--json]
 ```
 
-Flow 313 (W4 portability): move skills, rules, agents, memory entries,
+Move skills, rules, agents, memory entries,
 learned patterns and hook config between scopes and machines as a single
 sha256-content-addressed, manifest-described bundle — a directory (with
 `bundle.json` at its root) or a deterministic `.tar.gz`. This command never
@@ -2951,7 +3006,7 @@ keryx learn graduate apply <proposal-id>
 keryx learn prune [--dry-run] [--json]
 ```
 
-The self-learning loop's consent CLI (flow 312, W3): passive observation
+The self-learning loop's consent CLI: passive observation
 (`observe`), deterministic extraction (`extract`) into `status: candidate`
 `learned-pattern` records, human review and consent (`review`/`accept`/
 `reject`), and the bounded paths onward from an accepted record (`apply`,
@@ -3110,25 +3165,27 @@ a compact Markdown summary while persisting the full raw output under
 
 ```
 keryx ctx status
-keryx ctx diff [git-diff-args...]
-keryx ctx rg "<pattern>" [path]
-keryx ctx read <file> [--mode outline|compact|full]
+keryx ctx diff [--staged|--stat|<revision>]
+keryx ctx rg "<pattern>" [path] [--json] [--all]
+keryx ctx read <file> [--mode outline|compact|full] [--base <ref>]
 keryx ctx run -- <command...>
-keryx ctx show [latest|<name>] [--raw]
+keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]
 keryx ctx install-hook [--runtime <id|all>]
 keryx ctx uninstall-hook [--runtime <id|all>]
+keryx ctx hook <runtime>
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Report metaproject/manifest/config/data presence and whether gdctx is enabled. |
-| `diff` | git-diff args (e.g. `--staged`, `--stat`) | Run `git diff <args>` and summarize (files, risk hints, hunks, errors). |
-| `rg` | `"<pattern>" [path]` | Run ripgrep and summarize top files + example matches. Requires ≥1 arg. |
-| `read` | `<file>`, `--mode outline\|compact\|full` | Read and summarize a file. Default mode `compact`. |
+| `diff` | `--staged`, `--stat`, or a revision | Run `git diff <args>` and summarize (files, risk hints, hunks, errors). With no arguments: staged and unstaged changes against `HEAD`, plus the list of untracked files. |
+| `rg` | `"<pattern>" [path]`, `--json`, `--all` | Run ripgrep and summarize top files + example matches. Requires ≥1 arg. Every summary carries a `Scope:` line (what was not searched) and a `Completeness:` line; `--all` lists every match, `--json` prints the full machine-readable set. |
+| `read` | `<file>`, `--mode outline\|compact\|full`, `--base <ref>` | Read and summarize a file. Default mode `compact`. `--base` is accepted and has no effect: there is no delta mode yet, and every read says so. |
 | `run` | `-- <command...>` | Run an arbitrary command after `--` and summarize its output. Errors if empty. |
-| `show` | `[latest\|<name>]`, `--raw` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. |
+| `show` | `<artifact\|latest>`, `--raw`, `--lines <start>-<end>` | Print a saved artifact summary (`.md`), or the raw `.log` with `--raw`. `--lines` prints one range of the raw log, as named by a summary's omitted-lines manifest. |
 | `install-hook` | `--runtime <id\|all>` | Install an opt-in routing guard that blocks broad raw search/read/diff commands and points the agent to the bounded `ctx` equivalent. |
 | `uninstall-hook` | `--runtime <id\|all>` | Remove only the managed routing-guard integration for the selected runtime(s). |
+| `hook` | `<runtime>` | Internal: the entry point the installed routing guard invokes for each tool call. You do not run `keryx ctx hook` yourself. |
 
 ---
 
@@ -3239,26 +3296,26 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
 | `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
 | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
-| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Flow 325 (W1): resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
+| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
 | `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
 | `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
-| `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`generate` is an alias.) |
+| `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`keryx skills generate` is an alias.) |
 | `import --from <src>` | `--module <m>`, `--name <n>`, `--only <glob>` (repeatable), `--dry-run`, `--force`, `--json` | Copy a SKILL.md (directory, file, or https GitHub blob/raw URL) into `.metaproject/project-skills/<module>/<name>/`, recording Origin. `--module review` is the only module `review-orchestrator` auto-dispatches. `--only` is a glob (`*`, `?`) matched against the package directory name as it is on disk; it is required when `--from` is a tree of several packages and the import targets module `review` — the import is refused with the candidate list until it is given. An `--only` with an empty value is an error. In a tree, `--name` likewise selects by the directory name. What is written is the slug of that name (`review_house_api` → `review-house-api`): the destination, the already-exists and bundled-name checks and the reported row all use the slug, and two selected directories that slug to one destination are refused before anything is written. In a tree import a `deprecated: true` package is skipped. Other hosts and GitHub tree URLs are refused. A bundled name is skipped unless `--force`. A package landing in module `review` gets `warning:` lines for: no path trigger (`paths: none`), each `metadata.flags` entry dropped as not a flag, each flag exactly one existing project reviewer carries (it becomes a family flag for both), and — on a `--force` overwrite — each family flag the new version drops that leaves exactly one other reviewer carrying it (that reviewer is dispatched outright under it from then on). A name with no letter or digit (a package directory, or a SKILL.md or URL name) is refused. Before anything is written, every destination — package, registry, catalog, each rule — is checked for a symlink on the way that resolves outside the project; one is refused and nothing is written, `--dry-run` included. Frontmatter is read as a YAML subset (BOM and CRLF accepted, trailing `#` comments dropped, `metadata.paths`/`metadata.flags` as a flow, block or comma-separated list, only keys directly under `metadata:`); a shape outside it reads as not declared. Rules the skills cite are copied as described under [`review import`](#review). |
 | `update [<module>/<name>]` | `--all`, `--from <origin>`, `--dry-run`, `--json` | Re-read Origin and overwrite SKILL.md when the source moved on. Name one skill, or `--all`. A skill with no Origin is skipped. A destination behind a symlink that resolves outside the project is refused before anything is written, `--dry-run` included. |
 | `remove <module>/<name>` | `--dry-run`, `--json` | Remove a project skill — the inverse of `create`/`import`, in this order: the verification report, the catalog row, the package directory (and its `<module>/` directory when it was the last skill there), and the `projectSkillRegistry` entry last. Each part is listed as `removed` or `absent`; an already-missing part is not an error, and a skill whose entry and package are gone is still found by a leftover catalog row or verification report, so a skill half-removed by hand can be finished. If a step fails (e.g. a read-only directory), the error names that part and lists what is already gone and what is still in place (a package directory whose removal failed part-way is listed as `(may be partly removed)`); the registry entry is still there, so re-running the same command after fixing the cause finishes the removal. `--dry-run` lists what would be removed and changes nothing. Refused with exit `1`, always before anything is changed: a bundled skill (use `install`/`uninstall`); an unknown name (names are case-sensitive: `Review/Alpha` is refused, naming the registered `review/alpha`, even on a case-insensitive filesystem); a skill whose package directory is on disk only under another spelling (`review/Alpha/` for `review/alpha`) — the refusal names the on-disk spelling; rename the directory to the registered one and retry; a registry entry whose `path` is not its own `.metaproject/project-skills/<module>/<name>` or whose module/name is not a plain path segment; a symlink where something would be deleted (`project-skills/`, the `<module>/` directory, the package itself, the reports directory) — nothing is deleted through a link and the link is not unlinked; a `metaproject.json` or `catalog.md` that resolves outside the project (one reached through a symlink inside the project is rewritten in place and listed with its `resolvedPath`). A verification report whose body names another package (`skillPath`) is left alone even when its file name matches. Imported rules, runtime exports and learning proposals are left in place. |
 | `verify <skill-or-target>` | `--dry-run`, `--json` | Verify a project skill against evidence; write a report. `--all` verifies every registered skill. |
-| `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (the 65 `SKILL.md` files copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
+| `verify --bundled` | `--root <dir>`, `--json` | Structurally validate the **shipped** skill tree (every `SKILL.md` under `src/gdskills/bundled/`, the tree copied into every install), not this project's project-skills. Exits `1` on any finding and on an empty tree. |
 | `learn --from-<source> <path> --skill <m>/<s>` | `--from-review\|--from-test\|--from-failure\|--from-health\|--from-memory <path>`, `--skill`, `--dry-run`, `--json` | Create an auditable learning proposal (does not mutate SKILL.md). |
 | `learn apply <proposal.json>` | `--dry-run`, `--json` | Apply a reviewed proposal to SKILL.md + changelog; bump patch version. |
 | `export <project-skill>` | `--runtime codex\|claude\|plugin`, `--dry-run`, `--json` | Export a project skill to a runtime artifact. The `plugin` runtime (alongside `codex` and `claude`) emits a Claude Code plugin package. |
 | `sync` | `--runtime codex\|claude`, `--target <dir>`, `--dry-run`, `--json` | Sync exported runtime skills to an explicit target dir. Requires both `--runtime` and `--target`. |
 | `contracts list` | — | Print name/path/description for all contract schemas. |
 | `contracts validate <file>` | `--schema <name>` | Validate a JSON file against a named contract schema. Exits `1` on failure. |
-| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Flow 325 (W1): pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` (flow 313, W4) additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
-| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--judge <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Flow 325 (W1): behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); flow 314 wires this through `src/commands/model-eval-runner.ts`, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all` for `eval`, unlike `scout`/`stocktake`/`judge-check`, which default to `bundled`) selects which catalog the skill id resolves against and the triggers are scored against — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. Flow 316: `--judge <provider>[:<model>]` (same `provider[:model]` split as `--runner`, via `src/commands/model-eval-judge.ts`, called at `temperature: 0` for the closest a provider gets to deterministic scoring) grades every `"grader": "judge"` behavior scenario with a live LLM judge instead of leaving it `skipped`; the judge is a separate build and separate calls from the runner under test, even when both name `deepseek:deepseek-chat`. Building either an unknown `--runner`/`--judge` provider, or one with no credential, fails closed before any scenario runs. With `--judge`, the report gains `judge` (provider), `judgeModel`, and `judgePromptVersion` (the judge prompt version that produced the recorded verdicts); every report also gains `catalogDigest` (the bundled catalog the trigger scenarios were scored against, kept as informational context only — trigger scenarios are always re-scored live against the current catalog, never trusted from the report) and, per ran behavior scenario, `trialRecords` — one entry per trial (`output`, `outputSha256`, `deterministic` results, `judge` verdict, `passed`) so the report can be re-derived (`regradeRecordedReport`) without re-running the model. The stable-pack gate (`checkSkillReportForPackGate`) requires the report's `(runner, model)` and, when any scenario carries a judge expectation, its `(judge, judgeModel)` to both be in the gate's allowlisted set (`STACK_PACK_GATE_POLICY`, pinned to `deepseek`/`deepseek-chat` for both roles), `judgePromptVersion` to match the current judge prompt, and the recorded `passes`/`passRate`/trial counts to match what the trial records themselves show — a report from an unlisted runner or judge, a stale prompt version, or counts that disagree with its own records, never clears the gate. **What this proves, and what it does not:** the gate proves internal consistency — the recorded outputs, deterministic results, counts and pass rates are re-derived from the trial records, and trigger results are re-scored live, not re-declared from the report. It does not prove provenance: the trial outputs, judge verdicts, and runner/judge labels are self-declared by whoever ran the eval, and the gate never re-runs the judge model against them ("re-derive"/"re-grade" here means recomputing from what was recorded, not re-judging). The control for provenance is review of the committed `eval.json` / recording diff in the pull request. |
-| `eval --reverify <pack-dir>` | `--judge <provider>[:<model>]` (required), `--sample <n>` (default `10`), `--json` | Flow 317 (FU3): the live re-judge sampler. Re-judges a RANDOM SAMPLE of `<pack-dir>`'s already-recorded trial outputs (`governance/eval.json`, every ran behavior scenario's `trialRecords` that carry a judge verdict) against the CURRENT live judge, matched against the skill's current `evals.json` by scenario id, and reports where the live verdict disagrees with what was recorded. Read-only — never rewrites `governance/eval.json`. **Threat model:** `eval`'s own stable-pack gate (above) proves a recorded report is internally consistent (`regradeRecordedReport`) and re-scores triggers live, but it cannot prove a recorded JUDGE verdict was ever a genuine live grading rather than, say, a hand-edited recording — nor can it catch the judge PROVIDER's own weights drifting under a pinned model name over time. `--reverify` is the closest available check for exactly those two gaps: a diagnostic a human (or a scheduled job) runs and acts on, not something the gate itself enforces automatically. Exits `1` when the sampled disagreement rate exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, `src/gdskills/governance/eval.ts`) — deliberately generous, since a live judge is not perfectly deterministic on identical input (flow 316 review round 1) and a single flaky call among a handful of samples is expected noise, not drift. |
-| `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Flow 316: proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; fix 1 / R1-4, R1-11 added `vague` and `subtle-wrong`, authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
-| `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Flow 325 (W1): periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
+| `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
+| `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--judge <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); `src/commands/model-eval-runner.ts` wires this through, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all` for `eval`, unlike `scout`/`stocktake`/`judge-check`, which default to `bundled`) selects which catalog the skill id resolves against and the triggers are scored against — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. `--judge <provider>[:<model>]` (same `provider[:model]` split as `--runner`, via `src/commands/model-eval-judge.ts`, called at `temperature: 0` for the closest a provider gets to deterministic scoring) grades every `"grader": "judge"` behavior scenario with a live LLM judge instead of leaving it `skipped`; the judge is a separate build and separate calls from the runner under test, even when both name `deepseek:deepseek-chat`. Building either an unknown `--runner`/`--judge` provider, or one with no credential, fails closed before any scenario runs. With `--judge`, the report gains `judge` (provider), `judgeModel`, and `judgePromptVersion` (the judge prompt version that produced the recorded verdicts); every report also gains `catalogDigest` (the bundled catalog the trigger scenarios were scored against, kept as informational context only — trigger scenarios are always re-scored live against the current catalog, never trusted from the report) and, per ran behavior scenario, `trialRecords` — one entry per trial (`output`, `outputSha256`, `deterministic` results, `judge` verdict, `passed`) so the report can be re-derived (`regradeRecordedReport`) without re-running the model. The stable-pack gate (`checkSkillReportForPackGate`) requires the report's `(runner, model)` and, when any scenario carries a judge expectation, its `(judge, judgeModel)` to both be in the gate's allowlisted set (`STACK_PACK_GATE_POLICY`, pinned to `deepseek`/`deepseek-chat` for both roles), `judgePromptVersion` to match the current judge prompt, and the recorded `passes`/`passRate`/trial counts to match what the trial records themselves show — a report from an unlisted runner or judge, a stale prompt version, or counts that disagree with its own records, never clears the gate. **What this proves, and what it does not:** the gate proves internal consistency — the recorded outputs, deterministic results, counts and pass rates are re-derived from the trial records, and trigger results are re-scored live, not re-declared from the report. It does not prove provenance: the trial outputs, judge verdicts, and runner/judge labels are self-declared by whoever ran the eval, and the gate never re-runs the judge model against them ("re-derive"/"re-grade" here means recomputing from what was recorded, not re-judging). The control for provenance is review of the committed `eval.json` / recording diff in the pull request. |
+| `eval --reverify <pack-dir>` | `--judge <provider>[:<model>]` (required), `--sample <n>` (default `10`), `--json` | The live re-judge sampler. Re-judges a RANDOM SAMPLE of `<pack-dir>`'s already-recorded trial outputs (`governance/eval.json`, every ran behavior scenario's `trialRecords` that carry a judge verdict) against the CURRENT live judge, matched against the skill's current `evals.json` by scenario id, and reports where the live verdict disagrees with what was recorded. Read-only — never rewrites `governance/eval.json`. **Threat model:** `eval`'s own stable-pack gate (above) proves a recorded report is internally consistent (`regradeRecordedReport`) and re-scores triggers live, but it cannot prove a recorded JUDGE verdict was ever a genuine live grading rather than, say, a hand-edited recording — nor can it catch the judge PROVIDER's own weights drifting under a pinned model name over time. `--reverify` is the closest available check for exactly those two gaps: a diagnostic a human (or a scheduled job) runs and acts on, not something the gate itself enforces automatically. Exits `1` when the sampled disagreement rate exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, `src/gdskills/governance/eval.ts`) — deliberately generous, since a live judge is not perfectly deterministic on identical input and a single flaky call among a handful of samples is expected noise, not drift. |
+| `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; fix 1 / R1-4, R1-11 added `vague` and `subtle-wrong`, authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
+| `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
 `subagent-result`, `subagent-dispatch`, `agent-event`, `orchestrator-state`,
@@ -3329,7 +3386,7 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
 
-**The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
+**The `tests` source.** In `auto` mode, `keryx health run`
 used to report the `tests` source as `missing` whenever no persisted
 `.metaproject/data/testing` report existed to import — even on a tree where
 `bun` was on `PATH` and test files existed, which `keryx health sources`'
@@ -3393,7 +3450,7 @@ with a masked reason (the run itself is never broken).
 
 ## stack
 
-Deterministic, offline stack detection (flow 325, W1). Reads manifest files
+Deterministic, offline stack detection. Reads manifest files
 (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, …), marker files
 (`Dockerfile`, `.github/workflows/*.yml`, `*.tf`, `*.sql`, …) and runs a
 bounded extension scan — no network, no model call — and writes
@@ -3475,7 +3532,7 @@ keryx memory handoff --from <harness> --target <harness> [--scope project|user] 
 |---|---|---|
 | `new <type> [slug]` | `--title "<t>"`, `--force` | Scaffold a new draft entry; print possible duplicates. |
 | `index` | `--embeddings` | Build an optional disposable catalog at `data/memory/index/index.json`; `--embeddings` additionally builds a disposable vector cache when the capability is available. Search scans canonical Markdown directly and does not consume either generated output. |
-| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. Lexical mode applies a small English suffix stemmer (flow 353, AC5) to both the query and each entry's title/body, so `release` also matches `released`/`releases`/`releasing` — a separate, narrower normalisation from the base tokenizer `dedup`/relevant-recall use, so title/summary similarity is unaffected. On zero hits (and no explicit `--semantic`), the output gains one hint line: `--semantic` is available when an embeddings index already exists for the project, otherwise how to build one (`keryx memory index --embeddings`) — as a `semanticHint` string in `--json`. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
+| `search "<query>"` | `--module <m>`, `--entity <e>`, `--status <s>` (e.g. `accepted`), `--limit <n>` (1–100), `--as-of <YYYY-MM-DD>`, `--class <semantic\|episodic\|procedural>`, `--semantic`, `--save-report` | Filesystem-pure ranked retrieval by default; validates status/class/date/limit before reading. Lexical mode applies a small English suffix stemmer to both the query and each entry's title/body, so `release` also matches `released`/`releases`/`releasing` — a separate, narrower normalisation from the base tokenizer `dedup`/relevant-recall use, so title/summary similarity is unaffected. On zero hits (and no explicit `--semantic`), the output gains one hint line: `--semantic` is available when an embeddings index already exists for the project, otherwise how to build one (`keryx memory index --embeddings`) — as a `semanticHint` string in `--json`. `--save-report` explicitly publishes one bounded immutable report under ignored `.metaproject/runtime/memory/search/<run-id>/`; without it neither text nor `--json` writes artifacts. |
 
 Generated memory catalogs and embedding caches under `.metaproject/data/memory/`
 are disposable and ignored. Existing legacy `data/memory/artifacts/latest.*`
@@ -3507,7 +3564,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human] [--require-confirmation]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -3540,7 +3597,7 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human`, `--require-confirmation` (completion then needs a `flow confirm` token) | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
 | `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
@@ -3548,17 +3605,17 @@ keryx flow schema [--out <path>]
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
 | `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
-| `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs`, `--depends T1,T2` | Append a task. `--depends` is read by `flow next` and validated by `flow check`. |
+| `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|verify\|review\|docs`, `--depends T1,T2` | Append a task. `--depends` is read by `flow next` and validated by `flow check`. |
 | `task done <id> <taskId>` | `--disposition completed\|blocked\|failed\|skipped`, `--reason "<why>"` | Mark a task `done`. A `failed` or `blocked` close **records an attempt automatically** — those two dispositions are attempts by definition, and requiring a second command is why the counter read zero across seven flows. |
 | `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
-| `task depends <id> <taskId>` | `--on T1,T2\|none` (required), `--reason "<why>"` (required) | Rewrite one task's `dependsOn` — the repair for the three unsatisfiable shapes `flow check` reports. Until this existed, `--depends` wrote the field once at creation and nothing could rewrite it, so the only remedy was editing `flow.json` by hand; flow 178 carried a self-dependent `T10` for two weeks because the check was right and the operator had nowhere to go. Ids are normalised, so `t1`, `T1` and ` t1 ` are one edge. The change is validated against the same `dependencyIssues` the check uses and **refused if it would introduce an issue that was not already there** — deliberately narrower than "the graph must end clean", because a flow with two broken tasks has to be repairable one task at a time. A refused change leaves the record exactly as it was found. `--on none` clears the field. |
+| `task depends <id> <taskId>` | `--on T1,T2\|none` (required), `--reason "<why>"` (required) | Rewrite one task's `dependsOn` — the repair for the three unsatisfiable shapes `flow check` reports. Until this existed, `--depends` wrote the field once at creation and nothing could rewrite it, so the only remedy was editing `flow.json` by hand — the check could report a self-dependent task correctly and still leave the operator nowhere to go. Ids are normalised, so `t1`, `T1` and ` t1 ` are one edge. The change is validated against the same `dependencyIssues` the check uses and **refused if it would introduce an issue that was not already there** — deliberately narrower than "the graph must end clean", because a flow with two broken tasks has to be repairable one task at a time. A refused change leaves the record exactly as it was found. `--on none` clears the field. |
 | `owner set <id>` | `--owner "<name>"` (required), `--reason "<why>"` (required) | Set or change the flow's owner — the human accountable for it. **Never inferred**, and a `--reason` is required even for the first assignment. Every change is kept, not overwritten: it appends a `history` event naming the previous owner, the new owner, the reason and the time, so no earlier owner is ever lost. See [the owner and completion signatures](#the-owner-and-completion-signatures). |
 | `ac confirm <id> <ACn>` | `--note "<evidence>"`, `--signed-by "<name>"` | Confirm one acceptance criterion. Appends an append-only signature recording who confirmed it (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — a repeated confirmation of the same criterion adds a new signature rather than replacing the last one. |
-| `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the only behaviour before flow 293). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
-| `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: flow 002 carries ten dated confirmations against a criteria file byte-identical to its first commit, with a checksum sealed against content predating the squashed `0.1.0` import. |
+| `ac update <id>` | `--reason "<why>"` (required); or `--criterion ACn --text "<criterion>"` together with `--reason` | Re-freeze the AC checksum **and void every prior confirmation** — right when the criteria changed, because a criterion nobody confirmed in its current wording has not been confirmed. Wrong when only the seal is stale; use `ac reseal` for that. Without `--criterion`/`--text`, re-freezes the file exactly as an operator already edited it (the original behaviour). With both, rewrites that one `ACn` line's text itself — **only when the criterion is genuinely a single line**, the format the file's own Rules section prescribes — or appends it, when `ACn` is the **next unused number** (highest existing `ACn` + 1; a gap in the numbering, e.g. AC1/AC2/AC4 with AC3 missing, can never be filled this way — the refusal names the gap and says to edit the file directly and re-freeze with `--reason` alone). If the target criterion has ANY indented, non-blank line following it before the next `- ACn:` line, a blank line, or a heading — a criterion wrapped across two lines, a sub-bullet evidence note, a fenced code block, anything — the command **refuses**, naming the criterion, and writes nothing; there is no way to tell "this is the criterion continuing" from "this is unrelated content under it" from the file alone, so it never guesses at either. Edit the file directly and re-freeze with `--reason` alone instead. `--text` and `--reason` must each be non-empty, fit on one line, and (for `--text`) not repeat its own `- ACn:` prefix. `--criterion` and `--text` must be given together; either alone is refused. The flow's `history` records the criterion, its (single-line) previous text and its new text alongside the reason. The write itself preserves the rest of the file's bytes exactly: an untouched line keeps its own original line ending (even in a file with mixed `\n`/`\r\n` endings), and an appended line takes the ending of the line it follows. |
+| `ac reseal <id>` | `--reason "<why>"` (required, one line) | Re-seal a stale checksum over a file that did **not** change, keeping the confirmations. Refuses unless git reports the criteria file tracked and unchanged against HEAD, and refuses when git cannot answer at all — no evidence must not read the same as clean. It proves the file being sealed now is the file committed now; it cannot prove the old checksum was ever right. Exists because the only other repair destroys the record: a flow can carry dated confirmations against a criteria file byte-identical to its first commit while its checksum was sealed against older content (for example, content predating a squashed import). |
 | `ac kinds <id>` | `--json` | Report each criterion's verification kind, the distribution and the runnable coverage, read from the criteria file (see [verification kinds](#verification-kinds)). Read-only, no model call; exits `1` when a marker is malformed, naming the criterion. |
 
-Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (the syntax before flow 293) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
+Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (an older syntax) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
 | `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
@@ -3622,7 +3679,7 @@ TUI `/flows` modal, one row per criterion under the distribution block
 
 ### `flow check-ac`
 
-Jev checks a flow's change against its FROZEN acceptance criteria (flow 328). **Always
+Jev checks a flow's change against its FROZEN acceptance criteria. **Always
 advisory**: it never changes flow state, never confirms an AC, and its own errors
 never fail a caller command.
 
@@ -4136,6 +4193,7 @@ runtime.
 keryx standard validate
 keryx standard doctor
 keryx standard capabilities
+keryx standard baseline --baseline pass|fail|unknown --pr pass|fail|unknown
 keryx standard emit llms [--stdout]
 ```
 
@@ -4144,6 +4202,7 @@ keryx standard emit llms [--stdout]
 | `validate` | Check required files/dirs, the `metaproject.json` schema (`metaproject.schema.json` + per-module `module.schema.json`), declared `paths.*`, enabled-module manifests, and that root `AGENTS.md`/`CLAUDE.md` link `.metaproject/index.md`. Prints a `PASS`/`FAIL` report and exits `1` on failure. |
 | `doctor` | Same findings as `validate`, rendered as actionable diagnostics with a concrete fix hint per issue. Exits `1` when unresolved issues remain. |
 | `capabilities` | Print the standard version, declared and satisfied profiles, and each enabled module with its commands/capabilities, sourced from `metaproject.json`. Exits `0`. |
+| `baseline` | `keryx standard baseline` classifies a pull request's validation result against an independently measured result on the main branch, prints the verdict as JSON (`classification`: `baseline-green`, `baseline-red` or `baseline-unknown`, plus `blocking`), and exits `1` when the verdict is blocking. A red main excuses a PR failure; an unknown main or an unknown PR result never counts as a pass. |
 | `emit llms` | Generate a deterministic `llms.txt` from the manifest + artifact index. Writes the file by default (validating the result), or streams it to stdout with `--stdout`. Exits `1` if the generated file is not valid `llms.txt`. |
 
 `validate` and `doctor` also emit profile warnings when the manifest's declared
@@ -4162,7 +4221,7 @@ and exits `1`.
 Four unrelated surfaces share this noun: `bootstrap` manages global instruction
 files for coding agents, `external` inspects the vendor CLIs keryx can host as
 child agents, `monitor` reads a recorded subagent-fleet event log, and
-`list`/`show`/`export`/`verify` (flow 310) work the agent-definition catalog
+`list`/`show`/`export`/`verify` work the agent-definition catalog
 described below under "agents catalog".
 
 (It said "two" until 2026-09-05, while the router dispatched three, then
@@ -4268,7 +4327,7 @@ disabled or a binary is missing, both of which are answers rather than failures.
 
 ### agents catalog
 
-Flow 310 (W2): `list`/`show`/`export`/`verify` are a fourth surface under this
+`list`/`show`/`export`/`verify` are a fourth surface under this
 noun — the agent-definition catalog (`.metaproject/agents/*.md`, plus keryx's
 own bundled definitions), compiled into either `spawn_subagent` dispatch
 inputs (`keryx-shell`) or a host's own native/adapter subagent file
@@ -4279,7 +4338,7 @@ export-support levels, the content-hash sentinel `export` writes, and what
 
 ```
 keryx agents list [--stack <id>] [--json]
-keryx agents show <name>
+keryx agents show <name> [--json]
 keryx agents export --runtime <claude|codex|kiro|opencode|keryx-shell> <name> [--force] [--dry-run] [--json]
 keryx agents verify [<name>] [--json]
 keryx agents generate --stack <id> [--check] [--json]
@@ -4288,10 +4347,10 @@ keryx agents generate --stack <id> [--check] [--json]
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `list` | `--stack <id>`, `--json` | List every catalog definition (bundled and project-local), optionally filtered to one stack pack. Read-only. |
-| `show` | `<name>` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
+| `show` | `<name>`, `--json` | Print one definition's fields and its resolved export-support level for every runtime. Read-only. |
 | `export` | `--runtime <id>`, `<name>`, `--force`, `--dry-run`, `--json` | Compile one definition for one runtime and write its managed file (or, for `keryx-shell`, print the compiled dispatch input — nothing is written for that runtime). A file with no keryx-managed sentinel for this agent at all is never overwritten, even with `--force`. A managed file whose content-sha256 no longer matches its own recorded hash (hand-edited since export) is refused unless `--force` is passed. A managed, unedited file from an older source version is updated with no flag needed. |
 | `verify` | `[<name>]`, `--json` | Validate every definition (or just `<name>`) against the schema, tool/skill vocabularies, `policy_profile`, origin/sourceRef rules, and the baseline-in-body guard, and resolve its export support for every runtime. Also reports `stack-pack-not-gate-cleared` for a generated pair whose source stack pack is no longer gate-cleared, and `generated-drift` when a bundled generated file no longer matches a fresh run of the generator. |
-| `generate` | `--stack <id>`, `--check`, `--json` | Flow 314: write the `<stack>-code-auditor` (read-only review) and `<stack>-build-fixer` (build/lint/type/test-failure resolution, worktree-isolated) pair for one stack pack, derived from that pack's `pack.json`. Refuses a pack that is not gate-cleared (`stability: stable` and a passing stable-pack gate check). `--check` reports drift without writing, exiting non-zero if either generated file differs from what is on disk. |
+| `generate` | `--stack <id>`, `--check`, `--json` | Write the `<stack>-code-auditor` (read-only review) and `<stack>-build-fixer` (build/lint/type/test-failure resolution, worktree-isolated) pair for one stack pack, derived from that pack's `pack.json`. Refuses a pack that is not gate-cleared (`stability: stable` and a passing stable-pack gate check). `--check` reports drift without writing, exiting non-zero if either generated file differs from what is on disk. |
 
 To export the whole catalog for one harness at once, use
 `keryx integrations install --runtime <id> --surface agents` (opt-in — the
@@ -4373,6 +4432,16 @@ keryx review jev-docs (--diff <ref> | --pr <n>) [--max-calls <n>] [--threshold <
                       [--fixtures <dir>] [--include <glob>]... [--json]
 keryx review jev-comments --pr <n> --repo <owner/repo>
                           [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
+keryx review jev-rules (--diff <ref> | --pr <n> | --scope <scope.json>)
+keryx review jev-risk (--diff <ref> | --pr <n> | --scope <scope.json>)
+keryx review jev-scenarios (--diff <ref> | --pr <n> | --scope <scope.json>)
+keryx review jev-contract (--diff <ref> | --pr <n>) [--flow <id>]
+keryx review jev-triage --report <dir|findings.json>
+keryx review jev-select (--diff <file|-> | --ref <base>) [--reviewers <file|->]
+keryx review jev-profile [show] [--apply recommended|show] [--json]
+keryx review jev-edit-guard --hook claude [--fixtures <dir>]
+keryx review jev-edit-guard install | uninstall | status [--json]
+keryx review stack [--json]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review learn --reviewer <id> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
@@ -4415,7 +4484,7 @@ left off and the gate reports it as unobserved.
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
 | `loop` | Loop detection over a flow's review rounds. Exits 1 when repetition escalates. See below. |
-| `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
+| `stack` | `keryx review stack [--json]`: which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `ci-triage` | Advisory-only flaky/infra/real-regression triage for one failed CI run's job, scored by Jev (TypeSafe System One). See below. |
 | `conform` | Check a PR, a review report, or a diff against a reference document's clauses, scored by Jev. See below. |
@@ -4921,8 +4990,8 @@ between the cheapest and the most capable model in one vendor's line-up — so a
 token ceiling is either inert or ruinous depending on an unrecorded model choice.
 Currency is the unit the decision is made in and the unit the operator's budget
 is denominated in, and token counts convert to it while the reverse does not.
-3.00 USD follows SWE-agent's $3/instance cap; a keryx review round is one target
-and one reviewer fan-out, the analogue of one instance.
+The 3.00 USD default is a per-round cap: a keryx review round is one target and
+one reviewer fan-out.
 
 **The concurrency cap does not bind the nested total on its own, and says so.**
 keryx is a CLI invoked once per command: it cannot observe subagents running in
@@ -4938,9 +5007,7 @@ than implying a guarantee that does not exist.
 Advisory-only triage for a failed CI run's job(s): flaky, infra, or real
 regression, scored by Jev (TypeSafe System One) over a redacted, bounded
 excerpt of the job's own log **plus a small block of deterministic signals**
-computed before Jev is ever asked. Flow 306 (Jev client, opt-in gate,
-advisory rendering); flow 307 (signals, every-failed-job default, the
-evaluation harness, this section's measured-accuracy numbers).
+computed before Jev is ever asked.
 
 ```bash
 keryx review ci-triage --run 36095133327 --json
@@ -4949,16 +5016,16 @@ keryx review ci-triage --run 36095133327 --json
 | Flag | Description |
 |---|---|
 | `--run <id>` | Required (unless `--eval`). The CI run id (e.g. a GitHub Actions run id). |
-| `--job <name>` | Narrows to one of the run's jobs (reaches it directly even when it is beyond the `MAX_JOBS_TRIAGED` cap below). Omitted, **every job whose conclusion is `failure` is triaged** (flow 307, AC3), up to the cap — one verdict each. |
+| `--job <name>` | Narrows to one of the run's jobs (reaches it directly even when it is beyond the `MAX_JOBS_TRIAGED` cap below). Omitted, **every job whose conclusion is `failure` is triaged**, up to the cap — one verdict each. |
 | `--test <name>` | Override the failing test name instead of the best-effort extraction from the log excerpt. Only applied when exactly one job is in scope. |
 | `--repo <owner/repo>` | Passed to the live `gh` adapter; omitted, `gh` resolves the repository from the current checkout. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers BOTH the CI read and the Jev call from files on disk (`ci-run-info.json`, `ci-failed-log.txt`, optional `ci-history.json`, `ci-attempts.json`, `ci-changed-files.json`, `ci-runs-by-head-sha.json`, `ci-related-runs.json`, `jev-response.json`) — no real `gh` call, no real network call. |
 | `--json` | Prints `{results, notTriaged}`: `results` is an array, one entry per triaged job, each `{runId, job, testName, verdict, usage}`; `notTriaged` names any failed jobs beyond the `MAX_JOBS_TRIAGED` cap (empty when nothing was skipped). |
-| `--eval <file>` | Flow 307 (AC5/AC6). Replays a labelled evaluation manifest (JSON, `{cases: [{id, runId, job, truth, fixturesDir}]}`) and reports **before** (flow 306: log only) and **after** (flow 307: log + signals) accuracy and cost, plus a per-case line. Offline (fixtures) by default. See below. |
+| `--eval <file>` | Replays a labelled evaluation manifest (JSON, `{cases: [{id, runId, job, truth, fixturesDir}]}`) and reports **before** (log only) and **after** (log + signals) accuracy and cost, plus a per-case line. Offline (fixtures) by default. See below. |
 | `--live` | Only with `--eval`: replay against the real `gh`/Jev instead of each case's `fixturesDir` — the opt-in gate and credential check both apply, same as a plain `--run`. |
 
-**A bounded number of jobs per run (flow 307 review, `MAX_JOBS_TRIAGED = 10`).**
+**A bounded number of jobs per run (`MAX_JOBS_TRIAGED = 10`).**
 Without `--job`, at most 10 failed jobs of one run are triaged — each job costs
 one Jev call and (with signals) a bounded number of extra `gh` reads, so an
 unbounded number of failed jobs no longer means an unbounded number of calls.
@@ -4972,7 +5039,7 @@ re-fetched per job.
 
 ### `review jev-risk`
 
-Flow 332. An ADDITIONAL orchestrator reviewer — never replacing any other —
+An ADDITIONAL orchestrator reviewer — never replacing any other —
 that builds a RISK MAP of the diff: for every changed hunk, keryx computes
 deterministic facts first (a path class — auth/permissions, crypto,
 migrations, schema, public API, config, concurrency primitives, IO —
@@ -5023,7 +5090,7 @@ transcript.
 
 ### `review jev-scenarios`
 
-Flow 332. An ADDITIONAL orchestrator reviewer — never replacing any other —
+An ADDITIONAL orchestrator reviewer — never replacing any other —
 that performs a FUNCTIONAL review: which user scenarios a PR likely changes.
 Scenarios are gathered deterministically from three sources — gdwiki
 `user-scenario` pages (`.metaproject/wiki/user-scenarios/**`), PRD
@@ -5069,7 +5136,7 @@ prints the manual-check list and any findings into the transcript.
 
 ### `review jev-docs`
 
-Flow 333. An ADDITIONAL orchestrator reviewer — never replacing any other —
+An ADDITIONAL orchestrator reviewer — never replacing any other —
 that finds documentation sections that went STALE because of a diff. The
 default doc corpus is USER-FACING documentation only: `docs/**`, the root
 `README*` (never `CHANGELOG*`), and gdwiki pages (`.metaproject/wiki/**`) —
@@ -5115,7 +5182,7 @@ call.
 
 ### `review jev-comments`
 
-Flow 333. An ADDITIONAL orchestrator reviewer — never replacing any other,
+An ADDITIONAL orchestrator reviewer — never replacing any other,
 and never posting or resolving anything — that checks whether open PR review
 comments were ADDRESSED. Comments come from the EXISTING ledger
 (`.metaproject/reviews/pr-comments/*.json`, written by `keryx review comments
@@ -5152,7 +5219,7 @@ call.
 
 ### `review jev-contract`
 
-Flow 335. An ADDITIONAL orchestrator reviewer — never replacing any other —
+An ADDITIONAL orchestrator reviewer — never replacing any other —
 that checks a PR DESCRIPTION's own CLAIMS, and (when a flow is linked) that
 flow's FROZEN acceptance criteria, against the diff. Claims are extracted
 deterministically from the description: every bullet/numbered-list item, plus
@@ -5164,7 +5231,7 @@ API change" claim) — then asks Jev exactly one `noul`: "does the diff support
 this claim?". A claim the facts CONTRADICT (e.g. "no API change" with an
 exported symbol touched) is `major`, with `class_scope`, regardless of the
 `noul` answer; an unsupported claim below threshold is `minor`. The linked-flow
-track reuses flow 328's `check-ac.ts` wholesale (via `runCheckAc`) — no
+track reuses `review check-ac`'s own checker (`check-ac.ts`) wholesale (via `runCheckAc`) — no
 criterion-checking logic is reimplemented. Like `review jev-risk`, this is
 dispatched by `review-orchestrator` itself (Wave B), as a CLI call rather than
 an LLM sub-agent — `keryx review reviewers --json` marks it `"engine": "jev"`.
@@ -5173,8 +5240,8 @@ When the opt-in is on, it replaces the orchestrator's by-eye Stage 1
 off.
 
 ```bash
-keryx review jev-contract --pr 712 --repo MrCipherSmith/keryx --json
-keryx review jev-contract --pr 712 --flow 335 --repo MrCipherSmith/keryx --json
+keryx review jev-contract --pr 42 --repo <owner>/<repo> --json
+keryx review jev-contract --pr 42 --flow 12 --repo <owner>/<repo> --json
 keryx review jev-contract --diff HEAD~1 --json
 ```
 
@@ -5202,7 +5269,7 @@ transcript.
 
 ### `review jev-triage`
 
-Flow 340. An ADVISORY, ANNOTATE-ONLY pass the orchestrator runs over a review
+An ADVISORY, ANNOTATE-ONLY pass the orchestrator runs over a review
 package's CONSOLIDATED findings, after the Sub-Agent Report Quality Gate and
 before Wave C verification (`review-orchestrator/SKILL.md`). It never drops
 or demotes a finding by itself — every field it produces is an annotation.
@@ -5231,7 +5298,7 @@ merge — the status flip is a nudge to read the pair, not a verdict that the
 findings are duplicates.
 
 ```bash
-keryx review jev-triage --report .metaproject/flows/327-*/reviews/327-r01 --json
+keryx review jev-triage --report .metaproject/flows/<flow>/reviews/<review-id> --json
 keryx review jev-triage --report ./findings.json --max-calls 20 --json
 ```
 
@@ -5258,7 +5325,7 @@ package in the current flow and prints the annotations into the transcript.
 
 ### `review jev-select`
 
-Flow 344. An ADVISORY, pre-dispatch filter — not itself a reviewer, and it
+An ADVISORY, pre-dispatch filter — not itself a reviewer, and it
 never produces a `findings` array — over the candidate reviewer set
 `review-orchestrator` is about to dispatch. For each candidate (bundled +
 project reviewers, the same source `keryx review reviewers --json` reads), it
@@ -5302,7 +5369,7 @@ reviewer's domain surfaced a real finding anyway.
 
 ### `review jev-profile`
 
-Flow 344. The recommended-profile helper: every `review.jev.*` key this
+The recommended-profile helper: every `review.jev.*` key this
 benchmark produced a verdict for, in one place, next to the project's current
 value — so a project does not have to read multiple flow journals to know
 which Jev review steps are worth turning on.
@@ -5321,7 +5388,7 @@ keryx review jev-profile --apply recommended --json
 
 ### `review conform`
 
-Reference-document conformance mode (flow 308): a rules file, a skill, or a
+Reference-document conformance mode: a rules file, a skill, or a
 project skill is split deterministically into clauses (no model call), each
 tagged `state_kind: pr|report|hunk` and `checkable`. Every checkable clause is
 scored by Jev against DETERMINISTIC FACTS keryx computes first — PR body
@@ -5347,14 +5414,14 @@ keryx review conform --ref docs/pipeline-contribution-policy.md --pr 999 --json
 | `--threshold <0..1>` | Below this Jev probability a clause is `likely-violated` (and, with `--explain`, explained). Default `0.5`. |
 | `--model <jev-1.13\|jev-latest>` | Overrides the default Jev model. |
 | `--fixtures <dir>` | Answers the pr-kind read (`pr.json`), every Jev call (`jev-response.json`), and (with `--explain`) the explanation pass (`explain-response.json`) — no real `gh` call, no real network. |
-| `--json` | Prints `{ref, target, threshold, clauses, usage, hunkBudget?}` instead of the human-readable report. Each `clauses[]` entry carries `clause_id`, `state_kind`, `status`, and (hunk-kind only) `hunksJudged`/`hunksBelowThreshold` and, only when `--max-hunk-calls` cut that clause down to fewer hunks than the diff has, `hunksTotal` (the "N" in "judged on K of N"). `hunks` (the full per-hunk detail) is present only for hunk-kind clauses — a pr/report-kind clause is never scored per-hunk, so it no longer carries an always-empty `hunks: []` (flow 326). `hunkBudget` (`{maxHunkCalls, totalHunks, hunksJudged, hunksSkipped, truncatedClauses}`) is present only when `--max-hunk-calls` actually truncated something this run. See the example below. |
-| `--max-hunks <n>` | Flow 326. How many further violating hunk locations a hunk-kind clause's row shows, beyond the single worst one. Default `3`. |
-| `--max-hunk-calls <n>` | Flow 326. Caps hunk × clause Jev questions for the WHOLE run. With enough budget for every hunk-kind clause to get at least one full share (`--max-hunk-calls >= hunk-kind-clause-count`), every clause gets the same `floor(--max-hunk-calls / hunk-kind-clause-count)` region budget, and the hunks kept are the FIRST that many, in diff order, per clause. With a SMALLER budget than the clause count, the per-clause floor takes over: while the budget allows, each clause (in the order its `[state:hunk]` line appears in the reference document) gets 1 judged hunk before any clause gets a 2nd — so `--max-hunk-calls 1` with 2 hunk-kind clauses judges the FIRST clause on its first hunk and leaves the second at 0, rather than rounding both down to 0. At `--max-hunk-calls 0`, every hunk-kind clause gets 0 judged hunks. A clause left at 0 this way is never dropped from the report — it appears with `status: "not-evaluated"` and a reason naming the budget (`"skipped by --max-hunk-calls (0 of N hunks judged)"`); a clause judged on a subset keeps its usual status but carries the `hunksTotal`/"judged on K of N hunks" marker described above (text, JSON, and the `/conform` TUI). Default `40`. |
-| `--detail` | Flow 326. Prints the full per-hunk breakdown (every judged hunk's status/location/probability) under each hunk-kind clause's row in the TEXT report. `--json` always nests this detail, with or without `--detail`. |
+| `--json` | Prints `{ref, target, threshold, clauses, usage, hunkBudget?}` instead of the human-readable report. Each `clauses[]` entry carries `clause_id`, `state_kind`, `status`, and (hunk-kind only) `hunksJudged`/`hunksBelowThreshold` and, only when `--max-hunk-calls` cut that clause down to fewer hunks than the diff has, `hunksTotal` (the "N" in "judged on K of N"). `hunks` (the full per-hunk detail) is present only for hunk-kind clauses — a pr/report-kind clause is never scored per-hunk, so it no longer carries an always-empty `hunks: []`. `hunkBudget` (`{maxHunkCalls, totalHunks, hunksJudged, hunksSkipped, truncatedClauses}`) is present only when `--max-hunk-calls` actually truncated something this run. See the example below. |
+| `--max-hunks <n>` | How many further violating hunk locations a hunk-kind clause's row shows, beyond the single worst one. Default `3`. |
+| `--max-hunk-calls <n>` | Caps hunk × clause Jev questions for the WHOLE run. With enough budget for every hunk-kind clause to get at least one full share (`--max-hunk-calls >= hunk-kind-clause-count`), every clause gets the same `floor(--max-hunk-calls / hunk-kind-clause-count)` region budget, and the hunks kept are the FIRST that many, in diff order, per clause. With a SMALLER budget than the clause count, the per-clause floor takes over: while the budget allows, each clause (in the order its `[state:hunk]` line appears in the reference document) gets 1 judged hunk before any clause gets a 2nd — so `--max-hunk-calls 1` with 2 hunk-kind clauses judges the FIRST clause on its first hunk and leaves the second at 0, rather than rounding both down to 0. At `--max-hunk-calls 0`, every hunk-kind clause gets 0 judged hunks. A clause left at 0 this way is never dropped from the report — it appears with `status: "not-evaluated"` and a reason naming the budget (`"skipped by --max-hunk-calls (0 of N hunks judged)"`); a clause judged on a subset keeps its usual status but carries the `hunksTotal`/"judged on K of N hunks" marker described above (text, JSON, and the `/conform` TUI). Default `40`. |
+| `--detail` | Prints the full per-hunk breakdown (every judged hunk's status/location/probability) under each hunk-kind clause's row in the TEXT report. `--json` always nests this detail, with or without `--detail`. |
 
-**One row per clause, not one row per hunk × clause (flow 326).** A live run
-of `keryx review conform` against PR #712 of this repository, before this
-flow, printed 271 rows — one per (hunk, hunk-kind clause) pair, unreadable
+**One row per clause, not one row per hunk × clause.** A live run
+of `keryx review conform` against one pull request of this repository, before
+aggregation, printed 271 rows — one per (hunk, hunk-kind clause) pair, unreadable
 for any PR with more than a handful of hunks. The report is now aggregated
 per clause: a hunk-kind clause's row names how many hunks were judged and how
 many fell below `--threshold`, the single worst hunk (its location and Jev
@@ -5386,13 +5453,13 @@ got the single available hunk, so it carries `hunksJudged`/`hunksTotal` (the
 and its usual `hunks`/`worst` detail. `hunks-2` got none of the budget — it
 is `not-evaluated` with a reason naming why, not dropped from `clauses[]`.
 The pr-kind `change-limits-1` clause is unaffected by the hunk budget at all,
-and has no `hunks` field (flow 326 nit: a pr/report-kind clause is never
-scored per-hunk):
+and has no `hunks` field (a pr/report-kind clause is never scored
+per-hunk):
 
 ```json
 {
   "ref": "docs/pipeline-contribution-policy.md",
-  "target": { "kind": "pr", "label": "PR #998 — ..." },
+  "target": { "kind": "pr", "label": "PR #42 — ..." },
   "threshold": 0.5,
   "clauses": [
     {
@@ -5441,7 +5508,7 @@ the command refuses before any read and makes no network call.
 **A checkable clause whose kind has no target this run is `not evaluated`**,
 never silently dropped — the same discipline `not-checkable` clauses get.
 This also covers a hunk-kind clause `--max-hunk-calls` left with 0 judged
-hunks (flow 326, AC3): it is `not-evaluated` with a reason naming the budget
+hunks: it is `not-evaluated` with a reason naming the budget
 (`"skipped by --max-hunk-calls (0 of N hunks judged)"`), distinct from a
 target that supplied no state for that kind at all. The `/conform` TUI runs
 the identical budget (fixed at the default `--max-hunk-calls`, not
@@ -5455,8 +5522,7 @@ requests and a real review package: Jev's `noul` scores hedge low rather than
 confidently discriminating (no score reached 0.8+ probability across a
 115-question live check, and only a handful crossed the 0.5 default
 threshold on ordinary small maintenance PRs) — read `likely-violated` as
-"worth a human glance," not a confirmed finding. See flow 308's own journal
-(`.metaproject/flows/308-*/journal.md`) for the full measurement.
+"worth a human glance," not a confirmed finding.
 
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.ci_triage: true` in
@@ -5469,7 +5535,7 @@ ever reached in that state. (`--eval` without `--live` needs neither: nothing
 it reads ever leaves the machine.)
 
 **Advisory only, by construction.** The CI read port (`src/review/ci-port.ts`)
-has exactly six read methods (three from flow 306, three flow 307 added for
+has exactly six read methods (three for the log, three for the
 signals) and no write method at all — there is no rerun, status-check, or
 merge call anywhere on this path to call. The printed verdict is always
 labelled `ADVISORY ONLY`.
@@ -5480,7 +5546,7 @@ probability per option — only the chosen option. So this command asks one
 `noul` question per bucket (`flaky`, `infra`, `real-regression`) instead of
 one `choice` question, and reports the three probabilities together.
 
-**Deterministic signals, computed before Jev is asked (flow 307, AC1/AC2).**
+**Deterministic signals, computed before Jev is asked.**
 For every failed job, through `CiPort` and `git show` only — never a write:
 
 - **rerun** — did the SAME job pass on an EARLIER attempt of this SAME run
@@ -5533,7 +5599,7 @@ one of them is "this job" cannot be told apart from the name alone — and the
 run is only mentioned as an advisory-only evidence line, the same degrade
 path a missing, skipped, or unreadable job already gets.
 
-**A third known signal gap (flow 326, AC6): pagination can hide the triaged
+**A third known signal gap: pagination can hide the triaged
 run's own entry from the same-head list it is compared against.**
 `runsForHeadSha` is bounded/paginated (`-L 10` in the live `gh run list`
 adapter) and can come back without an entry for the run actually being
@@ -5552,14 +5618,14 @@ if pagination happens to drop its own entry from the page fetched, exactly
 the same shape the job-name-ambiguity gap above has (the signal degrades to
 "no evidence" rather than to a wrong answer).
 
-**Measured accuracy (flow 307, AC6) — honestly, whatever it is.** A live run
+**Measured accuracy — honestly, whatever it is.** A live run
 of `--eval` against the real runs of the eight cases in
 `src/commands/fixtures/ci-triage-eval/` (`gh`/Jev, not fixtures; 2026-09-25):
 
 | | accuracy | cost |
 |---|---|---|
-| before (flow 306: log only) | **4/8 = 50%** | $0.00077 |
-| after (flow 307: log + signals) | **4/8 = 50%** | $0.00083 |
+| before (log only) | **4/8 = 50%** | $0.00077 |
+| after (log + signals) | **4/8 = 50%** | $0.00083 |
 
 Raw top-1 accuracy did not move. Signals fixed one case (a thin log excerpt
 that Jev alone read as `infra`; the diff-proximity and cross-branch-history
@@ -5572,13 +5638,11 @@ root cause, different CI runs) also got different verdicts from Jev BEFORE
 any signal was added, which is a reminder that the model's own answer is not
 perfectly stable run-to-run holding the failure fixed. **This classifier
 remains a hint, not a diagnosis** — treat a non-`DETERMINISTIC` verdict
-accordingly regardless of `--top`. See the flow 307 journal
-(`.metaproject/flows/307-*/journal.md`) for the full per-case breakdown and
-the evidence behind each of the eight labels.
+accordingly regardless of `--top`.
 
 ### `review jev-rules`
 
-Flow 330. An ADDITIONAL orchestrator reviewer — never replacing any other —
+An ADDITIONAL orchestrator reviewer — never replacing any other —
 that checks every changed hunk against every applicable clause of every
 discovered project rule, scored by Jev's `noul` "does this hunk VIOLATE this
 clause?" and written up entirely by keryx: Jev supplies only a probability,
@@ -5692,8 +5756,7 @@ several of the false positives were exactly a process/agent-behaviour rule
 (commit-message formatting, TDD workflow, an agent's own prompting standard)
 paired against a code hunk it was never meant to describe. A follow-up
 re-measurement then found the `--rules` directory bypass and the
-first-hunk-drains-the-budget allocation described above. See
-`.metaproject/flows/330-*/journal.md` for the full before/after numbers.
+first-hunk-drains-the-budget allocation described above.
 
 **Opt-in, and named as a privacy decision.** Disabled by default. A project
 enables it with `review.jev.rules: true` in `.metaproject/tasks.config.json`.
@@ -5713,7 +5776,7 @@ and so the violation cache — miss).
 
 ### `review jev-edit-guard`
 
-Flow 343. The Jev EDIT GUARD — a Claude Code `PostToolUse` hook that catches
+The Jev EDIT GUARD — a Claude Code `PostToolUse` hook that catches
 a rule violation the moment an `Edit`/`Write`/`MultiEdit` makes it, rather
 than at the next review round. It reuses `review jev-rules`'s own
 `computeJevRulesResult` (discovery, clause tagging with its cache, pair
@@ -5896,7 +5959,7 @@ budget before anything notices — a counter cannot tell "converging slowly" fro
 "stuck".
 
 ```bash
-keryx review loop --flow 203 --task T4
+keryx review loop --flow 12 --task T4
 ```
 
 Escalates (exit 1) when the same finding recurs in two rounds, or two consecutive
@@ -6139,7 +6202,7 @@ completion gate, and the exit code of `scan`, `report`, `check-input`, and
 
 ```
 keryx security status
-keryx security scan <path> [--json] [--source <kind>]
+keryx security scan <path> [--json] [--source <kind>] [--recursive|--no-recursive] [--exclude <path>]... [--max-files <n>] [--max-bytes <n>]
 keryx security scan-mcp <manifest.json|dir> [--json] [--pin <manifest>] [--strict]
 keryx security audit-harness [path] [--json] [--ci] [--fix-proposals] [--baseline <file>] [--severity-floor <level>]
 keryx security audit-harness apply --proposal <id> [path]
@@ -6147,8 +6210,8 @@ keryx security audit-harness baseline add --finding <id> --justification <text> 
 keryx security impact-evidence status [--json]
 keryx security impact-evidence test <file...> [--json]
 keryx security impact-evidence hook [--runtime claude] [--profile <name>]
-keryx security check-input [--source <kind>] [--file <path>] [--json]
-keryx security check-output [--target <kind>] [--file <path>] [--json]
+keryx security check-input [--source <kind>] [--file <path>] [--runtime <id>] [--json]
+keryx security check-output [--target <kind>] [--file <path>] [--runtime <id>] [--json]
 keryx security redact <path> [--out <path>]
 keryx security report [--since <ref>] [--json]
 keryx security policy validate
@@ -6160,7 +6223,7 @@ keryx security eval [--corpus <name|all>] [--with-model] [--json]
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Print the effective config: mode, raw-retention, gate (`failOn` + `minConfidence`), config-checksum state, and each policy with its action. |
-| `scan <path>` | `<path>`, `--json`, `--source <kind>` | Scan a file, resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
+| `scan <path>` | `<path>`, `--json`, `--source <kind>`, `--recursive`/`--no-recursive`, `--exclude <path>` (repeatable), `--max-files <n>`, `--max-bytes <n>` | Scan a file or a directory (recursive by default; `--no-recursive` scans only the directory's own entry and reports coverage as incomplete rather than clean; `--max-files`/`--max-bytes` bound the scan and must be positive), resolve findings into a decision, and write committable artifacts (`data/security/artifacts/latest.{md,json}`). Prints the gate, action, and findings (or raw JSON with `--json`). |
 | `scan-mcp <manifest\|dir>` | `--json`, `--pin <manifest>`, `--strict` | Scan one MCP tool manifest (or every `*.json` under a directory, recursively) for MCP threats. Findings are leak-safe (category + policy id only). `--pin` records a rug-pull baseline instead of scanning; `--strict` exits `1` when any threat is found, or when the scan could not read a manifest or the pinned baseline (`coverage: incomplete`). Pure and network-free. |
 | `audit-harness [path]` | `<path>`, `--json`, `--ci`, `--fix-proposals`, `--baseline <file>`, `--severity-floor <level>` | Read-only sweep of harness-configuration surfaces, computing a security score over harness fixtures and vulnerabilities. Outputs a summary report with surface coverage, findings by severity, and a pass/fail gate (score formula: `100 - (25*critical + 10*high + 4*medium + 1*low)`, grades A 90–100 / B 75–89 / C 60–74 / D 40–59 / F <40, any critical caps at C). `--ci` sets process exit code from the gate; `--fix-proposals` includes fix recommendations (never writes anything); `--baseline <file>` uses a project suppression file `.metaproject/security-audit-baseline.json` with required justification and checksum; `--severity-floor <level>` filters findings below that severity. A suppression's `expiresAt` (`YYYY-MM-DD`) is inclusive THROUGH the end of that day in UTC — an entry expiring today still suppresses today, and stops the instant the next day begins. |
 | `audit-harness apply` | `--proposal <id>`, `[path]` | Apply a specific fix proposal by id, against `[path]` (defaults to the project root). Fix proposals never self-apply; they are generated by `audit-harness` and applied by the operator. Refuses a `path` that does not already exist as a directory rather than creating it. |
@@ -6168,8 +6231,8 @@ keryx security eval [--corpus <name|all>] [--with-model] [--json]
 | `impact-evidence status` | `--json` | Print the effective impact-evidence config (enabled, strict, exemptGlobs, dampenAfter), declared state, config-checksum match, kill-switch status (`impactEvidence.enabled` and `KERYX_DISABLE_IMPACT_GATE` both logged), host delivery readiness per adapter, and recent log records. `--json` for the machine-readable form. |
 | `impact-evidence test` | `<file...>`, `--json` | Dry-run computation of impact evidence for specified files. Writes nothing — no session state, no log — unlike `hook`, which is the live path. `--json` for machine-readable output. |
 | `impact-evidence hook` | `--runtime claude` (opt), `--profile <name>` (opt) | Live hook entry for pre-tool-context injection at the agent runtime level. `--runtime` (defaults to `claude`); `--profile` accepts `monitored-trusted-local`, `read-only-review`, or `unattended-untrusted` (defaults to `monitored-trusted-local`). Reads and processes JSON from stdin; outputs decision JSON to stdout. |
-| `check-input` | `--source <kind>`, `--file <path>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. |
-| `check-output` | `--target <kind>`, `--file <path>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
+| `check-input` | `--source <kind>`, `--file <path>`, `--runtime <id>`, `--json` | Evaluate incoming content (defaults source `untrusted-external`). Reads from `--file` or stdin. Prints the decision. `--runtime <id>` refuses in the shape that agent runtime's hook reads, and moves the report to stderr. |
+| `check-output` | `--target <kind>`, `--file <path>`, `--runtime <id>`, `--json` | Evaluate outgoing/generated content (defaults source `generated`, target `unknown`). Reads from `--file` or stdin. Prints the decision and, when applicable, the redacted preview. |
 | `redact <path>` | `<path>`, `--out <path>` | Apply fixed-width masks to detected sensitive spans. Writes to `--out`, else prints the redacted content to stdout. Reads from the path or stdin. |
 | `report` | `--since <ref>`, `--json` | Aggregate the latest scan artifact (never re-scans) into a summary: gate, mode, and finding counts by category. |
 | `policy validate` | — | Validate the config against its schema and verify the config checksum. Exit `1` on schema errors or a checksum mismatch. |
@@ -6214,7 +6277,7 @@ and prints a deprecation line.
 keryx serve-mcp [--cwd <project-root>]     # stdio JSON-RPC (default transport)
 keryx serve-mcp --http [--cwd <root>]      # HTTP/SSE, localhost only, opt-in
 keryx serve-mcp --read-only [--cwd <root>] # hide every tool marked mutating
-keryx serve-mcp --harness <id> [--cwd <root>] # bind a cross-harness memory identity (flow 313 / W4-AC6)
+keryx serve-mcp --harness <id> [--cwd <root>] # bind a cross-harness memory identity
 ```
 
 `--cwd` names the project root whose `.metaproject` workspace is exposed; it
@@ -6301,8 +6364,26 @@ installer core (see [integrations.md](./integrations.md#legacy-command-aliases))
 
 ## mcp
 
-Expose read-only Metaproject services (code graph, gdctx, security, flow status,
-memory, health, testing, wiki, standard, SAC) over the
+`keryx mcp` is the MCP **client**: `keryx mcp list`, `keryx mcp add`,
+`keryx mcp remove`, `keryx mcp enable`, `keryx mcp disable`, `keryx mcp trust`,
+`keryx mcp untrust`, `keryx mcp doctor`, `keryx mcp auth` and
+`keryx mcp logout` manage the third-party MCP servers that `keryx shell`
+connects to — see
+[connecting keryx to other MCP servers](#mcp-consumer-connecting-keryx-to-other-mcp-servers)
+below.
+
+Running keryx **as** an MCP server is [`keryx serve-mcp`](#serve-mcp), and
+wiring an editor or agent to that server is [`keryx integrate`](#integrate).
+<!-- retired-spellings-ok: line — names the retired spellings only to say they are retired -->
+The older spellings `keryx mcp serve`, `keryx mcp install` and `keryx mcp uninstall` are retired:
+they still run and print one line naming their replacement (see [Retired spellings](#retired-spellings)). The rest of
+this section describes the server side that `serve-mcp` and `integrate`
+manage.
+
+### What the MCP server exposes
+
+`serve-mcp` exposes read-only Metaproject services (code graph, gdctx, security,
+flow status, memory, health, testing, wiki, standard, SAC) over the
 [Model Context Protocol](https://modelcontextprotocol.io). A thin protocol adapter —
 it defines no new module logic and routes every tool result through the security
 redaction seam before transport. Opt-in: the module is off by default; enable it with
@@ -6313,21 +6394,21 @@ not just interactively.
 ```
 keryx serve-mcp [--cwd <project-root>]          # stdio JSON-RPC MCP server (default transport)
 keryx serve-mcp --http [--cwd <project-root>]   # isolated HTTP/SSE opt-in (localhost only)
-keryx mcp                  # alias for `serve-mcp`
 keryx integrate <cursor|claude|opencode|vscode|generic|all> [--dry-run]
 keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>
 ```
 
 | Command | Flags / args | Description |
 |---|---|---|
-| `serve-mcp` | `--http`, `--cwd <project-root>`, `--harness <id>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. `--harness <id>` (or `KERYX_HARNESS`) binds a cross-harness memory identity once at launch; an unrecognised id refuses to start. Bare `mcp` is an alias for `serve-mcp`. |
-| `integrate` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","mcp","serve","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["mcp","serve","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
+| `serve-mcp` | `--http`, `--cwd <project-root>`, `--read-only`, `--harness <id>` | Start the MCP server over stdio (the default). `--cwd` selects the project root whose `.metaproject/` workspace is exposed; this is what makes editor/client launches independent from their process cwd. `--http` switches to the isolated localhost-only HTTP/SSE transport, which additionally requires `http.enabled=true` in the module's manifest entry. `--harness <id>` (or `KERYX_HARNESS`) binds a cross-harness memory identity once at launch; an unrecognised id refuses to start. `--read-only` hides every tool marked mutating. A bare `keryx mcp` with no subcommand is the retired spelling of `serve-mcp` and still serves. |
+| `integrate` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (comma-separated; default `all`), `--dry-run` | Merge-safely wire this project into an editor/agent's MCP client config: `cursor` → `.cursor/mcp.json`, `claude` → `.mcp.json`, `opencode` → `opencode.json` (all project root), `vscode` → `.vscode/mcp.json`, `generic` prints a ready snippet and writes no file. `all` targets cursor + claude + opencode only — `vscode` is deliberately opt-in and must be named explicitly. `cursor`/`claude` add `mcpServers.keryx = { command: "keryx", args: ["serve-mcp","--cwd","<absolute-project-root>"] }`; `opencode`'s shape differs — `mcp.keryx = { type: "local", command: ["keryx","serve-mcp","--cwd","<absolute-project-root>"], enabled: true }`; `vscode`'s shape differs again — VS Code's native MCP config uses a top-level `servers` key (not `mcpServers`), each entry requiring `"type": "stdio"`: `servers.keryx = { type: "stdio", command: "keryx", args: ["serve-mcp","--cwd","<absolute-project-root>"] }`. Every runtime's entry is marked with a managed sentinel, preserving existing servers/keys and staying idempotent. Also sets `modules.mcp.enabled=true` in `metaproject.json` and probes the optional SDK (printing `bun add @modelcontextprotocol/sdk` when absent — it never auto-installs or opens a network connection). `--dry-run` prints the planned change and writes nothing. |
 | `integrate --remove` | `<cursor\|claude\|opencode\|vscode\|generic\|all>` (default `all`) | Remove ONLY the managed `keryx` server (and its sentinel) from each runtime's client config, leaving other servers and user content intact. A no-op when nothing is installed. |
 
 ### Retired spellings
 
-The publisher surface was renamed so that `mcp` means one direction only
-(D-04, `docs/requirements/keryx-mcp-servers/decisions.md`). Every retired
+The publisher surface was renamed so that `mcp` means one direction only:
+`keryx mcp` is the client side, `serve-mcp` and `integrate` the server side.
+Every retired
 spelling still runs and prints one line naming its replacement — nothing was
 removed, so existing scripts keep working:
 
@@ -6352,7 +6433,8 @@ nor writes a client config.
 
 ## mcp (consumer) — connecting keryx TO other MCP servers
 
-Everything above is keryx **as** an MCP server. This is the other direction:
+The server side above is `serve-mcp` and `integrate`. This is the direction
+`keryx mcp` itself covers:
 third-party MCP servers that `keryx shell` connects to, so the model can use
 their tools.
 
@@ -6370,7 +6452,7 @@ keryx mcp logout <name>
 
 | Command | Description |
 |---|---|
-| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. **Exit codes (flow 353, AC4):** a problem in a FOREIGN config keryx merely reads for compatibility (Cursor's `~/.cursor/mcp.json`, Claude Desktop's `~/.claude.json`, a project's own `.mcp.json`, Grok's TOML config) prints under a `warnings:` block (a `warnings` array alongside `problems` in `--json`) and never blocks — exit `0`. Only a problem in keryx's OWN native config (`.keryx/mcp-servers.json`, either scope) still exits `1`. |
+| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. **Exit codes:** a problem in a FOREIGN config keryx merely reads for compatibility (Cursor's `~/.cursor/mcp.json`, Claude Desktop's `~/.claude.json`, a project's own `.mcp.json`, Grok's TOML config) prints under a `warnings:` block (a `warnings` array alongside `problems` in `--json`) and never blocks — exit `0`. Only a problem in keryx's OWN native config (`.keryx/mcp-servers.json`, either scope) still exits `1`. |
 | `add` | Writes a native entry. The stdio form REQUIRES `--` before the server's command: without it, `keryx mcp add fs -- npx pkg --json` could not tell whose `--json` that is. `-e` is repeatable. `--scope user` (default) writes `mcp-servers.json` in the keryx config dir, owner-only; `--scope project` writes `<root>/.keryx/mcp-servers.json`, which is meant to be committed. An existing name is refused unless `--force`. |
 | `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http` — streamable HTTP negotiates it, so it is not a separate transport. |
 | `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |
@@ -6583,14 +6665,16 @@ fs [user] stdio: connected
   tools: 14
 ```
 
-Not yet in this release: OAuth, importing servers you already configured in
-Cursor/Claude/`.mcp.json`, and a TUI view. See
-`docs/requirements/keryx-mcp-servers/`.
+Not yet in this release: importing servers you already configured in another
+editor into keryx's own config. `list` and `doctor` read those files for
+compatibility (see the exit codes above); they do not copy them.
+
+### Server-side notes (`serve-mcp`)
 
 Tool and resource exposure is filtered by the manifest's `expose.modules` list — a
 disabled module is hidden from `tools/list` and `resources/list`.
 
-Unlike every other opt-in command, `mcp serve` **hard-fails** (prints an actionable
+Unlike every other opt-in command, `serve-mcp` **hard-fails** (prints an actionable
 message and exits `1`) when the optional `@modelcontextprotocol/sdk` dependency is
 not installed — this is the one sanctioned exception to graceful degradation. An
 unknown subcommand prints an error and exits `1`.

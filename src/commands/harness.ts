@@ -80,13 +80,20 @@ import type { ParsedChildResult } from "../harness/child/contract";
 import type { Provenance } from "../harness/session/types";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 
-const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
-  "fake",
-  "anthropic",
-  "openai",
-  "gemini",
-  "ollama",
-  ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
+/**
+ * Every provider id `keryx harness run --provider` accepts; also printed by
+ * `keryx --help`. De-duplicated because `openai` is both a native provider and
+ * an entry in the OpenAI-compatible registry.
+ */
+export const HARNESS_PROVIDER_OPTIONS: readonly string[] = [
+  ...new Set([
+    "fake",
+    "anthropic",
+    "openai",
+    "gemini",
+    "ollama",
+    ...OPENAI_COMPAT_PROVIDERS.map((provider) => provider.name),
+  ]),
 ];
 const HARNESS_PROVIDER_USAGE = `Usage: keryx harness run --provider <${HARNESS_PROVIDER_OPTIONS.join("|")}> --model <m> [--base-url <url>] "<prompt>"`;
 

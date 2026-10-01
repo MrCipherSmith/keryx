@@ -235,7 +235,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
 
   // ---- Working in keryx shell ----------------------------------------------
-  { kind: "cli", name: "sessions", group: "Working in keryx shell", summary: "List or export per-project shell sessions." },
+  { kind: "cli", name: "sessions", group: "Working in keryx shell", summary: "List, fork (branch), export or locate per-project shell sessions." },
   {
     kind: "slash",
     name: "/sessions",
@@ -544,13 +544,13 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "agents",
     group: "External agents, ACP and MCP",
-    summary: "Manage optional global agent bootstrap instructions.",
+    summary: "Agent catalog (list, show, export, verify, generate), optional global bootstrap instructions, the external-agent runtime and the agent monitor.",
   },
   {
     kind: "cli",
     name: "mcp",
     group: "External agents, ACP and MCP",
-    summary: "Retired spelling of serve-mcp / integrate; still works, names its replacement.",
+    summary: "The MCP servers keryx connects to (list, add, trust, doctor, auth); mcp serve/install are retired spellings of serve-mcp/integrate.",
   },
   {
     kind: "cli",
@@ -994,7 +994,9 @@ export function renderCommandsByTaskMarkdown(): string {
     "",
     "Every `keryx` CLI verb and every `keryx shell` command, grouped by task — " +
       "the same grouping `keryx help` and the OpenTUI shell's `/help` modal use " +
-      "(`src/standard/help-groups.ts`, flow 303).",
+      "(`src/standard/help-groups.ts`). Two aliases (`session` for `sessions`, " +
+      "`skill-verify-skill` for `skills verify`) and one internal helper are left out; " +
+      "the [CLI reference](cli-reference.md) has every subcommand and flag.",
     "",
     "Generated. Do not hand-edit: regenerate with " +
       "`bun scripts/generate-commands-by-task.ts`, and " +

@@ -1367,7 +1367,7 @@ function initPreviewNotes(input: {
 }
 
 
-function printInitHelp(): void {
+export function printInitHelp(): void {
   helpTitle("keryx init", "set up a .metaproject workspace");
   helpUsage(["keryx init [options]"]);
   helpOptions([

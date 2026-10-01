@@ -1939,7 +1939,7 @@ function runtimeSourcePath(relativePath: string): string {
   return directPath;
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   helpTitle("keryx update", "refresh .metaproject service files (data left untouched)");
   helpUsage(["keryx update [--skip-runtime] [--hooks] [--no-tasks] [--yes]"]);
   heading("Default behavior");

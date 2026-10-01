@@ -1856,9 +1856,9 @@ Commands:
   scout     Pre-creation dedupe gate: does an existing skill already cover this?
   eval      Behavioral compliance eval: trigger accuracy + scenario pass rate. --judge
             <provider>[:<model>] grades judge-graded behavior scenarios with a live LLM judge.
-  judge-check Proves a skill's judge-graded scenarios are hard to game: runs the canned
-              empty/echo/known-wrong/injection/stuffed/known-right answers through the live
-              judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
+  judge-check Proves a skill's judge-graded scenarios are hard to game: runs the eight canned
+              answers (empty, echo, vague, known-wrong, subtle-wrong, injection, stuffed,
+              known-right) through the live judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
   stocktake Periodic catalog health check: keep|improve|update|retire|merge
 `);
 }

@@ -1813,7 +1813,7 @@ function truncate(value: string, maxLength: number): string {
   return value.length <= maxLength ? value : `${value.slice(0, maxLength - 3)}...`;
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`keryx ctx
 
 Usage:
