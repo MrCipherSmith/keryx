@@ -158,3 +158,36 @@ rebase: replaying the branch onto main re-raised already-resolved conflicts.
 - 2026-10-01T11:05:22.871Z - task-depends-set: T18: dependsOn T17, T22 (was T17, T21) — review round 3 checks the round-2 fixes
 - 2026-10-01T11:05:23.180Z - task-attempt: T22: started (attempt 1) — 367-T22
 - 2026-10-01T11:09:12.308Z - task-done: T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures
+- 2026-10-01T11:09:12.828Z - task-attempt: T18: started (attempt 5) — 367-T18 review round 3 (fix verification)
+- 2026-10-01T11:14:49.502Z - task-attempt: T18: failed (attempt 6) — round 3: 0 blocker, 0 major, 1 minor (R1 serve loopback wording at 9 more sites), 3 info
+- 2026-10-01T11:14:49.925Z - task-added: T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep
+
+## 2026-10-01 — attempt budget reached on T18: strategy change
+
+Three review rounds have run (round 1: 3 major / 19 minor; round 2: 1 major /
+6 minor; round 3: 0 major / 1 minor). `attempts.count` on T18 reads 6 because
+each round records a `started` and a `failed` entry; the rounds are three, and
+the bound is reached. Findings converge and do not repeat across rounds
+(`keryx review loop` cannot observe repetition: the packages are lightweight
+markdown, not ingested). The single remaining minor (R1) is a wording class —
+`keryx serve` described as loopback-bound without "by default" — so a fourth
+full review round is not the right instrument. Changed strategy: T23 fixes every
+site, and the acceptance evidence is a deterministic multiline sweep over all
+user-facing docs for "loopback" sentences about `serve` that lack "by default",
+recorded here with its command and result, plus the existing gates. No fourth
+model review round.
+- 2026-10-01T11:15:04.921Z - task-attempt: T23: started (attempt 1) — 367-T23
+- 2026-10-01T11:17:37.276Z - task-done: T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep
+
+## 2026-10-01 — R1 closed by deterministic sweep (commit cf7789d1)
+
+`rg -U -i -n --pcre2 "serve[^.]{0,200}loopback[- ]\s*(bound|only)|loopback[- ]\s*(bound|only)[^.]{0,200}serve|loopback\s+HTTP|loopback\s+remote" README.md README.ru.md ARCHITECTURE.md SECURITY.md docs/docs src/standard/help-groups.ts`
+→ 2 hits, ARCHITECTURE.md:72 and :129, both about `serve-mcp` (the MCP
+publisher over stdio or loopback HTTP), not `keryx serve`. 11 sites rewritten to
+"loopback by default" (incl. the `serve` help summary in src/cli-registry.ts and
+help-groups.ts, regenerated commands-by-task.md, and its pinned help fixture).
+Gates at cf7789d1: mkdocs --strict OK, check-doc-links 0/2048 broken, retired
+spellings 0 undeclared, typecheck clean, help/reference/README tests 141/141.
+Review loop result: round 3 left 0 blocker / 0 major / 1 minor (R1) → R1 fixed
+and verified above; info items remain as recorded in reviews/round-3.md.
+- 2026-10-01T11:17:50.206Z - task-done: T18: review-orchestrator round over the final diff

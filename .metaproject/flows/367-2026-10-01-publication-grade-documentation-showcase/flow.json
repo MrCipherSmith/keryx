@@ -10,7 +10,7 @@
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T11:09:12.308Z",
+  "updatedAt": "2026-10-01T11:17:50.206Z",
   "source": {
     "type": "description",
     "ref": null
@@ -401,13 +401,13 @@
       "id": "T18",
       "title": "review-orchestrator round over the final diff",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T17",
         "T22"
       ],
       "attempts": {
-        "count": 4,
+        "count": 6,
         "log": [
           {
             "at": "2026-10-01T10:31:24.690Z",
@@ -428,12 +428,24 @@
             "at": "2026-10-01T11:05:00.222Z",
             "outcome": "failed",
             "detail": "round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)"
+          },
+          {
+            "at": "2026-10-01T11:09:12.828Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 3 (fix verification)"
+          },
+          {
+            "at": "2026-10-01T11:14:49.502Z",
+            "outcome": "failed",
+            "detail": "round 3: 0 blocker, 0 major, 1 minor (R1 serve loopback wording at 9 more sites), 3 info"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "3 review rounds (reviews/round-1..3.md); final minor R1 fixed in T23 and verified by deterministic sweep (journal); 0 blocker/major/minor open"
     },
     {
       "id": "T19",
@@ -525,6 +537,29 @@
             "at": "2026-10-01T11:05:23.180Z",
             "outcome": "started",
             "detail": "367-T22"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T11:15:04.921Z",
+            "outcome": "started",
+            "detail": "367-T23"
           }
         ]
       },
@@ -862,6 +897,36 @@
       "at": "2026-10-01T11:09:12.308Z",
       "event": "task-done",
       "detail": "T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures"
+    },
+    {
+      "at": "2026-10-01T11:09:12.828Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 5) — 367-T18 review round 3 (fix verification)"
+    },
+    {
+      "at": "2026-10-01T11:14:49.502Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 6) — round 3: 0 blocker, 0 major, 1 minor (R1 serve loopback wording at 9 more sites), 3 info"
+    },
+    {
+      "at": "2026-10-01T11:14:49.925Z",
+      "event": "task-added",
+      "detail": "T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep"
+    },
+    {
+      "at": "2026-10-01T11:15:04.921Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 367-T23"
+    },
+    {
+      "at": "2026-10-01T11:17:37.276Z",
+      "event": "task-done",
+      "detail": "T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep"
+    },
+    {
+      "at": "2026-10-01T11:17:50.206Z",
+      "event": "task-done",
+      "detail": "T18: review-orchestrator round over the final diff"
     }
   ],
   "acKinds": {
