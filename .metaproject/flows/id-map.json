@@ -390,5 +390,13 @@
     "toDir": "385-2026-10-01-local-env-test-failures",
     "at": "2026-10-01T13:45:04.262Z",
     "reason": "duplicate id with 366-2026-09-29-external-agents-live on main; operator chose to move the later flow (housekeeping, flow 384)"
+  },
+  {
+    "from": "367",
+    "to": "386",
+    "fromDir": "367-2026-10-01-wiki-mutations-reversible-and-invariant-",
+    "toDir": "386-2026-10-01-wiki-mutations-reversible-and-invariant-",
+    "at": "2026-10-01T17:13:55.211Z",
+    "reason": "Collision with 367-2026-09-29-w2-rewind merged to main from another branch while this flow was in progress; 385 is the highest id on main"
   }
 ]

@@ -1,0 +1,805 @@
+[
+  {
+    "id": "L-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "readPreviousVersion, which wiki validate uses as its baseline, deliberately judges a page that was changed outside keryx against the last keryx-recorded version (oldestMatch stays -1, so rows[0] is picked). validatePageInvariants then reports changelog-entry-altered / frontmatter-key-dropped / managed-block-dropped for any deliberate human edit (fixing a typo in an old changelog entry, removing an obsolete front-matter key, dropping a Reference block by hand). Nothing records a hand edit until the next keryx write to that page, so the finding cannot be acknowledged or cleared.",
+    "impact": "validate reports a false violation, attributed to the page history, on every run until some keryx command rewrites that page. The history tree is gitignored, so the same page is clean in CI and red locally; a local pre-push gate that runs wiki validate is blocked by a legitimate human edit.",
+    "suggested_fix": "Only judge writes keryx made: in validatePageInvariants (or readPreviousVersion) return null when the live sha matches no recorded row (live content is a hand edit), or compare only live-vs-previous when live equals rows[0]. Report hand edits as info, not as an invariant breach.",
+    "evidence": "Code path: readPreviousVersion sets oldestMatch=-1 when no row.sha equals sha(live), slice(0).find(sha !== liveSha) returns rows[0]; service.ts validatePageInvariants feeds that to checkPageInvariants(previous, content) and pushes an issue for every violation except version-behind-changelog. Not run end-to-end; derived from the code.",
+    "confidence": "medium",
+    "file": "src/wiki/history.ts",
+    "line": 558,
+    "quote": "const previous = history.rows.slice(oldestMatch + 1).find((row) => row.sha !== liveSha);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/history.ts:readPreviousVersion",
+        "src/wiki/service.ts:validatePageInvariants"
+      ],
+      "enumeration_method": "keryx ctx rg readPreviousVersion src: one production caller (validatePageInvariants)"
+    },
+    "global_id": "2026-10-01-ingest-main#L-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the first-pass repro (verify/hist.ts) in a temp project: write A, hand-edit the changelog typo, then readPreviousVersion(...) returned a value that is NOT the original (prev === A: false) and wikiValidate(d) returned issues [] (it was a changelog-entry-altered issue before). Code: history.ts:555 'if (oldestMatch < 0) return null' - a live content that matches no recorded row (a hand edit) is no longer judged.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-002",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "restoreWikiRun loops over pages in sorted order and restoreTo throws when the target version's stored copy is pruned ('(pruned)') or fails its sha check. The exception escapes the loop: pages before the failing one are already restored, pages after it are never attempted, and the CLI prints only the error (no restored/conflict list).",
+    "impact": "A run older than the retention window (keep=20) gives a partial, unreported undo. Re-running then reports the already-restored pages as 'changed after this run' conflicts, so the user cannot tell the state.",
+    "suggested_fix": "Catch per page inside the loop and push { page, reason } into result.conflicts (or a new failures list); better, resolve and verify every target's content (readVersionContent) before the first write so a run restore is all-or-nothing.",
+    "evidence": "restoreTo -> readVersionContent throws 'has no stored copy' for file '(pruned)'; no try/catch in restoreWikiRun; runRestoreCommand's catch prints only error.message.",
+    "confidence": "high",
+    "file": "src/wiki/history.ts",
+    "line": null,
+    "quote": "result.restored.push(await restoreTo(ctx, page, before));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the repro (3 pages a,b,c in one run, b under keep=1 so its pre-run version is '(pruned)'): restoreWikiRun no longer throws, it returned restored [a, c] and conflicts [b: 'v0001 of components/b.md has no stored copy ((pruned))']; a was back to 0.1.0 and c was restored too (c on disk no longer 0.1.1). A re-run lists a as 'changed after this run' and b again, i.e. a reported, complete result. history.ts:627-633 wraps each page in try/catch and pushes to result.conflicts.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "restoreChangelog pops trailing blank lines from the source section and re-adds a separator only when another section follows. When the changelog is the last section (the usual layout) the page loses its final newline. Ran preserveEnrichInvariants on '...## Changelog\\n\\n- 1.0.0 - a\\n': result ends with '- 1.0.0 - a' with no trailing newline.",
+    "impact": "Every enriched page whose changelog is last is written without a trailing newline (diff noise 'No newline at end of file', churn against hand-edited pages).",
+    "suggested_fix": "After the splice, ensure the result ends with exactly one '\\n' (return all.join('\\n').replace(/\\s*$/, '\\n')).",
+    "evidence": "bun script in scratchpad: JSON.stringify(preserveEnrichInvariants(lf, lf.replace('hi','ho'), 'n')) ended with '- 1.0.0 - a\"' (no \\n).",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": 307,
+    "quote": "all.splice(range.heading, range.end - range.heading, ...(section ?? []), ...(range.end < all.length ? [\"\"] : []));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-003",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "decided-by: MrCipherSmith (2026-10-01). Refuted by review-verifier (execution) at c8bd0042: both enrich writers append the trailing newline (enrich.ts RLM-off write and finishSuccess); an end-to-end wikiEnrich run on a changelog-last page left the page ending in a newline. Only the dry-run preview lacks it."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Function-level behaviour is real (preserveEnrichInvariants(lf, ...) output ends '- 1.0.0 - a' with endsWith('\\n') === false), but the stated impact is not: both production writers append the newline before writing (enrich.ts:924 and finishSuccess enrich.ts:1225 'content.endsWith(\"\\n\") ? content : content+\"\\n\"'). End-to-end wikiEnrich with a stub provider on a page whose changelog is the last section -> action 'enriched', on-disk page ends with '- 1.0.0 - a\\n' (disk ends with newline: true). Only dry-run preview/bytesAfter lacks the newline. Refutes 'every enriched page is written without a trailing newline'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-004",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Section/changelog parsing ignores code fences: the first '## Changelog' line wins even inside a fenced example, and SECTION_HEADING treats a '# comment' line inside a fence as a section end. A page that documents the page format (a fenced '## Changelog' example before the real one) gets the new entry inserted inside the code fence, and the real changelog is neither restored nor checked.",
+    "impact": "preserveEnrichInvariants/checkPageInvariants pass while the real changelog is unprotected; Version is bumped to a value no real changelog entry names. Reproduced: with a fenced example, output had '- 1.0.1 - note' inside the ```markdown block and the real changelog still ended at 1.0.0. No such page exists in this wiki today (src-harness-extension/parallel each have one heading).",
+    "suggested_fix": "Track fence state (lines starting with ``` or ~~~) in changelogRange, sectionsOf, mergeGeneratedSections' section-end scan and sectionCounts, and skip headings inside fences.",
+    "evidence": "bun script t1.ts in scratchpad: fenced input produced the entry inside the fence, checkPageInvariants returned [].",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": null,
+    "quote": "const heading = all.findIndex((line) => CHANGELOG_HEADING.test(line.trim()));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran verify/inv.ts L-004 input (a fenced ```markdown example holding '## Changelog' before the real one). preserveEnrichInvariants output leaves the fenced block untouched ('- 0.0.1 - example' only) and puts '- 1.0.1 - note' in the real changelog above '- 1.0.0 - real'. page-invariants.ts now has fencedLines()/findLine() masking in changelogRange, sectionsOf and parseChangelog.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "All parsers split on '\\n' only. On a CRLF page the existing section keeps '\\r' and never equals the generated section, so mergeGeneratedSections rewrites it on every run; setPageVersion, prependChangelogEntry and the spliced sections write LF lines into the CRLF file (mixed endings).",
+    "impact": "collect --force on a CRLF checkout (Windows autocrlf) is not idempotent: each run rewrites the Related Wiki/Reference section, bumps Version and adds a changelog entry, and fills the page history with no-op versions. Reproduced: mergeGeneratedSections(crlf, gen, 'm') !== crlf while the LF equivalent returns the input unchanged.",
+    "suggested_fix": "Detect the page's line ending, normalise to LF for processing and convert back on output, or compare with \\r stripped and emit entries/Version lines with the detected EOL.",
+    "evidence": "bun script t3.ts: 'LF same: true', 'CRLF same: false'; the CRLF output had mixed \\r\\n and \\n.",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": null,
+    "quote": "if (all.slice(start, contentEnd).join(\"\\n\") === regenerated.join(\"\\n\")) continue;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran verify/inv.ts L-005: mergeGeneratedSections(gen,gen,'m') === gen true and mergeGeneratedSections(crlf,gen,'m') === crlf now true (was false); the CRLF output is all CRLF with Version unchanged and no new entry. T-003 CRLF test in review-r1-coverage.test.ts fails when inEolOf is neutralised, so it is pinned.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-006",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Any generated 'Reference...' heading is matched loosely against the existing page with /^reference\\b/i, so a hand-written section such as '## Reference implementation notes' is taken for the generated Reference section and replaced wholesale when the page has no managed block. In the managed-block branch the same pattern applies to the heading only; the replacement branch matches the first '## Reference*' heading on the page.",
+    "impact": "collect --force deletes the prose of a non-generated section whose title merely starts with the word Reference (recoverable from history, but the page itself loses it and the changelog entry says prose untouched). Reproduced: '## Reference implementation notes' + body replaced by '## Reference (from code graph)'.",
+    "suggested_fix": "Match only 'Reference' or 'Reference (from code graph)' exactly (e.g. /^reference(\\s*\\(.*\\))?$/i), as managed-block.ts intends, and skip when the matched section has hand-written content.",
+    "evidence": "bun script t2.ts: existing '## Reference implementation notes' section was replaced; changelog entry '- 0.1.1 - m' added.",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": null,
+    "quote": "if (/^reference\\b/i.test(heading) && block.kind === \"present\") {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran verify/inv.ts L-006 (existing '## Reference implementation notes' + 'hand prose here', generated '## Reference (from code graph)'). The hand section and its prose are kept; the generated Reference section is added separately. page-invariants.ts:348 isReferenceHeading is now /^reference(\\s*\\(from code graph\\))?$/i.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-007",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "prependChangelogEntry inserts at the first non-blank line after the heading without checking it is an entry. A changelog with an intro line ('Newest first.') or an empty changelog followed by another heading gets the entry glued to it: the intro becomes a lazy continuation of the new bullet (parseChangelog then counts it as part of the entry text), and with an empty section the next '## ' heading follows the entry with no blank line. The 'spaced' heuristic also reads the file's trailing '' element as a blank line and adds a blank between entries on single-entry pages.",
+    "impact": "Rendering/changelog-text corruption of machine entries; later checks compare entries that include the glued prose.",
+    "suggested_fix": "Insert before the first ENTRY_START line inside [heading, end) (or before end when none), always followed by a blank line when the next line is not an entry; compute 'spaced' only from lines inside the changelog range.",
+    "evidence": "bun script t1.ts outputs: '- 1.0.1 - n\\nNewest first.' and '- 1.0.1 - n\\n## Other'.",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": null,
+    "quote": "all.splice(insert, 0, ...(spaced ? [entry, \"\"] : [entry]));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: ran verify2/inv2.ts through preserveEnrichInvariants. Intro-line changelog gives '## Changelog\\n\\nNewest first.\\n\\n- 1.0.1 - n\\n- 1.0.0 - a' and parseChangelog counts entry text '- 1.0.1 - n' cleanly; empty changelog before '## Other' gives '- 1.0.1 - n\\n\\n## Other' (blank line kept); single-entry changelog gets no blank between entries ('- 1.0.1 - n\\n- 1.0.0 - a'). All three symptoms gone.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-008",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "bumpPatch falls back to 0.1.1 for any Version that is not strict x.y.z ('1.0', '2.0.0-beta', '1.2.3+b'), and setPageVersion then writes that over the real value when the page has no changelog entry above it. Separately, setPageVersion rewrites a YAML 'version: \"1.0.0\"' line as 'Version: 1.0.1' (key case and quoting changed); frontmatterKeys lowercases so checkPageInvariants cannot see it.",
+    "impact": "A write can lower Version (2.0 -> 0.1.1) or silently change the casing of a front-matter key that other tooling may read case-sensitively; neither is reported by checkPageInvariants.",
+    "suggested_fix": "Leave Version untouched (and skip the new entry's version) when the current value is unparseable; in setPageVersion keep the original key spelling and quoting.",
+    "evidence": "bun script t2.ts: input 'version: \"1.0.0\"' came out as 'Version: 1.0.1'; code path for bumpPatch(null/unparseable) returns 0.1.1.",
+    "confidence": "medium",
+    "file": "src/wiki/page-invariants.ts",
+    "line": 135,
+    "quote": "if (parts === null) return \"0.1.1\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: ran verify2/inv2.ts: bumpPatch('1.0') = 1.0.1, '2.0.0-beta' = 2.0.1, '1.2.3+b' = 1.2.4 (were all 0.1.1); a page with 'Version: 2.0' is now written as 2.0.1 (was 0.1.1); YAML 'version: \"1.0.0\"' becomes 'version: \"1.0.1\"' (key case and quotes kept). Residual not in the finding's examples: a non-version value such as 'latest' still falls back to 0.1.1.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-009",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "runs.jsonl is appended after the page and index are already written, outside any shared lock or recovery. If the process dies or the append throws (disk full), the page is changed and its index advanced but the run has no record of it; the throw also reaches wikiEnrich/wikiCollect, which report the page as failed although it was written.",
+    "impact": "`wiki restore --run <id>` and the undo hint silently omit that page (partial undo reported as success); the enrich result misreports a written page as failed.",
+    "suggested_fix": "Make restoreWikiRun/pagesChangedByRun also scan page indexes for rows with row.run === runId (they are authoritative), and catch the runs.jsonl append so it cannot fail an already-completed page write.",
+    "evidence": "Ordering in mutatePage: writeFile(page) -> writeFileAtomic(index) -> rm(pruned) -> appendFile(runs); pagesChangedByRun reads only runs.jsonl.",
+    "confidence": "medium",
+    "file": "src/wiki/history.ts",
+    "line": null,
+    "quote": "await appendFile(runsFile, `${JSON.stringify({ runId: ctx.runId, command: ctx.command, page, at: now, action })}\\n`, \"utf8\");",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the repro (runs.jsonl made a directory so appendFile fails): the write still throws EISDIR but the page on disk is unchanged (changed: false) and the page index has no row for the run (index has ctx2 run: false), so there is no written-but-unrecorded page. history.ts:425 now appends the run log BEFORE writing the page/index; a logged page that was not written becomes a conflict on restore (history.test.ts L-009 test).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "L-010",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "Every error from readPreviousVersion (history index with no rows, stored copy missing or failing its sha256, unreadable file) is converted to null and the page is skipped, indistinguishable from 'no history yet'.",
+    "impact": "A corrupted or tampered history makes validate pass silently for that page, with no signal that the comparison did not happen.",
+    "suggested_fix": "Report a 'history' warning issue naming the page and the error instead of swallowing it.",
+    "evidence": "Code: .catch(() => null) followed by 'if (previous === null) continue;'.",
+    "confidence": "high",
+    "file": "src/wiki/service.ts",
+    "line": null,
+    "quote": "const previous = await readPreviousVersion(cwd, toPosixPath(page.relativePath), content).catch(() => null);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#L-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the repro (page history index replaced by 'garbage no rows'): readPreviousVersion still rejects, but wikiValidate(d) now returns [{page:'components/a.md',kind:'metadata',message:'page history unreadable: history index has no version rows (edited by hand?): ...'}] instead of passing silently.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "S-001",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The `file` field of every version row is parsed back from the per-page index.md (parsePageHistoryIndex: `file: link ? link[1]! : match[6]!`) and trusted. planPrune selects any row whose file merely ends with `.md`, and mutatePage then rm()s path.join(dir, file) with no containment check, so `../` segments escape the history folder. readVersionContent has the same flaw on the read side (`readFile(path.join(pageHistoryDir(cwd, page), row.file))`, gated only by a sha256 that the same index supplies).",
+    "impact": "Anyone who can place or edit `.metaproject/data/gdwiki/history/<page>/index.md` can make the next keryx wiki write (enrich, sync --apply, restore, sac accept) of that page delete arbitrary `*.md` files the user can write (notes, CLAUDE.md, other wiki pages), or make `keryx wiki restore` copy any readable `*.md` file into a wiki page. The history dir is only gitignored by a block that `keryx init/update` writes (see S-003), so a project that has not refreshed its ignore block can receive a crafted index through a pull request or clone; the attacker needs the rows to exceed `keep` (20 rows with .md file names) so the traversal rows land in the prune set.",
+    "suggested_fix": "Validate every row.file when parsing and before any fs call: require `/^v\\d{4,}-[0-9T-]+Z?\\.md$/` (or path.basename(file) === file), and resolve+check `path.resolve(dir, file).startsWith(path.resolve(dir) + path.sep)` in readVersionContent and the prune loop. Reject the index (throw) when a row fails.",
+    "evidence": "Code path: readPageHistory -> parsePageHistoryIndex (no validation of match[6]) -> mutatePage -> planPrune (`row.file.endsWith(\".md\")`) -> `rm(path.join(dir, file), { force: true })`. A row `| v0001 | t | b | r | s | ../../../../../victim.md |` with 21+ stored rows is deleted when the page is next written. Read-only analysis; not executed.",
+    "confidence": "medium",
+    "file": "src/wiki/history.ts",
+    "line": null,
+    "quote": "for (const file of pruned) await rm(path.join(dir, file), { force: true });",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/history.ts:mutatePage (prune rm loop)",
+        "src/wiki/history.ts:readVersionContent",
+        "src/wiki/history.ts:parsePageHistoryIndex"
+      ],
+      "enumeration_method": "keryx ctx rg for path.join(pageHistoryDir|dir, ...) / row.file uses in src/wiki/history.ts; all reads of `row.file` are readVersionContent, mutatePage failure rm (generated name, safe) and the prune loop"
+    },
+    "global_id": "2026-10-01-ingest-main#S-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the repro (keep=1, v0001 row's link edited to ../../../../../../victim.md, two more writes): victim.md still exists (true). Read side with the traversal row and the secret file's sha256: restoreWikiPage threw 'v0001 of components/a.md has no stored copy ((invalid))' and the page kept its content. history.ts uses VERSION_FILE.test(row.file) before readVersionContent (:524) and in planPrune (:326) and versionFilePath for rm.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "S-002",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "User-supplied page paths and run-log page entries are not checked for `..` segments or absolute-looking forms before pageHistoryDir/pagePath build paths from them. `keryx wiki history ../../x` reads `<history>/../../x/index.md`; `wiki restore` and `restore --run` call readPageHistory on the escaped directory. Writes and deletes are in practice stopped because every mutation goes through mutatePage -> wikiPageKey, which throws for paths outside the wiki root, so this is an unnecessary read primitive (index.md only) plus an abort in the middle of a run restore, not an out-of-root write.",
+    "impact": "Reads any `<dir>/index.md` reachable by `..` (contents printed verbatim by `wiki history <page>`); a hand-edited runs.jsonl entry with a `..` page makes `restore --run` throw part-way, after earlier pages were already restored.",
+    "suggested_fix": "Add a single validation in pageHistoryDir/pagePath (and normalizePage): reject any segment equal to `..` or empty, reject absolute paths, and re-check with path.relative against wikiRootPath. Validate runs.jsonl page values with the same function in pagesChangedByRun.",
+    "evidence": "normalizePage only strips a leading prefix and appends .md; pageHistoryDir does `path.join(wikiHistoryRoot(cwd), ...page.replace(/\\.md$/i, \"\").split(\"/\"))`. wikiPageKey (`relative.startsWith(\"..\")` -> throw) is only called from mutatePage, not from readPageHistory.",
+    "confidence": "high",
+    "file": "src/commands/wiki-history.ts",
+    "line": 24,
+    "quote": "const posix = value.replace(/\\\\/g, \"/\").replace(/^\\.?\\/?\\.metaproject\\/wiki\\//, \"\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#S-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: re-ran the repro (process.chdir into the temp project, runHistoryCommand(['../../x'])): stdout is '' and stderr 'wiki history: not a wiki page path: ../../x.md'; the out-of-tree index.md is no longer printed. Test 'T-002 a path leaving the wiki root is refused with exit code 1' in wiki-history.test.ts covers it.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "S-003",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The history tree is kept out of git only by this line in the managed gitignore block, which is applied by `keryx init/update`. A project that upgrades the CLI and runs a wiki command without refreshing the block starts writing full copies of every page (and the pre-history `baseline` content) into a tree git will happily stage. Nothing in history.ts checks or warns that the directory is ignored.",
+    "impact": "Large churn and accidental commit of old/hand-edited page content; also the delivery path that makes S-001 reachable from a repository. This repo's own .gitignore has the line (line 108), so the keryx checkout is not affected.",
+    "suggested_fix": "On first creation of the history root, ensure the ignore entry exists (or write `.metaproject/data/gdwiki/history/.gitignore` containing `*`), and/or make `keryx health`/doctor flag a tracked history dir.",
+    "evidence": "grep: only src/lib/metaproject-gitignore.ts:369 and the repo .gitignore:108 mention the path; history.ts never touches ignore files.",
+    "confidence": "medium",
+    "file": "src/lib/metaproject-gitignore.ts",
+    "line": 369,
+    "quote": ".metaproject/data/gdwiki/history/",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#S-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: ran verify2/hist3.ts: after one writeWikiPage in a fresh project the history root holds ['runs.jsonl','components','.gitignore'] and .gitignore is '# keryx wiki page history (flow 367): local undo state, never committed.\\n*\\n' (history.ts ensureHistoryRoot). The tree ignores itself regardless of the project's managed gitignore block.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "S-004",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "Retention only prunes stored version files (planPrune flips them to `(pruned)`); the rows of index.md and the append-only runs.jsonl grow forever, and the whole of each is read and parsed on every write (readWikiRuns reads the entire file for every restore/hint call, printWikiUndoHint after every mutating command). `keep` has no upper bound from config.",
+    "impact": "Slow degradation of every wiki command in a long-lived repo, not an exploit; a looped enrich or sync can grow the files without limit.",
+    "suggested_fix": "Cap rows retained in index.md (drop oldest pruned rows beyond N) and rotate/trim runs.jsonl past a size or age; clamp `keep` in loadWikiConfig.",
+    "evidence": "planPrune maps dropped rows to PRUNED_FILE instead of removing them; no truncation of runs.jsonl anywhere in history.ts.",
+    "confidence": "high",
+    "file": "src/wiki/history.ts",
+    "line": null,
+    "quote": "await appendFile(runsFile, `${JSON.stringify({ runId: ctx.runId, command: ctx.command, page, at: now, action })}\\n`, \"utf8\");",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#S-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: 260 writes of one page with keep=3 -> index rows 200 (was 40 of 40, unbounded; MAX_INDEX_ROWS=200). runs.jsonl seeded to 2307107 bytes / 9119 lines then one write -> 1153560 bytes / 4560 lines, newest entry kept (MAX_RUNS_BYTES=2 MiB trim to newest half under a lock). Not changed: 'keep' itself is not clamped in loadWikiConfig (not run).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "S-005",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "History stores what is passed to writeWikiPage, which in the keryx writers (service.ts, enrich.ts, wiki-owner-writer.ts) is already the output of guardOutput/prepareOutputForPersistence, so generated content that the guard blocked or redacted is not copied. However the `baseline` and `manual (detected)` rows copy the LIVE page bytes as they are on disk (hand-written or edited outside keryx), which never went through the guard.",
+    "impact": "A secret a human pasted into a wiki page is duplicated into the history folder and survives after the page is cleaned until pruned (keep=20) or the dir is removed. The folder is gitignored, so exposure is local only.",
+    "suggested_fix": "Run prepareOutputForPersistence over baseline/manual content before storeVersion, or document that history may hold pre-redaction content and have `wiki restore`/delete flows purge it.",
+    "evidence": "grep of guardOutput/prepareOutputForPersistence: guards run in service.ts, enrich.ts and wiki-owner-writer.ts before writeWikiPage; history.ts has none. reconcile() stores `live` directly.",
+    "confidence": "medium",
+    "file": "src/wiki/history.ts",
+    "line": 307,
+    "quote": "return { page, rows: live === null ? [] : [await record(1, \"baseline (before history)\")] };",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#S-005",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "decided-by: MrCipherSmith (2026-10-01). Baseline/manual history rows store the live page bytes unfiltered by design: a byte-exact restore requires them, and the page itself already holds those bytes on disk. The history tree is local and ignores itself for git (S-003, fixed in 816561a3ee9d570487410b966fec1dbfa479d318)."
+    }
+  },
+  {
+    "id": "S-006",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Markdown injection into the index table was checked: pipes and line breaks are stripped from the argv-derived command label, so a label cannot add rows or cells and the ROW parser stays aligned. Page keys and ISO times are not user text. Remaining: the label may still contain backticks or markdown links and is not escaped, and the page key (from a file name) is interpolated unescaped into front matter and the heading.",
+    "impact": "Cosmetic only (a link or emphasis rendered in index.md); no row forging or parser confusion found.",
+    "suggested_fix": "Optional: escape backticks/brackets in the label, or render it in a code span.",
+    "evidence": "createWikiWriteContext sanitisation; renderPageHistoryIndex/ROW round trip. Run ids are generated by newWikiRunId and are only compared to runs.jsonl values, never used in a path.",
+    "confidence": "high",
+    "file": "src/wiki/history.ts",
+    "line": null,
+    "quote": "const label = command.replace(/[|\\r\\n]+/g, \" \").replace(/\\s+/g, \" \").trim().slice(0, 160);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#S-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commits 816561a3ee9d570487410b966fec1dbfa479d318 (backticks) and 78688050b055e87c4207848c39207cb386d814ee (label rendered as a code span after the post-fix pass still found links/emphasis rendering); post-fix verification in verifications-s006.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 78688050b055e87c4207848c39207cb386d814ee — ran bun script (scratchpad/verify3/s006.ts) that wrote a page 3 times via createWikiWriteContext+writeWikiPage in a temp project for 4 hostile labels: '[link](http://evil) **bold** _em_'; a pipe+newline forged-row payload; backtick/double-backtick/pipe mix; raw html+image markdown. In every case index.md had exactly 5 table lines (header, separator, 3 rows), the by cell was a single code span (e.g. `wiki gen [link](http://evil) **bold** _em_`), pipes/newlines became spaces, backticks became apostrophes, so no forged v0099 row and no live link/emphasis. parsePageHistoryIndex returned 3 rows (versions 3,2,1) and by === ctx.command for all rows in all 4 cases.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-001",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "AC5-AC9 are tested only through the RLM-off path (page-invariants.test.ts enrichWith, no rlm config). The RLM path has its own copy of the logic in enrich.ts finalizeEnrichedText (unwrapFencedReply, preserveEnrichInvariants, checkPageInvariants, the 'invariant:' structuralError) and the only RLM test (W2) feeds a reply that carries no changelog and checks history rows only. Deleting the preserve/check block from finalizeEnrichedText fails no test.",
+    "impact": "The RLM tiers (light/deep/batch) can drop a Changelog, reword attestations or lower Version again, which is the exact incident flow 367 targets, and the suite stays green.",
+    "suggested_fix": "Add an RLM-enabled test (same config as W2) over a page shaped like ENRICHED_PAGE in page-invariants.test.ts: a reply without ## Changelog and with a reworded attestation, assert on-disk ATTESTATION/GENERATED_ENTRY survive and Version >= newest entry; add a managed-block-dropping reply asserting failed + 'invariant:' reason and the page untouched.",
+    "evidence": "grep of enrich-rlm.test.ts and history-writers.test.ts shows no changelog/attestation assertion under rlm.enabled; finalizeEnrichedText in src/wiki/enrich.ts has its own preserveEnrichInvariants call.",
+    "confidence": "high",
+    "file": "src/wiki/history-writers.test.ts",
+    "line": 189,
+    "quote": "expect(result.pages.every((page) => page.tier === \"light\")).toBe(true);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/enrich.ts:finalizeEnrichedText",
+        "src/wiki/enrich.ts:finishSuccess",
+        "src/wiki/page-invariants.test.ts:describe enrich (AC5-AC9)"
+      ],
+      "enumeration_method": "keryx ctx rg for preserveEnrichInvariants|checkPageInvariants in src/wiki; compared against enrichWith callers in page-invariants.test.ts (no rlm config)"
+    },
+    "global_id": "2026-10-01-ingest-main#T-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: baseline at HEAD, bun test over review-r1-coverage, refresh, page-invariants, history, wiki-history, enrich-rlm, history-writers -> 141 pass, 0 fail. Mutation in a git-archive copy under the scratchpad: removed the preserveEnrichInvariants/checkPageInvariants/'invariant:' block from finalizeEnrichedText (enrich.ts:1178-1182) -> 'T-001 light tier' and 'T-001 deep tier' in review-r1-coverage.test.ts both FAIL (parseChangelog(after) null; deep tier still contains the reworded attestation).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-002",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "keryx wiki history and keryx wiki restore (AC2's user-facing commands) have no test at all: runHistoryCommand/runRestoreCommand are referenced only by wiki.ts. Untested logic includes normalizePage (accepts .metaproject/wiki/ prefix, no .md), the hand-rolled positional-argument detection that skips the value after --run/--version, run-xor-page validation, --version parsing, exitCode=1 on conflicts, --json output, the missing-history message and the undo hint.",
+    "impact": "AC2 'history <page> prints the page's index' and the conflict exit code are unverified; a regression in arg parsing (e.g. 'restore a.md --version v0001' picking v0001 as the page) ships silently.",
+    "suggested_fix": "Add a wiki-history.command.test.ts that chdirs to a temp project (or injects cwd), runs runRestoreCommand/runHistoryCommand and captures stdout/stderr/process.exitCode: page restore with --version, --run with a conflict (exitCode 1, CONFLICT line), both/neither of page and --run (usage, exit 1), history on an unknown page (exit 1), --json shapes.",
+    "evidence": "keryx ctx rg 'runHistoryCommand|runRestoreCommand|wiki-history' src returns only wiki.ts and the module itself; history.test.ts exercises the library functions directly.",
+    "confidence": "high",
+    "file": "src/commands/wiki-history.ts",
+    "line": 80,
+    "quote": "if ((runId === undefined) === (target === undefined)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/wiki-history.ts:runHistoryCommand",
+        "src/commands/wiki-history.ts:runRestoreCommand",
+        "src/commands/wiki-history.ts:normalizePage"
+      ],
+      "enumeration_method": "keryx ctx rg 'runHistoryCommand|runRestoreCommand|wiki-history' src (only non-test references)"
+    },
+    "global_id": "2026-10-01-ingest-main#T-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: src/commands/wiki-history.test.ts now has 23 tests over runHistoryCommand/runRestoreCommand (green at HEAD). Three mutations in a git-archive copy each caught: dropping '--version' from the positional-skip list fails 'neither a page nor --run prints usage' (got 'no history for v1.md'); removing exitCode=1 on conflicts fails the two 'restore --run' conflict tests; removing the .metaproject/wiki/ prefix strip in normalizePage fails 'the three spellings print the same history'.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-003",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "No test runs CRLF (or legacy) pages through mergeGeneratedSections / preserveEnrichInvariants, and the path is broken. Running mergeGeneratedSections over a CRLF page (verified with a scratch script) yields mixed line endings: 'Version: 0.1.1' and the regenerated Related Wiki block and the new changelog entry are LF while the rest stays CRLF. checkPageInvariants reports no violation, so the page is written.",
+    "impact": "collect --force and enrich silently convert CRLF pages to mixed endings (noisy diffs, editors flag it). The suite cannot catch it because every fixture is LF.",
+    "suggested_fix": "Add a CRLF fixture test (ENRICHED_PAGE.replace(/\\n/g, '\\r\\n') through mergeGeneratedSections and preserveEnrichInvariants) asserting no bare LF appears in the output; fix by detecting the page's EOL and joining with it in setPageVersion, prependChangelogEntry, restoreChangelog and the section splice.",
+    "evidence": "Scratch run: first merge output contains 'Version: 0.1.1\\nStatus: draft\\r\\n' and '- 0.1.1 - regen\\n\\n- 0.1.0 ...\\r\\n'. No test in src/wiki/*.test.ts matches CRLF or \\r\\n for these functions (history.test.ts uses CRLF only for byte-exact restore).",
+    "confidence": "high",
+    "file": "src/wiki/page-invariants.ts",
+    "line": null,
+    "quote": "all[index] = `Version: ${version}`;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/page-invariants.ts:setPageVersion",
+        "src/wiki/page-invariants.ts:prependChangelogEntry",
+        "src/wiki/page-invariants.ts:restoreChangelog",
+        "src/wiki/page-invariants.ts:mergeGeneratedSections"
+      ],
+      "enumeration_method": "keryx ctx rg for 'split(\"\\n\")' / join(\"\\n\") in src/wiki/page-invariants.ts plus grep for CRLF in src/wiki test files"
+    },
+    "global_id": "2026-10-01-ingest-main#T-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: review-r1-coverage.test.ts 'L-005 / T-003: a CRLF page keeps CRLF, and a second merge is a no-op' passes at HEAD. Mutation in a git-archive copy: inEolOf (page-invariants.ts:76) changed to return lfText -> that test FAILS (expect(...).not.toContain), so the CRLF behaviour is pinned. verify/inv.ts at HEAD also shows 0 bare-LF newlines from mergeGeneratedSections and preserveEnrichInvariants on a CRLF page.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-004",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "AC9 (a page that would violate an invariant is not written, reported with page path + invariant, non-zero exit, other pages proceed) is untested for collect: invariantReason appears in no test, so the skip branch in writeCollectedPage and the exitCode=1 in runCollect never run. For enrich the only AC9 test has a single page, so 'other pages proceed' is not demonstrated either.",
+    "impact": "Removing the exit code or the invariantReason plumbing, or letting one rejected page abort the whole run, passes CI. AC9 is confirmed on the strength of one enrich case.",
+    "suggested_fix": "Test writeCollectedPage/wikiCollect with a page where mergeGeneratedSections output trips checkPageInvariants (e.g. a hand-damaged page whose existing changelog/front matter cannot be preserved) and assert action 'skipped', invariantReason set, page bytes unchanged; test runCollect sets process.exitCode=1. Add a two-page enrich run where one reply is refused and the other is written.",
+    "evidence": "keryx ctx rg 'invariantReason' src -g '*.test.ts' returns no matches. page-invariants.test.ts AC9 test seeds one page (components/src-alpha.md).",
+    "confidence": "high",
+    "file": "src/commands/wiki.ts",
+    "line": 237,
+    "quote": "if (result.pages.some((page) => page.invariantReason !== undefined)) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/service.ts:writeCollectedPage",
+        "src/commands/wiki.ts:runCollect",
+        "src/wiki/enrich.ts:wikiEnrich (invariant: failed branch, multi-page)"
+      ],
+      "enumeration_method": "keryx ctx rg 'invariantReason' src (test and non-test) and read of the AC9 enrich test"
+    },
+    "global_id": "2026-10-01-ingest-main#T-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: review-r1-coverage.test.ts adds 'T-004 wikiCollect: the page is left byte-identical and reported skipped with an invariantReason; other pages still update' and 'T-004 runCollect: wiki collect --force exits 1 and says REFUSED ...'; both pass at HEAD. Mutation in a git-archive copy: removed the exitCode=1 block at commands/wiki.ts:237 -> the runCollect test FAILS (expect(...).toBe). Not mutated: the service.ts skip branch itself and the multi-page enrich case (site-check only: test names present).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-005",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "AC1 requires 'a test per writer proves the saved file is byte-identical to the pre-run page', naming keryx sync --apply (collect + orphan prune). history-writers.test.ts calls wikiCollect and wikiPruneOrphans directly with default contexts, so the sync.ts wiring (one shared run id, history passed into applyModule/wikiCollect/wikiGenerateIndex/wikiPruneOrphans) is untested. Likewise wiki index (wikiGenerateIndex) is only checked in W3 as a logged runs.jsonl row; index.md's pre-run bytes are never compared.",
+    "impact": "If sync stopped passing the context (each call falling back to its own run id) 'restore --run' would no longer undo a sync, and no test would fail; an index.md history bug would also go unnoticed.",
+    "suggested_fix": "Add a sync --apply test over a seeded project asserting one run id across collect pages, index.md and pruned orphans, and that restoreWikiRun for that id returns the wiki tree byte-identical. In W3 (or a new wiki index test) assert the stored index.md version equals the pre-run index.md bytes.",
+    "evidence": "keryx ctx rg 'sync --apply' in test files finds no history assertion; W3 only does logged.some((entry) => entry.page === \"index.md\").",
+    "confidence": "high",
+    "file": "src/commands/sync.ts",
+    "line": null,
+    "quote": "const wikiHistory = apply ? await openWikiWriteContext(cwd, \"sync --apply\") : undefined;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/sync.ts:runSync/applyModule",
+        "src/wiki/service.ts:wikiGenerateIndex"
+      ],
+      "enumeration_method": "Compared AC1's writer list against the W1-W9 test list in history-writers.test.ts, refresh.test.ts and wiki-owner-writer.test.ts"
+    },
+    "global_id": "2026-10-01-ingest-main#T-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: review-r1-coverage.test.ts 'T-005a sync --apply is one history run labelled sync --apply, and restore --run returns the wiki to its pre-sync bytes' and 'T-005b a collect run stores index.md pre-run bytes' pass at HEAD. Mutation in a git-archive copy: commands/sync.ts applyModule no longer passes history to wikiCollect and calls wikiGenerateIndex(cwd) without it -> T-005a FAILS (expect(...).toBe).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-006",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The AC4 test simulates the aborted run with a hand-written loop in the test that throws after two writeWikiPage calls. It proves the primitive supports restore after a partial run but not that wikiEnrich (which catches per-page provider errors and continues) leaves a restorable store when a provider error occurs after K pages.",
+    "impact": "AC4 is marked covered while the real enrich failure path (provider error mid-run, pages already written under one run id) is not exercised.",
+    "suggested_fix": "Use a stub provider in history-writers.test.ts that succeeds for K pages and throws on the K+1th, run wikiEnrich, then restoreWikiRun(result.historyRunId) and compare the snapshotPages() before/after.",
+    "evidence": "The throw is inside the test's own async IIFE, not in production code.",
+    "confidence": "medium",
+    "file": "src/wiki/history.test.ts",
+    "line": 289,
+    "quote": "if (index === 2) throw new Error(\"provider 406\");",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#T-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: review-r1-coverage.test.ts:377-378 'T-006 wikiEnrich whose provider fails on the 4th of 5 pages: restoreWikiRun puts every page back byte-identical' drives real wikiEnrich with a stub provider (run log shows 'failed . components/src-delta.md' as the 4th of 5), then restoreWikiRun and compares snapshots; passes at HEAD (141 pass, 0 fail across the 7 files). Not mutated.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-007",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Two tests rely on chmod 0o444 making writeFile fail. As root (typical in CI containers) or on Windows the write succeeds, so rejects.toThrow() fails or the test is meaningless. They are not guarded.",
+    "impact": "Environment-dependent failure of the atomicity/prune-safety tests, or the tests silently stop testing anything.",
+    "suggested_fix": "Skip when process.getuid?.() === 0 or process.platform === 'win32', or induce the failure portably (make the page path a directory, or inject a failing fs seam).",
+    "evidence": "Tests 'a read-only page is refused...' and 'a failed write never leaves the index pointing at a pruned...' both depend on permission denial.",
+    "confidence": "medium",
+    "file": "src/wiki/history.test.ts",
+    "line": null,
+    "quote": "await chmod(wikiPath(\"components/a.md\"), 0o444);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 173, 187, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#T-007",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: history.test.ts:27 'const canMakeReadOnly = process.platform !== \"win32\" && process.getuid?.() !== 0' and the chmod 0o444 tests at :168, :184 and :427 use test.skipIf(!canMakeReadOnly). Not run as root or on Windows.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-008",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The torn-runs.jsonl tolerance is untested, and nothing tests the case it names: a torn line costs the run's entry, so restore --run for that run reports 'no pages recorded' even though page indexes still hold the versions. Behaviour verified by scratch run only (readWikiRuns skips the torn line and returns the good ones).",
+    "impact": "A refactor to JSON.parse-all-or-fail would break every history command after one interrupted append; the comment's 'indexes stay authoritative' promise has no fallback or test.",
+    "suggested_fix": "Add a test appending a torn line to runs.jsonl and asserting listWikiRuns/restoreWikiRun still work for intact runs; decide and test what restore --run does for a run whose line was torn.",
+    "evidence": "Scratch script: after appending '{\"runId\":\"torn' readWikiRuns returned 1 entry (no throw). No test in src/wiki references runs.jsonl corruption.",
+    "confidence": "high",
+    "file": "src/wiki/history.ts",
+    "line": 482,
+    "quote": "// A torn last line from an interrupted append; the page indexes stay authoritative.",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#T-008",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: review-r1-coverage.test.ts adds 'T-008 readWikiRuns, listWikiRuns and restoreWikiRun still work for the intact entries' and 'T-008 a run written after a torn line is still recorded'; both pass at HEAD. Mutation in a git-archive copy: removed the try/catch around JSON.parse in readWikiRuns -> both T-008 tests FAIL ('SyntaxError: JSON Parse error: Unterminated string').",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-009",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "refreshOne changed its Version computation from bumpPatch(page.version) to nextPageVersion(content) (one patch above Version and the newest changelog entry). The additions to refresh.test.ts check history only; no test covers a page whose Version is behind its changelog going through wiki refresh (AC7 names enrich or collect, but this is a changed behaviour of an existing writer).",
+    "impact": "Reverting to bumpPatch(page.version) passes the suite.",
+    "suggested_fix": "In refresh.test.ts seed a page with Version 0.1.0 and a 0.3.0 changelog entry, run refreshPages and expect Version 0.3.1.",
+    "evidence": "refresh.test.ts additions (W6-W8) never read Version after a refresh.",
+    "confidence": "medium",
+    "file": "src/wiki/refresh.ts",
+    "line": 329,
+    "quote": "const version = nextPageVersion(content);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#T-009",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: refresh.test.ts now has 'refreshPages > T-009 flow 367: a page whose Version is behind its newest changelog entry is refreshed to a Version above that entry' (passes at HEAD). Mutation in a git-archive copy: refresh.ts:329 'nextPageVersion(content)' replaced by 'bumpPatch(page.version ?? null)' -> that test FAILS (expected 'Version: 1.3.1', received 'Version: 1.0.1').",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "T-010",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "Changed AC1 parity assertion (contentA toBe contentB became normalised comparison). The change is justified: enrich now preserves the original changelog, so the two separately collected roots differ in the seeded 0.1.0 timestamp, which the old whole-file overwrite used to hide. The normalisation is narrow (one regex, global) and every other byte still has to match, so it does not hide a regression in enrich output. The cleaner option is to seed one root and copy it to the other so no normalisation is needed.",
+    "impact": "Low: a future second timestamp-shaped difference with the same prefix would be masked.",
+    "suggested_fix": "Collect once, copy .metaproject/wiki to rootB, and restore the strict toBe comparison.",
+    "evidence": "Diff of enrich-rlm.test.ts: only the comparison line and the seedStamp helper changed; the rlm-off vs absent-config parity intent is intact.",
+    "confidence": "high",
+    "file": "src/wiki/enrich-rlm.test.ts",
+    "line": null,
+    "quote": "const seedStamp = /Generated by `keryx wiki collect` at \\S+/g;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-10-01-ingest-main#T-010",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "verified against commit 816561a3ee9d570487410b966fec1dbfa479d318: enrich-rlm.test.ts:228 is 'expect(contentA).toBe(contentB)' again (strict, no seedStamp normalisation: keryx ctx rg for seedStamp in that file returns no match), and the file imports cp from node:fs/promises (:20). enrich-rlm.test.ts passes at HEAD (141 pass, 0 fail across the 7 files).",
+      "verifier": "review-verifier"
+    }
+  }
+]

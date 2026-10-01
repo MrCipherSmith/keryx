@@ -1,0 +1,28 @@
+# Decisions
+
+- L-001: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-002: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-003: dismissed-incorrect — decided-by: MrCipherSmith (2026-10-01). Refuted by review-verifier (execution) at c8bd0042: both enrich writers append the trailing newline (enrich.ts RLM-off write and finishSuccess); an end-to-end wikiEnrich run on a changelog-last page left the page ending in a newline. Only the dry-run preview lacks it. (valid_followup, post_flow_feedback).
+- L-004: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-005: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-006: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-007: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-008: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-009: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- L-010: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- S-001: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- S-002: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- S-003: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- S-004: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- S-005: dismissed-wont-fix — decided-by: MrCipherSmith (2026-10-01). Baseline/manual history rows store the live page bytes unfiltered by design: a byte-exact restore requires them, and the page itself already holds those bytes on disk. The history tree is local and ignores itself for git (S-003, fixed in 816561a3ee9d570487410b966fec1dbfa479d318). (valid_followup, post_flow_feedback).
+- S-006: acted-on — fixed in commits 816561a3ee9d570487410b966fec1dbfa479d318 (backticks) and 78688050b055e87c4207848c39207cb386d814ee (label rendered as a code span after the post-fix pass still found links/emphasis rendering); post-fix verification in verifications-s006.json (valid_followup, post_flow_feedback).
+- T-001: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-002: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-003: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-004: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-005: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-006: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-007: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-008: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-009: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
+- T-010: acted-on — fixed in commit 816561a3ee9d570487410b966fec1dbfa479d318 (flow 367 review round 1 fixes); post-fix verification in verifications-postfix.json (valid_followup, post_flow_feedback).
