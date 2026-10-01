@@ -24,7 +24,8 @@ line is `STATUS:` (`.metaproject/rules/core/subagent-status-protocol.md`). Set
    Add `--require-confirmation` when completion should need a terminal
    confirmation token (`flow confirm`), not only the CLI gates. The CLI
    scaffolds the package and collects deterministic context (issue body,
-   memory search, gdgraph artifacts, health).
+   memory search, gdgraph artifacts, health). The new id skips numbers used on
+   known remote branches; commit the flow folder in the same PR as the code.
 2. Enrich context - dispatch `context-collector` with `context_refs` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch `issue-analyzer`; for a described feature, `feature-analyzer`.

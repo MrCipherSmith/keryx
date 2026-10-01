@@ -521,9 +521,32 @@ async function runList(args: string[] = []): Promise<void> {
   // A number shared by two packages makes every bare-id command ambiguous —
   // say so here, where the listing is what usually reveals it.
   const shared = duplicateFlowIds(flows.map((flow) => flow.id));
+  // Flow 384: the two folder-hygiene problems `flow check` reports, as a tag
+  // beside the row. One check pass for the whole list; informational, so a
+  // failure to compute it is silence.
+  const remoteClash = new Set<string>();
+  const notCommitted = new Set<string>();
+  try {
+    const checked = await getService().check({ cwd: process.cwd() });
+    for (const issue of checked.issues) {
+      if (issue.kind === "duplicate-id") remoteClash.add(issue.flow);
+    }
+    for (const warning of checked.warnings ?? []) {
+      if (warning.kind === "untracked") notCommitted.add(warning.flow);
+    }
+  } catch {
+    // `flow check` owns this report.
+  }
   heading(`Flows (${flows.length})`);
   for (const flow of flows) {
-    const marker = shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "";
+    // `flow.dir` is the project-relative path; the check keys by folder name.
+    const folder = flow.dir.slice(flow.dir.lastIndexOf("/") + 1);
+    const tags = [
+      ...(remoteClash.has(folder) && !shared.has(flow.id) ? ["dup id"] : []),
+      ...(notCommitted.has(folder) ? ["not committed"] : []),
+    ];
+    const hygieneMarker = tags.length > 0 ? ` ${style.yellow(tags.map((tag) => `[${tag}]`).join(" "))}` : "";
+    const marker = (shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "") + hygieneMarker;
     console.log(
       `  ${style.bold(flow.id)}${marker} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
     );
@@ -1349,13 +1372,18 @@ async function runCheck(): Promise<void> {
   const result = await getService().check({ cwd: process.cwd() });
   if (result.ok) {
     console.log(`  ${style.green(symbols.ok)} All flows are consistent.`);
-    return;
+  } else {
+    heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
+    for (const issue of result.issues) {
+      console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+    }
+    process.exitCode = 1;
   }
-  heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
-  for (const issue of result.issues) {
-    console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+  // Flow 384: warnings never change the exit code — an uncommitted folder is
+  // the normal state between `flow init` and the first commit.
+  for (const warning of result.warnings) {
+    console.log(`  ${style.yellow(WARN)} ${warning.message}`);
   }
-  process.exitCode = 1;
 }
 
 async function runRenumber(args: string[]): Promise<void> {

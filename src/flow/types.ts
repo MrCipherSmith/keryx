@@ -147,6 +147,14 @@ export type FlowGates = {
    */
   owner?: boolean | undefined;
   /**
+   * Run the folder-committed gate in `complete()` (flow 384). Set to `true` by
+   * `flow init` for every package created from 0.3.53 on. ABSENT on earlier
+   * packages, where the gate reports `skipped` and never fails a completion —
+   * the same opt-in shape as `tasks`/`review`/`owner`: flow folders that were
+   * never committed are history this gate must not retroactively fail.
+   */
+  folderCommitted?: boolean | undefined;
+  /**
    * Require a terminal-minted confirmation token for `complete()` (flow 299,
    * AC2). Written by `flow init --require-confirmation`, or by `flow init`
    * when `.metaproject/tasks.config.json` has
@@ -384,6 +392,7 @@ export type GateOutcome = {
     | "review"
     | "base-branch"
     | "owner"
+    | "folder-committed"
     | "confirmation";
   status: "pass" | "fail" | "skipped";
   detail: string;
@@ -535,7 +544,21 @@ export type FlowCheckIssue = {
     | "attempts";
   message: string;
 };
-export type FlowCheckResult = { ok: boolean; issues: FlowCheckIssue[] };
+/**
+ * Something `flow check` reports that does NOT fail it (flow 384). `untracked`:
+ * the flow folder is not in `HEAD`.
+ */
+export type FlowCheckWarning = {
+  flow: string;
+  kind: "untracked";
+  message: string;
+};
+export type FlowCheckResult = {
+  ok: boolean;
+  issues: FlowCheckIssue[];
+  /** Additive: `ok` ignores these. */
+  warnings: FlowCheckWarning[];
+};
 
 /** One recorded `flow renumber`, kept in .metaproject/flows/id-map.json. */
 export type FlowIdMapEntry = {

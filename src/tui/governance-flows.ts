@@ -7,6 +7,7 @@ import path from "node:path";
 import { completionFixHint } from "../flow/service";
 import type { FlowCompleteResult, FlowCompletionCheck, GateOutcome } from "../flow/types";
 import { renderEffectLine, renderSummaryLine, type FlowGovernance, type GovernanceReport } from "../governance/service";
+import { formatHygieneTags, type FlowHygiene } from "./flow-hygiene";
 
 /** What the Flows tab lists, and why it lists nothing when it does. */
 export type FlowEntries = { flows: FlowGovernance[]; note: string | undefined };
@@ -89,14 +90,21 @@ export type FlowEntryState = {
   closing: boolean;
   closeResult: Pick<FlowCompleteResult, "passed" | "gates"> | undefined;
   error: string | undefined;
+  /** Flow 384 (AC7): what `flow check` finds wrong with this folder; a tag on the row, the message on the selected entry. */
+  hygiene?: FlowHygiene | undefined;
 };
 
 /** One flow in the list: a title row, the summary and effect, and for the selected flow its check and actions. */
 export function formatFlowEntryLines(flow: FlowGovernance, state: FlowEntryState): string[] {
   const marker = state.selected ? "▸" : " ";
   const verdict = state.check === undefined ? "" : state.check.passed ? "  [check: would pass]" : "  [check: would not pass]";
-  const lines = [`${marker} ${flow.id} ${flow.status}  ${flow.title}${verdict}`, `    ${renderSummaryLine(flow.summary)}`, `    ${renderEffectLine(flow.effect)}`];
+  const lines = [
+    `${marker} ${flow.id} ${flow.status}  ${flow.title}${formatHygieneTags(state.hygiene)}${verdict}`,
+    `    ${renderSummaryLine(flow.summary)}`,
+    `    ${renderEffectLine(flow.effect)}`,
+  ];
   if (!state.selected) return lines;
+  for (const note of state.hygiene?.notes ?? []) lines.push(`    ${note}`);
   if (state.checking) lines.push("    Checking… (every completion gate, read-only)");
   else if (state.check !== undefined) lines.push(...formatCheckLines(state.check).map((line) => `    ${line}`));
   if (state.closing) lines.push("    Closing… (running flow complete)");

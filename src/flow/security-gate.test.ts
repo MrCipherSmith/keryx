@@ -96,6 +96,7 @@ test("no securityGate dep: no security gate runs (no regression)", async () => {
     "base-branch",
     "tasks",
     "owner",
+    "folder-committed",
     "review",
     "health",
     // Flow 299: evaluated when the attempt starts, reported last.

@@ -26,6 +26,7 @@ import {
   type GovernanceReportRead,
 } from "../governance/service";
 import { clampScroll, windowLines, wrapLines } from "./flow-inspector";
+import type { FlowHygieneMap } from "./flow-hygiene";
 import { createGovernanceFlowActions, type GovernanceFlowActions } from "./governance-flow-actions";
 import { closeOffer, flowEntriesFrom, formatActionLine, formatFlowEntryLines, wrapHanging, type CloseOffer } from "./governance-flows";
 import { formatReportDate, type GovernanceRunner } from "./governance-panel";
@@ -165,6 +166,8 @@ export function openGovernanceReport(
   const checks = new Map<string, FlowCompletionCheck>();
   const closeResults = new Map<string, Pick<FlowCompleteResult, "passed" | "gates">>();
   const errors = new Map<string, string>();
+  // Flow 384 (AC7): one `flow check` pass per list refresh, keyed by folder name.
+  let hygiene: FlowHygieneMap = new Map();
   let checkingId: string | undefined;
   let closingId: string | undefined;
   let confirming: { id: string; typed: string; branch: string | undefined } | undefined;
@@ -215,6 +218,7 @@ export function openGovernanceReport(
         closing: closingId === flow.id,
         closeResult: closeResults.get(flow.id),
         error: errors.get(flow.id),
+        hygiene: hygiene.get(flow.dir),
       });
       lines.push(...entry.flatMap((line) => wrapHanging(line, width)));
       if (index === chosen) end = lines.length - 1;
@@ -261,13 +265,18 @@ export function openGovernanceReport(
     }
   };
   const reload = async (): Promise<void> => {
-    const [nextRead, nextMd] = await Promise.all([
+    const [nextRead, nextMd, nextHygiene] = await Promise.all([
       readLatest(options.cwd).catch((error: unknown): GovernanceReportRead => ({
         state: "malformed",
         reason: error instanceof Error ? error.message : String(error),
       })),
       readMarkdown(options.cwd),
+      // Informational: a failure here is an empty map, never a blocked list.
+      Promise.resolve()
+        .then((): Promise<FlowHygieneMap> | FlowHygieneMap => flowActions().hygiene?.() ?? new Map())
+        .catch((): FlowHygieneMap => new Map()),
     ]);
+    hygiene = nextHygiene;
     read = nextRead;
     markdown = nextRead.state === "present" ? nextMd : undefined;
     revealSelection();

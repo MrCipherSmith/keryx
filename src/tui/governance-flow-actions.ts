@@ -7,6 +7,7 @@
 import { flowServiceDeps, signerIdentityArgs } from "../commands/flow";
 import { createFlowService } from "../flow/service";
 import type { FlowCompleteResult, FlowCompletionCheck, FlowService } from "../flow/types";
+import { loadFlowHygiene, type FlowHygieneMap } from "./flow-hygiene";
 
 export interface GovernanceFlowActions {
   /** `flow check-complete`: every gate, nothing written. */
@@ -15,6 +16,13 @@ export interface GovernanceFlowActions {
   close(id: string): Promise<FlowCompleteResult>;
   /** The checked-out branch, named in the close confirmation; `undefined` when git cannot say. */
   branch(): Promise<string | undefined>;
+  /**
+   * Flow 384 (AC7): folder name → what `flow check` finds wrong with it (a number
+   * a remote branch also uses, a folder not in HEAD). One check pass per call;
+   * the modal asks once per list refresh. Optional: an actions object without it
+   * shows no tags.
+   */
+  hygiene?(): Promise<FlowHygieneMap>;
 }
 
 async function currentBranch(cwd: string): Promise<string | undefined> {
@@ -35,5 +43,6 @@ export function createGovernanceFlowActions(cwd: string, service: FlowService = 
     // does: KERYX_ACTOR, then the local git identity (basis `derived`).
     close: async (id) => service.complete({ cwd, id, ...(await signerIdentityArgs(cwd, undefined)) }),
     branch: () => currentBranch(cwd),
+    hygiene: () => loadFlowHygiene(cwd, (dir) => service.check({ cwd: dir })),
   };
 }
