@@ -137,12 +137,41 @@ second bot runtime: the shell never talks to Telegram.
 
 **It is off by default**, at two levels. `keryx serve` starts remote control only
 when both files below exist and are valid; without them it prints
-`remote control is off: <reason>` and serves exactly as before. And a shell only
+`remote control is off: <reason>` and serves exactly as before, offering only the
+local `/channels` routes that connect it. And a shell only
 mirrors a session after you type `/remote-control <name>` in it.
 
-### Setup
+### Connect from the shell (recommended)
 
-All three inputs are needed. The files live in the user-global keryx directory
+Make a separate bot with BotFather and a supergroup with topics enabled, then run
+`keryx serve` and, in any `keryx shell`, type `/channels` and choose **Connect**.
+
+1. Paste the bot token. The field is hidden and the token goes only into
+   `remote/bot-token` (mode 600), written by the shell; it is never sent to `serve`.
+2. The modal shows a one-time code and the bot's name. Send the code to the bot in
+   a private chat. The first message that carries it adds your Telegram user id to
+   the allowlist; the code expires after 10 minutes and works once, so someone else
+   writing to the bot cannot claim it.
+3. Add the bot to your group as an administrator with the manage topics right. The
+   group id is taken from that event. If the group has no topics or the bot lacks
+   the right, the modal says which.
+4. A test message arrives in the group's General topic and the channel reads
+   Connected. `serve` starts using it without a restart.
+
+**Test** sends another message naming this machine. **Disconnect** asks `serve` to
+delete every topic and stop polling, then erases the token and the config; if
+`serve` is not running it erases the files and says that the existing topics stay in
+the group. The connection belongs to the machine: any shell can connect or
+disconnect it, and sessions still opt in one by one with `/remote-control`. Use one
+bot per machine, because Telegram allows one poller per token; the group can be
+shared. The seven `/v1/remote/channels-*` routes (`status`, `pair`, `pairing`,
+`cancel`, `reload`, `test`, `disconnect`) take the shell token like the other
+`/v1/remote/*` routes and carry no secret: a pairing code, ids and a machine name
+only.
+
+### Setup by hand
+
+The shell does this for you; the files are the same. All three inputs are needed. The files live in the user-global keryx directory
 (`~/.local/share/keryx/` on Linux and macOS, `%APPDATA%\keryx` on Windows), under
 `remote/`.
 

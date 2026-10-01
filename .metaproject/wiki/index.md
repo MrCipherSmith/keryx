@@ -31,7 +31,7 @@ keryx wiki index
 ## Pages
 
 <!-- keryx:wiki-index:begin -->
-<!-- generated: 2026-10-01T06:49:30.340Z | pages: 97 -->
+<!-- generated: 2026-10-01T08:56:48.923Z | pages: 97 -->
 
 ### Architecture
 

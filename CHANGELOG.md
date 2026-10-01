@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.49] — 2026-10-01
+### Added
+- **`/channels`: connect Telegram to a machine from the shell.** The modal lists Telegram; when it is not connected there is one button, Connect, and when it is, Test and Disconnect. Connect asks for the bot token only (hidden, paste works, never in the transcript, history or logs). Your Telegram user id comes from a one-time pairing code (10 minutes, single use) sent to the bot in a private chat, and the group id from adding the bot to the group as an administrator; the modal says when the group has no topics or the bot lacks the manage topics right. No id, path or timeout is typed, and nothing is hard-coded. Test sends one message naming the machine to the General topic; Disconnect deletes every topic, stops polling and erases the token and the config (with `serve` down it erases the files and says the topics stay in the group). A sidebar row shows the state, a menu entry opens the modal, and the readline shell prints the state and how to connect. Use one bot per machine; the group can be shared. Sessions still opt in one by one with `/remote-control`.
+- **`keryx serve` offers the connecting routes even when Telegram is not configured, and reloads without a restart.** Seven `/v1/remote/channels-*` routes take the local shell token and carry no secret: the shell writes `remote/bot-token` and `remote/config.json` itself (mode 600, atomic) and asks `serve` to reload. Pairing runs inside the single poller.
+### Notes
+- Tested against the in-process fake Bot API only; no run against real Telegram.
+- Docs: [Connect from the shell](docs/docs/guides/drive-keryx-remotely.md#connect-from-the-shell-recommended), [`/channels` in the CLI reference](docs/docs/cli-reference.md#shell-behavior).
+
+[Changes since 0.3.48](https://github.com/MrCipherSmith/keryx/compare/v0.3.48...v0.3.49)
+
 ## [0.3.48] — 2026-10-01
 ### Added
 - **Remote control from Telegram: `/remote-control [name|off|status]`.** In the full-screen shell, `/remote-control <name>` mirrors the session into its own topic of a Telegram supergroup. A line sent in the topic runs as if typed in the shell (shown as `tg ❯` in the transcript and `[tg]` in the queue panel); the reply and any approval question, with Allow and Deny buttons, come back to the topic. `status` shows the state (`off`, `on`, `offline`), the topic, the last heartbeat and recent events; `off` deletes the topic. The sidebar has a remote row and a `/remote-control` modal. The readline shell prints that it is off. **Off by default**: it needs a separate BotFather bot whose token is in `remote/bot-token` in the global keryx directory (mode 600), `remote/config.json` with the supergroup `chatId` and the `allowedUserIds` allowlist, and a supergroup with topics where the bot is an admin with manage topics. Without those files `keryx serve` starts as before and says `remote control is off`.
