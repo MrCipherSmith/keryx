@@ -3,7 +3,7 @@ import { isPathInside, pathExists } from "../lib/fs";
 import { readJsonObjectFile } from "../lib/json";
 import { loadHealthConfig } from "./config";
 import { runHealth } from "./run";
-import { writeBaseline } from "./baseline";
+import { loadBaselineSources, scoredSourcesOfReport, writeBaseline } from "./baseline";
 import { getCoverage } from "./metrics/coverage";
 import { FINDING_ADAPTERS } from "./sources";
 import { dataRoot, listSourceFiles, moduleOfFile } from "./util";
@@ -324,17 +324,50 @@ export function createCodeHealthService(): CodeHealthService {
         const result = await runHealth({ cwd });
         latest = result.report;
       }
+      const baselinePathLabel = ".metaproject/health/baselines/scores.json";
+      // A `--sources` run left sources out by choice: its scores are not a
+      // measurement of the project, and recording its source set would make
+      // every other source read as new on the next full run.
+      const filtered = latest.sources.some(
+        (s) => s !== null && typeof s === "object" && (s as { filtered?: unknown }).filtered === true,
+      );
+      if (filtered) {
+        return {
+          updated: [],
+          path: baselinePathLabel,
+          refused: "the latest health report came from a --sources run; run `keryx health run` without --sources, then update the baseline",
+        };
+      }
       const generatedAt = new Date().toISOString();
+      // A project or `changed` re-baseline rewrites every scope, so it records
+      // what the report measured; a module or file one keeps the file's set.
+      const rewritesAll = input.scope === undefined || input.scope.kind === "project" || input.scope.kind === "changed";
+      if (!rewritesAll) {
+        // The file's source set applies to every scope. A module/file score
+        // taken with a source the set does not hold yet would bake that
+        // source's findings in while every run still leaves them out of the
+        // comparison, so the scope would read improved by their weight and
+        // hide a regression of that size.
+        const recorded = await loadBaselineSources(cwd);
+        const unrecorded = recorded === null
+          ? []
+          : scoredSourcesOfReport(latest).filter((source) => !recorded.has(source));
+        if (unrecorded.length > 0) {
+          return {
+            updated: [],
+            path: baselinePathLabel,
+            refused: `the latest report measured sources the baseline has not recorded yet (${unrecorded.join(", ")}); update the whole project's baseline first (\`keryx health baseline update\`)`,
+          };
+        }
+      }
       const updated = await writeBaseline(
         cwd,
         latest.metrics,
         generatedAt,
         input.scope,
+        rewritesAll ? scoredSourcesOfReport(latest) : undefined,
       );
-      return {
-        updated,
-        path: ".metaproject/health/baselines/scores.json",
-      };
+      return { updated, path: baselinePathLabel };
     },
   };
 }

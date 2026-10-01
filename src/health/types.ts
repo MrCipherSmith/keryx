@@ -3,6 +3,7 @@ export type Priority = "P0" | "P1" | "P2" | "P3";
 
 export type SourceId =
   | "eslint"
+  | "oxlint"
   | "typescript"
   | "tests"
   | "coverage"
@@ -186,6 +187,14 @@ export type SourceRunInfo = {
   parse?: "parsed" | "failed" | "not-run";
   exitCode?: number | null;
   error?: string;
+  /** Copied from the adapter by `runAdapter`; see `SourceCapability`. */
+  capability?: SourceCapability;
+  /**
+   * Set when a `--sources` filter left this source out. A filtered source was
+   * not looked at by choice of this run, so the gate never excuses it on a
+   * sibling's behalf (a source filter cannot report a clean gate).
+   */
+  filtered?: true;
 };
 
 import type { WikiFreshnessMetric } from "./metrics/wiki-freshness";
@@ -208,6 +217,13 @@ export type HealthReport = {
   // this field existed loads and renders unchanged. Absent means NOT MEASURED
   // — never "nothing is stale".
   wikiFreshness?: WikiFreshnessMetric;
+  /**
+   * The sources whose output shaped this report's scores: sources that
+   * produced a result, plus coverage whenever its data was applied. The one
+   * definition a baseline records, whether written by `health run` or
+   * `health baseline update`. Absent in reports written before it existed.
+   */
+  scoredSources?: string[];
   runId?: string;
   provenance?: {
     commit: string | null;
@@ -238,8 +254,16 @@ export type HealthContext = {
   moduleOf: (file: string) => string | null;
 };
 
+/**
+ * What a source measures, when more than one tool can measure it. The gate
+ * groups sources by this, not by id: `sources.eslint.required` means "this
+ * project is linted", and any adapter declaring `"lint"` can satisfy it.
+ */
+export type SourceCapability = "lint";
+
 export interface SourceAdapter {
   id: SourceId;
+  capability?: SourceCapability;
   detect(ctx: HealthContext): Promise<SourceStatus>;
   run(ctx: HealthContext): Promise<RawSourceResult>;
   import(ctx: HealthContext): Promise<RawSourceResult>;
@@ -296,7 +320,12 @@ export type HealthExplainResult = {
 };
 
 export type HealthBaselineInput = { cwd: string; scope?: ScopeSelector };
-export type HealthBaselineResult = { updated: string[]; path: string };
+export type HealthBaselineResult = {
+  updated: string[];
+  path: string;
+  /** Set when nothing was written, with the reason. */
+  refused?: string;
+};
 
 export interface CodeHealthService {
   run(input: HealthRunInput): Promise<HealthRunResult>;

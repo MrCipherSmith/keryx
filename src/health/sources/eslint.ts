@@ -29,6 +29,7 @@ function hasConfig(cwd: string): boolean {
 
 export const eslintAdapter: SourceAdapter = {
   id: "eslint",
+  capability: "lint",
 
   async detect(ctx: HealthContext): Promise<SourceStatus> {
     if (!hasConfig(ctx.cwd)) {

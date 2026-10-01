@@ -1,0 +1,328 @@
+[
+  {
+    "id": "R4-01",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The coverage report is applied to scores even when coverage is disabled or filtered (not measured). A baseline taken then carries the penalty but not coverage in `sources`; enabling coverage later zeroes a penalty the baseline already paid and the fold subtracts it again.",
+    "impact": "Drift in already-measured sources is hidden up to the coverage penalty: a 10-point eslint regression read as 'improved' (regression -5); 20 points read only WARN.",
+    "suggested_fix": "Make 'scored' and 'measured' agree for coverage: count coverage as measured whenever its data was applied, or never apply unmeasured coverage data.",
+    "evidence": "probe3.test.ts N2 vs control N2c on d74b535c.",
+    "confidence": "high",
+    "file": "src/health/scopes.ts",
+    "line": 106,
+    "quote": "            ...(newSources.has(\"coverage\") ? { coverage: 0 } : {}),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/run.ts coverage passed to computeMetrics regardless of mode/filter",
+        "src/health/scopes.ts comparable coverage zeroing",
+        "src/health/baseline.ts fold"
+      ],
+      "enumeration_method": "Every path where coverage data reaches the scores while coverage is not in measuredSources: mode disabled with a report on disk, and a --sources filter excluding coverage on a first run. complexity has no such path (its penalty is never zeroed)."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-01",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe3.test.ts -t N2 retargeted at the copy: coverage 50% with coverage disabled, r1 health 85 sources [eslint]; enable coverage -> r2 reg -15 improved, baseline folded to 70; +1 eslint error -> r3 reg -5 'improved'. Control N2c (coverage enabled from start, +1 eslint error): reg 10 regressed, gate fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 coverage applied rule; its re-baseline gap (R5-01) fixed in 65f6e175"
+    }
+  },
+  {
+    "id": "R4-02",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The fold's per-scope behaviour is asserted only on the project scope; folding only `project`, or adding scopes not in the baseline, leaves the suite green.",
+    "impact": "A regression to project-only folding leaves every module holding the new source's findings with a permanent false regression while CI stays green.",
+    "suggested_fix": "Steady-state test over a module: fold, run again unchanged, assert every scope regression 0 and not 'regressed'; assert no scope is added by the fold.",
+    "evidence": "Mutant Q02b: bun test src/health 180 pass; a steady-state probe then shows module:src/alpha regression 30.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 108,
+    "quote": "    if (entry === undefined) continue;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/baseline.ts foldNewSources scope loop",
+        "src/health/baseline-sources.test.ts (project-only assertions)"
+      ],
+      "enumeration_method": "Every fold assertion in the suite was read; all compare scopes.project only."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-02",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutant baseline.ts `if (entry === undefined || metric.key !== \"project\") continue;` in the copy: bun test --timeout 30000 src/health 180 pass, 0 fail. Restored.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 steady-state module fold test; round 5 Q02/Q02b red"
+    }
+  },
+  {
+    "id": "R4-03",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "The fold uses clamped scores, so a scope clamped at 0 records a new source's effect as 0.",
+    "impact": "Fails loud: the new source's pre-existing findings later read as a regression (N1b: FAIL regression 30).",
+    "suggested_fix": "Compute the effect from unclamped penalties and fold as clamp(base - effect).",
+    "evidence": "probe3.test.ts N1b.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 109,
+    "quote": "    const folded = Math.min(100, Math.max(0, metric.health_score + metric.regression_score));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-03",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 raw-penalty effect; round 5 N1b stable"
+    }
+  },
+  {
+    "id": "R4-04",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "A module/file re-baseline writes a score measured with a source the recorded set lacks; the next whole-project fold subtracts that source's effect a second time.",
+    "impact": "That scope reads improved by the effect, hiding a regression up to it.",
+    "suggested_fix": "Refuse a module/file re-baseline while the report measured an unrecorded source.",
+    "evidence": "service.ts keeps the file's set for module/file; the fold runs only on project runs.",
+    "confidence": "medium",
+    "file": "src/health/service.ts",
+    "line": 344,
+    "quote": "      const rewritesAll = input.scope === undefined || input.scope.kind === \"project\" || input.scope.kind === \"changed\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-04",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 module refusal; applied-coverage gap fixed in 65f6e175"
+    }
+  },
+  {
+    "id": "R4-05",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The module re-baseline assertion is vacuous: the recorded and measured sets are equal at that point.",
+    "impact": "Deleting the module/file branch of rewritesAll stays green.",
+    "suggested_fix": "Make the measured set differ from the recorded one before the module update.",
+    "evidence": "Mutant Q14 green.",
+    "confidence": "high",
+    "file": "src/health/baseline-sources.test.ts",
+    "line": 259,
+    "quote": "    expect((await baselineFile(p.root)).sources).toEqual(recorded);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-05",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 differing-set module test; round 5 Q14 red"
+    }
+  },
+  {
+    "id": "R4-06",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The non-object guards (measuredSources, refusal scan) are untested.",
+    "impact": "Removing them keeps CI green; updateBaseline on a damaged report would throw.",
+    "suggested_fix": "Unit test measuredSources with non-objects; updateBaseline over a latest.json holding null.",
+    "evidence": "Mutants Q15, Q15b green.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 46,
+    "quote": "    .filter((s): s is SourceRunInfo => s !== null && typeof s === \"object\")",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-06",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 non-object tests; round 5 Q15/Q15b red"
+    }
+  },
+  {
+    "id": "R4-07",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The coverage exclusion is only tested with coverage as the new source.",
+    "impact": "Zeroing coverage for any new source would hide a coverage drop and fold it in.",
+    "suggested_fix": "computeMetrics case with oxlint new and a coverage drop: regression > 0.",
+    "evidence": "Mutant Q11b green.",
+    "confidence": "high",
+    "file": "src/health/scopes.ts",
+    "line": 106,
+    "quote": "            ...(newSources.has(\"coverage\") ? { coverage: 0 } : {}),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-07",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 other-source coverage test; round 5 Q11b red"
+    }
+  },
+  {
+    "id": "R4-08",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The CLI side of the refusal is untested.",
+    "impact": "A refusal could exit 0 and print success with CI green.",
+    "suggested_fix": "Test the refusal's exit code and output.",
+    "evidence": "Mutants Q16, Q16b green.",
+    "confidence": "high",
+    "file": "src/commands/health.ts",
+    "line": null,
+    "quote": "    process.exitCode = 1;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 52, 188, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-08",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 reportBaselineUpdate test; wiring pinned in 65f6e175"
+    }
+  },
+  {
+    "id": "R4-09",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "Three writers build the document differently; the file is parsed by two near-identical functions.",
+    "impact": "No behaviour bug; two parsers to keep in sync.",
+    "suggested_fix": "Have loadBaseline delegate to readBaselineFile.",
+    "evidence": "baseline.ts parse paths.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 112,
+    "quote": "  await writeBaselineFile(cwd, { ...data, scopes, sources: [...new Set([...recorded, ...newSources])].sort() });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-09",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 single parser"
+    }
+  },
+  {
+    "id": "R4-10",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The legacy-set expectation is built from the constant under test (also raised by review-architecture, A4-03).",
+    "impact": "Dropping or adding a legacy entry stays green.",
+    "suggested_fix": "Pin the literal list.",
+    "evidence": "Mutants Q07a/b/d green.",
+    "confidence": "high",
+    "file": "src/health/baseline-sources.test.ts",
+    "line": 222,
+    "quote": "    expect(file.sources).toEqual([...LEGACY_BASELINE_SOURCES].sort());",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-10",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 literal legacy pin; round 5 Q07a/b/d red"
+    }
+  },
+  {
+    "id": "R4-11",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "The fold clamp is untested.",
+    "impact": "Low: a negative stored baseline would read every later run as improved.",
+    "suggested_fix": "Unit test a fold whose effect exceeds the baseline.",
+    "evidence": "Mutant Q01c green.",
+    "confidence": "medium",
+    "file": "src/health/baseline.ts",
+    "line": 109,
+    "quote": "    const folded = Math.min(100, Math.max(0, metric.health_score + metric.regression_score));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-11",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 clamp test; round 5 Q01c red"
+    }
+  },
+  {
+    "id": "R4-12",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "trimStart is unpinned.",
+    "impact": "Low.",
+    "suggested_fix": "Prefix the no-files fixture with whitespace.",
+    "evidence": "Mutant P25 green.",
+    "confidence": "medium",
+    "file": "src/health/sources/oxlint.ts",
+    "line": null,
+    "quote": "raw.content.trimStart().startsWith(NO_FILES_PREAMBLE)",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-12",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "d3d9e7c9 whitespace preamble; round 5 P25 red"
+    }
+  },
+  {
+    "id": "R4-13",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "A fold keeps generatedAt and risk_score and records nothing about the machine adjustment.",
+    "impact": "Audit provenance only; neither field is read for comparison.",
+    "suggested_fix": "Optionally record a folded-at marker.",
+    "evidence": "No reader of the baseline's generatedAt under src/health.",
+    "confidence": "high",
+    "file": "src/health/baseline.ts",
+    "line": 110,
+    "quote": "    scopes[metric.key] = { ...entry, health_score: folded };",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803-r03#R4-13",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "round 5 review-architecture: neither field is read for comparison; kept as acceptance time"
+    }
+  }
+]

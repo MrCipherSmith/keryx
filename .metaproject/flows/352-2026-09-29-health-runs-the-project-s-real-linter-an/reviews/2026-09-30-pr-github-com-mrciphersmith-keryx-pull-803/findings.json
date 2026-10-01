@@ -1,0 +1,165 @@
+[
+  {
+    "id": "R2-01",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "oxlint is now a default source; a project already naming oxlint gets oxlint findings on its first run after upgrade, scored against a baseline taken before oxlint was measured. The baseline stores only {health_score, risk_score} with no source set, and is written only when empty.",
+    "impact": "An unchanged tree flips gate PASS -> FAIL ('health regression N vs baseline'); keryx health gate and the flow-completion health gate exit 1 until someone re-baselines by hand. One oxlint error on a 2000-LOC project reaches failOnRegressionDrop.",
+    "suggested_fix": "Record the measured source set with the baseline; exclude findings from sources the baseline did not measure from the regression delta (or treat them as trend unknown) and re-accept the baseline for the new source. Test: runHealth twice on one tree, without then with an oxlint intent signal; the gate must not move to FAIL.",
+    "evidence": "probe-pass-to-fail.ts against the a407ce25 snapshot: run1 pass complete health 100; run2 (package.json names oxlint, stub oxlint prints 3 error diagnostics, 2000 LOC) fail complete health 70 regression 30. Verifier re-ran it: confirmed.",
+    "confidence": "high",
+    "file": "src/health/scopes.ts",
+    "line": 105,
+    "quote": "      regression_score: regressionScore(health, baseHealth),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/health/scopes.ts regressionScore delta",
+        "src/health/baseline.ts BaselineEntry (no source set)",
+        "src/health/gate.ts failOnRegressionDrop escalation",
+        "src/health/service.ts gateExitCode",
+        "src/commands/flow.ts healthGate"
+      ],
+      "enumeration_method": "Traced every consumer of regression_score / baseline health_score in the blast-radius set (keryx ctx rg over scopes.ts, scoring.ts, baseline.ts), then followed the gate verdict to its exit-code consumers."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803#R2-01",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "probe-pass-to-fail.ts against the snapshot's runHealth: 'run1 pass complete health 100' then 'run2 fail complete health 70 regression 30 / FAIL: health regression 30 vs baseline'; probe-baseline.ts: run1 health 100 regression 0, run2 fail health 70 regression 30. Needs only a pre-oxlint baseline plus oxlint findings on an oxlint-naming project.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f recorded baseline sources; its adoption flaw (round 3 R3-01..R3-03) replaced by per-source fold in c173d329"
+    }
+  },
+  {
+    "id": "R2-02",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "After the family moved to capability, the 'only skipped is excused' tests (missing and configured-but-failed) build eslint without capability, so eslint is outside the family and the tests pass whether or not excusedByLintFamily checks status === 'skipped'.",
+    "impact": "The guard that keeps a half-installed required linter blocking is untested; removing it would let a missing or configured-but-failed required eslint pass whenever oxlint ran.",
+    "suggested_fix": "Build those eslint records with capability 'lint' (e.g. a lintBroken(name, status) helper next to lintRan/lintSkipped).",
+    "evidence": "Mutation gate.ts `lintSatisfied && isLinter(s) && s.status === \"skipped\"` -> `lintSatisfied && isLinter(s)`: bun test src/health 168 pass / 0 fail. With capability added to the two records the mutant goes red. Verifier: confirmed on the snapshot.",
+    "confidence": "high",
+    "file": "src/health/gate.test.ts",
+    "line": 236,
+    "quote": "  const sources = [lintRan(\"oxlint\"), source({ source: \"eslint\", status: \"missing\", required: true })];",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/health/gate.test.ts 'AC3: only `skipped` is excused -- a missing required eslint still blocks'",
+        "src/health/gate.test.ts 'AC3: a required eslint that ran and FAILED to parse still blocks'"
+      ],
+      "enumeration_method": "Every gate test that asserts a lint-family source stays blocking was read; only these two build the blocked linter via source() instead of lintRan/lintSkipped, which set capability."
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803#R2-02",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "gate.ts `lintSatisfied && isLinter(s) && s.status === \"skipped\";` -> `lintSatisfied && isLinter(s);`: bun test --timeout 30000 src/health 168 pass, 0 fail (28 files). Restored, cmp-verified.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: lintBroken in gate.test.ts; round 3 closed (mutant P29 red)"
+    }
+  },
+  {
+    "id": "R2-03",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "filteredInfo (the --source filter path) builds SourceRunInfo without the adapter's capability, unlike runAdapter. A filtered-out required eslint stays INCOMPLETE only because the field is absent, not by a rule in the gate; no test pins it; filtered and unfiltered reports disagree on eslint's capability.",
+    "impact": "Making the report consistent later (copying capability in filteredOutcome) would silently excuse a filtered-out required linter. Also raised by review-logic (L2-02, info).",
+    "suggested_fix": "Pass the adapter to filteredOutcome and copy capability; mark filtered sources explicitly (e.g. filtered: true) and exclude them from the family excuse in the gate; add a gate test and a docs clause.",
+    "evidence": "run.ts: runAdapter spreads adapter.capability into base; filteredInfo has no capability and is reached via filteredOutcome(adapter.id, cfg). Verifier: site-check only (unverifiable).",
+    "confidence": "high",
+    "file": "src/health/run.ts",
+    "line": 506,
+    "quote": "function filteredInfo(source: string, cfg: SourceConfig): SourceRunInfo {\n  return {\n    source,\n    status: \"skipped\",",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803#R2-03",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "site-check",
+      "evidence": "keryx ctx rg 'filteredInfo|capability' src/health/run.ts: runAdapter spreads capability at line 342; filteredInfo at line 506 has none, called at lines 113, 133, 503. Shape confirmed; no harm executed.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: filteredOutcome capability + filtered flag; round 3 closed"
+    }
+  },
+  {
+    "id": "R2-04",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Real oxlint 1.81.0 with no files to lint prints 'No files found to lint. Please check your paths and ignore patterns.' on stdout before the JSON and exits 1; JSON.parse fails and the report says the format was not recognized.",
+    "impact": "Outcome is correct (configured-but-failed, required eslint keeps blocking) but the stated cause sends the operator to debug a nonexistent format mismatch.",
+    "suggested_fix": "Recognise the 'No files found to lint' preamble: strip it before parsing, or return a dedicated closed-vocabulary error added to KNOWN_VALIDATION_ERRORS.",
+    "evidence": "Real oxlint in an empty dir: exit 1, stdout begins with the plain-text line; snapshot oxlintAdapter.validate returned {valid:false, error:'oxlint JSON format was not recognized'}. Verifier: confirmed.",
+    "confidence": "high",
+    "file": "src/health/sources/oxlint.ts",
+    "line": 59,
+    "quote": "  let data: unknown;\n  try { data = JSON.parse(content); } catch { return null; }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803#R2-04",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Real oxlint 1.81.0 `--format json .` in an empty dir: exit 1, stdout 'No files found to lint. Please check your paths and ignore patterns.' then JSON with diagnostics [] and number_of_files 0. Snapshot oxlintAdapter.validate -> {valid:false, error:'oxlint JSON format was not recognized'}.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: OXLINT_NO_FILES; round 3 closed with real oxlint"
+    }
+  },
+  {
+    "id": "R2-05",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Severity mapping for 'advice' or a missing severity is untested.",
+    "impact": "A refactor could promote advice-level or severity-less diagnostics to P1 unnoticed.",
+    "suggested_fix": "Add parse cases with severity 'advice' and with severity deleted, asserting P2/warning.",
+    "evidence": "Mutation to `severity !== \"warning\"`: bun test src/health 168 pass / 0 fail. Verifier: confirmed.",
+    "confidence": "medium",
+    "file": "src/health/sources/oxlint.ts",
+    "line": 93,
+    "quote": "    const isError = diagnostic.severity === \"error\";",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-30-pr-github-com-mrciphersmith-keryx-pull-803#R2-05",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "oxlint.ts `diagnostic.severity === \"error\"` -> `diagnostic.severity !== \"warning\"`: bun test --timeout 30000 src/health 168 pass, 0 fail. Restored, cmp-verified.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb8ae20f: advice/missing severity test; round 3 closed (N9 red)"
+    }
+  }
+]

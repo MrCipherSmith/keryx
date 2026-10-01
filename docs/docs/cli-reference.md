@@ -3333,8 +3333,8 @@ Accepts the same flags as `skills verify` (`--dry-run`, `--json`, `--all`).
 
 ## health
 
-Aggregate code-quality signals from multiple tools (ESLint, TypeScript, tests,
-dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
+Aggregate code-quality signals from multiple tools (ESLint or oxlint, TypeScript,
+tests, dependency audit, SonarQube, plus built-in complexity/coverage/churn) into
 per-scope health scores, compare against a baseline, and evaluate a pass/warn/fail
 quality gate.
 
@@ -3357,6 +3357,52 @@ keryx health trend [--scope <key>] [--limit <n>]
 | `explain <file-or-module>` | `--narrate`, `--provider <p>`, `--json` | Print a scope's metrics + its first 20 findings from the last report. `--narrate` adds a model-written explanation and **needs a credential** — without one it exits `1`. Note it returns `0` before reaching the model when the scope has no metrics yet; run `keryx health run` first. |
 | `baseline update` | `--scope <sel>` | Write current scores into the baseline (all scopes, or those matching the selector). Runs health first if no report exists. |
 | `trend` | `--scope <scope-key>`, `--limit <n>` | Print a scope's health-score trend over history. Defaults: scope `project`, limit `20`. |
+
+**Lint is a capability, not a tool name (flow 352, AC1–AC3).** `health` runs the
+linter the project actually has: ESLint is detected from its config files, oxlint
+from `.oxlintrc.*` or a `package.json` dependency, and each parses its own JSON
+output into findings tagged with the tool that produced them. `sources.eslint.required`
+means "this project is linted" — so when oxlint runs and parses, a skipped ESLint
+no longer blocks the run (the gate says `NOTE: eslint skipped; lint capability
+provided by oxlint` instead of `INCOMPLETE`). A project with neither linter keeps
+the previous required-ESLint `INCOMPLETE`, and a half-installed one (config present,
+binary absent → `missing`) still blocks.
+
+`required` on a linter therefore means the capability, not the tool: any source
+whose adapter declares the lint capability satisfies it, and there is no setting
+for "must be linted by ESLint specifically". oxlint is a default optional source,
+so a configuration that switches ESLint off and uses neither linter now reports
+`coverage: partial` (lint is genuinely unmeasured there) where it used to report
+`complete`; the gate status does not change. A linter excused because another
+one ran gets no `OPTIONAL: … skipped` line, so the reasons agree with coverage.
+A linter left out by `--sources` is never excused: a filtered run does not
+report a clean gate.
+
+**The baseline records which sources it measured.** A source that starts being
+measured after the baseline was taken — oxlint on a project that already named
+it, for example — adds findings, but they are new measurement of unchanged
+code, so they are left out of `regression_score` and `trend` and cannot fail
+the gate as a regression; `health_score` still counts them (a coverage report
+seen for the first time is treated the same way). The gate names them —
+`NOTE: not in the baseline yet, so not compared for regression: oxlint` — on
+every run until you run `keryx health baseline update`; from then on the new
+source is compared like any other. `health run` never rewrites an existing
+baseline. "Measured" means *shaped the scores*: sources that produced a
+result, plus coverage whenever its data was applied, whatever coverage's mode.
+A baseline taken before sources were recorded is read as every source keryx
+had before oxlint. `keryx health baseline update` refuses a report from a
+`--sources` run, and a module/file update while the report measured a source
+the baseline has not recorded (update the whole project's baseline first).
+
+**A `missing` source names what it looked for (flow 352, AC5).** `eslint`, `oxlint`
+and `typescript` now report e.g. `tsconfig.json found, binary not found
+(node_modules/.bin/tsc and PATH)`, so the fix is visible in `latest.md` instead of
+requiring a guess about whether the tool or the config was absent. oxlint's reason
+names the signal that fired: `.oxlintrc.*` found, or oxlint named in
+`package.json`. The TypeScript source resolves `tsc` from the project's own
+`node_modules/.bin` before `PATH`, so a repository whose compiler is a
+dev-dependency is checked by that compiler; that behaviour predates flow 352,
+which pins it with a test that puts a decoy `tsc` on `PATH` (AC4).
 
 **The `tests` source (flow 353, AC6).** In `auto` mode, `keryx health run`
 used to report the `tests` source as `missing` whenever no persisted
