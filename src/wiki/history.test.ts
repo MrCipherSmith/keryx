@@ -97,7 +97,7 @@ describe("writeWikiPage", () => {
     const index = await readFile(path.join(pageHistoryDir(root, "components/a.md"), "index.md"), "utf8");
     expect(index).toContain("current: v0002");
     expect(index).toContain(`| v0002 (current) |`);
-    expect(index).toContain(`| wiki collect --force | ${run.runId} |`);
+    expect(index).toContain(`| \`wiki collect --force\` | ${run.runId} |`);
     expect(index).toMatch(/\[v0001\]\(v0001-[^)]+\.md\)/);
     expect(index).toMatch(/\[v0002\]\(v0002-[^)]+\.md\)/);
   });
@@ -367,9 +367,15 @@ describe("review round 1 fixes", () => {
     await expect(restoreWikiPage(ctx("wiki restore"), "components/a.md", 1)).rejects.toThrow("no stored copy");
   });
 
-  test("S-006: a command label cannot break the index table or open a code span", () => {
+  test("S-006: a command label cannot break the index table, and renders as inert code", async () => {
     const label = createWikiWriteContext(root, "wiki enrich --prompt `a | b`\nnext").command;
     expect(label).toBe("wiki enrich --prompt 'a b' next");
+
+    const run = ctx("wiki enrich --prompt [link](http://evil) **bold**");
+    await writeWikiPage(run, wikiPath("components/a.md"), "a\n");
+    const index = await readFile(path.join(pageHistoryDir(root, "components/a.md"), "index.md"), "utf8");
+    expect(index).toContain("| `wiki enrich --prompt [link](http://evil) **bold**` |");
+    expect((await readPageHistory(root, "components/a.md"))!.rows[0]!.by).toBe("wiki enrich --prompt [link](http://evil) **bold**");
   });
 
   test("S-002: a page key with .. segments is refused before any path is built", async () => {

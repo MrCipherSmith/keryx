@@ -224,7 +224,9 @@ export function renderPageHistoryIndex(history: WikiPageHistory): string {
   history.rows.forEach((row, index) => {
     const label = index === 0 ? `${versionLabel(row.version)} (current)` : versionLabel(row.version);
     const file = row.file.endsWith(".md") ? `[${versionLabel(row.version)}](${row.file})` : row.file;
-    lines.push(`| ${label} | ${row.at} | ${row.by} | ${row.run} | ${row.sha} | ${file} |`);
+    // `by` is argv-derived: rendered as a code span so a link or emphasis in a
+    // command line stays inert text in the table (review r1 S-006).
+    lines.push(`| ${label} | ${row.at} | \`${row.by}\` | ${row.run} | ${row.sha} | ${file} |`);
   });
   return `${lines.join("\n")}\n`;
 }
@@ -241,7 +243,7 @@ export function parsePageHistoryIndex(markdown: string, page: string): WikiPageH
     rows.push({
       version: Number(match[1]),
       at: match[2]!,
-      by: match[3]!,
+      by: match[3]!.replace(/^`(.*)`$/, "$1"),
       run: match[4]!,
       sha: match[5]!,
       // Only a name keryx could have written is kept as a file reference; any
