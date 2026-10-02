@@ -1265,7 +1265,7 @@ test("AC7 — reaching the round cap with the gate unsatisfied never completes",
   await fresh();
   const service = createFlowService(makeDeps());
   const { id, dir } = await driveToGates(service);
-  for (const round of [1, 2, 3]) {
+  for (const round of Array.from({ length: REVIEW_ROUND_CAP }, (_, i) => i + 1)) {
     await writeReviewPackage({
       cwd: ROOT,
       flowDir: dir,
@@ -1284,6 +1284,35 @@ test("AC7 — reaching the round cap with the gate unsatisfied never completes",
   expect(gate.status).toBe("fail");
   expect(gate.detail).toContain(`round cap (${REVIEW_ROUND_CAP}) is reached with the gate unsatisfied`);
   expect(gate.detail).toContain("the decision is the operator's");
+});
+
+async function completeWithRounds(rounds: number) {
+  await fresh();
+  const service = createFlowService(makeDeps());
+  const { id, dir } = await driveToGates(service);
+  for (const round of Array.from({ length: rounds }, (_, i) => i + 1)) {
+    await writeReviewPackage({
+      cwd: ROOT,
+      flowDir: dir,
+      reviewId: `round-${round}`,
+      createdAt: `2026-08-29T1${round}:00:00.000Z`,
+      head: HEAD,
+      findings: [{ id: "F-001", severity: "blocker", problem: "still open", dedupe_key: "still-open" }],
+    });
+  }
+  return reviewOf((await service.complete({ cwd: ROOT, id })).gates);
+}
+
+test("AC1 — one round short of the cap, the cap is not reached", async () => {
+  const gate = await completeWithRounds(REVIEW_ROUND_CAP - 1);
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).not.toContain("round cap");
+});
+
+test("AC1 — at exactly the cap, the cap is reached and named by the constant", async () => {
+  const gate = await completeWithRounds(REVIEW_ROUND_CAP);
+  expect(gate.status).toBe("fail");
+  expect(gate.detail).toContain(`round cap (${REVIEW_ROUND_CAP}) is reached`);
 });
 
 test("AC7 — below the cap the failure is reported without the cap note", async () => {

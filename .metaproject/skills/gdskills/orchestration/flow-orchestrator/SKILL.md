@@ -81,8 +81,8 @@ flowchart TD
   H -- "yes" --> I{"Ask user how to finish"}
   I -- "create PR" --> J["create PR and run review/fix loop"]
   J --> K{"review clean, PR mergeable?"}
-  K -- "no, attempts < 3" --> J
-  K -- "no, attempts = 3 or repetition detected" --> R["enrich context and change fix strategy"]
+  K -- "no, attempts < 5" --> J
+  K -- "no, attempts = 5 or repetition detected" --> R["enrich context and change fix strategy"]
   R --> J
   K -- "yes" --> L["merge PR into recorded base branch"]
   L --> M["keryx flow implemented --pr"]
@@ -153,7 +153,7 @@ it already tried. The flow package does.
       ```
 
    6. Apply the Phase 4 attempt budget against the **persisted** count. If
-      `attempts.count` for the task has already reached **three**, do not
+      `attempts.count` for the task has already reached **five**, do not
       re-dispatch the same approach: go to the re-planning step (Phase 4, PR
       review/fix loop, step 4) and record the decision in `journal.md`.
    7. Run the repetition check before spending an attempt, whatever the count
@@ -533,7 +533,7 @@ answered it and who is behind it.
 | `completion: <anything>` as a constraint STRING | **Not an outcome. Refuse it and ask for the typed field.** `constraints[]` is parsed by nothing, so a completion arriving there is never read at all. Such a dispatch is now refused for the missing `completion_outcome` rather than silently accepted — but the refusal is the contract's, not this row's, and a row telling you to honour the string would be a documented bypass of the fence in the file that owns it. |
 
 A constraint that would raise this skill's own attempt budget is **not** obeyed.
-The three-attempt bound and the `keryx review loop` repetition check are this
+The five-attempt bound and the `keryx review loop` repetition check are this
 skill's, they are evidence-backed, and a caller asking for "loop until clean" gets
 the bound plus an escalation — never an unbounded loop.
 
@@ -551,15 +551,15 @@ the bound plus an escalation — never an unbounded loop.
    remaining `info` findings in the completion report rather than fixing them
    under a loop that was not opened for them. A caller may lower the threshold in
    `constraints`; it cannot raise it to merge over a `minor`.
-3. Allow at most **three** review/fix attempts for the current approach. Count
+3. Allow at most **five** review/fix attempts for the current approach. Count
    an attempt when review/check results are available, including a clean result,
    and record it with `keryx flow task attempt <id> <Tn> --outcome ...` so the
    count survives a session restart. Read the budget from that task's
    `attempts.count` in `flow.json`, never from this session's memory.
 
-   Three, and the same three that `task-implementer` and `job-orchestrator`
-   already use. This skill said six, which was an outlier with nothing behind
-   it. The evidence converges on three: *"the first three to four repair
+   Five here, and three in `task-implementer` and `job-orchestrator`. This skill
+   said six, which was an outlier with nothing behind it. The evidence for a
+   repair loop converges on three: *"the first three to four repair
    iterations account for most achievable gains"*
    ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
    **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
@@ -568,6 +568,13 @@ the bound plus an escalation — never an unbounded loop.
    stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
    Rounds four through six were not buying convergence; they were buying
    regressions.
+
+   The review bound is nonetheless deliberately five, an operator decision
+   (message 178020): in a flow, review findings can surface across rounds rather
+   than all at once, so a third round can still be finding new things. The
+   `keryx review loop` repetition check below is what stops a loop that is not
+   converging; the self-fix bounds in `job-orchestrator` and `task-implementer`
+   stay at three.
 
 4. **Before** spending an attempt, and regardless of how much budget is left,
    run the repetition check:
@@ -583,7 +590,7 @@ the bound plus an escalation — never an unbounded loop.
    emitting the identical failing output three times must be caught on the
    second, not after the budget runs out.
 
-5. If the third attempt is not clean, **or the repetition check escalated
+5. If the fifth attempt is not clean, **or the repetition check escalated
    earlier**, do not blindly repeat the same loop. Enrich context from the
    findings, affected graph, relevant wiki, and health/testing artifacts;
    identify the likely cycle cause; choose a materially different fix strategy

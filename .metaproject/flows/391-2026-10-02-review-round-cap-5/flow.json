@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "391",
+  "slug": "review-round-cap-5",
+  "title": "Review round cap 5",
+  "status": "in-progress",
+  "createdAt": "2026-10-02T10:43:23.674Z",
+  "updatedAt": "2026-10-02T10:43:41.156Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8f6c5e71ec16469fc599f0ace9ec5f6740103c430f00fa33f55bfd223495c5a7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T10:43:23.674Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T10:43:40.971Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T10:43:41.156Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/flow/review-gate.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/round-bound.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/round-bound.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/gdskills/round-bound.test.ts"
+    },
+    "AC5": {
+      "kind": "invariant",
+      "check": "bun test src/flow/review-gate.test.ts"
+    }
+  }
+}
