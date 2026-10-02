@@ -33,11 +33,19 @@ import {
   toUsageAnchor,
   type UsageAnchor,
 } from "../../src/harness/provider/context-guard";
-import { spillToolOutput } from "../../src/harness/tool/output-spill";
+import { spillToolOutput, writeToolOutputFile } from "../../src/harness/tool/output-spill";
 import { anchorsAnnouncement } from "../../src/session/anchors-announce";
 import { compactWithFallback } from "../../src/session/compact";
-import { pruneToolOutputs } from "../../src/session/prune";
-import { renderAnchorsBlock, type SlateAnchors } from "../../src/session/slate";
+import { firstChangedIndex, pruneToolOutputs } from "../../src/session/prune";
+import { tokensOf } from "../../src/session/bounded-request";
+import {
+  cachedPriceRatio,
+  decideRewrite,
+  estimateRemainingRounds,
+  pruneThresholdsForWindow,
+} from "../../src/session/rewrite-gate";
+import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateNote, type TrailEntry } from "../../src/session/slate";
+import { rewriteWorkingMemory } from "../../src/session/working-memory";
 
 /** Model and window of the real session (openai-codex/gpt-6.1-sol). */
 export const REPLAY_MODEL = "openai-codex/gpt-6.1-sol";
@@ -324,6 +332,8 @@ export interface ReplayResult {
   compactions: number;
   /** Rounds in which prune cleared at least one result. */
   prunes: number;
+  /** Flow 393: working-memory rewrites applied (frame rebuilds, with the packs they carried). */
+  rewrites: number;
   prunedResults: number;
   spilled: number;
   /** Estimated tokens of the context after the last round. */
@@ -334,13 +344,15 @@ export interface ReplayResult {
 function result(
   mode: ReplayResult["mode"],
   perRequest: number[],
-  counters: Pick<ReplayResult, "compactions" | "prunes" | "prunedResults" | "spilled" | "finalContext">,
+  counters: Pick<ReplayResult, "compactions" | "prunes" | "prunedResults" | "spilled" | "finalContext"> &
+    Partial<Pick<ReplayResult, "rewrites">>,
 ): ReplayResult {
   return {
     mode,
     model: REPLAY_MODEL,
     windowTokens: REPLAY_WINDOW,
     thresholdTokens: 0.85 * REPLAY_WINDOW,
+    rewrites: 0,
     requests: perRequest.length,
     peakEstimate: Math.max(0, ...perRequest),
     totalEstimate: perRequest.reduce((a, b) => a + b, 0),
@@ -461,6 +473,151 @@ export async function replayBranch(session: SyntheticSession, sessionDir?: strin
   }
 }
 
+/** Flow 393: the notes a working-memory session would hold (a handful of short facts). */
+const REPLAY_NOTES: Record<string, SlateNote> = {
+  task: { text: "Goal: get CI green on the frontend branch. Constraint: do not touch generated files.", ts: "t" },
+  findings: {
+    text: "The failing lint rule is in src/feature-3/module-3. The flaky test is order-dependent; rerun once before editing.",
+    ts: "t",
+  },
+  next: { text: "Next: apply the lint fix, rerun the affected tests, then report to the operator.", ts: "t" },
+};
+
+/**
+ * Flow 393: this branch on a working-memory host. The round loop's request preparation as
+ * `pruneOrRewriteHistory` runs it: every tool result is saved and recorded in the Trail, anchors
+ * announce as before, and each round passes through `rewriteWorkingMemory` (frame + last K rounds +
+ * observation packs behind the cache-cost gate) before the flow-394 prune and the compaction guard.
+ */
+export async function replayBounded(session: SyntheticSession, sessionDir?: string): Promise<ReplayResult> {
+  const root = existsSync("/tmp") ? "/tmp" : os.tmpdir();
+  const ownDir = sessionDir === undefined ? await mkdtemp(path.join(root, "replay-session-")) : undefined;
+  const dir = sessionDir ?? (ownDir as string);
+  try {
+    const history: NormalizedMessage[] = [...session.initial];
+    const perRequest: number[] = [];
+    let anchor: UsageAnchor | undefined;
+    let compactions = 0;
+    let prunes = 0;
+    let prunedResults = 0;
+    let spilled = 0;
+    let rewrites = 0;
+    let trailStep = 0;
+    const trail: TrailEntry[] = [];
+    let anchors: SlateAnchors = { root: "/work/example-project/frontend", touched: [] };
+    const { systemInstruction, toolDefs } = session;
+    const window = REPLAY_WINDOW;
+    const thresholds = pruneThresholdsForWindow(window);
+    const nonce = "replaynonce";
+    const frame = { nonce, scrub: (t: string): string => t.split(nonce).join("[nonce]") };
+    let roundIndex = 0;
+
+    for (const step of session.steps) {
+      if (step.kind === "operator" || step.kind === "notice") {
+        history.push(step.message);
+      } else if (step.kind === "anchors") {
+        anchors = step.anchors;
+        const announcement = anchorsAnnouncement(history, step.anchors);
+        if (announcement !== undefined) {
+          history.push(announcement);
+        }
+      } else {
+        roundIndex += 1;
+        const forced = needsCompaction(estimateRequestTokens(history, systemInstruction, toolDefs), window);
+        const slate: Slate = { anchors, course: {}, seeds: [], trail: [...trail], notes: REPLAY_NOTES };
+        const rewrite = await rewriteWorkingMemory({
+          history,
+          sessionDir: dir,
+          slate,
+          frame,
+          contextWindow: window,
+          providerId: "openai-codex",
+          remainingRounds: estimateRemainingRounds({ round: roundIndex, maxRounds: 150 }),
+          atPlanBoundary: false,
+          forced,
+        });
+        let changed = rewrite.applied;
+        if (rewrite.applied) rewrites += 1;
+        if (!rewrite.applied) {
+          const pruned = await pruneToolOutputs(history, {
+            sessionDir: dir,
+            protectTokens: thresholds.protectTokens,
+            minSavingTokens: thresholds.minSavingTokens,
+            shouldApply: (plan, h) =>
+              decideRewrite({
+                kind: "prune",
+                savedTokens: plan.savedTokens,
+                invalidatedTokens: tokensOf(h.slice(firstChangedIndex(plan, h))),
+                remainingRounds: estimateRemainingRounds({ round: roundIndex, maxRounds: 150 }),
+                cachedRatio: cachedPriceRatio("openai-codex"),
+                forced,
+              }).apply,
+          });
+          if (pruned.pruned > 0) {
+            prunes += 1;
+            prunedResults += pruned.pruned;
+            changed = true;
+          }
+        }
+        if (changed) anchor = undefined;
+        const guardEstimate = changed
+          ? estimateRequestTokens(history, systemInstruction, toolDefs)
+          : estimateWithUsageAnchor(history, systemInstruction, toolDefs, anchor);
+        if (needsCompaction(guardEstimate, window)) {
+          const compacted = compactWithFallback(history, {
+            keepLastUserTurns: 3,
+            fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, systemInstruction, toolDefs), window),
+          });
+          if (!compacted.noop) {
+            history.splice(0, history.length, ...compacted.context);
+            compactions += 1;
+          }
+        }
+        const snapshot = snapshotRequest(history, systemInstruction, toolDefs);
+        const sent = estimateRequestTokens(history, systemInstruction, toolDefs);
+        perRequest.push(sent);
+        anchor = toUsageAnchor(snapshot, sent);
+        history.push(step.assistant);
+        const names = new Map((step.assistant.toolCalls ?? []).map((c) => [c.id, c.name]));
+        for (const tool of step.tools) {
+          const id = tool.toolCallId ?? "call";
+          const spill = await spillToolOutput(tool.content, { sessionDir: dir, toolCallId: id });
+          if (spill.text !== tool.content) spilled += 1;
+          // The loop saves every output of a working-memory host and records it in the Trail.
+          const filePath = spill.spillPath ?? (await writeToolOutputFile(dir, id, tool.content));
+          trailStep += 1;
+          trail.push({
+            step: trailStep,
+            tool: names.get(id) ?? "tool",
+            digest: id,
+            outcome: "ok",
+            ts: "t",
+            ...(filePath !== undefined ? { outputPath: filePath } : {}),
+          });
+          history.push({
+            ...tool,
+            content: spill.text,
+            trailStep,
+            ...(filePath !== undefined ? { spillPath: filePath } : {}),
+          });
+        }
+      }
+    }
+    return result("branch", perRequest, {
+      rewrites,
+      compactions,
+      prunes,
+      prunedResults,
+      spilled,
+      finalContext: estimateRequestTokens(history, systemInstruction, toolDefs),
+    });
+  } finally {
+    if (ownDir !== undefined) {
+      await rm(ownDir, { recursive: true, force: true });
+    }
+  }
+}
+
 export interface ReplayComparison {
   before: ReplayResult;
   after: ReplayResult;
@@ -490,6 +647,7 @@ function format(r: ReplayResult): string {
     `  total estimated input:  ${r.totalEstimate} tokens`,
     `  compactions:            ${r.compactions}`,
     `  prune rounds:           ${r.prunes} (${r.prunedResults} results cleared)`,
+    ...(r.rewrites > 0 ? [`  working-memory rewrites: ${r.rewrites}`] : []),
     `  spilled results:        ${r.spilled}`,
     `  final context:          ${r.finalContext} tokens`,
   ].join("\n");
@@ -505,8 +663,41 @@ export function formatComparison(c: ReplayComparison): string {
   ].join("\n");
 }
 
+/** Flow 393 AC3: the replay peak must stay at or below this many estimated tokens. */
+export const BOUNDED_PEAK_LIMIT = 64_000;
+/** Flow 393 AC3: 25% below the flow-394 replay total of 7,374,769. */
+export const FLOW_394_REPLAY_TOTAL = 7_374_769;
+export const BOUNDED_TOTAL_LIMIT = Math.round(FLOW_394_REPLAY_TOTAL * 0.75);
+
+export interface BoundedComparison {
+  flow394: ReplayResult;
+  bounded: ReplayResult;
+  /** 1 - bounded.total / flow394.total. */
+  totalReduction: number;
+}
+
+export async function runBoundedReplay(seed: number = REPLAY_SEED): Promise<BoundedComparison> {
+  const session = generateSession(seed);
+  const flow394 = await replayBranch(session);
+  const bounded = await replayBounded(session);
+  return { flow394, bounded, totalReduction: 1 - bounded.totalEstimate / flow394.totalEstimate };
+}
+
+export function formatBounded(c: BoundedComparison): string {
+  return [
+    "flow 394 (prune only)",
+    format(c.flow394),
+    "flow 393 (bounded request, working memory)",
+    format(c.bounded),
+    `peak per-request input: ${c.bounded.peakEstimate} (limit ${BOUNDED_PEAK_LIMIT}) -> ${c.bounded.peakEstimate <= BOUNDED_PEAK_LIMIT ? "ok" : "OVER"}`,
+    `total estimated input: ${c.bounded.totalEstimate} (limit ${BOUNDED_TOTAL_LIMIT}, ${(c.totalReduction * 100).toFixed(1)}% below flow 394) -> ${c.bounded.totalEstimate <= BOUNDED_TOTAL_LIMIT ? "ok" : "OVER"}`,
+  ].join("\n");
+}
+
 if (import.meta.main) {
   const seedFlag = process.argv.indexOf("--seed");
   const seed = seedFlag >= 0 ? Number(process.argv[seedFlag + 1]) : REPLAY_SEED;
   console.log(formatComparison(await runReplay(seed)));
+  console.log("");
+  console.log(formatBounded(await runBoundedReplay(seed)));
 }

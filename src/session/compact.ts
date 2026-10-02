@@ -41,7 +41,7 @@ export interface CompactResult {
 
 /** Never clip an operator request below this many characters. */
 const MIN_PROMPT_CHARS = 500;
-const SUMMARY_HEADER = "[Compacted earlier context";
+export const SUMMARY_HEADER = "[Compacted earlier context";
 const REQUESTS_HEADER = "Prior user requests:";
 const FILES_READ_PREFIX = "Files read: ";
 const FILES_MODIFIED_PREFIX = "Files modified: ";

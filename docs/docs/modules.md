@@ -1222,6 +1222,11 @@ keryx-native session uses.
 module name appears in the manifest's `expose.modules` list, which is what
 governs whether the tools are visible to a client.
 
+Inside keryx's own sessions the same file also holds the model's working memory
+(a harness-written Trail of tool calls and model-written Notes, with read-only
+`slate_trail`, `recall_step` and `history_search`); see the
+[Slate guide](./guides/slate.md#working-memory-in-keryxs-own-sessions).
+
 | Tool | Mutating | Behavior |
 |---|---|---|
 | `slate.open` | yes | Open or return an `externalSessionId`-scoped slate. A second `open` for the same id is a no-op returning the existing slate — never a second file. |

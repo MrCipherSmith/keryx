@@ -20,3 +20,15 @@
 - 2026-10-02T15:37:54.956Z - task-added: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
 - 2026-10-02T15:37:56.493Z - task-depends-set: T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)
 - 2026-10-02T16:26:30.802Z - owner-changed: Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))
+- 2026-10-02T19:04:37.073Z - started
+- 2026-10-02T19:09:04.674Z - task-done: T5: Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)
+- 2026-10-02T19:14:38.683Z - task-done: T6: Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)
+- 2026-10-02T19:18:14.128Z - task-done: T7: slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)
+- 2026-10-02T19:18:14.304Z - task-done: T8: Recall tools slate_trail, recall_step, history_search with session confinement (AC4)
+- 2026-10-02T19:33:34.636Z - task-done: T9: Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)
+- 2026-10-02T19:33:51.958Z - task-done: T10: Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)
+- 2026-10-02T19:33:52.357Z - task-done: T13: Window-relative prune thresholds (AC12)
+- 2026-10-02T19:33:52.771Z - task-done: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
+- 2026-10-02T19:36:00.000Z - measurement (AC3, replay, seed 0x20261001, window 272000, 110 rounds, 180 tool results; `bun run scripts/benchmark/replay-session-shape.ts`): flow 394 baseline reproduced exactly, peak 96,783 and total 7,374,769 estimated input tokens. Bounded request on this branch: peak 40,428 (limit 64,000) and total 2,969,506 (limit 5,531,077; 59.7% below flow 394), 28 working-memory rewrites in batches, 0 compactions. The replay composes the real rewriteWorkingMemory (frame, last K rounds, packs, cache-cost gate) with a Trail entry and a saved output per tool result and three Notes in the frame.
+- 2026-10-02T19:37:33.895Z - task-done: T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)
+- 2026-10-02T19:43:25.461Z - task-done: T12: shell_exec spill-instead-of-truncate (AC11)

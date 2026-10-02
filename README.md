@@ -742,7 +742,10 @@ Grouped by what you are trying to do, not by internal module layout.
   a working session keeps, plus an external hand onto it: the `slate.open` /
   `slate.writeSeed` / `slate.close` MCP tools let any MCP-connected harness open
   one scoped to its own session id and close it into the same review pipeline.
-  Local stdio only; there is no CLI verb. See the
+  Local stdio only; there is no CLI verb. In keryx's own sessions the slate is
+  also the model's working memory: a harness-written Trail of every tool call,
+  model-written Notes (`slate_note`), and read-only recall (`slate_trail`,
+  `recall_step`, `history_search`) replace re-sending old rounds. See the
   [Slate guide](docs/docs/guides/slate.md).
 
 **Run agents inside boundaries**

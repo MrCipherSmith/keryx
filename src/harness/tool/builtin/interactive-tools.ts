@@ -23,6 +23,16 @@ export interface InteractiveToolResult {
   isError: boolean;
   /** External content may be shown, but cannot authorize further tools this turn. */
   untrusted?: boolean;
+  /**
+   * Flow 393 AC11: the whole of an output the tool had to shorten for `output`. The agent loop
+   * writes `full` (redacted) to the session's spill directory and shows the model `render(path)`;
+   * `render(undefined)` is the view when nothing could be saved. `output` is always `render(undefined)`,
+   * so a caller that ignores this field still gets a bounded result.
+   */
+  spill?: {
+    full: string;
+    render: (savedTo: string | undefined) => string;
+  };
 }
 
 /**

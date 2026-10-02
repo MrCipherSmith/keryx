@@ -9,9 +9,9 @@
   "id": "393",
   "slug": "slate-working-memory",
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
-  "status": "ready",
+  "status": "in-progress",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T16:26:30.802Z",
+  "updatedAt": "2026-10-02T19:43:25.461Z",
   "source": {
     "type": "description",
     "ref": null
@@ -97,7 +97,7 @@
       "id": "T5",
       "title": "Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -105,13 +105,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -121,13 +122,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -137,13 +139,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Recall tools slate_trail, recall_step, history_search with session confinement (AC4)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -153,13 +156,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T7"
@@ -170,13 +174,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T9"
       ],
@@ -186,13 +191,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "Note-taking contract in the system instruction + pre-eviction notice (AC5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -202,13 +208,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "shell_exec spill-instead-of-truncate (AC11)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -216,13 +223,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "Window-relative prune thresholds (AC12)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -230,7 +238,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
@@ -256,7 +265,7 @@
       "id": "T15",
       "title": "ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -266,7 +275,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -368,6 +378,60 @@
       "at": "2026-10-02T16:26:30.802Z",
       "event": "owner-changed",
       "detail": "Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))"
+    },
+    {
+      "at": "2026-10-02T19:04:37.073Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T19:09:04.674Z",
+      "event": "task-done",
+      "detail": "T5: Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)"
+    },
+    {
+      "at": "2026-10-02T19:14:38.683Z",
+      "event": "task-done",
+      "detail": "T6: Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)"
+    },
+    {
+      "at": "2026-10-02T19:18:14.128Z",
+      "event": "task-done",
+      "detail": "T7: slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)"
+    },
+    {
+      "at": "2026-10-02T19:18:14.304Z",
+      "event": "task-done",
+      "detail": "T8: Recall tools slate_trail, recall_step, history_search with session confinement (AC4)"
+    },
+    {
+      "at": "2026-10-02T19:33:34.636Z",
+      "event": "task-done",
+      "detail": "T9: Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)"
+    },
+    {
+      "at": "2026-10-02T19:33:51.958Z",
+      "event": "task-done",
+      "detail": "T10: Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)"
+    },
+    {
+      "at": "2026-10-02T19:33:52.357Z",
+      "event": "task-done",
+      "detail": "T13: Window-relative prune thresholds (AC12)"
+    },
+    {
+      "at": "2026-10-02T19:33:52.771Z",
+      "event": "task-done",
+      "detail": "T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)"
+    },
+    {
+      "at": "2026-10-02T19:37:33.895Z",
+      "event": "task-done",
+      "detail": "T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)"
+    },
+    {
+      "at": "2026-10-02T19:43:25.461Z",
+      "event": "task-done",
+      "detail": "T12: shell_exec spill-instead-of-truncate (AC11)"
     }
   ],
   "acKinds": {

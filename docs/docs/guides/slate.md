@@ -156,6 +156,42 @@ Project-scoped, `.gitignore`d, one file per id. There is no `slate.list` or
 cross-hand isolation above structural rather than a policy check layered on
 top of a shared store.
 
+## Working memory in keryx's own sessions
+
+This part is about the slate keryx's shell, TUI and `harness run` keep for
+themselves, not the external hand above. On a host that keeps the original
+history (`pruneArchive`) with a live session directory, the slate is also what
+the model works from once old rounds have left the request. Other hosts behave
+as before and write no Trail into a slate another holder owns.
+
+- **Trail** — written by the harness, never by the model: one entry per executed
+  tool call (step, tool, argument digest, outcome, path of the saved full
+  output). There is no tool that writes it.
+- **Notes** — the model's own working notes, set, replaced or deleted by key with
+  `slate_note`. Redacted for secrets, at most 2,000 characters per note and 8,000
+  tokens for the whole shelf. A note is not a Seed and is never proposed to
+  workspace knowledge.
+- **Bounded request.** Older rounds leave the request in batches; the full
+  history stays in `archive.jsonl`. One slate frame, rebuilt every time rather
+  than appended, stands in for them: the Anchors, the latest Trail entries and
+  every Note. The system instruction says so, and one notice per batch names the
+  steps about to leave.
+- **Recall.** `slate_trail`, `recall_step` (the full output of a step, paged) and
+  `history_search` are read-only and confined to the live session.
+- **Data, not instructions.** Notes and Trail digests sit in a delimited
+  untrusted-data section of the frame: a note that reads like an instruction is
+  delivered as data.
+- **Big results.** A tool result over 10 KiB stays verbatim for two requests,
+  then becomes a fixed pack (size, head, tail, how to read it back). A rewrite of
+  the sent history happens only when its saving beats the cost of re-billing the
+  prefix it invalidates, and each decision is logged.
+- **`shell_exec` output** past its inline cap is saved in full (stdout and
+  stderr) and the model sees the head, the tail, the counts and the path; the end
+  of stderr is always visible.
+
+Seeds are unchanged: never injected, review-bound. `slate_read` only gained
+fields.
+
 ## Not shipped (do not treat as current)
 
 - Sharing an open slate between clients — the pre-existing non-goal this

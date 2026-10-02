@@ -17,7 +17,16 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { archiveSlate, openSlateAtomic, readSlate, writeSlate, type Slate, type SlateAnchors } from "./slate";
+import {
+  appendTrailEntry,
+  archiveSlate,
+  openSlateAtomic,
+  readSlate,
+  writeSlate,
+  type Slate,
+  type SlateAnchors,
+  type TrailEntry,
+} from "./slate";
 import { resolveProjectRoot } from "./paths";
 import type { CourseProjection } from "./slate-course";
 
@@ -474,6 +483,21 @@ export async function recordSlateSessionTouch(
     return undefined;
   }
   return recordSlateTouch(ref.dir, touched, extra);
+}
+
+/**
+ * Flow 393 (AC1, AC8): append one Trail entry through a ref. `undefined`, and
+ * nothing written, once the ref is detached — a shell that lost the session's
+ * lease must never write a Trail entry into the slate its successor now holds.
+ */
+export async function recordSlateSessionTrail(
+  ref: SlateSessionRef,
+  entry: Omit<TrailEntry, "step">,
+): Promise<TrailEntry | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return appendTrailEntry(ref.dir, entry);
 }
 
 /**

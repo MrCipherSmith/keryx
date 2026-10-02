@@ -66,7 +66,30 @@ import {
   type UsageAnchor,
 } from "../harness/provider/context-guard";
 import { compactWithFallback } from "../session/compact";
-import { isClearedToolResult, pruneToolOutputs, type PruneResult } from "../session/prune";
+import {
+  argDigest,
+  firstChangedIndex,
+  isClearedToolResult,
+  pruneToolOutputs,
+  type PruneOptions,
+  type PruneResult,
+} from "../session/prune";
+import { formatStepRanges, tokensOf } from "../session/bounded-request";
+import {
+  cachedPriceRatio,
+  decideRewrite,
+  describeRewriteDecision,
+  estimateRemainingRounds,
+  pruneThresholdsForWindow,
+  type RewriteDecision,
+} from "../session/rewrite-gate";
+import {
+  atPlanBoundary,
+  buildWorkingMemoryInstruction,
+  leavingNotice,
+  rewriteWorkingMemory,
+  workingMemoryState,
+} from "../session/working-memory";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
@@ -86,13 +109,17 @@ import {
   isCourseDone,
   readSlateSession,
   recordSlateSessionTouch,
+  recordSlateSessionTrail,
   slateSessionDir,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { spillToolOutput } from "../harness/tool/output-spill";
+import { spillToolOutput, writeToolOutputFile } from "../harness/tool/output-spill";
+import { WORKING_MEMORY_TOOL_NAMES } from "../harness/tool/builtin/slate-memory-tools";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
-const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
+// Flow 393: `slate_note` writes slate.json like a Seed does, so it is durable too and is not
+// exempted from the untrusted-content floor.
+const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed", "slate_note"]);
 
 /**
  * Flow 387 T7: the last provider-reported input-token usage per history array,
@@ -2139,10 +2166,13 @@ export async function runAgentTurn(
   // state its marker in the instruction every request of this turn sends
   // (round loop and both wrap-ups read `deps.systemInstruction`).
   const controlNonce = deps.controlNonce ?? generateControlNonce();
+  // Flow 393 AC5: a host that keeps working memory says so; every other host's instruction is
+  // byte-identical to what it was.
+  const memoryContract = isWorkingMemoryHost(deps, options) ? `\n\n${buildWorkingMemoryInstruction()}` : "";
   const turnDeps: AgentDeps = {
     ...deps,
     controlNonce,
-    systemInstruction: `${deps.systemInstruction}\n\n${buildControlMarkerInstruction(controlNonce)}`,
+    systemInstruction: `${deps.systemInstruction}${memoryContract}\n\n${buildControlMarkerInstruction(controlNonce)}`,
   };
   // Flow 354 review r1 (item 1): same "don't touch the core's many internal
   // `return`s" posture as SLATE-5's `finally` below — a fresh sink per turn,
@@ -2370,6 +2400,71 @@ function pruneSessionDir(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOpti
 }
 
 /**
+ * Flow 393 AC11: save the whole output a tool supplied (already shortened for `result.output`) and
+ * render the view that names the file. The full text is redacted before it is written, exactly
+ * like the generic spill, so the file never holds a secret history would not. No session dir, or
+ * a failed write: the view says nothing was saved and the model still gets head, tail and counts.
+ */
+async function spillToolSuppliedOutput(
+  spill: NonNullable<InteractiveToolResult["spill"]>,
+  sessionDir: string | undefined,
+  toolCallId: string,
+): Promise<{ text: string; spillPath?: string }> {
+  const savedTo =
+    sessionDir === undefined ? undefined : await writeToolOutputFile(sessionDir, toolCallId, redactSensitiveText(spill.full));
+  // Redact the view WITHOUT the path and put the path in afterwards: a file name made of a
+  // timestamp and a hash can look like a card number to the scrubber, and a mangled path is no use.
+  const view = redactSensitiveText(spill.render(savedTo === undefined ? undefined : SPILL_PATH_PLACEHOLDER));
+  return {
+    text: savedTo === undefined ? view : view.split(SPILL_PATH_PLACEHOLDER).join(savedTo),
+    ...(savedTo !== undefined ? { spillPath: savedTo } : {}),
+  };
+}
+
+const SPILL_PATH_PLACEHOLDER = "KERYXSPILLPATHPLACEHOLDER";
+
+/**
+ * Flow 393 AC8: a host that offers the working-memory tools: it keeps the originals
+ * (`pruneArchive`), has a handler that re-points its archive cursor, and a live session dir.
+ * Every other host (ACP, subagents, trigger dispatch, deep-enrich, the TUI side worker) is not one.
+ */
+function isWorkingMemoryHost(deps: AgentDeps, options: RunAgentTurnOptions): boolean {
+  return options.pruneArchive === true && deps.onContextCompaction !== undefined && liveSessionDir(options) !== undefined;
+}
+
+/**
+ * Flow 393: "working-memory mode". It needs everything pruning needs (a host that keeps the
+ * originals, a handler that re-points its archive cursor, a live dir) PLUS an open slate
+ * the session holds. Hosts without `pruneArchive` (ACP, subagents, trigger dispatch,
+ * deep-enrich, the TUI side worker) get `undefined` and behave exactly as after flow 394.
+ */
+function workingMemoryDir(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): string | undefined {
+  if (options.slateSession === undefined || options.slateSession.opened !== true) return undefined;
+  return pruneSessionDir(io, deps, options);
+}
+
+/**
+ * Flow 393 AC1: the Trail digest for one executed call, and the paths it touched. The model has
+ * no tool that writes this; only the loop does, through the lease-aware slate ref.
+ */
+function trailEntryFor(
+  call: { name: string; input: string },
+  isError: boolean,
+  outputPath: string | undefined,
+  ts: string,
+): { tool: string; digest: string; outcome: "ok" | "error"; ts: string; outputPath?: string; files?: string[] } {
+  const files = extractTouchedFromToolInput(call.name, parseToolInput(call.input));
+  return {
+    tool: call.name,
+    digest: argDigest(call.name, call.input),
+    outcome: isError ? "error" : "ok",
+    ts,
+    ...(outputPath !== undefined ? { outputPath } : {}),
+    ...(files.length > 0 ? { files } : {}),
+  };
+}
+
+/**
  * Flow 387 review r3 F-024: hosts already told that pruning is off for want of a handler. Keyed on
  * the io, not the deps: `runAgentTurn` copies deps per turn, while a host keeps one io.
  */
@@ -2388,16 +2483,21 @@ async function pruneHistory(
   history: NormalizedMessage[],
   sessionDir: string | undefined,
   minSavingTokens?: number,
+  shouldApply?: PruneOptions["shouldApply"],
 ): Promise<PruneResult> {
   if (sessionDir === undefined) {
     // Flow 387 review r1 F-001: no proof the originals are kept -> behave like main, no pruning.
     return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
   }
   const lengthBefore = history.length;
+  // Flow 393 AC12: the protected window and the batch threshold follow the context window.
+  const thresholds = pruneThresholdsForWindow(deps.contextWindow);
   const result = await pruneToolOutputs(history, {
     sessionDir,
+    protectTokens: thresholds.protectTokens,
+    minSavingTokens: minSavingTokens ?? thresholds.minSavingTokens,
     beforeApply: () => io.onHistoryChange?.("tool"),
-    ...(minSavingTokens !== undefined ? { minSavingTokens } : {}),
+    ...(shouldApply !== undefined ? { shouldApply } : {}),
   });
   if (result.pruned + result.reasoningStripped > 0) {
     if (result.collapsed > 0 && deps.onContextCompaction !== undefined) {
@@ -2412,6 +2512,128 @@ async function pruneHistory(
     }
   }
   return result;
+}
+
+interface RoundRewriteInput {
+  io: AgentIO;
+  deps: AgentDeps;
+  options: RunAgentTurnOptions;
+  history: NormalizedMessage[];
+  plan: ExecutionPlan | undefined;
+  round: number;
+  maxRounds: number;
+  systemInstruction: string;
+  toolDefs: Parameters<typeof estimateRequestTokens>[2];
+  controlNonce: string;
+  now: () => string;
+  system: (text: string) => void;
+}
+
+/**
+ * Flow 387 T11 + flow 393: what happens to the history before each request.
+ *
+ * A host in working-memory mode (`workingMemoryDir`) gets the bounded request: older rounds leave
+ * in batches behind a rebuilt slate frame, large results become packs, and every one of those
+ * rewrites passes the cache-cost gate (AC14), which logs its decision. A host without
+ * working memory gets the flow-394 prune, unchanged. `announced` is true when this call already
+ * told the host what it did.
+ */
+async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneResult & { announced: boolean }> {
+  const { io, deps, options, history, system } = input;
+  const sessionDir = pruneSessionDir(io, deps, options);
+  const wmDir = workingMemoryDir(io, deps, options);
+  if (wmDir === undefined || options.slateSession === undefined) {
+    return { ...(await pruneHistory(io, deps, history, sessionDir)), announced: false };
+  }
+  const state = workingMemoryState(history);
+  const completed = input.plan?.items.filter((i) => i.status === "completed").length ?? 0;
+  const pending = input.plan?.items.filter((i) => i.status !== "completed").length;
+  const boundary = atPlanBoundary(state, completed);
+  const remainingRounds = estimateRemainingRounds({
+    ...(pending !== undefined ? { pendingPlanSteps: pending } : {}),
+    round: input.round,
+    maxRounds: input.maxRounds,
+  });
+  const forced = needsCompaction(
+    estimateRequestTokens(history, input.systemInstruction, input.toolDefs),
+    deps.contextWindow,
+  );
+  const logDecision = (d: RewriteDecision): void => {
+    const key = `${d.kind}:${d.reason}`;
+    if (d.apply) {
+      state.lastSkipKey = undefined;
+    } else {
+      // A skip repeats every round until something changes: say it once.
+      if (state.lastSkipKey === key) return;
+      state.lastSkipKey = key;
+    }
+    system(`\n${describeRewriteDecision(d)}\n`);
+  };
+  const scrub = (text: string): string => scrubControlNonce(text, input.controlNonce);
+  const slate = await readSlateSession(options.slateSession);
+  const result = await rewriteWorkingMemory({
+    history,
+    sessionDir: wmDir,
+    slate,
+    frame: { nonce: input.controlNonce, scrub, ts: input.now() },
+    ...(deps.contextWindow !== undefined ? { contextWindow: deps.contextWindow } : {}),
+    providerId: deps.providerId,
+    remainingRounds,
+    atPlanBoundary: boundary,
+    forced,
+    beforeApply: () => io.onHistoryChange?.("tool"),
+  });
+  if (result.decision !== undefined) logDecision(result.decision);
+  if (result.applied) {
+    state.completedAtLastRewrite = completed;
+    if (result.removed > 0 && deps.onContextCompaction !== undefined) {
+      deps.onContextCompaction({ kind: "prune", removed: result.removed, context: [...history], estimate: 0 });
+    } else {
+      io.onHistoryChange?.("tool");
+    }
+    const steps = result.droppedSteps.length > 0 ? ` (steps ${formatStepRanges(result.droppedSteps)})` : "";
+    system(
+      `\n[working memory] ${result.droppedRounds} older rounds${steps} left the request, ${result.packed} large results packed, ~${result.savedTokens} tokens saved. ` +
+        "The slate frame (Anchors, Notes, Trail) stands in for them; slate_trail, recall_step and history_search read them back.\n",
+    );
+    return {
+      pruned: result.removed + result.packed,
+      collapsed: result.droppedRounds,
+      reasoningStripped: 0,
+      savedTokens: result.savedTokens,
+      announced: true,
+    };
+  }
+  // Nothing was rewritten this round: tell the model which steps leave at the next rewrite, once
+  // per batch, so it can save what it still needs as Notes (AC5).
+  const notice = leavingNotice(history, state);
+  if (notice !== undefined) {
+    history.push({
+      role: "user",
+      content: `${harnessEnvelopePrefix(input.controlNonce)} ${scrub(notice.text)}`,
+      provenance: "harness",
+      ts: input.now(),
+    });
+    io.onHistoryChange?.("tool");
+    system(`\n[working memory] Steps ${formatStepRanges(notice.steps)} leave the request at the next rewrite.\n`);
+  }
+  // The flow-394 prune still runs on its own thresholds, behind the same cache-cost gate.
+  const gate = (plan: Parameters<NonNullable<PruneOptions["shouldApply"]>>[0], h: readonly NormalizedMessage[]): boolean => {
+    const decision = decideRewrite({
+      kind: "prune",
+      savedTokens: plan.savedTokens,
+      invalidatedTokens: tokensOf(h.slice(firstChangedIndex(plan, h))),
+      remainingRounds,
+      cachedRatio: cachedPriceRatio(deps.providerId),
+      atPlanBoundary: boundary,
+      forced,
+    });
+    logDecision(decision);
+    return decision.apply;
+  };
+  const pruned = await pruneHistory(io, deps, history, sessionDir, undefined, gate);
+  if (pruned.pruned + pruned.reasoningStripped > 0) state.completedAtLastRewrite = completed;
+  return { ...pruned, announced: false };
 }
 
 /**
@@ -2621,8 +2843,15 @@ async function runAgentTurnCore(
     return {};
   }
 
-  const toolByName = new Map(deps.tools.map((t) => [t.definition.name, t]));
-  const toolDefs = deps.tools.map((t) => t.definition);
+  // Flow 393 AC8: the working-memory tools exist only for hosts that can keep working memory
+  // (pruneArchive + handler + a live session dir). Every other host is offered exactly the
+  // roster it had after flow 394, so its request does not change by a byte.
+  const workingMemoryHost = isWorkingMemoryHost(deps, options);
+  const turnTools = workingMemoryHost
+    ? deps.tools
+    : deps.tools.filter((t) => !WORKING_MEMORY_TOOL_NAMES.includes(t.definition.name));
+  const toolByName = new Map(turnTools.map((t) => [t.definition.name, t]));
+  const toolDefs = turnTools.map((t) => t.definition);
   const maxAttempts = resolveAgentMaxAttemptsPerHash();
   const parentRunId = deps.idSeq();
   const actionRequest = isActionRequest(userLine);
@@ -2960,10 +3189,25 @@ async function runAgentTurnCore(
     // through the host's existing checkpoint; the archive keeps the originals.
     // Flow 387 T18: old exchanges whose results are all outside the window are
     // collapsed into one text record, not only cleared.
-    const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(io, deps, options));
+    const pruneResult = await pruneOrRewriteHistory({
+      io,
+      deps,
+      options,
+      history,
+      plan: currentPlan,
+      round: roundState.round,
+      maxRounds: roundState.maxRounds,
+      systemInstruction: roundSystemInstruction,
+      toolDefs,
+      controlNonce,
+      now,
+      system,
+    });
     if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
       forgetHiddenHashes(); // flow 387 T24: re-reading a cleared result is not a repeat
+    }
+    if (!pruneResult.announced && pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       system(
         `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ${pruneResult.reasoningStripped} old reasoning replays dropped, ~${pruneResult.savedTokens} tokens) in the request.\n`,
       );
@@ -3775,11 +4019,36 @@ async function runAgentTurnCore(
       // the threshold passes through untouched. No live session dir → unchanged.
       // Flow 387 review r1 F-002: the spill file's path is recorded on the message
       // (`spillPath`) as data; prune never parses it back out of the output text.
-      const spilled = await spillToolOutput(redactSensitiveText(result.output), {
-        sessionDir: liveSessionDir(options),
-        toolCallId: call.id,
-      });
+      // Flow 393 AC11: a tool that shortened its own output (`shell_exec`) hands over the whole
+      // text; it is saved here and the model sees the tool's bounded view with the path in it.
+      const spilled =
+        result.spill !== undefined
+          ? await spillToolSuppliedOutput(result.spill, liveSessionDir(options), call.id)
+          : await spillToolOutput(redactSensitiveText(result.output), {
+              sessionDir: liveSessionDir(options),
+              toolCallId: call.id,
+            });
       const modelOutput = spilled.text;
+      // Flow 393 AC1/AC4 (working-memory mode only): every executed call leaves a Trail entry in
+      // slate.json, and its full redacted output is on disk so `recall_step` can page it later.
+      // A bookkeeping failure never replaces the real tool result.
+      let outputPath = spilled.spillPath;
+      let trailStep: number | undefined;
+      if (workingMemoryDir(io, deps, options) !== undefined && options.slateSession !== undefined) {
+        try {
+          const dir = liveSessionDir(options);
+          if (outputPath === undefined && dir !== undefined) {
+            outputPath = await writeToolOutputFile(dir, call.id, redactSensitiveText(result.output));
+          }
+          const entry = await recordSlateSessionTrail(
+            options.slateSession,
+            trailEntryFor(call, result.isError === true, outputPath, now()),
+          );
+          trailStep = entry?.step;
+        } catch (err) {
+          io.onSystem?.(`slate trail update failed (ignored): ${err instanceof Error ? err.message : String(err)}\n`);
+        }
+      }
       // `untrusted` alone decides, NOT `untrusted && !isError`.
       //
       // The old guard let the content's own author turn the control off. It
@@ -3805,7 +4074,8 @@ async function runAgentTurnCore(
         provenance: "tool",
         toolCallId: call.id,
         ...(result.isError === true ? { isError: true as const } : {}),
-        ...(spilled.spillPath !== undefined ? { spillPath: spilled.spillPath } : {}),
+        ...(outputPath !== undefined ? { spillPath: outputPath } : {}),
+        ...(trailStep !== undefined ? { trailStep } : {}),
         ts: now(),
       });
       io.onHistoryChange?.("tool");

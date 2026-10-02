@@ -129,7 +129,72 @@ export type Slate = {
   course: SlateCourse;
   seeds: SlateSeed[];
   childDispatches?: Record<string, SlateChildDispatch>;
+  /**
+   * Flow 393: harness-owned record of what the agent DID, one entry per tool
+   * call. Absent on a slate written before this flow (every reader treats a
+   * missing field as empty). The model has no tool that writes it.
+   */
+  trail?: TrailEntry[];
+  /**
+   * Flow 393: model-owned working notes, keyed by a short name. Absent on a
+   * legacy slate. Never a Seed, never part of a workspace proposal.
+   */
+  notes?: Record<string, SlateNote>;
 };
+
+/** One tool call, as the harness saw it (flow 393). */
+export type TrailEntry = {
+  /** 1-based, strictly increasing within a session; survives eviction of old entries. */
+  step: number;
+  tool: string;
+  /** Short, redacted digest of the call's arguments (same shape the prune collapse uses). */
+  digest: string;
+  outcome: "ok" | "error";
+  ts: string;
+  /** Absolute path of the saved full output, when one was written. */
+  outputPath?: string;
+  /** Paths the call touched (bounded), for `slate_trail`'s file filter. */
+  files?: string[];
+};
+
+/** One model-written note (flow 393). */
+export type SlateNote = {
+  text: string;
+  ts: string;
+};
+
+/** Most Trail entries kept in `slate.json`; the oldest are dropped past this. */
+export const TRAIL_MAX_ENTRIES = 1500;
+const TRAIL_DIGEST_MAX = 160;
+const TRAIL_FILES_MAX = 6;
+const TRAIL_FILE_MAX = 200;
+/** A note's `text` is cut to this many characters (flow 393 AC2). */
+export const NOTE_MAX_CHARS = 2000;
+/** The whole Notes shelf may hold at most this many estimated tokens (flow 393 AC2). */
+export const NOTES_MAX_TOKENS = 8000;
+export const NOTE_KEY_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+
+/** A `slate_note` write that was refused; `message` is shown to the model verbatim. */
+export class SlateNoteRefusedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SlateNoteRefusedError";
+  }
+}
+
+/** Estimated tokens of one note, as counted against {@link NOTES_MAX_TOKENS}. */
+export function estimateNoteTokens(key: string, text: string): number {
+  return estimateTokens(`${key}: ${text}`);
+}
+
+/** Estimated tokens the whole Notes shelf costs. */
+export function estimateNotesTokens(notes: Record<string, SlateNote> | undefined): number {
+  let total = 0;
+  for (const [key, note] of Object.entries(notes ?? {})) {
+    total += estimateNoteTokens(key, note.text);
+  }
+  return total;
+}
 
 function slatePath(dir: string): string {
   return path.join(dir, "slate.json");
@@ -282,6 +347,105 @@ export async function appendSeed(dir: string, seed: SlateSeed): Promise<Slate> {
     if (!prev) throw new Error(`appendSeed: no open slate in ${dir}`);
     return { ...prev, seeds: [...prev.seeds, seed] };
   });
+}
+
+/**
+ * Flow 393: append one Trail entry under the same lock every slate write uses.
+ * The step number is assigned HERE (last step + 1), never by the caller, so two
+ * writers cannot hand out the same number. A missing slate is a quiet no-op
+ * (`undefined`): a Trail entry for a session with no open slate has nowhere to
+ * go and must never fabricate one. Redaction of `digest`/`files` is this
+ * function's job, so no caller can persist a secret by forgetting to.
+ */
+export async function appendTrailEntry(
+  dir: string,
+  entry: Omit<TrailEntry, "step">,
+): Promise<TrailEntry | undefined> {
+  let written: TrailEntry | undefined;
+  try {
+    await withFileLock(slateLockPath(dir), async () => {
+      const prev = await readSlate(dir);
+      if (prev === undefined) {
+        return;
+      }
+      const trail = prev.trail ?? [];
+      const step = (trail[trail.length - 1]?.step ?? 0) + 1;
+      const files = (entry.files ?? [])
+        .slice(0, TRAIL_FILES_MAX)
+        .map((f) => redactSensitiveText(f).slice(0, TRAIL_FILE_MAX));
+      written = {
+        step,
+        tool: entry.tool.slice(0, 80),
+        digest: redactSensitiveText(entry.digest).slice(0, TRAIL_DIGEST_MAX),
+        outcome: entry.outcome,
+        ts: entry.ts,
+        ...(entry.outputPath !== undefined ? { outputPath: entry.outputPath } : {}),
+        ...(files.length > 0 ? { files } : {}),
+      };
+      const next = [...trail, written];
+      const bounded = next.length > TRAIL_MAX_ENTRIES ? next.slice(next.length - TRAIL_MAX_ENTRIES) : next;
+      await writeFileAtomic(slatePath(dir), `${JSON.stringify({ ...prev, trail: bounded }, null, 2)}\n`);
+    });
+  } catch (error) {
+    if (isNotFound(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+  return written;
+}
+
+/**
+ * Flow 393 AC2: set (create or replace) or delete a note. `text === undefined`
+ * deletes. The text is redacted and cut to {@link NOTE_MAX_CHARS}; a write that
+ * would push the shelf past {@link NOTES_MAX_TOKENS} is REFUSED with a message
+ * saying how far over it is and what to delete — nothing is stored then.
+ * Replacing a note counts the new text, not old + new.
+ */
+export async function writeNote(
+  dir: string,
+  key: string,
+  text: string | undefined,
+  ts: string,
+): Promise<{ slate: Slate; stored?: SlateNote; truncated: boolean; deleted: boolean }> {
+  if (!NOTE_KEY_PATTERN.test(key)) {
+    throw new SlateNoteRefusedError(
+      `invalid note key ${JSON.stringify(key.slice(0, 40))}: use 1-64 characters from A-Z a-z 0-9 . _ -`,
+    );
+  }
+  let stored: SlateNote | undefined;
+  let truncated = false;
+  let deleted = false;
+  const slate = await writeSlate(dir, (prev) => {
+    if (prev === undefined) {
+      throw new SlateNoteRefusedError("no open slate in this session, so there is nowhere to keep a note");
+    }
+    const notes = { ...(prev.notes ?? {}) };
+    if (text === undefined) {
+      deleted = key in notes;
+      delete notes[key];
+      return { ...prev, notes };
+    }
+    let clean = redactSensitiveText(text);
+    if (clean.length > NOTE_MAX_CHARS) {
+      clean = clean.slice(0, NOTE_MAX_CHARS);
+      truncated = true;
+    }
+    const others = { ...notes };
+    delete others[key];
+    const total = estimateNotesTokens(others) + estimateNoteTokens(key, clean);
+    if (total > NOTES_MAX_TOKENS) {
+      throw new SlateNoteRefusedError(
+        `note refused: the notes shelf would hold about ${total} tokens, over the ${NOTES_MAX_TOKENS} limit. ` +
+          `Delete or shorten an existing note (slate_note with no text deletes), then write again. ` +
+          `Existing notes: ${Object.keys(others).join(", ") || "(none)"}.`,
+      );
+    }
+    stored = { text: clean, ts };
+    notes[key] = stored;
+    return { ...prev, notes };
+  });
+  return { slate, ...(stored !== undefined ? { stored } : {}), truncated, deleted };
 }
 
 /**

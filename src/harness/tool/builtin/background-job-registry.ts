@@ -25,6 +25,7 @@
 // a `sh -c 'cmd &'` backgrounds and forgets about, closing the exact
 // process-ownership bug class hit live by opencode/Codex (see context.md).
 
+import { TranscriptRecorder, type ShellTranscript } from "./shell-transcript";
 import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
 import { resolveShellEnv, resolveShellSpawn } from "../../process/shell-spawn";
 
@@ -271,6 +272,15 @@ export interface JobRegistry {
    */
   markObserved(jobId: string): void;
   /**
+   * Flow 393 AC11: the whole transcript of a task that is still in its FOREGROUND phase, with its
+   * stdout and stderr tallied apart, handed over once and then released. `shell_exec` takes it when
+   * the command exited inside its yield so an output over the inline cap can be saved instead of
+   * cut. `undefined` for a task that was promoted or started in the background (it is not kept
+   * for those: the ring buffer is their bound) and after the first take. Optional so a test
+   * double need not implement it; `shell_exec` then falls back to the head snapshot.
+   */
+  takeTranscript?(jobId: string): ShellTranscript | undefined;
+  /**
    * Wait up to `ms` for a task to finish. Never kills on timeout — the caller
    * decides what to do (`shell_exec` promotes the task to background).
    * `"unknown"` means this registry never tracked that id.
@@ -389,6 +399,11 @@ interface InternalJob {
    */
   droppedBytes: number;
   exited: boolean;
+  /**
+   * Flow 393 AC11: the whole transcript while the task is a foreground one. Dropped when the task
+   * is promoted (a background task is bounded by the ring instead) and by `takeTranscript`.
+   */
+  recorder: TranscriptRecorder | undefined;
   /**
    * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, mirrored into
    * `info.outputHead`. Append-only: never rebased by the ring's truncation and
@@ -707,6 +722,7 @@ export function createJobRegistry(options?: {
 
   function appendOutput(job: InternalJob, chunk: string, stream: "stdout" | "stderr"): void {
     job.outputBuffer += chunk;
+    job.recorder?.push(chunk, stream);
     if (job.outputHead.length < TASK_OUTPUT_HEAD_BYTES) {
       job.outputHead = (job.outputHead + chunk).slice(0, TASK_OUTPUT_HEAD_BYTES);
       job.info.outputHead = job.outputHead;
@@ -822,6 +838,7 @@ export function createJobRegistry(options?: {
         },
         handle,
         outputBuffer: "",
+        recorder: phase === "foreground" ? new TranscriptRecorder() : undefined,
         outputHead: "",
         readCursor: 0,
         droppedBytes: 0,
@@ -961,6 +978,14 @@ export function createJobRegistry(options?: {
       if (job !== undefined) job.info.observed = true;
     },
 
+    takeTranscript(jobId) {
+      const job = jobs.get(jobId);
+      const recorder = job?.recorder;
+      if (job === undefined || recorder === undefined) return undefined;
+      job.recorder = undefined;
+      return recorder.snapshot();
+    },
+
     async waitForExit(jobId, ms) {
       const job = jobs.get(jobId);
       if (job === undefined) return "unknown";
@@ -987,6 +1012,7 @@ export function createJobRegistry(options?: {
         return { ok: false, error: `unknown job_id: ${jobId}` };
       }
       job.info.phase = "background";
+      job.recorder = undefined;
       if (!job.phaseEmitted) {
         job.phaseEmitted = true;
         onEvent?.({ type: "phase", jobId, phase: "background" });

@@ -19,6 +19,13 @@ import type { JobRegistry, StartTaskOptions } from "./background-job-registry";
 // never this module (see its `ENV_SHELL_TIMEOUT_MS_FALLBACK` comment), so this
 // edge closes no cycle.
 import { ENV_SHELL_IDLE_MS, clampTaskIdleTimeoutMs } from "./background-job-registry";
+import {
+  SHELL_INLINE_CAP,
+  overInlineCap,
+  renderShellOutput,
+  transcriptFromStreams,
+  type ShellTranscript,
+} from "./shell-transcript";
 import type { DetectOptions } from "../../process/sandbox/detect";
 import {
   resolveShellEnv,
@@ -48,7 +55,7 @@ export interface CommandRunOptions {
 /** Runs a shell command string and returns bounded output (or an error result). */
 export type CommandRunner = (command: string, options?: CommandRunOptions) => Promise<InteractiveToolResult>;
 
-const MAX_OUTPUT_BYTES = 20_000;
+const MAX_OUTPUT_BYTES = SHELL_INLINE_CAP;
 
 /**
  * Deadline for one approved command. Without it `await proc.exited` waits
@@ -119,6 +126,29 @@ export function resolveShellYieldMs(env: Record<string, string | undefined> = pr
 /** Apply the shared 20KB output cap, marking a truncated transcript as such. */
 function boundOutput(text: string): string {
   return text.length > MAX_OUTPUT_BYTES ? `${text.slice(0, MAX_OUTPUT_BYTES)}\n…(truncated)` : text;
+}
+
+/**
+ * Flow 393 AC11: the result for a finished command. Under the inline cap it is the transcript as
+ * before. Over it, `output` is the bounded view (head, tail, stderr tail, counts) and `spill`
+ * carries the whole transcript, so the agent loop can save it and name the file.
+ */
+function transcriptResult(
+  transcript: ShellTranscript,
+  isError: boolean,
+  notice: string | undefined,
+  emptyText: string,
+): InteractiveToolResult {
+  const withNotice = (body: string): string => (notice === undefined ? body : body.length > 0 ? `${body}\n${notice}` : notice);
+  if (!overInlineCap(transcript)) {
+    const body = transcript.full.trim();
+    return { output: withNotice(body.length > 0 ? body : emptyText), isError };
+  }
+  return {
+    output: withNotice(renderShellOutput(transcript, undefined)),
+    isError,
+    spill: { full: transcript.full, render: (savedTo) => withNotice(renderShellOutput(transcript, savedTo)) },
+  };
 }
 
 /**
@@ -339,27 +369,15 @@ export function makeCommandRunner(
       const stdout = out.text;
       const stderr = err.text;
 
-      const combined = `${stdout}${stderr.length > 0 ? `\n${stderr}` : ""}`.trim();
-      const bounded =
-        combined.length > MAX_OUTPUT_BYTES
-          ? `${combined.slice(0, MAX_OUTPUT_BYTES)}\n…(truncated)`
-          : combined;
+      const transcript = transcriptFromStreams(stdout, stderr);
       if (aborted) {
-        const notice = "aborted: run time limit";
-        return {
-          output: bounded.length > 0 ? `${bounded}\n${notice}` : notice,
-          isError: true,
-        };
+        return transcriptResult(transcript, true, "aborted: run time limit", "");
       }
       if (timedOut) {
         const notice = `shell_exec: timed out after ${timeoutMs}ms and was killed (raise or disable with ${ENV_SHELL_TIMEOUT_MS})`;
-        return {
-          output: bounded.length > 0 ? `${bounded}\n${notice}` : notice,
-          isError: true,
-        };
+        return transcriptResult(transcript, true, notice, "");
       }
-      const output = bounded.length > 0 ? bounded : `(no output; exit ${exit})`;
-      return { output, isError: exit !== 0 };
+      return transcriptResult(transcript, exit !== 0, undefined, `(no output; exit ${exit})`);
     } catch (cause) {
       return {
         output: `command failed to start: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -414,10 +432,11 @@ export function shellExecTool(
         "for a dev server or a watch build you know you will not read inline); it changes nothing else. " +
         "description is a short label for the task list. idle_timeout_ms is for a command that is deliberately " +
         "SILENT for a long time (a sleep, a slow poll) — a task that produces no output for its idle timeout " +
-        "is killed, so raise it rather than lose the command. Combined stdout+stderr is CAPPED at 20,000 bytes " +
-        "from the start of output — do not use sed/grep/cat/awk here to locate code (they can silently " +
-        "truncate before reaching what you need, and repeating the command returns the same truncated head); " +
-        "use search_code or graph_symbol instead, which are built for that and stay within the cap.",
+        "is killed, so raise it rather than lose the command. Output over 20,000 characters is saved in full to a " +
+        "file: you see the head, the tail, the last lines of stderr, the line and byte counts of both streams " +
+        "and the file's path, and read the rest with read_file or search_code on that path. Do not use " +
+        "sed/grep/cat/awk here to locate code; use search_code or graph_symbol instead, which are built " +
+        "for that and stay within the cap.",
       inputSchema: {
         type: "object",
         properties: {
@@ -545,12 +564,19 @@ export function shellExecTool(
       // part this result caps to. `collected` remains the fallback for a task
       // that produced nothing (no snapshot) or one whose entry is gone.
       const exitCode = info.exitCode ?? 0;
+      const idleKilled = info.status === "killed" && info.killReason === "idle";
+      const idleNotice = idleKilled
+        ? `shell_exec: no output for ${info.idleTimeoutMs}ms, so the command was killed (raise it for this command with idle_timeout_ms, or change the default with ${ENV_SHELL_IDLE_MS})`
+        : undefined;
+      // Flow 393 AC11: the registry hands over the whole transcript of a foreground task with its
+      // stdout/stderr tallies, so an output over the inline cap is saved rather than cut.
+      const transcript = jobRegistry.takeTranscript?.(taskId);
+      if (transcript !== undefined) {
+        return transcriptResult(transcript, info.status !== "completed", idleNotice, `(no output; exit ${exitCode})`);
+      }
       const bounded = boundOutput((info.outputHead ?? collected).trim());
       const body = bounded.length > 0 ? bounded : `(no output; exit ${exitCode})`;
-      const idleKilled = info.status === "killed" && info.killReason === "idle";
-      const output = idleKilled
-        ? `${body}\nshell_exec: no output for ${info.idleTimeoutMs}ms, so the command was killed (raise it for this command with idle_timeout_ms, or change the default with ${ENV_SHELL_IDLE_MS})`
-        : body;
+      const output = idleNotice !== undefined ? `${body}\n${idleNotice}` : body;
       return { output, isError: info.status !== "completed" };
     },
   };
