@@ -138,6 +138,27 @@ describe("an invalid kind is reported, not fatal", () => {
   });
 });
 
+describe("origin set with an invalid kind is reported, not fatal", () => {
+  test("the service changes nothing and names the valid kinds", async () => {
+    await freshRoot();
+    const service = createFlowService(deps());
+    const created = await service.init({ cwd: ROOT, title: "Set bad kind", origin: "agent-finding", originSource: "ci" });
+    const result = await service.originSet({ cwd: ROOT, id: created.flow.id, kind: "robot", reason: "typo" });
+    expect(result.changed).toBe(false);
+    expect(result.next).toBe(result.previous);
+    expect(result.note).toContain('"robot"');
+    expect(result.note).toContain("human-request, agent-finding, agent-proposal");
+  });
+
+  test("the CLI exits 0 and prints the problem", async () => {
+    await freshRoot();
+    const created = await createFlowService(deps()).init({ cwd: ROOT, title: "Set bad kind via CLI" });
+    const run = await runFlowCli(flowCommand, ROOT, ["origin", "set", created.flow.id, "robot", "--reason", "typo"]);
+    expect(run.exitCode).toBe(0);
+    expect(plain(`${run.out}\n${run.err}`)).toContain('"robot"');
+  });
+});
+
 describe("a flow without an origin shows origin: unknown", () => {
   test("flow init and flow status print it", async () => {
     await freshRoot();

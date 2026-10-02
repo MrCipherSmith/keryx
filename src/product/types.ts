@@ -110,7 +110,7 @@ export interface OpenEntry {
   /** Who wrote the criterion, read from the intent record; `unknown` for an index that predates the field. */
   readonly outcomeAuthor: OutcomeAuthorReading;
   /** Where the flow came from, read from the intent record; `unknown` for an index that predates the field. */
-  readonly origin: OriginReading;
+  readonly origin?: OriginReading | undefined;
   readonly originQuote?: string | undefined;
   readonly originSource?: string | undefined;
 }

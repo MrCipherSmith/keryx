@@ -979,12 +979,9 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
      * rule applies to the quote and source already on the flow or given here: if
      * it is not met, nothing is written and the result carries the reason (the
      * origin never refuses). `unknown` clears the origin. Works on any flow and
-     * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`.
+     * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`. An invalid kind is a note, not an error.
      */
     async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {
-      if (kind !== "unknown" && !isOriginKind(kind)) {
-        throw new Error(`origin kind must be one of: human-request, agent-finding, agent-proposal, unknown (got "${kind}").`);
-      }
       if (!reason?.trim()) {
         throw new Error('flow origin set requires --reason "<why>"');
       }
@@ -997,6 +994,11 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         const before = readOrigin(current.origin);
         previous = before?.kind ?? "unknown";
         let after: FlowOrigin | undefined;
+        if (kind !== "unknown" && !isOriginKind(kind)) {
+          note = `origin kind must be one of: human-request, agent-finding, agent-proposal, unknown (got "${kind}"); the origin is unchanged.`;
+          next = previous;
+          return current;
+        }
         if (kind !== "unknown") {
           const resolution = resolveOrigin({
             kind,

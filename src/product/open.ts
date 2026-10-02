@@ -70,7 +70,7 @@ export function openEntryLines(entry: OpenEntry): string[] {
     `${label}  ${entry.title}`,
     `${pad}outcome: ${entry.outcome}`,
     `${pad}outcome author: ${entry.outcomeAuthor}`,
-    ...originDetailLines(entry.origin === "unknown" ? undefined : { kind: entry.origin, quote: entry.originQuote, source: entry.originSource }, pad),
+    ...originDetailLines(entry.origin === undefined || entry.origin === "unknown" ? undefined : { kind: entry.origin, quote: entry.originQuote, source: entry.originSource }, pad),
     `${pad}closed ${entry.closedAt === null ? "at an unrecorded time" : entry.closedAt.slice(0, 10)}`,
   ];
 }
