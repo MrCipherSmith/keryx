@@ -73,6 +73,7 @@ import { routingCommand } from "./commands/routing";
 import { externalCommand } from "./commands/external";
 import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
+import { remoteCommand } from "./commands/remote";
 import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
@@ -172,6 +173,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
+  remote: remoteCommand,
   forgetting: forgettingCommand,
   trigger: triggerCommand,
   schedule: scheduleCommand,
@@ -384,6 +386,9 @@ export const USAGE_BODY = `Usage:
   keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
                                                Bound gdctx raw/artifacts logs and owner write-conflict
                                                sidecars; dry run by default, --apply removes
+  keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]
+                                               Print the sample reply in each Telegram rendering mode
+                                               (tables, lists, rules); no network
   keryx forgetting trail [--limit <n>] [--json]
   keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
                                                Read the deletion trail: what was removed, when, at
@@ -481,6 +486,7 @@ Commands:
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  remote    Telegram remote control: preview how replies are rendered, with no network
   forgetting Read the deletion trail — was this removed, or did it never exist?
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove

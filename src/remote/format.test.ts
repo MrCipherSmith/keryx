@@ -1,7 +1,10 @@
 // Reply formatting for Telegram (flow 376, block 4; AC13). Pure function, no network.
 
 import { describe, expect, test } from "bun:test";
-import { formatReply } from "./format";
+import { formatReply, renderedLength } from "./format";
+import { renderPlainText } from "./format-plain";
+import { checkTelegramHtml, renderTelegramHtml } from "./format-html";
+import { renderRichMessage } from "./format-rich";
 import { OutboundQueue } from "./outbound-queue";
 import { FakeBotApi } from "./fake-bot-api";
 import { makeRemoteDir } from "./remote.test-helpers";
@@ -237,6 +240,61 @@ describe("the outbound queue sends what formatReply produces (the single outboun
       expect(queue.size).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("formatReply: tables and rules (flow 395, AC6)", () => {
+  const table = (rows: number): string => ["| step | result |", "|:--|--:|", ...Array.from({ length: rows }, (_, i) => `| step ${i} | ${i % 2 === 0 ? "ok" : "failed"} |`)].join("\n");
+
+  test("a table that fits goes out whole with no part number", () => {
+    expect(formatReply(table(3))).toEqual([table(3)]);
+  });
+
+  test("a long table is numbered, falls between rows and repeats its header in every part", () => {
+    const parts = formatReply(table(80), 300);
+    expect(parts.length).toBeGreaterThan(2);
+    parts.forEach((part, index) => {
+      const lines = part.split("\n");
+      expect(lines[0]).toBe(`(${index + 1}/${parts.length})`);
+      expect(lines.slice(1, 3)).toEqual(["| step | result |", "|:--|--:|"]);
+      for (const row of lines.slice(3)) {
+        expect(row).toMatch(/^\| step \d+ \| (ok|failed) \|$/);
+      }
+    });
+    expect(parts.flatMap((part) => part.split("\n").slice(3))).toHaveLength(80);
+  });
+
+  test("every part fits the limit once rendered, in HTML, plain text and rich mode", () => {
+    for (const part of formatReply(table(80), 300)) {
+      expect(renderedLength(part)).toBeLessThanOrEqual(300);
+      const html = checkTelegramHtml(renderTelegramHtml(part));
+      expect(html.ok && html.text.length <= 300).toBe(true);
+      expect(renderPlainText(part).length).toBeLessThanOrEqual(300);
+      expect(renderRichMessage(part).blocks.some((block) => block.type === "table")).toBe(true);
+    }
+  });
+
+  test("a rule is charged at its drawn width so a part of rules still fits", () => {
+    const rules = Array.from({ length: 200 }, () => "---").join("\n");
+    const parts = formatReply(rules, 200);
+    expect(parts.length).toBeGreaterThan(5);
+    for (const part of parts) {
+      expect(renderedLength(part)).toBeLessThanOrEqual(200);
+      const html = checkTelegramHtml(renderTelegramHtml(part));
+      expect(html.ok && html.text.length <= 200).toBe(true);
+    }
+  });
+
+  test("the cost of text without a table or a rule is its own length", () => {
+    expect(renderedLength("plain **text**\n- a\n1. b")).toBe("plain **text**\n- a\n1. b".length);
+  });
+
+  test("a fenced block that looks like a table is not split as one", () => {
+    const code = ["```", "| a | b |", "|---|---|", ...Array.from({ length: 60 }, (_, i) => `| ${i} | x |`), "```"].join("\n");
+    for (const part of formatReply(code, 200)) {
+      expect(part.split("\n").filter((line) => line === "|---|---|").length).toBeLessThanOrEqual(1);
+      expect(part.includes("```")).toBe(true);
     }
   });
 });

@@ -128,6 +128,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
+| `keryx remote` | Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample. |
 
 | Shell command | Summary |
 |---|---|
@@ -142,6 +143,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
+| `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
 
 ## External agents, ACP and MCP
 

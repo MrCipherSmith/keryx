@@ -13,6 +13,9 @@
 //     call is in flight gets 409 Conflict, as Telegram answers it.
 //   - forum topics: ids from a counter, sendMessage into a missing topic is a
 //     400, deleting twice is a 400.
+//   - `sendRichMessage` and `editMessageText` with `rich_message` (Bot API 10.3, flow 395): the block
+//     list is checked against the documented limits; `setRichSupport` makes the bot a one that may
+//     not use them (the call is refused), as an ordinary bot or an older server answers.
 //   - 429 with retry_after, 5xx and a whole-API outage, injected per method.
 //   - callback queries, with the message the buttons belong to.
 //   - `parse_mode: "HTML"`: the text is checked as strictly as Telegram checks it
@@ -32,12 +35,15 @@ import {
   type BotChatMemberInfo,
   type BotIdentity,
   type BotUpdate,
+  type EditRichMessageParams,
   type GetUpdatesParams,
   type InlineKeyboard,
   type SendMessageParams,
+  type SendRichMessageParams,
   TELEGRAM_MAX_TEXT,
 } from "./types";
 import { checkTelegramHtml } from "./format-html";
+import { type InputRichBlock, type InputRichMessage, RICH_LIMITS, type RichText } from "./rich-types";
 
 export interface FakeTopic {
   messageThreadId: number;
@@ -52,6 +58,8 @@ export interface FakeSentMessage {
   /** As sent: Telegram HTML when `parseMode` is "HTML". */
   text: string;
   parseMode?: "HTML";
+  /** Set when the message was sent (or edited into) a rich message; `text` is then empty. */
+  richMessage?: InputRichMessage;
   inlineKeyboard?: InlineKeyboard;
   at: number;
 }
@@ -59,9 +67,11 @@ export interface FakeSentMessage {
 /** One edit of a message the bot sent. */
 export interface FakeEdit {
   messageId: number;
-  kind: "text" | "markup";
+  kind: "text" | "markup" | "rich";
   /** The new text, for a text edit. */
   text?: string;
+  /** The new block list, for a rich edit. */
+  richMessage?: InputRichMessage;
   /** The keyboard after the edit; empty when the buttons were removed. */
   inlineKeyboard: InlineKeyboard;
   at: number;
@@ -98,9 +108,14 @@ export interface FakeBotApiOptions {
   botUsername?: string;
 }
 
+/** What the fake bot may do with rich messages: allowed, a server that lacks the method (404), a bot that may not (403). */
+export type FakeRichSupport = "allowed" | "unsupported" | "forbidden";
+
 export type FakeMethod =
   | "getUpdates"
   | "sendMessage"
+  | "sendRichMessage"
+  | "editRichMessage"
   | "editMessageReplyMarkup"
   | "editMessageText"
   | "setMyCommands"
@@ -122,6 +137,8 @@ interface Fault {
 /** A client over the shared fake state, with its own poller identity. */
 export interface FakeBotClient extends BotApi {
   readonly label: string;
+  sendRichMessage(params: SendRichMessageParams): Promise<{ message_id: number }>;
+  editRichMessage(params: EditRichMessageParams): Promise<void>;
 }
 
 export class FakeBotApi implements BotApi {
@@ -156,6 +173,7 @@ export class FakeBotApi implements BotApi {
   private botCanManageTopics = true;
   private botStatus = "administrator";
   private botCanReact = true;
+  private richSupport: FakeRichSupport = "allowed";
   private readonly botId: number;
   private readonly botUsername: string;
   private readonly inFlightPollers = new Set<string>();
@@ -180,6 +198,8 @@ export class FakeBotApi implements BotApi {
       label,
       getUpdates: (params) => this.getUpdatesFor(label, params),
       sendMessage: (params) => this.sendMessageFor(label, params),
+      sendRichMessage: (params) => this.sendRichFor(label, params),
+      editRichMessage: (params) => this.editRichFor(label, params),
       editMessageReplyMarkup: (params) => this.editMarkupFor(label, params),
       editMessageText: (params) => this.editTextFor(label, params),
       setMyCommands: (params) => this.setCommandsFor(label, params),
@@ -240,6 +260,11 @@ export class FakeBotApi implements BotApi {
   /** Every call answers 401, as Telegram does for a token it does not know. */
   setTokenRejected(rejected: boolean): void {
     this.tokenRejected = rejected;
+  }
+
+  /** Whether rich messages work: allowed, unsupported (404 method not found) or forbidden (403 for this bot). */
+  setRichSupport(support: FakeRichSupport): void {
+    this.richSupport = support;
   }
 
   /** Whether the bot may put reactions on messages. Off: `setMessageReaction` is a 400, as in a group that forbids it. */
@@ -367,6 +392,14 @@ export class FakeBotApi implements BotApi {
 
   sendMessage(params: SendMessageParams): Promise<{ message_id: number }> {
     return this.defaultClient.sendMessage(params);
+  }
+
+  sendRichMessage(params: SendRichMessageParams): Promise<{ message_id: number }> {
+    return this.defaultClient.sendRichMessage(params);
+  }
+
+  editRichMessage(params: EditRichMessageParams): Promise<void> {
+    return this.defaultClient.editRichMessage(params);
   }
 
   editMessageReplyMarkup(params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard }): Promise<void> {
@@ -549,6 +582,81 @@ export class FakeBotApi implements BotApi {
     return { message_id: messageId };
   }
 
+  private richRefusal(method: FakeMethod): BotApiError | undefined {
+    if (this.richSupport === "unsupported") {
+      return rejected(method, 404, "Not Found");
+    }
+    if (this.richSupport === "forbidden") {
+      return rejected(method, 403, "Forbidden: bots are not allowed to send rich messages");
+    }
+    return undefined;
+  }
+
+  private async sendRichFor(label: string, params: SendRichMessageParams): Promise<{ message_id: number }> {
+    this.begin("sendRichMessage", label);
+    const refusal = this.richRefusal("sendRichMessage");
+    if (refusal !== undefined) {
+      throw refusal;
+    }
+    if (params.chatId !== this.chatId && params.chatId <= 0) {
+      throw rejected("sendRichMessage", 400, "Bad Request: chat not found");
+    }
+    const invalid = checkRichMessage(params.richMessage);
+    if (invalid !== undefined) {
+      throw rejected("sendRichMessage", 400, `Bad Request: ${invalid}`);
+    }
+    if (params.messageThreadId !== undefined && !this.liveTopics.has(params.messageThreadId)) {
+      throw rejected("sendRichMessage", 400, "Bad Request: message thread not found");
+    }
+    const messageId = ++this.messageSeq;
+    this.sent.push({
+      messageId,
+      chatId: params.chatId,
+      ...(params.messageThreadId === undefined ? {} : { messageThreadId: params.messageThreadId }),
+      text: "",
+      richMessage: params.richMessage,
+      ...(params.inlineKeyboard === undefined ? {} : { inlineKeyboard: params.inlineKeyboard }),
+      at: this.now(),
+    });
+    return { message_id: messageId };
+  }
+
+  private async editRichFor(label: string, params: EditRichMessageParams): Promise<void> {
+    this.begin("editRichMessage", label);
+    const refusal = this.richRefusal("editRichMessage");
+    if (refusal !== undefined) {
+      throw refusal;
+    }
+    const message = this.editable("editMessageText", params.chatId, params.messageId);
+    const invalid = checkRichMessage(params.richMessage);
+    if (invalid !== undefined) {
+      throw rejected("editMessageText", 400, `Bad Request: ${invalid}`);
+    }
+    const next = params.inlineKeyboard ?? [];
+    if (
+      message.richMessage !== undefined &&
+      JSON.stringify(message.richMessage) === JSON.stringify(params.richMessage) &&
+      sameKeyboard(message.inlineKeyboard ?? [], next)
+    ) {
+      throw rejected("editMessageText", 400, "Bad Request: message is not modified");
+    }
+    message.text = "";
+    delete message.parseMode;
+    message.richMessage = params.richMessage;
+    if (next.length === 0) {
+      delete message.inlineKeyboard;
+    } else {
+      message.inlineKeyboard = next;
+    }
+    this.edits.push({
+      messageId: message.messageId,
+      kind: "rich",
+      richMessage: params.richMessage,
+      inlineKeyboard: next,
+      at: this.now(),
+    });
+  }
+
   private async editMarkupFor(
     label: string,
     params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard },
@@ -592,6 +700,7 @@ export class FakeBotApi implements BotApi {
       throw rejected("editMessageText", 400, "Bad Request: message is not modified");
     }
     message.text = params.text;
+    delete message.richMessage;
     if (params.parseMode === undefined) {
       delete message.parseMode;
     } else {
@@ -733,6 +842,92 @@ export class FakeBotApi implements BotApi {
       ...(params.text === undefined ? {} : { text: params.text }),
     });
   }
+}
+
+/**
+ * The documented limits of a rich message (anchor `rich-message-limits`), checked from the block
+ * list alone: this is the fake's own reading, independent of the renderer that produced it.
+ * Returns the reason Telegram would refuse it with, or undefined.
+ */
+export function checkRichMessage(message: InputRichMessage): string | undefined {
+  const keys = Object.keys(message as unknown as Record<string, unknown>);
+  if (keys.length !== 1 || keys[0] !== "blocks") {
+    return "rich_message must have exactly one of html, markdown or blocks";
+  }
+  if (!Array.isArray(message.blocks) || message.blocks.length === 0) {
+    return "rich message is empty";
+  }
+  let blocks = 0;
+  let characters = 0;
+  let tooDeep = false;
+  let tooWide = false;
+  const text = (value: RichText | undefined): void => {
+    if (value === undefined) {
+      return;
+    }
+    if (typeof value === "string") {
+      characters += value.length;
+    } else if (Array.isArray(value)) {
+      for (const part of value) {
+        text(part);
+      }
+    } else {
+      text(value.text);
+    }
+  };
+  const walk = (list: InputRichBlock[], depth: number): void => {
+    if (depth > RICH_LIMITS.nesting) {
+      tooDeep = true;
+      return;
+    }
+    for (const block of list) {
+      blocks += 1;
+      switch (block.type) {
+        case "paragraph":
+        case "heading":
+        case "pre":
+        case "expandable_blockquote":
+          text(block.text);
+          break;
+        case "divider":
+          break;
+        case "blockquote":
+          walk(block.blocks, depth + 1);
+          break;
+        case "list":
+          for (const item of block.items) {
+            blocks += 1;
+            walk(item.blocks, depth + 1);
+          }
+          break;
+        case "table":
+          for (const row of block.cells) {
+            blocks += 1;
+            if (row.length > RICH_LIMITS.tableColumns) {
+              tooWide = true;
+            }
+            for (const cell of row) {
+              text(cell.text);
+            }
+          }
+          break;
+      }
+    }
+  };
+  walk(message.blocks, 1);
+  if (tooDeep) {
+    return "rich message is nested too deeply";
+  }
+  if (tooWide) {
+    return "table has too many columns";
+  }
+  if (blocks > RICH_LIMITS.blocks) {
+    return "rich message has too many blocks";
+  }
+  if (characters > RICH_LIMITS.characters) {
+    return "rich message is too long";
+  }
+  return undefined;
 }
 
 function sameKeyboard(a: InlineKeyboard, b: InlineKeyboard): boolean {

@@ -266,7 +266,10 @@ that it is off.
   the markup, so tags do not use it up. If Telegram still refuses a message's
   markup (400 "can't parse entities"), that one message is sent again as plain
   text and `serve` records a `format-fallback` event. Approval prompts are sent as
-  a code block, so what you approve is shown exactly.
+  a code block, so what you approve is shown exactly. Tables, numbered and nested
+  lists, task items and rules, and the `remote.rendering` setting that picks
+  between HTML and native rich messages, are covered in
+  [how replies look in Telegram](#how-replies-look-in-telegram).
 - **Orphans and limits.** If a session stops sending heartbeats, its topic gets a
   notice and is deleted after 10 minutes (`orphanMs`); a heartbeat inside that
   window brings it back. A run started from Telegram is interrupted after 30
@@ -276,6 +279,51 @@ that it is off.
   span in its history: `keryx sessions list` shows a `⇄ remote <topic>` line under
   it, `--json` carries a `remote` field, and the `keryx shell -r` picker marks it
 `⇄ remote`.
+
+### How replies look in Telegram
+
+A reply is rendered when it is sent, in one of four modes. The mode is the optional
+`rendering` key of `remote/config.json` (`auto`, `rich`, `html` or `plain`; the default is
+`auto`). Any other value is refused with a message that names the valid ones. Change it from
+the shell with the **Telegram rendering** row of `/settings` or with `/rendering <mode>`; the
+next message part picks it up, with no restart.
+
+| Mode | What goes out |
+|------|---------------|
+| `auto` | A reply that holds a table goes as a native rich message (Bot API 10.1 and later, `sendRichMessage`); every other reply goes as HTML, exactly as before. |
+| `rich` | Every reply goes as a rich message. |
+| `html` | Telegram HTML (`parse_mode` `HTML`), the formatting described above. |
+| `plain` | Plain text with the markup stripped. |
+
+What each construct becomes:
+
+- **Tables** are never sent as raw pipes. In HTML a table is an aligned `<pre>` block with the
+  separator row dropped; in a rich message it is a native table block with a header row.
+- **Ordered lists** keep their numbers, **nested bullets** keep their indentation, **task items**
+  show a box or a ticked box, and a **rule** (`---`) shows as a line, in HTML and in rich.
+- Text that holds none of these renders byte for byte as it did before.
+
+Long replies are still split into numbered `(i/n)` parts within the limit of the mode in use
+(4096 characters for HTML and plain, 32768 characters and 500 blocks for a rich message). A table is
+never cut inside a row, and its header row is repeated at the top of the next part.
+
+**The fallback chain.** A rich message is sent only where the Bot API accepts it, and the
+shell does not assume it does. If Telegram refuses a rich message with a 4xx, the same text is
+sent once as HTML; if Telegram then refuses the HTML markup (400 "can't parse entities"), it is
+sent once as plain text. A reply is never dropped because of its format. A 403, 404 or 405 on the
+rich call also pauses rich messages for ten minutes, so a bot that cannot use them does not pay a
+failed call for every message. Network errors, 5xx and 429 are not a refusal of the format: they
+are retried by the durable queue. An edit follows the same chain through `editMessageText` with
+`rich_message`. Each fallback is recorded with its step, its reason (the bot token is never in
+it) and the time; `/channels` shows the mode in effect and the last fallback.
+
+To see what a mode produces without sending anything, run `keryx remote format-sample`. It
+prints a fixed sample reply (a table, an ordered and a nested list, task items and a rule) as it
+goes out in each mode, with no network call; `--mode <mode>` narrows it, `--full` prints the rich
+message itself, and `--json` prints it for a script. The Bot API facts the rich path was built
+against are in the spike note, `docs/requirements/keryx-telegram-rendering/spike.md`. Rich
+messages have been checked against a fake Bot API only; the live check with a real bot is
+pending.
 
 ### Commands from the topic
 

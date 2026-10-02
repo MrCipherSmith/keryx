@@ -17,6 +17,7 @@ const BASE: SettingsSnapshot = {
   theme: "auto",
   jevProfile: { on: 3, total: 9 },
   externalAgents: { on: false, reason: "not enabled" },
+  rendering: { mode: "auto", saveable: true },
 };
 
 const rowOf = (rows: readonly SettingRow[], id: string): SettingRow => {
@@ -40,6 +41,7 @@ describe("buildSettingsRows", () => {
       ["theme", "Display", "Theme", "auto", "saved"],
       ["external", "External", "External providers", "on", "saved"],
       ["external-agents", "External", "External agents", "off", "saved"],
+      ["rendering", "External", "Telegram rendering", "auto", "saved"],
       ["jevprofile", "External", "Jev review profile", "3 of 9 keys on", "saved"],
     ]);
   });
@@ -62,6 +64,7 @@ describe("buildSettingsRows", () => {
       external: "/external",
       "external-agents": "/external-agents",
       jevprofile: "/jevprofile",
+      rendering: "/rendering",
     };
     for (const row of rows) {
       expect(row.command).toBe(owner[row.id]!);
@@ -180,6 +183,25 @@ describe("buildSettingsRows", () => {
   test("external agents: the reason it is off shows, an enabled runtime shows none", () => {
     expect(rowOf(rows, "external-agents").detail).toBe("not enabled");
     expect(rowOf(buildSettingsRows({ ...BASE, externalAgents: { on: true } }), "external-agents").detail).toBeUndefined();
+  });
+
+  test("Telegram rendering: one button per mode, the current one active, each running /rendering (flow 395)", () => {
+    const row = rowOf(buildSettingsRows({ ...BASE, rendering: { mode: "rich", saveable: true } }), "rendering");
+    expect(row.value).toBe("rich");
+    expect(row.usage).toBe("/rendering [auto|rich|html|plain]");
+    expect(row.actions.map((a) => [a.label, a.command, a.active, a.confirm])).toEqual([
+      ["auto", "/rendering auto", false, false],
+      ["rich", "/rendering rich", true, false],
+      ["html", "/rendering html", false, false],
+      ["plain", "/rendering plain", false, false],
+    ]);
+    expect(rowOf(rows, "rendering").detail).toBeUndefined();
+  });
+
+  test("Telegram rendering: without a remote config the row says a change cannot be saved yet", () => {
+    const row = rowOf(buildSettingsRows({ ...BASE, rendering: { mode: "auto", saveable: false } }), "rendering");
+    expect(row.value).toBe("auto");
+    expect(row.detail).toBe("remote control is not set up yet");
   });
 
   test("edit guard says it is per project", () => {

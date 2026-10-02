@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.64] — 2026-10-02
+### Added
+- **Telegram rendering through the current Bot API (flow 395).** Replies to a Telegram topic are rendered in one of four modes, the new optional `rendering` key of `remote/config.json`: `auto` (the default), `rich`, `html` and `plain`; any other value is refused with a message naming the valid ones. In `auto` a reply that holds a table is sent as a native rich message (`sendRichMessage`, and `editMessageText` with `rich_message` for an edit; Bot API 10.1 to 10.3, `blocks` input); every other reply stays on the HTML path of 0.3.63. A table is never sent as raw pipes: HTML gets an aligned `<pre>` block with the separator row dropped, rich gets a native table block. Ordered lists keep their numbers, nested bullets keep their indentation, task items show a box or a ticked box, and a rule shows as a line, in HTML and in rich. Text with none of these renders byte for byte as in 0.3.63.
+- **Fallback chain.** A rich message refused with a 4xx is sent once as HTML, and HTML refused with "can't parse entities" is sent once as plain text; a reply is never dropped for its format. A 403, 404 or 405 pauses rich messages for ten minutes. Network errors, 5xx and 429 are retried by the durable queue as before. Each fallback is recorded with its step, a redacted reason and the time.
+- **Splitting** still gives numbered `(i/n)` parts within the limit of the mode in use (32768 characters and 500 blocks for rich); a table is never cut inside a row and its header is repeated at the top of the next part.
+- **Surfaces.** `/settings` has a **Telegram rendering** row (with `/rendering [mode]` in the shell), the `/channels` modal shows the mode in effect and the last fallback, and `keryx remote format-sample` prints the fixed sample reply in every mode with no network (`--mode`, `--full`, `--json`).
+- The Bot API facts the rich path was built against, each with its source anchor, are in `docs/requirements/keryx-telegram-rendering/spike.md`. The live probe against a real bot is still pending operator acceptance.
+
+[Changes since 0.3.63](https://github.com/MrCipherSmith/keryx/compare/v0.3.63...v0.3.64)
+
 ## [0.3.63] — 2026-10-02
 ### Fixed
 - The managed ignore block that `keryx init` and `keryx update` write now covers `.metaproject/data/decisions/`, so the recommendation journal no longer shows up in `git status` of a project that uses keryx (this repository already ignored it by hand).

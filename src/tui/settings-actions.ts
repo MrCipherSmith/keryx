@@ -14,6 +14,8 @@ export interface SettingsActionHandlers {
   external: (value: "on" | "off") => Promise<void>;
   /** `/external-agents [on|off]`: the text to show. */
   externalAgents: (arg: string) => Promise<string>;
+  /** `/rendering [mode]` (flow 395): the text to show. */
+  rendering: (arg: string) => string;
   reasoning: (arg: string) => void;
   think: (arg: string) => void;
   theme: (arg: string) => void;
@@ -56,6 +58,9 @@ export async function runSettingsCommand(command: string, handlers: SettingsActi
         return;
       case "/external-agents":
         handlers.onSystem(await handlers.externalAgents(arg));
+        return;
+      case "/rendering":
+        handlers.onSystem(handlers.rendering(arg));
         return;
       case "/reasoning":
         handlers.reasoning(arg);

@@ -70,6 +70,20 @@ export type TelegramChannelState =
   /** Configured, but the hub is not running (another poller owns the token, a bad config ...). `reason` says why. */
   | "off";
 
+/** The rendering mode in effect and the last fallback (flow 395), as `/channels` shows them. */
+export interface ChannelsRendering {
+  mode: "auto" | "rich" | "html" | "plain";
+  lastFallback?: {
+    step: "rich-to-html" | "html-to-plain";
+    /** Redacted, never message text. */
+    reason: string;
+    /** Epoch ms. */
+    at: number;
+  };
+  /** Epoch ms until which rich messages are skipped because the bot or server refused them. */
+  richPausedUntil?: number;
+}
+
 export interface ChannelsStatusResponse {
   schemaVersion: string;
   /** This machine's name (the hostname), as it appears in the Test message and in topic names. */
@@ -79,6 +93,8 @@ export interface ChannelsStatusResponse {
     reason?: string;
     /** Registered sessions, i.e. open topics. */
     sessions: number;
+    /** Absent when nothing is configured on this machine. */
+    rendering?: ChannelsRendering;
   };
 }
 

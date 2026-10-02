@@ -15,6 +15,7 @@
 import { statSync, unlinkSync } from "node:fs";
 import { readConfigFile, writeOwnerOnlyFileAtomic } from "../lib/config-dir";
 import { botTokenPath, ensureRemoteDir, remoteConfigPath } from "./paths";
+import { isRenderMode, RENDER_MODE_CHOICES, type RenderMode } from "./rendering-mode";
 
 export const REMOTE_CONFIG_SCHEMA_VERSION = 1;
 export const DEFAULT_ORPHAN_MS = 10 * 60_000;
@@ -31,11 +32,17 @@ export interface RemoteConfig {
   orphanMs: number;
   /** How long a run started from Telegram may take before the shell interrupts it. */
   runTimeoutMs: number;
+  /**
+   * How a reply is written for Telegram (flow 395): auto | rich | html | plain. Left out of the
+   * file means `auto`; a reader applies `DEFAULT_RENDER_MODE`, so a config that never set it is
+   * written back unchanged.
+   */
+  rendering?: RenderMode;
 }
 
 export type Loaded<T> = { ok: true; value: T } | { ok: false; reason: string };
 
-const CONFIG_KEYS = new Set(["schemaVersion", "chatId", "allowedUserIds", "orphanMs", "runTimeoutMs"]);
+const CONFIG_KEYS = new Set(["schemaVersion", "chatId", "allowedUserIds", "orphanMs", "runTimeoutMs", "rendering"]);
 const TOKEN_SHAPE = /^\d{5,}:[A-Za-z0-9_-]{20,}$/;
 
 function isSafeInt(value: unknown): value is number {
@@ -82,6 +89,9 @@ export function parseRemoteConfig(value: unknown): Loaded<RemoteConfig> {
   if (!run.ok) {
     return run;
   }
+  if (doc.rendering !== undefined && !isRenderMode(doc.rendering)) {
+    return { ok: false, reason: `remote config rendering must be ${RENDER_MODE_CHOICES}` };
+  }
   return {
     ok: true,
     value: {
@@ -90,6 +100,7 @@ export function parseRemoteConfig(value: unknown): Loaded<RemoteConfig> {
       allowedUserIds: [...new Set(ids as number[])],
       orphanMs: orphan.value,
       runTimeoutMs: run.value,
+      ...(doc.rendering === undefined ? {} : { rendering: doc.rendering }),
     },
   };
 }

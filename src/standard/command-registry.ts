@@ -1853,6 +1853,28 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "does not touch content already relayed to an agent, exported copies, or git history",
     ],
   },
+  // ---- remote ---------------------------------------------------------------
+  // Telegram remote control (flows 376, 395). Only the offline preview is a CLI verb; the mode
+  // itself is `/rendering` in the shell.
+  {
+    module: "remote",
+    command: "remote format-sample",
+    summary: "Print the fixed sample reply (a table, lists, a rule) the way each Telegram rendering mode sends it. No network, no token.",
+    intent: [
+      "как выглядит ответ в телеграме",
+      "remote format-sample",
+      "preview telegram rendering",
+      "how are tables rendered in telegram",
+      "show the telegram sample reply",
+    ],
+    args: [
+      { name: "mode", type: "string", required: false, desc: "only this mode: auto, rich, html or plain" },
+      { name: "full", type: "bool", required: false, desc: "print the whole rich message instead of a count of its blocks" },
+      { name: "json", type: "bool", required: false, desc: "structured sample source and per-mode parts" },
+    ],
+    json: true,
+    read: true,
+  },
   // ---- bus ------------------------------------------------------------------
   // The agent bus (flow 272; docs/requirements/keryx-agent-bus). It lives in the
   // git common directory, outside `.metaproject/`, and never writes flow state.

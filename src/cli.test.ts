@@ -210,6 +210,11 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "                                               recommendation before showing it, the human's choice after;\n",
     "                                               report = match share by mode and stage, deviations (no model)\n",
     "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
+    // Flow 395: `keryx remote`, a brand-new verb (the Telegram rendering preview).
+    "  keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]\n",
+    "                                               Print the sample reply in each Telegram rendering mode\n",
+    "                                               (tables, lists, rules); no network\n",
+    "  remote    Telegram remote control: preview how replies are rendered, with no network\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

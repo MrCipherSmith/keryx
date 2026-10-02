@@ -17,12 +17,14 @@
 
 import { redactSensitiveText } from "../security/service";
 import { SESSION_LEASE_HEARTBEAT_MS, SESSION_LEASE_STALE_MS } from "../session/lease";
-import type { RemoteConfig } from "./config";
-import { editHtml, isNotModified, sendHtml } from "./format-html";
+import { loadRemoteConfig, type RemoteConfig } from "./config";
+import { isNotModified } from "./format-html";
 import { InboundQueues, type InboundEntry, inboundEntryId, MAX_INBOUND_PER_TOPIC, PollerState } from "./inbound";
 import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
 import { OutboundQueue, type SentMessageInfo } from "./outbound-queue";
+import { editRendered, type RenderFallback, RenderingState, type RenderingSnapshot, sendRendered } from "./rendering";
+import { DEFAULT_RENDER_MODE, type RenderMode } from "./rendering-mode";
 import { remoteMenu } from "./command-gateway";
 import { isReactionForbidden, MAX_TRACKED_MESSAGES, REACTION_FOR_STATE, type ReactionState, STATE_CALL_TIMEOUT_MS, TYPING_REFRESH_MS } from "./message-state";
 import type { MessageState } from "./protocol";
@@ -103,6 +105,12 @@ export interface RemoteHubOptions extends RemoteConsumer {
   timers?: HubTimers;
   /** How often `start` sweeps for stale heartbeats. Default: the lease heartbeat period. */
   sweepIntervalMs?: number;
+  /**
+   * The rendering mode in effect (flow 395), read before each message part is sent. Default: the
+   * `rendering` key of the remote config file in `dir`, read fresh so `/rendering` and the
+   * `/settings` row apply without a restart, then the `config` given here, then `auto`.
+   */
+  renderingMode?: () => RenderMode;
   /** Wait before redelivering to a consumer that rejected. Default 2 s. */
   deliverRetryMs?: number;
   pollTimeoutSec?: number;
@@ -179,6 +187,8 @@ export class RemoteHub {
   private readonly registry: SessionRegistry;
   private readonly inbound: InboundQueues;
   private readonly outbound: OutboundQueue;
+  /** Flow 395: the rendering mode in effect and the last fallback, shown by `/channels`. */
+  private readonly rendering: RenderingState;
   /** Flow 389: topics that belong to keryx itself (the digest), kept apart from the session registry. */
   private readonly serviceTopics: ServiceTopics;
   /** Flow 389: why an outbound entry was dropped, by id, so a caller that queued it can report it. */
@@ -220,15 +230,25 @@ export class RemoteHub {
     };
     this.registry = new SessionRegistry({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.inbound = new InboundQueues(options.dir === undefined ? {} : { dir: options.dir });
+    this.rendering = new RenderingState({
+      now: this.now,
+      mode:
+        options.renderingMode ??
+        ((): RenderMode => {
+          const fresh = loadRemoteConfig(options.dir);
+          return (fresh.ok ? fresh.value.rendering : undefined) ?? options.config.rendering ?? DEFAULT_RENDER_MODE;
+        }),
+    });
     this.outbound = new OutboundQueue({
       api: this.api,
+      rendering: this.rendering,
       ...(options.dir === undefined ? {} : { dir: options.dir }),
       now: this.now,
       onDrop: (entry, reason) => {
         this.droppedReasons.set(entry.id, reason);
         this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`);
       },
-      onFallback: (entry) => this.event("format-fallback", `Telegram refused the formatting; sent as plain text${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
+      onFallback: (entry, fallback) => this.fallbackEvent(fallback, entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`, "sent"),
     });
     this.journal = new RejectedJournal({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.offset = new PollerState(options.dir === undefined ? {} : { dir: options.dir });
@@ -402,7 +422,25 @@ export class RemoteHub {
 
   /** One message to the General topic of the group, sent now (not queued): the caller reports the outcome. */
   async sendGeneral(text: string): Promise<void> {
-    await sendHtml(this.api, { chatId: this.config.chatId, text }, () => this.event("format-fallback", "Telegram refused the formatting; sent as plain text (General)"));
+    await sendRendered(
+      this.api,
+      { chatId: this.config.chatId, text },
+      { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, " (General)", "sent") },
+    );
+  }
+
+  /** Flow 395: the rendering mode in effect and the last fallback (step, reason, time). */
+  renderingStatus(): RenderingSnapshot {
+    return this.rendering.snapshot();
+  }
+
+  private fallbackEvent(fallback: RenderFallback, where: string, verb: "sent" | "edited"): void {
+    this.event(
+      "format-fallback",
+      fallback.step === "html-to-plain"
+        ? `Telegram refused the formatting; ${verb} as plain text${where}`
+        : `Telegram refused the rich message (${fallback.reason}); ${verb} as HTML${where}`,
+    );
   }
 
   heartbeat(sessionId: string): Promise<HeartbeatResult> {
@@ -569,8 +607,10 @@ export class RemoteHub {
       return "gone";
     }
     try {
-      await editHtml(this.api, { chatId: record.chatId, messageId, text }, () =>
-        this.event("format-fallback", `Telegram refused the formatting; edited as plain text (topic ${record.threadId})`),
+      await editRendered(
+        this.api,
+        { chatId: record.chatId, messageId, text },
+        { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, ` (topic ${record.threadId})`, "edited") },
       );
       return "edited";
     } catch (error) {

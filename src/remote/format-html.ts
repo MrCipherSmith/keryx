@@ -19,13 +19,22 @@
 //   - Telegram counts the 4096-unit limit AFTER it parses the entities. Markup
 //     characters are only ever removed (`**`, a fence line, `# `) or swapped for
 //     one character (`- ` becomes `• `), so a rendered part never parses to more
-//     text than the plain part it came from.
+//     text than the plain part it came from. Two constructs lengthen their line:
+//     a horizontal rule (`---` becomes a line of RULE_LENGTH glyphs) and a table
+//     (cells are padded into columns). The splitter charges both at their rendered
+//     length (format.ts), so a part from `formatReply` still fits after parsing.
+//   - A Markdown table becomes an aligned `<pre>` block (format-table.ts): HTML has
+//     no table tag, so a monospace block is the only way the columns line up.
+//     Task items (`- [ ]`, `- [x]`) show a box and a ticked box; a rule shows as a line.
 //
 // `sendHtml` is the one way a keryx text reaches `sendMessage`: it sends the
 // rendered part with `parse_mode` HTML and, if Telegram answers 400 "can't parse
 // entities", sends the original part once as plain text.
 
 import { closesFence, fenceOpening } from "./format";
+import { BULLET, CHECKED_BOX, HEADING, QUOTE, RULE, RULE_GLYPH, RULE_LENGTH, TASK, UNCHECKED_BOX } from "./format-blocks";
+import { renderPlainText } from "./format-plain";
+import { renderTableText, tableAt } from "./format-table";
 import { type BotApi, type InlineKeyboard, isBotApiError, type SendMessageParams } from "./types";
 
 export function escapeHtml(text: string): string {
@@ -36,14 +45,14 @@ function escapeAttribute(text: string): string {
   return escapeHtml(text).replace(/"/g, "&quot;");
 }
 
-interface Context {
+export interface Context {
   bold: boolean;
   italic: boolean;
   strike: boolean;
   link: boolean;
 }
 
-const OUTSIDE: Context = { bold: false, italic: false, strike: false, link: false };
+export const OUTSIDE: Context = { bold: false, italic: false, strike: false, link: false };
 
 const WORD = /[\p{L}\p{N}_]/u;
 const ALNUM = /[\p{L}\p{N}]/u;
@@ -203,7 +212,7 @@ function link(text: string, index: number, context: Context): { html: string; en
 }
 
 /** One line (or quote line) of running text. */
-function renderInline(text: string, context: Context): string {
+export function renderInline(text: string, context: Context): string {
   let out = "";
   let index = 0;
   while (index < text.length) {
@@ -253,9 +262,6 @@ function renderInline(text: string, context: Context): string {
   return out;
 }
 
-const HEADING = /^ {0,3}#{1,6}[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
-const BULLET = /^([ \t]*)[-*][ \t]+(.*)$/;
-const QUOTE = /^ {0,3}>(?: (.*))?$/;
 
 /**
  * The Telegram HTML for one message. Never throws; text with no markup comes back
@@ -322,7 +328,18 @@ export function renderTelegramHtml(part: string): string {
       continue;
     }
 
+    const found = tableAt(lines, index);
+    if (found !== undefined) {
+      push(`<pre>${escapeHtml(renderTableText(found.table))}</pre>`, true);
+      index = found.end;
+      continue;
+    }
+
     index += 1;
+    if (RULE.test(line)) {
+      push(RULE_GLYPH.repeat(RULE_LENGTH), false);
+      continue;
+    }
     const heading = HEADING.exec(line);
     if (heading !== null && (heading[1] as string).trim().length > 0) {
       push(`<b>${renderInline(heading[1] as string, { ...OUTSIDE, bold: true })}</b>`, false);
@@ -330,6 +347,13 @@ export function renderTelegramHtml(part: string): string {
     }
     const bullet = BULLET.exec(line);
     if (bullet !== null) {
+      const task = TASK.exec(bullet[2] as string);
+      if (task !== null) {
+        const box = task[1] === " " ? UNCHECKED_BOX : CHECKED_BOX;
+        const label = renderInline(task[2] ?? "", OUTSIDE);
+        push(`${bullet[1] as string}${box}${label.length > 0 ? ` ${label}` : ""}`, false);
+        continue;
+      }
       push(`${bullet[1] as string}• ${renderInline(bullet[2] as string, OUTSIDE)}`, false);
       continue;
     }
@@ -456,7 +480,8 @@ export function isEntityParseError(error: unknown): boolean {
 /**
  * Send `params.text` (plain Markdown-ish text) as Telegram HTML. If Telegram
  * refuses the markup, `onFallback` is told and the original text goes out once
- * more with no parse mode. Any other failure is thrown as it is.
+ * more with no parse mode (a table written as aligned lines, any other text as it is). Any other
+ * failure is thrown as it is.
  */
 export async function sendHtml(
   api: BotApi,
@@ -475,7 +500,7 @@ export async function sendHtml(
     } catch {
       // A throwing observer must never cost the operator the message.
     }
-    return api.sendMessage(plain);
+    return api.sendMessage({ ...plain, text: renderPlainText(plain.text) });
   }
 }
 
@@ -501,7 +526,7 @@ export async function editHtml(
     } catch {
       // A throwing observer must never cost the operator the edit.
     }
-    await api.editMessageText(params);
+    await api.editMessageText({ ...params, text: renderPlainText(params.text) });
   }
 }
 
