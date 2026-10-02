@@ -5842,19 +5842,21 @@ export async function launchTuiAgentShell(opts: {
       estimate: number;
       kind?: "compact" | "prune";
     }): void => {
+      // Flow 387 review r2 F-024: re-point the archive cursor FIRST, before the lease early
+      // return — `history` is already shorter, so a stale cursor would skip later messages.
+      nextArchiveIndex = history.length;
       if (!sessionLease.canPersist()) {
         return; // review F1: another shell has this session now
       }
       if (r.kind === "prune") {
         // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
         // The archive already holds the originals (synced before the change);
-        // persist the shorter context and re-point the archive cursor at its end.
+        // persist the shorter context (the cursor was re-pointed above).
         liveSession = persistHistory(liveSession, history, {
           archive,
           provider: currentSel.provider,
           model: currentSel.model,
         });
-        nextArchiveIndex = history.length;
         return;
       }
       const persisted = persistCompacted(liveSession, r.context, archive, {
@@ -5862,7 +5864,6 @@ export async function launchTuiAgentShell(opts: {
         model: currentSel.model,
       });
       liveSession = persisted.handle;
-      nextArchiveIndex = history.length;
       paintSessionHeader();
       io.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
     };

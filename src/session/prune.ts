@@ -131,16 +131,42 @@ function recordLine(name: string, digest: string, error: boolean, filePath: stri
   return `${name}(${digest}) → ${error ? "error" : "ok"}${filePath === undefined ? "" : `, full output: ${filePath}`}`;
 }
 
-/** The `name(digest)` pairs a collapsed record lists, in order; empty for any other message. */
-export function parseCollapsedRecord(m: NormalizedMessage): { name: string; digest: string }[] {
-  if (m.role !== "assistant" || m.toolCalls !== undefined || !m.content.includes(COLLAPSED_HEADER)) {
+/** One call a collapsed record lists. */
+export interface CollapsedCall {
+  name: string;
+  digest: string;
+  outcome: "ok" | "error";
+  /** The file holding the call's full output, when the record names one. */
+  filePath?: string;
+}
+/**
+ * The calls a collapsed record lists, in order; empty for any other message.
+ *
+ * Flow 387 review r2 F-025: only a message the harness marked `collapsed` is a record. A
+ * model-authored assistant message that quotes the header (or a whole record) is not, so it
+ * never counts as evidence. Within a real record the harness header is the LAST line equal to
+ * it: the model's own leading text comes before it, and a record line can never equal it (a
+ * line starts with a tool name and a `(`).
+ */
+export function parseCollapsedRecord(m: NormalizedMessage): CollapsedCall[] {
+  if (m.role !== "assistant" || m.collapsed !== true || m.toolCalls !== undefined) {
     return [];
   }
-  const out: { name: string; digest: string }[] = [];
-  for (const line of m.content.slice(m.content.indexOf(COLLAPSED_HEADER)).split("\n").slice(1)) {
-    const hit = /^([A-Za-z0-9_.:-]+)\((.*)\) → (?:ok|error)(?:, full output: .*)?$/.exec(line);
-    if (hit?.[1] !== undefined && hit[2] !== undefined) {
-      out.push({ name: hit[1], digest: hit[2] });
+  const lines = m.content.split("\n");
+  const headerAt = lines.lastIndexOf(COLLAPSED_HEADER);
+  if (headerAt < 0) {
+    return [];
+  }
+  const out: CollapsedCall[] = [];
+  for (const line of lines.slice(headerAt + 1)) {
+    const hit = /^([A-Za-z0-9_.:-]+)\((.*)\) → (ok|error)(?:, full output: (.*))?$/.exec(line);
+    if (hit?.[1] !== undefined && hit[2] !== undefined && (hit[3] === "ok" || hit[3] === "error")) {
+      out.push({
+        name: hit[1],
+        digest: hit[2],
+        outcome: hit[3],
+        ...(hit[4] !== undefined && hit[4].length > 0 ? { filePath: hit[4] } : {}),
+      });
     }
   }
   return out;
@@ -442,6 +468,8 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
     const record: NormalizedMessage = {
       role: "assistant",
       content: [...(text.length > 0 ? [text] : []), COLLAPSED_HEADER, ...lines].join("\n"),
+      // Flow 387 review r2 F-025: the structural marker `parseCollapsedRecord` requires.
+      collapsed: true,
       ...(assistant.provenance !== undefined ? { provenance: assistant.provenance } : {}),
       ...(assistant.ts !== undefined ? { ts: assistant.ts } : {}),
     };

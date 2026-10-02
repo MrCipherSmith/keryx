@@ -2226,15 +2226,18 @@ export async function runAgentRepl(
     // `live === undefined` (sessions off) just skips persistence; `history`
     // was already spliced in place by the guard regardless.
     onContextCompaction: (r) => {
+      // Flow 387 review r2 F-024: `history` was already shortened in place, so the archive
+      // cursor is re-pointed FIRST — before the early return below — or a later sync would
+      // copy from a stale index and skip messages even when nothing is persisted.
+      nextArchiveIndex = history.length;
       if (live === undefined || !leaseWatch.canPersist()) {
         return;
       }
       if (r.kind === "prune") {
         // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
         // The archive already holds the originals (synced before the change);
-        // persist the shorter context and re-point the archive cursor at its end.
+        // persist the shorter context (the cursor was re-pointed above).
         live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
-        nextArchiveIndex = history.length;
         return;
       }
       const persisted = persistCompacted(live, r.context, archive, {
@@ -2242,7 +2245,6 @@ export async function runAgentRepl(
         model: deps.modelId,
       });
       live = persisted.handle;
-      nextArchiveIndex = history.length;
       agentIo.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
     },
   };

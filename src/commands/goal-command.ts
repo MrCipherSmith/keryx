@@ -23,7 +23,7 @@ import {
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
 import { anchorsAnnouncement } from "../session/anchors-announce";
-import { COLLAPSED_HEADER, parseCollapsedRecord } from "../session/prune";
+import { parseCollapsedRecord } from "../session/prune";
 import { readSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { createFlowService } from "../flow/service";
@@ -507,12 +507,11 @@ function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): str
     // Flow 387 review r1 F-003: prune collapses old exchanges into one text record, so the
     // live call/result pair above is gone. Read those records' digest lines too
     // (`workspace_propose(<digest>) → ok|error`), or the verifier would see no proposal.
-    if (parseCollapsedRecord(message).some((entry) => entry.name === "workspace_propose")) {
-      for (const line of message.content.slice(message.content.indexOf(COLLAPSED_HEADER)).split("\n").slice(1)) {
-        const hit = /^workspace_propose\((.*)\) → (ok|error)(?:, full output: .*)?$/.exec(line);
-        if (hit?.[1] !== undefined && hit[2] !== undefined) {
-          lines.push(`- workspace_propose: ${hit[1]} -> ${hit[2]} (collapsed earlier in the run)`);
-        }
+    // Flow 387 review r2 F-025: only harness-marked records count (`collapsed`), read through
+    // the shared parser rather than a private copy of its regex.
+    for (const entry of parseCollapsedRecord(message)) {
+      if (entry.name === "workspace_propose") {
+        lines.push(`- workspace_propose: ${entry.digest} -> ${entry.outcome} (collapsed earlier in the run)`);
       }
     }
   }

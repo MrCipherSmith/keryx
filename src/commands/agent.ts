@@ -755,6 +755,13 @@ export interface RunAgentTurnOptions {
    * persists without an archive (ACP, subagents, trigger dispatch, deep-enrich, the
    * TUI side worker) would lose the originals for good. Set by the readline shell,
    * the TUI shell and `/goal`, which sync their archives.
+   *
+   * Flow 387 review r2 F-024: the promise has a second half the type cannot check. A host
+   * that sets this MUST also provide `AgentDeps.onContextCompaction` and, on `kind: "prune"`,
+   * reset its archive cursor to `history.length` like a compaction (the archive itself is
+   * already synced by its `onHistoryChange`). Without the handler a collapse shortens
+   * `history` and the host's next archive sync starts from a stale index, silently skipping
+   * later messages.
    */
   pruneArchive?: boolean;
   /**

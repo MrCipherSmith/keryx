@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -7,6 +7,7 @@ import {
   TOOL_OUTPUT_PREVIEW_CHARS,
   TOOL_OUTPUT_SPILL_MAX_BYTES,
   TOOL_OUTPUT_SPILL_MAX_LINES,
+  isInsideToolOutputDir,
   spillLargeToolOutput,
   spillToolOutput,
   writeToolOutputFile,
@@ -84,7 +85,8 @@ describe("flow 387 T10 spillLargeToolOutput (AC7)", () => {
 });
 
 describe("flow 387 review r1 spill files", () => {
-  test("F-004: two rounds with the same toolCallId write two intact files", async () => {
+  test("two rounds with the same toolCallId write two intact files", async () => {
+    // flow 387 review r1 F-004
     const dir = tmp();
     const first = "a".repeat(TOOL_OUTPUT_SPILL_MAX_BYTES + 10);
     const second = "b".repeat(TOOL_OUTPUT_SPILL_MAX_BYTES + 10);
@@ -100,7 +102,8 @@ describe("flow 387 review r1 spill files", () => {
     expect(readdirSync(path.join(dir, TOOL_OUTPUT_DIRNAME))).toHaveLength(2);
   });
 
-  test("F-004: identical content under the same id in the same millisecond still gets a distinct file", async () => {
+  test("identical content under the same id in the same millisecond still gets a distinct file", async () => {
+    // flow 387 review r1 F-004
     const dir = tmp();
     const same = "c".repeat(TOOL_OUTPUT_SPILL_MAX_BYTES + 10);
     const realNow = Date.now;
@@ -118,7 +121,8 @@ describe("flow 387 review r1 spill files", () => {
     }
   });
 
-  test("F-011: the directory is 0700 and each file 0600", async () => {
+  test("the directory is 0700 and each file 0600", async () => {
+    // flow 387 review r1 F-011
     if (process.platform === "win32") {
       return;
     }
@@ -133,5 +137,41 @@ describe("flow 387 review r1 spill files", () => {
   test("an under-threshold output returns no spillPath", async () => {
     const dir = tmp();
     expect((await spillToolOutput("tiny", { sessionDir: dir, toolCallId: "m3" })).spillPath).toBeUndefined();
+  });
+});
+
+// flow 387 review r2 F-028: the check prune applies to a recorded `spillPath`. It is LEXICAL by
+// design (no realpath), so a tampered path can never name a placeholder target outside the
+// directory; `read_file` still resolves real paths before it opens anything.
+describe("isInsideToolOutputDir", () => {
+  const session = path.join(path.sep, "sessions", "s1");
+  const inside = path.join(session, TOOL_OUTPUT_DIRNAME);
+
+  test.each([
+    ["a file directly inside", path.join(inside, "1-aaaaaaaa-c0.txt"), true],
+    ["a file in a nested directory", path.join(inside, "sub", "c0.txt"), true],
+    ["the directory itself", inside, false],
+    ["the directory with a trailing separator", `${inside}${path.sep}`, false],
+    ["a sibling whose name starts with the directory name", `${inside}-evil${path.sep}c0.txt`, false],
+    ["a path that climbs out with ..", path.join(inside, "..", "x.txt"), false],
+    ["a path that climbs out and back in with ..", path.join(inside, "..", TOOL_OUTPUT_DIRNAME, "c0.txt"), true],
+    ["another file in the session dir", path.join(session, "context.jsonl"), false],
+    ["an unrelated absolute path", "/etc/passwd", false],
+    ["a relative path", path.join(TOOL_OUTPUT_DIRNAME, "c0.txt"), false],
+    ["an empty path", "", false],
+  ])("%s", (_name, candidate, expected) => {
+    expect(isInsideToolOutputDir(session, candidate)).toBe(expected);
+  });
+
+  test("is lexical: a symlink inside the directory is accepted by name, not followed", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const dir = tmp();
+    const outside = tmp();
+    mkdirSync(path.join(dir, TOOL_OUTPUT_DIRNAME));
+    const link = path.join(dir, TOOL_OUTPUT_DIRNAME, "link.txt");
+    symlinkSync(path.join(outside, "secret.txt"), link);
+    expect(isInsideToolOutputDir(dir, link)).toBe(true);
   });
 });

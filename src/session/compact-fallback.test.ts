@@ -118,7 +118,8 @@ test("in-turn cut is a noop when the turn is already within the tail budget", ()
   expect(compactInTurn(oneLongTurn(3, 400), { tailTokens: 20_000 }).noop).toBe(true);
 });
 
-test("F-012: the in-turn cut counts replayed reasoning when sizing its tail", () => {
+test("the in-turn cut counts replayed reasoning when sizing its tail", () => {
+  // flow 387 review r1 F-012
   // Ten rounds, each with a tiny result but 16K chars (4K tokens) of replayed reasoning.
   const h: NormalizedMessage[] = [user("go")];
   for (let i = 0; i < 10; i++) {

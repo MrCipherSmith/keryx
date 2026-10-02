@@ -273,6 +273,14 @@ export interface NormalizedMessage {
    */
   spillPath?: string;
   /**
+   * Flow 387 review r2 F-025: assistant only; `true` on the record prune writes when it
+   * collapses an old tool exchange. Store-only like `spillPath` (persisted in
+   * `context.jsonl`, never sent to a provider). It is the ONLY thing that marks a message
+   * as a harness-made record: a model-authored message that merely contains the record
+   * header is not one, so nothing (compaction, the /goal verifier) may read it as evidence.
+   */
+  collapsed?: true;
+  /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
    * it to disk). Optional and store-only bookkeeping: no request builder

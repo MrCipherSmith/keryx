@@ -109,7 +109,8 @@ afterEach(async () => {
 
 // --- F-001 / F-007: pruning only where the host keeps the originals ---------------
 
-test("F-001 shell-class host (pruneArchive + live dir, slate NOT open): old tool output is pruned (also F-007)", async () => {
+test("a shell-class host (pruneArchive + live dir, slate not open) prunes old tool output", async () => {
+  // flow 387 review r1 F-001, F-007
   const { provider } = scriptedProvider([okReply]);
   const history = heavyHistory();
   const before = totalChars(history);
@@ -120,7 +121,8 @@ test("F-001 shell-class host (pruneArchive + live dir, slate NOT open): old tool
   expect(totalChars(history)).toBeLessThan(before / 2);
 });
 
-test("F-001 ACP-like host (a live dir but no pruneArchive): history is left byte-identical, like main", async () => {
+test("an ACP-like host (a live dir but no pruneArchive) leaves history byte-identical", async () => {
+  // flow 387 review r1 F-001
   const { provider } = scriptedProvider([okReply]);
   const history = heavyHistory();
   const snapshot = history.map((m) => m.content);
@@ -133,7 +135,8 @@ test("F-001 ACP-like host (a live dir but no pruneArchive): history is left byte
   expect(system.join("")).not.toContain("[prune]");
 });
 
-test("F-001 subagent/trigger/side-worker-class host (no options at all): never prunes", async () => {
+test("a subagent/trigger/side-worker-class host (no options at all) never prunes", async () => {
+  // flow 387 review r1 F-001
   const { provider } = scriptedProvider([okReply]);
   const history = heavyHistory();
   const original = history.length;
@@ -144,7 +147,8 @@ test("F-001 subagent/trigger/side-worker-class host (no options at all): never p
   expect(totalChars(history, original)).toBe(before);
 });
 
-test("F-001 pruneArchive without a session dir cannot prune (nowhere to put the originals)", async () => {
+test("pruneArchive without a session dir cannot prune (nowhere to put the originals)", async () => {
+  // flow 387 review r1 F-001
   const { provider } = scriptedProvider([okReply]);
   const history = heavyHistory();
   const original = history.length;
@@ -155,7 +159,8 @@ test("F-001 pruneArchive without a session dir cannot prune (nowhere to put the 
   expect(totalChars(history, original)).toBe(before);
 });
 
-test("F-007 a detached (lease-lost) shell never prunes or writes into the dir it no longer holds", async () => {
+test("a detached (lease-lost) shell never prunes or writes into the dir it no longer holds", async () => {
+  // flow 387 review r1 F-007
   const { provider } = scriptedProvider([okReply]);
   const history = heavyHistory();
   const original = history.length;
@@ -170,7 +175,8 @@ test("F-007 a detached (lease-lost) shell never prunes or writes into the dir it
 
 // --- F-020 / F-009: prompt-cache key for every host --------------------------------
 
-test("F-020 a run without a slate session sends one stable promptCacheKey on every request; a second run gets another", async () => {
+test("a run without a slate session sends one stable promptCacheKey on every request; a second run gets another", async () => {
+  // flow 387 review r1 F-020
   const toolRound: Script = [
     { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
     { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
@@ -194,7 +200,8 @@ test("F-020 a run without a slate session sends one stable promptCacheKey on eve
   expect(second.requests[0]?.promptCacheKey).not.toBe(keys[0]);
 });
 
-test("F-020 a slate session id wins over an explicit cacheKey, which wins over the minted one", async () => {
+test("a slate session id wins over an explicit cacheKey, which wins over the minted one", async () => {
+  // flow 387 review r1 F-020
   const { provider, requests } = scriptedProvider([okReply]);
   const slateSession: SlateSessionRef = { dir: path.join(dir, "session-abc"), cwd: dir, opened: false };
   await runAgentTurn(collectingIo().io, makeDeps(provider), [], "a", { slateSession, cacheKey: "explicit" });
@@ -203,7 +210,8 @@ test("F-020 a slate session id wins over an explicit cacheKey, which wins over t
   expect(requests[1]?.promptCacheKey).toBe("explicit");
 });
 
-test("F-009 the budget wrap-up request carries the same promptCacheKey as the rounds before it", async () => {
+test("the budget wrap-up request carries the same promptCacheKey as the rounds before it", async () => {
+  // flow 387 review r1 F-009
   const toolRound: Script = [
     { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
     { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
@@ -232,7 +240,8 @@ const overflow = (message: string): Script => [
   { kind: "provider_error", error: { kind: "context_overflow", retryable: false, message } as never },
 ];
 
-test("F-006 unknown window and no stated limit: the retry takes the strongest cut, not the weakest", async () => {
+test("unknown window and no stated limit: the overflow retry takes the strongest cut, not the weakest", async () => {
+  // flow 387 review r1 F-006
   const { provider, requests } = scriptedProvider([overflow("prompt too long"), okReply]);
 
   await runAgentTurn(collectingIo().io, makeDeps(provider), longHistory(), "next");
@@ -245,7 +254,8 @@ test("F-006 unknown window and no stated limit: the retry takes the strongest cu
   expect(retry).not.toContain("answer 3");
 });
 
-test("F-006 a stated limit that the weak cut already fits under keeps the weak cut", async () => {
+test("a stated limit that the weak cut already fits under keeps the weak cut", async () => {
+  // flow 387 review r1 F-006
   const { provider, requests } = scriptedProvider([
     overflow("This model's maximum context length is 100000 tokens."),
     okReply,

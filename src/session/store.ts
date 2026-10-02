@@ -106,6 +106,8 @@ interface TranscriptLine {
   isError?: true;
   /** Flow 387 review r1 F-002: the file holding a tool result's full text (see `NormalizedMessage.spillPath`). */
   spillPath?: string;
+  /** Flow 387 review r2 F-025: a prune-made collapsed record (see `NormalizedMessage.collapsed`). */
+  collapsed?: true;
   /**
    * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
    * redacted flag, and opaque provider replay items. Round-tripped so a
@@ -406,6 +408,7 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpo
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
       ...(m.isError === true ? { isError: true as const } : {}),
       ...(m.spillPath !== undefined ? { spillPath: m.spillPath } : {}),
+      ...(m.collapsed === true ? { collapsed: true as const } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
@@ -542,6 +545,7 @@ function readJsonl(file: string): NormalizedMessage[] {
           : {}),
         ...(o.isError === true ? { isError: true as const } : {}),
         ...(typeof o.spillPath === "string" && o.spillPath.length > 0 ? { spillPath: o.spillPath } : {}),
+        ...(o.collapsed === true ? { collapsed: true as const } : {}),
         // Carried forward so a resumed session's next flush reuses the
         // message's ORIGINAL append time instead of re-stamping it with the
         // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`

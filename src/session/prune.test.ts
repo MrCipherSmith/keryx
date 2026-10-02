@@ -1,42 +1,17 @@
-import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { expect, test } from "bun:test";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { renderSpillPreview } from "../harness/tool/output-spill";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { CLEARED_PREFIX, PRUNE_MIN_SAVING_TOKENS, isClearedToolResult, planPrune, pruneToolOutputs } from "./prune";
+import { pair, toolsOf, useTempDirs, user } from "./prune.test-helpers";
 
 // Flow 387 T11 (AC6): send-time pruning of old tool results. The only protected
 // window is the newest 40K tokens of tool output (the operator message is never a
 // tool result), so a single long operator turn is pruned too. The T11 tests below run
 // with `collapseGroups: false` (results only); the T18 tests at the end cover collapsing.
 
-const dirs: string[] = [];
-afterEach(() => {
-  for (const d of dirs.splice(0)) {
-    rmSync(d, { recursive: true, force: true });
-  }
-});
-function tmp(): string {
-  const d = mkdtempSync(path.join(tmpdir(), "prune-test-"));
-  dirs.push(d);
-  return d;
-}
-
-function user(content: string): NormalizedMessage {
-  return { role: "user", content, provenance: "project" };
-}
-/** An assistant tool call plus its result, `chars` long. */
-function pair(id: string, chars: number): NormalizedMessage[] {
-  return [
-    { role: "assistant", content: "", provenance: "model", toolCalls: [{ id, name: "read_file", arguments: "{}" }] },
-    { role: "tool", content: `${id}:`.padEnd(chars, "x"), provenance: "tool", toolCallId: id },
-  ];
-}
-function toolsOf(history: readonly NormalizedMessage[]): NormalizedMessage[] {
-  return history.filter((m) => m.role === "tool");
-}
-
+const tmp = useTempDirs("prune-test-");
 /** Three operator turns; the first holds `count` tool results of `chars` each. */
 function longFirstTurn(count: number, chars: number): NormalizedMessage[] {
   const first: NormalizedMessage[] = [user("one")];

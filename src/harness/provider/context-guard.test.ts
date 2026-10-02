@@ -164,7 +164,8 @@ describe("isContextOverflowError per provider shape (flow 387 review r1 F-005)",
   });
 });
 
-describe("parseOverflowLimits / overflowTargetTokens (flow 387 review r1 F-006)", () => {
+describe("parseOverflowLimits / overflowTargetTokens", () => {
+  // flow 387 review r1 F-006
   test("reads the figures out of each provider's wording", () => {
     expect(parseOverflowLimits("prompt is too long: 210000 tokens > 200000 maximum")).toEqual({
       actual: 210000,
@@ -189,5 +190,41 @@ describe("parseOverflowLimits / overflowTargetTokens (flow 387 review r1 F-006)"
   test("scales the target by how far the estimator under-measured", () => {
     // Estimator said 100K, provider counted 200K: an estimator-unit target must be half of 70K.
     expect(overflowTargetTokens({ limit: 100_000, actual: 200_000 }, undefined, 100_000)).toBe(35_000);
+  });
+
+  // flow 387 review r2 F-027: the branches the cases above never reach.
+  test("does not scale when the estimator did not under-measure", () => {
+    // The provider counted LESS than (or as much as) the estimate: the estimate was not low.
+    expect(overflowTargetTokens({ limit: 100_000, actual: 50_000 }, undefined, 100_000)).toBe(70_000);
+    expect(overflowTargetTokens({ limit: 100_000, actual: 100_000 }, undefined, 100_000)).toBe(70_000);
+  });
+
+  test("an estimate of 0 is never used as a divisor", () => {
+    expect(overflowTargetTokens({ limit: 100_000, actual: 200_000 }, undefined, 0)).toBe(70_000);
+  });
+
+  test("scales against the configured window when the message stated no limit", () => {
+    expect(overflowTargetTokens({ actual: 200_000 }, 100_000, 100_000)).toBe(35_000);
+  });
+
+  test("the limit the provider stated wins over the configured window", () => {
+    expect(overflowTargetTokens({ limit: 100_000 }, 1_000_000, 10_000)).toBe(70_000);
+  });
+
+  test("reads comma- and underscore-grouped figures", () => {
+    expect(parseOverflowLimits("The input token count (1,200,000) exceeds the maximum number of tokens allowed (1,048,576).")).toEqual({
+      actual: 1_200_000,
+      limit: 1_048_576,
+    });
+    expect(parseOverflowLimits("maximum context length is 128_000 tokens, resulted in 150_000 tokens")).toEqual({
+      actual: 150_000,
+      limit: 128_000,
+    });
+  });
+
+  test("reads a limit stated as a context window or limit, and ignores zero or missing figures", () => {
+    expect(parseOverflowLimits("exceeds a context window of 32768")).toEqual({ limit: 32768 });
+    expect(parseOverflowLimits("maximum context length is 0 tokens")).toEqual({});
+    expect(parseOverflowLimits(undefined)).toEqual({});
   });
 });
