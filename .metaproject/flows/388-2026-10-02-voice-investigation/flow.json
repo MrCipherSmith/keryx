@@ -9,22 +9,43 @@
   "id": "388",
   "slug": "voice-investigation",
   "title": "Voice for Telegram and keryx: investigation",
-  "status": "ready",
+  "status": "done",
   "createdAt": "2026-10-02T04:32:28.836Z",
-  "updatedAt": "2026-10-02T04:36:40.030Z",
+  "updatedAt": "2026-10-02T10:31:27.386Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-02T10:09:43.023Z",
+      "note": "operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed"
+    },
+    "AC2": {
+      "at": "2026-10-02T10:09:43.362Z",
+      "note": "operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed"
+    },
+    "AC3": {
+      "at": "2026-10-02T10:09:43.700Z",
+      "note": "operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed"
+    },
+    "AC4": {
+      "at": "2026-10-02T10:09:44.033Z",
+      "note": "operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed"
+    },
+    "AC5": {
+      "at": "2026-10-02T10:09:44.365Z",
+      "note": "operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/846"
   },
   "owner": {
-    "value": "Aleksandr",
+    "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "outcomeAuthor": "agent",
   "tasks": [
@@ -33,7 +54,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -41,14 +62,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected in docs/requirements/keryx-voice/report.md"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -56,14 +79,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Investigation only; changes no code"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -71,14 +96,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "No code changed, nothing to test"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -86,7 +113,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Report self-reviewed and delivered via merged PR 846"
     }
   ],
   "history": [
@@ -98,6 +127,79 @@
       "at": "2026-10-02T04:36:40.030Z",
       "event": "frozen",
       "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T10:09:42.677Z",
+      "event": "owner-changed",
+      "detail": "Aleksandr -> MrCipherSmith (operator standing instruction (poll 38, message 177828))"
+    },
+    {
+      "at": "2026-10-02T10:09:43.024Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T10:09:43.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T10:09:43.700Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T10:09:44.033Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T10:09:44.366Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: operator accepted the voice report on 2026-10-02 (message 177971: 1 принято); AC5 checked: no src files changed (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T10:10:09.745Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T10:10:13.443Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T10:10:13.823Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T10:10:14.187Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T10:10:14.569Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T10:10:16.861Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/846 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-02T10:31:22.771Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T10:31:27.384Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T10:31:27.386Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -117,5 +219,138 @@
       "kind": "exec",
       "check": "git diff --name-only origin/main...HEAD -- src | wc -l | grep -x 0"
     }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-02T10:09:43.023Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:09:43.362Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:09:43.700Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:09:44.033Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:09:44.365Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:31:27.386Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4",
+      "headCommit": "b856f1d875f6a10649a311995db2434423900322"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T10:31:27.384Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "b856f1d875f6a10649a311995db2434423900322 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "b856f1d875f6a10649a311995db2434423900322 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "388-2026-10-02-voice-investigation is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    }
+  ],
+  "merged": {
+    "commit": "b856f1d875f6a10649a311995db2434423900322",
+    "ref": "origin/main",
+    "at": "2026-10-02T10:31:27.386Z"
   }
 }
