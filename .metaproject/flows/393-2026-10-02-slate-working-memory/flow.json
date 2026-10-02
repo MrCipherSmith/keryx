@@ -11,7 +11,7 @@
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
   "status": "in-progress",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T19:43:25.461Z",
+  "updatedAt": "2026-10-02T20:18:58.388Z",
   "source": {
     "type": "description",
     "ref": null
@@ -68,7 +68,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -76,7 +76,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -245,7 +246,7 @@
       "id": "T14",
       "title": "Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10",
         "T11",
@@ -259,7 +260,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
@@ -432,6 +434,16 @@
       "at": "2026-10-02T19:43:25.461Z",
       "event": "task-done",
       "detail": "T12: shell_exec spill-instead-of-truncate (AC11)"
+    },
+    {
+      "at": "2026-10-02T20:18:53.908Z",
+      "event": "task-done",
+      "detail": "T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)"
+    },
+    {
+      "at": "2026-10-02T20:18:58.388Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ],
   "acKinds": {

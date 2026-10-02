@@ -32,3 +32,5 @@
 - 2026-10-02T19:36:00.000Z - measurement (AC3, replay, seed 0x20261001, window 272000, 110 rounds, 180 tool results; `bun run scripts/benchmark/replay-session-shape.ts`): flow 394 baseline reproduced exactly, peak 96,783 and total 7,374,769 estimated input tokens. Bounded request on this branch: peak 40,428 (limit 64,000) and total 2,969,506 (limit 5,531,077; 59.7% below flow 394), 28 working-memory rewrites in batches, 0 compactions. The replay composes the real rewriteWorkingMemory (frame, last K rounds, packs, cache-cost gate) with a Trail entry and a saved output per tool result and three Notes in the frame.
 - 2026-10-02T19:37:33.895Z - task-done: T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)
 - 2026-10-02T19:43:25.461Z - task-done: T12: shell_exec spill-instead-of-truncate (AC11)
+- 2026-10-02T20:18:53.908Z - task-done: T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)
+- 2026-10-02T20:18:58.388Z - task-done: T3: Add/adjust tests and make them pass
