@@ -5,7 +5,7 @@
 // pure function of the tree it was read from, so it carries no clock.
 
 import type { AcKindRecord } from "../flow/ac-kinds";
-import type { OutcomeAuthorReading } from "../flow/service";
+import type { FlowOrigin, OriginReading, OutcomeAuthorReading } from "../flow/service";
 
 export type IntentSource = "flow" | "docpack";
 
@@ -48,6 +48,13 @@ export interface Intent {
    * it carries none. It labels; nothing gates on it.
    */
   readonly outcomeAuthor?: OutcomeAuthorReading | undefined;
+  /**
+   * Where the flow came from (kind, verbatim quote, source), when `flow.json`
+   * records a usable origin. ABSENT otherwise, and readers treat absence as
+   * `unknown`; absent keeps an index written before the field existed
+   * byte-identical and valid. It labels; nothing gates on it.
+   */
+  readonly origin?: FlowOrigin | undefined;
 }
 
 export interface IntentCounts {
@@ -102,6 +109,19 @@ export interface OpenEntry {
   readonly hasCriterion: boolean;
   /** Who wrote the criterion, read from the intent record; `unknown` for an index that predates the field. */
   readonly outcomeAuthor: OutcomeAuthorReading;
+  /** Where the flow came from, read from the intent record; `unknown` for an index that predates the field. */
+  readonly origin: OriginReading;
+  readonly originQuote?: string | undefined;
+  readonly originSource?: string | undefined;
+}
+
+/** One row of the G1a table: the closed-or-open flows of one origin, split by whether the outcome slot holds a real criterion. */
+export interface G1aRow {
+  readonly origin: OriginReading;
+  /** Flows whose Outcome criteria state something that can be looked at. */
+  readonly criterion: number;
+  /** Flows whose Outcome criteria state nothing, or only `not measured`. */
+  readonly notMeasured: number;
 }
 
 export interface OpenReport {
@@ -117,6 +137,8 @@ export interface OpenReport {
   /** Sources the index could not read, or observation lines it could not parse. */
   readonly failures: number;
   readonly entries: readonly OpenEntry[];
+  /** G1a by origin: four rows (the three kinds, then `unknown`), computed over every flow in the index. */
+  readonly g1a?: readonly G1aRow[] | undefined;
 }
 
 export type Staleness = { readonly stale: false } | { readonly stale: true; readonly reason: string };

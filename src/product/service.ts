@@ -4,6 +4,7 @@
 
 export { buildIntentIndex, corpusFingerprint } from "./corpus";
 export { NO_INSTRUMENT } from "./extract";
+export { g1aByOrigin, g1aLines } from "./by-origin";
 export {
   buildOpenReport,
   loadOpenReport,
@@ -14,4 +15,4 @@ export {
   type OpenLoad,
 } from "./open";
 export { checkStaleness, indexPath, productDataRoot, readIntentIndex, serializeIndex, writeIntentIndex } from "./store";
-export type { IndexRead, Intent, IntentCounts, IntentIndex, IntentOutcome, OpenEntry, OpenReport, OutcomeVerdict, Staleness } from "./types";
+export type { G1aRow, IndexRead, Intent, IntentCounts, IntentIndex, IntentOutcome, OpenEntry, OpenReport, OutcomeVerdict, Staleness } from "./types";

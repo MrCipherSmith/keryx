@@ -105,6 +105,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
+| `/flow` | Show a flow's origin, or set it with a reason — /flow origin [<id>] \| /flow origin <id> <kind> --reason "...". |
 | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
 | `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
 | `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |

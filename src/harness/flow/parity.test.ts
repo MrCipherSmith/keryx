@@ -403,6 +403,7 @@ describe("no duplicate coordinator — completeFromGate calls exactly one state-
       next: notImplemented("next", calls),
       ownerSet: notImplemented("ownerSet", calls),
       outcomeAuthorSet: notImplemented("outcomeAuthorSet", calls),
+      originSet: notImplemented("originSet", calls),
       acConfirm: notImplemented("acConfirm", calls),
       acUpdate: notImplemented("acUpdate", calls),
       acReseal: notImplemented("acReseal", calls),

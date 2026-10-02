@@ -139,6 +139,7 @@ import { isJevScenariosCommand, runJevScenariosForShell } from "./jev-scenarios-
 // flow 333: registration only — everything else lives in
 // jev-docs-command.ts/jev-comments-command.ts so flow 326/330's concurrent
 // work never collides with either.
+import { isFlowOriginCommand, runFlowOriginForShell } from "./flow-origin-command";
 import { isStaledocsCommand, runStaledocsForShell } from "./jev-docs-command";
 import { isOpencommentsCommand, runOpencommentsForShell } from "./jev-comments-command";
 import { loadCiTriageList, runCiTriageForItem } from "./ci-triage-source";
@@ -8444,6 +8445,20 @@ export async function launchTuiAgentShell(opts: {
               io.onSystem?.(`${await runStaledocsForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-docs: ${error instanceof Error ? error.message : String(error)}\n`);
+            }
+          });
+          return;
+        }
+        if (isFlowOriginCommand(command.name)) {
+          // flow 390: `/flow origin [<id>]` shows where a flow came from;
+          // `/flow origin <id> <kind> --reason "..."` sets it. A one-shot text
+          // surface, not a modal, same reasoning as `/staledocs`.
+          const cwd = inspectorCwd();
+          trackCommandWork(async () => {
+            try {
+              io.onSystem?.(`${await runFlowOriginForShell(cwd, line)}\n`);
+            } catch (error) {
+              io.onSystem?.(`flow origin: ${error instanceof Error ? error.message : String(error)}\n`);
             }
           });
           return;
