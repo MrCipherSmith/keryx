@@ -22,6 +22,7 @@ import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
+import { basename } from "node:path";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
 import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
@@ -48,14 +49,27 @@ import type {
   NormalizedRequest,
   NormalizedRequestOptions,
   NormalizedToolCall,
+  NormalizedToolDefinition,
   NormalizedUsage,
   ProviderPort,
   ProviderReplayItem,
 } from "../harness/provider/types";
-import { estimateRequestTokens, needsCompaction } from "../harness/provider/context-guard";
-import { compactMessages } from "../session/compact";
+import {
+  estimateRequestTokens,
+  estimateWithUsageAnchor,
+  isContextOverflowError,
+  needsCompaction,
+  overflowTargetTokens,
+  parseOverflowLimits,
+  snapshotRequest,
+  toUsageAnchor,
+  type UsageAnchor,
+} from "../harness/provider/context-guard";
+import { compactWithFallback } from "../session/compact";
+import { isClearedToolResult, pruneToolOutputs, type PruneResult } from "../session/prune";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
-import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
+import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
 import {
   getExecutionPlan,
   executionPlanApprovalItems,
@@ -75,9 +89,20 @@ import {
   slateSessionDir,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
+import { spillToolOutput } from "../harness/tool/output-spill";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
+
+/**
+ * Flow 387 T7: the last provider-reported input-token usage per history array,
+ * plus the provider/model it came from. Keyed by the `history` reference the
+ * callers already hold across the turns of a session, so the anchor survives
+ * turn boundaries without any caller plumbing; a different array (new session,
+ * resume) simply has no anchor, and a spliced/compacted history invalidates it
+ * inside `estimateWithUsageAnchor`. A WeakMap never keeps a finished session alive.
+ */
+const usageAnchors = new WeakMap<object, { anchor: UsageAnchor; providerId: string; modelId: string }>();
 
 /**
  * Extra context handed to an approver alongside the raw tool input.
@@ -648,7 +673,17 @@ export interface AgentDeps {
    * omits it and is unaffected — the guard still compacts `history` in place
    * regardless, only the persistence/UX side-effect is skipped.
    */
-  onContextCompaction?: (r: { removed: number; context: NormalizedMessage[]; estimate: number }) => void;
+  onContextCompaction?: (r: {
+    removed: number;
+    context: NormalizedMessage[];
+    estimate: number;
+    /**
+     * Flow 387 T18: `"prune"` when old tool exchanges were collapsed into text records
+     * (history got shorter, nothing was summarised). The host persists the new context
+     * and resets its archive cursor like a compaction, but must not count or announce it as one.
+     */
+    kind?: "compact" | "prune";
+  }) => void;
   /**
    * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
    * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
@@ -712,6 +747,29 @@ export interface RunAgentTurnOptions {
    * `session/slate-lifecycle.ts`'s `SlateSessionRef` doc comment for why.
    */
   slateSession?: SlateSessionRef;
+  /**
+   * Flow 387 review r1 F-001: the host's promise that it keeps the ORIGINAL messages
+   * (an archive synced before every history change, written next to a live session
+   * dir). Pruning and collapsing rewrite `history` into placeholders, so they run
+   * only when this is `true` AND a live session dir exists. Default off: a host that
+   * persists without an archive (ACP, subagents, trigger dispatch, deep-enrich, the
+   * TUI side worker) would lose the originals for good. Set by the readline shell,
+   * the TUI shell and `/goal`, which sync their archives.
+   *
+   * Flow 387 review r2 F-024: the promise has a second half the type cannot check. A host
+   * that sets this MUST also provide `AgentDeps.onContextCompaction` and, on `kind: "prune"`,
+   * reset its archive cursor to `history.length` like a compaction (the archive itself is
+   * already synced by its `onHistoryChange`). Without the handler a collapse shortens
+   * `history` and the host's next archive sync starts from a stale index, silently skipping
+   * later messages.
+   */
+  pruneArchive?: boolean;
+  /**
+   * Flow 387 review r1 F-020: explicit stable provider prompt-cache key for a host
+   * with no slate session. A slate session id still takes precedence; absent both, a
+   * key is minted once per `history` array (see {@link buildPromptCacheKey}).
+   */
+  cacheKey?: string;
   /**
    * Review finding (Phase 3): `/goal` (`goal-command.ts`) already performs
    * its own deterministic slate open + `workspaceId` bind BEFORE calling
@@ -1107,6 +1165,33 @@ function buildRequestOptions(
       ...(reasoning !== undefined ? { reasoning } : {}),
     },
   };
+}
+
+/**
+ * Flow 387 T5: the provider prompt-cache key for a turn — the live session id.
+ * The slate ref's `dir` is `sessionDir(project, sessionId)`, so its basename IS
+ * the session id.
+ * Flow 387 review r1 F-020: a host without a slate session (harness run, benchmark
+ * runner, ACP, trigger, subagent) gets `options.cacheKey`, else a key minted once
+ * per `history` array — stable for that host/run's lifetime, different for a second
+ * run and for a subagent (its own history is its own prefix), never per request.
+ */
+const historyCacheKeys = new WeakMap<object, string>();
+
+export type PromptCacheFields = { promptCacheKey: string } | Record<string, never>;
+
+function buildPromptCacheKey(options: RunAgentTurnOptions, history: NormalizedMessage[]): PromptCacheFields {
+  if (options.slateSession !== undefined) {
+    const id = basename(options.slateSession.dir);
+    if (id !== "") return { promptCacheKey: id };
+  }
+  if (options.cacheKey !== undefined && options.cacheKey !== "") return { promptCacheKey: options.cacheKey };
+  let minted = historyCacheKeys.get(history);
+  if (minted === undefined) {
+    minted = `keryx-run-${randomBytes(12).toString("hex")}`;
+    historyCacheKeys.set(history, minted);
+  }
+  return { promptCacheKey: minted };
 }
 
 /**
@@ -2247,6 +2332,116 @@ function computeReasoningDurationMs(startedAt: string | undefined, endedAt: stri
   return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs ? endMs - startMs : undefined;
 }
 
+/**
+ * The live session dir that holds `tool-output/` spill files, or undefined without one (flow 387 T10/T11).
+ * Flow 387 review r1 F-007: not gated on the slate being open (many prompts never open it).
+ * `slateSessionDir` is the lease-loss-aware accessor: a detached or displaced shell gets
+ * `undefined`, so it never writes into another holder's session dir.
+ */
+function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
+  return options.slateSession !== undefined ? slateSessionDir(options.slateSession) : undefined;
+}
+
+/**
+ * Flow 387 review r1 F-001: the dir pruning may rewrite history against — only when the
+ * host proved it keeps the originals (`pruneArchive`) and holds a live, non-detached dir.
+ */
+function pruneSessionDir(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): string | undefined {
+  if (options.pruneArchive !== true) return undefined;
+  // Flow 387 review r3 F-024: `pruneArchive` is a promise the type cannot check. A collapse
+  // shortens history, and only `onContextCompaction` lets the host re-point its archive cursor;
+  // without it the next archive sync would skip messages. Fail safe: do not prune, say so once.
+  if (deps.onContextCompaction === undefined) {
+    if (!pruneWithoutHandlerNotified.has(io)) {
+      pruneWithoutHandlerNotified.add(io);
+      io.onSystem?.(
+        "\n[context] pruneArchive is set but this host has no onContextCompaction handler; old tool output will not be pruned.\n",
+      );
+    }
+    return undefined;
+  }
+  return liveSessionDir(options);
+}
+
+/**
+ * Flow 387 review r3 F-024: hosts already told that pruning is off for want of a handler. Keyed on
+ * the io, not the deps: `runAgentTurn` copies deps per turn, while a host keeps one io.
+ */
+const pruneWithoutHandlerNotified = new WeakSet<AgentIO>();
+
+/**
+ * Flow 387 T11/T18: prune old tool exchanges and tell the host. The host flushes
+ * its archive BEFORE history changes (`beforeApply`), so `archive.jsonl` holds the
+ * originals. A collapse shortens `history`, which the host must treat like a
+ * compaction (it resets its archive cursor and persists the new context);
+ * a results-only prune keeps the length, so the ordinary checkpoint is enough.
+ */
+async function pruneHistory(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  sessionDir: string | undefined,
+  minSavingTokens?: number,
+): Promise<PruneResult> {
+  if (sessionDir === undefined) {
+    // Flow 387 review r1 F-001: no proof the originals are kept -> behave like main, no pruning.
+    return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
+  }
+  const lengthBefore = history.length;
+  const result = await pruneToolOutputs(history, {
+    sessionDir,
+    beforeApply: () => io.onHistoryChange?.("tool"),
+    ...(minSavingTokens !== undefined ? { minSavingTokens } : {}),
+  });
+  if (result.pruned + result.reasoningStripped > 0) {
+    if (result.collapsed > 0 && deps.onContextCompaction !== undefined) {
+      deps.onContextCompaction({
+        kind: "prune",
+        removed: lengthBefore - history.length,
+        context: [...history],
+        estimate: 0,
+      });
+    } else {
+      io.onHistoryChange?.("tool");
+    }
+  }
+  return result;
+}
+
+/**
+ * Flow 387 T11: prune → re-estimate → compact for the one-shot final rounds
+ * (`finishWithBudgetSummary`, `finishWithSubmitResult`) that build their own
+ * request. Same order as the round loop; no usage anchor exists on these paths,
+ * so the estimate is the full chars/4 one.
+ */
+async function pruneThenCompact(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  systemInstruction: string,
+  toolDefs: readonly NormalizedToolDefinition[],
+  sessionDir: string | undefined,
+): Promise<void> {
+  const pruned = await pruneHistory(io, deps, history, sessionDir);
+  if (pruned.pruned + pruned.reasoningStripped > 0) {
+    // Flow 387 review r1 F-010: the anchored prefix just shrank, same as in the round loop.
+    usageAnchors.delete(history);
+  }
+  const estimate = estimateRequestTokens(history, systemInstruction, toolDefs);
+  if (!needsCompaction(estimate, deps.contextWindow)) {
+    return;
+  }
+  await firePreCompactBestEffort(deps, estimate);
+  const compacted = compactWithFallback(history, {
+    keepLastUserTurns: 3,
+    fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, systemInstruction, toolDefs), deps.contextWindow),
+  });
+  if (!compacted.noop) {
+    history.splice(0, history.length, ...compacted.context);
+    deps.onContextCompaction?.({ removed: compacted.removed, context: compacted.context, estimate });
+  }
+}
+
 async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
@@ -2470,8 +2665,13 @@ async function runAgentTurnCore(
         if (!wasOpened && options.slateSession.opened) {
           const freshSlate = await readSlateSession(options.slateSession);
           if (freshSlate !== undefined) {
-            history.push({ role: "user", content: scrub(renderAnchorsBlock(freshSlate.anchors)), provenance: "project", ts: now() });
-            io.onHistoryChange?.("tool");
+            // Flow 387 T9: a full block only when history holds none (first
+            // announcement, or after a compaction); otherwise a delta or nothing.
+            const opened = anchorsAnnouncement(history, freshSlate.anchors, scrub, now());
+            if (opened !== undefined) {
+              history.push(opened);
+              io.onHistoryChange?.("tool");
+            }
             // Flow 200: NO auto resolve-or-create here anymore. The slate
             // opens with workspaceId unset; the agent binds/creates a
             // workspace explicitly via workspace_create (which writes
@@ -2520,6 +2720,51 @@ async function runAgentTurnCore(
   const lastErrorByHash = new Map<string, string>();
   const errorStreakByHash = new Map<string, number>();
   const warnedFailingHashes = new Set<string>();
+  /**
+   * Flow 387 T24: the signature of every call admitted this turn, by call id. Pruning, collapse
+   * and compaction replace an old result with "re-read the saved file"; a model that does so
+   * issues the SAME call again, which must not count as a loop while the earlier result is no
+   * longer in context. {@link forgetHiddenHashes} reads this to find which signatures lost
+   * every visible result.
+   */
+  const hashByCallId = new Map<string, string>();
+  /**
+   * Flow 387 T24: call after any history rewrite (prune, collapse, compaction, in-turn cut).
+   * A signature none of whose results is still present as a live (not cleared) tool message
+   * has its attempt count and identical-error streak reset, so re-reading what the harness
+   * hid is not refused. A signature with a result still in context keeps its count, so a
+   * genuine loop (identical calls the model can see) is still stopped. Reasoning stripping
+   * leaves every result visible, so it resets nothing.
+   *
+   * Flow 387 review r3 F-033: each signature is reset at most ONCE per turn. Following a
+   * placeholder to the saved file once is free; a model that keeps re-reading the same large
+   * files in a cycle (each result pushed out of the protected window before it repeats) would
+   * otherwise be reset on every prune and only the round cap would end it. A decrement-by-one
+   * was rejected: a cycle that is pruned once per lap would net to zero and never be refused,
+   * whereas a once-only reset still lets the count reach the cap on the second lap.
+   */
+  const resetOnceSignatures = new Set<string>();
+  const forgetHiddenHashes = (): void => {
+    if (hashByCallId.size === 0) return;
+    const visible = new Set<string>();
+    for (const m of history) {
+      if (m.role !== "tool" || m.toolCallId === undefined || isClearedToolResult(m)) continue;
+      const h = hashByCallId.get(m.toolCallId);
+      if (h !== undefined) visible.add(h);
+    }
+    for (const h of new Set(hashByCallId.values())) {
+      if (visible.has(h) || resetOnceSignatures.has(h)) continue;
+      resetOnceSignatures.add(h);
+      budget.attempts.delete(h);
+      lastErrorByHash.delete(h);
+      errorStreakByHash.delete(h);
+      warnedFailingHashes.delete(h);
+    }
+    // Drop the bookkeeping of ids that no longer have a visible result.
+    for (const [id, h] of [...hashByCallId]) {
+      if (!visible.has(h)) hashByCallId.delete(id);
+    }
+  };
   // Scoped to THIS turn only (this one `runAgentTurnCore` call) — matches how
   // every competitor harness we compared against (Codex's Guardian, grok-build's
   // Auto Mode classifier) re-evaluates untrusted-content risk per turn/action
@@ -2612,7 +2857,16 @@ async function runAgentTurnCore(
           : `round budget exhausted (${stop?.used ?? 0}/${stop?.limit ?? 0} rounds)`;
     system(`\n[budget] Stopping tools: ${why}. One final round to submit a result…\n`);
     roundState.round += 1;
-    const outcome = await finishWithSubmitResult(io, deps, history, parentRunId, why, signal);
+    const outcome = await finishWithSubmitResult(
+      io,
+      deps,
+      history,
+      parentRunId,
+      why,
+      signal,
+      pruneSessionDir(io, deps, options),
+      buildPromptCacheKey(options, history),
+    );
     if (outcome.aborted === true) {
       system("\n[stopped] Model turn interrupted by user.\n");
       return { finishReason: "interrupted" };
@@ -2639,6 +2893,11 @@ async function runAgentTurnCore(
   // run this turn, a later toolless round is a normal wrap-up/summary reply,
   // not the stalled shape the reprompt targets, so it must not fire again.
   let turnExecutedToolCall = false;
+  // Flow 387 T6: true once THIS round has already been retried after a provider
+  // context-overflow rejection (compact once, retry once). Reset the moment a
+  // round completes without an error, so a later round can recover again but a
+  // retry that overflows a second time ends the turn instead of looping.
+  let overflowRetried = false;
   for (;;) {
     if (roundState.round >= roundState.maxRounds) {
       if (subagentBudget !== undefined) {
@@ -2679,15 +2938,48 @@ async function runAgentTurnCore(
     // shrunk `history` in place so this round's own request cannot 400 on
     // input-token overflow. `deps.contextWindow === undefined` (the default)
     // makes `needsCompaction` always `false` (AC2): byte-identical behavior.
-    const preRequestEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
+    // Flow 387 T7: anchored on the provider's last reported input tokens (plus
+    // an estimate of what was appended since) when one is recorded for THIS
+    // provider/model; otherwise the full chars/4 estimate (which also counts
+    // replayed reasoning bytes).
+    const storedAnchor = usageAnchors.get(history);
+    const liveAnchor =
+      storedAnchor !== undefined && storedAnchor.providerId === deps.providerId && storedAnchor.modelId === deps.modelId
+        ? storedAnchor.anchor
+        : undefined;
+    // Flow 387 T11: prune old tool results FIRST (everything outside the newest
+    // 40K tokens of tool output, even inside one long turn; only past a 20K saving), re-measure, and
+    // compact only if the request is still over the threshold. The pruned form
+    // replaces the history entries (stable prefix next round) and is persisted
+    // through the host's existing checkpoint; the archive keeps the originals.
+    // Flow 387 T18: old exchanges whose results are all outside the window are
+    // collapsed into one text record, not only cleared.
+    const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(io, deps, options));
+    if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
+      usageAnchors.delete(history); // the anchored prefix just shrank
+      forgetHiddenHashes(); // flow 387 T24: re-reading a cleared result is not a repeat
+      system(
+        `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ${pruneResult.reasoningStripped} old reasoning replays dropped, ~${pruneResult.savedTokens} tokens) in the request.\n`,
+      );
+    }
+    const preRequestEstimate =
+      pruneResult.pruned + pruneResult.reasoningStripped > 0
+        ? estimateRequestTokens(history, roundSystemInstruction, toolDefs)
+        : estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
       await firePreCompactBestEffort(deps, preRequestEstimate);
-      const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+      // Flow 387 T11: fewer operator turns, then a cut inside the current turn,
+      // while the result is still over the threshold.
+      const compacted = compactWithFallback(history, {
+        keepLastUserTurns: 3,
+        fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
+      });
       if (!compacted.noop) {
         // Splice, never reassign — `runAgentTurn`'s own contract (see its doc
         // comment) means every caller holds this exact array reference across
         // the whole turn.
         history.splice(0, history.length, ...compacted.context);
+        forgetHiddenHashes(); // flow 387 T24: compaction / in-turn cut removed old results
         deps.onContextCompaction?.({
           removed: compacted.removed,
           context: compacted.context,
@@ -2695,6 +2987,9 @@ async function runAgentTurnCore(
         });
       }
     }
+    // Flow 387 T7: describe the request exactly as sent (after any compaction
+    // splice above) so a usage_update can be anchored to it.
+    const requestSnapshot = snapshotRequest(history, roundSystemInstruction, toolDefs);
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
@@ -2703,6 +2998,7 @@ async function runAgentTurnCore(
       tools: toolDefs,
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
       ...buildRequestOptions(deps, reasoningEffort),
+      ...buildPromptCacheKey(options, history),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -2755,6 +3051,9 @@ async function runAgentTurnCore(
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
     let errored = false;
+    // Flow 387 T6: the round's normalized provider error, held back (not yet
+    // printed) when it is a context overflow that may still be recovered.
+    let pendingOverflowError: NormalizedError | undefined;
 
     try {
       const streamOptions = {
@@ -2819,9 +3118,18 @@ async function runAgentTurnCore(
           if (event.usage !== undefined) {
             io.onUsage?.(event.usage);
             reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
+            // Flow 387 T7: remember the provider's own input-token count for this request.
+            const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
+            if (newAnchor !== undefined) {
+              usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+            }
           }
         } else if (event.kind === "provider_error") {
-          system(formatProviderErrorMessage(event.error));
+          if (!overflowRetried && isContextOverflowError(event.error)) {
+            pendingOverflowError = event.error;
+          } else {
+            system(formatProviderErrorMessage(event.error));
+          }
           errored = true;
           break;
         } else if (event.kind === "model_end") {
@@ -2883,8 +3191,62 @@ async function runAgentTurnCore(
       return {};
     }
     if (errored) {
+      // Flow 387 T6: a provider context-overflow rejection (the window was
+      // unknown or the estimate undershot, so the pre-request guard did not
+      // fire) is recovered ONCE: compact, then retry the same round. Only when
+      // the failed round produced no output of its own, and only when
+      // compaction actually shrinks something — a noop surfaces the error now.
+      if (pendingOverflowError !== undefined) {
+        if (assistantMessage === undefined && calls.length === 0) {
+          const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
+          // Flow 387 T11: prune first (any saving counts now), then compact with
+          // the same fallback as the pre-request guard.
+          const overflowPrune = await pruneHistory(io, deps, history, pruneSessionDir(io, deps, options), 1);
+          if (overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
+            usageAnchors.delete(history);
+            forgetHiddenHashes(); // flow 387 T24
+          }
+          // Flow 387 review r1 F-006: the estimator just under-measured (or the window is
+          // unknown), so the usual 85%-of-window test cannot pick the cut. Aim for 70% of the
+          // limit the provider stated (else the configured window); with no limit known at all,
+          // never accept a weak cut — `fits` stays false so the strongest one (in-turn tail) wins.
+          const overflowTarget = overflowTargetTokens(
+            parseOverflowLimits(pendingOverflowError.message),
+            deps.contextWindow,
+            overflowEstimate,
+          );
+          const compacted = compactWithFallback(history, {
+            keepLastUserTurns: 3,
+            fits: (ctx) =>
+              overflowTarget !== undefined &&
+              estimateRequestTokens(ctx, roundSystemInstruction, toolDefs) <= overflowTarget,
+          });
+          if (compacted.noop && overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
+            overflowRetried = true;
+            roundState.round -= 1;
+            system("\n[prune] Provider rejected the request as too large; cleared old tool results, retrying once.\n");
+            continue;
+          }
+          if (!compacted.noop) {
+            await firePreCompactBestEffort(deps, overflowEstimate);
+            history.splice(0, history.length, ...compacted.context);
+            forgetHiddenHashes(); // flow 387 T24
+            deps.onContextCompaction?.({
+              removed: compacted.removed,
+              context: compacted.context,
+              estimate: overflowEstimate,
+            });
+            overflowRetried = true;
+            roundState.round -= 1; // the retry is the same round, not a new one
+            system("\n[compact] Provider rejected the request as too large; compacted the context, retrying once.\n");
+            continue;
+          }
+        }
+        system(formatProviderErrorMessage(pendingOverflowError));
+      }
       return {};
     }
+    overflowRetried = false;
     if (calls.length === 0) {
       // Flow 347 T6 (AC8): a round in THIS turn already executed a tool call
       // (`turnExecutedToolCall`), or this toolless reply is itself a
@@ -3171,7 +3533,9 @@ async function runAgentTurnCore(
     // rather than threading live results back into a synchronous pre-pass.
     const reservationByCallId = new Map<string, ReturnType<typeof reserveToolAttempt>>();
     for (const call of calls) {
-      reservationByCallId.set(call.id, reserveToolAttempt(budget, call.name, call.input));
+      const reserved = reserveToolAttempt(budget, call.name, call.input);
+      reservationByCallId.set(call.id, reserved);
+      if (reserved.ok) hashByCallId.set(call.id, reserved.hash); // flow 387 T24
     }
     const spawnConcurrencyCandidates = calls.filter(
       (call) => call.name === "spawn_subagent" && reservationByCallId.get(call.id)?.ok === true,
@@ -3398,7 +3762,18 @@ async function runAgentTurnCore(
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
       // not receive a credential a command happened to read.
-      const modelOutput = redactSensitiveText(result.output);
+      // Flow 387 T10: an output over 2000 lines / 50KB is written IN FULL (the
+      // already-redacted text, so the file never holds a secret history would not)
+      // to the live session dir and the model gets head + tail + counts + path.
+      // One generic hook here covers every tool; an output already capped below
+      // the threshold passes through untouched. No live session dir → unchanged.
+      // Flow 387 review r1 F-002: the spill file's path is recorded on the message
+      // (`spillPath`) as data; prune never parses it back out of the output text.
+      const spilled = await spillToolOutput(redactSensitiveText(result.output), {
+        sessionDir: liveSessionDir(options),
+        toolCallId: call.id,
+      });
+      const modelOutput = spilled.text;
       // `untrusted` alone decides, NOT `untrusted && !isError`.
       //
       // The old guard let the content's own author turn the control off. It
@@ -3423,6 +3798,8 @@ async function runAgentTurnCore(
         ),
         provenance: "tool",
         toolCallId: call.id,
+        ...(result.isError === true ? { isError: true as const } : {}),
+        ...(spilled.spillPath !== undefined ? { spillPath: spilled.spillPath } : {}),
         ts: now(),
       });
       io.onHistoryChange?.("tool");
@@ -3489,8 +3866,13 @@ async function runAgentTurnCore(
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
     if (anchorsToAnnounce !== undefined) {
-      history.push({ role: "user", content: scrub(renderAnchorsBlock(anchorsToAnnounce)), provenance: "project", ts: now() });
-      io.onHistoryChange?.("tool");
+      // Flow 387 T9: only what changed since the last announcement (a full
+      // block again only after a compaction dropped the previous one).
+      const announcement = anchorsAnnouncement(history, anchorsToAnnounce, scrub, now());
+      if (announcement !== undefined) {
+        history.push(announcement);
+        io.onHistoryChange?.("tool");
+      }
     }
     if (repeatedFailureHint !== undefined) {
       // Flow 347 T7 (AC9): a shell-authored control nudge, not operator input.
@@ -3562,7 +3944,16 @@ async function runAgentTurnCore(
       }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
-        const wrapUp = await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog }, signal);
+        const wrapUp = await finishWithBudgetSummary(
+        io,
+        deps,
+        history,
+        parentRunId,
+        { maxAttempts, toolLog },
+        signal,
+        pruneSessionDir(io, deps, options),
+        buildPromptCacheKey(options, history),
+      );
         if (wrapUp.aborted) {
           system("\n[stopped] Model turn interrupted by user.\n");
           return { finishReason: "interrupted" };
@@ -3810,6 +4201,11 @@ async function finishWithBudgetSummary(
   // reached the provider call, so the round streamed to completion — the one
   // "final" turn call still uninterruptible by construction.
   signal: AbortSignal | undefined,
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files
+  // (review r1 F-001: set only when the host keeps the originals).
+  sessionDir?: string,
+  // Flow 387 review r1 F-009: same prompt-cache key as the round loop.
+  cacheKey: PromptCacheFields = {},
 ): Promise<{ aborted: boolean }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -3855,19 +4251,8 @@ async function finishWithBudgetSummary(
   // Flow 267: same guard as the round loop, before the wrap-up request. No
   // `tools` are sent on this path, so the estimate carries an empty tool-def
   // list — matching what actually goes over the wire here.
-  const wrapUpEstimate = estimateRequestTokens(history, deps.systemInstruction, []);
-  if (needsCompaction(wrapUpEstimate, deps.contextWindow)) {
-    await firePreCompactBestEffort(deps, wrapUpEstimate);
-    const compacted = compactMessages(history, { keepLastUserTurns: 3 });
-    if (!compacted.noop) {
-      history.splice(0, history.length, ...compacted.context);
-      deps.onContextCompaction?.({
-        removed: compacted.removed,
-        context: compacted.context,
-        estimate: wrapUpEstimate,
-      });
-    }
-  }
+  // Flow 387 T11: prune first, then compact only if still over the threshold.
+  await pruneThenCompact(io, deps, history, deps.systemInstruction, [], sessionDir);
   const baseRequest: Omit<NormalizedRequest, "signal"> = {
     providerId: deps.providerId,
     modelId: deps.modelId,
@@ -3876,6 +4261,7 @@ async function finishWithBudgetSummary(
     // No tools — force a text wrap-up.
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
     ...buildRequestOptions(deps, reasoningEffort),
+    ...cacheKey,
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -3932,6 +4318,11 @@ async function finishWithSubmitResult(
   parentRunId: string,
   why: string,
   signal: AbortSignal | undefined,
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files
+  // (review r1 F-001: set only when the host keeps the originals).
+  sessionDir?: string,
+  // Flow 387 review r1 F-009: same prompt-cache key as the round loop.
+  cacheKey: PromptCacheFields = {},
 ): Promise<{ submitted?: SubmittedResult; error?: string; aborted?: true }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -3958,15 +4349,8 @@ async function finishWithSubmitResult(
   io.onHistoryChange?.("tool");
 
   const tools = [SUBMIT_RESULT_TOOL_DEFINITION];
-  const estimate = estimateRequestTokens(history, deps.systemInstruction, tools);
-  if (needsCompaction(estimate, deps.contextWindow)) {
-    await firePreCompactBestEffort(deps, estimate);
-    const compacted = compactMessages(history, { keepLastUserTurns: 3 });
-    if (!compacted.noop) {
-      history.splice(0, history.length, ...compacted.context);
-      deps.onContextCompaction?.({ removed: compacted.removed, context: compacted.context, estimate });
-    }
-  }
+  // Flow 387 T11: prune first, then compact only if still over the threshold.
+  await pruneThenCompact(io, deps, history, deps.systemInstruction, tools, sessionDir);
   const baseRequest: Omit<NormalizedRequest, "signal"> = {
     providerId: deps.providerId,
     modelId: deps.modelId,
@@ -3975,6 +4359,7 @@ async function finishWithSubmitResult(
     tools,
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
     ...buildRequestOptions(deps, deps.reasoningEffort),
+    ...cacheKey,
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,

@@ -1,0 +1,4367 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/testing/context.json",
+    ".metaproject/data/testing/context.md",
+    ".metaproject/data/testing/recommendations.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/acceptance-criteria.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/comparative-report.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/context.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/description.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/flow.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/journal.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/plan.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/blast-radius.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/coverage.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/decisions.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/findings.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/learning.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/manifest.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/report.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/scope.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/tasks.md",
+    "fixtures/benchmark/keryx/ablation-mutating-results-codex-gpt-6.1-sol.json",
+    "fixtures/benchmark/keryx/ablation-mutating-results-openai-codex-gpt-6.1-sol.json",
+    "fixtures/benchmark/keryx/baseline-main-ablation-mutating-openai-codex-gpt-6.1-sol.json",
+    "opencode.json",
+    "scripts/benchmark/build-comparative-report.ts",
+    "scripts/benchmark/long-metrics.test.ts",
+    "scripts/benchmark/long-metrics.ts",
+    "scripts/benchmark/long-runner-shared.ts",
+    "scripts/benchmark/long-tasks.test.ts",
+    "scripts/benchmark/long-tasks.ts",
+    "scripts/benchmark/replay-session-shape.test.ts",
+    "scripts/benchmark/replay-session-shape.ts",
+    "scripts/benchmark/run-ablation-long-codex.ts",
+    "scripts/benchmark/run-ablation-long.ts",
+    "scripts/benchmark/run-ablation-mutating-codex.ts",
+    "scripts/benchmark/run-ablation-mutating-grok.ts",
+    "scripts/benchmark/run-ablation-mutating-opencode.ts",
+    "scripts/benchmark/run-ablation-mutating.ts",
+    "scripts/benchmark/token-metrics.test.ts",
+    "scripts/benchmark/token-metrics.ts",
+    "src/acp/server-archive.test.ts",
+    "src/acp/server.ts",
+    "src/commands/agent.overflow-retry.test.ts",
+    "src/commands/agent.review-r1.test.ts",
+    "src/commands/agent.test.ts",
+    "src/commands/agent.ts",
+    "src/commands/goal-command.test.ts",
+    "src/commands/goal-command.ts",
+    "src/commands/interactive-agent-tools.ts",
+    "src/commands/model-limits.test.ts",
+    "src/commands/model-limits.ts",
+    "src/commands/shell.test.ts",
+    "src/commands/shell.ts",
+    "src/commands/subscription-models.ts",
+    "src/harness/provider/anthropic/anthropic-provider.test.ts",
+    "src/harness/provider/anthropic/anthropic-provider.ts",
+    "src/harness/provider/context-guard.test.ts",
+    "src/harness/provider/context-guard.ts",
+    "src/harness/provider/openai-codex/openai-codex-provider.test.ts",
+    "src/harness/provider/openai/openai-provider.ts",
+    "src/harness/provider/types.ts",
+    "src/harness/tool/builtin/interactive-tools.ts",
+    "src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "src/harness/tool/builtin/spill-read-access.test.ts",
+    "src/harness/tool/builtin/spill-search.ts",
+    "src/harness/tool/output-spill.test.ts",
+    "src/harness/tool/output-spill.ts",
+    "src/session/anchors-announce.test.ts",
+    "src/session/anchors-announce.ts",
+    "src/session/compact-fallback.test.ts",
+    "src/session/compact.test.ts",
+    "src/session/compact.ts",
+    "src/session/index.ts",
+    "src/session/prune-collapse.test.ts",
+    "src/session/prune-reasoning.test.ts",
+    "src/session/prune-review-r1.test.ts",
+    "src/session/prune.test.ts",
+    "src/session/prune.ts",
+    "src/session/store.ts",
+    "src/tui/tui-shell.test.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/providers.ts",
+      "hop": 1,
+      "fanIn": 41,
+      "via": "src/commands/subscription-models.ts",
+      "path": [
+        "src/commands/providers.ts",
+        "src/commands/subscription-models.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/single-turn.ts",
+      "hop": 1,
+      "fanIn": 27,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/single-turn.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "hop": 1,
+      "fanIn": 23,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/metaproject-adapter.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/lease.ts",
+      "hop": 1,
+      "fanIn": 21,
+      "via": "src/session/store.ts",
+      "path": [
+        "src/session/lease.ts",
+        "src/session/store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/fake-provider.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/fake-provider.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/background-job-registry.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/background-job-registry.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/run/run.ts",
+      "hop": 1,
+      "fanIn": 19,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/run/run.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-tool.ts",
+      "hop": 1,
+      "fanIn": 19,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/shell-exec-tool.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/select.ts",
+      "hop": 1,
+      "fanIn": 17,
+      "via": "src/commands/subscription-models.ts",
+      "path": [
+        "src/commands/select.ts",
+        "src/commands/subscription-models.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/make-provider.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "path": [
+        "src/harness/provider/make-provider.ts",
+        "src/harness/provider/anthropic/anthropic-provider.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/metaproject-operations.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/inspector-sources.ts",
+      "hop": 1,
+      "fanIn": 15,
+      "via": "src/session/index.ts",
+      "path": [
+        "src/tui/inspector-sources.ts",
+        "src/session/index.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/lib/serve-turn.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-provider.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/compat/openai-compat-provider.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/provider-port.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/provider-port.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/metaproject-tools.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/metaproject-tools.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/tools.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/mcp-servers/tools.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/permission.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/acp/permission.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/trigger-dispatch.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/trigger-dispatch.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/external/write-run.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/session/store.ts",
+      "path": [
+        "src/harness/external/write-run.ts",
+        "src/session/store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/commands/harness.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/external/acp-permission.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/harness/external/acp-permission.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/catch-up.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/session/store.ts",
+      "path": [
+        "src/sac/catch-up.ts",
+        "src/session/store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/settings-model.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/tui/settings-model.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agents-external.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agents-external.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell-types.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/commands/shell-types.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider-catalog.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/subscription-models.ts",
+      "path": [
+        "src/harness/provider-catalog.ts",
+        "src/commands/subscription-models.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/tool-call-linking.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/tool-call-linking.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "path": [
+        "src/harness/run-external-factory.ts",
+        "src/harness/tool/builtin/spawn-subagent-tool.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/apply-patch-tool.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/apply-patch-tool.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-registry.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/cli-registry.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/shell-approval.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/provider/ollama/ollama-provider.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/harness/provider/ollama/ollama-provider.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/ask-user-tool.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/ask-user-tool.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "path": [
+        "src/harness/tool/builtin/workspace-lifecycle-tool.ts",
+        "src/harness/tool/builtin/interactive-tools.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/rewind/apply.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/harness/provider/types.ts",
+      "path": [
+        "src/rewind/apply.ts",
+        "src/harness/provider/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/session-wrap-up.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/session/store.ts",
+      "path": [
+        "src/sac/session-wrap-up.ts",
+        "src/session/store.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/models.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/acp/models.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/acp/server-harness.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/acp/server.ts",
+      "path": [
+        "src/acp/server-harness.test-helpers.ts",
+        "src/acp/server.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/bus/agent-tools.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 444 at hop 1, fan-in 4, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-tools.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 444 at hop 1, fan-in 4, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-client.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 444 at hop 1, fan-in 4, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-run.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 444 at hop 1, fan-in 4, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/write-land.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 444 at hop 1, fan-in 4, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/gemini/gemini-provider.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 444 at hop 1, fan-in 4, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/slate-tool.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 444 at hop 1, fan-in 4, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-approvals.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 444 at hop 1, fan-in 4, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/history.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 444 at hop 1, fan-in 4, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/service.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 444 at hop 1, fan-in 4, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/lease-choice.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 444 at hop 1, fan-in 4, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-inspector.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 444 at hop 1, fan-in 4, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-info.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/model-limits.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 444 at hop 1, fan-in 4, reached via src/commands/model-limits.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/agent-io.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 444 at hop 1, fan-in 3, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sessions.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 444 at hop 1, fan-in 3, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-agent-task.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 444 at hop 1, fan-in 3, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-fs.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 444 at hop 1, fan-in 3, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 444 at hop 1, fan-in 3, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 444 at hop 1, fan-in 3, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-state.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 444 at hop 1, fan-in 3, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 444 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 444 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/capability-tools.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/fixture-provider.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 444 at hop 1, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/roster.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/session-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/session.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 444 at hop 1, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/acp/server.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 444 at hop 1, fan-in 2, reached via src/acp/server.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/project-tools.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 444 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/submit-result-tool.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 444 at hop 1, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/web-fetch-tool.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/web-search-tool.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-context-tool.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 444 at hop 1, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/readline-command.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 444 at hop 1, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/model-limits.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 444 at hop 1, fan-in 2, reached via src/commands/model-limits.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/foreground-operation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 444 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/side-worker.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 444 at hop 1, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 444 at hop 1, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 444 at hop 1, fan-in 1, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 444 at hop 1, fan-in 1, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 444 at hop 1, fan-in 1, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/openai-codex/openai-codex-provider.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/provider/openai/openai-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 444 at hop 1, fan-in 1, reached via src/harness/provider/openai/openai-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/resume/resume.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 444 at hop 1, fan-in 1, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/execution-plan-tool.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 444 at hop 1, fan-in 1, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 444 at hop 1, fan-in 1, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/ablation-emission-gating.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "scripts/benchmark/run-ablation-mutating-codex.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 444 at hop 1, fan-in 0, reached via scripts/benchmark/run-ablation-mutating-codex.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/build-comparative-report.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "scripts/benchmark/build-comparative-report.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 444 at hop 1, fan-in 0, reached via scripts/benchmark/build-comparative-report.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/cancel-list-load.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/conformance.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/hook-notices.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/permission.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/roster.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/interactive-agent-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 444 at hop 1, fan-in 0, reached via src/commands/interactive-agent-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server-mcp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/server-models.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/session.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/agents/compile.spawn-subagent.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/delivery.integration.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 102 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-bus-notification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 103 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 104 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-instruction-roster.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 105 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-lifecycle-hooks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 106 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 107 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-rewind-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 108 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-task-notification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 109 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 110 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-untrusted-batch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 111 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.context-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 112 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent.error-hint.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 113 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-write.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 114 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.replay.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 115 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 116 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/interactive-agent-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 117 of 444 at hop 1, fan-in 0, reached via src/commands/interactive-agent-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 118 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 119 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-judge.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 120 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-runner.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 121 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 122 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-security.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 123 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 124 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 125 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sessions.fork.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 126 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/sessions.list.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 127 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 128 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 129 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 130 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 131 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-lease.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 132 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 133 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 134 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 135 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 136 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 137 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-agent-task.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 138 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-dispatch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 139 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger-unattended.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 140 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/workspace.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 141 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/flow/confirm-floors.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 142 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/round-bound.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/goal-command.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 143 of 444 at hop 1, fan-in 0, reached via src/commands/goal-command.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/governance/report.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 144 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/decision/classify-turn.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 145 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/decision/main-model-classifier.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 146 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-client.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 147 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-interop.process.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 148 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/write-land.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 149 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/hooks/failure-matrix.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 150 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/hooks/guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 151 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/mutation/guard.loopback.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 152 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/anthropic/anthropic-negatives.hardening.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 153 of 444 at hop 1, fan-in 0, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/anthropic/anthropic-reasoning.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 154 of 444 at hop 1, fan-in 0, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/anthropic/anthropic-streaming.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 155 of 444 at hop 1, fan-in 0, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-provider.privatelan.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 156 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 157 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-provider.timeout.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 158 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-reasoning.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 159 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-replay.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 160 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/compat/openai-compat-streaming.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 161 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/fake-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 162 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/gemini/gemini-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 163 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/gemini/gemini-streaming.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 164 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider-disconnect.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 165 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider-label.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 166 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/make-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 167 of 444 at hop 1, fan-in 0, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/ollama/ollama-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 168 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/openai/openai-provider.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/openai/openai-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 169 of 444 at hop 1, fan-in 0, reached via src/harness/provider/openai/openai-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/openai/openai-reasoning.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/openai/openai-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 170 of 444 at hop 1, fan-in 0, reached via src/harness/provider/openai/openai-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/openai/openai-streaming.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/openai/openai-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 171 of 444 at hop 1, fan-in 0, reached via src/harness/provider/openai/openai-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/provider-port.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 172 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/single-turn.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 173 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/single-turn.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 174 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/stream-contract.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 175 of 444 at hop 1, fan-in 0, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider/tool-call-linking.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 176 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/replay/replay.hardening.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 177 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/replay/replay.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 178 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/resume/resume.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 179 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/rpc.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 180 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/run.completion-requirements.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 181 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/run.hooks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 182 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/run.metaproject.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 183 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/run.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 184 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/confine-to-root.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 185 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/interactive-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 186 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/metaproject-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 187 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/read-file-bounded.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 188 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 189 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 190 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-cwd.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 191 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 192 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 193 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 194 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 195 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.hooks.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 196 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 197 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 198 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-lifecycle-tool.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 199 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/graph-find-projection.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 200 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/config-dir.permissions.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 201 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-listener.turns.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 202 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turn.ask-parity.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 203 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turn.hook-notices.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 204 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turns.route.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 205 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/sac-tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 206 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/history.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 207 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/apply.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 208 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/history.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 209 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/readline-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 210 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/catch-up.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 211 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/session-wrap-up.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 212 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 213 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/compact.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 214 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/external-run-sessions.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 215 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 216 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/session-title.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 217 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/store.callers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 218 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/session/store.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 219 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 220 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 221 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 222 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 223 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-antigravity-surfaces.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 224 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 225 of 444 at hop 1, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/foreground-operation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 226 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 227 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 228 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/inspector-sources.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 229 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-inspector.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 230 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 231 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 232 of 444 at hop 1, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 233 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 234 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 235 of 444 at hop 1, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-model.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 236 of 444 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 237 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 238 of 444 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/tui/tui-shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 239 of 444 at hop 1, fan-in 0, reached via src/tui/tui-shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 240 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich-rlm.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 241 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.reasoning-guard.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 242 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 243 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/history-writers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 244 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/page-invariants.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 245 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/review-r1-coverage.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 246 of 444 at hop 1, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/remote.test-helpers.ts",
+      "hop": 2,
+      "fanIn": 30,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 247 of 444 at hop 2, fan-in 30, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "hop": 2,
+      "fanIn": 29,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 248 of 444 at hop 2, fan-in 29, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/client.ts",
+      "hop": 2,
+      "fanIn": 26,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 249 of 444 at hop 2, fan-in 26, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector.ts",
+      "hop": 2,
+      "fanIn": 24,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 250 of 444 at hop 2, fan-in 24, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/hub.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 251 of 444 at hop 2, fan-in 13, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/runtime.ts",
+      "hop": 2,
+      "fanIn": 12,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 252 of 444 at hop 2, fan-in 12, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 253 of 444 at hop 2, fan-in 11, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/tools.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 254 of 444 at hop 2, fan-in 11, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/types.ts",
+      "hop": 2,
+      "fanIn": 11,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 255 of 444 at hop 2, fan-in 11, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-servers.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 256 of 444 at hop 2, fan-in 9, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/trigger.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 257 of 444 at hop 2, fan-in 9, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/proposal-lifecycle.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 258 of 444 at hop 2, fan-in 9, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.ts",
+      "hop": 2,
+      "fanIn": 9,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 259 of 444 at hop 2, fan-in 9, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-server.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 260 of 444 at hop 2, fan-in 8, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/approval-render.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 261 of 444 at hop 2, fan-in 8, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/model.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 262 of 444 at hop 2, fan-in 7, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/client.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 263 of 444 at hop 2, fan-in 7, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/metaproject-tools.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 264 of 444 at hop 2, fan-in 6, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 265 of 444 at hop 2, fan-in 5, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/process/shell-spawn.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 266 of 444 at hop 2, fan-in 5, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider-catalog-cache.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 267 of 444 at hop 2, fan-in 5, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-inspector.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 268 of 444 at hop 2, fan-in 5, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-modal.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 269 of 444 at hop 2, fan-in 5, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-judge.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 270 of 444 at hop 2, fan-in 4, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/model-eval-runner.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 271 of 444 at hop 2, fan-in 4, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 272 of 444 at hop 2, fan-in 4, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/decision/classify-turn.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 273 of 444 at hop 2, fan-in 4, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/narrate.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 274 of 444 at hop 2, fan-in 4, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-session.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 275 of 444 at hop 2, fan-in 4, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 276 of 444 at hop 2, fan-in 4, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-modal.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 277 of 444 at hop 2, fan-in 4, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/routing/provider-default.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 278 of 444 at hop 2, fan-in 3, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/routing/tier-rank-agent.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 279 of 444 at hop 2, fan-in 3, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ask-user-bridge.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 280 of 444 at hop 2, fan-in 3, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/job-bridge.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 281 of 444 at hop 2, fan-in 3, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-consumer.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 282 of 444 at hop 2, fan-in 3, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/schedule-command.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 283 of 444 at hop 2, fan-in 3, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 284 of 444 at hop 2, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 285 of 444 at hop 2, fan-in 2, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/routing.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 286 of 444 at hop 2, fan-in 2, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-governance.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 287 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/decision/main-model-classifier.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 288 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/rpc.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 289 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-runner.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/anthropic/anthropic-provider.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 290 of 444 at hop 2, fan-in 2, reached via src/harness/provider/anthropic/anthropic-provider.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/format.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 291 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/harness-facade.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 292 of 444 at hop 2, fan-in 2, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ac-kinds-surface.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 293 of 444 at hop 2, fan-in 2, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 294 of 444 at hop 2, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 295 of 444 at hop 2, fan-in 2, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/games/model-turn.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 296 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 297 of 444 at hop 2, fan-in 2, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/rewind-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 298 of 444 at hop 2, fan-in 2, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/routing-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 299 of 444 at hop 2, fan-in 2, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-session-lease.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 300 of 444 at hop 2, fan-in 2, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 301 of 444 at hop 2, fan-in 2, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-bot.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 302 of 444 at hop 2, fan-in 1, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run/cli.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 303 of 444 at hop 2, fan-in 1, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/registry.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 304 of 444 at hop 2, fan-in 1, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "hop": 2,
+      "fanIn": 1,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 305 of 444 at hop 2, fan-in 1, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 306 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 307 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-leakage-check.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 308 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 309 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/agent-io.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 310 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/concurrent-turns.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 311 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/mcp-servers.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 312 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/models.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 313 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/permission.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 314 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/project-tools.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 315 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/acp/session-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 316 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/agent-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 317 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/bus/client.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 318 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-docs-structure.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 319 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 320 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/acp.process.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 321 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 322 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-antigravity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 323 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external-run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 324 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 325 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/approvals.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 326 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/forgetting.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 327 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-extension-wave.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 328 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec-restricted.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 329 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-exec.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 330 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-namespace-pin.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 331 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness-network-posture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 332 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 333 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 334 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.balance.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 335 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 336 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.custom.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 337 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.disconnect.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 338 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.model-profiles.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 339 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.models-failure.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 340 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.reasoning-preset.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 341 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.status.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 342 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 343 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-conform-cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 344 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/schedule-review.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 345 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select-subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 346 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-approval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 347 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/skills-remove.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 348 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 349 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/core.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 350 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/child/model.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 351 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-fs.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 352 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/acp-permission.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 353 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/bounded.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 354 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/bun-spawn-port.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 355 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 356 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/write-run.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 357 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/process/sandbox/unattended.abort-kill.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 358 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/provider-catalog.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 359 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run-external-factory.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 360 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/spawn-subagent-tool.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/startup.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 361 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/apply-patch-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 362 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/ask-user-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 363 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/background-job-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 364 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/keryx-self-command.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 365 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-background.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 366 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-timeout.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 367 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/shell-exec-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 368 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/slate-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 369 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/web-fetch-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 370 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/web-search-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 371 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/workspace-context-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 372 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/memory-recall-p3.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 373 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-containment.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 374 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 375 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 376 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-boundary-parity.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 377 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-display-truth.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 378 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/metaproject-operations.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 379 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/search-code-confinement.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 380 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/search-code-output.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 381 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/wiki-evidence-projection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 382 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/wiki-freshness-op.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 383 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/integrations/registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 384 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/oauth/openai-subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 385 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/provider-config.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 386 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-approvals-binding.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 387 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-approvals-durability.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 388 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-approvals.route.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 389 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turn-approval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 390 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/serve-turn.outcome.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 391 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-client/live-elicitation.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 392 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/approval-wiring.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 393 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/http.live.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 394 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/stdio.live.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 395 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 396 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/evidence-find-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 397 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/memory-p0.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 398 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp/metaproject-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 399 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/product/bulk-budget.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 400 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/remote/orphan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 401 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 402 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/review/jev-risk.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 403 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/rewind/restore.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 404 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/workspace-reference.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 405 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/sac/workspace-resolve.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 406 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 407 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 408 of 444 at hop 2, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/ac-kinds-surface.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 409 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 410 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-session.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 411 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/balance-panel.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/subscription-models.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 412 of 444 at hop 2, fan-in 0, reached via src/commands/subscription-models.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 413 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-diff-sidebar.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 414 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-hygiene.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 415 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector-interrupted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 416 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector-outcome-author.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 417 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector-uncommitted.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 418 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/flow-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 419 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/job-bridge.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 420 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 421 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-accept.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/tool/builtin/interactive-tools.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 422 of 444 at hop 2, fan-in 0, reached via src/harness/tool/builtin/interactive-tools.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 423 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/store.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 424 of 444 at hop 2, fan-in 0, reached via src/session/store.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-info.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/model-limits.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 425 of 444 at hop 2, fan-in 0, reached via src/commands/model-limits.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-actions.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 426 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 427 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/settings-state.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 428 of 444 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/side-worker.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/harness/provider/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 429 of 444 at hop 2, fan-in 0, reached via src/harness/provider/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/workspace-inspector.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/session/index.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 430 of 444 at hop 2, fan-in 0, reached via src/session/index.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 431 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 432 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 433 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-hooks.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 434 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-catalog-commands.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 435 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 436 of 444 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-bus.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 437 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-events.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 438 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-grant-refresh.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 439 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-headless-sigint.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 440 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-pause.process.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 441 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 442 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-startup-exit.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 443 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-task-registry-wiring.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 444 of 444 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/recommendations.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/comparative-report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/blast-radius.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "fixtures/benchmark/keryx/ablation-mutating-results-codex-gpt-6.1-sol.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "fixtures/benchmark/keryx/ablation-mutating-results-openai-codex-gpt-6.1-sol.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "fixtures/benchmark/keryx/baseline-main-ablation-mutating-openai-codex-gpt-6.1-sol.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "opencode.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 84,
+    "changedFilesResolved": 57,
+    "changedFilesUnresolved": 27,
+    "candidates": 444,
+    "retained": 40,
+    "droppedByCap": 404,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 14,
+    "testsRetained": 0,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 2640,
+    "edges": 8962
+  }
+}

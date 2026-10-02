@@ -58,7 +58,7 @@ import {
   recordSlateSessionTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { renderAnchorsBlock } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
 import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
 import { join as joinPath } from "node:path";
@@ -1388,18 +1388,28 @@ export function attachUsageIo(io: AgentIO, chrome: UsageChrome): AgentIO & { res
 const OPENAI_CACHED_INPUT_DISCOUNT = 0.5;
 
 /**
+ * flow 387 T16 — Anthropic prompt-caching multipliers on the base input rate
+ * (claude-api skill, Prompt Caching: reads ~0.1x, 5-minute-TTL writes ~1.25x).
+ * Provider-wide defaults like the OpenAI constant above; some newest models
+ * publish a lower read rate (e.g. Opus 5.5 $0.20 on $4 = 0.05x), so this is a
+ * conservative (slightly high) estimate there, never an undercount.
+ */
+const ANTHROPIC_CACHE_READ_MULTIPLIER = 0.1;
+const ANTHROPIC_CACHE_WRITE_MULTIPLIER = 1.25;
+
+/**
  * `undefined` when either price is `"unknown"` or `profile` itself is — never
  * a fabricated number, mirroring `NumericProfileField`'s own "unknown, never
  * 0" contract. `cacheReadTokens` (flow 354, L-11) is a SUBSET of
  * `inputTokens` (never additional to it — see `NormalizedUsage.
  * cacheReadTokens`'s own doc), billed at `OPENAI_CACHED_INPUT_DISCOUNT` ONLY
  * for `providerId` `"openai"`/`"openai-codex"` (review r1, item 2): that rate
- * is OpenAI's own documented number, and nothing here confirms any OTHER
- * provider that might one day report `cacheReadTokens` discounts it by the
- * same fraction — an other-provider cache hit is billed at the FULL input
- * rate until its own rate is researched, never a fabricated guess. Absent/`0`
- * `cacheReadTokens`, or a non-OpenAI `providerId`, reproduces the pre-L-11
- * all-full-price calculation exactly.
+ * is OpenAI's own documented number. `"anthropic"` (flow 387 T16) bills
+ * `cacheReadTokens` at `ANTHROPIC_CACHE_READ_MULTIPLIER` and the disjoint
+ * `cacheWriteTokens` subset at `ANTHROPIC_CACHE_WRITE_MULTIPLIER`. Any OTHER
+ * provider's cache hit is billed at the FULL input rate until its own rate is
+ * researched, never a fabricated guess. Absent/`0` cache counts reproduce the
+ * pre-L-11 all-full-price calculation exactly.
  */
 function estimateTaskCostUsd(
   profile: ModelProfile | undefined,
@@ -1407,6 +1417,7 @@ function estimateTaskCostUsd(
   inputTokens: number,
   outputTokens: number,
   cacheReadTokens?: number,
+  cacheWriteTokens?: number,
 ): number | undefined {
   if (profile === undefined) return undefined;
   const priceIn = profile.priceInputPerMillion.value;
@@ -1414,10 +1425,26 @@ function estimateTaskCostUsd(
   if (priceIn === "unknown" || priceOut === "unknown") return undefined;
   // 1 = full input rate (no discount) — the honest default until a provider's
   // OWN cached-input rate is researched and named here explicitly.
-  const cachedInputDiscount = providerId === "openai" || providerId === "openai-codex" ? OPENAI_CACHED_INPUT_DISCOUNT : 1;
+  let cacheReadMultiplier = 1;
+  let cacheWriteMultiplier = 1;
+  if (providerId === "openai" || providerId === "openai-codex") {
+    cacheReadMultiplier = OPENAI_CACHED_INPUT_DISCOUNT;
+  } else if (providerId === "anthropic") {
+    // flow 387 T16: Anthropic's adapter folds cache reads AND writes into
+    // `inputTokens` (both subsets), each billed at its own multiple of the
+    // input rate.
+    cacheReadMultiplier = ANTHROPIC_CACHE_READ_MULTIPLIER;
+    cacheWriteMultiplier = ANTHROPIC_CACHE_WRITE_MULTIPLIER;
+  }
   const cacheRead = cacheReadTokens !== undefined && cacheReadTokens > 0 ? Math.min(cacheReadTokens, inputTokens) : 0;
-  const fullPriceInputTokens = inputTokens - cacheRead;
-  const inputCost = (fullPriceInputTokens / 1_000_000) * priceIn + (cacheRead / 1_000_000) * priceIn * cachedInputDiscount;
+  // Reads and writes are disjoint subsets: clamp the write count to what the
+  // reads left over so the pair can never exceed `inputTokens` (no double counting).
+  const cacheWrite = cacheWriteTokens !== undefined && cacheWriteTokens > 0 ? Math.min(cacheWriteTokens, inputTokens - cacheRead) : 0;
+  const fullPriceInputTokens = inputTokens - cacheRead - cacheWrite;
+  const inputCost =
+    (fullPriceInputTokens / 1_000_000) * priceIn +
+    (cacheRead / 1_000_000) * priceIn * cacheReadMultiplier +
+    (cacheWrite / 1_000_000) * priceIn * cacheWriteMultiplier;
   return inputCost + (outputTokens / 1_000_000) * priceOut;
 }
 
@@ -1451,6 +1478,8 @@ export async function recordTurnTaskCostBestEffort(input: {
   readonly outputTokens: number;
   /** Flow 354 (L-11): this turn's summed `usage.cacheReadTokens` — a SUBSET of `inputTokens`, never additional. */
   readonly cacheReadTokens?: number;
+  /** flow 387 T16: this turn's summed `usage.cacheWriteTokens` — a SUBSET of `inputTokens`, disjoint from `cacheReadTokens`. */
+  readonly cacheWriteTokens?: number;
   readonly success: boolean;
   readonly category?: RoutingCategory;
   readonly userConfigDir?: string;
@@ -1460,7 +1489,7 @@ export async function recordTurnTaskCostBestEffort(input: {
   try {
     const profiles = loadModelProfiles(input.userConfigDir);
     const profile = profiles[profileKey(input.providerId, input.modelId)];
-    const costUsd = estimateTaskCostUsd(profile, input.providerId, input.inputTokens, input.outputTokens, input.cacheReadTokens);
+    const costUsd = estimateTaskCostUsd(profile, input.providerId, input.inputTokens, input.outputTokens, input.cacheReadTokens, input.cacheWriteTokens);
     await appendTaskCostRecord(
       {
         providerId: input.providerId,
@@ -1745,11 +1774,13 @@ export async function applyRuntimeSwitchToSlate(params: {
   if (result === undefined || !result.changed) {
     return false;
   }
-  params.history.push({
-    role: "user",
-    content: renderAnchorsBlock(result.slate.anchors),
-    provenance: "project",
-  });
+  // Flow 387 T9: a runtime switch is a delta (`runtime:` line) once the model
+  // has seen a full block; the full block only when history holds none.
+  const announcement = anchorsAnnouncement(params.history, result.slate.anchors);
+  if (announcement === undefined) {
+    return false;
+  }
+  params.history.push(announcement);
   params.onHistoryChange?.("tool");
   return true;
 }
@@ -5827,16 +5858,34 @@ export async function launchTuiAgentShell(opts: {
      * shorter `history`. A system-stream line replaces a silent swap so the
      * operator sees WHY the transcript just shrank.
      */
-    const onContextCompaction = (r: { removed: number; context: NormalizedMessage[]; estimate: number }): void => {
+    const onContextCompaction = (r: {
+      removed: number;
+      context: NormalizedMessage[];
+      estimate: number;
+      kind?: "compact" | "prune";
+    }): void => {
+      // Flow 387 review r2 F-024: re-point the archive cursor FIRST, before the lease early
+      // return — `history` is already shorter, so a stale cursor would skip later messages.
+      nextArchiveIndex = history.length;
       if (!sessionLease.canPersist()) {
         return; // review F1: another shell has this session now
+      }
+      if (r.kind === "prune") {
+        // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
+        // The archive already holds the originals (synced before the change);
+        // persist the shorter context (the cursor was re-pointed above).
+        liveSession = persistHistory(liveSession, history, {
+          archive,
+          provider: currentSel.provider,
+          model: currentSel.model,
+        });
+        return;
       }
       const persisted = persistCompacted(liveSession, r.context, archive, {
         provider: currentSel.provider,
         model: currentSel.model,
       });
       liveSession = persisted.handle;
-      nextArchiveIndex = history.length;
       paintSessionHeader();
       io.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
     };
@@ -9054,11 +9103,13 @@ export async function launchTuiAgentShell(opts: {
       // `turnOutputTokens` above — `usage.cacheReadTokens` is a SUBSET of
       // `inputTokens`, so this is never added to `turnInputTokens` itself.
       let turnCacheReadTokens = 0;
+      let turnCacheWriteTokens = 0; // flow 387 T16 — also a subset of `turnInputTokens`
       const prevOnUsageForCost = io.onUsage;
       io.onUsage = (usage) => {
         turnInputTokens += usage.inputTokens ?? 0;
         turnOutputTokens += usage.outputTokens ?? 0;
         turnCacheReadTokens += usage.cacheReadTokens ?? 0;
+        turnCacheWriteTokens += usage.cacheWriteTokens ?? 0;
         prevOnUsageForCost?.(usage);
       };
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
@@ -9196,7 +9247,8 @@ export async function launchTuiAgentShell(opts: {
         void runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
         ...(origin === "operator" ? {} : { origin }),
-        ...(slateSession !== undefined ? { slateSession } : {}),
+        // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
+        ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic
@@ -9263,6 +9315,7 @@ export async function launchTuiAgentShell(opts: {
           inputTokens: turnInputTokens,
           outputTokens: turnOutputTokens,
           ...(turnCacheReadTokens > 0 ? { cacheReadTokens: turnCacheReadTokens } : {}),
+          ...(turnCacheWriteTokens > 0 ? { cacheWriteTokens: turnCacheWriteTokens } : {}),
           success: !turnFailed,
           ...(turnCategory !== undefined ? { category: turnCategory } : {}),
         });

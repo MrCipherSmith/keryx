@@ -28,7 +28,6 @@ import {
   resolveProjectRoot,
   sessionDir as sessionDirPath,
 } from "./paths";
-import { compactMessages, type CompactOptions } from "./compact";
 import { readSlate, type Slate } from "./slate";
 import { redactSensitiveText } from "../security/redact";
 
@@ -95,12 +94,20 @@ interface TranscriptLine {
   role: NormalizedMessage["role"];
   content: string;
   provenance?: NormalizedMessage["provenance"];
+  /** Flow 387 T8: harness-injected `role: "user"` message (not operator input). */
+  injected?: true;
   ts: string;
   kind?: "message" | "compaction";
   /** Assistant tool calls, so a resumed session keeps the tool-call loop. */
   toolCalls?: NormalizedToolCall[];
   /** The assistant call a tool result answers. */
   toolCallId?: string;
+  /** Flow 387 T18: the tool reported failure (see `NormalizedMessage.isError`). */
+  isError?: true;
+  /** Flow 387 review r1 F-002: the file holding a tool result's full text (see `NormalizedMessage.spillPath`). */
+  spillPath?: string;
+  /** Flow 387 review r2 F-025: a prune-made collapsed record (see `NormalizedMessage.collapsed`). */
+  collapsed?: true;
   /**
    * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
    * redacted flag, and opaque provider replay items. Round-tripped so a
@@ -396,8 +403,12 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpo
       ts: m.ts ?? checkpointTs,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
+      ...(m.injected === true ? { injected: true as const } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
+      ...(m.isError === true ? { isError: true as const } : {}),
+      ...(m.spillPath !== undefined ? { spillPath: m.spillPath } : {}),
+      ...(m.collapsed === true ? { collapsed: true as const } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
@@ -527,10 +538,14 @@ function readJsonl(file: string): NormalizedMessage[] {
         o.provenance === "harness"
           ? { provenance: o.provenance }
           : {}),
+        ...(o.injected === true ? { injected: true as const } : {}),
         ...(toolCalls !== undefined ? { toolCalls } : {}),
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }
           : {}),
+        ...(o.isError === true ? { isError: true as const } : {}),
+        ...(typeof o.spillPath === "string" && o.spillPath.length > 0 ? { spillPath: o.spillPath } : {}),
+        ...(o.collapsed === true ? { collapsed: true as const } : {}),
         // Carried forward so a resumed session's next flush reuses the
         // message's ORIGINAL append time instead of re-stamping it with the
         // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`
@@ -864,27 +879,6 @@ export function describeRemote(remote: SessionRemote | undefined): string {
 
 /** The one-word list-row mark. */
 export const REMOTE_MARK = "remote";
-
-/**
- * Compact the live model context. Archive is preserved (and grown if needed).
- * Returns the new context array for the caller to swap into memory.
- */
-export function compactSession(
-  handle: SessionHandle,
-  context: readonly NormalizedMessage[],
-  archive: readonly NormalizedMessage[],
-  opts?: CompactOptions & { provider?: string; model?: string },
-): { handle: SessionHandle; context: NormalizedMessage[]; result: ReturnType<typeof compactMessages> } {
-  const result = compactMessages(context, opts);
-  if (result.noop) {
-    return { handle, context: [...context], result };
-  }
-  // Archive keeps everything we had before compact + a marker line is not needed
-  // as messages — full prior context already lives in archive.
-  const nextArchive = archive.length >= context.length ? archive : context;
-  const persisted = persistCompacted(handle, result.context, nextArchive, opts);
-  return { handle: persisted.handle, context: result.context, result };
-}
 
 /** Typed rejection for a fork whose source session is not in this project. */
 export class UnknownSessionError extends Error {

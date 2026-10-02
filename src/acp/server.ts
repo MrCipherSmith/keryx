@@ -88,7 +88,7 @@ import {
   type AcpStopReason,
 } from "./protocol";
 import { renderAcpPromptContent } from "./prompt-content";
-import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, type AcpSessionState } from "./session";
+import { AcpSessionRegistry, AcpSessionTranscriptUnreadableError, syncAcpArchive, type AcpSessionState } from "./session";
 import {
   acpMcpSetKey,
   parseAcpMcpServers,
@@ -1201,10 +1201,23 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // is taken, so the busy guard above still holds while this waits.
       await sessionMcp.get(sessionId)?.mcp.ready;
       const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
+      // Flow 387 review r1 F-001 / r2 F-021: `persistHistory` without an archive writes the
+      // CONTEXT as the archive, so this host keeps the originals itself (`state.archive`). It is
+      // synced on every history change (the shells' `onHistoryChange` contract) and its cursor is
+      // re-pointed when the history is shortened in place (overflow compaction), so the turn that
+      // triggered the compaction still reaches archive.jsonl. This host does not set `pruneArchive`.
+      const archive = state.archive;
+      syncAcpArchive(archive, state.history);
+      io.onHistoryChange = () => syncAcpArchive(archive, state.history);
+      deps.onContextCompaction = () => {
+        archive.next = state.history.length;
+      };
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
+      syncAcpArchive(archive, state.history);
       const updatedHandle = persistHistory(state.handle, state.history, {
         provider: providerId,
         model: modelId,
+        archive: archive.messages,
       });
       registry.updateHandle(sessionId, updatedHandle);
       // `turn.cancelled` wins over whatever `finishReason` came back: a turn
