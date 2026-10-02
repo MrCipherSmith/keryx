@@ -136,7 +136,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'askReason' src --glob '!*.test.ts' lists the producer and the hint; no consumer asks a question."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-004"
+    "global_id": "2026-10-02-ingest-856-r02#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 33e715b6, against the AC6 reworded by operator decision (poll 42): 'asked once for a reason and the tool result waits for the answer; optional, an empty answer is recorded as absent and releases the wait'. src/decisions/ask.ts journalAsk calls askReasonOnce(ask, deps, id) when answerDecision returns askReason, and awaits it before returning the choice; the prompt is raw `ask` (not journaled), has options 'No reason'/'Not now' plus allowFreeform. Probe with a scripted host: deviation returns after the reason answer (66 ms with a 60 ms delayed answer), 2 ask calls; empty answer and 'skip' record no reason and release; a followed recommendation and a cancel make 1 ask call; a throwing prompt and an unwritable journal dir do not throw. changeAnswer after the first answer returns askReason false (asked once). giveReason (/decisions reason) now replaces: recorded true, replaced true, and the report shows the later 'second reason'. Frozen AC6 and the build agree.",
+      "verifier": "flow392-pr856-round5-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "33e715b6"
+    }
   },
   {
     "id": "F-005",
@@ -199,6 +209,16 @@
       ],
       "enumeration_method": "keryx ctx rg 'resolveFlowContext|onlyInProgress' src --glob '!*.test.ts' lists the resolver and its two callers (ask_user bridge and decisions open)."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-006"
+    "global_id": "2026-10-02-ingest-856-r02#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 33e715b6: journal.ts journalToFlow returns early when open.flow === null || open.flowSource === 'inferred'; the record stays in the project-wide journal with its inferred flag and the report still shows '(inferred)'. Probe in a temp repo on main with one in-progress flow: an ask_user answer attributed by inference added 0 lines to the flow's journal.md; the same question with KERYX_FLOW=001 (source env) added 1 line. The branch source takes the same non-inferred path. src/commands/decisions.ts help now says an inferred flow only stays in the project-wide journal.",
+      "verifier": "flow392-pr856-round5-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "33e715b6"
+    }
   }
 ]

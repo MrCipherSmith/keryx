@@ -28,12 +28,12 @@
     "verification": {
       "verdict": "refuted",
       "method": "site-check",
-      "evidence": "At 15c52808: src/decisions/ask.ts journalAsk returns `chosen` right after answerDecision (line ~151); the second awaited ask is gone, a deviation only pushes a transcript hint. src/decisions/review-fixes.test.ts 'a deviation returns at once, asks nothing more' passes (bun test: 79 pass, 0 fail). Fixed in 15c52808.",
-      "verifier": "flow392-pr856-round2-verifier"
+      "evidence": "At 33e715b6, against AC9 as amended by operator decision (poll 42: 'Journaling itself never blocks or delays a question and a journaling failure never throws into the question path; the single deliberate wait is the optional reason prompt after a deviation (AC6), by operator decision'). The original defect was a blocking reason prompt that nobody had approved; it is now the recorded exception. Build matches: openDecision/answerDecision/journalToFlow stay in try/catch with a note and fall back to the plain question (probe: unwritable journal dir returns the choice, 1 note, no throw); the only await after the answer is askReasonOnce, which fires only after a deviation (askReason), once per decision (a changed answer gives askReason false), after the blind reveal notification (event order ask#1, notify, ask#2), never on a cancel, and never on the CLI path (keryx decisions answer returned in 0.9 s with 'the command does not wait, the caller asks'). A failing or throwing reason prompt is caught and recorded as no reason.",
+      "verifier": "flow392-pr856-round5-verifier"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "15c52808"
+      "evidence": "33e715b6 (AC9 amended by operator decision, poll 42)"
     }
   },
   {

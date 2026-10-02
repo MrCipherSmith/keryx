@@ -25,10 +25,14 @@
     },
     "global_id": "2026-10-02-ingest-856-r04#F-001",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "Re-ran at 75fcefed: openDecision with random=0 and a recommendation returned mode 'blind' for 'Cut 0.3.62?' and for 'Bump the version and tag it?' (options Yes/No); isIrreversible is false for both; STRONG_PATTERNS tag rules need a version number next to 'tag' or 'tag it as'/'tag the version', and 'cut' is not in DEFAULT_IRREVERSIBLE (blind.ts lines 22-60, 62-).",
-      "verifier": "flow392-pr856-round4-verifier"
+      "evidence": "At 33e715b6: blind.ts adds STRONG_PATTERNS for 'cut <version|build|tag|release>', 'bump ... version|release|build|major|minor|patch', a bare 'tag it/this', Russian 'поднять/повысить версию' and the roots затег/тегнут/тегани. Probe through openDecision (random=0, recommendation set): ordinary (protected) for 'Cut 0.3.62?', 'Bump the version and tag it?', 'Bump version to 0.3.63?', 'Tag it?', 'Зарелизить?', 'Поднять версию до 0.3.63?', 'Cut a release?'; 26 of 26 ordinary coding questions stay blind-eligible, including 'Which cut of the data should the chart show?', 'Bump the font size in the header?', 'Which tag name for the HTML element?'. bun test src/decisions + 3 TUI/tool files: 266 pass, 0 fail.",
+      "verifier": "flow392-pr856-round5-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "33e715b6"
     }
   }
 ]

@@ -4,7 +4,7 @@ target: report
 ref: 856
 mode: ingest
 flow: 392 (explicit-flow-id)
-created_at: 2026-10-02T13:34:50.969Z
+created_at: 2026-10-02T14:31:16.849Z
 context_mode: light
 
 ## Stage counts
@@ -21,14 +21,14 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 4
-claims_applied: 4
+claims_received: 6
+claims_applied: 6
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 4
+refuted: 6
 unverifiable: 0
-unverified: 2
+unverified: 0
 
 ### Retained
 
@@ -36,7 +36,7 @@ findings_in: 6
 findings_removed_by_verifier: 0
 findings_retained: 6
 
-`annotate` records verdicts and removes nothing: 4 finding(s) are marked refuted and still reported.
+`annotate` records verdicts and removes nothing: 6 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 

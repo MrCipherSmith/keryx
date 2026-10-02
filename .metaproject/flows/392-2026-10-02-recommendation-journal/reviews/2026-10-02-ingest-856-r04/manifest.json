@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-10-02-ingest-856-r04",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "856",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-10-02T14:00:43.902Z",
-  "updatedAt": "2026-10-02T14:00:43.902Z",
+  "createdAt": "2026-10-02T14:31:16.658Z",
+  "updatedAt": "2026-10-02T14:31:26.491Z",
   "flow": {
     "id": "392",
     "path": ".metaproject/flows/392-2026-10-02-recommendation-journal"
