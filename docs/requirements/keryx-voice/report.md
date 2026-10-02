@@ -11,8 +11,8 @@ First follow-up flow: inbound Telegram voice only. Download the voice message, t
 - The shell receives only text; voice lives entirely in `keryx serve` (download, transcribe, deliver as a text line).
 - Voice is an optional module of `keryx serve`, which is installed from npm next to the main keryx package. The user chooses at install time whether to have voice. If yes, the module downloads its own Piper and voices.
 - keryx and helyx must not know about each other: no path into helyx's `piper/` folder and no shared code. keryx ships and manages its own, fully independent copy. This replaces the earlier idea of pointing keryx at `/home/altsay/bots/helyx/piper`.
-- Open: whether the module may carry its own npm dependencies (e.g. an Opus encoder), or must stay at none; the main keryx package keeps `dependencies` at `{}` either way.
-- Message 177324 was a voice message that ended mid-sentence ("и также это"); the rest was requested.
+- The voice module may pull its own npm dependencies (message 177335), but they must be the minimum, and each one must be justified in the follow-up flow with its size. The main keryx package keeps `dependencies` at `{}`.
+- Voices are chosen during an interactive install in the terminal: the user picks which voices to download (for example English only), and nothing else is fetched. The installer must show the size of each voice before downloading.
 
 ## 1. How helyx does voice today (read)
 
