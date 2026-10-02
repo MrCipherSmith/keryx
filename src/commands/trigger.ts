@@ -60,6 +60,7 @@ import type { NextTaskDecision } from "../flow/machine";
 import type { TriggerAgentTaskRecord, TriggerDispatchRecord } from "../trigger/record";
 import { runFlowNextDispatch, type DispatchDeps, type DispatchResult } from "./trigger-dispatch";
 import { runAgentTaskDispatch, type AgentTaskDeps } from "./trigger-agent-task";
+import { runDigestDispatch, type DigestDeps } from "../scheduler/digest-run";
 import {
   describeEntry,
   describeFire,
@@ -78,6 +79,8 @@ export interface TriggerRunOverrides {
   readonly dispatch?: Omit<DispatchDeps, "service">;
   /** Flow 295: seams for an `agent-task` run. */
   readonly agentTask?: AgentTaskDeps;
+  /** Flow 389: seams for a scheduled digest (an `agent-task` carrying `action.digest`). */
+  readonly digest?: DigestDeps;
 }
 
 /** One `keryx trigger run <name>` pass against `projectRoot`, with optional seams (tests). */
@@ -552,14 +555,22 @@ async function runAgentTask(
 ): Promise<void> {
   // The fast, lock-free budget refusal; the authoritative decision is the
   // reservation the run takes under the spend lock before its first model call.
-  const budget = await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: action.dispatch.ceilingUsd });
+  // Flow 389: a scheduled digest does not take it. Its model call is only a summary,
+  // so a spent budget degrades the digest (no summary, a report entry and a status
+  // line) instead of silencing it; `runDigestDispatch` reserves spend itself.
+  const isDigest = action.digest !== undefined;
+  const budget = isDigest
+    ? { allowed: true as const }
+    : await evaluateTriggerBudget(projectRoot, "agent-task", {}, { name: entry.name, ceilingUsd: action.dispatch.ceilingUsd });
   if (!budget.allowed) {
     await refuseOnBudget(projectRoot, name, entry, budget.reason);
     return;
   }
   let result;
   try {
-    result = await runAgentTaskDispatch(projectRoot, entry, action, overrides.agentTask ?? {});
+    result = isDigest
+      ? await runDigestDispatch(projectRoot, entry, action, { ...(overrides.agentTask ?? {}), ...(overrides.digest ?? {}) })
+      : await runAgentTaskDispatch(projectRoot, entry, action, overrides.agentTask ?? {});
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`keryx trigger run ${name}: agent task failed: ${message}`);

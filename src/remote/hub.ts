@@ -24,6 +24,7 @@ import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
 import { OutboundQueue } from "./outbound-queue";
 import { type PollerStatus, UpdatePoller } from "./poller";
+import { ServiceTopics } from "./service-topics";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
@@ -116,6 +117,9 @@ export type HeartbeatResult =
   | { ok: true; name: string; threadId: number }
   | { ok: false; code: "unknown-session"; message: string };
 
+/** What happened to one message written to a service topic (flow 389). */
+export type ServiceSendResult = { ok: true; state: "sent" | "queued"; threadId: number } | { ok: false; reason: string };
+
 export interface RemoteSessionInfo {
   name: string;
   sessionId: string;
@@ -160,6 +164,10 @@ export class RemoteHub {
   private readonly registry: SessionRegistry;
   private readonly inbound: InboundQueues;
   private readonly outbound: OutboundQueue;
+  /** Flow 389: topics that belong to keryx itself (the digest), kept apart from the session registry. */
+  private readonly serviceTopics: ServiceTopics;
+  /** Flow 389: why an outbound entry was dropped, by id, so a caller that queued it can report it. */
+  private readonly droppedReasons = new Map<string, string>();
   private readonly journal: RejectedJournal;
   private readonly offset: PollerState;
   private readonly poller: UpdatePoller;
@@ -196,13 +204,18 @@ export class RemoteHub {
       api: this.api,
       ...(options.dir === undefined ? {} : { dir: options.dir }),
       now: this.now,
-      onDrop: (entry, reason) => this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
+      onDrop: (entry, reason) => {
+        this.droppedReasons.set(entry.id, reason);
+        this.event("outbound-dropped", `${reason}${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`);
+      },
       onFallback: (entry) => this.event("format-fallback", `Telegram refused the formatting; sent as plain text${entry.threadId === undefined ? "" : ` (topic ${entry.threadId})`}`),
     });
     this.journal = new RejectedJournal({ ...(options.dir === undefined ? {} : { dir: options.dir }), now: this.now });
     this.offset = new PollerState(options.dir === undefined ? {} : { dir: options.dir });
     this.registry.load();
     this.outbound.load();
+    this.serviceTopics = new ServiceTopics(options.dir === undefined ? {} : { dir: options.dir });
+    this.serviceTopics.load();
     this.offset.load();
     this.forgetOtherGroups();
     const onPollerStatus = options.onPollerStatus ?? (() => undefined);
@@ -423,6 +436,72 @@ export class RemoteHub {
     });
     await this.flushOutbound();
     return true;
+  }
+
+  /**
+   * Flow 389: write text into a SERVICE topic (a topic of keryx's own, such as "Digest"), creating
+   * it on first use and remembering it across restarts. The result says what happened to THIS
+   * message: `sent`, `queued` (Telegram or the network refused for now; the durable queue
+   * retries it), or a failure (the topic could not be created, or Telegram refused the text for
+   * good). A topic Telegram no longer has is forgotten, so the next send creates it again.
+   */
+  async sendToServiceTopic(name: string, text: string): Promise<ServiceSendResult> {
+    const checked = checkName(name);
+    if (!checked.ok) {
+      return { ok: false, reason: `invalid topic name: ${checked.reason}` };
+    }
+    const topic = await this.serial(async () => {
+      const known = this.serviceTopics.get(checked.name, this.config.chatId);
+      if (known !== undefined) {
+        return { ok: true as const, threadId: known.threadId };
+      }
+      try {
+        const created = await this.api.createForumTopic({ chatId: this.config.chatId, name: checked.name });
+        this.serviceTopics.put({ name: checked.name, chatId: this.config.chatId, threadId: created.message_thread_id });
+        this.event("topic-created", `${checked.name} (service topic)`);
+        return { ok: true as const, threadId: created.message_thread_id };
+      } catch (error) {
+        return { ok: false as const, reason: `could not create the topic "${checked.name}": ${describeError(error)}` };
+      }
+    });
+    if (!topic.ok) {
+      return { ok: false, reason: topic.reason };
+    }
+    return this.sendTracked(this.config.chatId, topic.threadId, text, checked.name);
+  }
+
+  /**
+   * Flow 389: like `send`, but the result says what happened to THIS message (`sent`, `queued` for
+   * the durable retry, or a refusal). The scheduled digest records it.
+   */
+  async sendToSessionTracked(sessionId: string, text: string): Promise<ServiceSendResult> {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return { ok: false, reason: "the session is not registered" };
+    }
+    return this.sendTracked(record.chatId, record.threadId, text);
+  }
+
+  private async sendTracked(chatId: number, threadId: number, text: string, serviceTopic?: string): Promise<ServiceSendResult> {
+    const entries = this.outbound.enqueue({ chatId, threadId, text });
+    if (entries.length === 0) {
+      return { ok: false, reason: "the message was empty" };
+    }
+    await this.flushOutbound();
+    const pending = new Set(this.outbound.pending().map((entry) => entry.id));
+    for (const entry of entries) {
+      const dropped = this.droppedReasons.get(entry.id);
+      if (dropped !== undefined) {
+        this.droppedReasons.delete(entry.id);
+        // A refusal because the topic is gone: forget it so the retry creates it again.
+        if (serviceTopic !== undefined && /thread not found|topic_id_invalid|topic.*not found/i.test(dropped)) {
+          this.serviceTopics.remove(serviceTopic);
+        }
+        // Parts already queued behind a dropped one are not worth sending out of order.
+        return { ok: false, reason: dropped };
+      }
+    }
+    return { ok: true, state: entries.some((entry) => pending.has(entry.id)) ? "queued" : "sent", threadId };
   }
 
   /** Try to send everything queued. Safe to call at any time. */

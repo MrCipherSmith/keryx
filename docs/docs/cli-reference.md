@@ -2369,7 +2369,7 @@ store the schedule and install an OS timer that runs the task unattended. Each r
 leaves a **report** you read later in `keryx shell` or with `keryx schedule show`.
 
 keryx still runs no daemon of its own. The OS scheduler calls `keryx trigger run
-<name>` from the project root:
+<name>` from the project root (a digest is the exception: `keryx serve` runs it, see below):
 
 | Backend | Where | Catch-up after the machine was off/asleep |
 |---|---|---|
@@ -2382,6 +2382,9 @@ keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
     --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
     [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \
     [--domain example.com]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+keryx schedule add --digest --name <name> --every "<cadence>" \
+    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
 keryx schedule list
 keryx schedule show <name>
 keryx schedule pause <name>
@@ -2399,6 +2402,30 @@ keryx schedule remove <name> [--yes]
 | `resume <name>` | Re-enable both. No new confirmation is asked, so resume first checks that the entry still carries this machine's signature and that every granted binary still matches its pin, and refuses with the reason otherwise. It reinstalls the keryx recorded when you confirmed the card, never the one running `resume`. |
 | `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
+
+**Digest (`add --digest`).** A digest is a schedule that reads GitHub and the flow board and
+sends you what changed, what is stuck, what needs your decision and every "PR merged, flow
+closed, effect not checked" chain, in Telegram. See the guide
+[Get a GitHub and board digest on a schedule](guides/scheduled-digest.md). In short:
+
+- **Who runs it.** `keryx serve`. A digest has **no OS timer** (`install: none`), so `pause`,
+  `resume` and `remove` touch no timer, and serve must be running. A missed time runs once when
+  serve comes back, and a time is claimed before the run starts, so it is never run twice.
+- **Configuration.** `--every` is the schedule; `--repo` (repeatable, default
+  `MrCipherSmith/keryx`) is the only set of repositories it may read; `--topic` (default
+  `Digest`) is the service topic used when the project has no live remote session, otherwise the
+  digest goes into that session's topic. `--prompt` is not needed. A digest defaults its tools to
+  `gh.pr.list`, `gh.issue.list`, `gh.pr.review-requested` and `gh.run.failed`.
+- **Read-only.** Every `gh` tool is on a read-only allow-list (`pr list|view|checks`,
+  `issue list|view`, `run list`) with a fixed argv and no writing word, and the digest never calls
+  `gh auth switch` or `gh auth login`. `gh` runs as the account the project path selects
+  (`~/work/**` the work account, everything else the personal one).
+- **Limits.** `--ceiling` (dollars, for the optional model summary), `--max-seconds` (timeout)
+  and `--memory-mb` (memory, default 512). A run over a limit is stopped and reported.
+- **Baseline.** The first run only records a snapshot and is marked `baseline`; a later run with
+  no changes has no items.
+- **Seeing it.** `list` and `show` print the digest, its next run, the last run's status and
+  the last delivery; `/schedules` in `keryx shell` shows the same, with `p` to pause or resume.
 
 **Drafting checks the provider before the card is even shown.** `add`, `/schedule`
 and the agent's `schedule_create` tool all draft through the same code, which
@@ -2483,7 +2510,8 @@ store or the reports. **No grant lifts any of it.**
   domain list after confirmation refuses the run with `grants-changed`, the same as
   changing anything else about it.
 - **Granted tools:** a fixed, reviewed catalogue: `gh.pr.list`, `gh.pr.view`,
-  `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`. It includes no
+  `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`, `gh.pr.review-requested`,
+  `gh.run.failed` (all read-only: see the digest above). It includes no
   `gh api` and no free-form argv. **keryx runs a granted tool itself, outside the
   sandbox, with your credentials**, via `execFile`:
   - there is no shell;

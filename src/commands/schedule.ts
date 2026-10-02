@@ -31,6 +31,8 @@ import {
   type ScheduleSummary,
 } from "../trigger/schedules";
 import { GRANTED_TOOL_CATALOGUE } from "../trigger/granted-tools";
+import { digestStatus, digestStatusLines } from "../scheduler/digest-status";
+import { digestEntries } from "../scheduler/digest-ticker";
 
 /** Flow 302: the real checks, reused so a draft agrees with what `keryx trigger run` would do. Production's default; tests inject a fake to stay hermetic. */
 async function defaultCheckCredential(provider: string, model: string): ReturnType<NonNullable<DraftContext["checkCredential"]>> {
@@ -112,6 +114,9 @@ Usage:
       --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
       [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \\
       [--domain example.com]... [--port 443]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+  keryx schedule add --digest --name <name> --every "<cadence>" \\
+      --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \\
+      [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
   keryx schedule list
   keryx schedule show <name>
   keryx schedule pause <name>
@@ -135,7 +140,16 @@ model call and every granted tool already run outside the sandbox on your networ
 The allowlist restricts host AND port: 443 (CONNECT/HTTPS) and 80 (plain HTTP) by
 default, or exactly the --port list when you give one (applies to every --domain).
 
-Keryx runs no daemon. The OS scheduler (systemd --user, launchd, or cron) calls
+"add --digest" creates a GitHub and board digest instead of a free-form task. It reads open
+issues and PRs, reviews waiting for you and failed CI for each --repo (default
+MrCipherSmith/keryx) through read-only gh tools, plus the flow board's product index, and
+sends what changed, what is stuck and what needs your decision to Telegram: into this
+project's remote session topic, or the "Digest" topic (--topic renames it) when there is
+none. It needs no --prompt. \`keryx serve\` runs it; there is no OS timer, so keep serve
+running. The first run is a baseline and reports no changes. --ceiling, --max-seconds and
+--memory-mb are its per-run limits (the ceiling only covers the optional model summary).
+
+Keryx runs no daemon for ordinary schedules. The OS scheduler (systemd --user, launchd, or cron) calls
 \`keryx trigger run <name>\`. The machine must be on. systemd and launchd catch up one
 missed run after a boot or wake; cron does not. Without linger, a systemd --user timer
 does not run while you are logged out, and keryx never enables linger for you.
@@ -209,7 +223,8 @@ function numberFlag(args: readonly string[], name: string): number | undefined {
 
 /** Parse `keryx schedule add` flags into a request. Missing required flags are reported together. */
 export function requestFromArgs(args: readonly string[]): ScheduleRequest {
-  const missing = ["--name", "--prompt", "--provider", "--model", "--rates", "--ceiling"].filter((f) => flag(args, f) === undefined);
+  const isDigest = args.includes("--digest");
+  const missing = ["--name", ...(isDigest ? [] : ["--prompt"]), "--provider", "--model", "--rates", "--ceiling"].filter((f) => flag(args, f) === undefined);
   const cadence = flag(args, "--every") ?? flag(args, "--cron");
   if (cadence === undefined) missing.push("--every (or --cron)");
   if (missing.length > 0) throw new Error(`missing ${missing.join(", ")} — see \`keryx schedule --help\``);
@@ -230,10 +245,14 @@ export function requestFromArgs(args: readonly string[]): ScheduleRequest {
     throw new Error("--port must be an integer 1-65535 (repeatable, or comma-separated)");
   }
   const maxSeconds = numberFlag(args, "--max-seconds");
+  const memoryMb = numberFlag(args, "--memory-mb");
+  const topic = flag(args, "--topic");
+  if (!isDigest && (topic !== undefined || memoryMb !== undefined)) throw new Error("--topic and --memory-mb belong to a digest: add --digest");
   return {
     name: flag(args, "--name")!,
     cadence: cadence!,
-    prompt: flag(args, "--prompt")!,
+    prompt: flag(args, "--prompt") ?? "",
+    ...(isDigest ? { digest: { ...(topic !== undefined ? { topic } : {}), ...(memoryMb !== undefined ? { memoryLimitMb: memoryMb } : {}) } } : {}),
     provider: flag(args, "--provider")!,
     model: flag(args, "--model")!,
     rates: { inputUsdPerMTok: inRate!, outputUsdPerMTok: outRate! },
@@ -268,23 +287,29 @@ async function addSubcommand(cwd: string, args: string[], deps: ScheduleCommandD
   }
   for (const line of drafted.draft.card) console.log(line);
   const yes = args.includes("--yes");
-  const confirmed = yes || (await (deps.confirm ?? ttyConfirm)("Create this schedule and install its timer?"));
+  const isDigest = request.digest !== undefined;
+  const confirmed = yes || (await (deps.confirm ?? ttyConfirm)(isDigest ? "Create this digest schedule?" : "Create this schedule and install its timer?"));
   if (!confirmed) {
     console.log("keryx schedule add: not confirmed — nothing was written or installed.");
     if (!yes && !process.stdin.isTTY && deps.confirm === undefined) process.exitCode = 1;
     return;
   }
   const created = await confirmSchedule(cwd, drafted.draft, host);
-  console.log(`keryx schedule add: "${created.name}" stored and installed (${created.backend}: ${created.unit}).`);
+  console.log(
+    isDigest
+      ? `keryx schedule add: digest "${created.name}" stored. \`keryx serve\` runs it on its schedule (no OS timer was installed); the first run is a baseline.`
+      : `keryx schedule add: "${created.name}" stored and installed (${created.backend}: ${created.unit}).`,
+  );
 }
 
 function formatSummary(s: ScheduleSummary): string {
+  const digest = s.entry.action.digest !== undefined;
   const last =
     s.last === undefined
       ? "never ran"
       : `${s.last.outcome}${s.last.refusal !== undefined ? ` (${s.last.refusal})` : ""} at ${s.last.at}${s.last.usd !== undefined ? `, $${s.last.usd.toFixed(4)}` : ""}`;
   return (
-    `  - ${s.name}  [${s.enabled ? "enabled" : "paused"}]  cron "${s.cron}"  ${s.installed ? "installed" : "NOT installed"}` +
+    `  - ${s.name}${digest ? " (digest)" : ""}  [${s.enabled ? "enabled" : "paused"}]  cron "${s.cron}"  ${digest ? "runs in keryx serve" : s.installed ? "installed" : "NOT installed"}` +
     `  next: ${s.nextRun?.toISOString() ?? "—"}  last: ${last}  report: ${s.reportPath ?? "none yet"}`
   );
 }
@@ -296,7 +321,11 @@ async function listSubcommand(cwd: string, host: ScheduleHost, deps: ScheduleCom
     return;
   }
   console.log(`keryx schedule list (${rows.length}):`);
-  for (const row of rows) console.log(formatSummary(row));
+  for (const row of rows) {
+    console.log(formatSummary(row));
+    const status = await digestStatus(cwd, row);
+    if (status !== undefined) for (const line of digestStatusLines(status)) console.log(`      ${line}`);
+  }
 }
 
 async function showSubcommand(cwd: string, name: string | undefined, host: ScheduleHost, deps: ScheduleCommandDeps): Promise<void> {
@@ -305,7 +334,9 @@ async function showSubcommand(cwd: string, name: string | undefined, host: Sched
   if (row === undefined) throw new Error(`no schedule named "${name}"`);
   const a = row.entry.action;
   console.log(formatSummary(row));
-  console.log(`    prompt: ${a.prompt}`);
+  const status = await digestStatus(cwd, row);
+  if (status !== undefined) for (const line of digestStatusLines(status)) console.log(`    ${line}`);
+  else console.log(`    prompt: ${a.prompt}`);
   console.log(`    runner: ${a.dispatch.provider}/${a.dispatch.model}, mode ${a.dispatch.permissionMode}, ceiling $${a.dispatch.ceilingUsd}, max ${a.dispatch.maxSeconds}s`);
   console.log(
     `    network: ${a.grants.network}${a.grants.network === "allowlist" ? ` [${a.grants.domains.join(", ")}] port ${a.grants.ports !== undefined && a.grants.ports.length > 0 ? a.grants.ports.join("/") : "443/80 default"}` : ""}; ` +
@@ -322,9 +353,13 @@ async function showSubcommand(cwd: string, name: string | undefined, host: Sched
 
 async function simpleAction(cwd: string, name: string | undefined, verb: string, action: (name: string) => Promise<void>): Promise<void> {
   if (name === undefined) throw new Error(`usage: keryx schedule ${verb} <name>`);
+  const digest = digestEntries(cwd).some((e) => e.name === name);
   await action(name);
-  console.log(`keryx schedule ${verb}: "${name}" ${verb === "pause" ? "paused (timer disabled, entry disabled)" : "resumed (timer enabled)"}.`);
-  void cwd;
+  console.log(
+    digest
+      ? `keryx schedule ${verb}: digest "${name}" ${verb === "pause" ? "paused (serve will not run it; a message already queued is still delivered)" : "resumed (serve runs it from the next cron time)"}.`
+      : `keryx schedule ${verb}: "${name}" ${verb === "pause" ? "paused (timer disabled, entry disabled)" : "resumed (timer enabled)"}.`,
+  );
 }
 
 async function removeSubcommand(cwd: string, args: string[], deps: ScheduleCommandDeps): Promise<void> {
