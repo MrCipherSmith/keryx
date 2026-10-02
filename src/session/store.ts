@@ -95,6 +95,8 @@ interface TranscriptLine {
   role: NormalizedMessage["role"];
   content: string;
   provenance?: NormalizedMessage["provenance"];
+  /** Flow 387 T8: harness-injected `role: "user"` message (not operator input). */
+  injected?: true;
   ts: string;
   kind?: "message" | "compaction";
   /** Assistant tool calls, so a resumed session keeps the tool-call loop. */
@@ -396,6 +398,7 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpo
       ts: m.ts ?? checkpointTs,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
+      ...(m.injected === true ? { injected: true as const } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
@@ -527,6 +530,7 @@ function readJsonl(file: string): NormalizedMessage[] {
         o.provenance === "harness"
           ? { provenance: o.provenance }
           : {}),
+        ...(o.injected === true ? { injected: true as const } : {}),
         ...(toolCalls !== undefined ? { toolCalls } : {}),
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }

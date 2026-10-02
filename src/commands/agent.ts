@@ -64,7 +64,8 @@ import {
 } from "../harness/provider/context-guard";
 import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
-import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
+import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
 import {
   getExecutionPlan,
   executionPlanApprovalItems,
@@ -2506,8 +2507,13 @@ async function runAgentTurnCore(
         if (!wasOpened && options.slateSession.opened) {
           const freshSlate = await readSlateSession(options.slateSession);
           if (freshSlate !== undefined) {
-            history.push({ role: "user", content: scrub(renderAnchorsBlock(freshSlate.anchors)), provenance: "project", ts: now() });
-            io.onHistoryChange?.("tool");
+            // Flow 387 T9: a full block only when history holds none (first
+            // announcement, or after a compaction); otherwise a delta or nothing.
+            const opened = anchorsAnnouncement(history, freshSlate.anchors, scrub, now());
+            if (opened !== undefined) {
+              history.push(opened);
+              io.onHistoryChange?.("tool");
+            }
             // Flow 200: NO auto resolve-or-create here anymore. The slate
             // opens with workspaceId unset; the agent binds/creates a
             // workspace explicitly via workspace_create (which writes
@@ -3592,8 +3598,13 @@ async function runAgentTurnCore(
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
     if (anchorsToAnnounce !== undefined) {
-      history.push({ role: "user", content: scrub(renderAnchorsBlock(anchorsToAnnounce)), provenance: "project", ts: now() });
-      io.onHistoryChange?.("tool");
+      // Flow 387 T9: only what changed since the last announcement (a full
+      // block again only after a compaction dropped the previous one).
+      const announcement = anchorsAnnouncement(history, anchorsToAnnounce, scrub, now());
+      if (announcement !== undefined) {
+        history.push(announcement);
+        io.onHistoryChange?.("tool");
+      }
     }
     if (repeatedFailureHint !== undefined) {
       // Flow 347 T7 (AC9): a shell-authored control nudge, not operator input.

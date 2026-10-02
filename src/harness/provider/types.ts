@@ -226,6 +226,18 @@ export interface NormalizedMessage {
    */
   provenance?: "trusted" | "project" | "model" | "tool" | "harness";
   /**
+   * Flow 387 T8: `true` on a `role: "user"` message the harness injected (an
+   * `Anchors:` block or delta, a compaction summary) rather than something the
+   * operator typed. Those share provenance `"project"` with operator input, so
+   * provenance alone cannot tell them apart; compaction counts only unmarked
+   * `"project"`/`"trusted"` user messages as operator turns. Store-only
+   * bookkeeping like `ts`: persisted in `context.jsonl`, never sent to a
+   * provider (request builders construct payloads field by field). A session
+   * saved before this field existed is classified by content instead — see
+   * `isOperatorMessage` in `src/session/compact.ts`.
+   */
+  injected?: true;
+  /**
    * Assistant only: the tool calls this turn emitted.
    *
    * Without this the assistant's own turn was absent from every subsequent

@@ -58,7 +58,7 @@ import {
   recordSlateSessionTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { renderAnchorsBlock } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
 import { runGoalCommand } from "../commands/goal-command";
 import { spawnSync } from "node:child_process";
 import { join as joinPath } from "node:path";
@@ -1740,11 +1740,13 @@ export async function applyRuntimeSwitchToSlate(params: {
   if (result === undefined || !result.changed) {
     return false;
   }
-  params.history.push({
-    role: "user",
-    content: renderAnchorsBlock(result.slate.anchors),
-    provenance: "project",
-  });
+  // Flow 387 T9: a runtime switch is a delta (`runtime:` line) once the model
+  // has seen a full block; the full block only when history holds none.
+  const announcement = anchorsAnnouncement(params.history, result.slate.anchors);
+  if (announcement === undefined) {
+    return false;
+  }
+  params.history.push(announcement);
   params.onHistoryChange?.("tool");
   return true;
 }

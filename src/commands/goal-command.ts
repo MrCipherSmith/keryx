@@ -22,7 +22,8 @@ import {
   writeSlateSession,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { readSlate, renderAnchorsBlock, type Slate, type SlateSeed } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
+import { readSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
@@ -741,8 +742,12 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       if (!wasOpened && slateSession.opened) {
         const freshSlate = await readSlateSession(slateSession);
         if (freshSlate !== undefined) {
-          history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
-          io.onHistoryChange?.("tool");
+          // Flow 387 T9: full block only when history holds none, else a delta.
+          const announcement = anchorsAnnouncement(history, freshSlate.anchors);
+          if (announcement !== undefined) {
+            history.push(announcement);
+            io.onHistoryChange?.("tool");
+          }
         }
       }
       if (parsed.workspaceId !== undefined) {
@@ -927,8 +932,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
             await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
             const reopened = await readSlateSession(slateSession);
             if (reopened !== undefined) {
-              history.push({ role: "user", content: renderAnchorsBlock(reopened.anchors), provenance: "project" });
-              io.onHistoryChange?.("tool");
+              const announcement = anchorsAnnouncement(history, reopened.anchors);
+              if (announcement !== undefined) {
+                history.push(announcement);
+                io.onHistoryChange?.("tool");
+              }
             }
             await writeSlateSession(slateSession, (prev) => {
               if (!prev) throw new Error(`SLATE-27 verifier-reopen: no open slate in ${slateSession.dir}`);

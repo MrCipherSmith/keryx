@@ -83,6 +83,87 @@ test("flow 268 T11: compactMessages keeps `reasoning` on a retained suffix messa
   expect(retained?.reasoning).toEqual(withReasoning.reasoning);
 });
 
+// flow 387 T8 (AC5): the 2026-10-01 pattern — injected user messages trailing the last operator turn
+function inj(content: string, provenance: "project" | "tool" | "harness" = "project"): NormalizedMessage {
+  return { role: "user", content, provenance, ...(provenance === "project" ? { injected: true as const } : {}) };
+}
+
+test("flow 387 T8: trailing injected messages never count as turns, so older turns are removed", () => {
+  const h = [
+    u("request one"),
+    a("ok1"),
+    u("request two"),
+    a("ok2"),
+    u("request three"),
+    a("ok3"),
+    u("request four"),
+    a("ok4"),
+    inj("Anchors:\nroot: /r"),
+    inj("[system] A shell task finished. The text below is command output", "tool"),
+    inj("Anchors update:\n+ a.ts"),
+  ];
+  const r = compactMessages(h, { keepLastUserTurns: 3 });
+  expect(r.noop).toBe(false);
+  // kept window starts at "request two": request one is summarised, not retained
+  expect(r.removed).toBeGreaterThan(0);
+  expect(r.context.some((m) => m.content === "request one")).toBe(false);
+  expect(r.context.some((m) => m.content === "request two")).toBe(true);
+  expect(r.summaryText).toContain("1. request one");
+  // the three injected messages are kept, not summarised as user requests
+  expect(r.summaryText).not.toContain("Anchors");
+  expect(r.summaryText).toContain("1 operator turns");
+});
+
+test("flow 387 T8: a legacy session (no marker) still treats anchors, notices and summaries as non-operator", () => {
+  const h = [
+    u("first"),
+    u("Anchors:\nroot: /r"),
+    u("[system] A shell task finished. The text below is command output"),
+    u("[Compacted earlier context — full transcript retained on disk]\nPrior user requests:\n1. older"),
+    u("second"),
+    u("third"),
+  ];
+  expect(indexOfKeepFrom(h, 3)).toBe(0);
+  expect(indexOfKeepFrom(h, 2)).toBe(4);
+});
+
+test("flow 387 T8: every earlier request survives (>= 500 chars) and a previous summary is merged, not nested", () => {
+  const long = `${"x".repeat(450)}END-OF-LONG-REQUEST`;
+  const h = [u(long), a("ok"), u("second"), a("ok"), u("third"), u("fourth"), u("fifth"), u("sixth")];
+  const first = compactMessages(h, { keepLastUserTurns: 3 });
+  expect(first.summaryText).toContain("END-OF-LONG-REQUEST");
+
+  const again = [...first.context, u("seventh"), u("eighth"), u("ninth")];
+  const second = compactMessages(again, { keepLastUserTurns: 3 });
+  expect(second.summaryText).toContain("END-OF-LONG-REQUEST");
+  expect(second.summaryText).toContain("second");
+  expect(second.summaryText).toContain("fourth");
+  // merged: exactly one summary header, no nested copy of the first summary
+  expect(second.summaryText.match(/Compacted earlier context/g)).toHaveLength(1);
+  expect(second.summaryText.match(/Prior user requests:/g)).toHaveLength(1);
+});
+
+test("flow 387 T8: the summary lists files read and modified from tool calls in the removed prefix", () => {
+  const call = (name: string, args: Record<string, unknown>): NormalizedMessage => ({
+    role: "assistant",
+    content: "",
+    provenance: "model",
+    toolCalls: [{ id: `c-${name}`, name, arguments: JSON.stringify(args) }],
+  });
+  const patch = "--- a/src/old.ts\n+++ b/src/new.ts\n@@ -1 +1 @@\n-a\n+b\n";
+  const h = [
+    u("first"),
+    call("read_file", { path: "src/read-me.ts" }),
+    call("apply_patch", { patch }),
+    u("second"),
+    u("third"),
+    u("fourth"),
+  ];
+  const r = compactMessages(h, { keepLastUserTurns: 3 });
+  expect(r.summaryText).toContain("Files read: src/read-me.ts");
+  expect(r.summaryText).toContain("Files modified: src/old.ts, src/new.ts");
+});
+
 test("a cut between an assistant call and its result leaves no dangling link", () => {
   const call: NormalizedMessage = {
     role: "assistant",

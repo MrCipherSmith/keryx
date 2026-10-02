@@ -1785,7 +1785,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // child's very first request to its provider carries both, in that
         // order.
         if (openedChildSlate !== undefined) {
-          history.push({ role: "user", content: renderAnchorsBlock(openedChildSlate.anchors), provenance: "project" });
+          // Flow 387 T8: marked injected so compaction never counts it as an operator turn.
+          history.push({ role: "user", content: renderAnchorsBlock(openedChildSlate.anchors), provenance: "project", injected: true });
         }
         const userLine =
           `## Subagent task (${mode})\n` +
