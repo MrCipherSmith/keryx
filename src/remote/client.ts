@@ -36,9 +36,13 @@ import {
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalEvent,
+  type ChoiceEvent,
+  type PromptBody,
+  type PromptResponse,
   type ApprovalResponse,
   type CallbackEvent,
   type InboundEvent,
+  type MessageState,
   type RegisterBody,
   type RegisterResponse,
   type ReplyBody,
@@ -46,6 +50,7 @@ import {
   remoteRoutePath,
   type RemoteRoute,
   SseParser,
+  type StateBody,
   type StatusEvent,
 } from "./protocol";
 import { readEndpoint } from "./endpoint";
@@ -179,6 +184,8 @@ export class RemoteClient {
   private inboundChain: Promise<void> = Promise.resolve();
   private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly earlyDecisions = new Map<string, ApprovalDecision>();
+  private readonly choiceWaiters = new Map<string, { resolve: (index: number | undefined) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyChoices = new Map<string, number>();
   private firstResult: ((result: StartResult) => void) | undefined;
 
   /** The topic name and thread, once registered. */
@@ -321,6 +328,58 @@ export class RemoteClient {
     });
   }
 
+  /**
+   * Ask the topic with buttons (flow 387). Resolves with the position of the pressed button,
+   * counting across the rows, or undefined: no press in time, a refusal, no stream, a dropped
+   * stream. Nothing here ever turns an absent answer into a yes.
+   */
+  async requestChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<number | undefined> {
+    if (!this.connected) {
+      return undefined;
+    }
+    const body: PromptBody = { sessionId: this.options.sessionId, text, rows, timeoutMs, ...(forUserId === undefined ? {} : { forUserId }) };
+    let promptId: string;
+    try {
+      const response = await this.post("prompt", body);
+      if (!response.ok) {
+        return undefined;
+      }
+      promptId = ((await response.json()) as PromptResponse).promptId;
+    } catch {
+      return undefined;
+    }
+    const early = this.earlyChoices.get(promptId);
+    if (early !== undefined) {
+      this.earlyChoices.delete(promptId);
+      return early;
+    }
+    if (!this.connected) {
+      return undefined;
+    }
+    return new Promise<number | undefined>((resolve) => {
+      const timer = setTimeout(() => {
+        this.choiceWaiters.delete(promptId);
+        resolve(undefined);
+      }, timeoutMs);
+      this.choiceWaiters.set(promptId, { resolve, timer });
+    });
+  }
+
+  /**
+   * Tell serve where a message from the topic is (flow 387, AC18): it shows the state as a
+   * reaction and the typing indicator. Best effort: a failure here never touches the message.
+   */
+  async reportState(updateId: number, state: MessageState): Promise<void> {
+    if (!this.connected) {
+      return;
+    }
+    try {
+      await this.post("state", { sessionId: this.options.sessionId, updateId, state });
+    } catch {
+      // The state is a courtesy; the message itself is unaffected.
+    }
+  }
+
   // ---- requests --------------------------------------------------------------
 
   /** The one place a URL is built, and the one place the loopback rule is enforced. */
@@ -354,7 +413,7 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | AckBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
@@ -549,6 +608,9 @@ export class RemoteClient {
     } else if (event === "approval") {
       const approval = parsed as ApprovalEvent;
       this.resolveApproval(approval.approvalId, approval.decision);
+    } else if (event === "choice") {
+      const choice = parsed as ChoiceEvent;
+      this.resolveChoice(choice.promptId, choice.index);
     } else if (event === "callback") {
       const callback = parsed as CallbackEvent;
       if (this.options.onCallback !== undefined) {
@@ -614,6 +676,33 @@ export class RemoteClient {
     waiter.resolve(decision);
   }
 
+  private resolveChoice(promptId: string, index: number): void {
+    const waiter = this.choiceWaiters.get(promptId);
+    if (waiter === undefined) {
+      // The press beat the response that names its id; park it briefly.
+      if (this.earlyChoices.size >= MAX_EARLY_DECISIONS) {
+        const oldest = this.earlyChoices.keys().next().value;
+        if (oldest !== undefined) {
+          this.earlyChoices.delete(oldest);
+        }
+      }
+      this.earlyChoices.set(promptId, index);
+      return;
+    }
+    clearTimeout(waiter.timer);
+    this.choiceWaiters.delete(promptId);
+    waiter.resolve(index);
+  }
+
+  private failChoices(): void {
+    for (const [id, waiter] of [...this.choiceWaiters.entries()]) {
+      clearTimeout(waiter.timer);
+      this.choiceWaiters.delete(id);
+      waiter.resolve(undefined);
+    }
+    this.earlyChoices.clear();
+  }
+
   private failApprovals(): void {
     for (const [id, waiter] of [...this.waiters.entries()]) {
       clearTimeout(waiter.timer);
@@ -621,5 +710,6 @@ export class RemoteClient {
       waiter.resolve("deny");
     }
     this.earlyDecisions.clear();
+    this.failChoices();
   }
 }

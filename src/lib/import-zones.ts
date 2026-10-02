@@ -248,6 +248,10 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `lib/config-dir` and the network only through its single HTTP client file,
   // and only the shell (`tui/`, `commands/`) imports it, so it is a client-zone leaf.
   { segment: "remote", zone: "client" },
+  // Flow 387: tests that keep the docs in step with the code (the Telegram command lists against
+  // `src/remote/command-gateway.ts`). It holds only tests, reads the markdown files, and imports a
+  // client-zone module, so it is a client-zone leaf; nothing imports it.
+  { segment: "docs", zone: "client" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

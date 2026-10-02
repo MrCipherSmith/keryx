@@ -33,11 +33,14 @@ import {
   type ApprovalDecision,
   type ApprovalEvent,
   type CallbackEvent,
+  type ChoiceEvent,
+  choiceCallbackData,
   DEFAULT_ACK_TIMEOUT_MS,
   DEFAULT_APPROVAL_TIMEOUT_MS,
   DEFAULT_KEEPALIVE_MS,
   encodeSseEvent,
   type InboundEvent,
+  isMessageState,
   isSessionId,
   MAX_APPROVAL_PROMPT_CHARS,
   MAX_APPROVAL_TIMEOUT_MS,
@@ -46,9 +49,11 @@ import {
   MAX_KEYBOARD_BUTTONS_PER_ROW,
   MAX_KEYBOARD_ROWS,
   MAX_PROJECT_CHARS,
+  MAX_PROMPT_BUTTONS,
   MAX_REMOTE_BODY_BYTES,
   MIN_APPROVAL_TIMEOUT_MS,
   parseApprovalCallback,
+  parseChoiceCallback,
   approvalCallbackData,
   CHANNELS_ROUTE_METHODS,
   type ChannelsRoute,
@@ -56,8 +61,10 @@ import {
   REMOTE_SCHEMA_VERSION,
   type RegisterBody,
   type RemoteRoute,
+  type PromptBody,
   type ReplyBody,
   RESERVED_CALLBACK_PREFIX,
+  RESERVED_CHOICE_PREFIX,
   type SessionBody,
   SSE_KEEPALIVE_FRAME,
   type StatusEvent,
@@ -68,6 +75,7 @@ import { type InlineKeyboard } from "./types";
 
 const MAX_REPLY_CHARS = 20_000;
 const MAX_PENDING_APPROVALS_PER_SESSION = 8;
+const MAX_PENDING_CHOICES_PER_SESSION = 8;
 /** How many exact update ids a session's `completed` and `sent` books each remember. */
 const MAX_REMEMBERED_IDS_PER_SESSION = 512;
 const MAX_PROJECT_NAME_CHARS = 128;
@@ -90,6 +98,8 @@ export interface RemoteSurfaceOptions {
   ackTimeoutMs?: number;
   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */
   approvalIds?: () => string;
+  /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */
+  promptIds?: () => string;
 }
 
 export function ok(body: Record<string, unknown>, status = 200): Response {
@@ -157,6 +167,8 @@ function parseLastEventId(request: Request): number | undefined {
 class ShellStream {
   controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   closed = false;
+  /** Why the stream was closed on purpose; undefined for a dropped connection. */
+  endedBecause: "superseded" | "closing" | undefined;
   keepalive: unknown;
   private readonly encoder = new TextEncoder();
 
@@ -184,6 +196,7 @@ class ShellStream {
     if (this.closed) {
       return;
     }
+    this.endedBecause = kind;
     if (kind !== undefined) {
       this.write(encodeSseEvent("status", { kind } satisfies StatusEvent));
     }
@@ -219,6 +232,44 @@ interface PendingApproval {
   sessionId: string;
   expiresAt: number;
   timer: unknown;
+  /** Set once the prompt is in the topic: what to edit when it is answered or expires. */
+  messageId?: number;
+  /** The plain text of that message, so the final state keeps what was asked. */
+  text?: string;
+}
+
+/** A picker or a Yes/No waiting for a press (flow 387). */
+interface PendingChoice extends PendingApproval {
+  /** The label of each button, in reading order across the rows. */
+  labels: string[];
+  /** Only this Telegram user may answer. */
+  forUserId?: number;
+}
+
+/** A prompt that reached its final state: kept so a late press can be put back to it (flow 387, AC21). */
+interface FinishedPrompt {
+  sessionId: string;
+  messageId?: number;
+  finalText: string;
+  shortReply: string;
+}
+
+const MAX_FINISHED_PROMPTS = 128;
+/** Edits stay under Telegram's limit even after the result line is added. */
+const MAX_SETTLED_TEXT_CHARS = 3_600;
+
+/** `12:03:11 UTC`: when something happened, for the final text of an answered prompt. */
+export function clockText(at: number): string {
+  return `${new Date(at).toISOString().slice(11, 19)} UTC`;
+}
+
+/** The final text of a prompt: what was asked, a blank line, then the result. */
+export function settledText(original: string | undefined, result: string): string {
+  if (original === undefined || original.length === 0) {
+    return result;
+  }
+  const kept = `${original}\n\n${result}`;
+  return kept.length <= MAX_SETTLED_TEXT_CHARS ? kept : result;
 }
 
 /** Answers the channels routes (flow 377); they work whether or not a hub is running. */
@@ -239,6 +290,7 @@ export class RemoteHttpSurface {
   private readonly keepaliveMs: number;
   private readonly ackTimeoutMs: number;
   private readonly newApprovalId: () => string;
+  private readonly newPromptId: () => string;
   private readonly streams = new Map<string, ShellStream>();
   /** Per session: the exact update ids the shell finished (bounded). */
   private readonly completed = new Map<string, Set<number>>();
@@ -248,6 +300,8 @@ export class RemoteHttpSurface {
   private readonly bound = new Map<string, string>();
   private readonly pendingAcks = new Map<string, Map<number, PendingAck>>();
   private readonly approvals = new Map<string, PendingApproval>();
+  private readonly choices = new Map<string, PendingChoice>();
+  private readonly finished = new Map<string, FinishedPrompt>();
 
   constructor(private readonly options: RemoteSurfaceOptions) {
     this.now = options.now ?? Date.now;
@@ -255,6 +309,7 @@ export class RemoteHttpSurface {
     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString("hex")}`);
+    this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString("hex")}`);
     this.consumer = {
       deliver: (sessionId, line, meta) => this.deliver(sessionId, line, meta),
       deliverCallback: (sessionId, callback) => this.deliverCallback(sessionId, callback),
@@ -325,6 +380,10 @@ export class RemoteHttpSurface {
         return this.reply(hub, request);
       case "approval":
         return this.requestApproval(hub, request);
+      case "prompt":
+        return this.requestPrompt(hub, request);
+      case "state":
+        return this.messageState(hub, request);
       case "ack":
         return this.ack(hub, request);
       case "stream":
@@ -345,6 +404,9 @@ export class RemoteHttpSurface {
     }
     for (const id of [...this.approvals.keys()]) {
       this.dropApproval(id);
+    }
+    for (const id of [...this.choices.keys()]) {
+      this.dropChoice(id);
     }
   }
 
@@ -471,6 +533,9 @@ export class RemoteHttpSurface {
         if (data.startsWith(RESERVED_CALLBACK_PREFIX)) {
           return { ok: false, message: `button data may not start with "${RESERVED_CALLBACK_PREFIX}" (reserved for approvals).` };
         }
+        if (data.startsWith(RESERVED_CHOICE_PREFIX)) {
+          return { ok: false, message: `button data may not start with "${RESERVED_CHOICE_PREFIX}" (reserved for pickers).` };
+        }
         out.push({ text: redactSensitiveText(text), callback_data: data });
       }
       keyboard.push(out);
@@ -556,12 +621,127 @@ export class RemoteHttpSurface {
           { text: "Deny", callback_data: approvalCallbackData(approvalId, "deny") },
         ],
       ],
+      onSent: (info) => this.onApprovalSent(approvalId, sessionId, info.messageId, info.text),
     });
     if (!sent) {
       this.dropApproval(approvalId);
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
     return ok({ approvalId, expiresAt });
+  }
+
+  /**
+   * A picker or a Yes/No (flow 387). The shell sends labels; this builds the buttons so their
+   * `callback_data` is `pk:<id>:<n>` (never a label, never near Telegram's 64 bytes, never `ap:`).
+   * The prompt is registered before it is sent, so a press cannot beat the record.
+   */
+  private async requestPrompt(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return body.response;
+    }
+    const value = body.value as Partial<PromptBody> & Record<string, unknown>;
+    if (!isSessionId(value.sessionId)) {
+      return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+    }
+    if (typeof value.text !== "string" || value.text.length === 0 || value.text.length > MAX_APPROVAL_PROMPT_CHARS) {
+      return invalid(`text must be a string of 1 to ${MAX_APPROVAL_PROMPT_CHARS} characters.`);
+    }
+    const timeoutMs = value.timeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    if (typeof timeoutMs !== "number" || !Number.isSafeInteger(timeoutMs) || timeoutMs < MIN_APPROVAL_TIMEOUT_MS || timeoutMs > MAX_APPROVAL_TIMEOUT_MS) {
+      return invalid(`timeoutMs must be an integer from ${MIN_APPROVAL_TIMEOUT_MS} to ${MAX_APPROVAL_TIMEOUT_MS}.`);
+    }
+    if (value.forUserId !== undefined && (typeof value.forUserId !== "number" || !Number.isSafeInteger(value.forUserId))) {
+      return invalid("forUserId must be an integer.");
+    }
+    const rows = value.rows;
+    if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_KEYBOARD_ROWS) {
+      return invalid(`rows must be 1 to ${MAX_KEYBOARD_ROWS} rows of button labels.`);
+    }
+    const labels: string[] = [];
+    const layout: number[] = [];
+    for (const row of rows as unknown[]) {
+      if (!Array.isArray(row) || row.length === 0 || row.length > MAX_KEYBOARD_BUTTONS_PER_ROW) {
+        return invalid(`each row must hold 1 to ${MAX_KEYBOARD_BUTTONS_PER_ROW} labels.`);
+      }
+      for (const label of row as unknown[]) {
+        if (typeof label !== "string" || label.length === 0 || label.length > MAX_BUTTON_TEXT_CHARS) {
+          return invalid(`a label must be 1 to ${MAX_BUTTON_TEXT_CHARS} characters.`);
+        }
+        labels.push(redactSensitiveText(label));
+      }
+      layout.push((row as unknown[]).length);
+    }
+    if (labels.length > MAX_PROMPT_BUTTONS) {
+      return invalid(`a prompt may carry at most ${MAX_PROMPT_BUTTONS} buttons.`);
+    }
+    const sessionId = value.sessionId;
+    if (!hub.hasSession(sessionId)) {
+      return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
+    }
+    if (this.streams.get(sessionId) === undefined) {
+      return fail(409, "no-stream", "No stream is connected for this session; the prompt cannot be answered.");
+    }
+    let held = 0;
+    for (const entry of this.choices.values()) {
+      if (entry.sessionId === sessionId) {
+        held += 1;
+      }
+    }
+    if (held >= MAX_PENDING_CHOICES_PER_SESSION) {
+      return fail(429, "too-many-prompts", "Too many questions are waiting for this session.");
+    }
+
+    const promptId = this.newPromptId();
+    const expiresAt = this.now() + timeoutMs;
+    this.choices.set(promptId, {
+      sessionId,
+      expiresAt,
+      labels,
+      ...(value.forUserId === undefined ? {} : { forUserId: value.forUserId }),
+      timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),
+    });
+    const keyboard: InlineKeyboard = [];
+    let position = 0;
+    for (const width of layout) {
+      const line: InlineKeyboard[number] = [];
+      for (let column = 0; column < width; column += 1) {
+        line.push({ text: labels[position] as string, callback_data: choiceCallbackData(promptId, position) });
+        position += 1;
+      }
+      keyboard.push(line);
+    }
+    const sent = await hub.send(sessionId, redactSensitiveText(value.text), {
+      keyboard,
+      onSent: (info) => this.onChoiceSent(promptId, sessionId, info.messageId, info.text),
+    });
+    if (!sent) {
+      this.dropChoice(promptId);
+      return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
+    }
+    return ok({ promptId, expiresAt });
+  }
+
+  /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
+  private async messageState(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return body.response;
+    }
+    const value = body.value;
+    if (!isSessionId(value.sessionId)) {
+      return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+    }
+    if (typeof value.updateId !== "number" || !Number.isSafeInteger(value.updateId) || value.updateId < 0) {
+      return invalid("updateId must be a non-negative integer.");
+    }
+    if (!isMessageState(value.state)) {
+      return invalid("state must be one of reading, working, done, failed.");
+    }
+    if (!hub.hasSession(value.sessionId)) {
+      return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
+    }
+    return ok({ shown: hub.messageState(value.sessionId, value.updateId, value.state) });
   }
 
   private async ack(hub: RemoteHub, request: Request): Promise<Response> {
@@ -717,18 +897,12 @@ export class RemoteHttpSurface {
     const stream = this.streams.get(sessionId);
     const approval = parseApprovalCallback(callback.data);
     if (approval !== undefined) {
-      const entry = this.approvals.get(approval.approvalId);
-      // Only an id this server generated, for THIS session, still inside its
-      // window. Anything else (a replay, another topic's button, a stale press) is dropped.
-      if (entry !== undefined && entry.sessionId === sessionId && entry.expiresAt > this.now()) {
-        this.dropApproval(approval.approvalId);
-        const event: ApprovalEvent = { updateId: callback.updateId, approvalId: approval.approvalId, decision: approval.decision };
-        // Say "granted" only if the shell was actually told: a decision that went nowhere is not one.
-        const told = stream?.write(encodeSseEvent("approval", event, callback.updateId)) === true;
-        if (told) {
-          void this.noteDecision(sessionId, approval.decision);
-        }
-      }
+      this.pressApproval(sessionId, callback, approval, stream);
+      return Promise.resolve();
+    }
+    const choice = parseChoiceCallback(callback.data);
+    if (choice !== undefined) {
+      this.pressChoice(sessionId, callback, choice, stream);
       return Promise.resolve();
     }
     // A button the shell attached itself: handed over best effort, never retried.
@@ -743,8 +917,212 @@ export class RemoteHttpSurface {
     return Promise.resolve();
   }
 
-  private async noteDecision(sessionId: string, decision: ApprovalDecision): Promise<void> {
-    await this.hub?.send(sessionId, decision === "allow" ? "Approval granted." : "Approval denied.").catch(() => undefined);
+  /**
+   * A press on an approval button. Only an id this server generated, for THIS session, still
+   * inside its window, decides anything. Every press, valid or not, leaves the message it came
+   * from in its final state (buttons gone, result shown): a replay or a late press never
+   * resurrects the buttons and never sends a second message.
+   */
+  private pressApproval(
+    sessionId: string,
+    callback: CallbackDelivery,
+    approval: { approvalId: string; decision: ApprovalDecision },
+    stream: ShellStream | undefined,
+  ): void {
+    const id = approval.approvalId;
+    const entry = this.approvals.get(id);
+    if (entry !== undefined && entry.sessionId !== sessionId) {
+      // Another topic's button: not ours to answer or to edit.
+      return;
+    }
+    if (entry !== undefined && entry.expiresAt > this.now()) {
+      this.dropApproval(id);
+      const event: ApprovalEvent = { updateId: callback.updateId, approvalId: id, decision: approval.decision };
+      // Say "allowed" only if the shell was actually told: a decision that went nowhere is not one.
+      const told = stream?.write(encodeSseEvent("approval", event, callback.updateId)) === true;
+      const messageId = entry.messageId ?? callback.messageId;
+      const when = clockText(this.now());
+      if (!told) {
+        this.finishApproval(id, sessionId, messageId, entry.text, {
+          result: `Not delivered at ${when}: the shell is not connected, so nothing was approved.`,
+          shortReply: "Approval not delivered: the shell is not connected, so nothing was approved.",
+        });
+        return;
+      }
+      const who = `user ${callback.fromId}`;
+      this.finishApproval(id, sessionId, messageId, entry.text, {
+        result: approval.decision === "allow" ? `Allowed by ${who} at ${when}.` : `Denied by ${who} at ${when}.`,
+        shortReply: approval.decision === "allow" ? "Approval granted." : "Approval denied.",
+      });
+      return;
+    }
+    if (entry !== undefined) {
+      // The window closed and the timer has not run yet: it is expired now.
+      this.expireApproval(id);
+      return;
+    }
+    const done = this.finished.get(id);
+    if (done !== undefined) {
+      if (done.sessionId === sessionId) {
+        // Answered or expired already: put the pressed message back to that final state (a no-op when it is).
+        const messageId = callback.messageId ?? done.messageId;
+        if (messageId !== undefined) {
+          void this.hub?.settleMessage(sessionId, messageId, done.finalText, done.shortReply).catch(() => undefined);
+        }
+      }
+      return;
+    }
+    // An id this server never issued or no longer remembers (a restart): the message is stale.
+    // Never touch a message that carries a live approval.
+    const pressed = callback.messageId;
+    if (pressed !== undefined && !this.carriesLivePrompt(pressed)) {
+      void this.hub
+        ?.settleMessage(sessionId, pressed, "This request is no longer active.", "That request is no longer active.")
+        .catch(() => undefined);
+    }
+  }
+
+  private carriesLivePrompt(messageId: number): boolean {
+    return [...this.approvals.values(), ...this.choices.values()].some((live) => live.messageId === messageId);
+  }
+
+  /**
+   * A press on a picker or Yes/No button. It counts once, from the person it was asked of, in the
+   * topic and on the message it was sent as, before it expires. Anything else changes nothing: a
+   * press for another session, message or user leaves the prompt as it was, and a late or repeated
+   * press puts the message back to its final state.
+   */
+  private pressChoice(sessionId: string, callback: CallbackDelivery, choice: { promptId: string; index: number }, stream: ShellStream | undefined): void {
+    const id = choice.promptId;
+    const entry = this.choices.get(id);
+    if (entry !== undefined && entry.sessionId !== sessionId) {
+      return;
+    }
+    if (entry !== undefined && entry.expiresAt > this.now()) {
+      const sameMessage = entry.messageId !== undefined && callback.messageId === entry.messageId;
+      const sameUser = entry.forUserId === undefined || entry.forUserId === callback.fromId;
+      if (!sameMessage || !sameUser || choice.index >= entry.labels.length) {
+        return;
+      }
+      this.dropChoice(id);
+      const event: ChoiceEvent = { updateId: callback.updateId, promptId: id, index: choice.index, fromId: callback.fromId };
+      const told = stream?.write(encodeSseEvent("choice", event, callback.updateId)) === true;
+      const when = clockText(this.now());
+      if (!told) {
+        this.finishApproval(id, sessionId, entry.messageId, entry.text, {
+          result: `Not delivered at ${when}: the shell is not connected, so nothing changed.`,
+          shortReply: "Not delivered: the shell is not connected, so nothing changed.",
+        });
+        return;
+      }
+      this.finishApproval(id, sessionId, entry.messageId, entry.text, {
+        result: `Chosen: ${entry.labels[choice.index]} (user ${callback.fromId}, ${when}).`,
+        shortReply: `Chosen: ${entry.labels[choice.index]}.`,
+      });
+      return;
+    }
+    if (entry !== undefined) {
+      this.expireChoice(id);
+      return;
+    }
+    const done = this.finished.get(id);
+    if (done !== undefined) {
+      if (done.sessionId === sessionId) {
+        const messageId = callback.messageId ?? done.messageId;
+        if (messageId !== undefined) {
+          void this.hub?.settleMessage(sessionId, messageId, done.finalText, done.shortReply).catch(() => undefined);
+        }
+      }
+      return;
+    }
+    const pressed = callback.messageId;
+    if (pressed !== undefined && !this.carriesLivePrompt(pressed)) {
+      void this.hub
+        ?.settleMessage(sessionId, pressed, "This request is no longer active.", "That request is no longer active.")
+        .catch(() => undefined);
+    }
+  }
+
+  private onChoiceSent(promptId: string, sessionId: string, messageId: number, text: string): void {
+    const live = this.choices.get(promptId);
+    if (live !== undefined) {
+      live.messageId = messageId;
+      live.text = text;
+      return;
+    }
+    this.onApprovalSent(promptId, sessionId, messageId, text);
+  }
+
+  private dropChoice(promptId: string): void {
+    const entry = this.choices.get(promptId);
+    if (entry === undefined) {
+      return;
+    }
+    this.timers.clearTimeout(entry.timer);
+    this.choices.delete(promptId);
+  }
+
+  private expireChoice(promptId: string): void {
+    const entry = this.choices.get(promptId);
+    if (entry === undefined) {
+      return;
+    }
+    this.dropChoice(promptId);
+    this.finishApproval(promptId, entry.sessionId, entry.messageId, entry.text, {
+      result: `Expired at ${clockText(this.now())}: no answer, nothing changed.`,
+      shortReply: "That question expired: no answer, nothing changed.",
+    });
+  }
+
+  private onApprovalSent(approvalId: string, sessionId: string, messageId: number, text: string): void {
+    const live = this.approvals.get(approvalId);
+    if (live !== undefined) {
+      live.messageId = messageId;
+      live.text = text;
+      return;
+    }
+    // Answered or expired before the message was in the topic: finish it now.
+    const done = this.finished.get(approvalId);
+    if (done !== undefined && done.messageId === undefined) {
+      done.messageId = messageId;
+      done.finalText = settledText(text, done.finalText);
+      void this.hub?.settleMessage(sessionId, messageId, done.finalText, done.shortReply).catch(() => undefined);
+    }
+  }
+
+  /** Record the final state of an approval and put it on the message (or say it once when there is no message). */
+  private finishApproval(
+    approvalId: string,
+    sessionId: string,
+    messageId: number | undefined,
+    original: string | undefined,
+    outcome: { result: string; shortReply: string },
+  ): void {
+    const finalText = messageId === undefined ? outcome.result : settledText(original, outcome.result);
+    this.finished.delete(approvalId);
+    this.finished.set(approvalId, {
+      sessionId,
+      ...(messageId === undefined ? {} : { messageId }),
+      finalText,
+      shortReply: outcome.shortReply,
+    });
+    while (this.finished.size > MAX_FINISHED_PROMPTS) {
+      const oldest = this.finished.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.finished.delete(oldest);
+    }
+    const hub = this.hub;
+    if (hub === undefined) {
+      return;
+    }
+    if (messageId === undefined) {
+      // The prompt is still in the outbound queue (or was never delivered): say the result once; onSent edits it if it lands later.
+      void hub.send(sessionId, outcome.shortReply).catch(() => undefined);
+      return;
+    }
+    void hub.settleMessage(sessionId, messageId, finalText, outcome.shortReply).catch(() => undefined);
   }
 
   // ---- bookkeeping ---------------------------------------------------------
@@ -763,8 +1141,12 @@ export class RemoteHttpSurface {
     if (entry === undefined) {
       return;
     }
+    this.timers.clearTimeout(entry.timer);
     this.approvals.delete(approvalId);
-    void this.hub?.send(entry.sessionId, "Approval request expired: no answer, so it was denied.").catch(() => undefined);
+    this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {
+      result: `Expired at ${clockText(this.now())}: no answer, so it was denied.`,
+      shortReply: "Approval request expired: no answer, so it was denied.",
+    });
   }
 
   private onStreamEnded(stream: ShellStream): void {
@@ -784,7 +1166,32 @@ export class RemoteHttpSurface {
     for (const [id, entry] of [...this.approvals.entries()]) {
       if (entry.sessionId === stream.sessionId) {
         this.dropApproval(id);
+        if (!this.closed && entry.messageId !== undefined) {
+          // The shell is gone, so the question is dead: take its buttons away.
+          this.finishApproval(id, stream.sessionId, entry.messageId, entry.text, {
+            result: `Cancelled at ${clockText(this.now())}: the shell disconnected, so it was denied.`,
+            shortReply: "Approval cancelled: the shell disconnected, so it was denied.",
+          });
+        }
       }
+    }
+    for (const [id, entry] of [...this.choices.entries()]) {
+      if (entry.sessionId === stream.sessionId) {
+        this.dropChoice(id);
+        if (!this.closed && entry.messageId !== undefined) {
+          this.finishApproval(id, stream.sessionId, entry.messageId, entry.text, {
+            result: `Cancelled at ${clockText(this.now())}: the shell disconnected, nothing changed.`,
+            shortReply: "Question cancelled: the shell disconnected, nothing changed.",
+          });
+        }
+      }
+    }
+    // Typing stops and a message the shell was working on is marked failed only when the shell really
+    // left (it said it is closing). A dropped connection or a newer stream for the same session is
+    // not an exit: the shell reconnects and goes on, and the hub's own sweep ends the activity if
+    // it never does.
+    if (stream.endedBecause === "closing") {
+      this.hub?.endActivity(stream.sessionId);
     }
   }
 }

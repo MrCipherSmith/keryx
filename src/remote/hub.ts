@@ -18,11 +18,14 @@
 import { redactSensitiveText } from "../security/service";
 import { SESSION_LEASE_HEARTBEAT_MS, SESSION_LEASE_STALE_MS } from "../session/lease";
 import type { RemoteConfig } from "./config";
-import { sendHtml } from "./format-html";
+import { editHtml, isNotModified, sendHtml } from "./format-html";
 import { InboundQueues, type InboundEntry, inboundEntryId, MAX_INBOUND_PER_TOPIC, PollerState } from "./inbound";
 import { RejectedJournal } from "./journal";
 import { checkName, defaultNameCandidates, nameKey } from "./naming";
-import { OutboundQueue } from "./outbound-queue";
+import { OutboundQueue, type SentMessageInfo } from "./outbound-queue";
+import { remoteMenu } from "./command-gateway";
+import { isReactionForbidden, MAX_TRACKED_MESSAGES, REACTION_FOR_STATE, type ReactionState, STATE_CALL_TIMEOUT_MS, TYPING_REFRESH_MS } from "./message-state";
+import type { MessageState } from "./protocol";
 import { type PollerStatus, UpdatePoller } from "./poller";
 import { isLive, type RemoteSessionRecord, SessionRegistry } from "./registry";
 import { type BotApi, type BotApiError, type BotUpdate, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
@@ -77,6 +80,8 @@ export type RemoteEventType =
   | "delivery-failed"
   | "outbound-dropped"
   | "format-fallback"
+  | "menu-failed"
+  | "reactions-unavailable"
   | "poller-status";
 
 export interface RemoteEvent {
@@ -125,6 +130,16 @@ export interface RemoteSessionInfo {
   lastHeartbeat: number;
 }
 
+/** A message from a topic whose state is shown as a reaction (flow 387). */
+interface TrackedMessage {
+  chatId: number;
+  threadId: number;
+  messageId: number;
+  state: ReactionState;
+  /** Reaction calls for this message run one after another, so each replaces the one before it. */
+  chain: Promise<void>;
+}
+
 const MAX_EVENTS = 50;
 /** How long a callback acknowledgement may take before it is abandoned. It is never worth holding anything for. */
 const ANSWER_CALLBACK_TIMEOUT_MS = 5_000;
@@ -171,6 +186,11 @@ export class RemoteHub {
   private flushTimer: unknown;
   private sweepTimer: unknown;
   private stopped = false;
+  private readonly tracked = new Map<string, TrackedMessage>();
+  /** Per topic: the interval that keeps the typing indicator alive while a turn runs. */
+  private readonly typing = new Map<string, unknown>();
+  /** The bot may not react in this group: reactions are off for good and only typing is left. */
+  private reactionsOff = false;
 
   constructor(options: RemoteHubOptions) {
     this.api = options.api;
@@ -247,6 +267,19 @@ export class RemoteHub {
     for (const record of this.registry.records()) {
       void this.dispatch(nameKey(record.name));
     }
+    await this.publishCommandMenu();
+  }
+
+  /**
+   * The command menu in the group is exactly the commands the gateway lets a topic run (flow 387,
+   * AC12). A failure is one event: the menu is a convenience, typing the command still works.
+   */
+  private async publishCommandMenu(): Promise<void> {
+    try {
+      await this.api.setMyCommands({ commands: remoteMenu(), chatId: this.config.chatId });
+    } catch (error) {
+      this.event("menu-failed", describeError(error));
+    }
   }
 
   /** Stop polling and timers. In-flight deliveries are abandoned, not awaited. */
@@ -264,6 +297,10 @@ export class RemoteHub {
       this.timers.clearTimeout(handle);
     }
     this.retryTimers.clear();
+    for (const handle of this.typing.values()) {
+      this.timers.clearInterval(handle);
+    }
+    this.typing.clear();
     await this.poller.stop();
   }
 
@@ -392,6 +429,8 @@ export class RemoteHub {
           record.unavailableSince = Math.min(now, record.lastHeartbeat + SESSION_LEASE_STALE_MS);
           this.registry.save();
           this.event("session-unavailable", record.name);
+          // The shell is not coming back on its own: stop typing and fail what it was working on.
+          this.endActivity(record.sessionId);
           if (now - record.unavailableSince < this.config.orphanMs) {
             this.queueStatus(
               record,
@@ -409,8 +448,16 @@ export class RemoteHub {
 
   // ---- messages to Telegram ------------------------------------------------
 
-  /** Queue text for a session's topic and try to send it. False when the session is unknown. */
-  async send(sessionId: string, text: string, options: { keyboard?: InlineKeyboard } = {}): Promise<boolean> {
+  /**
+   * Queue text for a session's topic and try to send it. False when the session is unknown.
+   * `onSent` learns the id of the message once it is in the topic (in memory only), so the
+   * caller can edit it later.
+   */
+  async send(
+    sessionId: string,
+    text: string,
+    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+  ): Promise<boolean> {
     const record = this.registry.bySession(sessionId);
     if (record === undefined) {
       return false;
@@ -420,9 +467,45 @@ export class RemoteHub {
       threadId: record.threadId,
       text,
       ...(options.keyboard === undefined ? {} : { keyboard: options.keyboard }),
+      ...(options.onSent === undefined ? {} : { onSent: options.onSent }),
     });
     await this.flushOutbound();
     return true;
+  }
+
+  /**
+   * Put a message the bot sent into its final state: the text is replaced and the buttons are
+   * gone (flow 387, AC21). If the edit fails, the buttons are removed on their own and ONE short
+   * reply carries the result, so a prompt never keeps live buttons and never answers twice.
+   * An edit that changes nothing (a replayed press on a settled message) counts as done.
+   */
+  async settleMessage(
+    sessionId: string,
+    messageId: number,
+    text: string,
+    shortReply: string = text,
+  ): Promise<"edited" | "replied" | "gone"> {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return "gone";
+    }
+    try {
+      await editHtml(this.api, { chatId: record.chatId, messageId, text }, () =>
+        this.event("format-fallback", `Telegram refused the formatting; edited as plain text (topic ${record.threadId})`),
+      );
+      return "edited";
+    } catch (error) {
+      if (isNotModified(error)) {
+        return "edited";
+      }
+      try {
+        await this.api.editMessageReplyMarkup({ chatId: record.chatId, messageId });
+      } catch {
+        // Already gone or unchanged: the short reply below still carries the result.
+      }
+      await this.send(sessionId, shortReply);
+      return "replied";
+    }
   }
 
   /** Try to send everything queued. Safe to call at any time. */
@@ -632,6 +715,7 @@ export class RemoteHub {
    */
   private async retire(record: RemoteSessionRecord, why: string, strict = false): Promise<void> {
     this.outbound.discardForThread(record.chatId, record.threadId);
+    this.stopTyping(record);
     try {
       await this.api.deleteForumTopic({ chatId: record.chatId, messageThreadId: record.threadId });
     } catch (error) {
@@ -684,7 +768,12 @@ export class RemoteHub {
       if (typeof message.text !== "string" || message.text.length === 0) {
         return undefined;
       }
-      const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text });
+      const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text, messageId: message.message_id });
+      if (appended.added) {
+        // The first thing the sender sees: the message was received. Fire and forget.
+        const tracked = this.track(record, update.update_id, message.message_id);
+        this.react(tracked, "received");
+      }
       return { key, dropped: appended.dropped };
     }
     if (query?.data === undefined) {
@@ -696,6 +785,129 @@ export class RemoteHub {
       callback: { id: query.id, data: query.data, ...(query.message === undefined ? {} : { messageId: query.message.message_id }) },
     });
     return { key, dropped: appended.dropped, callbackQueryId: query.id };
+  }
+
+  // ---- message state: reactions and typing (flow 387, AC18 to AC20) ------------
+
+  private trackKey(threadId: number, updateId: number): string {
+    return `${threadId}:${updateId}`;
+  }
+
+  private track(record: RemoteSessionRecord, updateId: number, messageId: number): TrackedMessage {
+    const key = this.trackKey(record.threadId, updateId);
+    const existing = this.tracked.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const entry: TrackedMessage = { chatId: record.chatId, threadId: record.threadId, messageId, state: "received", chain: Promise.resolve() };
+    this.tracked.set(key, entry);
+    while (this.tracked.size > MAX_TRACKED_MESSAGES) {
+      const oldest = this.tracked.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.tracked.delete(oldest);
+    }
+    return entry;
+  }
+
+  /**
+   * Put a state on a message as its one reaction. Never awaited by the caller and never throws: a
+   * failed reaction must not block or delay the message. A refusal that says the bot may not react
+   * in this group turns reactions off and is recorded once.
+   */
+  private react(message: TrackedMessage, state: ReactionState): void {
+    message.state = state;
+    if (this.reactionsOff || this.stopped) {
+      return;
+    }
+    message.chain = message.chain.then(async () => {
+      if (this.reactionsOff) {
+        return;
+      }
+      let timer: unknown;
+      const timeout = new Promise<void>((resolve) => {
+        timer = this.timers.setTimeout(resolve, STATE_CALL_TIMEOUT_MS);
+      });
+      const call = this.api.setMessageReaction({ chatId: message.chatId, messageId: message.messageId, emoji: REACTION_FOR_STATE[state] }).then(
+        () => undefined,
+        (error: unknown) => this.reactionFailed(error),
+      );
+      await Promise.race([call, timeout]);
+      this.timers.clearTimeout(timer);
+    });
+  }
+
+  private reactionFailed(error: unknown): void {
+    if (!isBotApiError(error) || error.kind !== "rejected" || !isReactionForbidden(error.status, error.message)) {
+      return;
+    }
+    if (!this.reactionsOff) {
+      this.reactionsOff = true;
+      this.event("reactions-unavailable", `this bot may not react in the group; the topic shows typing only (${describeError(error)})`);
+    }
+  }
+
+  /**
+   * The shell reports where one of its messages is. The state replaces the reaction; "working" also
+   * starts the typing indicator and "done"/"failed" stop it. False for an unknown session or a message
+   * this hub does not track (a restart forgets them).
+   */
+  messageState(sessionId: string, updateId: number, state: MessageState): boolean {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return false;
+    }
+    const message = this.tracked.get(this.trackKey(record.threadId, updateId));
+    if (message === undefined) {
+      return false;
+    }
+    this.react(message, state);
+    if (state === "working") {
+      this.startTyping(record);
+    } else if (state === "done" || state === "failed") {
+      this.stopTyping(record);
+    }
+    return true;
+  }
+
+  /** The shell is gone: stop typing, and a message it was still working on is marked failed. */
+  endActivity(sessionId: string): void {
+    const record = this.registry.bySession(sessionId);
+    if (record === undefined) {
+      return;
+    }
+    this.stopTyping(record);
+    for (const message of this.tracked.values()) {
+      if (message.threadId === record.threadId && (message.state === "reading" || message.state === "working")) {
+        this.react(message, "failed");
+      }
+    }
+  }
+
+  private typingKey(record: RemoteSessionRecord): string {
+    return `${record.chatId}:${record.threadId}`;
+  }
+
+  private startTyping(record: RemoteSessionRecord): void {
+    const key = this.typingKey(record);
+    if (this.typing.has(key) || this.stopped) {
+      return;
+    }
+    const send = (): void => {
+      void this.api.sendChatAction({ chatId: record.chatId, action: "typing", messageThreadId: record.threadId }).catch(() => undefined);
+    };
+    send();
+    this.typing.set(key, this.timers.setInterval(send, TYPING_REFRESH_MS));
+  }
+
+  private stopTyping(record: RemoteSessionRecord): void {
+    const key = this.typingKey(record);
+    const handle = this.typing.get(key);
+    if (handle !== undefined) {
+      this.timers.clearInterval(handle);
+      this.typing.delete(key);
+    }
   }
 
   private dispatch(key: string): Promise<void> {
@@ -722,6 +934,10 @@ export class RemoteHub {
         }
         try {
           if (entry.kind === "text") {
+            if (entry.messageId !== undefined) {
+              // An entry replayed after a restart: its state can still be shown.
+              this.track(record, entry.updateId, entry.messageId);
+            }
             await this.consumer.deliver(record.sessionId, entry.text ?? "", {
               updateId: entry.updateId,
               threadId: record.threadId,

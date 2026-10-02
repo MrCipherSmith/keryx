@@ -100,6 +100,7 @@ function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs
           if (fake.approvalAnswer === "throw") throw new Error("stream dropped");
           return fake.approvalAnswer;
         },
+        requestChoice: async () => undefined,
       } as FakeClient;
       client = fake;
       return fake;
@@ -299,7 +300,9 @@ test("slash commands from Telegram are refused with a reply and never reach the 
   expect(h.calls.some((c) => c.startsWith("run:") || c.startsWith("queue:"))).toBe(false);
   await Promise.resolve();
   expect(h.client().replies).toHaveLength(3);
-  expect(h.client().replies[0]).toContain("Slash commands are not run from Telegram");
+  expect(h.client().replies[0]).toContain("Not available remotely: /exit");
+  expect(h.client().replies[1]).toContain("Not available remotely: /remote-control");
+  expect(h.client().replies[2]).toContain("Not available remotely: /bash");
 });
 
 test("the final text of a Telegram turn goes back, redacted; only the last text counts", async () => {

@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "387",
+  "slug": "telegram-commands",
+  "title": "Telegram commands: slash commands and button pickers from the topic",
+  "status": "ready",
+  "createdAt": "2026-10-02T04:20:33.712Z",
+  "updatedAt": "2026-10-02T05:35:01.307Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "Aleksandr",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T04:20:33.712Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T04:21:23.383Z",
+      "event": "outcome-author-set",
+      "detail": "agent -> human (outcome written from the operator's request and poll 37 answers)"
+    },
+    {
+      "at": "2026-10-02T04:32:04.870Z",
+      "event": "frozen",
+      "detail": "21 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T05:18:27.454Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"Each operator message in the topic shows its state on the message itself through a Telegram reaction: received by serve (eyes), accepted into the shell session (reading), turn running (working), turn finished (done), refused or failed (cross). Each state replaces the previous one; a failed reaction call never blocks or delays the message. [verify: exec `bun test src/remote/message-state.test.ts`]\" -> \"Each operator message in the topic shows its state on the message itself through a Telegram reaction: received by serve (eyes), accepted into the shell session (reading), turn running (working), turn finished (done), refused or failed (thumbs-down, because Telegram has no cross reaction). Each state replaces the previous one; a failed reaction call never blocks or delays the message. [verify: exec `bun test src/remote/message-state.test.ts`]\" (Telegram does not offer a cross-mark reaction; thumbs-down is the failed state)"
+    },
+    {
+      "at": "2026-10-02T05:35:01.307Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"Text commands (`/help`, `/status`, `/doctor`, `/new`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, `/reasoning`, `/theme <name>`, `/schedule`, `/rewind`, the jev text commands) run from the topic and their output (today a local transcript line or a toast) comes back to the topic, redacted and rendered like any reply. [verify: exec `bun test src/remote/command-output.test.ts`]\" -> \"Text commands (`/help`, `/status`, `/doctor`, `/new`, `/compact`, `/think <level>`, `/goal`, `/queue`, `/plan`, `/reasoning`, `/theme <name>`, the jev text commands) run from the topic and their output (today a local transcript line or a toast) comes back to the topic, redacted and rendered like any reply. Commands that only open a local modal or panel (`/schedule`, `/rewind`, `/conform`, `/ci`, bare `/theme`, bare `/think`) are refused remotely with the reason. [verify: exec `bun test src/remote/command-output.test.ts`]\" (Implementation found these commands only open local modals, so nothing can come back to the topic; they are refused instead)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-gateway.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-output.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-model.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-connect.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/remote/picker-callbacks.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-confirm.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-confirm.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-gateway.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-busy.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/remote/bot-api-edit.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-secrets.test.ts"
+    },
+    "AC12": {
+      "kind": "invariant",
+      "check": "bun test src/remote/command-menu.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/tui/remote-control-surface.test.ts"
+    },
+    "AC14": {
+      "kind": "invariant",
+      "check": "bun test src/remote/no-live-network.test.ts"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/docs/remote-commands-docs.test.ts"
+    },
+    "AC17": {
+      "kind": "exec",
+      "check": "bun test src/remote/command-session.test.ts"
+    },
+    "AC18": {
+      "kind": "exec",
+      "check": "bun test src/remote/message-state.test.ts"
+    },
+    "AC19": {
+      "kind": "exec",
+      "check": "bun test src/remote/typing-indicator.test.ts"
+    },
+    "AC20": {
+      "kind": "exec",
+      "check": "bun test src/remote/bot-api-reaction.test.ts"
+    },
+    "AC21": {
+      "kind": "exec",
+      "check": "bun test src/remote/approval-edit.test.ts"
+    },
+    "AC16": {
+      "kind": "judged"
+    }
+  }
+}
