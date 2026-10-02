@@ -33,6 +33,7 @@ import {
   toolCallHash,
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
+import { scriptedProvider as sharedScriptedProvider } from "./agent.test-helpers";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type {
@@ -207,43 +208,13 @@ test("resolveAgentMaxAttemptsPerHash: valid env override clamped to ceiling", ()
 
 // A minimal scripted ProviderPort: each `stream()` call replays the next scripted
 // event list and records the request it received (for feed-back assertions).
+// Flow 387 review r3 F-029: the provider contract lives in agent.test-helpers.ts; this file's
+// historic behaviour is an empty stream once the scripts run out.
 function scriptedProvider(scripts: Partial<NormalizedEvent>[][]): {
   provider: AgentDeps["provider"];
   requests: NormalizedRequest[];
 } {
-  const requests: NormalizedRequest[] = [];
-  let call = 0;
-  const description: ProviderDescription = {
-    capabilities: {
-      streaming: true,
-      toolCalls: true,
-      parallelToolCalls: false,
-      structuredOutput: false,
-      reasoningMetadata: false,
-      promptCaching: false,
-      vision: false,
-      tokenCounting: false,
-      modelListing: false,
-    },
-    descriptor: { providerId: "scripted" },
-  };
-  return {
-    requests,
-    provider: {
-      describe: () => description,
-      stream: (request, opts) => {
-        requests.push(request);
-        const events = scripts[call] ?? [];
-        call += 1;
-        return (async function* (): AsyncGenerator<NormalizedEvent> {
-          let sequence = 0;
-          for (const partial of events) {
-            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
-          }
-        })();
-      },
-    },
-  };
+  return sharedScriptedProvider(scripts, { exhausted: "empty" });
 }
 
 let idCounter = 0;

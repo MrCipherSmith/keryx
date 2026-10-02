@@ -357,6 +357,25 @@ each call (parse, list, revoke, withheld reason, marker) is tested directly in
 `mcp-servers/approval-render.trust.test.ts` and
 `commands/agent-permission-mode.test.ts`.
 
+### Added by flow 387 (shell token economy), review r3 F-032
+
+`commands/prune-archive-wiring.test.ts` reads both god-files, three sites in all:
+the readline shell's task-notification turn and operator turn in `shell.ts`, and
+the TUI foreground turn in `tui-shell.ts`. Each pins that the `runAgentTurn` call
+passes `pruneArchive: true`. The behaviour it protects is that pruning and
+collapsing of old tool output stays on in the two hosts that keep an archive:
+dropping the flag at one site silently turns pruning off there, and the session
+grows back to the pre-flow-387 size with no failing test.
+
+The behaviour is not observable today. All three calls sit inside the REPL
+closures (`runAgentRepl`'s turn handler, `launchTuiAgentShell`'s foreground
+dispatch), and the turn options are an inline object literal, so there is no
+function to call or spy on. The conversion is a seam: extract the turn options
+the two shells pass into one exported builder (`buildShellTurnOptions`), test
+that it sets `pruneArchive`, and reduce each site to a call of the builder. The
+`/goal` and ACP pins in the same test file read neither god-file and are not
+counted.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -369,6 +388,7 @@ the guard against fragile text assertions, the exact fragility it guards
 against. They live in the detail files, which assert nothing.
 
 ```text
+commands/prune-archive-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3

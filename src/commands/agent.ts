@@ -2346,9 +2346,28 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
  * Flow 387 review r1 F-001: the dir pruning may rewrite history against — only when the
  * host proved it keeps the originals (`pruneArchive`) and holds a live, non-detached dir.
  */
-function pruneSessionDir(options: RunAgentTurnOptions): string | undefined {
-  return options.pruneArchive === true ? liveSessionDir(options) : undefined;
+function pruneSessionDir(io: AgentIO, deps: AgentDeps, options: RunAgentTurnOptions): string | undefined {
+  if (options.pruneArchive !== true) return undefined;
+  // Flow 387 review r3 F-024: `pruneArchive` is a promise the type cannot check. A collapse
+  // shortens history, and only `onContextCompaction` lets the host re-point its archive cursor;
+  // without it the next archive sync would skip messages. Fail safe: do not prune, say so once.
+  if (deps.onContextCompaction === undefined) {
+    if (!pruneWithoutHandlerNotified.has(io)) {
+      pruneWithoutHandlerNotified.add(io);
+      io.onSystem?.(
+        "\n[context] pruneArchive is set but this host has no onContextCompaction handler; old tool output will not be pruned.\n",
+      );
+    }
+    return undefined;
+  }
+  return liveSessionDir(options);
 }
+
+/**
+ * Flow 387 review r3 F-024: hosts already told that pruning is off for want of a handler. Keyed on
+ * the io, not the deps: `runAgentTurn` copies deps per turn, while a host keeps one io.
+ */
+const pruneWithoutHandlerNotified = new WeakSet<AgentIO>();
 
 /**
  * Flow 387 T11/T18: prune old tool exchanges and tell the host. The host flushes
@@ -2716,7 +2735,15 @@ async function runAgentTurnCore(
    * hid is not refused. A signature with a result still in context keeps its count, so a
    * genuine loop (identical calls the model can see) is still stopped. Reasoning stripping
    * leaves every result visible, so it resets nothing.
+   *
+   * Flow 387 review r3 F-033: each signature is reset at most ONCE per turn. Following a
+   * placeholder to the saved file once is free; a model that keeps re-reading the same large
+   * files in a cycle (each result pushed out of the protected window before it repeats) would
+   * otherwise be reset on every prune and only the round cap would end it. A decrement-by-one
+   * was rejected: a cycle that is pruned once per lap would net to zero and never be refused,
+   * whereas a once-only reset still lets the count reach the cap on the second lap.
    */
+  const resetOnceSignatures = new Set<string>();
   const forgetHiddenHashes = (): void => {
     if (hashByCallId.size === 0) return;
     const visible = new Set<string>();
@@ -2726,7 +2753,8 @@ async function runAgentTurnCore(
       if (h !== undefined) visible.add(h);
     }
     for (const h of new Set(hashByCallId.values())) {
-      if (visible.has(h)) continue;
+      if (visible.has(h) || resetOnceSignatures.has(h)) continue;
+      resetOnceSignatures.add(h);
       budget.attempts.delete(h);
       lastErrorByHash.delete(h);
       errorStreakByHash.delete(h);
@@ -2836,7 +2864,7 @@ async function runAgentTurnCore(
       parentRunId,
       why,
       signal,
-      pruneSessionDir(options),
+      pruneSessionDir(io, deps, options),
       buildPromptCacheKey(options, history),
     );
     if (outcome.aborted === true) {
@@ -2926,7 +2954,7 @@ async function runAgentTurnCore(
     // through the host's existing checkpoint; the archive keeps the originals.
     // Flow 387 T18: old exchanges whose results are all outside the window are
     // collapsed into one text record, not only cleared.
-    const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(options));
+    const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(io, deps, options));
     if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
       forgetHiddenHashes(); // flow 387 T24: re-reading a cleared result is not a repeat
@@ -3173,7 +3201,7 @@ async function runAgentTurnCore(
           const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
           // Flow 387 T11: prune first (any saving counts now), then compact with
           // the same fallback as the pre-request guard.
-          const overflowPrune = await pruneHistory(io, deps, history, pruneSessionDir(options), 1);
+          const overflowPrune = await pruneHistory(io, deps, history, pruneSessionDir(io, deps, options), 1);
           if (overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             usageAnchors.delete(history);
             forgetHiddenHashes(); // flow 387 T24
@@ -3923,7 +3951,7 @@ async function runAgentTurnCore(
         parentRunId,
         { maxAttempts, toolLog },
         signal,
-        pruneSessionDir(options),
+        pruneSessionDir(io, deps, options),
         buildPromptCacheKey(options, history),
       );
         if (wrapUp.aborted) {

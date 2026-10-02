@@ -3,8 +3,15 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { TOOL_OUTPUT_DIRNAME, renderSpillPreview } from "../harness/tool/output-spill";
-import { createSession, loadContext, persistHistory } from "./store";
-import { CLEARED_PREFIX, isClearedToolResult, planPrune, pruneToolOutputs } from "./prune";
+import { createSession, loadArchive, loadContext, persistHistory } from "./store";
+import {
+  CLEARED_PREFIX,
+  COLLAPSED_HEADER,
+  isClearedToolResult,
+  parseCollapsedRecord,
+  planPrune,
+  pruneToolOutputs,
+} from "./prune";
 import { pair, toolsOf, useTempDirs, user } from "./prune.test-helpers";
 
 // Flow 387 review r1: F-002 (path never parsed from content), F-008 (current batch is
@@ -83,6 +90,28 @@ test("spillPath and the collapsed marker survive a session save and reload", () 
   expect(loaded[1]?.spillPath).toBeUndefined();
   expect(context.find((m) => m.content === "record")?.collapsed).toBe(true);
   expect(context.find((m) => m.content === "model text")?.collapsed).toBeUndefined();
+});
+
+test("a collapsed record keeps its marker through context.jsonl and archive.jsonl and still parses", () => {
+  // flow 387 review r3 F-034
+  const dataDir = tmp();
+  const cwd = tmp();
+  const handle = createSession({ cwd, dataDir });
+  const record: NormalizedMessage = {
+    role: "assistant",
+    content: `${COLLAPSED_HEADER}\nworkspace_propose(kind=decision) → ok`,
+    provenance: "model",
+    ts: "t",
+    collapsed: true,
+  };
+  const history = [user("q"), record];
+  const after = persistHistory(handle, history, { archive: history });
+  const context = loadContext(cwd, after.summary.id, dataDir);
+  const archive = loadArchive(cwd, after.summary.id, dataDir);
+  expect(context[1]?.collapsed).toBe(true);
+  expect(archive[1]?.collapsed).toBe(true);
+  expect(parseCollapsedRecord(context[1] as NormalizedMessage)).toHaveLength(1);
+  expect(parseCollapsedRecord(archive[1] as NormalizedMessage)).toHaveLength(1);
 });
 
 test("14 parallel 20K results awaiting their first response are all kept", async () => {

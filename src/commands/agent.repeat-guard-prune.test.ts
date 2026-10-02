@@ -9,55 +9,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runAgentTurn } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
+import { callRound, okReply as done, scriptedProvider, type Script } from "./agent.test-helpers";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
-import type { NormalizedEvent, NormalizedRequest, ProviderDescription } from "../harness/provider/types";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
-
-type Script = Partial<NormalizedEvent>[];
-
-function scriptedProvider(scripts: Script[]): { provider: AgentDeps["provider"]; requests: NormalizedRequest[] } {
-  const requests: NormalizedRequest[] = [];
-  const description: ProviderDescription = {
-    capabilities: {
-      streaming: true,
-      toolCalls: true,
-      parallelToolCalls: false,
-      structuredOutput: false,
-      reasoningMetadata: false,
-      promptCaching: false,
-      vision: false,
-      tokenCounting: false,
-      modelListing: false,
-    },
-    descriptor: { providerId: "scripted" },
-  };
-  return {
-    requests,
-    provider: {
-      describe: () => description,
-      stream: (request, opts) => {
-        const events = scripts[requests.length] ?? scripts[scripts.length - 1] ?? [];
-        requests.push(request);
-        return (async function* (): AsyncGenerator<NormalizedEvent> {
-          let sequence = 0;
-          for (const partial of events) {
-            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
-          }
-        })();
-      },
-    },
-  };
-}
-
-const done: Script = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
-
-function callRound(id: string, name: string, input: string): Script {
-  return [
-    { kind: "tool_call_start", toolCallId: id, toolName: name },
-    { kind: "tool_call_end", toolCallId: id, input },
-    { kind: "model_end" },
-  ];
-}
 
 /** ~12K estimated tokens per result and under the 50KB spill threshold, so it stays inline in history. */
 const BIG = "x".repeat(48_000);
@@ -98,6 +52,7 @@ async function run(scripts: Script[], bigOutput: string, prune: boolean): Promis
     tools: [tool("read_spill", bigOutput), tool("other", bigOutput)],
     systemInstruction: "sys",
     idSeq: () => `id-${n++}`,
+    onContextCompaction: () => {},
   };
   const slateSession: SlateSessionRef = { dir, cwd: dir, opened: false };
   await runAgentTurn(io, deps, [], "go", prune ? { slateSession, pruneArchive: true } : {});
@@ -106,14 +61,15 @@ async function run(scripts: Script[], bigOutput: string, prune: boolean): Promis
 
 const refused = (r: string): boolean => /already tried 3×/.test(r);
 
-test("flow 387 T24: 4+ identical reads separated by a prune that cleared the earlier results are all allowed", async () => {
-  // Five identical reads, each followed by six different calls: by the time of the next read
-  // the previous read's result is outside the protected window and has been cleared or collapsed.
+test("flow 387 T24: a re-read after a prune cleared the earlier result is allowed (and never counted twice)", async () => {
+  // Flow 387 review r3 F-033: following a placeholder to the saved file is forgiven once per
+  // signature per turn (the cycle test below pins the bound), so the second read here is
+  // allowed even though the first result is outside the protected window and has been cleared.
   const scripts: Script[] = [];
   let other = 0;
-  for (let i = 1; i <= 5; i += 1) {
+  for (let i = 1; i <= 2; i += 1) {
     scripts.push(callRound(`r${i}`, "read_spill", "{}"));
-    if (i < 5) {
+    if (i < 2) {
       for (let k = 0; k < 6; k += 1) {
         other += 1;
         scripts.push(callRound(`o${other}`, "other", JSON.stringify({ n: other })));
@@ -123,7 +79,7 @@ test("flow 387 T24: 4+ identical reads separated by a prune that cleared the ear
   scripts.push(done);
   const results = await run(scripts, BIG, true);
   expect(results.some(refused)).toBe(false);
-  expect(results.filter((r) => r.startsWith("x"))).toHaveLength(5 + 24);
+  expect(results.filter((r) => r.startsWith("x"))).toHaveLength(2 + 6);
 });
 
 test("flow 387 T24: 4 identical reads with no prune in between still hit the guard", async () => {
@@ -152,4 +108,22 @@ test("flow 387 T24: back-to-back identical big reads whose result stays visible 
   ];
   const results = await run(scripts, BIG, true);
   expect(results.some(refused)).toBe(true);
+});
+
+test("flow 387 review r3 F-033: a cycle of large re-reads is eventually refused, not reset on every prune", async () => {
+  // Five signatures, each ~12K tokens, cycled six times (30 rounds). Every signature's earlier
+  // result is pushed out of the protected window before it repeats, so each prune hides it. A
+  // once-per-signature reset forgives the first lap's repeat only: the count then reaches the cap.
+  const scripts: Script[] = [];
+  let id = 0;
+  for (let lap = 0; lap < 6; lap += 1) {
+    for (let k = 0; k < 5; k += 1) {
+      id += 1;
+      scripts.push(callRound(`c${id}`, "other", JSON.stringify({ path: `f${k}` })));
+    }
+  }
+  scripts.push(done);
+  const results = await run(scripts, BIG, true);
+  expect(results.some(refused)).toBe(true);
+  expect(results.filter((r) => r.startsWith("x")).length).toBeLessThan(30);
 });
