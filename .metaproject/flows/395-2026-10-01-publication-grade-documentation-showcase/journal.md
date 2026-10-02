@@ -191,3 +191,4 @@ spellings 0 undeclared, typecheck clean, help/reference/README tests 141/141.
 Review loop result: round 3 left 0 blocker / 0 major / 1 minor (R1) → R1 fixed
 and verified above; info items remain as recorded in reviews/round-3.md.
 - 2026-10-01T11:17:50.206Z - task-done: T18: review-orchestrator round over the final diff
+- 2026-10-02T16:35:23.074Z - renumbered: 367 -> 395: main now has its own 367 (renumbered w2-rewind); 395 is the first id free on every remote branch after fetch --all

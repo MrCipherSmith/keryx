@@ -5,12 +5,12 @@
     "review": true,
     "owner": true
   },
-  "id": "367",
+  "id": "395",
   "slug": "publication-grade-documentation-showcase",
   "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
   "status": "in-progress",
   "createdAt": "2026-10-01T05:03:43.749Z",
-  "updatedAt": "2026-10-01T11:17:50.206Z",
+  "updatedAt": "2026-10-02T16:35:23.074Z",
   "source": {
     "type": "description",
     "ref": null
@@ -927,6 +927,11 @@
       "at": "2026-10-01T11:17:50.206Z",
       "event": "task-done",
       "detail": "T18: review-orchestrator round over the final diff"
+    },
+    {
+      "at": "2026-10-02T16:35:23.074Z",
+      "event": "renumbered",
+      "detail": "367 -> 395: main now has its own 367 (renumbered w2-rewind); 395 is the first id free on every remote branch after fetch --all"
     }
   ],
   "acKinds": {
