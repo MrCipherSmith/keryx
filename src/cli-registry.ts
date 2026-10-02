@@ -77,7 +77,8 @@ import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
-import { productCommand } from "./commands/product";
+import { productCommand, readDigestBoard } from "./commands/product";
+import { registerBoardReader } from "./scheduler/digest-board";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -87,6 +88,9 @@ import { setupCommand } from "./commands/setup";
 import { GROUP_SUBCOMMANDS } from "./lib/group-subcommands";
 import { MCP_CONSUMER_SUBCOMMANDS } from "./commands/mcp-servers";
 import packageJson from "../package.json" with { type: "json" };
+
+// Flow 389: the scheduled digest reads the flow board through the product command, the only reader of the product index.
+registerBoardReader(readDigestBoard);
 
 export const VERSION = packageJson.version;
 
