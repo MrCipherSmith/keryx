@@ -9,9 +9,9 @@
   "id": "396",
   "slug": "telegram-permissions-parity-with-shell",
   "title": "Telegram permissions parity with shell",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T20:33:53.079Z",
+  "updatedAt": "2026-10-02T20:58:08.401Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:daf6adc9958b98b407dcd0a6e3ef7aed37c146c67342f6a236c55c5e3639d983",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/868"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -363,6 +363,11 @@
       "at": "2026-10-02T20:33:53.079Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T20:58:08.401Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/868 (base: main)"
     }
   ],
   "acKinds": {
@@ -439,5 +444,6 @@
       "kind": "exec",
       "check": "bun test src/remote src/tui"
     }
-  }
+  },
+  "baseBranch": "main"
 }

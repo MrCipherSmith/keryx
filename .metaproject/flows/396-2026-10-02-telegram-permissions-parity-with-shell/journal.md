@@ -24,3 +24,4 @@
 - 2026-10-02T20:25:30.451Z - task-done: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)
 - 2026-10-02T20:31:14.458Z - task-done: T12: Docs (README + docs site pages) and version bump (AC16,AC17)
 - 2026-10-02T20:33:53.079Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-02T20:58:08.401Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/868 (base: main)
