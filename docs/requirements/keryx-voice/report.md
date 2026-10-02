@@ -6,6 +6,14 @@ Date: 2026-10-02. Evidence labels: read (source read on this machine), measured,
 
 First follow-up flow: inbound Telegram voice only. Download the voice message, transcribe it with Groq Whisper through one plain `fetch` call, deliver it as a text line. No new npm package, no extra install weight. Spoken replies come second, using the OGG/Opus output a cloud provider returns directly. Local engines come third and only if the operator wants no audio to leave the machine.
 
+## Operator decisions (2026-10-02, messages 177302, 177315, 177324)
+
+- The shell receives only text; voice lives entirely in `keryx serve` (download, transcribe, deliver as a text line).
+- Voice is an optional module of `keryx serve`, which is installed from npm next to the main keryx package. The user chooses at install time whether to have voice. If yes, the module downloads its own Piper and voices.
+- keryx and helyx must not know about each other: no path into helyx's `piper/` folder and no shared code. keryx ships and manages its own, fully independent copy. This replaces the earlier idea of pointing keryx at `/home/altsay/bots/helyx/piper`.
+- Open: whether the module may carry its own npm dependencies (e.g. an Opus encoder), or must stay at none; the main keryx package keeps `dependencies` at `{}` either way.
+- Message 177324 was a voice message that ended mid-sentence ("и также это"); the rest was requested.
+
 ## 1. How helyx does voice today (read)
 
 - STT: `utils/transcribe.ts` calls Groq `whisper-large-v3` through multipart `fetch`, passing the OGG file as is. The fallback is a local whisper-asr-webservice on :9000; it is commented out in compose and not listening on this machine. helyx's "about 200 ms" claim is unverified.
