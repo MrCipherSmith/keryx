@@ -707,7 +707,8 @@ Grouped by what you are trying to do, not by internal module layout.
   writes one record under `.metaproject/data/decisions/`: the recommendation and
   its reason (written before the question is shown), the display mode, the option
   order, your choice, the time you took and, after a deviation, an optional
-  reason (offered once, never holding the answer back: `/decisions reason`).
+  reason (asked once, and the tool result waits for it; an empty answer releases
+  the wait; add or change it later with `/decisions reason`).
   One question in three is asked blind (no "recommended" mark, random order,
   revealed after the answer, changeable with `/decisions change`), never for
   release, ship, publish, deploy, delete or push, nor for merge, drop, remove or

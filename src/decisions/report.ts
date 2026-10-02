@@ -66,7 +66,8 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
       const list = answers.get(record.id) ?? [];
       list.push(record);
       answers.set(record.id, list);
-    } else if (!reasons.has(record.id)) {
+    } else {
+      // the latest reason wins: the human may change it later (`/decisions reason <why>`)
       reasons.set(record.id, record);
     }
   }

@@ -40,24 +40,44 @@ async function initRepo(dir: string, branch = "main"): Promise<void> {
 
 const flows = () => createFlowService({ tracker: null, healthGate: async () => ({ status: "pass", reasons: [] }), now: () => new Date("2026-10-02T10:00:00Z") });
 
-describe("F-001 / F-002: the answer is never held for a reason; the TUI can give it later", () => {
-  test("a deviation returns at once, asks nothing more, and the hint names the slash command", async () => {
+/** An ask that answers the question with `choice` and the reason prompt that follows a deviation with `reason`. */
+const answering = (choice: string, reason = "skip") => async (request: AskRequest) => (request.question.includes("Why?") ? reason : choice);
+
+describe("F-001 / F-002: the reason is asked once and awaited; the TUI can add or change it later", () => {
+  test("a deviation asks for the reason once, waits for it, and the question itself is not asked again", async () => {
     const shown: string[] = [];
-    const notes: string[] = [];
-    const ask = journalAsk(async (request: AskRequest) => (shown.push(request.question), "b"), { cwd: root, random: () => 0.9, notify: (t) => notes.push(t) });
+    const ask = journalAsk(async (request: AskRequest) => (shown.push(request.question), answering("b", "too slow")(request)), { cwd: root, random: () => 0.9 });
     expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
-    expect(shown).toEqual(["Pick"]);
-    expect(notes.join(" ")).toContain("/decisions reason <why>");
+    expect(shown).toHaveLength(2);
+    expect(shown[0]).toBe("Pick");
+    expect(shown[1]).toContain("Why?");
+    expect((await loadReport(root)).deviations[0]?.reason).toBe("too slow");
   });
 
-  test("giveReason records the reason later, once, for the latest answered decision", async () => {
+  test("a skipped or cancelled reason prompt records an absent reason", async () => {
+    for (const reply of ["skip", "later", "__cancel__", "   "]) {
+      const dir = await mkdtemp(path.join(tmpdir(), "keryx-decisions-skip-"));
+      await mkdir(path.join(dir, ".metaproject"), { recursive: true });
+      try {
+        const ask = journalAsk(answering("b", reply), { cwd: dir, random: () => 0.9 });
+        expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
+        expect((await loadReport(dir)).deviations[0]).not.toHaveProperty("reason");
+        expect((await readRecords(dir)).filter((r) => r.kind === "reason")).toHaveLength(1);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  test("giveReason adds a reason later for the latest answered decision, and changes it (the latest wins)", async () => {
     const ids: string[] = [];
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
+    const ask = journalAsk(answering("b"), { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
     const given = await giveReason({ cwd: root, text: "B fits the deadline", lastId: ids[0] });
-    expect(given.recorded).toBe(true);
-    expect((await giveReason({ cwd: root, text: "again", lastId: ids[0] })).recorded).toBe(false);
-    expect((await loadReport(root)).deviations[0]?.reason).toBe("B fits the deadline");
+    expect(given).toMatchObject({ recorded: true, replaced: false });
+    const again = await giveReason({ cwd: root, text: "B fits, and A is slow", lastId: ids[0] });
+    expect(again).toMatchObject({ recorded: true, replaced: true });
+    expect((await loadReport(root)).deviations[0]?.reason).toBe("B fits, and A is slow");
   });
 
   test("a reason needs text and a deviation", async () => {

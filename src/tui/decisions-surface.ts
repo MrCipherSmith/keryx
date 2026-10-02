@@ -77,7 +77,7 @@ export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { 
     const flow = lastId === undefined ? (await resolveFlowContext(deps.cwd)).flow : undefined;
     if (command.kind === "reason") {
       const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId, flow, session: deps.session });
-      say(done.recorded ? `Reason recorded for decision ${done.id} ("${shortQuestion(done.question)}").` : `Decision ${done.id} ("${shortQuestion(done.question)}") already has a reason on record.`);
+      say(`Reason ${done.replaced ? "changed" : "recorded"} for decision ${done.id} ("${shortQuestion(done.question)}").`);
       return;
     }
     if (command.choice.length === 0) throw new Error("name the option: /decisions change <option id or label>");

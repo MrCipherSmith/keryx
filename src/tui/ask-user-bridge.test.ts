@@ -62,15 +62,23 @@ test("a journaling failure shows up as a transcript note, and the question still
   expect(notes.some((text) => text.includes("decision journal:"))).toBe(true);
 });
 
-test("a deviation points the transcript at /decisions reason, without a second question (F-001)", async () => {
-  const notes: string[] = [];
+test("a deviation asks the human once for a reason, through the same host, and waits for it (F-001)", async () => {
   const questions: string[] = [];
-  setAskUserNotice((text) => notes.push(text));
   setAskUserHost(async (request) => {
     questions.push(request.question);
-    return "b";
+    return questions.length === 1 ? "b" : "B is quicker";
   });
+  expect(await journaledAskUser(root)({ question: "Pick", options: OPTIONS })).toBe("b");
+  expect(questions).toHaveLength(2);
+  expect(questions[0]).toBe("Pick");
+  expect(questions[1]).toContain("Why?");
+  const lines = (await readFile(path.join(root, ".metaproject", "data", "decisions", "journal.jsonl"), "utf8")).trim().split("\n");
+  expect(JSON.parse(lines[lines.length - 1] ?? "{}")).toMatchObject({ kind: "reason", reason: "B is quicker" });
+});
+
+test("a followed recommendation asks nothing more", async () => {
+  const questions: string[] = [];
+  setAskUserHost(async (request) => (questions.push(request.question), "a"));
   await journaledAskUser(root)({ question: "Pick", options: OPTIONS });
   expect(questions).toEqual(["Pick"]);
-  expect(notes.join("\n")).toContain("/decisions reason");
 });

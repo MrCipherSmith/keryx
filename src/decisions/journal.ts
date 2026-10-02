@@ -145,10 +145,17 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
  * "no reason given" and still counts as the one ask. Returns false when the
  * human was already asked for this decision.
  */
-export async function recordReason(cwd: string, id: string, text: string | undefined, now: () => Date = () => new Date()): Promise<boolean> {
+export async function recordReason(
+  cwd: string,
+  id: string,
+  text: string | undefined,
+  now: () => Date = () => new Date(),
+  options: { replace?: boolean } = {},
+): Promise<boolean> {
   const records = await readRecords(cwd);
   if (!records.some((r) => r.kind === "open" && r.id === id)) throw new Error(`no open decision with id ${id}`);
-  if (records.some((r) => r.kind === "reason" && r.id === id)) return false;
+  // `replace` is the human adding or changing the reason later (`/decisions reason <why>`): the latest record wins in the report.
+  if (options.replace !== true && records.some((r) => r.kind === "reason" && r.id === id)) return false;
   const reason = text === undefined ? "" : oneLine(text);
   const record: ReasonRecord = { kind: "reason", id, at: now().toISOString(), ...(reason.length > 0 ? { reason } : {}) };
   await appendRecord(cwd, record);

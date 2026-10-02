@@ -1290,7 +1290,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions answer",
     summary:
       "Record the human's choice (one of the options) for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether " +
-      "the human may add an optional reason (once; never hold the answer for it). A second answer for the same id is kept as a changed answer.",
+      "the human should be asked for an optional reason (once; this command does not wait for it). A second answer for the same id is kept as a changed answer.",
     intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },

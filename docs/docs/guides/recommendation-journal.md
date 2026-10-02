@@ -89,8 +89,12 @@ removed from what is shown.
 
 ## Changing your mind, and giving a reason
 
-Your answer is never held back. After you answer, the transcript shows the reveal
-and tells you what you can still do:
+After you answer, the transcript shows the reveal and tells you what you can still
+do. The one thing the journal waits for is the reason after a deviation: when you
+chose something other than the recommendation, keryx asks you **once** why, and the
+tool result waits for your answer (there is no timeout). The reason is optional: an
+empty answer, "No reason" or "Not now" is recorded as absent and releases the wait,
+and you are not asked again for that decision. Nothing else waits.
 
 - `/decisions change <option id or label>` changes the answer of the latest
   question **asked in this session**. The journal records the session on every
@@ -101,10 +105,9 @@ and tells you what you can still do:
   It prints which decision it changed. Both answers are kept and
   the record says it was changed. The agent already received your first answer,
   so the change is recorded in the journal but may not reach the agent.
-- `/decisions reason <why>` adds an optional reason when your answer differed from
-  the recommendation, to the same decision. After a deviation the transcript shows
-  one line naming it, **once per decision**; nothing waits for it, the tool result
-  has already gone back, and leaving it out costs nothing (the report shows
+- `/decisions reason <why>` adds a reason, or changes the one you gave, when your
+  answer differed from the recommendation, to the same decision. The latest reason
+  wins in the report. Leaving the reason out costs nothing (the report shows
   `(none given)`).
 
 The same two steps from a shell are `keryx decisions answer <id> --choice <id>`
@@ -155,8 +158,8 @@ keryx decisions reason <id> --text "<why>" [--json]
 2. Show the question as told, and take the answer.
 3. Call `answer`. It prints the reveal (the recommendation) and the time taken,
    and says whether the human may add a reason.
-4. If it did, offer it once, without holding the answer back, and call `reason`
-   whenever it arrives.
+4. If it did, ask for it once and call `reason` with what the human says. (keryx's
+   own `ask_user` waits for it; an empty answer is recorded as absent.)
 
 `--flow` and `--stage` default to what the checkout says (`KERYX_FLOW`, the
 branch, the only flow in progress). A failure here is
@@ -166,8 +169,9 @@ keryx's own `ask_user` tool does all of this for you.
 
 ## What it does not do
 
-- It never blocks or delays a question: a journaling failure is shown as a
-  one-line note in the transcript and the question goes on.
+- Journaling itself never blocks or delays a question: a journaling failure is
+  shown as a one-line note in the transcript and the question goes on. The single
+  deliberate wait is the optional reason prompt after a deviation (see above).
 - The tool-permission picker (allow / deny a tool call) is not journaled; it is
   an approval, not a question with a recommendation.
 - It judges nothing and gates nothing; the report is a mirror.

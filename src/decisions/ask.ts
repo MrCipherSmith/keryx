@@ -3,20 +3,21 @@
 // `journalAsk(ask, deps)` returns an `ask` with the same shape. Before the host
 // shows the question it opens a journal record (so the recommendation is on disk
 // first), and in blind mode it hides the mark and shuffles the options. After the
-// answer it records the choice, reveals the recommendation, and returns the
-// choice AT ONCE. On a deviation it only says, in the transcript, that a reason
-// can be added (`/decisions reason <why>`, or `keryx decisions reason`); it never
-// holds the answer for it, and never asks a second question the agent did not ask.
-// A blind answer can be changed after the reveal (`/decisions change <option>`).
+// answer it records the choice and reveals the recommendation. On a deviation it
+// asks the human ONCE for an optional reason and the tool result waits for it (no
+// timeout; an empty answer is recorded as absent and releases the wait): that is
+// the one deliberate wait, by operator decision. The reason can also be added or
+// changed later with `/decisions reason <why>`. A blind answer can be changed after
+// the reveal (`/decisions change <option>`).
 //
-// The journal never gets in the way of the question: every journaling step is in
-// a try/catch that leaves a note and falls back to the plain question. Only the
+// Journaling itself never gets in the way of the question: every journaling step is
+// in a try/catch that leaves a note and falls back to the plain question. Only the
 // host's own `ask` can throw, exactly as without the journal.
 //
 // The types are structural copies of the harness' `AskUserFn`, because the core
 // zone cannot import the client zone; they are assignable both ways.
 
-import { answerDecision, openDecision } from "./journal";
+import { answerDecision, openDecision, recordReason } from "./journal";
 import type { FlowContext } from "./context";
 import type { OpenResult } from "./types";
 
@@ -59,6 +60,8 @@ export interface JournalAskDeps {
 }
 
 export const CANCEL_ANSWER = "__cancel__";
+const SKIP_REASON = "skip";
+const LATER_REASON = "later";
 
 function note(deps: JournalAskDeps, text: string): void {
   try {
@@ -155,12 +158,41 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         parts.push("You chose differently from the recommendation.");
       }
       if (parts.length > 0) notify(deps, parts.join(" "));
-      // The one, non-blocking offer of a reason (AC6): its own transcript line, shown once per decision
-      // (`askReason` is false for any later answer to the same decision), and only after the answer has returned its value path.
-      if (result.askReason) notify(deps, `Add a reason for choosing differently, if you want (asked once): /decisions reason <why>`);
+      // The one deliberate wait (AC6, operator decision): after a deviation the human is asked ONCE for an
+      // optional reason and the tool result waits for it. `askReason` is false for any later answer to the
+      // same decision, so it is never asked twice. Everything else here stays non-blocking.
+      if (result.askReason) await askReasonOnce(ask, deps, opened.id);
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
     }
     return chosen;
   };
+}
+
+/**
+ * Ask for the optional reason, wait for the answer (no timeout), record it. An empty
+ * or skipped answer, a cancel, or a failing prompt is recorded as "no reason given":
+ * it releases the wait and counts as the one ask. `/decisions reason <why>` can still
+ * add or change a reason later. A failure to record is a note, never an error.
+ */
+async function askReasonOnce(ask: AskFn, deps: JournalAskDeps, id: string): Promise<void> {
+  let text: string | undefined;
+  try {
+    const answer = await ask({
+      question: "You chose differently from the recommendation. Why? (optional, asked once)",
+      options: [
+        { id: SKIP_REASON, label: "No reason", description: "Leave it empty" },
+        { id: LATER_REASON, label: "Not now", description: "Skip; you will not be asked again for this question (add one later with /decisions reason <why>)" },
+      ],
+      allowFreeform: true,
+    });
+    if (answer !== SKIP_REASON && answer !== LATER_REASON && answer !== CANCEL_ANSWER) text = answer;
+  } catch {
+    text = undefined;
+  }
+  try {
+    await recordReason(deps.cwd, id, text, deps.now);
+  } catch (cause) {
+    note(deps, `decision journal: could not record the reason (${cause instanceof Error ? cause.message : String(cause)})`);
+  }
 }

@@ -11,12 +11,12 @@
   "title": "Recommendation journal: что рекомендовал агент и что выбрал человек",
   "status": "implemented",
   "createdAt": "2026-10-02T11:54:20.132Z",
-  "updatedAt": "2026-10-02T12:16:48.491Z",
+  "updatedAt": "2026-10-02T14:20:18.759Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:04148c1ca05bcda732f1f6154a2c33957f572491635d54b7ce4a1a808f668f89",
+  "acChecksum": "sha256:f3a4094a8e0a21443f42378a3365938032511af64ba6b0f3ec4ce2f9496e583c",
   "acConfirmed": {},
   "pr": {
     "url": "https://github.com/MrCipherSmith/keryx/pull/856"
@@ -111,6 +111,16 @@
       "at": "2026-10-02T12:16:48.491Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/856 (base: main)"
+    },
+    {
+      "at": "2026-10-02T14:20:15.955Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"After a deviation from the recommendation the human is asked once for a reason; the field is optional and an empty answer is recorded as absent. [verify: exec `bun test src/decisions`]\" -> \"After a deviation from the recommendation the human is asked once for a reason and the tool result waits for the answer; the field is optional, an empty answer is recorded as absent and releases the wait. [verify: exec `bun test src/decisions`]\" (Operator decision, poll 42, 2026-10-02 14:11 UTC: ask for the reason blocking, once)"
+    },
+    {
+      "at": "2026-10-02T14:20:18.759Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"The journal never blocks and never delays a question; a question outside a flow goes to the project-wide journal; a decision inside a flow also appears as a line in the flow's journal.md. [verify: exec `bun test src/decisions`]\" -> \"Journaling itself never blocks or delays a question and a journaling failure never throws into the question path; the single deliberate wait is the optional reason prompt after a deviation (AC6), by operator decision. A question outside a flow goes to the project-wide journal; a decision inside a flow also appears as a line in the flow's journal.md. [verify: exec `bun test src/decisions`]\" (Operator decision, poll 42, 2026-10-02 14:11 UTC: the reason prompt is the one allowed wait)"
     }
   ],
   "acKinds": {

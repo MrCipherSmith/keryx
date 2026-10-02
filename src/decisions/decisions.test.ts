@@ -11,6 +11,7 @@ import {
   answerDecision,
   buildReport,
   journalAsk,
+  giveReason,
   journalFile,
   loadReport,
   openDecision,
@@ -121,7 +122,8 @@ describe("AC3: blind mode", () => {
     const ask = journalAsk(
       async (request) => {
         shown.push(request);
-        return "b";
+        // the question is answered "b"; the reason prompt that follows the deviation is skipped
+        return request.question === "Pick" ? "b" : "skip";
       },
       { cwd: root, notify: (text) => notes.push(text), random: sequence([0.1, 0.0, 0.0]) },
     );
@@ -132,8 +134,9 @@ describe("AC3: blind mode", () => {
     // The shuffle moved the options: it is a permutation, and not the given order.
     expect(request?.options.map((o) => o.id).sort()).toEqual(["a", "b", "c"]);
     expect(request?.options.map((o) => o.id)).not.toEqual(["a", "b", "c"]);
-    // the reveal, then the one non-blocking offer of a reason (the answer deviated)
-    expect(notes).toHaveLength(2);
+    // the reveal is one transcript line; the reason is asked as its own awaited question (the answer deviated)
+    expect(notes).toHaveLength(1);
+    expect(shown).toHaveLength(2);
     expect(notes[0]).toContain("Option A");
     // ask_user options carry a description of the option, not a reason for recommending it (F-007)
     expect(notes[0]).not.toContain("the safe one");
@@ -242,21 +245,82 @@ describe("AC6: the reason for a deviation, asked once", () => {
     expect((await loadReport(root)).deviations[0]).not.toHaveProperty("reason");
   });
 
-  test("through ask_user: the answer returns at once and nothing else is asked (F-001)", async () => {
+  test("through ask_user: the tool result waits once for the reason, and an empty answer releases it", async () => {
     const questions: string[] = [];
-    const notes: string[] = [];
+    let release: (answer: string) => void = () => {};
+    const ask = journalAsk(
+      (request) => {
+        questions.push(request.question);
+        if (questions.length === 1) return Promise.resolve("b");
+        return new Promise<string>((resolve) => {
+          release = resolve;
+        });
+      },
+      { cwd: root, random: () => 0.9 },
+    );
+    const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
+    let settled = false;
+    const pending = ask({ question: "First?", options }).then((value) => {
+      settled = true;
+      return value;
+    });
+    // the reason prompt is open and the tool result is held, with no timeout
+    for (let i = 0; i < 40 && questions.length < 2; i += 1) await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(questions).toHaveLength(2);
+    expect(questions[1]).toContain("Why?");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(settled).toBe(false);
+    release("");
+    expect(await pending).toBe("b");
+    // an empty answer is recorded as absent and counts as the one ask
+    const reasons = (await readRecords(root)).filter((r) => r.kind === "reason");
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0] && "reason" in reasons[0]).toBe(false);
+    expect((await loadReport(root)).deviations[0]).not.toHaveProperty("reason");
+  });
+
+  test("through ask_user: a typed reason is recorded, and a later answer to the same decision asks nothing more", async () => {
+    const questions: string[] = [];
     const ask = journalAsk(
       async (request) => {
         questions.push(request.question);
-        return "b";
+        return questions.length === 1 ? "b" : "A is too slow";
       },
-      { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) },
+      { cwd: root, random: () => 0.9 },
     );
     const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
     expect(await ask({ question: "First?", options })).toBe("b");
-    expect(questions).toEqual(["First?"]);
-    expect((await readRecords(root)).filter((r) => r.kind === "reason")).toHaveLength(0);
-    expect(notes.filter((text) => text.includes("/decisions reason"))).toHaveLength(1);
+    expect(questions).toHaveLength(2);
+    expect((await loadReport(root)).deviations[0]?.reason).toBe("A is too slow");
+    // a second answer to the same decision is not asked about again
+    const id = (await readRecords(root)).find((r) => r.kind === "open")?.id ?? "";
+    expect((await answerDecision({ cwd: root, id, choice: "c" })).askReason).toBe(false);
+  });
+
+  test("through ask_user: a failing reason prompt never throws into the question", async () => {
+    let calls = 0;
+    const ask = journalAsk(
+      async () => {
+        calls += 1;
+        if (calls === 2) throw new Error("prompt closed");
+        return "b";
+      },
+      { cwd: root, random: () => 0.9 },
+    );
+    const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
+    expect(await ask({ question: "First?", options })).toBe("b");
+    expect(calls).toBe(2);
+  });
+
+  test("/decisions reason can still add or change a reason later (the latest wins)", async () => {
+    await openDecision({ cwd: root, question: "Which?", options: OPTIONS, recommendation: { optionId: "a", reason: "r" }, id: "d-5", random: () => 0.9 });
+    await answerDecision({ cwd: root, id: "d-5", choice: "b" });
+    await recordReason(root, "d-5", undefined);
+    const added = await giveReason({ cwd: root, id: "d-5", text: "B fits the deadline" });
+    expect(added).toMatchObject({ recorded: true, replaced: false });
+    const changed = await giveReason({ cwd: root, id: "d-5", text: "B fits, and A is slow" });
+    expect(changed).toMatchObject({ recorded: true, replaced: true });
+    expect((await loadReport(root)).deviations[0]?.reason).toBe("B fits, and A is slow");
   });
 
   test("through ask_user: a followed recommendation says nothing about a reason", async () => {

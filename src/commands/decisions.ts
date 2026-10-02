@@ -4,9 +4,9 @@
 //   open    record the question, the options and the recommendation BEFORE showing
 //           it; it says blind or ordinary, the order to show and whether to mark
 //   answer  record the human's choice; it returns the reveal and whether the
-//           human may be offered to add a reason (once, optional, never holding
-//           the answer back). A second answer is a changed answer.
-//   reason  record that one optional reason, whenever the human gives it
+//           human should be asked for a reason (once, optional; the command itself
+//           does not wait, the caller asks). A second answer is a changed answer.
+//   reason  record the optional reason (the latest one wins when it is changed)
 //   report  deterministic summary, no model: match share by mode and stage,
 //           deviations with their reasons
 //
@@ -210,10 +210,12 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
   answer   records the choice (it must be one of the options; --other marks a
            free-form answer), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
-           both are kept. After a deviation it says the human may add a reason,
-           once: it never holds the answer back, and the reason can come later
-           through \`reason\`. In the TUI the same two follow-ups are
-           /decisions reason <why> and /decisions change <option>.
+           both are kept. After a deviation it says the human should be asked
+           for a reason, once; the command does not wait, the caller asks, and
+           the reason can come later through \`reason\`. In the TUI the reason
+           is asked once and the tool result waits for it (an empty answer
+           releases the wait); /decisions reason <why> and /decisions change
+           <option> add or change them later.
   report   no model: match share by mode and by stage, and every deviation with
            its reason. It also counts the questions that looked irreversible
            and the ones where blind was refused because of it, per stage: a

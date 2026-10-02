@@ -122,9 +122,10 @@ export interface AnswerResult {
   deviation: boolean;
   timeToAnswerMs: number;
   /**
-   * True when the human may now be offered, ONCE, to give an optional reason: a
-   * deviation, no reason on file, and no earlier answer already offered it. The
-   * answer itself is never held back for it.
+   * True when the human should now be asked, ONCE, for an optional reason: a
+   * deviation, no reason on file, and no earlier answer already offered it. In the
+   * TUI `ask_user` path the tool result waits for it (an empty answer releases the
+   * wait); the `answer` command itself does not wait.
    */
   askReason: boolean;
   flow: string | null;

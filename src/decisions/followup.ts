@@ -65,11 +65,13 @@ async function resolveOpen(
 export interface GiveReasonResult {
   id: string;
   question: string;
-  /** False when a reason was already on record: the human is asked once, and that was it. */
+  /** True when the reason is on record (the human may add or change it at any time). */
   recorded: boolean;
+  /** True when it replaced a reason that was already there. */
+  replaced: boolean;
 }
 
-/** Add the one optional reason for a deviation. Only a deviation takes one. */
+/** Add or change the optional reason for a deviation (the latest one wins). Only a deviation takes one. */
 export async function giveReason(input: { cwd: string; text: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; session?: string | undefined; now?: (() => Date) | undefined }): Promise<GiveReasonResult> {
   const text = input.text.trim();
   if (text.length === 0) throw new Error("a reason needs some text: /decisions reason <why>");
@@ -80,7 +82,9 @@ export async function giveReason(input: { cwd: string; text: string; id?: string
   if (open.recommendation === null || first.choice === open.recommendation.optionId) {
     throw new Error(`decision ${open.id}: the recommendation was followed; there is no deviation to explain`);
   }
-  return { id: open.id, question: open.question, recorded: await recordReason(input.cwd, open.id, text, input.now) };
+  const had = (await readRecords(input.cwd)).some((r) => r.kind === "reason" && r.id === open.id && r.reason !== undefined);
+  const recorded = await recordReason(input.cwd, open.id, text, input.now, { replace: true });
+  return { id: open.id, question: open.question, recorded, replaced: had };
 }
 
 /** An option id, or a label (case-insensitive), as the human typed it. */

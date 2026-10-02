@@ -1,5 +1,5 @@
 // Flow 392, review round 2 on PR #856: the two-tier irreversible matcher, one-line
-// free text, the single non-blocking reason prompt, follow-up targeting, and the
+// free text, the single awaited reason prompt, follow-up targeting, and the
 // flow attribution source.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -200,24 +200,25 @@ describe("F-005: free text is one capped line, at write time and at render time"
   });
 });
 
-describe("AC6: the reason is offered once, never blocks, and is its own transcript line", () => {
-  test("one prompt naming /decisions reason <why>, the answer returns before anything is typed", async () => {
-    const notes: string[] = [];
+describe("AC6: the reason is asked once and awaited; an empty answer releases the wait", () => {
+  test("waits once for the reason, then returns the answer; the host is asked a second time with the reason question", async () => {
     const order: string[] = [];
+    const questions: string[] = [];
     const ask = journalAsk(
-      async () => {
-        order.push("host answered");
-        return "b";
+      async (request) => {
+        questions.push(request.question);
+        order.push(questions.length === 1 ? "question answered" : "reason answered");
+        return questions.length === 1 ? "b" : "";
       },
-      { cwd: root, random: () => 0.9, notify: (text) => (order.push("notified"), notes.push(text)) },
+      { cwd: root, random: () => 0.9 },
     );
     expect(await ask({ question: "Pick", options: withRec() })).toBe("b");
-    const prompts = notes.filter((text) => text.includes("/decisions reason <why>"));
-    expect(prompts).toHaveLength(1);
-    expect(prompts[0]).toContain("asked once");
-    // nothing but the host's own question was awaited
-    expect(order[0]).toBe("host answered");
-    expect((await readRecords(root)).filter((r) => r.kind === "reason")).toHaveLength(0);
+    expect(order).toEqual(["question answered", "reason answered"]);
+    expect(questions[1]).toContain("Why?");
+    // an empty answer is recorded as absent, and it counts as the one ask
+    const reasons = (await readRecords(root)).filter((r) => r.kind === "reason");
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0] && "reason" in reasons[0]).toBe(false);
   });
 
   test("not shown again for the same decision: a later answer for it offers nothing", async () => {
@@ -229,9 +230,11 @@ describe("AC6: the reason is offered once, never blocks, and is its own transcri
 
   test("a followed recommendation shows no prompt", async () => {
     const notes: string[] = [];
-    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) });
+    const questions: string[] = [];
+    const ask = journalAsk(async (request) => (questions.push(request.question), "a"), { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) });
     await ask({ question: "Pick", options: withRec() });
     expect(notes).toEqual([]);
+    expect(questions).toEqual(["Pick"]);
   });
 });
 
