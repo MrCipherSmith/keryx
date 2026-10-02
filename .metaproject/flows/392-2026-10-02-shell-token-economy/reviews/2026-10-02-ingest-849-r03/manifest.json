@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-10-02-ingest-849-r02",
+  "reviewId": "2026-10-02-ingest-849-r03",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "849",
-    "head": "16b8ae12fded9c5f3d32158cdbdbafb82b959954"
+    "head": "73676b5591bbb743f89597d933d33452eb738c2e"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/scope.md",
-    "coverage": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/coverage.md",
-    "report": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/report.md",
-    "findings": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/findings.json",
-    "learning": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/learning.md",
-    "decisions": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/decisions.md"
+    "scope": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/scope.md",
+    "coverage": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/coverage.md",
+    "report": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/report.md",
+    "findings": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/findings.json",
+    "learning": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/learning.md",
+    "decisions": ".metaproject/flows/392-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 28,
+    "total": 29,
     "dropped_prefilter": 1,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": 0,
     "dropped_findings_cap": 0,
-    "retained": 28,
+    "retained": 29,
     "dismissed_by_round": null,
     "by_reason": {
       "prefilter:comment-only": 1
@@ -50,10 +50,10 @@
   "cost": {
     "spent_usd": 0
   },
-  "createdAt": "2026-10-02T10:25:30.157Z",
-  "updatedAt": "2026-10-02T10:25:30.157Z",
+  "createdAt": "2026-10-02T12:17:41.729Z",
+  "updatedAt": "2026-10-02T12:17:59.082Z",
   "flow": {
-    "id": "387",
-    "path": ".metaproject/flows/387-2026-10-02-shell-token-economy"
+    "id": "392",
+    "path": ".metaproject/flows/392-2026-10-02-shell-token-economy"
   }
 }

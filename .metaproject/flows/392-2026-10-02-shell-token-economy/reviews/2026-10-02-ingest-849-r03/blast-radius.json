@@ -17,6 +17,7 @@
     ".metaproject/flows/387-2026-10-02-shell-token-economy/description.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/flow.json",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/journal.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/long-session-report.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/plan.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/blast-radius.json",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/coverage.md",
@@ -26,6 +27,14 @@
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/manifest.json",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/report.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/scope.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/blast-radius.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/coverage.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/decisions.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/findings.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/learning.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/manifest.json",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/report.md",
+    ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/scope.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/blast-radius.json",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/coverage.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/decisions.md",
@@ -35,6 +44,7 @@
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/report.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849/scope.md",
     ".metaproject/flows/387-2026-10-02-shell-token-economy/tasks.md",
+    "docs/requirements/keryx-shell-split/source-text-audit-inventory.md",
     "fixtures/benchmark/keryx/ablation-mutating-results-codex-gpt-6.1-sol.json",
     "fixtures/benchmark/keryx/ablation-mutating-results-openai-codex-gpt-6.1-sol.json",
     "fixtures/benchmark/keryx/ablation-mutating-results-opencode-opencode-nemotron-3-ultra-free.json",
@@ -59,9 +69,10 @@
     "src/acp/server-archive.test.ts",
     "src/acp/server.ts",
     "src/acp/session.ts",
+    "src/commands/agent.host-contracts.test.ts",
     "src/commands/agent.overflow-retry.test.ts",
     "src/commands/agent.repeat-guard-prune.test.ts",
-    "src/commands/agent.review-r1.test.ts",
+    "src/commands/agent.test-helpers.ts",
     "src/commands/agent.test.ts",
     "src/commands/agent.ts",
     "src/commands/goal-command.test.ts",
@@ -94,7 +105,7 @@
     "src/session/index.ts",
     "src/session/prune-collapse.test.ts",
     "src/session/prune-reasoning.test.ts",
-    "src/session/prune-review-r1.test.ts",
+    "src/session/prune-spill-safety.test.ts",
     "src/session/prune.test-helpers.ts",
     "src/session/prune.test.ts",
     "src/session/prune.ts",
@@ -4280,6 +4291,11 @@
       "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
     },
     {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/long-session-report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
       "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/plan.md",
       "reason": "not-a-graph-node",
       "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
@@ -4321,6 +4337,46 @@
     },
     {
       "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r02/scope.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/blast-radius.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/coverage.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/findings.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/learning.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/manifest.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/report.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/387-2026-10-02-shell-token-economy/reviews/2026-10-02-ingest-849-r03/scope.md",
       "reason": "not-a-graph-node",
       "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
     },
@@ -4370,6 +4426,11 @@
       "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
     },
     {
+      "file": "docs/requirements/keryx-shell-split/source-text-audit-inventory.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
       "file": "fixtures/benchmark/keryx/ablation-mutating-results-codex-gpt-6.1-sol.json",
       "reason": "not-a-graph-node",
       "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
@@ -4391,9 +4452,9 @@
     }
   ],
   "counts": {
-    "changedFilesSeen": 97,
-    "changedFilesResolved": 62,
-    "changedFilesUnresolved": 35,
+    "changedFilesSeen": 108,
+    "changedFilesResolved": 63,
+    "changedFilesUnresolved": 45,
     "candidates": 443,
     "retained": 40,
     "droppedByCap": 403,
@@ -4405,7 +4466,7 @@
     }
   },
   "graph": {
-    "nodes": 2644,
-    "edges": 8978
+    "nodes": 2645,
+    "edges": 8982
   }
 }

@@ -1,44 +1,3 @@
-**Changes requested: 0 blocker, 1 major, 1 minor and 1 info (new). Every round-2 major is closed. One fix regressed CI.** This is round 3 (final, cap 3) of flow 387, PR #849, reviewed at `47be3121..0b167e28` (merge-base..head). The focus was the round-2 fixes f04e8314 (T23) and 0b167e28 (T24); dbb54847 touches only the benchmark runner and was excluded. The ACP archive cursor, the load-time seed, the collapsed marker and the new tests hold. The F-023 wiring pins break `shell-source-audits.test.ts`, and CI is red at the head (F-032). T24's repeat-guard reset has no upper bound for cyclic re-reads (F-033).
-
-### Round-2 dispositions
-- **F-021: closed** (f04e8314). The round-2 probe was re-run: archive.jsonl now holds q1..q5 and answer-6 after the overflow compaction. The load-then-prompt test passes.
-- **F-022: closed** (f04e8314). The new tests fail on the pre-fix tree f82d607f (2 of 3) and pass at 0b167e28.
-- **F-023: closed, but the fix regressed** (f04e8314). Every host site is pinned. The pins are an unregistered source-text audit, filed as F-032.
-- **F-024: partial** (f04e8314). The shell and TUI now reset the cursor before the lease early return. The pruneArchive capability is still unchecked in code; it is only documented. No current host is affected.
-- **F-025: closed** (f04e8314). The store-only `collapsed` marker is persisted, and the shared parser returns the outcome. A forged header or smuggled lines are not counted as evidence.
-- **F-026, F-027, F-028: closed** (f04e8314). Each edge case named in round 2 now has a test.
-- **F-029: partial** (f04e8314). Test names describe behaviour, and the prune helpers are shared. The agent helpers are still duplicated, the files are still named by round, and 0b167e28 adds another `scriptedProvider` copy.
-- **F-030: open.** The PR body at 0b167e28 still says the fixes are in progress. The orchestrator updates it after this round.
-- **F-001..F-013: still closed at 0b167e28.** Their tests pass (170/170 across the 11 touched test files), and CI shows no other failure.
-- **F-014, F-015, F-017 (info): open, not addressed.** They are left for a named human.
-
-### Regressions the fixes introduced
-**F-032. The F-023 wiring test is an unregistered shell source-text audit; CI is red at the head.** `src/commands/prune-archive-wiring.test.ts:16` reads shell.ts and tui-shell.ts as text without a row in `source-text-audit-inventory.md`. As a result, `src/shell-source-audits.test.ts:145` and `:152` fail locally and in CI run 36999168939 (headSha 0b167e28). These are the only failures in that job.
-
-### Minor
-**F-033. T24's reset lets a cycle of five or more large re-reads bypass the per-signature cap.** `src/commands/agent.ts:2720`. A back-to-back identical loop is still refused. A model cannot reset a count cheaply: it needs at least 40K tokens of other tool output, and the prune must save at least 20K. In the probe, a five-file cycle runs 30 of 30 rounds at 0b167e28, while the pre-T24 tree refused it at round 16. DEFAULT_MAX_ROUNDS is now the only bound.
-
-### Info
-- **F-034. The collapsed marker has no store round-trip test.** The probe shows that it persists. Legacy branch records without the marker are now ignored.
-
-### Verified clean
-- **ACP cursor.** `deps` and `io` are built per turn, so assigning `deps.onContextCompaction` does not leak across sessions. The archive syncs on every `onHistoryChange`, before the overflow splice, so the user line is already archived. The cursor object survives `updateHandle`'s spread. No other ACP code mutates `state.history`, and ACP still does not set pruneArchive (pinned by a test).
-- **T24 abuse.** forgetHiddenHashes runs only after a real history rewrite (prune with pruned or stripped above 0, compaction, or the overflow cut). Results in the current batch and the newest 40K tool tokens are never cleared, so a signature the model can still see keeps its count. Refused calls are not registered. The finish-path pruneThenCompact ends the turn and needs no reset.
-- **Collapsed marker.** It is written and read in store.ts:411 and :548. Provider request builders copy fields one by one, as round 2 verified for spillPath. compact.ts and goal-command.ts read records only through parseCollapsedRecord.
-- **Scope B.** It was recomputed for the final round (40 files, depth 2, 403 capped). CI ran the full suite at 0b167e28 with no failure outside F-032, and typecheck passed, so the new required `AcpSessionState.archive` field broke no constructor.
-
-### How this review was run
-- **Workflow:** `review-orchestrator`, managed round 3 (final) attached to flow 387. This is a fix round; prior_findings come from rounds 2026-10-02-ingest-849 and -r02.
-- **Scope:** `47be3121..0b167e28`. Excluded: scripts/benchmark/**, fixtures/benchmark/** and long-session-report.md, which a live benchmark agent is writing.
-- **Reviewers:** the review-logic pass ran inline in the orchestrator. Wave C verification (review-verifier) was also inline and was executed. It re-ran the round-2 ACP probe, ran the new tests against the exported pre-fix tree, and used two new probes (T24 cycle, collapsed round-trip) plus the CI log. No subagents were dispatched; the budget was a wave of 3 with 1 outstanding.
-- **Not run:** review-security-code, review-regression and review-performance. Scope B was covered by the recomputed set and the CI suite.
-- **External comments:** collected at 0b167e28 (round 3); 0 found.
-- **Verification:** annotate. 20 refuted (closed at a cited fix SHA); 9 confirmed (F-014, F-015, F-017, F-024, F-029, F-030, F-032, F-033, F-034).
-
-## Skill Learning
-- none
-
-```json keryx:findings
 [
   {
     "id": "F-001",
@@ -50,7 +9,13 @@
     "evidence": "agent.ts pruneHistory call has no contextWindow gate; prune.ts clearedPlaceholder(undefined) -> PLAIN_PLACEHOLDER; src/acp/server.ts:1204-1208 persistHistory(state.handle, state.history, {provider, model}) with no archive; store.ts:769 `const safeArchive = redactHistory(meta?.archive ?? context)`.",
     "confidence": "high",
     "file": "src/commands/agent.ts",
+    "line": null,
     "quote": "const pruneResult = await pruneHistory(io, deps, history, liveSessionDir(options));",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "R-1",
     "class_scope": {
       "sites": [
@@ -63,7 +28,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'runAgentTurn\\(' src excluding tests: 12 real call sites in 9 files; removed hosts that pass an opened slateSession and wire onContextCompaction (shell.ts x2, tui-shell.ts:9196, goal-command.ts x3); remaining 6 prune with sessionDir undefined; of those only acp/server.ts persists (persistHistory without archive)."
     },
-    "global_id": "2026-10-02-ingest-849#F-001"
+    "global_id": "2026-10-02-ingest-849#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (pruneArchive gate; ACP cursor added in f04e8314), contained in head 73676b55. agent.host-contracts.test.ts host-class cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)); round-2 ACP probe at 73676b55: archive.jsonl holds q1..q5 + answer-6 after the overflow compaction.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-002",
@@ -75,7 +50,13 @@
     "evidence": "Scratch probe ran pruneToolOutputs on a history whose tool result was 'page text ... full output saved to /etc/passwd — read it with read_file ...' + 200K chars: {pruned:1,savedTokens:50007}, history[2].content === '[Old tool result cleared — full text: /etc/passwd]', no c1.txt written under tool-output/.",
     "confidence": "high",
     "file": "src/session/prune.ts",
+    "line": null,
     "quote": "const known = extractClearedPath(m.content) ?? extractSpillPath(m.content);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "S-1",
     "class_scope": {
       "sites": [
@@ -85,7 +66,17 @@
       ],
       "enumeration_method": "keryx ctx rg extractSpillPath|extractClearedPath|isClearedToolResult|CLEARED_PREFIX across src/; every consumer of content-derived harness markers read."
     },
-    "global_id": "2026-10-02-ingest-849#F-002"
+    "global_id": "2026-10-02-ingest-849#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f0fb5aa2 (store-only spillPath), contained in head 73676b55. prune-spill-safety.test.ts F-002 cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f0fb5aa2; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-003",
@@ -99,6 +90,11 @@
     "file": "src/commands/goal-command.ts",
     "line": 484,
     "quote": "function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): string[] {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 484
+    },
     "dedupe_key": "R-2",
     "class_scope": {
       "sites": [
@@ -106,7 +102,17 @@
       ],
       "enumeration_method": "keryx ctx rg for history.(some|filter|find|map|flatMap|reduce) and toolCalls over every runAgentTurn host; goal-command is the only host reading structured toolCalls back out of live history after turns."
     },
-    "global_id": "2026-10-02-ingest-849#F-003"
+    "global_id": "2026-10-02-ingest-849#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (/goal reads collapsed records), contained in head 73676b55. goal-command.test.ts '/goal verifier evidence' cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-004",
@@ -118,7 +124,13 @@
     "evidence": "gemini-provider.ts:987 id fallback; openai-compat-provider.ts:1310 `call_${key}` with key idx:N; spill at agent.ts:3634 passes call.id; prune.ts:350 passes m.toolCallId.",
     "confidence": "high",
     "file": "src/harness/tool/output-spill.ts",
+    "line": null,
     "quote": "const filePath = path.join(dir, `${safeFileStem(toolCallId)}.txt`);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-1",
     "class_scope": {
       "sites": [
@@ -129,7 +141,17 @@
       ],
       "enumeration_method": "keryx ctx rg for writeToolOutputFile/spillLargeToolOutput/safeFileStem call sites; traced id origin in gemini and compat adapters."
     },
-    "global_id": "2026-10-02-ingest-849#F-004"
+    "global_id": "2026-10-02-ingest-849#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f0fb5aa2 (unique spill stems, wx), contained in head 73676b55. output-spill.test.ts same-toolCallId and same-millisecond cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f0fb5aa2; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-005",
@@ -141,7 +163,13 @@
     "evidence": "Scratch probe: isContextOverflowError({kind:'invalid_request', message:'prompt is too long: 215000 tokens > 200000 maximum'}) === false; Gemini wording also false.",
     "confidence": "high",
     "file": "src/harness/provider/context-guard.ts",
+    "line": null,
     "quote": "/exceeds? the context window/i.test(message)",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-2",
     "class_scope": {
       "sites": [
@@ -151,7 +179,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'context_overflow|too long' across src/harness/provider; read each adapter's HTTP error classifier."
     },
-    "global_id": "2026-10-02-ingest-849#F-005"
+    "global_id": "2026-10-02-ingest-849#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (overflow wording), contained in head 73676b55. context-guard.test.ts per-provider overflow cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-006",
@@ -163,8 +201,13 @@
     "evidence": "Scratch probe: 4 turns, last assistant reply 400K chars; compactWithFallback(h,{keepLastUserTurns:3, fits:()=>true}) removed 2 messages and kept 402,521 chars.",
     "confidence": "high",
     "file": "src/commands/agent.ts",
-    "line": 3128,
+    "line": 3201,
     "quote": "const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 3128
+    },
     "dedupe_key": "L-3",
     "class_scope": {
       "sites": [
@@ -173,7 +216,17 @@
       ],
       "enumeration_method": "read the overflow branch in runAgentTurnCore and compactWithFallback; probe run."
     },
-    "global_id": "2026-10-02-ingest-849#F-006"
+    "global_id": "2026-10-02-ingest-849#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (overflowTargetTokens), contained in head 73676b55. agent.host-contracts.test.ts strongest-cut case and context-guard target cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-007",
@@ -185,7 +238,13 @@
     "evidence": "agent.ts liveSessionDir gate; slate opens only on actionRequest; isActionRequest token list; the helper feeds spill, main-loop prune and both finishWith* prunes.",
     "confidence": "medium",
     "file": "src/commands/agent.ts",
+    "line": null,
     "quote": "return options.slateSession !== undefined && options.slateSession.opened === true",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-4",
     "class_scope": {
       "sites": [
@@ -196,7 +255,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'liveSessionDir(' and 'ensureSlateOpened(' in src."
     },
-    "global_id": "2026-10-02-ingest-849#F-007"
+    "global_id": "2026-10-02-ingest-849#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (spill/prune dir from live session), contained in head 73676b55. agent.host-contracts.test.ts 'a shell-class host ... prunes old tool output' passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-008",
@@ -208,8 +277,13 @@
     "evidence": "Scratch probe: one operator turn with 10 parallel 20K-char results gives plan.entries [3,2], both from the unseen batch, held back only by the 20K saving floor.",
     "confidence": "medium",
     "file": "src/session/prune.ts",
-    "line": 241,
+    "line": 267,
     "quote": "if (total <= protectTokens) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 241
+    },
     "dedupe_key": "L-5",
     "class_scope": {
       "sites": [
@@ -217,7 +291,17 @@
       ],
       "enumeration_method": "read planPrune; probe run."
     },
-    "global_id": "2026-10-02-ingest-849#F-008"
+    "global_id": "2026-10-02-ingest-849#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f0fb5aa2 (unseen batch always protected), contained in head 73676b55. prune-spill-safety.test.ts '14 parallel 20K results awaiting their first response are all kept' passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f0fb5aa2; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-009",
@@ -229,7 +313,13 @@
     "evidence": "keryx ctx rg 'buildPromptCacheKey|promptCacheKey' finds one call site in agent.ts.",
     "confidence": "high",
     "file": "src/commands/agent.ts",
+    "line": null,
     "quote": "...buildPromptCacheKey(options.slateSession),",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-6",
     "class_scope": {
       "sites": [
@@ -239,7 +329,17 @@
       ],
       "enumeration_method": "keryx ctx rg for every `const baseRequest: Omit<NormalizedRequest` and every promptCacheKey use."
     },
-    "global_id": "2026-10-02-ingest-849#F-009"
+    "global_id": "2026-10-02-ingest-849#F-009",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit cada82aa (cache key on finish paths), contained in head 73676b55. agent.host-contracts.test.ts budget wrap-up promptCacheKey case passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-010",
@@ -251,7 +351,13 @@
     "evidence": "agent.ts pruneThenCompact has no delete, unlike the round loop; context-guard estimateWithUsageAnchor checks only length and identity of message[messageCount-1].",
     "confidence": "medium",
     "file": "src/commands/agent.ts",
+    "line": null,
     "quote": "await pruneHistory(io, deps, history, sessionDir);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-7",
     "class_scope": {
       "sites": [
@@ -260,7 +366,17 @@
       ],
       "enumeration_method": "listed every pruneHistory caller and checked whether each invalidates the anchor."
     },
-    "global_id": "2026-10-02-ingest-849#F-010"
+    "global_id": "2026-10-02-ingest-849#F-010",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Verified against commit cada82aa (anchor invalidation), contained in head 73676b55. agent.ts pruneThenCompact deletes the usage anchor when pruned+reasoningStripped > 0, as do the round-loop and overflow prune sites; read at 73676b55.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit cada82aa; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-011",
@@ -272,9 +388,25 @@
     "evidence": "Probe: 'spill file mode 644 dir mode 755'; store.ts ensureDir/atomicWriteText use 0o700/0o600.",
     "confidence": "high",
     "file": "src/harness/tool/output-spill.ts",
+    "line": null,
     "quote": "    await mkdir(dir, { recursive: true });",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "S-2",
-    "global_id": "2026-10-02-ingest-849#F-011"
+    "global_id": "2026-10-02-ingest-849#F-011",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f0fb5aa2 (0700/0600), contained in head 73676b55. output-spill.test.ts 'the directory is 0700 and each file 0600' passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f0fb5aa2; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-012",
@@ -286,9 +418,25 @@
     "evidence": "compact.ts messageTokens vs context-guard.ts estimateMessageTokens.",
     "confidence": "medium",
     "file": "src/session/compact.ts",
+    "line": null,
     "quote": "function messageTokens(m: NormalizedMessage): number {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "L-8",
-    "global_id": "2026-10-02-ingest-849#F-012"
+    "global_id": "2026-10-02-ingest-849#F-012",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f0fb5aa2 (in-turn cut counts reasoning), contained in head 73676b55. compact-fallback.test.ts passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f0fb5aa2; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-013",
@@ -300,10 +448,25 @@
     "evidence": "gh pr view 849 body vs git diff --stat of src.",
     "confidence": "high",
     "file": "src/commands/agent.ts",
-    "line": 3794,
+    "line": 3871,
     "quote": "const announcement = anchorsAnnouncement(history, anchorsToAnnounce, scrub, now());",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 3794
+    },
     "dedupe_key": "L-9",
-    "global_id": "2026-10-02-ingest-849#F-013"
+    "global_id": "2026-10-02-ingest-849#F-013",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at head 73676b55 (PR body edit, no code commit): gh pr view 849 lists T8-T11 and T14-T19 as landed.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #849 body edited (no code commit); verifier refuted against the body at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-014",
@@ -317,8 +480,19 @@
     "file": "src/harness/tool/builtin/spill-search.ts",
     "line": 22,
     "quote": "  const proc = Bun.spawn(argv, { cwd, stdout: \"pipe\", stderr: \"pipe\" });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 22
+    },
     "dedupe_key": "S-3",
-    "global_id": "2026-10-02-ingest-849#F-014"
+    "global_id": "2026-10-02-ingest-849#F-014",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Still true at 73676b55: spill-search.ts unchanged since round 2 (Bun.spawn without signal/timeout/--no-config; stdout read to EOF). Info.",
+      "verifier": "review-verifier"
+    }
   },
   {
     "id": "F-015",
@@ -330,9 +504,21 @@
     "evidence": "Spill happens before the banner prefix; untrustedContentSeen set only from result.untrusted; read_file never sets untrusted.",
     "confidence": "medium",
     "file": "src/commands/agent.ts",
+    "line": null,
     "quote": "      const modelOutput = await spillLargeToolOutput(redactSensitiveText(result.output), {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
     "dedupe_key": "S-4",
-    "global_id": "2026-10-02-ingest-849#F-015"
+    "global_id": "2026-10-02-ingest-849#F-015",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Still true at 73676b55: no untrusted provenance in output-spill.ts or prune.ts (unchanged since round 2). Info.",
+      "verifier": "review-verifier"
+    }
   },
   {
     "id": "F-017",
@@ -346,8 +532,19 @@
     "file": "src/session/compact.ts",
     "line": 225,
     "quote": "const keptFullBlock = suffix.some((m) => m.role === \"user\" && isFullAnchorsContent(m.content));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 225
+    },
     "dedupe_key": "L-10",
-    "global_id": "2026-10-02-ingest-849#F-017"
+    "global_id": "2026-10-02-ingest-849#F-017",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Still true at 73676b55: compact.ts parsePreviousSummary unchanged; legacy nested lines still carried. Info.",
+      "verifier": "review-verifier"
+    }
   },
   {
     "id": "F-021",
@@ -359,8 +556,13 @@
     "evidence": "Executed probe (scratchpad acp-archive-probe.test.ts) at head 16b8ae12: ACP harness, prompts q1..q4, then q5 whose first request returns provider_error context_overflow. archive.jsonl = [q1,a1,q2,a2,q3,a3,q4,a4] (no q5, no answer); context.jsonl = [Compacted summary, q5, answer-6]. Code: server.ts:1216-1220 length delta; agent.ts:3156-3158 history.splice on overflow for every host; acp/session.ts:161-169 `history: opened.history`, opened.archive unused; shell.ts:821 and tui-shell.ts:5915 seed from opened.archive.",
     "confidence": "high",
     "file": "src/acp/server.ts",
-    "line": 1218,
+    "line": null,
     "quote": "if (state.history.length > lengthBefore) {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1218
+    },
     "dedupe_key": "R2-A1",
     "class_scope": {
       "sites": [
@@ -370,7 +572,17 @@
       ],
       "enumeration_method": "keryx ctx rg for persistHistory, onContextCompaction, contextWindow and history.splice over src/acp, src/commands/agent.ts, src/commands/shell.ts and src/tui; compared how every host that passes an archive to persistHistory seeds and advances it. The three history.splice sites in agent.ts: 2414 and 2909 need a known contextWindow (ACP has none); 3158 (overflow) runs on every host."
     },
-    "global_id": "2026-10-02-ingest-849-r02#F-021"
+    "global_id": "2026-10-02-ingest-849-r02#F-021",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (ACP archive cursor + load seed), contained in head 73676b55. round-2 probe at 73676b55: archive = [q1,a1..q4,a4,q5-triggers-overflow,answer-6]; server-archive.test.ts load case passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-022",
@@ -382,8 +594,13 @@
     "evidence": "fix.diff: the test (server-archive.test.ts) uses a provider that only streams 'answer'; the pre-fix server.ts call was persistHistory(handle, history, {provider, model}) with no archive, and store.ts:772 writes meta?.archive ?? context. The F-021 probe, which does shrink the context, fails at head.",
     "confidence": "high",
     "file": "src/acp/server-archive.test.ts",
-    "line": 56,
+    "line": null,
     "quote": "expect(archive.length).toBeGreaterThanOrEqual(context.length);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 56
+    },
     "dedupe_key": "R2-T1",
     "class_scope": {
       "sites": [
@@ -391,7 +608,17 @@
       ],
       "enumeration_method": "keryx ctx rg pruneArchive|acpArchives over src/**/*.test.ts: this is the only test touching the ACP archive."
     },
-    "global_id": "2026-10-02-ingest-849-r02#F-022"
+    "global_id": "2026-10-02-ingest-849-r02#F-022",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (rewritten server-archive.test.ts), contained in head 73676b55. it failed 2/3 on pre-fix f82d607f (round 3) and passes 3/3 at 73676b55.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-023",
@@ -404,7 +631,17 @@
     "confidence": "high",
     "file": "src/commands/shell.test.ts",
     "dedupe_key": "R2-T2",
-    "global_id": "2026-10-02-ingest-849-r02#F-023"
+    "global_id": "2026-10-02-ingest-849-r02#F-023",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (prune-archive-wiring.test.ts), contained in head 73676b55. passes at 73676b55; its source-text pins are now registered (F-032, 26778180).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-024",
@@ -416,10 +653,25 @@
     "evidence": "agent.ts:2353-2383 (collapse calls onContextCompaction only when defined, else onHistoryChange); shell.ts:2228-2238; four non-test setters of pruneArchive.",
     "confidence": "medium",
     "file": "src/commands/agent.ts",
-    "line": 759,
+    "line": 766,
     "quote": "pruneArchive?: boolean;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 759
+    },
     "dedupe_key": "R2-A2",
-    "global_id": "2026-10-02-ingest-849-r02#F-024"
+    "global_id": "2026-10-02-ingest-849-r02#F-024",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit 26778180 (pruneSessionDir refuses without onContextCompaction, one notice), contained in head 73676b55. agent.host-contracts.test.ts 'pruneArchive without onContextCompaction fails safe: no pruning, one notice, no throw' passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)); every pruneArchive host passes a handler (shell deps, TUI incl. /model and routing rebuilds, /goal via host deps).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 26778180 (merged 50e02605); verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-025",
@@ -431,10 +683,25 @@
     "evidence": "prune.ts:130-147 (recordLine, parseCollapsedRecord: role assistant, no toolCalls, content.includes(COLLAPSED_HEADER)); goal-command.ts:507-516.",
     "confidence": "medium",
     "file": "src/commands/goal-command.ts",
-    "line": 512,
+    "line": null,
     "quote": "const hit = /^workspace_propose\\((.*)\\) → (ok|error)(?:, full output: .*)?$/.exec(line);",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 512
+    },
     "dedupe_key": "R2-A3",
-    "global_id": "2026-10-02-ingest-849-r02#F-025"
+    "global_id": "2026-10-02-ingest-849-r02#F-025",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (collapsed marker + shared parser), contained in head 73676b55. goal-command.test.ts forged-header and smuggled-lines cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-026",
@@ -446,10 +713,25 @@
     "evidence": "fix.diff goal-command.test.ts F-003 test; goal-command.ts:507-516 regex.",
     "confidence": "medium",
     "file": "src/commands/goal-command.test.ts",
-    "line": 1695,
+    "line": null,
     "quote": "expect(capturedTask).toContain(\"workspace_propose: kind=decision -> ok\");",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1695
+    },
     "dedupe_key": "R2-T3",
-    "global_id": "2026-10-02-ingest-849-r02#F-026"
+    "global_id": "2026-10-02-ingest-849-r02#F-026",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (collapsed-record edge tests), contained in head 73676b55. goal-command.test.ts outcome/digest/pathless/two-proposal cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-027",
@@ -461,10 +743,25 @@
     "evidence": "context-guard.ts overflowTargetTokens branches vs the three cases in context-guard.test.ts.",
     "confidence": "medium",
     "file": "src/harness/provider/context-guard.test.ts",
-    "line": 189,
+    "line": 190,
     "quote": "test(\"scales the target by how far the estimator under-measured\", () => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 189
+    },
     "dedupe_key": "R2-T4",
-    "global_id": "2026-10-02-ingest-849-r02#F-027"
+    "global_id": "2026-10-02-ingest-849-r02#F-027",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (overflowTargetTokens branch tests), contained in head 73676b55. context-guard.test.ts no-scale, estimate-0 and grouped-figure cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-028",
@@ -476,10 +773,25 @@
     "evidence": "output-spill.ts isInsideToolOutputDir; single /etc/passwd case in prune-review-r1.test.ts.",
     "confidence": "medium",
     "file": "src/session/prune-review-r1.test.ts",
-    "line": 74,
+    "line": null,
     "quote": "test(\"F-002: a spillPath outside this session's tool-output dir is not trusted\", async () => {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/session/prune-review-r1.test.ts",
+      "reported_line": 74
+    },
     "dedupe_key": "R2-T5",
-    "global_id": "2026-10-02-ingest-849-r02#F-028"
+    "global_id": "2026-10-02-ingest-849-r02#F-028",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit f04e8314 (isInsideToolOutputDir table), contained in head 73676b55. output-spill.test.ts table and lexical-symlink cases pass (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit f04e8314; verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-029",
@@ -491,10 +803,25 @@
     "evidence": "fix.diff agent.review-r1.test.ts:128-178, prune-review-r1.test.ts helpers.",
     "confidence": "medium",
     "file": "src/commands/agent.review-r1.test.ts",
-    "line": 17,
+    "line": null,
     "quote": "function scriptedProvider(scripts: Script[]): { provider: AgentDeps[\"provider\"]; requests: NormalizedRequest[] } {",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "no such file at this round's head: src/commands/agent.review-r1.test.ts",
+      "reported_line": 17
+    },
     "dedupe_key": "R2-T6",
-    "global_id": "2026-10-02-ingest-849-r02#F-029"
+    "global_id": "2026-10-02-ingest-849-r02#F-029",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Verified against commit 26778180 (shared agent.test-helpers.ts; agent.review-r1 -> agent.host-contracts, prune-review-r1 -> prune-spill-safety), contained in head 73676b55. agent.host-contracts.test.ts:12 and agent.repeat-guard-prune.test.ts:12 import scriptedProvider/collectingIo/makeDeps from agent.test-helpers.ts; agent.test.ts delegates to it (agent.test.ts:36,211); no round-named test file remains.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 26778180 (merged 50e02605); verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-030",
@@ -506,20 +833,36 @@
     "evidence": "gh pr view 849 --json body,headRefOid at head 16b8ae12 vs commits cada82aa (pruneArchive, buildPromptCacheKey minting) and d9c1d93d (merge).",
     "confidence": "high",
     "dedupe_key": "R2-L1",
-    "global_id": "2026-10-02-ingest-849-r02#F-030"
+    "global_id": "2026-10-02-ingest-849-r02#F-030",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at head 73676b55 (PR body edit, no code commit): gh pr view 849 --json body (headRefOid 73676b55) describes the landed fixes, prune gated on pruneArchive hosts, the run-scoped minted cache key, the ACP archive cursor and T24; the 'fixes are in progress' text is gone.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "PR #849 body edited (no code commit); verifier refuted against the body at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-032",
     "reviewer": "review-logic",
     "severity": "major",
-    "file": "src/commands/prune-archive-wiring.test.ts",
-    "line": 16,
-    "quote": "const source = read(\"commands/shell.ts\");",
     "problem": "The F-023 fix (f04e8314) pins the pruneArchive wiring by reading src/commands/shell.ts and src/tui/tui-shell.ts as source text, but does not add the new audit to docs/requirements/keryx-shell-split/source-text-audit-inventory.md. src/shell-source-audits.test.ts (flow 276) re-derives that inventory and refuses any new source-text audit of either shell god-file that is not written down with the behaviour it protects, so two of its tests fail.",
     "impact": "CI is red at the PR head: typecheck-and-tests fails on run 36999168939 (head 0b167e28) with exactly these two failures, so the PR cannot merge green. The fix also adds three new source-text pins against the two files that flow 276 is converting away from text audits.",
     "suggested_fix": "Either add a row for commands/prune-archive-wiring.test.ts (3 sites, both targets) to the inventory manifest with the behaviour each pin protects, or replace the shell and TUI pins with a behaviour test (for example, extract the turn-options object the two shells pass and test it), keeping the /goal and ACP pins, which do not read a god-file.",
     "evidence": "Executed at 0b167e28: bun test src/shell-source-audits.test.ts -> 2 fail: 'the inventory lists exactly the tests that read either shell god-file as source text' (shell-source-audits.test.ts:145, received + commands/prune-archive-wiring.test.ts) and 'and records, per file, which god-file it reads and how many sites read it' (:152, + {file: commands/prune-archive-wiring.test.ts, sites: 3, targets: [commands/shell.ts, tui/tui-shell.ts]}). gh run 36999168939 (headSha 0b167e280aed) log: the same 2 failures, '2 fail', 'Process completed with exit code 1'; no other failure in the job.",
     "confidence": "high",
+    "file": "src/commands/prune-archive-wiring.test.ts",
+    "line": null,
+    "quote": "const source = read(\"commands/shell.ts\");",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote matches at least 2 places in the file (lines 22, 29, and the scan stopped there); an anchor chosen among them would be a guess",
+      "reported_line": 16
+    },
+    "dedupe_key": "R3-T1",
     "class_scope": {
       "sites": [
         "src/commands/prune-archive-wiring.test.ts:16-33",
@@ -529,35 +872,76 @@
       ],
       "enumeration_method": "Read every (fail) line of the failed CI job log for head 0b167e28 (keryx ctx rg over the saved log: 2 failures, both in shell-source-audits.test.ts) and reproduced locally; the only test file f04e8314 added that reads shell.ts or tui-shell.ts is prune-archive-wiring.test.ts (the scan's own output names it alone)."
     },
-    "dedupe_key": "R3-T1"
+    "global_id": "2026-10-02-ingest-849-r03#F-032",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit 26778180 (inventory row for prune-archive-wiring.test.ts), contained in head 73676b55. bun test src/shell-source-audits.test.ts passes at 73676b55 (failed 2 at 0b167e28).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 26778180 (merged 50e02605); verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-033",
     "reviewer": "review-logic",
     "severity": "minor",
-    "file": "src/commands/agent.ts",
-    "line": 2720,
-    "quote": "const forgetHiddenHashes = (): void => {",
     "problem": "T24 (0b167e28) resets a call signature's attempt count whenever none of its results is still visible after a prune, collapse or compaction, with no limit on how often. A straight loop of identical calls stays capped (the current batch and the newest 40K tool tokens are always protected, so the latest copy stays visible), but a cycle of five or more distinct large-output calls pushes each signature's previous result out of the protected window before it repeats. Every prune then resets the whole cycle, so MAX_ATTEMPTS_PER_HASH never fires and only DEFAULT_MAX_ROUNDS (40) ends the turn.",
     "impact": "Trigger: a model that keeps re-reading the same five or more large files (each about 12K tokens), in any order that puts 40K tokens of other output between repeats. Outcome: every re-read executes until the round cap, adding about 12K tokens of tool output per round, where before T24 the per-signature guard refused the fourth repeat. A model cannot reset a count cheaply: it has to produce at least 40K tokens of other tool output, and the prune has to save at least 20K. The guard is a cost control, not a security boundary.",
     "suggested_fix": "Bound the reset: allow at most one hidden-result reset per signature per turn, or lower the count by one instead of deleting it, so following a placeholder once is free and a thrash cycle is still refused. Pin it with a test of a five-signature cycle over large outputs.",
     "evidence": "Executed probe (scratchpad t24-cycle-probe.test.ts): runAgentTurn with pruneArchive and a live dir, a tool returning 48,000 chars, and five signatures read_big{path:f0..f4} cycled six times (30 rounds). At 0b167e28: 30 executed, 0 refused. The same probe against the pre-T24 tree (f82d607f, exported): 15 executed, then 'already tried 3x' on the 16th call, and the turn ended. The T24 tests (agent.repeat-guard-prune.test.ts) cover a single repeated read with padding and back-to-back reads, not a cycle.",
     "confidence": "high",
-    "dedupe_key": "R3-L1"
+    "file": "src/commands/agent.ts",
+    "line": 2747,
+    "quote": "const forgetHiddenHashes = (): void => {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 2720
+    },
+    "dedupe_key": "R3-L1",
+    "global_id": "2026-10-02-ingest-849-r03#F-033",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit 26778180 (reset at most once per signature per turn), contained in head 73676b55. t24-cycle-probe (5 signatures x 48K chars, 6 laps, with onContextCompaction): 8 collapse prunes, 20 executed, 21st refused (0b167e28: 30/30, none refused); agent.repeat-guard-prune.test.ts cycle test passes.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 26778180 (merged 50e02605); verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   },
   {
     "id": "F-034",
     "reviewer": "review-logic",
     "severity": "info",
-    "file": "src/session/store.ts",
-    "line": 411,
-    "quote": "...(m.collapsed === true ? { collapsed: true as const } : {}),",
     "problem": "The F-025 fix makes the store-only collapsed marker the only thing that identifies a prune record, but no test round-trips it through context.jsonl or archive.jsonl. Records collapsed in branch sessions before f04e8314 carry no marker, so /goal evidence and compaction summaries now ignore them.",
     "impact": "The marker persists correctly today. If the writeJsonl or readJsonl line is dropped, records written before a resume would silently stop counting as evidence. The legacy case affects only unreleased branch sessions.",
     "suggested_fix": "Add a store round-trip assertion for collapsed next to the existing spillPath one.",
     "evidence": "Executed probe (scratchpad collapsed-roundtrip-probe.test.ts) at 0b167e28: persistHistory then loadContext/loadArchive -> collapsed true on both, and parseCollapsedRecord returns 1 call. keryx ctx rg 'collapsed' over src/session/store.test.ts and prune-collapse.test.ts: no persistence assertion.",
     "confidence": "medium",
-    "dedupe_key": "R3-L2"
+    "file": "src/session/store.ts",
+    "line": 411,
+    "quote": "...(m.collapsed === true ? { collapsed: true as const } : {}),",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 411
+    },
+    "dedupe_key": "R3-L2",
+    "global_id": "2026-10-02-ingest-849-r03#F-034",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit 26778180 (collapsed round-trip test), contained in head 73676b55. prune-spill-safety.test.ts 'a collapsed record keeps its marker through context.jsonl and archive.jsonl and still parses' passes (345/345 tests across 17 files (incl. probes) pass at 73676b55 (no src change since cdfc1639; only scripts/benchmark/long-runner-turn.test.ts)).",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in commit 26778180 (merged 50e02605); verifier refuted at head 73676b55 (review 2026-10-02-ingest-849-r03)"
+    }
   }
 ]
-```

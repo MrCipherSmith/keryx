@@ -1,0 +1,44 @@
+# Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools
+
+Status: draft (flow-init skill formalizes this)
+Source: user description (Aleksandr Tsaitler, 2026-10-02), follow-up to flow 387
+
+## Problem
+
+After flow 387, `keryx shell` prunes, collapses and compacts its history, but the request is still
+"the history, made smaller": it grows with the session until a batch shrinks it, and old work survives
+only as collapsed one-line records inside the history. Slate (Anchors / Course / Seeds, shipped in the
+slate phases, `src/session/slate*.ts`, `slate_read` / `slate_write_seed`) was meant to give the model
+situational awareness — where it is, what it did, what it will do — but today it is an appendix to the
+full history, not the thing the model works from.
+
+## Expected Outcome
+
+The model works through slate: each request is assembled from a stable frame — system instruction, a
+budgeted slate snapshot (Anchors = where, Course/plan = what next, a new **Trail** shelf = what was
+done as references to each step and its saved output, Seeds = decisions/hypotheses), the operator's
+messages and only the last few rounds verbatim. Anything older is not re-sent; the model pulls it on
+demand with point-recall tools (e.g. trail filtered by file/tool/step, recall of one step's full output,
+search over the session archive). The request size stops growing with session length.
+
+## Outcome criteria
+
+Effect requested by Aleksandr Tsaitler (owner, outcome author: human):
+
+- The model works via slate — it knows where it is, what it did (references) and where to look for what
+  it will do, and has a few tools to request context precisely — so keryx spends fewer tokens than flow
+  387 already achieved, without losing quality.
+
+Concretely, judged by:
+
+- On flow 387's session-shape replay (`scripts/benchmark/replay-session-shape.ts`) and comparative
+  benchmark (`scripts/benchmark/`), per-request input stays bounded (flat after the first rounds) and
+  total input is lower than flow 387's result.
+- Quality holds: same task success rate as flow 387's branch on the same task set, and repeated reads /
+  recall calls do not grow enough to cancel the saving.
+
+## Out of Scope
+
+- Sharing slate between clients or sessions (slate stays task-local; workspace/SAC unchanged).
+- Changing flow 387's mechanisms other than to route their output into the Trail.
+- An LLM-written summary (separate follow-up noted in flow 387).

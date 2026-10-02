@@ -3,8 +3,8 @@
 target: report
 ref: 849
 mode: ingest
-flow: 387 (explicit-flow-id)
-created_at: 2026-10-02T11:26:31.957Z
+flow: 392 (explicit-flow-id)
+created_at: 2026-10-02T12:17:41.729Z
 context_mode: light
 
 ## Stage counts
@@ -15,13 +15,13 @@ construction, refused as a baseline).
 
 ### Dropped by the pre-filter
 
-files_seen: 97
-files_retained: 97
+files_seen: 108
+files_retained: 108
 files_dropped: 0
-blocks_seen: 352
-blocks_retained: 351
+blocks_seen: 367
+blocks_retained: 366
 blocks_dropped: 1
-changed_lines_retained: 23348
+changed_lines_retained: 30072
 changed_lines_dropped: 1
 
 | path | where | reason | why |
@@ -35,8 +35,8 @@ claims_received: 29
 claims_applied: 29
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 9
-refuted: 20
+confirmed: 3
+refuted: 26
 unverifiable: 0
 unverified: 0
 
@@ -46,7 +46,7 @@ findings_in: 29
 findings_removed_by_verifier: 0
 findings_retained: 29
 
-`annotate` records verdicts and removes nothing: 20 finding(s) are marked refuted and still reported.
+`annotate` records verdicts and removes nothing: 26 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 
