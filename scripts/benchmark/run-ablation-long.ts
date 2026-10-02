@@ -149,7 +149,11 @@ async function runSeed(
     const startedAt = Date.now();
     await runAgentTurn(io, deps, history, task.prompt, {
       slateSession: { dir: sessionDir, cwd: root, opened: true },
-    });
+      // Flow 387 review r1 F-001: prune/collapse run only on hosts that keep the originals. This runner
+      // holds the whole run in memory and writes full texts to sessionDir, so it opts in like the shell
+      // hosts do. A `main` checkout ignores the unknown option.
+      pruneArchive: true,
+    } as Parameters<typeof runAgentTurn>[4]);
     const durationMs = Date.now() - startedAt;
 
     // Independent verification from the files the agent left behind, never its own "DONE".
