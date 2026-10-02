@@ -205,6 +205,76 @@ export function isContextOverflowError(error: { kind: string; message?: string }
     /context_length_exceeded/i.test(message) ||
     /prompt contains at least \d+ input tokens/i.test(message) ||
     /maximum context length/i.test(message) ||
-    /exceeds? the context window/i.test(message)
+    /exceeds? the context window/i.test(message) ||
+    // Flow 387 review r1 F-005: Anthropic ("prompt is too long: N tokens > M maximum", also inside
+    // the raw `invalid_request_error` JSON body) and Gemini ("The input token count (N) exceeds
+    // the maximum number of tokens allowed (M)").
+    /prompt is too long/i.test(message) ||
+    /input token count[^.]*exceeds/i.test(message)
   );
+}
+
+/** What a provider's overflow rejection says about the request: tokens sent and/or the window. */
+export interface OverflowLimits {
+  /** Tokens the provider counted in the rejected request, when it said so. */
+  actual?: number;
+  /** The model's input limit, when it said so. */
+  limit?: number;
+}
+
+function firstNumber(message: string, patterns: readonly RegExp[]): number | undefined {
+  for (const pattern of patterns) {
+    const m = pattern.exec(message);
+    const raw = m?.[1]?.replace(/[,_]/g, "");
+    if (raw !== undefined) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Flow 387 review r1 F-006: read the token count and/or limit out of an overflow message
+ * (OpenAI "maximum context length is M tokens ... resulted in N tokens", Anthropic
+ * "prompt is too long: N tokens > M maximum", Gemini "input token count (N) exceeds the
+ * maximum number of tokens allowed (M)", Codex "contains at least N input tokens").
+ * Absent figures are simply absent; nothing is guessed.
+ */
+export function parseOverflowLimits(message: string | undefined): OverflowLimits {
+  const text = message ?? "";
+  const limit = firstNumber(text, [
+    /maximum context length is ([\d,_]+)/i,
+    />\s*([\d,_]+)\s*maximum/i,
+    /maximum number of tokens allowed \(([\d,_]+)\)/i,
+    /context (?:window|limit) (?:of|is) ([\d,_]+)/i,
+  ]);
+  const actual = firstNumber(text, [
+    /resulted in ([\d,_]+) tokens/i,
+    /prompt is too long: ([\d,_]+) tokens/i,
+    /input token count \(([\d,_]+)\)/i,
+    /contains at least ([\d,_]+) input tokens/i,
+  ]);
+  return { ...(actual !== undefined ? { actual } : {}), ...(limit !== undefined ? { limit } : {}) };
+}
+
+/**
+ * Flow 387 review r1 F-006: the largest request the retry may send, in the ESTIMATOR's
+ * units, or `undefined` when no limit is known. After a real overflow the estimator is
+ * known to have under-measured, so the target is 70% of the limit (the provider's own
+ * statement, else the configured window) and, when the provider also reported what it
+ * counted, is scaled by how far the estimator was off.
+ */
+export function overflowTargetTokens(
+  limits: OverflowLimits,
+  contextWindow: number | undefined,
+  estimate: number,
+): number | undefined {
+  const limit = limits.limit ?? contextWindow;
+  if (limit === undefined) return undefined;
+  const target = 0.7 * limit;
+  if (limits.actual !== undefined && limits.actual > estimate && estimate > 0) {
+    return Math.floor(target * (estimate / limits.actual));
+  }
+  return Math.floor(target);
 }

@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import {
   estimateRequestTokens,
   estimateWithUsageAnchor,
+  isContextOverflowError,
   needsCompaction,
+  overflowTargetTokens,
+  parseOverflowLimits,
   snapshotRequest,
   toUsageAnchor,
   type EstimatableMessage,
@@ -125,5 +128,66 @@ describe("needsCompaction", () => {
 
   test("well under the threshold never trips", () => {
     expect(needsCompaction(100, 1000)).toBe(false);
+  });
+});
+
+// Flow 387 review r1 F-005: provider-specific overflow wording.
+describe("isContextOverflowError per provider shape (flow 387 review r1 F-005)", () => {
+  test("Anthropic: plain message and the raw invalid_request_error body", () => {
+    expect(
+      isContextOverflowError({ kind: "invalid_request", message: "prompt is too long: 210000 tokens > 200000 maximum" }),
+    ).toBe(true);
+    expect(
+      isContextOverflowError({
+        kind: "unknown",
+        message:
+          '{"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 210000 tokens > 200000 maximum"}}',
+      }),
+    ).toBe(true);
+  });
+
+  test("Gemini: input token count exceeds the maximum", () => {
+    expect(
+      isContextOverflowError({
+        kind: "invalid_request",
+        message: "The input token count (1200000) exceeds the maximum number of tokens allowed (1048575).",
+      }),
+    ).toBe(true);
+  });
+
+  test("auth, rate-limit and 5xx errors are never matched, even with overflow wording", () => {
+    const message = "prompt is too long: input token count (9) exceeds the context window";
+    for (const kind of ["auth", "rate_limit", "server_error", "unavailable"]) {
+      expect(isContextOverflowError({ kind, message })).toBe(false);
+    }
+    expect(isContextOverflowError({ kind: "invalid_request", message: "bad tool schema" })).toBe(false);
+  });
+});
+
+describe("parseOverflowLimits / overflowTargetTokens (flow 387 review r1 F-006)", () => {
+  test("reads the figures out of each provider's wording", () => {
+    expect(parseOverflowLimits("prompt is too long: 210000 tokens > 200000 maximum")).toEqual({
+      actual: 210000,
+      limit: 200000,
+    });
+    expect(
+      parseOverflowLimits("maximum context length is 128000 tokens. However, your messages resulted in 150000 tokens."),
+    ).toEqual({ actual: 150000, limit: 128000 });
+    expect(
+      parseOverflowLimits("The input token count (1200000) exceeds the maximum number of tokens allowed (1048575)."),
+    ).toEqual({ actual: 1200000, limit: 1048575 });
+    expect(parseOverflowLimits("your prompt contains at least 200001 input tokens")).toEqual({ actual: 200001 });
+    expect(parseOverflowLimits("too long")).toEqual({});
+  });
+
+  test("target is 70% of the stated limit, else of the window, else unknown", () => {
+    expect(overflowTargetTokens({ limit: 100_000 }, 500_000, 90_000)).toBe(70_000);
+    expect(overflowTargetTokens({}, 100_000, 90_000)).toBe(70_000);
+    expect(overflowTargetTokens({}, undefined, 90_000)).toBeUndefined();
+  });
+
+  test("scales the target by how far the estimator under-measured", () => {
+    // Estimator said 100K, provider counted 200K: an estimator-unit target must be half of 70K.
+    expect(overflowTargetTokens({ limit: 100_000, actual: 200_000 }, undefined, 100_000)).toBe(35_000);
   });
 });

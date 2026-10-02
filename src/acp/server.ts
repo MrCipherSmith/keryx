@@ -296,6 +296,8 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
     readonly permissionRequestIds: Set<string>;
   }
   const activeTurns = new Map<string, AcpActiveTurn>();
+  /** Flow 387 review r1 F-001: the unpruned messages per live history array (see the turn handler). */
+  const acpArchives = new WeakMap<NormalizedMessage[], NormalizedMessage[]>();
 
   /**
    * Flow 306 (W6, T15): one `keryx shell` lifecycle hook runtime per ACP
@@ -1201,10 +1203,25 @@ export async function runAcpServer(options: AcpServerOptions): Promise<void> {
       // is taken, so the busy guard above still holds while this waits.
       await sessionMcp.get(sessionId)?.mcp.ready;
       const io = createAcpAgentIo(sessionId, sendUpdate, askPermissionFor(sessionId, turn));
+      // Flow 387 review r1 F-001: this host keeps no archive of its own, and
+      // `persistHistory` without one writes the CONTEXT as the archive. Track the
+      // originals per history array so a shortened/pruned context can never replace them.
+      // (This host does not set `pruneArchive`, so nothing prunes today; this keeps it
+      // true if that ever changes.)
+      let archive = acpArchives.get(state.history);
+      if (archive === undefined) {
+        archive = [...state.history];
+        acpArchives.set(state.history, archive);
+      }
+      const lengthBefore = state.history.length;
       const result = await runAgentTurn(io, deps, state.history, userLine, { signal: turn.controller.signal });
+      if (state.history.length > lengthBefore) {
+        archive.push(...state.history.slice(lengthBefore));
+      }
       const updatedHandle = persistHistory(state.handle, state.history, {
         provider: providerId,
         model: modelId,
+        archive,
       });
       registry.updateHandle(sessionId, updatedHandle);
       // `turn.cancelled` wins over whatever `finishReason` came back: a turn

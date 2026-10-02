@@ -23,6 +23,7 @@ import {
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
 import { anchorsAnnouncement } from "../session/anchors-announce";
+import { COLLAPSED_HEADER, parseCollapsedRecord } from "../session/prune";
 import { readSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { createFlowService } from "../flow/service";
@@ -483,10 +484,10 @@ function summarizeRecentSeeds(seeds: readonly SlateSeed[]): string[] {
 function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): string[] {
   const lines: string[] = [];
   for (const message of history) {
-    if (message.role !== "assistant" || message.toolCalls === undefined) {
+    if (message.role !== "assistant") {
       continue;
     }
-    for (const call of message.toolCalls) {
+    for (const call of message.toolCalls ?? []) {
       if (call.name !== "workspace_propose") {
         continue;
       }
@@ -502,6 +503,17 @@ function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): str
       }
       const outcome = resultMessage !== undefined ? resultMessage.content : "(no result recorded this run)";
       lines.push(`- workspace_propose: ${argSummary} -> ${outcome}`);
+    }
+    // Flow 387 review r1 F-003: prune collapses old exchanges into one text record, so the
+    // live call/result pair above is gone. Read those records' digest lines too
+    // (`workspace_propose(<digest>) → ok|error`), or the verifier would see no proposal.
+    if (parseCollapsedRecord(message).some((entry) => entry.name === "workspace_propose")) {
+      for (const line of message.content.slice(message.content.indexOf(COLLAPSED_HEADER)).split("\n").slice(1)) {
+        const hit = /^workspace_propose\((.*)\) → (ok|error)(?:, full output: .*)?$/.exec(line);
+        if (hit?.[1] !== undefined && hit[2] !== undefined) {
+          lines.push(`- workspace_propose: ${hit[1]} -> ${hit[2]} (collapsed earlier in the run)`);
+        }
+      }
     }
   }
   return lines;
@@ -815,7 +827,8 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
   // check must not re-examine the same `parsed.text` and immediately undo
   // that open/bind whenever the goal text happens to contain a close-phrase
   // substring (e.g. "wrap up documentation").
-  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {};
+  // Flow 387 review r1 F-001: `/goal` runs inside the shells, which sync their archives.
+  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true, pruneArchive: true } : {};
   await runAgentTurn(io, deps, history, parsed.text, turnOptions);
 
   // SLATE-27 (flow 186, T9): bounded continuation loop, armed only when T8

@@ -59,6 +59,8 @@ import {
   estimateWithUsageAnchor,
   isContextOverflowError,
   needsCompaction,
+  overflowTargetTokens,
+  parseOverflowLimits,
   snapshotRequest,
   toUsageAnchor,
   type UsageAnchor,
@@ -87,7 +89,7 @@ import {
   slateSessionDir,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { spillLargeToolOutput } from "../harness/tool/output-spill";
+import { spillToolOutput } from "../harness/tool/output-spill";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
@@ -746,6 +748,22 @@ export interface RunAgentTurnOptions {
    */
   slateSession?: SlateSessionRef;
   /**
+   * Flow 387 review r1 F-001: the host's promise that it keeps the ORIGINAL messages
+   * (an archive synced before every history change, written next to a live session
+   * dir). Pruning and collapsing rewrite `history` into placeholders, so they run
+   * only when this is `true` AND a live session dir exists. Default off: a host that
+   * persists without an archive (ACP, subagents, trigger dispatch, deep-enrich, the
+   * TUI side worker) would lose the originals for good. Set by the readline shell,
+   * the TUI shell and `/goal`, which sync their archives.
+   */
+  pruneArchive?: boolean;
+  /**
+   * Flow 387 review r1 F-020: explicit stable provider prompt-cache key for a host
+   * with no slate session. A slate session id still takes precedence; absent both, a
+   * key is minted once per `history` array (see {@link buildPromptCacheKey}).
+   */
+  cacheKey?: string;
+  /**
    * Review finding (Phase 3): `/goal` (`goal-command.ts`) already performs
    * its own deterministic slate open + `workspaceId` bind BEFORE calling
    * `runAgentTurn` with the same `parsed.text` as `userLine`. Without this
@@ -1145,17 +1163,28 @@ function buildRequestOptions(
 /**
  * Flow 387 T5: the provider prompt-cache key for a turn — the live session id.
  * The slate ref's `dir` is `sessionDir(project, sessionId)`, so its basename IS
- * the session id; every live surface (readline shell, TUI, `/goal`, harness
- * one-shot) already threads `slateSession`, which makes this one derivation
- * cover them all instead of a per-call-site option that one site could forget.
- * Absent ref (no session) -> `{}`: never a made-up key.
+ * the session id.
+ * Flow 387 review r1 F-020: a host without a slate session (harness run, benchmark
+ * runner, ACP, trigger, subagent) gets `options.cacheKey`, else a key minted once
+ * per `history` array — stable for that host/run's lifetime, different for a second
+ * run and for a subagent (its own history is its own prefix), never per request.
  */
-function buildPromptCacheKey(
-  slateSession: SlateSessionRef | undefined,
-): { promptCacheKey: string } | Record<string, never> {
-  if (slateSession === undefined) return {};
-  const id = basename(slateSession.dir);
-  return id === "" ? {} : { promptCacheKey: id };
+const historyCacheKeys = new WeakMap<object, string>();
+
+export type PromptCacheFields = { promptCacheKey: string } | Record<string, never>;
+
+function buildPromptCacheKey(options: RunAgentTurnOptions, history: NormalizedMessage[]): PromptCacheFields {
+  if (options.slateSession !== undefined) {
+    const id = basename(options.slateSession.dir);
+    if (id !== "") return { promptCacheKey: id };
+  }
+  if (options.cacheKey !== undefined && options.cacheKey !== "") return { promptCacheKey: options.cacheKey };
+  let minted = historyCacheKeys.get(history);
+  if (minted === undefined) {
+    minted = `keryx-run-${randomBytes(12).toString("hex")}`;
+    historyCacheKeys.set(history, minted);
+  }
+  return { promptCacheKey: minted };
 }
 
 /**
@@ -2296,11 +2325,22 @@ function computeReasoningDurationMs(startedAt: string | undefined, endedAt: stri
   return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs ? endMs - startMs : undefined;
 }
 
-/** The live session dir that holds `tool-output/` spill files, or undefined without one (flow 387 T10/T11). */
+/**
+ * The live session dir that holds `tool-output/` spill files, or undefined without one (flow 387 T10/T11).
+ * Flow 387 review r1 F-007: not gated on the slate being open (many prompts never open it).
+ * `slateSessionDir` is the lease-loss-aware accessor: a detached or displaced shell gets
+ * `undefined`, so it never writes into another holder's session dir.
+ */
 function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
-  return options.slateSession !== undefined && options.slateSession.opened === true
-    ? slateSessionDir(options.slateSession)
-    : undefined;
+  return options.slateSession !== undefined ? slateSessionDir(options.slateSession) : undefined;
+}
+
+/**
+ * Flow 387 review r1 F-001: the dir pruning may rewrite history against — only when the
+ * host proved it keeps the originals (`pruneArchive`) and holds a live, non-detached dir.
+ */
+function pruneSessionDir(options: RunAgentTurnOptions): string | undefined {
+  return options.pruneArchive === true ? liveSessionDir(options) : undefined;
 }
 
 /**
@@ -2317,6 +2357,10 @@ async function pruneHistory(
   sessionDir: string | undefined,
   minSavingTokens?: number,
 ): Promise<PruneResult> {
+  if (sessionDir === undefined) {
+    // Flow 387 review r1 F-001: no proof the originals are kept -> behave like main, no pruning.
+    return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
+  }
   const lengthBefore = history.length;
   const result = await pruneToolOutputs(history, {
     sessionDir,
@@ -2352,7 +2396,11 @@ async function pruneThenCompact(
   toolDefs: readonly NormalizedToolDefinition[],
   sessionDir: string | undefined,
 ): Promise<void> {
-  await pruneHistory(io, deps, history, sessionDir);
+  const pruned = await pruneHistory(io, deps, history, sessionDir);
+  if (pruned.pruned + pruned.reasoningStripped > 0) {
+    // Flow 387 review r1 F-010: the anchored prefix just shrank, same as in the round loop.
+    usageAnchors.delete(history);
+  }
   const estimate = estimateRequestTokens(history, systemInstruction, toolDefs);
   if (!needsCompaction(estimate, deps.contextWindow)) {
     return;
@@ -2745,7 +2793,8 @@ async function runAgentTurnCore(
       parentRunId,
       why,
       signal,
-      liveSessionDir(options),
+      pruneSessionDir(options),
+      buildPromptCacheKey(options, history),
     );
     if (outcome.aborted === true) {
       system("\n[stopped] Model turn interrupted by user.\n");
@@ -2834,7 +2883,7 @@ async function runAgentTurnCore(
     // through the host's existing checkpoint; the archive keeps the originals.
     // Flow 387 T18: old exchanges whose results are all outside the window are
     // collapsed into one text record, not only cleared.
-    const pruneResult = await pruneHistory(io, deps, history, liveSessionDir(options));
+    const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(options));
     if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
       system(
@@ -2876,7 +2925,7 @@ async function runAgentTurnCore(
       tools: toolDefs,
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
       ...buildRequestOptions(deps, reasoningEffort),
-      ...buildPromptCacheKey(options.slateSession),
+      ...buildPromptCacheKey(options, history),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -3079,14 +3128,24 @@ async function runAgentTurnCore(
           const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
           // Flow 387 T11: prune first (any saving counts now), then compact with
           // the same fallback as the pre-request guard.
-          const overflowPrune = await pruneHistory(io, deps, history, liveSessionDir(options), 1);
+          const overflowPrune = await pruneHistory(io, deps, history, pruneSessionDir(options), 1);
           if (overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             usageAnchors.delete(history);
           }
+          // Flow 387 review r1 F-006: the estimator just under-measured (or the window is
+          // unknown), so the usual 85%-of-window test cannot pick the cut. Aim for 70% of the
+          // limit the provider stated (else the configured window); with no limit known at all,
+          // never accept a weak cut — `fits` stays false so the strongest one (in-turn tail) wins.
+          const overflowTarget = overflowTargetTokens(
+            parseOverflowLimits(pendingOverflowError.message),
+            deps.contextWindow,
+            overflowEstimate,
+          );
           const compacted = compactWithFallback(history, {
             keepLastUserTurns: 3,
             fits: (ctx) =>
-              !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
+              overflowTarget !== undefined &&
+              estimateRequestTokens(ctx, roundSystemInstruction, toolDefs) <= overflowTarget,
           });
           if (compacted.noop && overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             overflowRetried = true;
@@ -3631,10 +3690,13 @@ async function runAgentTurnCore(
       // to the live session dir and the model gets head + tail + counts + path.
       // One generic hook here covers every tool; an output already capped below
       // the threshold passes through untouched. No live session dir → unchanged.
-      const modelOutput = await spillLargeToolOutput(redactSensitiveText(result.output), {
+      // Flow 387 review r1 F-002: the spill file's path is recorded on the message
+      // (`spillPath`) as data; prune never parses it back out of the output text.
+      const spilled = await spillToolOutput(redactSensitiveText(result.output), {
         sessionDir: liveSessionDir(options),
         toolCallId: call.id,
       });
+      const modelOutput = spilled.text;
       // `untrusted` alone decides, NOT `untrusted && !isError`.
       //
       // The old guard let the content's own author turn the control off. It
@@ -3660,6 +3722,7 @@ async function runAgentTurnCore(
         provenance: "tool",
         toolCallId: call.id,
         ...(result.isError === true ? { isError: true as const } : {}),
+        ...(spilled.spillPath !== undefined ? { spillPath: spilled.spillPath } : {}),
         ts: now(),
       });
       io.onHistoryChange?.("tool");
@@ -3811,7 +3874,8 @@ async function runAgentTurnCore(
         parentRunId,
         { maxAttempts, toolLog },
         signal,
-        liveSessionDir(options),
+        pruneSessionDir(options),
+        buildPromptCacheKey(options, history),
       );
         if (wrapUp.aborted) {
           system("\n[stopped] Model turn interrupted by user.\n");
@@ -4060,8 +4124,11 @@ async function finishWithBudgetSummary(
   // reached the provider call, so the round streamed to completion — the one
   // "final" turn call still uninterruptible by construction.
   signal: AbortSignal | undefined,
-  // Flow 387 T11: live session dir for the prune step's `tool-output/` files.
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files
+  // (review r1 F-001: set only when the host keeps the originals).
   sessionDir?: string,
+  // Flow 387 review r1 F-009: same prompt-cache key as the round loop.
+  cacheKey: PromptCacheFields = {},
 ): Promise<{ aborted: boolean }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -4117,6 +4184,7 @@ async function finishWithBudgetSummary(
     // No tools — force a text wrap-up.
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
     ...buildRequestOptions(deps, reasoningEffort),
+    ...cacheKey,
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -4173,8 +4241,11 @@ async function finishWithSubmitResult(
   parentRunId: string,
   why: string,
   signal: AbortSignal | undefined,
-  // Flow 387 T11: live session dir for the prune step's `tool-output/` files.
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files
+  // (review r1 F-001: set only when the host keeps the originals).
   sessionDir?: string,
+  // Flow 387 review r1 F-009: same prompt-cache key as the round loop.
+  cacheKey: PromptCacheFields = {},
 ): Promise<{ submitted?: SubmittedResult; error?: string; aborted?: true }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -4211,6 +4282,7 @@ async function finishWithSubmitResult(
     tools,
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
     ...buildRequestOptions(deps, deps.reasoningEffort),
+    ...cacheKey,
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,

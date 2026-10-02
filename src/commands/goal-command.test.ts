@@ -66,6 +66,7 @@ import type { GoalArgsError, GoalVerifierVerdict, ParsedGoalArgs } from "./goal-
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import { detachSlateSession, type SlateSessionRef } from "../session/slate-lifecycle";
 import { appendSeed, readSlate } from "../session/slate";
+import { COLLAPSED_HEADER } from "../session/prune";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 
@@ -1651,6 +1652,48 @@ test("#392: the verifier's dispatch includes this run's workspace_propose record
 
   expect(capturedTask).toContain("chose JWT for session auth");
   expect(capturedTask).toContain("proposed decision d-1 for review");
+});
+
+test("flow 387 review r1 F-003: a workspace_propose exchange collapsed by prune still reaches the verifier as evidence", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const { provider } = textOnlyProvider("still working");
+  let capturedTask = "";
+  const spawnSubagent = fakeSpawnSubagentTool(async (input) => {
+    capturedTask = String(input.task);
+    return { output: '{"achieved": true, "gaps": []}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+  // The shape `pruneToolOutputs` leaves behind: one plain assistant text record, no toolCalls.
+  const history: NormalizedMessage[] = [
+    {
+      role: "assistant",
+      content: `${COLLAPSED_HEADER}\nworkspace_propose(kind=decision) → ok, full output: /tmp/x/tool-output/collapsed-call-1.txt\nread_file(src/a.ts) → ok`,
+      provenance: "model",
+    },
+  ];
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 1",
+    cwd,
+    io,
+    deps,
+    history,
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(capturedTask).toContain("workspace_propose: kind=decision -> ok");
+  expect(capturedTask).not.toContain("read_file(src/a.ts)");
 });
 
 test("#392: when the auto-provisioned flow's own AC defers completion to the verifier, the verifier is instructed not to weight flow-task-checkbox state as non-completion evidence", async () => {

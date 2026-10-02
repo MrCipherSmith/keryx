@@ -9196,7 +9196,8 @@ export async function launchTuiAgentShell(opts: {
         void runAgentTurn(foregroundIo, deps, history, line, {
         signal: turnSignal,
         ...(origin === "operator" ? {} : { origin }),
-        ...(slateSession !== undefined ? { slateSession } : {}),
+        // Flow 387 review r1 F-001: this shell syncs its archive before every history change.
+        ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic

@@ -4558,8 +4558,10 @@ test("flow 387 T5: requests carry promptCacheKey = the session id, and none with
 
   const without = scriptedProvider([[{ kind: "text_delta", text: "one" }, { kind: "model_end" }]]);
   await runAgentTurn(collectingIo().io, deps(without.provider), [], "hello");
+  // Flow 387 review r1 F-020: no session no longer means no key — the run mints one (see
+  // agent.review-r1.test.ts for stability across rounds and uniqueness across runs).
   expect(without.requests).toHaveLength(1);
-  expect("promptCacheKey" in without.requests[0]!).toBe(false);
+  expect(without.requests[0]!.promptCacheKey).toMatch(/^keryx-run-/);
 });
 
 test("the control: with planFollowThrough opted in, a plan with real work left still gets the single follow-through round", async () => {
