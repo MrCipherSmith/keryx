@@ -9,9 +9,9 @@
   "id": "388",
   "slug": "voice-investigation",
   "title": "Voice for Telegram and keryx: investigation",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T04:32:28.836Z",
-  "updatedAt": "2026-10-02T10:10:16.861Z",
+  "updatedAt": "2026-10-02T10:31:27.386Z",
   "source": {
     "type": "description",
     "ref": null
@@ -186,6 +186,20 @@
       "at": "2026-10-02T10:10:16.861Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/846 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-02T10:31:22.771Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T10:31:27.384Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T10:31:27.386Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -261,7 +275,82 @@
       },
       "criterion": "AC5",
       "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    },
+    {
+      "at": "2026-10-02T10:31:27.386Z",
+      "kind": "complete",
+      "identity": {
+        "value": "MrCipherSmith",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4",
+      "headCommit": "b856f1d875f6a10649a311995db2434423900322"
     }
   ],
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T10:31:27.384Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "b856f1d875f6a10649a311995db2434423900322 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "b856f1d875f6a10649a311995db2434423900322 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "388-2026-10-02-voice-investigation is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 4 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:828decaf08dda6d92b5ce46216894409529b8d091a5e0a11ceb0c93a656e76a4"
+    }
+  ],
+  "merged": {
+    "commit": "b856f1d875f6a10649a311995db2434423900322",
+    "ref": "origin/main",
+    "at": "2026-10-02T10:31:27.386Z"
+  }
 }

@@ -14,3 +14,6 @@
 - 2026-10-02T10:10:14.187Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-02T10:10:14.569Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-02T10:10:16.861Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/846 (warning: PR is not a draft) (base: main)
+- 2026-10-02T10:31:22.771Z - completing
+- 2026-10-02T10:31:27.384Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-02T10:31:27.386Z - done: all gates passed
