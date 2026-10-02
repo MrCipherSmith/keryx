@@ -9421,7 +9421,10 @@ export async function launchTuiAgentShell(opts: {
         chunks.push(`${error instanceof Error ? error.message : String(error)}\n`);
       } finally {
         active = false;
-        if (io.onSystem === capture) io.onSystem = previous;
+        if (io.onSystem === capture) {
+          if (previous) io.onSystem = previous;
+          else delete io.onSystem;
+        }
         if (chrome.showToast === captureToast) chrome.showToast = previousToast;
       }
       if (commandWorkFailures.length > 0) {
