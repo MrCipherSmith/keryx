@@ -320,6 +320,8 @@ export interface RemotePanelOptions {
    * Painted only while remote control is on; `undefined` hides the line so the sidebar keeps its height.
    */
   getPosture?: () => string | undefined;
+  /** A click on the posture line (the saved-rule count lives there) opens `/permissions`. */
+  onOpenPermissions?: () => void;
 }
 
 export interface RemotePanelHandle {
@@ -366,6 +368,9 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
   };
   value.onMouseDown = () => {
     activate();
+  };
+  posture.onMouseDown = () => {
+    options.onOpenPermissions?.();
   };
 
   const unsubscribeTheme = onThemeChange(guardedThemeRepaint("remote-panel", draw, () => disposed || isRenderableGone(box)));

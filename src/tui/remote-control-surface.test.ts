@@ -133,6 +133,31 @@ otuiTest("sidebar: the posture line follows refresh() and is hidden while remote
   }
 });
 
+otuiTest("sidebar: a click on the posture line opens /permissions, and the Remote row still opens the modal", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  let permissions = 0;
+  let remote = 0;
+  const panel = mountRemotePanel(otui.core, h.renderer, h.chrome.sidebarTop, {
+    width: SIDEBAR_TEXT_WIDTH,
+    getStatus: () => ON,
+    getPosture: () => postureSidebarText(POSTURE),
+    onOpen: () => (remote += 1),
+    onOpenPermissions: () => (permissions += 1),
+  });
+  try {
+    await clickNode(h, findById(h.chrome.sidebarTop, "sb-remote-p"));
+    expect(permissions).toBe(1);
+    expect(remote).toBe(0);
+    await clickNode(h, findById(h.chrome.sidebarTop, "sb-remote-v"));
+    expect(remote).toBe(1);
+    expect(permissions).toBe(1);
+  } finally {
+    panel.dispose();
+    h.destroy();
+  }
+});
+
 test("the status block lists the Telegram permissions and names /remote-policy; without a posture it is unchanged", () => {
   const lines = formatRemoteStatusLines(ON, postureLines({ ...POSTURE, inForce: "ask (shell /mode)" }));
   const text = lines.join("\n");

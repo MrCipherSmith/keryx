@@ -32,6 +32,7 @@
 // damaged file quotes a field name that came off disk.
 
 import { randomUUID } from "node:crypto";
+import { loadRemoteConfig } from "../remote/config";
 import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";
 import {
@@ -416,6 +417,9 @@ function runStatus(args: string[]): void {
   // Flow 396: the saved defaults for a turn that came from Telegram. Present only when Telegram is set
   // up. A running shell's own `/mode` overrides the mode default, and serve cannot see that shell.
   const telegram = loadPosture();
+  // How many people may use the topic: a count, never the ids themselves.
+  const remoteConfig = telegram === undefined ? undefined : loadRemoteConfig();
+  const allowedUsers = remoteConfig?.ok === true ? remoteConfig.value.allowedUserIds.length : undefined;
 
   if (asJson) {
     // No token, no credential id, no salt, no hash: a fingerprint is the most a
@@ -434,6 +438,7 @@ function runStatus(args: string[]): void {
                   runTimeoutMs: telegram.runTimeoutMs,
                   approvalTimeoutMs: telegram.approvalTimeoutMs,
                   savedRules: telegram.savedRules,
+                  ...(allowedUsers !== undefined ? { allowedUsers } : {}),
                   shellModeOverridesDefault: true,
                 },
               }),
@@ -467,7 +472,7 @@ function runStatus(args: string[]): void {
   console.log(`  pending approvals: ${report.pendingApprovals}`);
   if (telegram !== undefined) {
     console.log(
-      `  telegram:   default mode ${telegram.defaultMode}, run limit ${formatPolicyDuration(telegram.runTimeoutMs)}, approval wait ${formatPolicyDuration(telegram.approvalTimeoutMs)}, ${telegram.savedRules} saved shell rule${telegram.savedRules === 1 ? "" : "s"}`,
+      `  telegram:   default mode ${telegram.defaultMode}, run limit ${formatPolicyDuration(telegram.runTimeoutMs)}, approval wait ${formatPolicyDuration(telegram.approvalTimeoutMs)}, ${telegram.savedRules} saved shell rule${telegram.savedRules === 1 ? "" : "s"}${allowedUsers !== undefined ? `, ${allowedUsers} allowed user${allowedUsers === 1 ? "" : "s"}` : ""}`,
     );
     console.log("              a running shell's /mode overrides the default mode; /remote-policy changes the defaults");
   }

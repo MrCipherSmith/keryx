@@ -4421,6 +4421,7 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
       onOpen: () => showRemoteControl(),
+      onOpenPermissions: () => showPermissions(),
       getPosture: () => {
         const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
         return posture === undefined ? undefined : postureSidebarText(posture);

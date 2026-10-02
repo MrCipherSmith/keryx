@@ -117,6 +117,9 @@ describe("flow 396 — serve status reports the Telegram permission defaults", (
     expect(human.out).toContain("default mode ask");
     expect(human.out).toContain("run limit 30m");
     expect(human.out).toContain("approval wait 5m");
+    expect(human.out).toContain("1 allowed user");
+    // A count, never the ids or the chat.
+    expect(human.out).not.toContain("-1001");
     const json = await run(["serve", "status", "--json"]);
     const start = json.out.indexOf("{");
     const report = JSON.parse(json.out.slice(start, json.out.lastIndexOf("}") + 1)) as { telegramPermissions?: Record<string, unknown> };
@@ -125,6 +128,7 @@ describe("flow 396 — serve status reports the Telegram permission defaults", (
       runTimeoutMs: 1_800_000,
       approvalTimeoutMs: 300_000,
       savedRules: 0,
+      allowedUsers: 1,
       shellModeOverridesDefault: true,
     });
   }, 30_000);
