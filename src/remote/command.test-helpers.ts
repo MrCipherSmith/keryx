@@ -106,7 +106,6 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
         requestApproval: async () => "deny" as const,
         reportState: async (updateId: number, state: MessageState) => {
           fake.reported.push([updateId, state]);
-          return true;
         },
         requestChoice: (text: string, rows: string[][], timeoutMs: number) =>
           new Promise<number | undefined>((resolve) => {

@@ -100,6 +100,7 @@ function harness(opts: { busy?: boolean; startResult?: StartResult; runTimeoutMs
           if (fake.approvalAnswer === "throw") throw new Error("stream dropped");
           return fake.approvalAnswer;
         },
+        requestChoice: async () => undefined,
       } as FakeClient;
       client = fake;
       return fake;

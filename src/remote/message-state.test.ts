@@ -229,7 +229,6 @@ function bridgeRig(options: { rejectReports?: boolean } = {}): Rig {
         reportState: async (updateId: number, state: MessageState) => {
           reported.push([updateId, state]);
           if (options.rejectReports === true) throw new Error("serve is gone");
-          return true;
         },
       };
     },
@@ -388,7 +387,6 @@ describe("the shell reports each state in order (AC18)", () => {
               });
             }
             posted.push(state);
-            return true;
           },
         };
       },
