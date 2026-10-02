@@ -3,7 +3,7 @@
 // nothing of the operator's own configuration leaks in or out.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeProjectExternalSetting } from "../lib/external-switch";
@@ -120,4 +120,37 @@ test("a saved mode is what the row shows", async () => {
   saveRemoteConfig(testConfig({ rendering: "html" }), configDir);
   const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
   expect(snapshot.rendering).toEqual({ mode: "html", saveable: true });
+});
+
+function seedRemote(extra: Record<string, unknown> = {}): void {
+  mkdirSync(join(configDir, "remote"), { recursive: true });
+  writeFileSync(join(configDir, "remote", "config.json"), JSON.stringify({ schemaVersion: 1, chatId: -1001, allowedUserIds: [1], ...extra }), { mode: 0o600 });
+}
+
+test("flow 396: with no Telegram config the snapshot carries a telegram field without a posture (shown as not connected)", async () => {
+  const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(snapshot.telegram).toEqual({});
+});
+
+test("flow 396: a saved config is read as the defaults when no shell holds its own copy", async () => {
+  seedRemote({ permissionMode: "ask", runTimeoutMs: 1_800_000 });
+  const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "trust", plan: false }, configDir);
+  expect(snapshot.telegram?.posture).toMatchObject({ defaultMode: "ask", runTimeoutMs: 1_800_000, approvalTimeoutMs: 900_000, savedRules: 0 });
+  expect(snapshot.telegram?.posture?.inForce).toBeUndefined();
+});
+
+test("flow 396: the running shell's copy and the mode in force with its source win over the file", async () => {
+  seedRemote({ permissionMode: "ask" });
+  const snapshot = await loadSettingsSnapshot(
+    cwd,
+    {
+      permissionMode: "trust",
+      plan: false,
+      telegram: { defaultMode: "trust", runTimeoutMs: 0, approvalTimeoutMs: 120_000, inForce: "trust (Telegram default)" },
+    },
+    configDir,
+  );
+  expect(snapshot.telegram?.posture).toMatchObject({ defaultMode: "trust", approvalTimeoutMs: 120_000, inForce: "trust (Telegram default)" });
+  // The shell's own mode row is not the Telegram default: they are separate rows.
+  expect(snapshot.permissionMode).toBe("trust");
 });

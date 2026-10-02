@@ -88,8 +88,8 @@ export function formatAge(ms: number): string {
 
 const STATE_WORDS: Record<RemoteState, string> = { off: "off", on: "on", offline: "offline" };
 
-/** One status block: state, topic, heartbeat age and what turns it on or off. */
-export function formatRemoteStatusLines(status: RemoteStatus): string[] {
+/** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */
+export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[]): string[] {
   const lines = [`Remote control: ${STATE_WORDS[status.state]}`];
   if (status.state === "off") {
     lines.push("Topic: none");
@@ -104,6 +104,9 @@ export function formatRemoteStatusLines(status: RemoteStatus): string[] {
     lines.push(`Approvals not confirmed: ${n}. The topic shows ${n === 1 ? "it" : "them"} as "not confirmed" until serve takes the shell's ack.`);
   }
   lines.push(`Turn it off with ${REMOTE_CONTROL_COMMAND} off, or press o here. Rename: ${REMOTE_CONTROL_COMMAND} off, then ${REMOTE_CONTROL_COMMAND} <name>.`);
+  if (posture !== undefined && posture.length > 0) {
+    lines.push("", "Telegram permissions (change with /remote-policy):", ...posture.map((line) => `  ${line}`));
+  }
   return lines;
 }
 
@@ -161,6 +164,8 @@ export const REMOTE_TABS = [
 
 export type PresentRemoteOptions = {
   getStatus: () => RemoteStatus;
+  /** The Telegram permission lines for the Status tab (flow 396). */
+  getPostureLines?: () => readonly string[] | undefined;
   /** Turn it on (with the name serve picks) when off, off when on. Same code as the typed command. */
   onToggle: () => void;
   renderer?: { width?: number; height?: number };
@@ -200,7 +205,7 @@ export function presentRemoteControl(
     const status = options.getStatus();
     if (tab === "events") return formatRemoteEventLines(status);
     if (tab === "commands") return formatRemoteCommandLines(status);
-    return formatRemoteStatusLines(status);
+    return formatRemoteStatusLines(status, options.getPostureLines?.());
   };
   const content = (tab: string): string => {
     const lines = linesFor(tab);
@@ -294,6 +299,15 @@ export function projectRemoteRow(status: RemoteStatus | undefined, width: number
   return { text: fit(topic, width), role: "ok", action: "open" };
 }
 
+/** The posture line under the Remote row: only while remote control is on or retrying, and only when there is something to say. */
+export function projectPostureLine(status: RemoteStatus | undefined, posture: string | undefined, width: number): string | undefined {
+  if (status === undefined || status.state === "off" || posture === undefined || posture.length === 0) return undefined;
+  return posture
+    .split("\n")
+    .map((line) => fit(line, width))
+    .join("\n");
+}
+
 type PanelParent = { add(child: unknown): void };
 type TextNode = { content: unknown; onMouseDown?: (() => void) | undefined };
 
@@ -301,6 +315,11 @@ export interface RemotePanelOptions {
   width: number;
   getStatus: () => RemoteStatus;
   onOpen: () => void;
+  /**
+   * Flow 396: the Telegram permission posture, one line under the row (`trust · no limit · wait 15m`).
+   * Painted only while remote control is on; `undefined` hides the line so the sidebar keeps its height.
+   */
+  getPosture?: () => string | undefined;
 }
 
 export interface RemotePanelHandle {
@@ -325,6 +344,8 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
   const value = new core.TextRenderable(renderer as never, { id: "sb-remote-v", content: "" }) as unknown as TextNode;
   box.add(label);
   box.add(value as never);
+  const posture = new core.TextRenderable(renderer as never, { id: "sb-remote-p", content: "" }) as unknown as TextNode & { visible?: boolean };
+  box.add(posture as never);
 
   const currentRow = (): RemoteRow => projectRemoteRow(options.getStatus(), options.width);
   const draw = (): void => {
@@ -332,6 +353,9 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
     const row = currentRow();
     label.content = core.t`${dimChunk(core, "Remote")}`;
     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
+    const line = projectPostureLine(options.getStatus(), options.getPosture?.(), options.width);
+    posture.content = line === undefined ? "" : core.t`${dimChunk(core, line)}`;
+    posture.visible = line !== undefined;
   };
   const activate = (): "open" => {
     options.onOpen();

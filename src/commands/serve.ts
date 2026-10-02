@@ -32,6 +32,7 @@
 // damaged file quotes a field name that came off disk.
 
 import { randomUUID } from "node:crypto";
+import { formatPolicyDuration, loadPosture } from "./remote-policy-command";
 import { sanitizeForDisplay } from "../lib/project-registry";
 import {
   DEFAULT_SERVE_BIND_ADDRESS,
@@ -412,6 +413,9 @@ function runStatus(args: string[]): void {
 
   const credentialState = credential.status === "ok" ? "present" : credential.status;
   const fingerprint = credential.status === "ok" ? credentialFingerprint(credential.record) : undefined;
+  // Flow 396: the saved defaults for a turn that came from Telegram. Present only when Telegram is set
+  // up. A running shell's own `/mode` overrides the mode default, and serve cannot see that shell.
+  const telegram = loadPosture();
 
   if (asJson) {
     // No token, no credential id, no salt, no hash: a fingerprint is the most a
@@ -422,6 +426,17 @@ function runStatus(args: string[]): void {
           ...report,
           credential: credentialState,
           ...(fingerprint === undefined ? {} : { credentialFingerprint: fingerprint }),
+          ...(telegram === undefined
+            ? {}
+            : {
+                telegramPermissions: {
+                  defaultMode: telegram.defaultMode,
+                  runTimeoutMs: telegram.runTimeoutMs,
+                  approvalTimeoutMs: telegram.approvalTimeoutMs,
+                  savedRules: telegram.savedRules,
+                  shellModeOverridesDefault: true,
+                },
+              }),
           // NOT stripped, deliberately, and for the reason recorded on the R4a
           // JSON projection: JSON escapes a control character rather than
           // emitting it, so the consumer receives valid JSON and decides for
@@ -450,6 +465,12 @@ function runStatus(args: string[]): void {
   }
   console.log(`  credential: ${credentialState}${fingerprint === undefined ? "" : ` (fingerprint ${fingerprint})`}`);
   console.log(`  pending approvals: ${report.pendingApprovals}`);
+  if (telegram !== undefined) {
+    console.log(
+      `  telegram:   default mode ${telegram.defaultMode}, run limit ${formatPolicyDuration(telegram.runTimeoutMs)}, approval wait ${formatPolicyDuration(telegram.approvalTimeoutMs)}, ${telegram.savedRules} saved shell rule${telegram.savedRules === 1 ? "" : "s"}`,
+    );
+    console.log("              a running shell's /mode overrides the default mode; /remote-policy changes the defaults");
+  }
   if (report.message !== undefined) {
     console.log("");
     console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(report.message)}`);

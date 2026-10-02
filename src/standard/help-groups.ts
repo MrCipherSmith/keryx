@@ -568,6 +568,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",
   },
+  {
+    kind: "slash",
+    name: "/remote-policy",
+    group: "Automation",
+    summary: "Telegram defaults for a turn started there: mode ask|trust, run limit, approval wait. Never changes the shell's /mode.",
+  },
 
   // ---- External agents, ACP and MCP ----------------------------------------
   {

@@ -71,6 +71,14 @@ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 import { permissionsSlashText } from "../commands/permissions-command";
+import {
+  loadPosture,
+  postureLines,
+  postureSidebarText,
+  REMOTE_POLICY_COMMAND,
+  remotePolicyText,
+  type RemotePolicyDeps,
+} from "../commands/remote-policy-command";
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
@@ -4413,6 +4421,10 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
       onOpen: () => showRemoteControl(),
+      getPosture: () => {
+        const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+        return posture === undefined ? undefined : postureSidebarText(posture);
+      },
     });
     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
@@ -5888,14 +5900,17 @@ export async function launchTuiAgentShell(opts: {
     io.readOnly = () => readOnly;
     const paintModeRow = (): void => {
       const row = describeModeRow(permissionMode, readOnly);
+      // Flow 396: with remote control on, the row names the mode in force and where it comes from
+      // (`trust (Telegram default)`, `ask (shell /mode)`), because a Telegram turn and a typed one can differ.
+      const inForce = remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined;
       // Read-only is the state an operator must not forget they are in.
       // The row is also the sidebar's way into `/settings` (flow 374): clicking
       // it opens the modal, and the hint names the command while there is room.
       const hint = settingsSidebarHint(row.readOnly !== undefined);
       sbModeV.content =
         row.readOnly !== undefined
-          ? otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
-          : otui.t`${dimChunk(otui, `mode ${row.mode}${hint === undefined ? "" : ` ${hint}`}`)}`;
+          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
+          : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
@@ -6717,6 +6732,31 @@ export async function launchTuiAgentShell(opts: {
       }
       io.onSystem?.(permissionsSlashText(rest, { sessionAllow: sessionShellAllow, onChanged: permissionsChanged }));
     };
+    // Flow 396: `/remote-policy`. The saved Telegram defaults, and this shell's copy of them. It never
+    // touches `permissionMode` or `modeChangedThisSession`: `/mode` owns those.
+    const runningTelegramPolicy = (): NonNullable<ReturnType<NonNullable<RemotePolicyDeps["running"]>>> | undefined => {
+      const bridge = remoteBridge;
+      if (bridge === undefined || !bridge.active) return undefined;
+      return {
+        defaultMode: bridge.configuredPermissionMode,
+        runTimeoutMs: bridge.runTimeoutMs,
+        approvalTimeoutMs: bridge.approvalTimeoutMs,
+      };
+    };
+    const telegramModeInForce = (): string | undefined => (remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined);
+    const remotePolicyDeps = (): RemotePolicyDeps => ({
+      running: runningTelegramPolicy,
+      inForce: telegramModeInForce,
+      applyPolicy: (patch) => {
+        remoteBridge?.applyPolicy(patch);
+        paintModeRow();
+        liveRemotePanel?.refresh();
+      },
+    });
+    const telegramPosture = () => loadPosture({ running: runningTelegramPolicy, inForce: telegramModeInForce });
+    const runRemotePolicyCommand = (line: string): void => {
+      io.onSystem?.(remotePolicyText(line.trim().slice(REMOTE_POLICY_COMMAND.length), remotePolicyDeps()));
+    };
     const showReviews = (): void => {
       void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
         .then(() => liveReviewsPanel?.refresh())
@@ -6745,6 +6785,10 @@ export async function launchTuiAgentShell(opts: {
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        getPostureLines: () => {
+          const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+          return posture === undefined ? undefined : postureLines(posture);
+        },
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
@@ -7385,6 +7429,11 @@ export async function launchTuiAgentShell(opts: {
           routing: routingEnabled,
           thinkDisplay: thinkDisplayMode,
           reasoningOverride,
+          ...(() => {
+            const running = runningTelegramPolicy();
+            const inForce = telegramModeInForce();
+            return running === undefined ? {} : { telegram: { ...running, ...(inForce !== undefined ? { inForce } : {}) } };
+          })(),
         }),
       );
     const runSettingsAction = (command: string): Promise<void> =>
@@ -7402,6 +7451,7 @@ export async function launchTuiAgentShell(opts: {
         reasoning: runReasoningCommand,
         think: runThinkCommand,
         theme: runThemeCommand,
+        remotePolicy: (arg) => remotePolicyText(arg, remotePolicyDeps()),
         onSystem: (text) => io.onSystem?.(text),
       });
     const showSettings = (): void => {
@@ -8120,6 +8170,10 @@ export async function launchTuiAgentShell(opts: {
             runPermissionsCommand(line);
             return;
           }
+          case "remote-policy": {
+            runRemotePolicyCommand(line);
+            return;
+          }
           case "decisions": {
             routeDecisionsCommand(line, decisionsPanel);
             return;
@@ -8523,6 +8577,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === PERMISSIONS_COMMAND) {
           runPermissionsCommand(line);
+          return;
+        }
+        if (command.name === REMOTE_POLICY_COMMAND) {
+          runRemotePolicyCommand(line);
           return;
         }
         if (routeDecisionsCommand(line, decisionsPanel)) {
@@ -9793,7 +9851,11 @@ export async function launchTuiAgentShell(opts: {
           // The switch happened when the live session is now the one asked for.
           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },
-        onChange: () => liveRemotePanel?.refresh(),
+        onChange: () => {
+          liveRemotePanel?.refresh();
+          // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
+          paintModeRow();
+        },
       },
     });
 

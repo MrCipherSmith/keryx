@@ -11,6 +11,7 @@ import {
   loadRemoteConfig,
   parseRemoteConfig,
   saveRemoteConfig,
+  updateRemotePolicy,
 } from "./config";
 import type { FakeSentMessage } from "./fake-bot-api";
 import { alwaysButtonText } from "./http-surface";
@@ -86,6 +87,70 @@ describe("the remote config keys (AC4, AC6, AC8, AC14)", () => {
     const again = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
     expect(again.permissionMode).toBe("ask");
     expect("approvalTimeoutMs" in again).toBe(false);
+  });
+});
+
+describe("updateRemotePolicy (AC19)", () => {
+  function seed(extra: Record<string, unknown> = {}): { dir: string; file: string } {
+    const dir = makeRemoteDir();
+    dirs.push(dir);
+    mkdirSync(path.join(dir, "remote"), { recursive: true });
+    const file = path.join(dir, "remote", "config.json");
+    writeFileSync(file, JSON.stringify({ ...BASE, orphanMs: 5_000, ...extra }), { mode: 0o600 });
+    return { dir, file };
+  }
+  const onDisk = (file: string): Record<string, unknown> => JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>;
+
+  test("writes only the named key; absent keys stay absent so a later default change reaches them", () => {
+    const { dir, file } = seed();
+    const saved = updateRemotePolicy({ permissionMode: "ask" }, dir);
+    expect(saved.ok && saved.value.permissionMode).toBe("ask");
+    expect(Object.keys(onDisk(file)).sort()).toEqual(["allowedUserIds", "chatId", "orphanMs", "permissionMode", "schemaVersion"]);
+  });
+
+  test("changes several keys at once and keeps the others exactly as they were", () => {
+    const { dir, file } = seed({ runTimeoutMs: 1_800_000, permissionMode: "ask" });
+    updateRemotePolicy({ runTimeoutMs: 0, approvalTimeoutMs: 120_000 }, dir);
+    expect(onDisk(file)).toMatchObject({ chatId: -1001, allowedUserIds: [1], orphanMs: 5_000, permissionMode: "ask", runTimeoutMs: 0, approvalTimeoutMs: 120_000 });
+    const loaded = loadRemoteConfig(dir);
+    expect(loaded.ok && loaded.value.approvalTimeoutMs).toBe(120_000);
+  });
+
+  test("a value outside the schema is refused with a reason and the file is untouched", () => {
+    const { dir, file } = seed();
+    const before = readFileSync(file, "utf8");
+    const bad = updateRemotePolicy({ approvalTimeoutMs: 10 }, dir);
+    expect(bad.ok).toBe(false);
+    expect(!bad.ok && bad.reason).toContain("approvalTimeoutMs");
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
+  test("auto is refused here too, whatever the type says", () => {
+    const { dir, file } = seed();
+    const before = readFileSync(file, "utf8");
+    const bad = updateRemotePolicy({ permissionMode: "auto" as unknown as "ask" }, dir);
+    expect(bad.ok).toBe(false);
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
+  test("no config file: refused, says to connect, creates nothing", () => {
+    const dir = makeRemoteDir();
+    dirs.push(dir);
+    const result = updateRemotePolicy({ permissionMode: "ask" }, dir);
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.reason).toContain("connect Telegram first");
+    expect(loadRemoteConfig(dir).ok).toBe(false);
+  });
+
+  test("a file that is not valid JSON is refused without being rewritten", () => {
+    const dir = makeRemoteDir();
+    dirs.push(dir);
+    mkdirSync(path.join(dir, "remote"), { recursive: true });
+    const file = path.join(dir, "remote", "config.json");
+    writeFileSync(file, "{ nope", { mode: 0o600 });
+    const result = updateRemotePolicy({ permissionMode: "ask" }, dir);
+    expect(!result.ok && result.reason).toContain("not valid JSON");
+    expect(readFileSync(file, "utf8")).toBe("{ nope");
   });
 });
 

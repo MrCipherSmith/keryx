@@ -9,6 +9,7 @@
 import { resolveExternalAgentsCapability } from "../capability/external-agents";
 import { describeReasoningEffortSource } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
+import { loadPosture, type PolicyPosture } from "../commands/remote-policy-command";
 import { readJevProfileForShell } from "../commands/review-jev-profile";
 import { resolveExternalSetting } from "../lib/external-switch";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
@@ -29,6 +30,11 @@ export interface LiveSettings {
   routing?: boolean;
   thinkDisplay?: ThinkDisplayMode;
   reasoningOverride?: string | undefined;
+  /**
+   * What the running shell holds for a Telegram-started turn, when remote control is on. Absent: the
+   * saved config is read instead, and a shell with no config shows Telegram as not connected.
+   */
+  telegram?: { defaultMode: "ask" | "trust"; runTimeoutMs: number; approvalTimeoutMs: number; inForce?: string };
 }
 
 function readReasoning(sessionOverride: string | undefined, globalEffort: string | undefined): SettingsSnapshot["reasoning"] {
@@ -52,6 +58,28 @@ async function orElse<T>(read: () => Promise<T>, fallback: T): Promise<T> {
     return await read();
   } catch {
     return fallback;
+  }
+}
+
+function readTelegram(live: LiveSettings, configDir: string | undefined): { posture?: PolicyPosture } {
+  try {
+    const running = live.telegram;
+    const posture = loadPosture({
+      ...(configDir !== undefined ? { dir: configDir } : {}),
+      ...(running !== undefined
+        ? {
+            running: () => ({
+              defaultMode: running.defaultMode,
+              runTimeoutMs: running.runTimeoutMs,
+              approvalTimeoutMs: running.approvalTimeoutMs,
+            }),
+            ...(running.inForce !== undefined ? { inForce: () => running.inForce } : {}),
+          }
+        : {}),
+    });
+    return posture === undefined ? {} : { posture };
+  } catch {
+    return {};
   }
 }
 
@@ -81,5 +109,6 @@ export async function loadSettingsSnapshot(cwd: string, live: LiveSettings, conf
     },
     externalAgents: agents.ok ? { on: true } : { on: false, reason: agents.reason },
     rendering: readRendering(configDir),
+    telegram: readTelegram(live, configDir),
   };
 }

@@ -201,6 +201,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 396: the saved defaults for a turn that came from Telegram (mode, run limit, approval wait).
+    // It never changes the shell's own mode; the full-screen shell also updates its running copy.
+    name: "/remote-policy",
+    description: "Telegram defaults: /remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]. Never changes the shell's /mode",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

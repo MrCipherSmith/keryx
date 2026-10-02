@@ -209,6 +209,53 @@ export function saveRemoteConfig(config: RemoteConfigInput, dir?: string): Loade
   return checked;
 }
 
+/** The saved defaults `/remote-policy` may change (flow 396). Each key is optional: only the ones given change. */
+export interface RemotePolicyPatch {
+  permissionMode?: RemotePermissionMode;
+  /** 0 means no limit. */
+  runTimeoutMs?: number;
+  approvalTimeoutMs?: number;
+}
+
+/**
+ * Change the saved defaults for a Telegram-started turn. The file is edited as it is: a key the caller
+ * did not name keeps its place, and an absent key stays absent so a later default change still reaches
+ * it. The result is validated by the same closed schema as a load, so a bad value is refused here and
+ * the file is not touched.
+ */
+export function updateRemotePolicy(patch: RemotePolicyPatch, dir?: string): Loaded<RemoteConfig> {
+  const file = remoteConfigPath(dir);
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return {
+      ok: false,
+      reason:
+        read.reason === "absent"
+          ? `no remote-control config at ${file}; connect Telegram first`
+          : `remote-control config at ${file} cannot be read (${read.reason})`,
+    };
+  }
+  let doc: unknown;
+  try {
+    doc = JSON.parse(read.text);
+  } catch {
+    return { ok: false, reason: `remote-control config at ${file} is not valid JSON` };
+  }
+  if (typeof doc !== "object" || doc === null || Array.isArray(doc)) {
+    return { ok: false, reason: "remote config must be a JSON object" };
+  }
+  const next: Record<string, unknown> = { ...(doc as Record<string, unknown>) };
+  if (patch.permissionMode !== undefined) next.permissionMode = patch.permissionMode;
+  if (patch.runTimeoutMs !== undefined) next.runTimeoutMs = patch.runTimeoutMs;
+  if (patch.approvalTimeoutMs !== undefined) next.approvalTimeoutMs = patch.approvalTimeoutMs;
+  const checked = parseRemoteConfig(next);
+  if (!checked.ok) {
+    return checked;
+  }
+  writeOwnerOnlyFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
+  return checked;
+}
+
 /**
  * Read the bot token. Refuses a file readable by group or others, naming the
  * fix; refuses content that is not shaped like a bot token without echoing it.

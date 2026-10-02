@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T20:03:35.526Z",
+  "updatedAt": "2026-10-02T20:19:50.776Z",
   "source": {
     "type": "description",
     "ref": null
@@ -191,7 +191,7 @@
       "id": "T10",
       "title": "/remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T9"
@@ -202,7 +202,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -339,6 +340,11 @@
       "at": "2026-10-02T20:03:35.526Z",
       "event": "task-done",
       "detail": "T9: keryx permissions list|remove and /permissions modal (AC11)"
+    },
+    {
+      "at": "2026-10-02T20:19:50.776Z",
+      "event": "task-done",
+      "detail": "T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)"
     }
   ],
   "acKinds": {

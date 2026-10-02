@@ -107,6 +107,7 @@ import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand 
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import { approvalsSlashText } from "./approvals";
 import { permissionsSlashText } from "./permissions-command";
+import { remotePolicyText } from "./remote-policy-command";
 import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
@@ -273,6 +274,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/remote-control",
   "/channels",
   "/rendering",
+  "/remote-policy",
   "/theme",
   "/settings",
   "/mode",
@@ -2696,6 +2698,9 @@ export async function runAgentRepl(
       } else if (isRenderingCommand(command)) {
         // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
         agentIo.onSystem?.(runRenderingCommand(rest));
+      } else if (command === "/remote-policy") {
+        // Flow 396: the saved Telegram defaults. This shell has no bridge, so it edits the file only.
+        agentIo.onSystem?.(remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

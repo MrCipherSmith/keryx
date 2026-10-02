@@ -490,3 +490,38 @@ test("AC5: the status carries the unconfirmed-approvals count only while it is a
   fake.unconfirmedApprovals = 0;
   expect(h.bridge.status().unconfirmedApprovals).toBeUndefined();
 });
+
+test("applyPolicy: the bridge's effective values change at once, and the mode of the shell is not part of it", async () => {
+  const h = harness({ runTimeoutMs: 0 });
+  await h.bridge.enable();
+  const changes = h.calls.filter((c) => c === "change").length;
+  expect(h.bridge.runTimeoutMs).toBe(0);
+  h.bridge.applyPolicy({ permissionMode: "ask", approvalTimeoutMs: 120_000, runTimeoutMs: 600_000 });
+  expect(h.bridge.configuredPermissionMode).toBe("ask");
+  expect(h.bridge.approvalTimeoutMs).toBe(120_000);
+  expect(h.bridge.runTimeoutMs).toBe(600_000);
+  expect(h.calls.filter((c) => c === "change").length).toBe(changes + 1);
+  // Only the named keys move: a later patch leaves the others where the first put them.
+  h.bridge.applyPolicy({ approvalTimeoutMs: 300_000 });
+  expect(h.bridge.configuredPermissionMode).toBe("ask");
+  expect(h.bridge.runTimeoutMs).toBe(600_000);
+  expect(h.bridge.approvalTimeoutMs).toBe(300_000);
+});
+
+test("applyPolicy: a run limit set after enable() applies to the next Telegram turn", async () => {
+  const h = harness({ runTimeoutMs: 0 });
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ runTimeoutMs: 20 });
+  h.bridge.turnStarted(TG_SOURCE);
+  await new Promise((r) => setTimeout(r, 60));
+  expect(h.calls).toContain("cancel");
+});
+
+test("applyPolicy: no limit set after enable() means the next turn is never cancelled", async () => {
+  const h = harness({ runTimeoutMs: 20 });
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ runTimeoutMs: 0 });
+  h.bridge.turnStarted(TG_SOURCE);
+  await new Promise((r) => setTimeout(r, 60));
+  expect(h.calls).not.toContain("cancel");
+});

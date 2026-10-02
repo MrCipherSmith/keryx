@@ -63,6 +63,7 @@ export const ACP_TUI_ONLY_COMMANDS: readonly string[] = [
   "schedules",
   "approvals",
   "permissions",
+  "remote-policy",
   "external-diff",
   "integrate",
   "mcp",

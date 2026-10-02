@@ -116,6 +116,13 @@ export interface RemoteBridgeOptions {
   choiceTimeoutMs?: number;
 }
 
+/** The policy values `/remote-policy` can change in a running shell. */
+export interface RemotePolicyOverride {
+  permissionMode?: "ask" | "trust";
+  approvalTimeoutMs?: number;
+  runTimeoutMs?: number;
+}
+
 export type EnableResult = StartResult | { ok: false; code: "already-on"; message: string; retrying: false };
 
 function preview(text: string): string {
@@ -179,6 +186,8 @@ export class RemoteBridge {
   private readonly host: RemoteBridgeHost;
   private readonly now: () => number;
   private readonly approvalOverrideMs: number | undefined;
+  /** What `/remote-policy` changed in this shell since it registered; wins over what serve delivered (flow 396). */
+  private policyOverride: RemotePolicyOverride = {};
   private connectedOnce = false;
   private clientConnected = false;
   private tgTurn = false;
@@ -274,12 +283,28 @@ export class RemoteBridge {
    * shell) is read as `ask`: today's behaviour, never a silent widening.
    */
   get configuredPermissionMode(): "ask" | "trust" {
-    return this.client?.permissionMode ?? "ask";
+    return this.policyOverride.permissionMode ?? this.client?.permissionMode ?? "ask";
   }
 
   /** How long an approval waits in the topic: a test override, then what serve delivered, then the old five minutes. */
   get approvalTimeoutMs(): number {
-    return this.approvalOverrideMs ?? this.client?.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    return this.policyOverride.approvalTimeoutMs ?? this.approvalOverrideMs ?? this.client?.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+  }
+
+  /** The run limit for a Telegram-started turn: what `/remote-policy` set, then what serve delivered; 0 or absent is no limit. */
+  get runTimeoutMs(): number {
+    return this.policyOverride.runTimeoutMs ?? this.client?.runTimeoutMs ?? 0;
+  }
+
+  /**
+   * `/remote-policy` changed the saved defaults: the running shell takes them now. Only the values named
+   * change. This is the Telegram default and nothing else: the shell's own mode and the "changed this
+   * session" flag are the host's, and are not touched here. A turn already running keeps the limit it
+   * started with; the next one uses the new value.
+   */
+  applyPolicy(next: RemotePolicyOverride): void {
+    this.policyOverride = { ...this.policyOverride, ...next };
+    this.host.onChange?.();
   }
 
   /** Put a line in the remote event ring from the host (an auto-approval, a saved rule): redacted and capped. */
@@ -520,8 +545,8 @@ export class RemoteBridge {
     this.stoppedByUser = false;
     this.turnAbort = new AbortController();
     // 0 or absent is "no limit" (flow 396): only `/stop` or the shell ends such a run.
-    const limit = this.client.runTimeoutMs;
-    if (limit !== undefined && limit > 0) {
+    const limit = this.runTimeoutMs;
+    if (limit > 0) {
       this.runTimer = setTimeout(() => {
         this.timedOut = true;
         this.push("error", "run time limit reached; stopping the turn");

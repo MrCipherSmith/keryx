@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { REASONING_EFFORT_LEVELS } from "../commands/agent";
 import { PERMISSION_MODES } from "../commands/permission-mode";
+import type { PolicyPosture } from "../commands/remote-policy-command";
 import { buildSettingsRows, formatSettingsTable, SETTING_GROUPS, type SettingRow, type SettingsSnapshot } from "./settings-model";
 import { THINK_DISPLAY_MODES } from "./reasoning-display";
 import { THEME_IDS } from "./theme";
@@ -19,6 +20,9 @@ const BASE: SettingsSnapshot = {
   externalAgents: { on: false, reason: "not enabled" },
   rendering: { mode: "auto", saveable: true },
 };
+
+const POSTURE: PolicyPosture = { defaultMode: "trust", inForce: "trust (Telegram default)", runTimeoutMs: 0, approvalTimeoutMs: 15 * 60_000, savedRules: 2 };
+const WITH_TELEGRAM: SettingsSnapshot = { ...BASE, telegram: { posture: POSTURE } };
 
 const rowOf = (rows: readonly SettingRow[], id: string): SettingRow => {
   const row = rows.find((candidate) => candidate.id === id);
@@ -47,7 +51,7 @@ describe("buildSettingsRows", () => {
   });
 
   test("groups appear contiguously and in the declared order", () => {
-    const seen = rows.map((row) => row.group).filter((group, index, all) => all.indexOf(group) === index);
+    const seen = buildSettingsRows(WITH_TELEGRAM).map((row) => row.group).filter((group, index, all) => all.indexOf(group) === index);
     expect(seen).toEqual([...SETTING_GROUPS]);
   });
 
@@ -218,7 +222,7 @@ describe("buildSettingsRows", () => {
 });
 
 describe("formatSettingsTable", () => {
-  const table = formatSettingsTable(buildSettingsRows(BASE));
+  const table = formatSettingsTable(buildSettingsRows(WITH_TELEGRAM));
 
   test("prints every group once, with its rows under it", () => {
     const lines = table.split("\n");
@@ -252,5 +256,54 @@ describe("formatSettingsTable", () => {
     const rowsText = table.split("\n").filter((line) => line.startsWith("  "));
     const cols = new Set(rowsText.map((line) => line.indexOf("[s")));
     expect(cols.size).toBe(1);
+  });
+});
+
+describe("Telegram rows (flow 396)", () => {
+  const tg = (snapshot: SettingsSnapshot) => buildSettingsRows(snapshot).filter((row) => row.group === "Telegram");
+
+  test("a snapshot without telegram draws no Telegram group", () => {
+    expect(tg(BASE)).toEqual([]);
+  });
+
+  test("connected: mode, run limit, approval wait and saved rules, with the saved values", () => {
+    const rows = tg(WITH_TELEGRAM);
+    expect(rows.map((row) => [row.id, row.value, row.scope])).toEqual([
+      ["tg-mode", "trust", "saved"],
+      ["tg-limit", "none", "saved"],
+      ["tg-wait", "15m", "saved"],
+      ["tg-rules", "2", "saved"],
+    ]);
+    expect(rows[0]?.detail).toContain("trust (Telegram default)");
+    expect(rows[0]?.detail).toContain("a /mode in the shell wins once used");
+  });
+
+  test("mode buttons offer ask and trust only, never auto, and run /remote-policy", () => {
+    const row = rowOf(tg(WITH_TELEGRAM), "tg-mode");
+    expect(row.actions.map((a) => [a.label, a.command, a.active, a.confirm])).toEqual([
+      ["ask", "/remote-policy mode ask", false, false],
+      ["trust", "/remote-policy mode trust", true, false],
+    ]);
+    expect(row.actions.some((a) => a.command.includes("auto"))).toBe(false);
+  });
+
+  test("limit and wait buttons mark the value in force", () => {
+    const limited = tg({ ...BASE, telegram: { posture: { ...POSTURE, runTimeoutMs: 30 * 60_000, approvalTimeoutMs: 5 * 60_000 } } });
+    expect(rowOf(limited, "tg-limit").actions.filter((a) => a.active).map((a) => a.command)).toEqual(["/remote-policy limit 30"]);
+    expect(rowOf(limited, "tg-wait").actions.filter((a) => a.active).map((a) => a.command)).toEqual(["/remote-policy wait 5"]);
+    expect(rowOf(tg(WITH_TELEGRAM), "tg-limit").actions.filter((a) => a.active).map((a) => a.command)).toEqual(["/remote-policy limit none"]);
+  });
+
+  test("the saved-rules row is read-only and names /permissions", () => {
+    const row = rowOf(tg(WITH_TELEGRAM), "tg-rules");
+    expect(row.actions).toEqual([]);
+    expect(row.command).toBe("/permissions");
+  });
+
+  test("not connected: the rows say so and offer no buttons", () => {
+    const rows = tg({ ...BASE, telegram: {} });
+    expect(rows.map((row) => row.id)).toEqual(["tg-mode", "tg-limit", "tg-wait", "tg-rules"]);
+    expect(rowOf(rows, "tg-mode").value).toContain("not connected");
+    expect(rows.every((row) => row.actions.length === 0)).toBe(true);
   });
 });

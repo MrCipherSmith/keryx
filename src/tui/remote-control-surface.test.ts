@@ -4,6 +4,7 @@
 
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
+import { postureLines, postureSidebarText } from "../commands/remote-policy-command";
 import type { RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
 import { REMOTE_EVENT_LIMIT, TG_SOURCE } from "../remote/shell-bridge";
 import { HELP_GROUPS } from "../standard/help-groups";
@@ -29,6 +30,7 @@ import {
   mountRemotePanel,
   parseRemoteControlArgs,
   presentRemoteControl,
+  projectPostureLine,
   projectRemoteRow,
   readlineRemoteControlText,
   renderRemoteControlText,
@@ -82,6 +84,81 @@ otuiTest("sidebar: the mounted row reads Remote plus the state and follows refre
     panel.dispose();
     h.destroy();
   }
+});
+
+const POSTURE = { defaultMode: "trust" as const, runTimeoutMs: 0, approvalTimeoutMs: 900_000, savedRules: 2 };
+
+test("posture line: shown only while remote control is on or retrying, fitted to the sidebar width", () => {
+  const text = postureSidebarText(POSTURE);
+  expect(projectPostureLine(OFF, text, SIDEBAR_TEXT_WIDTH)).toBeUndefined();
+  expect(projectPostureLine(undefined, text, SIDEBAR_TEXT_WIDTH)).toBeUndefined();
+  expect(projectPostureLine(ON, undefined, SIDEBAR_TEXT_WIDTH)).toBeUndefined();
+  expect(projectPostureLine(ON, "", SIDEBAR_TEXT_WIDTH)).toBeUndefined();
+  const shown = projectPostureLine(ON, text, SIDEBAR_TEXT_WIDTH);
+  expect(shown).toContain("trust");
+  expect(shown).toContain("2 saved shell rules");
+  expect(projectPostureLine(OFFLINE, text, SIDEBAR_TEXT_WIDTH)).toBeDefined();
+  for (const line of (shown ?? "").split("\n")) expect(line.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+  expect((projectPostureLine(ON, "x".repeat(80), 12) ?? "").length).toBeLessThanOrEqual(12);
+});
+
+otuiTest("sidebar: the posture line follows refresh() and is hidden while remote control is off", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui);
+  let status: RemoteStatus = OFF;
+  let posture: string | undefined = postureSidebarText(POSTURE);
+  const panel = mountRemotePanel(otui.core, h.renderer, h.chrome.sidebarTop, {
+    width: SIDEBAR_TEXT_WIDTH,
+    getStatus: () => status,
+    getPosture: () => posture,
+    onOpen: () => {},
+  });
+  try {
+    const node = findById(h.chrome.sidebarTop, "sb-remote-p");
+    expect(textOf(node)).toBe("");
+    status = ON;
+    panel.refresh();
+    expect(textOf(node)).toContain("trust");
+    expect(textOf(node)).toContain("no limit");
+    posture = postureSidebarText({ ...POSTURE, defaultMode: "ask", approvalTimeoutMs: 300_000, savedRules: 0 });
+    panel.refresh();
+    expect(textOf(node)).toContain("ask");
+    expect(textOf(node)).toContain("wait 5m");
+    status = OFF;
+    panel.refresh();
+    expect(textOf(node)).toBe("");
+  } finally {
+    panel.dispose();
+    h.destroy();
+  }
+});
+
+test("the status block lists the Telegram permissions and names /remote-policy; without a posture it is unchanged", () => {
+  const lines = formatRemoteStatusLines(ON, postureLines({ ...POSTURE, inForce: "ask (shell /mode)" }));
+  const text = lines.join("\n");
+  expect(text).toContain("Telegram permissions (change with /remote-policy):");
+  expect(text).toContain("In force now: ask (shell /mode)");
+  expect(text).toContain("Approval wait: 15m");
+  expect(formatRemoteStatusLines(ON)).toEqual(formatRemoteStatusLines(ON, undefined));
+  expect(formatRemoteStatusLines(ON).join("\n")).not.toContain("Telegram permissions");
+  expect(formatRemoteStatusLines(ON, []).join("\n")).not.toContain("Telegram permissions");
+});
+
+test("/remote-policy is registered for the agent shell only, in help, and runs while a turn is busy", () => {
+  expect(commandsForMode("agent").some((c) => c.name === "/remote-policy")).toBe(true);
+  expect(commandsForMode("chat").some((c) => c.name === "/remote-policy")).toBe(false);
+  expect(HELP_GROUPS.some((e) => e.kind === "slash" && e.name === "/remote-policy")).toBe(true);
+  const target = classifyBusyDispatch({
+    line: "/remote-policy mode ask",
+    commandName: "/remote-policy",
+    isSessionInfo: false,
+    isFlows: false,
+    isWorkspace: false,
+    isReview: false,
+    isMcp: false,
+    isMcpConsumer: false,
+  });
+  expect(target).toBe("remote-policy");
 });
 
 otuiTest("sidebar: clicking the label or the value opens the modal and starts nothing by itself", async () => {
@@ -149,7 +226,7 @@ otuiTest("sidebar: a disposed panel is not repainted by a theme change", async (
 
 type Key = { name: string; sequence: string };
 
-function openModalFake(getStatus: () => RemoteStatus, onToggle: () => void = () => {}) {
+function openModalFake(getStatus: () => RemoteStatus, onToggle: () => void = () => {}, extra: { getPostureLines?: () => readonly string[] | undefined; visibleRows?: number } = {}) {
   const painted = new Map<string, { content: string }>();
   let input: { title: string; tabs: readonly { id: string; label: string }[]; initialTab?: string; footer?: readonly { key: string; label: string }[] } | undefined;
   let renderTab!: (tabId: string, body: unknown, ctx?: { width?: number }) => void;
@@ -180,6 +257,7 @@ function openModalFake(getStatus: () => RemoteStatus, onToggle: () => void = () 
       getStatus,
       onToggle,
       visibleRows: 8,
+      ...extra,
       onKeypress: (handler) => {
         keyHandler = handler;
         return () => {
@@ -236,6 +314,17 @@ test("modal status tab: off, on and offline each say what they are and what turn
   expect(offline).toContain("Remote control: offline");
   expect(offline).toContain("Last heartbeat: none yet");
   expect(offline).toContain("Serve is not reachable");
+});
+
+test("modal status tab: the Telegram permissions follow the shell, and a posture that changes is repainted", () => {
+  let inForce = "trust (Telegram default)";
+  const m = openModalFake(() => ON, () => {}, { visibleRows: 30, getPostureLines: () => postureLines({ ...POSTURE, inForce }) });
+  expect(m.text("status")).toContain("In force now: trust (Telegram default)");
+  expect(m.text("status")).toContain("Telegram permissions (change with /remote-policy):");
+  inForce = "ask (shell /mode)";
+  m.switchTo("events");
+  m.switchTo("status");
+  expect(m.text("status")).toContain("In force now: ask (shell /mode)");
 });
 
 test("modal events tab: newest first, at most the ring size, and an empty note", () => {
