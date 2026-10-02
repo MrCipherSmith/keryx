@@ -53,7 +53,15 @@ import type {
   ProviderPort,
   ProviderReplayItem,
 } from "../harness/provider/types";
-import { estimateRequestTokens, isContextOverflowError, needsCompaction } from "../harness/provider/context-guard";
+import {
+  estimateRequestTokens,
+  estimateWithUsageAnchor,
+  isContextOverflowError,
+  needsCompaction,
+  snapshotRequest,
+  toUsageAnchor,
+  type UsageAnchor,
+} from "../harness/provider/context-guard";
 import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
@@ -76,9 +84,20 @@ import {
   slateSessionDir,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
+import { spillLargeToolOutput } from "../harness/tool/output-spill";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
 
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
+
+/**
+ * Flow 387 T7: the last provider-reported input-token usage per history array,
+ * plus the provider/model it came from. Keyed by the `history` reference the
+ * callers already hold across the turns of a session, so the anchor survives
+ * turn boundaries without any caller plumbing; a different array (new session,
+ * resume) simply has no anchor, and a spliced/compacted history invalidates it
+ * inside `estimateWithUsageAnchor`. A WeakMap never keeps a finished session alive.
+ */
+const usageAnchors = new WeakMap<object, { anchor: UsageAnchor; providerId: string; modelId: string }>();
 
 /**
  * Extra context handed to an approver alongside the raw tool input.
@@ -2701,7 +2720,16 @@ async function runAgentTurnCore(
     // shrunk `history` in place so this round's own request cannot 400 on
     // input-token overflow. `deps.contextWindow === undefined` (the default)
     // makes `needsCompaction` always `false` (AC2): byte-identical behavior.
-    const preRequestEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
+    // Flow 387 T7: anchored on the provider's last reported input tokens (plus
+    // an estimate of what was appended since) when one is recorded for THIS
+    // provider/model; otherwise the full chars/4 estimate (which also counts
+    // replayed reasoning bytes).
+    const storedAnchor = usageAnchors.get(history);
+    const liveAnchor =
+      storedAnchor !== undefined && storedAnchor.providerId === deps.providerId && storedAnchor.modelId === deps.modelId
+        ? storedAnchor.anchor
+        : undefined;
+    const preRequestEstimate = estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
       await firePreCompactBestEffort(deps, preRequestEstimate);
       const compacted = compactMessages(history, { keepLastUserTurns: 3 });
@@ -2717,6 +2745,9 @@ async function runAgentTurnCore(
         });
       }
     }
+    // Flow 387 T7: describe the request exactly as sent (after any compaction
+    // splice above) so a usage_update can be anchored to it.
+    const requestSnapshot = snapshotRequest(history, roundSystemInstruction, toolDefs);
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
@@ -2845,6 +2876,11 @@ async function runAgentTurnCore(
           if (event.usage !== undefined) {
             io.onUsage?.(event.usage);
             reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
+            // Flow 387 T7: remember the provider's own input-token count for this request.
+            const newAnchor = toUsageAnchor(requestSnapshot, event.usage.inputTokens);
+            if (newAnchor !== undefined) {
+              usageAnchors.set(history, { anchor: newAnchor, providerId: deps.providerId, modelId: deps.modelId });
+            }
           }
         } else if (event.kind === "provider_error") {
           if (!overflowRetried && isContextOverflowError(event.error)) {
@@ -3454,7 +3490,18 @@ async function runAgentTurnCore(
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
       // not receive a credential a command happened to read.
-      const modelOutput = redactSensitiveText(result.output);
+      // Flow 387 T10: an output over 2000 lines / 50KB is written IN FULL (the
+      // already-redacted text, so the file never holds a secret history would not)
+      // to the live session dir and the model gets head + tail + counts + path.
+      // One generic hook here covers every tool; an output already capped below
+      // the threshold passes through untouched. No live session dir → unchanged.
+      const modelOutput = await spillLargeToolOutput(redactSensitiveText(result.output), {
+        sessionDir:
+          options.slateSession !== undefined && options.slateSession.opened === true
+            ? slateSessionDir(options.slateSession)
+            : undefined,
+        toolCallId: call.id,
+      });
       // `untrusted` alone decides, NOT `untrusted && !isError`.
       //
       // The old guard let the content's own author turn the control off. It

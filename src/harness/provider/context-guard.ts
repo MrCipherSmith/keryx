@@ -23,6 +23,36 @@ import type { NormalizedToolDefinition } from "./types";
 export interface EstimatableMessage {
   content: string;
   toolCalls?: readonly { arguments: string }[];
+  /**
+   * Flow 387 T7: an assistant message's replayed reasoning. The opaque
+   * `replay[].data` payloads (encrypted reasoning items, thinking signatures)
+   * are echoed to the provider on EVERY later request, so they weigh on the
+   * request body exactly like `content` does — ~143K chars in one real session.
+   */
+  reasoning?: { replay?: readonly { data: unknown }[] };
+}
+
+/** Serialized size of one message's replayed-reasoning payloads (flow 387 T7). */
+function replayChars(message: EstimatableMessage): number {
+  let chars = 0;
+  for (const item of message.reasoning?.replay ?? []) {
+    chars += (typeof item.data === "string" ? item.data : (JSON.stringify(item.data) ?? "")).length;
+  }
+  return chars;
+}
+
+/** Chars of one message's contribution to the request body. */
+function messageChars(message: EstimatableMessage): number {
+  let chars = message.content.length + replayChars(message);
+  for (const call of message.toolCalls ?? []) {
+    chars += call.arguments.length;
+  }
+  return chars;
+}
+
+/** Chars of the non-message request overhead: system instruction + tool schemas. */
+function overheadChars(systemInstruction: string, toolDefs: readonly NormalizedToolDefinition[]): number {
+  return systemInstruction.length + (toolDefs.length > 0 ? JSON.stringify(toolDefs).length : 0);
 }
 
 /**
@@ -46,17 +76,87 @@ export function estimateRequestTokens(
   systemInstruction: string,
   toolDefs: readonly NormalizedToolDefinition[],
 ): number {
-  let chars = systemInstruction.length;
-  if (toolDefs.length > 0) {
-    chars += JSON.stringify(toolDefs).length;
-  }
+  let chars = overheadChars(systemInstruction, toolDefs);
   for (const message of history) {
-    chars += message.content.length;
-    for (const call of message.toolCalls ?? []) {
-      chars += call.arguments.length;
-    }
+    chars += messageChars(message);
   }
   return Math.round(chars / 4);
+}
+
+/**
+ * Flow 387 T7: the last provider-reported input-token count together with the
+ * request it described — enough to tell later whether it still applies.
+ */
+export interface UsageAnchor {
+  /** Provider-reported `usage.inputTokens` for the request. */
+  inputTokens: number;
+  /** `history.length` when that request was built. */
+  messageCount: number;
+  /** The last message that request carried; identity proves the prefix is intact. */
+  lastMessage: object | undefined;
+  /** System-instruction + tool-schema chars of that request. */
+  overheadChars: number;
+}
+
+/**
+ * Snapshot a request at build time (call BEFORE sending, with the exact
+ * `history`/system/tools the request used); pair the result with the
+ * provider-reported `inputTokens` via {@link toUsageAnchor}.
+ */
+export interface RequestSnapshot {
+  messageCount: number;
+  lastMessage: object | undefined;
+  overheadChars: number;
+}
+
+export function snapshotRequest(
+  history: readonly EstimatableMessage[],
+  systemInstruction: string,
+  toolDefs: readonly NormalizedToolDefinition[],
+): RequestSnapshot {
+  return {
+    messageCount: history.length,
+    lastMessage: history[history.length - 1],
+    overheadChars: overheadChars(systemInstruction, toolDefs),
+  };
+}
+
+/** A non-positive / non-finite count is treated as "not reported" (no anchor). */
+export function toUsageAnchor(snapshot: RequestSnapshot, inputTokens: number | undefined): UsageAnchor | undefined {
+  if (inputTokens === undefined || !Number.isFinite(inputTokens) || inputTokens <= 0 || snapshot.messageCount === 0) {
+    return undefined;
+  }
+  return { inputTokens, ...snapshot };
+}
+
+/**
+ * Flow 387 T7: pre-request size estimate anchored on the provider's own count
+ * (pattern: codex `history.rs` / pi `compaction.ts`) — last reported input
+ * tokens + a chars/4 estimate of what was added since (messages appended after
+ * the anchored request, plus any change in system-instruction/tool-schema size,
+ * e.g. the per-round plan snapshot). The anchored prefix is only trusted while
+ * it is provably intact: when history shrank or the message at the anchored
+ * position is no longer the same object (compaction splice, resume, edit), or
+ * no anchor exists, this falls back to {@link estimateRequestTokens}.
+ */
+export function estimateWithUsageAnchor(
+  history: readonly EstimatableMessage[],
+  systemInstruction: string,
+  toolDefs: readonly NormalizedToolDefinition[],
+  anchor: UsageAnchor | undefined,
+): number {
+  if (
+    anchor === undefined ||
+    history.length < anchor.messageCount ||
+    history[anchor.messageCount - 1] !== anchor.lastMessage
+  ) {
+    return estimateRequestTokens(history, systemInstruction, toolDefs);
+  }
+  let addedChars = overheadChars(systemInstruction, toolDefs) - anchor.overheadChars;
+  for (let i = anchor.messageCount; i < history.length; i += 1) {
+    addedChars += messageChars(history[i] as EstimatableMessage);
+  }
+  return anchor.inputTokens + Math.round(addedChars / 4);
 }
 
 /**
