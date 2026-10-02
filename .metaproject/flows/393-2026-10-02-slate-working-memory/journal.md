@@ -36,3 +36,4 @@
 - 2026-10-02T20:18:58.388Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-02T20:19:44.381Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-02T20:19:57.176Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/865
+- 2026-10-02T21:50:00.000Z - measurement redone on the real working-memory path (runner fixed: real slate, four tools registered, a guard fails the run otherwise; commit ec89b5c4). AC3 replay: peak 40,428 (limit 64,000), total 2,969,506 (limit 5,531,077). AC6 registry-recall, 3 seeds: 22/22 each, 110/114/104 calls (cap 150 not hit), 0 repeated reads (limit: average 10). AC9 keryx leg: context-on mean uncached 9,436 (limit 13,259), success 9/9; codex CLI leg not re-run (flow 394 figures stay). Earlier AC6/AC9 numbers measured a degraded mode and are superseded. Thresholds unchanged; no criterion confirmed by the implementer.

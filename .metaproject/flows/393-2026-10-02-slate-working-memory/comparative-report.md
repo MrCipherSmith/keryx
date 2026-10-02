@@ -1,21 +1,24 @@
 Same-model comparative check (AC9), flow 393 branch, keryx leg re-run on flow 394's task set.
 
-Conditions: `bun scripts/benchmark/run-ablation-mutating.ts --provider openai-codex --model gpt-6.1-sol --seeds 1,2,3` (three tasks, three seeds, context-on and context-off), branch head of PR #865 (0.3.65). Only the keryx leg was re-run; the codex CLI figures below are flow 394's, in `../394-2026-10-02-shell-token-economy/comparative-report.md`, unchanged. The runner writes a tracked fixture; the new one was kept out of the tree and the tracked fixture was restored, so nothing under `fixtures/` changed. These short tasks do not opt in to `pruneArchive`, so they do not run the working-memory request; what changed for them is the `shell_exec` result shape.
+Supersedes the earlier version of this report (mean uncached 6,775, 100% over n=9). That run came from the same runner state as the earlier AC6 numbers, which did not run the working-memory path; the keryx leg has been re-run with the runner fixed (real slate, tools registered, guard on). The codex CLI leg was NOT re-run: its figures are flow 394's, in `../394-2026-10-02-shell-token-economy/comparative-report.md`, unchanged.
+
+Conditions: `bun scripts/benchmark/run-ablation-mutating.ts --provider openai-codex --model gpt-6.1-sol --seeds 1,2,3` (three tasks, three seeds, context-on and context-off), PR #865 head `ec89b5c4` (0.3.65). The runner writes a tracked fixture; the new one was kept out of the tree and the tracked fixture was restored, so nothing under `fixtures/` changed.
 
 context-on, uncached input per run (tokens):
 
 | task | seed 1 | seed 2 | seed 3 |
 |---|---|---|---|
-| atomic-json-write | 7,304 | 4,925 | 4,978 |
-| flag-present | 4,247 | 4,247 | 4,249 |
-| read-text-file-or | 10,019 | 10,984 | 10,020 |
+| atomic-json-write | 5,026 | 5,052 | 6,768 |
+| flag-present | 6,102 | 7,121 | 7,125 |
+| read-text-file-or | 21,030 | 12,499 | 14,203 |
 
 | harness | model | variant | mean uncached input | success |
 |---|---|---|---|---|
-| keryx, this branch | gpt-6.1-sol | context-on | 6,775 | 100% (n=9) |
+| keryx, this branch | gpt-6.1-sol | context-on | 9,436 | 100% (n=9) |
+| keryx, this branch | gpt-6.1-sol | context-off | 9,159 | 100% (n=9) |
 | keryx, flow 394 | gpt-6.1-sol | context-on | 12,628 | 100% (n=9) |
-| codex CLI, flow 394 | gpt-6.1-sol | context-on | 35,199 | 100% (n=9) |
+| codex CLI, flow 394 (not re-run) | gpt-6.1-sol | context-on | 35,199 | 100% (n=9) |
 
-AC9: met. 6,775 is below 12,628 x 1.05 = 13,259, and the success rate is 100%, not below 100%. Context-off on this branch also succeeded 9 of 9 (flow 394 had 89%).
+AC9 against the frozen limit (unchanged): the context-on mean of 9,436 is below 12,628 x 1.05 = 13,259, and success is 100%, not below 100%. The numbers satisfy the criterion as written. Whether AC9 is confirmed is the operator's call, not this report's.
 
-Caveat: the uncached share depends on the provider's prompt cache. In this run the cache served part of the prefix on eight of the nine context-on runs (`cachedIn` 1,920 to 23,680), while flow 394's run recorded 0 cached, so the drop from 12,628 to 6,775 is mostly cache state and not an effect of this flow. Total input (cached + uncached) per run is the like-for-like figure and is in the console output the fixture was built from; the claim made here is only that the branch does not exceed flow 394's uncached figure by more than 5% and does not lose success.
+Caveats. The uncached figure depends on the provider's prompt cache: on this branch's context-on runs the cache served 1,792 to 20,864 tokens per run (mean 6,713), while flow 394's run recorded 0 cached, so part of the drop from 12,628 to 9,436 is cache state and not an effect of this flow. Context-on is slightly above context-off on this branch (9,436 against 9,159), within the run-to-run spread; `read-text-file-or` seed 1 used 21,030 uncached. The codex CLI leg was not re-run, so the cross-harness comparison rests on flow 394's figure. These tasks are three requests long; whether a working-memory rewrite fired in them was not measured. The long-session path is measured by AC6.
