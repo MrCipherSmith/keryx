@@ -136,6 +136,34 @@ function safeFileStem(toolCallId: string): string {
 }
 
 /**
+ * Flow 387 T11: write `text` in full to `<sessionDir>/tool-output/<id>.txt`
+ * regardless of size and return the path, or `undefined` when the write failed.
+ * Used before an old tool result is cleared from the request, so the placeholder
+ * can always name a file `read_file` can open. `text` is already redacted history.
+ */
+export async function writeToolOutputFile(
+  sessionDir: string,
+  toolCallId: string,
+  text: string,
+): Promise<string | undefined> {
+  const dir = path.join(sessionDir, TOOL_OUTPUT_DIRNAME);
+  const filePath = path.join(dir, `${safeFileStem(toolCallId)}.txt`);
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(filePath, text, "utf8");
+    return filePath;
+  } catch {
+    return undefined;
+  }
+}
+
+/** The spill file named by a {@link renderSpillPreview} marker in `content`, if any. */
+export function extractSpillPath(content: string): string | undefined {
+  const m = /full output saved to (.+?) — read it with read_file/.exec(content);
+  return m?.[1];
+}
+
+/**
  * Return `text` untouched when it is under both thresholds or there is no
  * session dir; otherwise write it in full to `<sessionDir>/tool-output/<id>.txt`
  * and return the head+tail view. A failed write degrades to the original text —

@@ -62,7 +62,8 @@ import {
   toUsageAnchor,
   type UsageAnchor,
 } from "../harness/provider/context-guard";
-import { compactMessages } from "../session/compact";
+import { compactMessages, compactWithFallback } from "../session/compact";
+import { pruneToolOutputs } from "../session/prune";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
@@ -2284,6 +2285,13 @@ function computeReasoningDurationMs(startedAt: string | undefined, endedAt: stri
   return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs ? endMs - startMs : undefined;
 }
 
+/** The live session dir that holds `tool-output/` spill files, or undefined without one (flow 387 T10/T11). */
+function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
+  return options.slateSession !== undefined && options.slateSession.opened === true
+    ? slateSessionDir(options.slateSession)
+    : undefined;
+}
+
 async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
@@ -2735,10 +2743,29 @@ async function runAgentTurnCore(
       storedAnchor !== undefined && storedAnchor.providerId === deps.providerId && storedAnchor.modelId === deps.modelId
         ? storedAnchor.anchor
         : undefined;
-    const preRequestEstimate = estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
+    // Flow 387 T11: prune old tool results FIRST (outside the last 2 operator
+    // turns and the newest 40K tokens, only past a 20K saving), re-measure, and
+    // compact only if the request is still over the threshold. The pruned form
+    // replaces the history entries (stable prefix next round) and is persisted
+    // through the host's existing checkpoint; the archive keeps the originals.
+    const pruneResult = await pruneToolOutputs(history, { sessionDir: liveSessionDir(options) });
+    if (pruneResult.pruned > 0) {
+      usageAnchors.delete(history); // the anchored prefix just shrank
+      io.onHistoryChange?.("tool");
+      system(`\n[prune] Cleared ${pruneResult.pruned} old tool results (~${pruneResult.savedTokens} tokens) from the request.\n`);
+    }
+    const preRequestEstimate =
+      pruneResult.pruned > 0
+        ? estimateRequestTokens(history, roundSystemInstruction, toolDefs)
+        : estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
       await firePreCompactBestEffort(deps, preRequestEstimate);
-      const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+      // Flow 387 T11: fewer operator turns, then a cut inside the current turn,
+      // while the result is still over the threshold.
+      const compacted = compactWithFallback(history, {
+        keepLastUserTurns: 3,
+        fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
+      });
       if (!compacted.noop) {
         // Splice, never reassign — `runAgentTurn`'s own contract (see its doc
         // comment) means every caller holds this exact array reference across
@@ -2963,7 +2990,27 @@ async function runAgentTurnCore(
       if (pendingOverflowError !== undefined) {
         if (assistantMessage === undefined && calls.length === 0) {
           const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
-          const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+          // Flow 387 T11: prune first (any saving counts now), then compact with
+          // the same fallback as the pre-request guard.
+          const overflowPrune = await pruneToolOutputs(history, {
+            sessionDir: liveSessionDir(options),
+            minSavingTokens: 1,
+          });
+          if (overflowPrune.pruned > 0) {
+            usageAnchors.delete(history);
+            io.onHistoryChange?.("tool");
+          }
+          const compacted = compactWithFallback(history, {
+            keepLastUserTurns: 3,
+            fits: (ctx) =>
+              !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
+          });
+          if (compacted.noop && overflowPrune.pruned > 0) {
+            overflowRetried = true;
+            roundState.round -= 1;
+            system("\n[prune] Provider rejected the request as too large; cleared old tool results, retrying once.\n");
+            continue;
+          }
           if (!compacted.noop) {
             await firePreCompactBestEffort(deps, overflowEstimate);
             history.splice(0, history.length, ...compacted.context);
@@ -3502,10 +3549,7 @@ async function runAgentTurnCore(
       // One generic hook here covers every tool; an output already capped below
       // the threshold passes through untouched. No live session dir → unchanged.
       const modelOutput = await spillLargeToolOutput(redactSensitiveText(result.output), {
-        sessionDir:
-          options.slateSession !== undefined && options.slateSession.opened === true
-            ? slateSessionDir(options.slateSession)
-            : undefined,
+        sessionDir: liveSessionDir(options),
         toolCallId: call.id,
       });
       // `untrusted` alone decides, NOT `untrusted && !isError`.
