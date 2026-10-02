@@ -25,7 +25,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'isIrreversible|action' src/decisions src/tui/ask-user-bridge.ts src/harness/tool/builtin/ask-user-tool.ts --glob '!*.test.ts' lists the matcher, its single caller and the absence of an action on the ask_user side."
     },
-    "global_id": "2026-10-02-ingest-856-r03#F-001"
+    "global_id": "2026-10-02-ingest-856-r03#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 75fcefed: blind.ts adds strong terms ship, rollout, roll out, promote, go live, выпуск, выпуст, залить/залей/заливк, накат and STRONG_PATTERNS for 'to npm/registry' and 'в/на прод'; ask-user-tool.ts (+14) and ask.ts/types.ts add `action` and `irreversible`, journal.ts openDecision treats irreversible===true or any action tag as irreversible. Probe through openDecision (random=0, recommendation set): ordinary (protected) for 'Выпустить версию 0.3.62?', 'Ship 0.3.62 to npm?', 'Отправить в прод?', 'Залить в мастер?', 'Release now?', 'Force-push to main?', 'Удалить ветку?'; through createAskUserTool(...).invoke the record for action 'release' and for irreversible true is ordinary with irreversible true and blindRefused true, and the untagged call is blind. bun test src/decisions + 3 TUI/tool files: 229 pass, 0 fail. Residual (new, minor, round 4 F-001): 'Cut 0.3.62?' and 'Bump the version and tag it?' still blind.",
+      "verifier": "flow392-pr856-round4-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "75fcefed"
+    }
   },
   {
     "id": "F-002",
@@ -51,7 +61,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'WEAK_IRREVERSIBLE' src --glob '!*.test.ts' lists the one tier check."
     },
-    "global_id": "2026-10-02-ingest-856-r03#F-002"
+    "global_id": "2026-10-02-ingest-856-r03#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 75fcefed: blind.ts hasBareObject treats a weak verb whose object is a pronoun or absent as risky, and STRONG_PATTERNS cover reset --hard, clean -f, rm -rf, branch -d, --force. Probe: protected for 'Merge it now?' (options 'Merge now'/'Wait'), 'Merge?', 'Squash and merge?', 'Слить это?', 'git reset --hard HEAD~1?', 'Reset the working tree hard?'; still eligible: 'Merge two helpers into one?', 'Drop an unused import?', 'Rename deleteUser to removeUser?', 'Слить два хелпера в один?', 'Reset the form state on unmount?', 'Remove dead code in utils?'.",
+      "verifier": "flow392-pr856-round4-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "75fcefed"
+    }
   },
   {
     "id": "F-003",
@@ -78,7 +98,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'blindRefused|irreversible' src/decisions --glob '!*.test.ts' lists the producer, the matcher and the report that ignores the field."
     },
-    "global_id": "2026-10-02-ingest-856-r03#F-003"
+    "global_id": "2026-10-02-ingest-856-r03#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 75fcefed: report.ts counts blindRefused per stage (byStage[].blindRefused, rendered ', blind refused N') and in total ('Looked irreversible: 27. Blind refused because of it: 27 ...'); journal.ts writes blindRefused on the open record when blind was wanted and refused. Probe through loadReport/renderReport on a temp journal printed 'ask_user: ordinary 100% (2/2), blind 0% (0/1), blind refused 2', 'unspecified: ... blind refused 25' and the total line. The over-match itself is made visible, not removed (contrived ordinary questions containing deploy/release/promote/push words are still flagged); the finding's suggested fix was to surface the count, and 22 of 22 plain coding questions stayed eligible.",
+      "verifier": "flow392-pr856-round4-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "75fcefed"
+    }
   },
   {
     "id": "F-004",
@@ -105,6 +135,16 @@
       ],
       "enumeration_method": "keryx ctx rg 'resolveFlowContext|flowSource' src --glob '!*.test.ts' lists the resolver, the follow-up caller that ignores the source and the open record that stores it."
     },
-    "global_id": "2026-10-02-ingest-856-r03#F-004"
+    "global_id": "2026-10-02-ingest-856-r03#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 75fcefed: followup.ts resolveOpen with no id takes lastId else the latest decision of the flow, and then refuses unless open.session equals the caller's session (or wanted===lastId when no session is known); the open record carries session (journal.ts, ask.ts), ask-user-bridge.ts mints one id per shell and tui-shell.ts passes it to the sidebar. Probe with two sessions on flow 392: S2 change and S2 reason with no id, a call with no session, and a legacy record without a session were all refused with 'was not asked in this session, so nothing was changed' naming the decision; S1's own decision, an explicit id and an own lastId were allowed; runDecisionsFollowup with no resolvable flow said 'no decision from this session to act on; nothing was changed'. The inferred flow still receives journal.md lines (round 2 F-006, unchanged).",
+      "verifier": "flow392-pr856-round4-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "75fcefed"
+    }
   }
 ]
