@@ -9,9 +9,9 @@
   "id": "392",
   "slug": "recommendation-journal",
   "title": "Recommendation journal: что рекомендовал агент и что выбрал человек",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-02T11:54:20.132Z",
-  "updatedAt": "2026-10-02T11:58:15.818Z",
+  "updatedAt": "2026-10-02T12:16:48.491Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:04148c1ca05bcda732f1f6154a2c33957f572491635d54b7ce4a1a808f668f89",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/856"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -106,6 +106,11 @@
     {
       "at": "2026-10-02T11:58:15.818Z",
       "event": "started"
+    },
+    {
+      "at": "2026-10-02T12:16:48.491Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/856 (base: main)"
     }
   ],
   "acKinds": {
@@ -152,5 +157,6 @@
     "AC11": {
       "kind": "judged"
     }
-  }
+  },
+  "baseBranch": "main"
 }
