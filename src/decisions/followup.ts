@@ -8,20 +8,27 @@ import { answerDecision, recordReason } from "./journal";
 import { readRecords } from "./store";
 import type { AnswerRecord, AnswerResult, OpenRecord } from "./types";
 
-/** The id of the latest decision that has an answer on record. */
-export async function latestAnsweredDecision(cwd: string): Promise<string | undefined> {
+/** The id of the latest decision that has an answer on record, optionally only one that belongs to `flow`. */
+export async function latestAnsweredDecision(cwd: string, flow?: string): Promise<string | undefined> {
   const records = await readRecords(cwd);
   const answered = new Set(records.filter((r) => r.kind === "answer").map((r) => r.id));
   for (let i = records.length - 1; i >= 0; i -= 1) {
     const record = records[i];
-    if (record !== undefined && record.kind === "open" && answered.has(record.id)) return record.id;
+    if (record !== undefined && record.kind === "open" && answered.has(record.id) && (flow === undefined || record.flow === flow)) return record.id;
   }
   return undefined;
 }
 
-async function resolveOpen(cwd: string, id: string | undefined, lastId: string | undefined): Promise<OpenRecord> {
-  const wanted = id ?? lastId ?? (await latestAnsweredDecision(cwd));
-  if (wanted === undefined) throw new Error("no answered decision to act on yet");
+/**
+ * The decision a follow-up acts on: the id given, else the latest one answered in
+ * THIS session (`lastId`), else the latest one of THIS flow. Never the repo-wide
+ * latest: with several agents and sessions writing one journal that would change
+ * somebody else's decision.
+ */
+async function resolveOpen(cwd: string, id: string | undefined, lastId: string | undefined, flow: string | undefined): Promise<OpenRecord> {
+  let wanted = id ?? lastId;
+  if (wanted === undefined && flow !== undefined) wanted = await latestAnsweredDecision(cwd, flow);
+  if (wanted === undefined) throw new Error("no decision from this session or this flow to act on; nothing was changed");
   const open = (await readRecords(cwd)).find((r): r is OpenRecord => r.kind === "open" && r.id === wanted);
   if (open === undefined) throw new Error(`no decision with id ${wanted}`);
   return open;
@@ -29,22 +36,23 @@ async function resolveOpen(cwd: string, id: string | undefined, lastId: string |
 
 export interface GiveReasonResult {
   id: string;
+  question: string;
   /** False when a reason was already on record: the human is asked once, and that was it. */
   recorded: boolean;
 }
 
 /** Add the one optional reason for a deviation. Only a deviation takes one. */
-export async function giveReason(input: { cwd: string; text: string; id?: string | undefined; lastId?: string | undefined; now?: (() => Date) | undefined }): Promise<GiveReasonResult> {
+export async function giveReason(input: { cwd: string; text: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; now?: (() => Date) | undefined }): Promise<GiveReasonResult> {
   const text = input.text.trim();
   if (text.length === 0) throw new Error("a reason needs some text: /decisions reason <why>");
-  const open = await resolveOpen(input.cwd, input.id, input.lastId);
+  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow);
   const answers = (await readRecords(input.cwd)).filter((r): r is AnswerRecord => r.kind === "answer" && r.id === open.id);
   const first = [...answers].sort((x, y) => x.seq - y.seq)[0];
   if (first === undefined) throw new Error(`decision ${open.id} has no answer yet`);
   if (open.recommendation === null || first.choice === open.recommendation.optionId) {
     throw new Error(`decision ${open.id}: the recommendation was followed; there is no deviation to explain`);
   }
-  return { id: open.id, recorded: await recordReason(input.cwd, open.id, text, input.now) };
+  return { id: open.id, question: open.question, recorded: await recordReason(input.cwd, open.id, text, input.now) };
 }
 
 /** An option id, or a label (case-insensitive), as the human typed it. */
@@ -58,8 +66,22 @@ export function resolveOptionId(open: OpenRecord, typed: string): string {
   throw new Error(`"${wanted}" is not one of the options of decision ${open.id}: ${choices}`);
 }
 
-/** Record a changed answer: both answers stay on record, the report counts the first for the match share. */
-export async function changeAnswer(input: { cwd: string; choice: string; id?: string | undefined; lastId?: string | undefined; now?: (() => Date) | undefined }): Promise<AnswerResult> {
-  const open = await resolveOpen(input.cwd, input.id, input.lastId);
-  return answerDecision({ cwd: input.cwd, id: open.id, choice: resolveOptionId(open, input.choice), now: input.now });
+export interface ChangeAnswerResult extends AnswerResult {
+  question: string;
+  /** The answer the agent already received. */
+  previous: string;
+}
+
+/**
+ * Record a changed answer: both answers stay on record, the report counts the
+ * first for the match share. The agent got the first answer when the question was
+ * answered; the change is a record for the journal and may not reach it.
+ */
+export async function changeAnswer(input: { cwd: string; choice: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; now?: (() => Date) | undefined }): Promise<ChangeAnswerResult> {
+  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow);
+  const choice = resolveOptionId(open, input.choice);
+  const answers = (await readRecords(input.cwd)).filter((r): r is AnswerRecord => r.kind === "answer" && r.id === open.id);
+  const first = [...answers].sort((x, y) => x.seq - y.seq)[0];
+  const result = await answerDecision({ cwd: input.cwd, id: open.id, choice, now: input.now });
+  return { ...result, question: open.question, previous: first?.choice ?? "" };
 }

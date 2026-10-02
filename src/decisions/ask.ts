@@ -120,6 +120,7 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         recommendation: recommended === undefined ? undefined : { optionId: recommended.id, reason: "" },
         stage: deps.stage ?? context.stage ?? "ask_user",
         flow: deps.flow ?? context.flow,
+        flowSource: deps.flow === undefined ? context.flowSource : undefined,
         random: deps.random,
         now: deps.now,
       });
@@ -144,8 +145,10 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       } else if (result.deviation) {
         parts.push("You chose differently from the recommendation.");
       }
-      if (result.askReason) parts.push("If you want, add a reason (once): /decisions reason <why>.");
       if (parts.length > 0) notify(deps, parts.join(" "));
+      // The one, non-blocking offer of a reason (AC6): its own transcript line, shown once per decision
+      // (`askReason` is false for any later answer to the same decision), and only after the answer has returned its value path.
+      if (result.askReason) notify(deps, `Add a reason for choosing differently, if you want (asked once): /decisions reason <why>`);
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
     }

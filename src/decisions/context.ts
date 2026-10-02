@@ -15,8 +15,13 @@
 
 import { flowIdOf, listFlowDirs, readFlow, resolveFlowDir } from "../flow/store";
 
+/** Where the flow came from: the environment, the branch name, or a guess (the one flow in progress). */
+export type FlowSource = "env" | "branch" | "inferred";
+
 export interface FlowContext {
   flow?: string | undefined;
+  /** How `flow` was found; "inferred" is the weakest attribution and the report says so. */
+  flowSource?: FlowSource | undefined;
   stage?: string | undefined;
 }
 
@@ -79,21 +84,26 @@ export async function resolveFlowContext(cwd: string, env: Record<string, string
     const dirs = await listFlowDirs(cwd);
     const fromEnv = env["KERYX_FLOW"];
     let dir: string | undefined;
+    let flowSource: FlowSource = "env";
     if (fromEnv !== undefined && fromEnv.length > 0) {
       try {
         dir = await resolveFlowDir(cwd, fromEnv);
       } catch {
         // KERYX_FLOW names something that is not a flow here: keep it as given, there is no stage to read
-        return { flow: fromEnv };
+        return { flow: fromEnv, flowSource: "env" };
       }
     } else {
       const branch = await currentBranch(cwd);
       const id = branch === undefined ? undefined : fromBranch(branch, dirs);
       dir = id === undefined ? undefined : dirs.find((candidate) => flowIdOf(candidate) === id);
-      dir ??= await onlyInProgress(cwd, dirs);
+      flowSource = "branch";
+      if (dir === undefined) {
+        dir = await onlyInProgress(cwd, dirs);
+        flowSource = "inferred";
+      }
     }
     if (dir === undefined) return {};
-    return { flow: flowIdOf(dir), stage: await stageOf(cwd, dir) };
+    return { flow: flowIdOf(dir), flowSource, stage: await stageOf(cwd, dir) };
   } catch {
     return {};
   }

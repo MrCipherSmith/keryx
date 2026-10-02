@@ -22,6 +22,8 @@ export interface OpenRecord {
   at: string;
   /** Flow id, or null for a question asked outside a flow. */
   flow: string | null;
+  /** How the flow was found, when it was derived rather than given: env, branch, or inferred (the one flow in progress). */
+  flowSource?: "env" | "branch" | "inferred";
   stage: string;
   question: string;
   /** The options in the order the agent gave them. */
@@ -69,6 +71,7 @@ export interface OpenInput {
   recommendation?: DecisionRecommendation | undefined;
   stage?: string | undefined;
   flow?: string | undefined;
+  flowSource?: "env" | "branch" | "inferred" | undefined;
   action?: string | undefined;
   /** Test seam: a random source in [0, 1). */
   random?: (() => number) | undefined;

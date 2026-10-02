@@ -5,6 +5,7 @@
 // the human changed after the reveal is contaminated by the reveal, so the
 // change is counted on its own line and never moves the share.
 
+import { oneLine } from "./text";
 import type { AnswerRecord, DecisionMode, DecisionRecord, OpenRecord, ReasonRecord } from "./types";
 
 export interface Tally {
@@ -21,6 +22,8 @@ export interface DeviationRow {
   question: string;
   recommended: string;
   chose: string;
+  /** How the flow was found when it was derived: "inferred" is a guess (the one flow in progress). */
+  flowSource?: "env" | "branch" | "inferred";
   changed: boolean;
   /** Absent when the human gave no reason, or was never asked. */
   reason?: string;
@@ -35,6 +38,8 @@ export interface DecisionsReport {
   byMode: Record<DecisionMode, Tally>;
   byStage: Array<{ stage: string; ordinary: Tally; blind: Tally }>;
   deviations: DeviationRow[];
+  /** Decisions whose flow was only inferred (the single in-progress flow), not named by env or branch. */
+  inferredFlow: number;
   /** Journal lines that were unreadable or malformed and left out of every number above. */
   skipped: number;
 }
@@ -71,6 +76,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     byMode: { ordinary: emptyTally(), blind: emptyTally() },
     byStage: [],
     deviations: [],
+    inferredFlow: opens.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
     skipped,
   };
   const stages = new Map<string, { ordinary: Tally; blind: Tally }>();
@@ -100,6 +106,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
       report.deviations.push({
         id: open.id,
         flow: open.flow,
+        ...(open.flowSource !== undefined ? { flowSource: open.flowSource } : {}),
         stage: open.stage,
         mode: open.mode,
         question: open.question,
@@ -140,12 +147,16 @@ export function renderReport(report: DecisionsReport): string {
   }
   lines.push("", `Deviations: ${report.deviations.length}`);
   for (const dev of report.deviations) {
-    const where = dev.flow === null ? "project" : `flow ${dev.flow}`;
+    const where = dev.flow === null ? "project" : `flow ${oneLine(dev.flow)}${dev.flowSource === "inferred" ? " (inferred)" : ""}`;
     const changed = dev.changed ? ", changed after the reveal" : "";
-    lines.push(`  ${dev.id} [${where}, ${dev.stage}, ${dev.mode}${changed}]`);
-    lines.push(`    ${dev.question}`);
-    lines.push(`    recommended ${dev.recommended}, chose ${dev.chose}`);
-    lines.push(`    reason: ${dev.reason ?? "(none given)"}`);
+    // every free-text field is one capped line here too, whatever an older or hand-edited record holds
+    lines.push(`  ${oneLine(dev.id)} [${where}, ${oneLine(dev.stage)}, ${dev.mode}${changed}]`);
+    lines.push(`    ${oneLine(dev.question)}`);
+    lines.push(`    recommended ${oneLine(dev.recommended)}, chose ${oneLine(dev.chose)}`);
+    lines.push(`    reason: ${dev.reason === undefined ? "(none given)" : oneLine(dev.reason)}`);
+  }
+  if (report.inferredFlow > 0) {
+    lines.push("", `Flow attribution inferred (the one flow in progress, not named by KERYX_FLOW or the branch): ${report.inferredFlow} decision${report.inferredFlow === 1 ? "" : "s"}.`);
   }
   if (skippedLine !== undefined) lines.push("", skippedLine);
   return lines.join("\n");

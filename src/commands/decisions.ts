@@ -90,6 +90,7 @@ async function runOpen(args: string[]): Promise<void> {
     recommendation: recommend === undefined ? undefined : { optionId: recommend, reason: optionValue(args, "--reason") ?? "" },
     stage: given.stage ?? context.stage,
     flow,
+    flowSource: given.flow === undefined ? context.flowSource : undefined,
     action: optionValue(args, "--action"),
   });
   const labels = new Map(options.map((option) => [option.id, option]));
@@ -195,9 +196,12 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
   open     decides blind (a third of the questions: no "recommended" mark,
            random order) or ordinary, and prints the order to show and whether
            to mark the recommendation. A question about a release, a delete or
-           a push, a merge, a drop (the irreversible list, English and Russian,
-           matched on the question, the options and --action, plus
-           .metaproject/decisions.config.json) is never blind.
+           a push (the strong irreversible terms, English and Russian, plus
+           .metaproject/decisions.config.json) is never blind. Merge, drop,
+           remove, force and the like count only next to main, production, a
+           branch, a table, ... in the same question or option, or in --action.
+           PASS --action FOR ANYTHING IRREVERSIBLE: that is the reliable path,
+           the text match is only a safety net.
   answer   records the choice (it must be one of the options; --other marks a
            free-form answer), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
@@ -210,7 +214,8 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
 
 The journal is one file per repository, .metaproject/data/decisions/journal.jsonl
 under the main checkout (every worktree shares it; it is git-ignored). Inside a
-flow (--flow <id>, KERYX_FLOW, the flow's branch, or the only flow in progress)
+flow (--flow <id>, KERYX_FLOW, the flow's branch, or the only flow in progress;
+the last is a guess, recorded as "inferred" and shown so in the report)
 the answer also adds a line to that flow's journal.md. A failure here never
 stops the question.`);
 }

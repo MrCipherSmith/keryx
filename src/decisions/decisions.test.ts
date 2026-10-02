@@ -132,7 +132,8 @@ describe("AC3: blind mode", () => {
     // The shuffle moved the options: it is a permutation, and not the given order.
     expect(request?.options.map((o) => o.id).sort()).toEqual(["a", "b", "c"]);
     expect(request?.options.map((o) => o.id)).not.toEqual(["a", "b", "c"]);
-    expect(notes).toHaveLength(1);
+    // the reveal, then the one non-blocking offer of a reason (the answer deviated)
+    expect(notes).toHaveLength(2);
     expect(notes[0]).toContain("Option A");
     // ask_user options carry a description of the option, not a reason for recommending it (F-007)
     expect(notes[0]).not.toContain("the safe one");
@@ -255,8 +256,7 @@ describe("AC6: the reason for a deviation, asked once", () => {
     expect(await ask({ question: "First?", options })).toBe("b");
     expect(questions).toEqual(["First?"]);
     expect((await readRecords(root)).filter((r) => r.kind === "reason")).toHaveLength(0);
-    expect(notes).toHaveLength(1);
-    expect(notes[0]).toContain("/decisions reason");
+    expect(notes.filter((text) => text.includes("/decisions reason"))).toHaveLength(1);
   });
 
   test("through ask_user: a followed recommendation says nothing about a reason", async () => {

@@ -51,19 +51,21 @@ describe("F-001 / F-002: the answer is never held for a reason; the TUI can give
   });
 
   test("giveReason records the reason later, once, for the latest answered decision", async () => {
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9 });
+    const ids: string[] = [];
+    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
-    const given = await giveReason({ cwd: root, text: "B fits the deadline" });
+    const given = await giveReason({ cwd: root, text: "B fits the deadline", lastId: ids[0] });
     expect(given.recorded).toBe(true);
-    expect((await giveReason({ cwd: root, text: "again" })).recorded).toBe(false);
+    expect((await giveReason({ cwd: root, text: "again", lastId: ids[0] })).recorded).toBe(false);
     expect((await loadReport(root)).deviations[0]?.reason).toBe("B fits the deadline");
   });
 
   test("a reason needs text and a deviation", async () => {
-    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9 });
+    const ids: string[] = [];
+    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
-    await expect(giveReason({ cwd: root, text: "  " })).rejects.toThrow(/needs some text/);
-    await expect(giveReason({ cwd: root, text: "why" })).rejects.toThrow(/no deviation/);
+    await expect(giveReason({ cwd: root, text: "  ", lastId: ids[0] })).rejects.toThrow(/needs some text/);
+    await expect(giveReason({ cwd: root, text: "why", lastId: ids[0] })).rejects.toThrow(/no deviation/);
   });
 });
 
@@ -82,9 +84,10 @@ describe("F-011: the answer can be changed after the reveal", () => {
   });
 
   test("an unknown option is refused and lists the valid ones", async () => {
-    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9 });
+    const ids: string[] = [];
+    const ask = journalAsk(async () => "b", { cwd: root, random: () => 0.9, onDecision: (id) => ids.push(id) });
     await ask({ question: "Pick", options: withRec() });
-    await expect(changeAnswer({ cwd: root, choice: "zzz" })).rejects.toThrow(/not one of the options.*a \(Option A\)/);
+    await expect(changeAnswer({ cwd: root, choice: "zzz", lastId: ids[0] })).rejects.toThrow(/not one of the options.*a \(Option A\)/);
   });
 });
 
@@ -127,14 +130,14 @@ describe("F-004: the irreversible list reads the options and Russian wording", (
     ["Выпускаем релиз сегодня?"],
     ["Удалить кеш?"],
     ["Запушить в main?"],
-    ["Отправить письмо клиентам?"],
     ["Опубликовать пакет?"],
     ["Слить ветку?"],
     ["Смержить PR?"],
     ["Unpublish the package?"],
     ["Merge the branch?"],
     ["Drop the table?"],
-    ["Force the update?"],
+    ["Force push the update?"],
+    ["Force the update on production?"],
   ])("%s is irreversible", (question) => {
     expect(isIrreversible(list, question)).toBe(true);
   });
@@ -149,7 +152,7 @@ describe("F-004: the irreversible list reads the options and Russian wording", (
       cwd: root,
       question: "Which way?",
       options: [
-        { id: "a", label: "Option A", description: "Merge it" },
+        { id: "a", label: "Option A", description: "Merge it into main" },
         { id: "b", label: "Option B" },
       ],
       recommendation: REC,

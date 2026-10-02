@@ -13,9 +13,10 @@ export { buildReport, renderReport } from "./report";
 export type { DecisionsReport, DeviationRow, Tally } from "./report";
 export { journalFile, resolveJournalFile } from "./store";
 export { resolveFlowContext } from "./context";
-export type { FlowContext } from "./context";
+export type { FlowContext, FlowSource } from "./context";
+export { MAX_TEXT_LENGTH, oneLine } from "./text";
 export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
-export type { GiveReasonResult } from "./followup";
+export type { ChangeAnswerResult, GiveReasonResult } from "./followup";
 export type {
   AnswerInput,
   AnswerResult,

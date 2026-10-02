@@ -22,7 +22,9 @@ the main checkout: every git worktree reads and writes the same file. Inside a
 flow, the answer also adds one line to that flow's `journal.md`; outside a flow
 only the project-wide journal is written. The flow is `KERYX_FLOW` when it is set,
 else the flow named by the git branch (`flow-392`, or the flow's slug), else the
-only flow in progress; the stage is the kind of the task in progress, or the
+only flow in progress. The last one is a guess: it is recorded as `inferred`
+(`flowSource` on the record is `env`, `branch` or `inferred`) and the report marks
+those flows `(inferred)` and counts them. The stage is the kind of the task in progress, or the
 flow's status.
 
 ## Blind questions
@@ -33,25 +35,36 @@ and then the recommendation is revealed. This is what lets the match share mean
 something: if you only ever saw the recommendation marked, you would match it
 because it was marked.
 
-A question about something on the **irreversible list** is never blind. The built-in
-list is `release`, `delete`, `remove`, `push`, `publish`, `unpublish`, `deploy`,
-`merge`, `drop`, `force`, `destroy`, `wipe` and `purge`, with Russian roots
-(`релиз`, `удал`, `пуш`, `отправ`, `опублик`, `слить`, `слив`, `мерж`, `деплой`,
-`выкат`, `сброс`; a Russian root matches inside a word, so `запушить` and
-`смержить` count); add your own words in
-`.metaproject/decisions.config.json`, which extends the built-in list and cannot
-shorten it:
+A question about something on the **irreversible list** is never blind. The list has
+two tiers, so that ordinary coding questions ("merge these two helpers", "drop an
+unused import", "remove dead code", "force a type") are not mistaken for a release:
 
-```json
-{ "irreversible": ["migrate", "drop"] }
-```
+- **Strong terms always count**: `release`, `publish`, `unpublish`, `deploy`,
+  `delete`, `push`, `destroy`, `wipe`, `purge`, with the Russian roots `релиз`,
+  `удал`, `пуш`, `опублик`, `деплой`, `выкат` (a Russian root matches inside a
+  word, so `запушить` counts). Add your own words in
+  `.metaproject/decisions.config.json`; they are strong too, and the file extends
+  the built-in list and cannot shorten it:
 
-A word matches at the start of a word in the question text, in the `--action`
-tag the agent passes, or in any option's id, label or description,
-case-insensitively. When in doubt, keryx treats the question
-as irreversible. A question with no recommendation is never blind. In a blind question a mark
-written into a label, such as `(Recommended)`, `[recommended]`, `- recommended`,
-`Recommended:` or a star, is removed from what is shown.
+  ```json
+  { "irreversible": ["migrate"] }
+  ```
+
+- **Weak terms count only next to a risk target**: `merge`, `drop`, `remove`,
+  `force`, `reset`, `overwrite`, `truncate`, `send` (and `слить`, `мерж`, `сброс`,
+  `отправ`, ...) make a question irreversible only when the same question, or the
+  same option, also names `main`, `master`, `prod`/`production`, `remote`,
+  `origin`, a `database`, `table`, `branch`, `tag`, `repository`, a PR or a
+  release, or when the `--action` tag itself is one of them.
+
+**Agents should pass `--action` for anything irreversible** (`--action merge`,
+`--action drop-table`, `--action force-push`). That is the reliable path: the text
+match is only a safety net, and it looks at the question, the options and the tag,
+case-insensitively. A weak term with no risk target, such as "Merge the two date
+helpers?", is asked normally and can be blind. A question with no recommendation
+is never blind. In a blind question a mark written into a label, such as
+`(Recommended)`, `[recommended]`, `- recommended`, `Recommended:` or a star, is
+removed from what is shown.
 
 ## Changing your mind, and giving a reason
 
@@ -59,16 +72,24 @@ Your answer is never held back. After you answer, the transcript shows the revea
 and tells you what you can still do:
 
 - `/decisions change <option id or label>` changes the answer of the latest
-  question (or name another with the id from `keryx decisions report`). Both
-  answers are kept and the record says it was changed.
+  question **asked in this session** (with no session question, the latest one of
+  the current flow; never the latest of the whole repository, which may belong to
+  another session). It prints which decision it changed. Both answers are kept and
+  the record says it was changed. The agent already received your first answer,
+  so the change is recorded in the journal but may not reach the agent.
 - `/decisions reason <why>` adds an optional reason when your answer differed from
-  the recommendation. It is offered **once**; nothing asks you for it, and leaving
-  it out costs nothing (the report shows `(none given)`).
+  the recommendation, to the same decision. After a deviation the transcript shows
+  one line naming it, **once per decision**; nothing waits for it, the tool result
+  has already gone back, and leaving it out costs nothing (the report shows
+  `(none given)`).
 
 The same two steps from a shell are `keryx decisions answer <id> --choice <id>`
 again and `keryx decisions reason <id> --text "<why>"`. An answer must be one of
 the options (a free-form `ask_user` answer is recorded as such). Journal lines
-that cannot be read are skipped and the report says how many.
+that cannot be read are skipped and the report says how many. Free text you type
+(a free-form answer, a reason) is collapsed to one line of at most 300 characters,
+when it is written and again when it is shown, so it cannot add lines to a flow's
+`journal.md` or to the report.
 
 ## The report
 

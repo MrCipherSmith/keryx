@@ -6,7 +6,7 @@
 // Opening it never writes: it reads the journal and refuses nothing.
 
 import { findAgentCommand } from "../commands/agent-commands";
-import { changeAnswer, decisionCount, giveReason, reportText } from "../decisions/service";
+import { changeAnswer, decisionCount, giveReason, oneLine, reportText, resolveFlowContext } from "../decisions/service";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalChrome, type ModalHandle as HostModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -47,6 +47,10 @@ export function parseDecisionsCommand(line: string): DecisionsCommand {
   return { kind: "show" };
 }
 
+function shortQuestion(question: string): string {
+  return oneLine(question, 60);
+}
+
 export interface DecisionsFollowupDeps {
   cwd: string;
   /** The latest question answered through the journal in this session. */
@@ -66,14 +70,19 @@ export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { 
   };
   const lastId = deps.lastDecisionId?.();
   try {
+    // no decision from this session: fall back to the latest one of this flow, never the repo-wide latest
+    const flow = lastId === undefined ? (await resolveFlowContext(deps.cwd)).flow : undefined;
     if (command.kind === "reason") {
-      const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId });
-      say(done.recorded ? `Reason recorded for decision ${done.id}.` : `Decision ${done.id} already has a reason on record.`);
+      const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId, flow });
+      say(done.recorded ? `Reason recorded for decision ${done.id} ("${shortQuestion(done.question)}").` : `Decision ${done.id} ("${shortQuestion(done.question)}") already has a reason on record.`);
       return;
     }
     if (command.choice.length === 0) throw new Error("name the option: /decisions change <option id or label>");
-    const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId });
-    say(`Answer for decision ${result.id} changed to ${result.choice}. Both answers stay on record; the report counts the first one.`);
+    const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId, flow });
+    say(
+      `Decision ${result.id} ("${shortQuestion(result.question)}"): answer changed from ${result.previous} to ${result.choice}. ` +
+        `The agent already received the first answer (${result.previous}), so the change is recorded in the journal but may not reach the agent. The report counts the first answer.`,
+    );
   } catch (cause) {
     say(`/decisions ${command.kind}: ${cause instanceof Error ? cause.message : String(cause)}`);
   }

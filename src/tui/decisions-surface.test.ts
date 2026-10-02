@@ -184,3 +184,28 @@ test("/decisions reason and /decisions change work from the TUI path and tell th
   await runDecisionsFollowup({ kind: "change", choice: "nope" }, deps);
   expect(said.at(-1)).toContain("not one of the options");
 });
+
+test("/decisions change says the agent already got the first answer and names the decision (round 2)", async () => {
+  await openDecision({ cwd: root, question: "Which cache?", options: [{ id: "a", label: "Option A" }, { id: "b", label: "Option B" }], recommendation: { optionId: "a", reason: "" }, random: () => 0.9, id: "d-7" });
+  await answerDecision({ cwd: root, id: "d-7", choice: "b" });
+  const said: string[] = [];
+  await runDecisionsFollowup({ kind: "change", choice: "a" }, { cwd: root, lastDecisionId: () => "d-7", notice: (text) => said.push(text) });
+  expect(said[0]).toContain("d-7");
+  expect(said[0]).toContain("Which cache?");
+  expect(said[0]).toContain("already received the first answer (b)");
+  expect(said[0]).toContain("may not reach the agent");
+});
+
+test("/decisions reason|change with no session decision and no flow touches nothing and says so (round 2)", async () => {
+  await openDecision({ cwd: root, question: "Someone else's", options: [{ id: "a", label: "Option A" }, { id: "b", label: "Option B" }], recommendation: { optionId: "a", reason: "" }, random: () => 0.9, id: "d-else" });
+  await answerDecision({ cwd: root, id: "d-else", choice: "b" });
+  const said: string[] = [];
+  const deps = { cwd: root, lastDecisionId: () => undefined, notice: (text: string) => said.push(text) };
+  await runDecisionsFollowup({ kind: "reason", text: "because" }, deps);
+  await runDecisionsFollowup({ kind: "change", choice: "a" }, deps);
+  expect(said).toHaveLength(2);
+  for (const text of said) expect(text).toContain("no decision from this session or this flow");
+  const report = await loadReport(root);
+  expect(report.changed).toBe(0);
+  expect(report.deviations[0]).not.toHaveProperty("reason");
+});

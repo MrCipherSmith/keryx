@@ -2011,13 +2011,13 @@ keryx decisions report [--json]
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list (release, delete, push, publish, merge, drop, force and the Russian equivalents, matched on the question, the options and `--action`, plus `.metaproject/decisions.config.json`) is never blind. |
+| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list is never blind: strong terms (release, publish, unpublish, deploy, delete, push and the Russian equivalents, plus `.metaproject/decisions.config.json`) always count; weak terms (merge, drop, remove, force and the like) count only next to a risk target (main, production, a branch, a table, ...) in the same question or option, or in `--action`. Pass `--action` for anything irreversible: it is the reliable path. A flow found only as the single flow in progress is recorded as `inferred`. |
 | `answer <id>` | `--choice`, `--other`, `--reason`, `--json` | Records the choice (it must be one of the options; `--other` marks a free-form answer) and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says the human may add a reason, once; the answer is never held back for it. |
 | `reason <id>` | `--text`, `--json` | Records the reason for a deviation; an empty text is recorded as absent. |
 | `report` | `--json` | Deterministic, no model: match share by mode and by stage, and every deviation with its reason. |
 
 `--flow` and `--stage` default to what the checkout says: `KERYX_FLOW`, else the
-flow named by the git branch, else the only flow in progress. The journal is
+flow named by the git branch, else the only flow in progress (a guess, marked `inferred` in the record and the report). The journal is
 `.metaproject/data/decisions/journal.jsonl` under the main checkout, shared by every
 worktree; inside a flow the answer also adds a line to that flow's `journal.md`.
 In the TUI the report is `/decisions`, `/decisions reason <why>` adds the optional

@@ -1269,7 +1269,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions open",
     summary:
       "Record an agent question with options and its recommendation BEFORE showing it. Decides blind (a third of the questions: " +
-      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete, push, merge or drop is never blind.",
+      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete, push, or a merge or drop of something shared (pass --action) is never blind.",
     intent: ["decisions open", "record a question with options", "журнал рекомендаций", "recommendation journal", "blind question"],
     args: [
       { name: "question", type: "string", required: true, desc: "the question as the human will read it" },

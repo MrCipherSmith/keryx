@@ -9,6 +9,7 @@ import { randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
 import { BLIND_PROBABILITY, isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
+import { oneLine } from "./text";
 import type {
   AnswerInput,
   AnswerRecord,
@@ -24,10 +25,6 @@ export const DEFAULT_STAGE = "unspecified";
 
 function newId(now: Date): string {
   return `d-${now.getTime().toString(36)}-${randomBytes(3).toString("hex")}`;
-}
-
-function oneLine(text: string): string {
-  return text.replace(/\s+/g, " ").trim();
 }
 
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
@@ -61,6 +58,7 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     id: input.id ?? newId(now),
     at: now.toISOString(),
     flow: input.flow ?? null,
+    ...(input.flow !== undefined && input.flowSource !== undefined ? { flowSource: input.flowSource } : {}),
     stage: input.stage !== undefined && input.stage.trim().length > 0 ? oneLine(input.stage) : DEFAULT_STAGE,
     question,
     options: input.options.map((option) => ({
@@ -92,9 +90,10 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   const records = await readRecords(input.cwd);
   const open = records.find((r): r is OpenRecord => r.kind === "open" && r.id === input.id);
   if (open === undefined) throw new Error(`no open decision with id ${input.id}`);
-  const choice = input.choice.trim();
-  if (choice.length === 0) throw new Error("decisions answer needs a choice");
   const other = input.other === true;
+  // a free-form answer is the human's own words: one line, capped, so it cannot forge a journal.md or report line
+  const choice = other ? oneLine(input.choice) : input.choice.trim();
+  if (choice.length === 0) throw new Error("decisions answer needs a choice");
   if (!other && !open.options.some((option) => option.id === choice)) {
     throw new Error(`"${choice}" is not one of the options of decision ${input.id}. Choose one of: ${open.options.map((option) => option.id).join(", ")}`);
   }
@@ -163,7 +162,7 @@ async function journalToFlow(cwd: string, open: OpenRecord, answer: AnswerRecord
       cwd,
       dir,
       answer.at,
-      `decision ${open.id} [${open.stage}, ${open.mode}]: chose ${answer.choice}${changed}; ${verdict}`,
+      `decision ${open.id} [${oneLine(open.stage)}, ${open.mode}]: chose ${oneLine(answer.choice)}${changed}; ${oneLine(verdict)}`,
     );
   } catch {
     // the project-wide journal already has the record; a flow that cannot be found is not an error here
