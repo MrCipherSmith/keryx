@@ -14,7 +14,9 @@ import {
   acCheckCachePath,
   readAcCheckCache,
   readAcKindRecords,
-  readOutcomeAuthor,
+  effectiveOutcomeAuthor,
+  readOrigin,
+  type FlowOrigin,
   statusLabel,
   type AcCheckStatus,
   type OutcomeAuthorReading,
@@ -69,6 +71,8 @@ export type FlowInspectorItem = {
    * surfaces. Absent only on an item built by hand, which reads `unknown`.
    */
   outcomeAuthor?: OutcomeAuthorReading;
+  /** Where the flow came from (kind, quote, source); absent reads `unknown`. */
+  origin?: FlowOrigin;
   /**
    * Set when the flow is `completing` and nothing holds its lock (flow 299,
    * AC6): the same condition, and the same words, as `keryx flow status`.
@@ -167,6 +171,11 @@ export function flowsInSession(
   });
 }
 
+function originField(raw: unknown): { origin?: FlowOrigin } {
+  const origin = readOrigin(raw);
+  return origin === undefined ? {} : { origin };
+}
+
 export function flowItemFromState(flow: FlowState, dir: string): FlowInspectorItem {
   const sessionIds = [
     ...new Set(
@@ -189,7 +198,8 @@ export function flowItemFromState(flow: FlowState, dir: string): FlowInspectorIt
     updatedAt: flow.updatedAt,
     source: flow.source.ref ?? flow.source.type,
     tasks: flow.tasks.map((task) => ({ id: task.id, title: task.title, status: task.status })),
-    outcomeAuthor: readOutcomeAuthor(flow.outcomeAuthor),
+    outcomeAuthor: effectiveOutcomeAuthor(flow),
+    ...originField(flow.origin),
   };
 }
 

@@ -12,6 +12,7 @@ import {
 } from "./machine";
 import { reviewGate } from "./review-gate";
 import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
+import { isOriginKind, originSummary, readOrigin, resolveOrigin, type FlowOrigin, type OriginReading } from "./origin";
 // The outcome-author vocabulary, re-exported so the CLI, the product module and the
 // TUI read it through this facade (import policy, rule 2).
 export {
@@ -23,6 +24,21 @@ export {
   type OutcomeAuthor,
   type OutcomeAuthorReading,
 } from "./outcome-author";
+// The origin vocabulary, re-exported for the same reason.
+export {
+  ORIGIN_KINDS,
+  ORIGIN_READINGS,
+  effectiveOutcomeAuthor,
+  isOriginKind,
+  originDetailLines,
+  originSummary,
+  readOrigin,
+  readOriginKind,
+  resolveOrigin,
+  type FlowOrigin,
+  type OriginKind,
+  type OriginReading,
+} from "./origin";
 import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
@@ -172,6 +188,7 @@ import type {
   AttemptOutcome,
   TaskAttempts,
   OutcomeAuthorSetResult,
+  OriginSetResult,
 } from "./types";
 
 /**
@@ -703,7 +720,28 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // behind. Only an OMITTED flag takes the default; `human` is never chosen
       // for the caller.
       const outcomeAuthor =
-        input.outcomeAuthor === undefined ? DEFAULT_OUTCOME_AUTHOR : parseOutcomeAuthor(input.outcomeAuthor);
+        input.outcomeAuthor === undefined ? undefined : parseOutcomeAuthor(input.outcomeAuthor);
+
+      // The origin never refuses: the evidence rule (`resolveOrigin`) either
+      // yields an origin to record or a note saying why not, and an invalid kind
+      // is only a note. The template keeps the requested words either way.
+      let originNote: string | undefined;
+      let origin: FlowOrigin | undefined;
+      let originDraft: FlowOrigin | undefined;
+      if (input.origin !== undefined) {
+        const resolution = resolveOrigin({ kind: input.origin, quote: input.originQuote, source: input.originSource });
+        origin = resolution.origin;
+        originNote = resolution.note;
+        if (isOriginKind(input.origin)) {
+          originDraft = {
+            kind: input.origin,
+            ...(input.originQuote?.trim() ? { quote: input.originQuote } : {}),
+            ...(input.originSource?.trim() ? { source: input.originSource } : {}),
+          };
+        }
+      } else if (input.originQuote !== undefined || input.originSource !== undefined) {
+        originNote = "--quote/--source were given without --origin; origin stays unknown.";
+      }
 
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
@@ -789,13 +827,25 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ...(input.owner?.trim()
             ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
             : {}),
-          outcomeAuthor,
+          // Derived from the origin when not named (`effectiveOutcomeAuthor`): a
+          // recorded origin leaves the key absent, no origin keeps the default.
+          ...(outcomeAuthor !== undefined
+            ? { outcomeAuthor }
+            : origin === undefined
+              ? { outcomeAuthor: DEFAULT_OUTCOME_AUTHOR }
+              : {}),
+          ...(origin === undefined ? {} : { origin }),
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
 
         const sourceLabel = input.issue ?? "user description";
-        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(title, sourceLabel));
+        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(
+            title,
+            originDraft === undefined ? sourceLabel : `${sourceLabel} (origin: ${originDraft.kind})`,
+            originDraft,
+          ),
+        );
         await writeFileAtomic(path.join(absolute, "context.md"), context.markdown);
         await writeFileAtomic(path.join(absolute, "plan.md"), renderPlan());
         await writeFileAtomic(path.join(absolute, "tasks.md"), renderTasksDoc());
@@ -804,7 +854,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFlow(input.cwd, dir, flow);
         await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project });
 
-        return { flow, dir: path.relative(input.cwd, absolute), contextNotes: context.notes };
+        return {
+          flow,
+          dir: path.relative(input.cwd, absolute),
+          contextNotes: context.notes,
+          ...(originNote === undefined ? {} : { originNote }),
+        };
       });
     },
 
@@ -916,6 +971,57 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
       });
       return { flow, previous, changed };
+    },
+
+    /**
+     * Change where the flow came from. `reason` is required and single-line; the
+     * field and its journal line are written together by `save()`. The evidence
+     * rule applies to the quote and source already on the flow or given here: if
+     * it is not met, nothing is written and the result carries the reason (the
+     * origin never refuses). `unknown` clears the origin. Works on any flow and
+     * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`. An invalid kind is a note, not an error.
+     */
+    async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {
+      if (!reason?.trim()) {
+        throw new Error('flow origin set requires --reason "<why>"');
+      }
+      validateSingleLineReason(reason);
+      let previous: OriginReading = "unknown";
+      let next: OriginReading = "unknown";
+      let changed = false;
+      let note: string | undefined;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        const before = readOrigin(current.origin);
+        previous = before?.kind ?? "unknown";
+        let after: FlowOrigin | undefined;
+        if (kind !== "unknown" && !isOriginKind(kind)) {
+          note = `origin kind must be one of: human-request, agent-finding, agent-proposal, unknown (got "${kind}"); the origin is unchanged.`;
+          next = previous;
+          return current;
+        }
+        if (kind !== "unknown") {
+          const resolution = resolveOrigin({
+            kind,
+            quote: quote !== undefined && quote.length > 0 ? quote : before?.quote,
+            source: source !== undefined && source.length > 0 ? source : before?.source,
+          });
+          if (resolution.origin === undefined) {
+            note = resolution.note;
+            next = previous;
+            return current;
+          }
+          after = resolution.origin;
+        }
+        next = after?.kind ?? "unknown";
+        if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) {
+          return current;
+        }
+        changed = true;
+        if (after === undefined) delete current.origin;
+        else current.origin = after;
+        return save(cwd, dir, current, "origin-set", `${originSummary(before)} -> ${originSummary(after)} (${reason.trim()})`);
+      });
+      return { flow, previous, next, changed, ...(note === undefined ? {} : { note }) };
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {

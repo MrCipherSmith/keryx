@@ -380,6 +380,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/flow",
+    group: "Managed work",
+    summary: "Show a flow's origin, or set it with a reason — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\".",
+  },
+  {
+    kind: "slash",
     name: "/opencomments",
     group: "Managed work",
     summary: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>.",

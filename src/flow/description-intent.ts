@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { ORIGIN_PLACEHOLDER_BULLETS, REQUEST_LABEL, SOURCE_LABEL } from "./origin";
 
 // The intent a flow's description.md states, read as text. Kept in the flow
 // module, not the product module, so `flow init` can say when a fresh
@@ -117,14 +118,38 @@ export function outcomeBulletsFrom(markdown: string): string[] | null {
   const body = sectionOf(markdown, /^outcome criteri(?:a|on)$/i);
   if (body === null) return null;
   const bullets: string[] = [];
+  // True while inside a request/source bullet (or a placeholder one) and its continuation lines.
+  let skipping = false;
   for (const line of body.split(/\r?\n/)) {
     const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
     // Only the exact template line is skipped: a real bullet that starts with the same words is a criterion.
     if ((bullet?.[1] ?? line).trim() === OUTCOME_HINT) continue;
-    if (bullet !== null) bullets.push((bullet[1] ?? "").trim());
-    else if (line.trim().length > 0 && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
+    if (bullet !== null) {
+      skipping = isOriginTemplateBullet(bullet[1] ?? "");
+      if (!skipping) bullets.push((bullet[1] ?? "").trim());
+    } else if (line.trim().length > 0 && !skipping && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
   }
   return bullets.filter((bullet) => bullet.length > 0);
+}
+
+/**
+ * The bullets the origin template writes that are not an outcome criterion: the
+ * verbatim request and the source say where the flow came from, and an
+ * untouched placeholder declares nothing.
+ */
+export function isOriginTemplateBullet(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    trimmed.startsWith(`${REQUEST_LABEL}:`) ||
+    trimmed.startsWith(`${SOURCE_LABEL}:`) ||
+    ORIGIN_PLACEHOLDER_BULLETS.some((placeholder) => placeholder.slice(2) === trimmed)
+  );
+}
+
+/** True for an untouched origin placeholder bullet (an unfilled formalization or observation line). */
+export function isOriginPlaceholderBullet(text: string): boolean {
+  const trimmed = text.trim();
+  return ORIGIN_PLACEHOLDER_BULLETS.some((placeholder) => placeholder.slice(2) === trimmed);
 }
 
 export const INIT_INTENT_NOTE ="note: no intent statement extractable from description.md — the product index will hold no statement for this flow";
