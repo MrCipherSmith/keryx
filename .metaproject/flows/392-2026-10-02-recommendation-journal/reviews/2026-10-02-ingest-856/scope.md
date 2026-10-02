@@ -4,7 +4,7 @@ target: report
 ref: 856
 mode: ingest
 flow: 392 (explicit-flow-id)
-created_at: 2026-10-02T13:10:19.140Z
+created_at: 2026-10-02T13:34:43.259Z
 context_mode: light
 
 ## Stage counts

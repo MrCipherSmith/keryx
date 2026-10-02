@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-10-02-ingest-856-r02",
+  "reviewId": "2026-10-02-ingest-856-r03",
   "mode": "ingest",
-  "status": "closed",
+  "status": "draft",
   "target": {
     "kind": "report",
     "ref": "856",
-    "head": "15c528083315d41b843e8f63280e15bb776df70f"
+    "head": "b68fff5fc4a2343aebb01d72984f2d351cf6a09e"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/scope.md",
-    "coverage": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/coverage.md",
-    "report": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/report.md",
-    "findings": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/findings.json",
-    "learning": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/learning.md",
-    "decisions": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r02/decisions.md"
+    "scope": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/scope.md",
+    "coverage": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/coverage.md",
+    "report": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/report.md",
+    "findings": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/findings.json",
+    "learning": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/learning.md",
+    "decisions": ".metaproject/flows/392-2026-10-02-recommendation-journal/reviews/2026-10-02-ingest-856-r03/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 6,
+    "total": 4,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 6,
+    "retained": 4,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-10-02T13:34:50.969Z",
-  "updatedAt": "2026-10-02T13:36:12.153Z",
+  "createdAt": "2026-10-02T13:34:06.455Z",
+  "updatedAt": "2026-10-02T13:34:06.455Z",
   "flow": {
     "id": "392",
     "path": ".metaproject/flows/392-2026-10-02-recommendation-journal"

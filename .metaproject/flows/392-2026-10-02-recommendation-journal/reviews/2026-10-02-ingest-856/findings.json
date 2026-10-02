@@ -30,6 +30,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/ask.ts journalAsk returns `chosen` right after answerDecision (line ~151); the second awaited ask is gone, a deviation only pushes a transcript hint. src/decisions/review-fixes.test.ts 'a deviation returns at once, asks nothing more' passes (bun test: 79 pass, 0 fail). Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -63,6 +67,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: the reason can now be typed: src/decisions/followup.ts giveReason via /decisions reason <why> (src/tui/decisions-surface.ts runDecisionsFollowup), no allowFreeform picker remains. decisions-surface.test.ts '/decisions reason and /decisions change work from the TUI path' passes. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -96,6 +104,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/context.ts resolveFlowContext derives flow and stage from KERYX_FLOW, the branch or the one in-progress flow; src/tui/ask-user-bridge.ts passes context per question. Probe on the worktree returned flow 392, stage 'implemented'; ask-user-bridge.test.ts asserts the journal.md line (passes). Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -129,6 +141,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/blind.ts isIrreversible now scans question, --action tag and every option, with Russian roots and unpublish/merge/drop. Probe: 'Выкатываем релиз 0.3.62?', 'Удалить ветку feature/x?', 'Опубликовать пакет в npm?', 'Unpublish 0.3.61 from npm?' all return true. Original miss fixed in 15c52808; the over-breadth this introduced is raised as a new finding in round 2.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -148,7 +164,17 @@
       "method": "exact",
       "reported_line": 95
     },
-    "global_id": "2026-10-02-ingest-856#F-005"
+    "global_id": "2026-10-02-ingest-856#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At b68fff5f: src/decisions/journal.ts answerDecision rejects a choice that is not one of the opened decision's option ids (line ~96, message lists the valid ids) unless other:true, and for a free-form answer stores oneLine(input.choice) (line 95: whitespace and control characters collapsed, 300 characters max); journalToFlow (line 165) wraps the choice in oneLine again and src/decisions/report.ts renderReport wraps every free-text field in oneLine. Probe in a temp repo through journalAsk with a free-form answer 'line1\\n- 2099-01-01T00:00:00Z forged line': the flow's journal.md gets ONE line ('chose line1 - 2099-01-01T00:00:00Z forged line') and the report shows one row; no forged bullet. bun test src/decisions src/tui/decisions-surface.test.ts src/tui/ask-user-bridge.test.ts: 136 pass, 2 skip, 0 fail, including round2.test.ts 'a free-form answer with newlines is stored on one line and cannot forge a journal.md line'. The earlier half of the finding (label instead of option id) was fixed in 15c52808; the newline remainder is fixed in b68fff5f.",
+      "verifier": "flow392-pr856-round3-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b68fff5f"
+    }
   },
   {
     "id": "F-006",
@@ -173,6 +199,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/store.ts isRecord/isOpen/isAnswer validate shape and readJournal counts skipped lines. Probe: an open {kind,id,at} only and an answer without choice give skipped 2, records 0, and renderReport prints 'No decisions recorded yet. Skipped 2 unreadable journal records.' Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -198,6 +228,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/ask.ts openDecision call passes recommendation reason \"\" for ask_user (option descriptions are no longer used as the reason); ask-user tests 'ask_user records no reason for the recommendation, and the reveal does not invent one' pass. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -223,6 +257,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/tui/ask-user-bridge.ts journaledAskUser passes onNote: (text) => notice?.(text); ask-user-bridge.test.ts 'a journaling failure shows up as a transcript note, and the question still returns' passes. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -248,6 +286,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/store.ts journalRoot resolves the main checkout from git's common dir (via resolveGitCommonDir) and keeps .metaproject/data/decisions git-ignored (.gitignore line 90). Probe: from the linked worktree /home/altsay/keryx-wF the root is /home/altsay/keryx; a worktree of a bare repo, the bare dir and a detached-HEAD subdirectory fall back to a sane root; outside git it is cwd. Test 'a record written from a linked worktree is read from the main checkout' passes. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   },
   {
@@ -273,6 +315,10 @@
       "method": "site-check",
       "evidence": "At 15c52808: src/decisions/ask.ts stripRecommendedMarks removes parenthesised, leading, trailing and star marks from labels and descriptions in blind mode. Probe: 'Increase limit (Recommended)', 'Recommended: Increase limit', 'Увеличить лимит (рекомендуется)', 'Increase limit - recommended' and a star prefix all give 'Increase limit'. Free-prose recommendations ('which I recommend') are not stripped, which was not the finding. Fixed in 15c52808.",
       "verifier": "flow392-pr856-round2-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "15c52808"
     }
   }
 ]

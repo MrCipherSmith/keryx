@@ -25,7 +25,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'isIrreversible|blindRefused|DEFAULT_IRREVERSIBLE' src --glob '!*.test.ts' lists the matcher, its one caller in journal.ts and the unread result field; the sample run above shows the match rate."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-001"
+    "global_id": "2026-10-02-ingest-856-r02#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At b68fff5f: src/decisions/blind.ts is two-tier. Strong terms (release, delete, push, publish, deploy, destroy, wipe, purge and Russian roots) always count; weak terms (merge, drop, remove, force, reset, overwrite, truncate, send, слить, мерж, отправ, ...) count only inside the --action tag or in a unit (question or one option) that also names a risk target (blind.ts lines 159-170). Probe of the five questions cited in the finding, with their options: 'How should the config loader be structured?' (option 'Merge both loaders'), 'Which cache should we use?' ('can drop old rows with TTL'), 'Refactor approach?' ('Remove duplication'), 'Which test strategy?' ('will force a rebuild of the fixtures'), 'Как поступить с отправной точкой?' all return false (can be blind); 'Release 0.3.62 now?', 'Force-push to main?', 'Удалить ветку?', 'Merge PR 856 into main?' still return true. round2.test.ts (26 ordinary questions, strong and weak-with-target sets) passes: 136 pass, 0 fail. Residual, not the reproduced scenario and raised as round 3 findings: strong-term words in ordinary questions (F-003), release phrasings outside both tiers (F-001), a lone 'merge' (F-002); blindRefused is still not shown or counted.",
+      "verifier": "flow392-pr856-round3-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b68fff5f"
+    }
   },
   {
     "id": "F-002",
@@ -52,7 +62,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'answer.choice|dev.chose|chose ' src/decisions --glob '!*.test.ts' lists the two renderers; both take the raw string."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-002"
+    "global_id": "2026-10-02-ingest-856-r02#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At b68fff5f: src/decisions/text.ts oneLine collapses whitespace and control characters and caps at 300; src/decisions/journal.ts answerDecision (line 95) applies it to a free-form choice, journalToFlow (line 165) and report.ts renderReport apply it again at render time. Probe through journalAsk with answer 'line1\\n- 2099-01-01T00:00:00Z forged line': journal.md holds one line 'chose line1 - 2099-01-01T00:00:00Z forged line' and the report prints 'chose line1 - 2099-01-01T00:00:00Z forged line' on the deviation row; no separate forged row. round2.test.ts F-005 describe (newline answer, 5000-character answer capped, reason with newlines, hand-written records rendered on one line) passes.",
+      "verifier": "flow392-pr856-round3-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b68fff5f"
+    }
   },
   {
     "id": "F-003",
@@ -79,7 +99,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'decisions change|changeAnswer' src docs/docs --glob '!*.test.ts' lists the three places that describe the change without saying the agent already acted."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-003"
+    "global_id": "2026-10-02-ingest-856-r02#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At b68fff5f: src/tui/decisions-surface.ts runDecisionsFollowup (lines 83-84) now says 'answer changed from b to a. The agent already received the first answer (b), so the change is recorded in the journal but may not reach the agent. The report counts the first answer.' and names the decision id and question; the probe printed exactly that. docs/docs/guides/recommendation-journal.md lines 74-79 say the same. Residual, minor: the blind reveal line in src/decisions/ask.ts still reads 'To change your answer: /decisions change <option>.' without the warning; the warning arrives with the confirmation.",
+      "verifier": "flow392-pr856-round3-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b68fff5f"
+    }
   },
   {
     "id": "F-004",
@@ -132,7 +162,17 @@
       ],
       "enumeration_method": "keryx ctx rg 'latestAnsweredDecision|resolveOpen' src --glob '!*.test.ts' lists the one fallback and its two callers."
     },
-    "global_id": "2026-10-02-ingest-856-r02#F-005"
+    "global_id": "2026-10-02-ingest-856-r02#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At b68fff5f: src/decisions/followup.ts resolveOpen (lines 25-33) takes the id given, else this session's lastId, else the latest answered decision of THIS flow, else throws 'no decision from this session or this flow to act on; nothing was changed'; the repo-wide latestAnsweredDecision fallback is gone, and src/tui/decisions-surface.ts line 74 passes the flow. round2.test.ts 'with no id and no session decision, nothing is touched and it says so' and 'with a flow, it targets the latest decision of that flow, not the latest overall' pass; the confirmation names the decision id and question. Residual, raised as round 3 F-004: the flow used for the fallback can be the one inferred (the only in-progress flow), so a session with no decisions can still reach another session's decision of that flow.",
+      "verifier": "flow392-pr856-round3-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b68fff5f"
+    }
   },
   {
     "id": "F-006",
