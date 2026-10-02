@@ -745,7 +745,8 @@ Grouped by what you are trying to do, not by internal module layout.
   Local stdio only; there is no CLI verb. In keryx's own sessions the slate is
   also the model's working memory: a harness-written Trail of every tool call,
   model-written Notes (`slate_note`), and read-only recall (`slate_trail`,
-  `recall_step`, `history_search`) replace re-sending old rounds. See the
+  `recall_step`, `history_search`) replace re-sending old rounds; `/trail` and
+  `/notes` show you the same Trail and Notes in the shell. See the
   [Slate guide](docs/docs/guides/slate.md).
 
 **Run agents inside boundaries**

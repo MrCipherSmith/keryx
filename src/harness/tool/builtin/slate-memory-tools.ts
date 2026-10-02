@@ -32,6 +32,11 @@ import type { InteractiveTool } from "./interactive-tools";
 /** The tool names this module adds; the agent loop offers them only on working-memory hosts. */
 export const WORKING_MEMORY_TOOL_NAMES: readonly string[] = ["slate_note", "slate_trail", "recall_step", "history_search"];
 
+/** The four working-memory tools, for a host that builds its own roster (the benchmark runners). */
+export function workingMemoryTools(getSessionDir: () => string | undefined, clock: () => string): InteractiveTool[] {
+  return [slateNoteTool(getSessionDir, clock), slateTrailTool(getSessionDir), recallStepTool(getSessionDir), historySearchTool(getSessionDir)];
+}
+
 const TRAIL_DEFAULT_LIMIT = 40;
 const TRAIL_MAX_LIMIT = 200;
 const RECALL_DEFAULT_LINES = 200;
@@ -41,6 +46,8 @@ const RECALL_LINE_CLIP = 2000;
 const SEARCH_DEFAULT_LIMIT = 8;
 const SEARCH_MAX_LIMIT = 30;
 const SNIPPET_RADIUS = 120;
+/** Characters of one archived message that a `history_search` recall returns per call. */
+export const MESSAGE_PAGE_CHARS = 6000;
 
 function failure(message: string): { output: string; isError: true } {
   return { output: message, isError: true };
@@ -276,30 +283,85 @@ function snippetAround(text: string, needle: string): string {
   return `${from > 0 ? "..." : ""}${text.slice(from, to).replace(/\s+/g, " ")}${to < text.length ? "..." : ""}`;
 }
 
-/** `history_search`: case-insensitive search over this session's own archive.jsonl. */
+/**
+ * Whether a raw archive line can be skipped without parsing it: the line is JSON, so a character the
+ * encoder escapes (a quote, a backslash, a newline, a control character) appears in the line in its
+ * ESCAPED form and a plain `includes(query)` misses it. A query with such a character is therefore never
+ * prefiltered; every other query is, because its raw and decoded spellings are the same.
+ */
+export function canPrefilterRaw(query: string): boolean {
+  for (let i = 0; i < query.length; i += 1) {
+    const code = query.charCodeAt(i);
+    if (code < 0x20 || code === 0x22 || code === 0x5c || code === 0x2028 || code === 0x2029 || (code >= 0xd800 && code <= 0xdfff)) return false;
+  }
+  return true;
+}
+
+type ArchiveRow = { role?: unknown; content?: unknown; ts?: unknown; toolCalls?: unknown; trailStep?: unknown };
+
+/** The tool calls of an archived message as searchable text: `name arguments`, one per line, arguments decoded. */
+function callsText(toolCalls: unknown): string {
+  if (!Array.isArray(toolCalls)) return "";
+  return toolCalls
+    .map((c) => {
+      const call = c as { name?: unknown; arguments?: unknown };
+      const args = typeof call.arguments === "string" ? call.arguments : JSON.stringify(call.arguments ?? "");
+      return `${String(call.name ?? "")} ${args}`;
+    })
+    .join("\n");
+}
+
+/** The full text of one archived message: its content, or its calls when it has no content. */
+function messageText(row: ArchiveRow): string {
+  const content = typeof row.content === "string" ? row.content : "";
+  return content.length > 0 ? content : callsText(row.toolCalls);
+}
+
+/** One page of one archived message, with the exact call that reads the next page. */
+function messagePage(rowNo: number, row: ArchiveRow, offset: number): { output: string; isError: boolean } {
+  const text = redactSensitiveText(messageText(row));
+  if (offset > text.length) {
+    return failure(`history_search: row ${rowNo} has ${text.length} characters; offset ${offset} is past the end`);
+  }
+  const end = Math.min(text.length, offset + MESSAGE_PAGE_CHARS);
+  const header = `row ${rowNo} ${String(row.role)} ${String(row.ts ?? "")}: characters ${offset}-${end} of ${text.length}`;
+  const more = end < text.length ? `\nnext page: history_search {"row":${rowNo},"offset":${end}}` : "\n(end of message)";
+  return { output: `${header}\n${text.slice(offset, end)}${more}`, isError: false };
+}
+
+/**
+ * `history_search`: case-insensitive search over this session's own archive.jsonl, and the way to read
+ * one archived message in full (by row, or by timestamp) when the request carries only a clipped copy.
+ */
 export function historySearchTool(getSessionDir: () => string | undefined): InteractiveTool {
   return {
     definition: {
       name: "history_search",
       description:
-        "Search the full record of this session (every message and tool call, including those that have left the request) for a text. " +
-        `Input: { query: string, limit?: number (default ${SEARCH_DEFAULT_LIMIT}, max ${SEARCH_MAX_LIMIT}), role?: 'user'|'assistant'|'tool' }. ` +
-        "Returns the matching entries newest first, each with its row number, role, time and a snippet.",
+        "Search the full record of this session (every message and tool call, including those that have left the request) for a text, or read one message in full. " +
+        `Search: { query: string, limit?: number (default ${SEARCH_DEFAULT_LIMIT}, max ${SEARCH_MAX_LIMIT}), role?: 'user'|'assistant'|'tool' } returns the matching entries newest first, each with its row number, role, time and a short snippet. ` +
+        `Read: { row: number } or { ts: string, role?: ... } (the time of a message) returns that whole message, ${MESSAGE_PAGE_CHARS} characters per call; { offset: number } continues a long one.`,
       inputSchema: {
         type: "object",
         properties: {
           query: { type: "string", minLength: 2 },
           limit: { type: "integer", minimum: 1, maximum: SEARCH_MAX_LIMIT },
           role: { type: "string", enum: ["user", "assistant", "tool"] },
+          row: { type: "integer", minimum: 1 },
+          ts: { type: "string" },
+          offset: { type: "integer", minimum: 0 },
         },
-        required: ["query"],
         additionalProperties: false,
       },
       risk: "read",
     },
     invoke: async (input) => {
       const query = typeof input.query === "string" ? input.query.trim().toLowerCase() : "";
-      if (query.length < 2) return failure("history_search requires a 'query' of at least 2 characters");
+      const rowWanted = positiveInt(input.row);
+      const tsWanted = typeof input.ts === "string" && input.ts.length > 0 ? input.ts : undefined;
+      const recall = rowWanted !== undefined || tsWanted !== undefined;
+      if (!recall && query.length < 2) return failure("history_search requires a 'query' of at least 2 characters, or a 'row' / 'ts' to read one message");
+      const offset = typeof input.offset === "number" && Number.isInteger(input.offset) && input.offset >= 0 ? input.offset : 0;
       const limit = Math.min(positiveInt(input.limit) ?? SEARCH_DEFAULT_LIMIT, SEARCH_MAX_LIMIT);
       const role = typeof input.role === "string" ? input.role : undefined;
       const dir = getSessionDir();
@@ -307,22 +369,50 @@ export function historySearchTool(getSessionDir: () => string | undefined): Inte
       try {
         const file = await confinedFile(dir, path.join(dir, "archive.jsonl"));
         if (file === null) return failure("history_search: this session has no readable archive");
-        const hits: string[] = [];
-        let row = 0;
-        let matched = 0;
         const reader = createInterface({ input: createReadStream(file, { encoding: "utf8" }), crlfDelay: Infinity });
+        let row = 0;
+        if (recall) {
+          const found: Array<{ no: number; parsed: ArchiveRow }> = [];
+          for await (const raw of reader) {
+            row += 1;
+            if (rowWanted !== undefined && row !== rowWanted) continue;
+            if (raw.length === 0 || (tsWanted !== undefined && canPrefilterRaw(tsWanted) && !raw.includes(tsWanted))) continue;
+            let parsed: ArchiveRow;
+            try {
+              parsed = JSON.parse(raw) as ArchiveRow;
+            } catch {
+              continue;
+            }
+            if (tsWanted !== undefined && parsed.ts !== tsWanted) continue;
+            if (role !== undefined && parsed.role !== role) continue;
+            found.push({ no: row, parsed });
+            if (rowWanted !== undefined) break;
+          }
+          const first = found[0];
+          if (first === undefined) {
+            return failure(`history_search: no archived message matches ${rowWanted !== undefined ? `row ${rowWanted}` : `ts ${tsWanted}`}${role !== undefined ? ` with role ${role}` : ""}`);
+          }
+          const page = messagePage(first.no, first.parsed, offset);
+          const others = found.slice(1).map((f) => f.no);
+          return others.length === 0 || page.isError
+            ? page
+            : { output: `${page.output}\n(${others.length} more message(s) share this timestamp: rows ${others.slice(0, 10).join(", ")}; read one with {"row":N})`, isError: false };
+        }
+        const hits: string[] = [];
+        let matched = 0;
+        const prefilter = canPrefilterRaw(query);
         for await (const raw of reader) {
           row += 1;
-          if (raw.length === 0 || !raw.toLowerCase().includes(query)) continue;
-          let parsed: { role?: unknown; content?: unknown; ts?: unknown; toolCalls?: unknown; trailStep?: unknown };
+          if (raw.length === 0 || (prefilter && !raw.toLowerCase().includes(query))) continue;
+          let parsed: ArchiveRow;
           try {
-            parsed = JSON.parse(raw) as typeof parsed;
+            parsed = JSON.parse(raw) as ArchiveRow;
           } catch {
             continue;
           }
           if (role !== undefined && parsed.role !== role) continue;
           const content = typeof parsed.content === "string" ? parsed.content : "";
-          const calls = JSON.stringify(parsed.toolCalls ?? "");
+          const calls = callsText(parsed.toolCalls);
           const inContent = content.toLowerCase().includes(query);
           if (!inContent && !calls.toLowerCase().includes(query)) continue;
           matched += 1;
@@ -336,7 +426,7 @@ export function historySearchTool(getSessionDir: () => string | undefined): Inte
         const newest = hits.slice(-limit).reverse();
         const omitted = matched - newest.length;
         return {
-          output: `${newest.join("\n")}${omitted > 0 ? `\n... ${omitted} older matches omitted; narrow the query` : ""}`,
+          output: `${newest.join("\n")}${omitted > 0 ? `\n... ${omitted} older matches omitted; narrow the query` : ""}\n(read a whole message: history_search {"row":N})`,
           isError: false,
         };
       } catch (cause) {

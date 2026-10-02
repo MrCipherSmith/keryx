@@ -208,6 +208,18 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 393: the operator's view of the working memory. Both are plain text, so they run in the
+    // readline REPL and the full-screen shell alike.
+    name: "/trail",
+    description: "The tool calls this session recorded: /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]",
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/notes",
+    description: "The notes the model keeps for itself: /notes [key]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

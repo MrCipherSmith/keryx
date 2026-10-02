@@ -39,17 +39,44 @@ afterEach(async () => {
   await rm(work, { recursive: true, force: true });
 });
 
-async function run(wm: boolean): Promise<{ requests: NormalizedRequest[]; system: string[]; history: NormalizedMessage[] }> {
+async function run(
+  wm: boolean,
+  extra: {
+    history?: NormalizedMessage[];
+    contextWindow?: number;
+    opened?: boolean;
+    /** Runs after the Nth read_file call returned (1-based): lets a test break the slate mid-turn. */
+    afterReadFile?: { call: number; act: () => Promise<void> };
+  } = {},
+): Promise<{ requests: NormalizedRequest[]; system: string[]; history: NormalizedMessage[] }> {
   const scripts = Array.from({ length: ROUNDS }, (_, i) => callRound(`c${i}`, "read_file", JSON.stringify({ path: `f${i}.txt` })));
   const { provider, requests } = scriptedProvider([...scripts, okReply]);
   const { io, system } = collectingIo();
-  const history: NormalizedMessage[] = [];
+  const history: NormalizedMessage[] = extra.history ?? [];
+  let readCalls = 0;
+  const tools = builtinReadOnlyTools(work).map((tool) =>
+    tool.definition.name === "read_file" && extra.afterReadFile !== undefined
+      ? {
+          ...tool,
+          invoke: async (...args: Parameters<typeof tool.invoke>) => {
+            const out = await tool.invoke(...args);
+            readCalls += 1;
+            if (readCalls === extra.afterReadFile?.call) await extra.afterReadFile.act();
+            return out;
+          },
+        }
+      : tool,
+  );
   await runAgentTurn(
     io,
-    makeDeps(provider, { tools: builtinReadOnlyTools(work), ...(wm ? { onContextCompaction: () => {} } : {}) }),
+    makeDeps(provider, {
+      tools,
+      ...(extra.contextWindow !== undefined ? { contextWindow: extra.contextWindow } : {}),
+      ...(wm ? { onContextCompaction: () => {} } : {}),
+    }),
     history,
     "read every file in turn",
-    { slateSession: { dir, cwd: work, opened: true }, ...(wm ? { pruneArchive: true } : {}) },
+    { slateSession: { dir, cwd: work, opened: extra.opened ?? true }, ...(wm ? { pruneArchive: true } : {}) },
   );
   return { requests, system, history };
 }
@@ -176,4 +203,71 @@ test("the system instruction of a working-memory host states the contract; every
   // differs by one token, so compare the text without the paragraph).
   const without = instruction.replace(`\n\n${buildWorkingMemoryInstruction()}`, "");
   expect(without.length).toBe(plainInstruction.length);
+});
+
+// ---- review fixes: operator turns, and a missing slate ---------------------------------------
+
+/** Twenty long operator messages: more than the kept-text budget, so the oldest must go. */
+function earlierOperatorTurns(): NormalizedMessage[] {
+  return Array.from({ length: 20 }, (_, i) => ({
+    role: "user" as const,
+    content: `earlier ask number ${String(i).padStart(2, "0")}: ${"keep the naming stable and the tests green. ".repeat(40)}`,
+    provenance: "project" as const,
+    ts: `2026-10-02T09:00:${String(i).padStart(2, "0")}.000Z`,
+  }));
+}
+
+test("the notice names the older operator messages that stop being sent, with the exact recall call", async () => {
+  const { requests } = await run(true, { history: earlierOperatorTurns() });
+  const notice = requests
+    .flatMap((r) => r.messages)
+    .find((m) => NOTICE.test(m.content) && m.content.includes("earlier operator message")) as NormalizedMessage;
+  expect(notice).toBeDefined();
+  expect(notice.content).toMatch(/\d+ earlier operator messages will no longer be sent/);
+  // Named newest-dropped-first within the five: the exact call that reads one in full.
+  expect(notice.content).toMatch(/history_search \{"ts":"2026-10-02T09:00:\d\d\.000Z","role":"user"\}/);
+  expect(notice.content).toContain('"earlier ask number');
+  // The two newest operator messages stay in the request, so they are not named.
+  expect(notice.content).not.toContain("earlier ask number 19");
+  expect(notice.content).not.toContain("earlier ask number 18");
+  expect(notice.content).toContain("Trail records tool calls only");
+});
+
+test("after the rewrite the model is told how many operator messages are no longer in the request", async () => {
+  const { requests } = await run(true, { history: earlierOperatorTurns() });
+  const last = requests[requests.length - 1] as NormalizedRequest;
+  expect(last.messages.some((m) => m.content.includes("earlier ask number 00"))).toBe(false);
+  expect(last.messages.some((m) => m.content.includes("earlier ask number 19"))).toBe(true);
+  const pointer = last.messages.find((m) => m.provenance === "harness" && m.content.includes("not in this request"));
+  expect(pointer).toBeDefined();
+  expect(pointer?.content).toMatch(/\d+ earlier operator messages are not in this request/);
+  expect(pointer?.content).toContain('history_search {"query"');
+  // A pointer is not a leaving notice: it must survive the next rewrite.
+  expect(pointer?.content).not.toMatch(NOTICE);
+});
+
+test("when slate.json disappears mid-turn the host falls back to the plain prune, says so once, and keeps going", async () => {
+  const { requests, system, history } = await run(true, {
+    contextWindow: 32_000,
+    afterReadFile: { call: 2, act: () => rm(path.join(dir, "slate.json")) },
+  });
+  const notices = history.filter((m) => m.provenance === "harness" && m.content.includes("Working memory is off for now"));
+  expect(notices).toHaveLength(1);
+  expect(notices[0]?.content).toContain("there is no slate.json");
+  expect(system.filter((s) => s.includes("falling back to the plain prune"))).toHaveLength(1);
+  const last = requests[requests.length - 1] as NormalizedRequest;
+  expect(pairingValid(last.messages)).toBe(true);
+  // History does not grow without bound: the plain prune still shrinks the oldest results.
+  expect(last.messages.some((m) => m.role === "tool" && m.content.includes("file 0\n"))).toBe(false);
+});
+
+test("an unreadable slate.json mid-turn takes the same fallback instead of failing the turn", async () => {
+  const { requests, system, history } = await run(true, {
+    contextWindow: 32_000,
+    afterReadFile: { call: 2, act: () => writeFile(path.join(dir, "slate.json"), "{ not json") },
+  });
+  expect(system.some((s) => s.includes("slate.json cannot be read"))).toBe(true);
+  expect(history.filter((m) => m.content.includes("Working memory is off for now"))).toHaveLength(1);
+  const last = requests[requests.length - 1] as NormalizedRequest;
+  expect(last.messages.some((m) => m.role === "tool" && m.content.includes("file 0\n"))).toBe(false);
 });

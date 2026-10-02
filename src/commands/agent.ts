@@ -2570,7 +2570,35 @@ async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneRes
     system(`\n${describeRewriteDecision(d)}\n`);
   };
   const scrub = (text: string): string => scrubControlNonce(text, input.controlNonce);
-  const slate = await readSlateSession(options.slateSession);
+  // A missing or unreadable slate means no frame can be built, and without a frame the bounded
+  // rewrite never fires: the history would grow until compaction. Fall back to the plain prune (on
+  // its own thresholds, not the cache gate) and say so once, so the model does not rely on Notes
+  // that the next request will not carry.
+  let slate: Awaited<ReturnType<typeof readSlateSession>>;
+  let slateProblem: string | undefined;
+  try {
+    slate = await readSlateSession(options.slateSession);
+    if (slate === undefined) slateProblem = "there is no slate.json for this session";
+  } catch (cause) {
+    slateProblem = `slate.json cannot be read (${cause instanceof Error ? cause.message : String(cause)})`;
+  }
+  if (slateProblem !== undefined) {
+    if (!state.fallbackNoticed) {
+      state.fallbackNoticed = true;
+      history.push({
+        role: "user",
+        content: `${harnessEnvelopePrefix(input.controlNonce)} ${scrub(
+          `Working memory is off for now: ${slateProblem}. Older rounds are pruned in place instead of being replaced by a frame, ` +
+            "so Notes you write may not be kept. recall_step and history_search still read earlier tool output and messages.",
+        )}`,
+        provenance: "harness",
+        ts: input.now(),
+      });
+      io.onHistoryChange?.("tool");
+      system(`\n[working memory] ${slateProblem}: falling back to the plain prune.\n`);
+    }
+    return { ...(await pruneHistory(io, deps, history, sessionDir)), announced: false };
+  }
   const result = await rewriteWorkingMemory({
     history,
     sessionDir: wmDir,
@@ -2586,14 +2614,23 @@ async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneRes
   if (result.decision !== undefined) logDecision(result.decision);
   if (result.applied) {
     state.completedAtLastRewrite = completed;
+    if (result.operatorPointer !== undefined) {
+      history.push({
+        role: "user",
+        content: `${harnessEnvelopePrefix(input.controlNonce)} ${scrub(result.operatorPointer)}`,
+        provenance: "harness",
+        ts: input.now(),
+      });
+    }
     if (result.removed > 0 && deps.onContextCompaction !== undefined) {
       deps.onContextCompaction({ kind: "prune", removed: result.removed, context: [...history], estimate: 0 });
     } else {
       io.onHistoryChange?.("tool");
     }
     const steps = result.droppedSteps.length > 0 ? ` (steps ${formatStepRanges(result.droppedSteps)})` : "";
+    const operators = result.droppedOperators > 0 ? `, ${result.droppedOperators} older operator messages` : "";
     system(
-      `\n[working memory] ${result.droppedRounds} older rounds${steps} left the request, ${result.packed} large results packed, ~${result.savedTokens} tokens saved. ` +
+      `\n[working memory] ${result.droppedRounds} older rounds${steps}${operators} left the request, ${result.packed} large results packed, ~${result.savedTokens} tokens saved. ` +
         "The slate frame (Anchors, Notes, Trail) stands in for them; slate_trail, recall_step and history_search read them back.\n",
     );
     return {

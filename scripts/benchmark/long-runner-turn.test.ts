@@ -13,7 +13,9 @@ import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/a
 import { shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
 import type { InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../../src/harness/provider/types";
-import { longTurnOptions, uncappedShellRunner } from "./long-runner-shared";
+import { workingMemoryTools } from "../../src/harness/tool/builtin/slate-memory-tools";
+import { readSlate } from "../../src/session/slate";
+import { assertWorkingMemoryPath, createRunnerArchive, openLongTurnOptions, uncappedShellRunner } from "./long-runner-shared";
 
 type Script = Partial<NormalizedEvent>[];
 
@@ -82,7 +84,10 @@ function fullOutputSaved(): boolean {
 async function run(shell: InteractiveTool): Promise<{ history: NormalizedMessage[]; system: string }> {
   let n = 0;
   const system: string[] = [];
-  const io: AgentIO = { write: () => {}, requestApproval: async () => true, onSystem: (s) => system.push(s) };
+  const history: NormalizedMessage[] = [];
+  const archive = createRunnerArchive(sessionDir, history);
+  const tools = [shell, bulkTool, ...workingMemoryTools(() => sessionDir, () => "2026-10-02T00:00:00.000Z")];
+  const io: AgentIO = { write: () => {}, requestApproval: async () => true, onSystem: (s) => system.push(s), onHistoryChange: () => archive.sync() };
   const deps: AgentDeps = {
     provider: scriptedProvider([
       call("s1", "shell_exec", { command: "seq 1 3000" }),
@@ -91,15 +96,17 @@ async function run(shell: InteractiveTool): Promise<{ history: NormalizedMessage
     ]),
     providerId: "scripted",
     modelId: "m",
-    tools: [shell, bulkTool],
+    tools,
     systemInstruction: "sys",
     idSeq: () => `id-${n++}`,
     // Flow 387 review r3 F-024: pruneArchive only prunes when the host handles
     // onContextCompaction, exactly as run-ablation-long.ts's real deps do.
     onContextCompaction: () => {},
   };
-  const history: NormalizedMessage[] = [];
-  await runAgentTurn(io, deps, history, "go", longTurnOptions(sessionDir, root) as Parameters<typeof runAgentTurn>[4]);
+  const options = await openLongTurnOptions(sessionDir, root, { provider: "scripted", model: "m" }, () => "attempt-1");
+  await assertWorkingMemoryPath(options, tools);
+  await runAgentTurn(io, deps, history, "go", options as Parameters<typeof runAgentTurn>[4]);
+  archive.sync();
   return { history, system: system.join("") };
 }
 
@@ -110,12 +117,44 @@ test("the runner's turn options and uncapped shell runner yield a spill and a wo
   // A working-memory host (pruneArchive plus a live session dir) says so with
   // one "[working memory]" notice per batch instead of the legacy "[prune]" line.
   expect(system).toContain("[working memory]");
-  // The big result became an observation pack that names the saved file instead of re-sending the text.
-  expect(history.some((m) => m.role === "tool" && m.content.includes("full text:") && m.content.includes("tool-output"))).toBe(true);
+  // With a real Trail the pack points at the Trail step (recall_step), and the Trail names the saved output.
+  expect(history.some((m) => m.role === "tool" && m.content.includes("Observation pack") && m.content.includes("recall_step"))).toBe(true);
+  const slate = await readSlate(sessionDir);
+  const shellStep = slate?.trail?.find((e) => e.tool === "shell_exec");
+  expect(shellStep?.outputPath).toBeDefined();
 });
 
 test("the stock shell_exec runner caps at 20 KB, so the same command never spills (the root cause)", async () => {
   await run(shellExecTool(root));
 
   expect(fullOutputSaved()).toBe(false);
+});
+
+test("the runner opens a REAL slate: slate.json exists and the working-memory frame is not empty", async () => {
+  const options = await openLongTurnOptions(sessionDir, root, { provider: "scripted", model: "m" }, () => "attempt-1");
+
+  expect(options.slateSession.opened).toBe(true);
+  expect(await readSlate(sessionDir)).toBeDefined();
+  await assertWorkingMemoryPath(options, workingMemoryTools(() => sessionDir, () => "t"));
+});
+
+test("a run in the degraded mode is refused: a ref marked opened without a slate.json (what the first AC6/AC9 numbers measured)", async () => {
+  const degraded = { slateSession: { dir: sessionDir, cwd: root, opened: true }, pruneArchive: true } as const;
+
+  await expect(assertWorkingMemoryPath(degraded, workingMemoryTools(() => sessionDir, () => "t"))).rejects.toThrow(/no slate\.json/);
+});
+
+test("a run whose roster lacks a working-memory tool is refused, naming the tool", async () => {
+  const options = await openLongTurnOptions(sessionDir, root, { provider: "scripted", model: "m" }, () => "attempt-1");
+  const tools = workingMemoryTools(() => sessionDir, () => "t").filter((t) => t.definition.name !== "history_search");
+
+  await expect(assertWorkingMemoryPath(options, tools)).rejects.toThrow(/history_search/);
+});
+
+test("the runner's archive writer gives history_search a real archive.jsonl to read", async () => {
+  const { history } = await run(shellExecTool(root, uncappedShellRunner(root)));
+  const lines = readFileSync(path.join(sessionDir, "archive.jsonl"), "utf8").trim().split("\n");
+
+  expect(lines.length).toBeGreaterThanOrEqual(history.length);
+  expect(lines.some((l) => l.includes('"seq 1 3000"') || l.includes("seq 1 3000"))).toBe(true);
 });

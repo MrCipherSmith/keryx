@@ -21,7 +21,9 @@ import {
   appendTrailEntry,
   archiveSlate,
   openSlateAtomic,
+  readArchivedWorkingMemory,
   readSlate,
+  workingMemoryOf,
   writeSlate,
   type Slate,
   type SlateAnchors,
@@ -280,11 +282,20 @@ export async function ensureSlateOpened(
   if (isSlateSessionDetached(ref)) {
     return;
   }
-  await openSlateAtomic(ref.dir, mintAttemptId, (_existing) => ({
-    anchors,
-    course: {},
-    seeds: [],
-  }));
+  // Flow 393: the Trail and Notes belong to the conversation, not to one slate attempt. A live slate
+  // that is being re-opened (a resumed session whose process died) or an archived one (the session
+  // was resumed after a clean exit, or its slate closed mid-conversation) hands them to the new slate.
+  const archived = await readArchivedWorkingMemory(ref.dir);
+  await openSlateAtomic(ref.dir, mintAttemptId, (existing): Slate => {
+    const live = workingMemoryOf(existing);
+    return {
+      anchors,
+      course: {},
+      seeds: [],
+      ...(live.trail !== undefined || archived.trail !== undefined ? { trail: live.trail ?? archived.trail } : {}),
+      ...(live.notes !== undefined || archived.notes !== undefined ? { notes: live.notes ?? archived.notes } : {}),
+    };
+  });
   ref.opened = true;
 }
 

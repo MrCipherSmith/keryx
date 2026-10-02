@@ -98,6 +98,7 @@ import { collapseHome } from "../lib/statusbar";
 import { metaprojectIncompleteNotice } from "../lib/metaproject-state";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { isRenderingCommand, runRenderingCommand } from "../tui/rendering-command";
+import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "../tui/working-memory-command";
 import { buildSettingsRows, formatSettingsTable } from "../tui/settings-model";
 import { loadSettingsSnapshot } from "../tui/settings-state";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -275,6 +276,8 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/channels",
   "/rendering",
   "/remote-policy",
+  "/trail",
+  "/notes",
   "/theme",
   "/settings",
   "/mode",
@@ -2701,6 +2704,11 @@ export async function runAgentRepl(
       } else if (command === "/remote-policy") {
         // Flow 396: the saved Telegram defaults. This shell has no bridge, so it edits the file only.
         agentIo.onSystem?.(remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
+      } else if (isTrailCommand(command)) {
+        // Flow 393: the Trail of the live session, the same list the model reads with slate_trail.
+        agentIo.onSystem?.(await runTrailCommand(rest, slateSession?.dir));
+      } else if (isNotesCommand(command)) {
+        agentIo.onSystem?.(await runNotesCommand(rest, slateSession?.dir));
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

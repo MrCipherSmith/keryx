@@ -62,6 +62,8 @@ export interface BoundedPlan {
   droppedSteps: number[];
   /** Messages of `history` that are not in `next`. */
   droppedMessages: number;
+  /** Operator messages that were before the window and did not stay (oldest first, unclipped). */
+  droppedOperators: NormalizedMessage[];
   /** Estimated tokens saved (history minus next, frames included). */
   savedTokens: number;
   /** First index at which `next` differs from `history`. */
@@ -87,9 +89,17 @@ export function roundIndices(history: readonly NormalizedMessage[]): number[] {
   return out;
 }
 
-function clip(text: string, max: number): string {
+/** The exact `history_search` call that returns `m` in full, or a query-based hint for one with no timestamp. */
+export function recallCall(m: NormalizedMessage): string {
+  if (m.ts !== undefined) return `history_search {"ts":${JSON.stringify(m.ts)},"role":${JSON.stringify(m.role)}}`;
+  const start = m.content.replace(/\s+/g, " ").trim().slice(0, 40);
+  return `history_search {"query":${JSON.stringify(start)}} (then {"row":N})`;
+}
+
+function clip(m: NormalizedMessage, max: number): string {
+  const text = m.content;
   if (text.length <= max) return text;
-  return `${text.slice(0, max)}\n[… ${text.length - max} more characters; the full message is in history_search]`;
+  return `${text.slice(0, max)}\n[… ${text.length - max} more characters; read the whole message with ${recallCall(m)}]`;
 }
 
 function sameMessage(a: NormalizedMessage | undefined, b: NormalizedMessage | undefined): boolean {
@@ -133,8 +143,11 @@ export function boundedWindowStart(history: readonly NormalizedMessage[], opts: 
  * clipped. Operator messages are never dropped for budget alone beyond the newest
  * {@link ALWAYS_KEEP_OPERATOR}; the oldest go first.
  */
-function keptBeforeWindow(history: readonly NormalizedMessage[], windowStart: number): NormalizedMessage[] {
-  type Candidate = { index: number; msg: NormalizedMessage; operator: boolean };
+function partitionBeforeWindow(
+  history: readonly NormalizedMessage[],
+  windowStart: number,
+): { kept: NormalizedMessage[]; droppedOperators: NormalizedMessage[] } {
+  type Candidate = { index: number; msg: NormalizedMessage; operator: boolean; original: NormalizedMessage };
   const candidates: Candidate[] = [];
   let summaryAt = -1;
   for (let i = 0; i < windowStart; i++) {
@@ -145,9 +158,9 @@ function keptBeforeWindow(history: readonly NormalizedMessage[], windowStart: nu
     const m = history[i];
     if (m === undefined) continue;
     if (i === summaryAt) {
-      candidates.push({ index: i, msg: m, operator: true });
+      candidates.push({ index: i, msg: m, operator: true, original: m });
     } else if (m.role === "user" && isOperatorMessage(m) && !isSlateFrameMessage(m)) {
-      candidates.push({ index: i, msg: { ...m, content: clip(m.content, KEPT_OPERATOR_CHARS) }, operator: true });
+      candidates.push({ index: i, msg: { ...m, content: clip(m, KEPT_OPERATOR_CHARS) }, operator: true, original: m });
     } else if (
       m.role === "assistant" &&
       m.collapsed !== true &&
@@ -155,7 +168,7 @@ function keptBeforeWindow(history: readonly NormalizedMessage[], windowStart: nu
       m.content.trim().length > 0
     ) {
       const { reasoning: _dropped, ...rest } = m;
-      candidates.push({ index: i, msg: { ...rest, content: clip(m.content, KEPT_ASSISTANT_CHARS) }, operator: false });
+      candidates.push({ index: i, msg: { ...rest, content: clip(m, KEPT_ASSISTANT_CHARS) }, operator: false, original: m });
     }
   }
   // Newest first, within the budget; the newest operator turns and the summary always stay.
@@ -174,7 +187,10 @@ function keptBeforeWindow(history: readonly NormalizedMessage[], windowStart: nu
       used += cost;
     }
   }
-  return candidates.filter((_, k) => keep.has(k)).map((c) => c.msg);
+  return {
+    kept: candidates.filter((_, k) => keep.has(k)).map((c) => c.msg),
+    droppedOperators: candidates.filter((c, k) => !keep.has(k) && c.operator && c.index !== summaryAt).map((c) => c.original),
+  };
 }
 
 /** The phrase every leaving-the-request notice carries (see `leavingNotice` in working-memory.ts). */
@@ -212,7 +228,8 @@ export function planBoundedRewrite(
   if (windowStart === undefined) return undefined;
   // A notice that said "these steps leave" is stale once they have: it is dropped with them.
   const window = trimOldReplay(history.slice(windowStart)).filter((m) => !isLeavingNotice(m));
-  const next = [...frames, ...keptBeforeWindow(history, windowStart), ...window];
+  const before = partitionBeforeWindow(history, windowStart);
+  const next = [...frames, ...before.kept, ...window];
   const droppedRounds = roundIndices(history.slice(0, windowStart)).length;
   let firstChangedIndex = 0;
   while (firstChangedIndex < history.length && sameMessage(history[firstChangedIndex], next[firstChangedIndex])) {
@@ -224,6 +241,7 @@ export function planBoundedRewrite(
     droppedRounds,
     droppedSteps: stepsOfRounds(history, windowStart),
     droppedMessages: windowStart,
+    droppedOperators: before.droppedOperators,
     savedTokens: tokensOf(history) - tokensOf(next),
     firstChangedIndex,
   };
@@ -250,14 +268,50 @@ export function formatStepRanges(steps: readonly number[]): string {
  * is due then (so the model can write Notes first). `undefined` while it is not.
  */
 export function stepsLeavingNextRound(history: readonly NormalizedMessage[], opts: BoundedOptions = {}): number[] | undefined {
+  const boundary = nextRewriteBoundary(history, opts);
+  if (boundary === undefined) return undefined;
+  const steps = stepsOfRounds(history, boundary);
+  return steps.length > 0 ? steps : undefined;
+}
+
+/** The history index before which everything leaves at the next rewrite, or `undefined` while none is due. */
+function nextRewriteBoundary(history: readonly NormalizedMessage[], opts: BoundedOptions): number | undefined {
   const keep = opts.keepRounds ?? BOUNDED_KEEP_ROUNDS;
   const batch = opts.batchRounds ?? BOUNDED_BATCH_ROUNDS;
   const rounds = roundIndices(history);
   // One more round will have been added when the rewrite runs.
   if (rounds.length + 1 < keep + batch) return undefined;
   const dropCount = rounds.length + 1 - keep;
-  const boundary = rounds[dropCount];
-  if (boundary === undefined) return undefined;
-  const steps = stepsOfRounds(history, boundary);
-  return steps.length > 0 ? steps : undefined;
+  return rounds[dropCount];
+}
+
+/**
+ * The operator messages the rewrite one round from now would stop sending (only the newest
+ * {@link ALWAYS_KEEP_OPERATOR} stay whatever the budget). A lower bound: the rewrite may move its window
+ * start forward when the window is over its cap.
+ */
+export function operatorTurnsLeavingNextRound(history: readonly NormalizedMessage[], opts: BoundedOptions = {}): NormalizedMessage[] {
+  const boundary = nextRewriteBoundary(history, opts);
+  return boundary === undefined ? [] : partitionBeforeWindow(history, boundary).droppedOperators;
+}
+
+const NAMED_OPERATOR_TURNS = 5;
+
+function previewOf(m: NormalizedMessage): string {
+  const flat = m.content.replace(/\s+/g, " ").trim();
+  return flat.length > 60 ? `${flat.slice(0, 60)}...` : flat;
+}
+
+/**
+ * One sentence per dropped operator turn group: how many, which (time and opening words) and the exact
+ * call that reads each in full. Empty when none dropped.
+ */
+export function describeDroppedOperators(dropped: readonly NormalizedMessage[], verb: string): string {
+  if (dropped.length === 0) return "";
+  const named = dropped
+    .slice(-NAMED_OPERATOR_TURNS)
+    .map((m) => `${m.ts ?? "?"} "${previewOf(m)}" (${recallCall(m)})`)
+    .join("; ");
+  const more = dropped.length > NAMED_OPERATOR_TURNS ? ` and ${dropped.length - NAMED_OPERATOR_TURNS} older (history_search {"query":"<words you remember>","role":"user"})` : "";
+  return `${dropped.length} earlier operator message${dropped.length === 1 ? "" : "s"} ${verb}: ${named}${more}.`;
 }

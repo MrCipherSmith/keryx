@@ -253,6 +253,18 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/trail",
+    group: "Working in keryx shell",
+    summary: "The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP].",
+  },
+  {
+    kind: "slash",
+    name: "/notes",
+    group: "Working in keryx shell",
+    summary: "The notes the model keeps for itself (the facts that survive older rounds) — /notes [key].",
+  },
+  {
+    kind: "slash",
     name: "/rewind",
     group: "Working in keryx shell",
     summary: "Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files|history|both]]; snapshots cover the work tree only.",

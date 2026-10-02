@@ -15,7 +15,7 @@
 // Pure storage over `withFileLock`/`writeFileAtomic` (src/lib/fs.ts) —
 // deliberately no dependency on src/sac/* or src/harness/*.
 
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { assembleContext, type ContextCandidate } from "../ctx/assembly";
@@ -223,6 +223,46 @@ export async function readSlate(dir: string): Promise<Slate | undefined> {
     if (isNotFound(error)) return undefined;
     throw error;
   }
+}
+
+/** The part of a slate that is the model's working memory and must outlive a re-open of the same session. */
+export type WorkingMemoryCarry = { trail?: TrailEntry[]; notes?: Record<string, SlateNote> };
+
+/** `trail` and `notes` of `slate`, only the ones it has. */
+export function workingMemoryOf(slate: Slate | undefined): WorkingMemoryCarry {
+  return {
+    ...(slate?.trail !== undefined ? { trail: slate.trail } : {}),
+    ...(slate?.notes !== undefined ? { notes: slate.notes } : {}),
+  };
+}
+
+/**
+ * Flow 393: the Trail and Notes of the newest archived slate of this session dir, or `{}`.
+ *
+ * A session is resumed (`--continue`) or its slate is re-opened after a close, while the conversation
+ * keeps referring to earlier Trail steps ("recall_step 12") and the model keeps relying on its Notes.
+ * A fresh slate that started both empty would restart the step numbers at 1 (so a new step 3 shadows the
+ * old output of step 3) and silently lose every Note. Never throws: an unreadable archive is no carry.
+ */
+export async function readArchivedWorkingMemory(dir: string): Promise<WorkingMemoryCarry> {
+  const archiveDir = path.join(dir, "slate-archive");
+  try {
+    const names = (await readdir(archiveDir)).filter((n) => n.endsWith(".json"));
+    const dated = await Promise.all(names.map(async (n) => ({ n, at: (await stat(path.join(archiveDir, n))).mtimeMs })));
+    dated.sort((a, b) => b.at - a.at || (a.n < b.n ? 1 : -1));
+    for (const { n } of dated) {
+      try {
+        const slate = JSON.parse(await readFile(path.join(archiveDir, n), "utf8")) as Slate;
+        const carry = workingMemoryOf(slate);
+        if (carry.trail !== undefined || carry.notes !== undefined) return carry;
+      } catch {
+        // An unreadable archive entry is skipped; the next newest one may hold the memory.
+      }
+    }
+  } catch {
+    // No archive directory: nothing to carry.
+  }
+  return {};
 }
 
 /**

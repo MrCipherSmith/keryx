@@ -8,7 +8,9 @@
 import type { NormalizedMessage } from "../harness/provider/types";
 import {
   LEAVING_NOTICE_MARKER,
+  describeDroppedOperators,
   formatStepRanges,
+  operatorTurnsLeavingNextRound,
   planBoundedRewrite,
   stepsLeavingNextRound,
   tokensOf,
@@ -29,6 +31,10 @@ export interface WorkingMemoryState {
   /** Completed plan items when the last rewrite ran (or was first looked at). */
   completedAtLastRewrite: number | undefined;
   rewrites: number;
+  /** Operator messages the rewrites so far stopped sending (they stay in the archive). */
+  operatorTurnsDropped: number;
+  /** The slate-missing fallback prune was announced to the model already. */
+  fallbackNoticed: boolean;
   /** Kind and reason of the last skipped rewrite that was logged: the same skip is not logged twice in a row. */
   lastSkipKey: string | undefined;
 }
@@ -38,7 +44,7 @@ const states = new WeakMap<NormalizedMessage[], WorkingMemoryState>();
 export function workingMemoryState(history: NormalizedMessage[]): WorkingMemoryState {
   let s = states.get(history);
   if (s === undefined) {
-    s = { noticedThroughStep: 0, completedAtLastRewrite: undefined, rewrites: 0, lastSkipKey: undefined };
+    s = { noticedThroughStep: 0, completedAtLastRewrite: undefined, rewrites: 0, operatorTurnsDropped: 0, fallbackNoticed: false, lastSkipKey: undefined };
     states.set(history, s);
   }
   return s;
@@ -68,12 +74,14 @@ export function leavingNotice(history: NormalizedMessage[], state: WorkingMemory
   // later, disjoint batch is about to leave.
   if (fresh.length === 0 || fresh.length < steps.length) return undefined;
   state.noticedThroughStep = steps[steps.length - 1] ?? state.noticedThroughStep;
+  const operators = describeDroppedOperators(operatorTurnsLeavingNextRound(history), "will no longer be sent");
   return {
     steps,
     text:
       `Steps ${formatStepRanges(steps)} ${LEAVING_NOTICE_MARKER}: older rounds are not re-sent. ` +
       `If a fact from them is still needed, save it now with slate_note. Their outputs stay readable with recall_step, ` +
-      `slate_trail lists them and history_search finds earlier messages.`,
+      `slate_trail lists them and history_search finds earlier messages.` +
+      (operators.length > 0 ? ` ${operators} The Trail records tool calls only, so what the operator asked there is not in the Trail: save it with slate_note or read it back with the call shown.` : ""),
   };
 }
 
@@ -88,6 +96,7 @@ export function buildWorkingMemoryInstruction(): string {
     "Older rounds leave the request in batches; what stays is the Anchors block, your Notes, a digest of the Trail (one line per tool call you made) and the most recent rounds.",
     "A fact you will still need after that belongs in a Note: call slate_note with a short key and the fact (set, replace or delete; 2000 characters per note).",
     "Before a batch leaves, the shell sends one notice naming the steps; write Notes then, not afterwards.",
+    "Only the two newest operator messages stay in the request: older ones are not re-sent, the Trail does not list them, and the notice names them with the history_search call that reads each in full.",
     "To get something back, call recall_step for a saved tool output, slate_trail to list steps by file, tool or step range, or history_search to find earlier text.",
     "Read a recalled output only when you need it: the Trail line says what the call was and whether it succeeded.",
   ].join(" ");
@@ -117,12 +126,16 @@ export interface WorkingMemoryResult {
   removed: number;
   droppedRounds: number;
   droppedSteps: number[];
+  /** Operator messages this rewrite stopped sending. */
+  droppedOperators: number;
+  /** The harness line that tells the model how to recall every operator turn no longer sent; present when any exist. */
+  operatorPointer?: string;
   packed: number;
   /** Estimated tokens the batch removed from every later request. */
   savedTokens: number;
 }
 
-const NOTHING: WorkingMemoryResult = { applied: false, removed: 0, droppedRounds: 0, droppedSteps: [], packed: 0, savedTokens: 0 };
+const NOTHING: WorkingMemoryResult = { applied: false, removed: 0, droppedRounds: 0, droppedSteps: [], droppedOperators: 0, packed: 0, savedTokens: 0 };
 
 export async function rewriteWorkingMemory(input: WorkingMemoryInput): Promise<WorkingMemoryResult> {
   const { history } = input;
@@ -174,12 +187,22 @@ export async function rewriteWorkingMemory(input: WorkingMemoryInput): Promise<W
   const { packed } = await applyObservationPacks(history, packs, input.sessionDir);
   const state = workingMemoryState(history);
   state.rewrites += 1;
+  const droppedOperators = bounded?.droppedOperators.length ?? 0;
+  state.operatorTurnsDropped += droppedOperators;
   return {
     decision,
     applied: true,
     removed: lengthBefore - history.length,
     droppedRounds: bounded?.droppedRounds ?? 0,
     droppedSteps: bounded?.droppedSteps ?? [],
+    droppedOperators,
+    ...(state.operatorTurnsDropped > 0
+      ? {
+          operatorPointer:
+            `${state.operatorTurnsDropped} earlier operator message${state.operatorTurnsDropped === 1 ? " is" : "s are"} not in this request (the newest two stay). ` +
+            `Find one with history_search {"query":"<words from it>","role":"user"}, then read it whole with {"row":N}.`,
+        }
+      : {}),
     packed,
     savedTokens,
   };

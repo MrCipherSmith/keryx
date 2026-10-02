@@ -9,6 +9,7 @@ import { estimateMessageTokens } from "../harness/provider/context-guard";
 import { anchorsAnnouncement, foldAnchorsState } from "./anchors-announce";
 import {
   BOUNDED_KEEP_ROUNDS,
+  LEAVING_NOTICE_MARKER,
   boundedWindowCap,
   formatStepRanges,
   planBoundedRewrite,
@@ -24,7 +25,7 @@ import {
 } from "./rewrite-gate";
 import { renderAnchorsBlock, type Slate } from "./slate";
 import { buildSlateFrame, isSlateFrameMessage, renderMemoryFrame, MEMORY_FRAME_HEADER } from "./slate-frame";
-import { atPlanBoundary, leavingNotice, rewriteWorkingMemory, workingMemoryState } from "./working-memory";
+import { atPlanBoundary, buildWorkingMemoryInstruction, leavingNotice, rewriteWorkingMemory, workingMemoryState } from "./working-memory";
 
 const NONCE = "n0nce123";
 const scrub = (t: string): string => t.split(NONCE).join("[scrubbed]");
@@ -252,6 +253,45 @@ test("only the newest three assistant messages keep their reasoning replay", () 
   expect(carrying).toHaveLength(3);
 });
 
+/** `n` operator messages of ~2000 characters each, oldest first, stamped one second apart. */
+function longAsks(n: number): NormalizedMessage[] {
+  return Array.from({ length: n }, (_, i) => ({
+    role: "user" as const,
+    content: `ask ${String(i).padStart(2, "0")} ${"please keep the naming stable. ".repeat(65)}`,
+    provenance: "project" as const,
+    ts: `2026-10-02T09:00:${String(i).padStart(2, "0")}.000Z`,
+  }));
+}
+
+test("a clipped operator message says the exact history_search call that reads it whole", () => {
+  const stamped: NormalizedMessage = { ...op("x".repeat(9000)), ts: "2026-10-02T08:00:00.000Z" };
+  const history = [stamped, ...Array.from({ length: 12 }, (_, i) => op(`ask ${i}`)), ...rounds(14)];
+  const clipped = (planBoundedRewrite(history, buildSlateFrame(slate(), frameOpts))?.next ?? []).find((m) => m.content.startsWith("xxxx"));
+  expect(clipped?.content).toContain('read the whole message with history_search {"ts":"2026-10-02T08:00:00.000Z","role":"user"}');
+  // The call it names really is the message's own stamp: a message with no stamp falls back to a query.
+  const unstamped = [op(`needle phrase ${"y".repeat(9000)}`), ...Array.from({ length: 12 }, (_, i) => op(`ask ${i}`)), ...rounds(14)];
+  const fallback = (planBoundedRewrite(unstamped, buildSlateFrame(slate(), frameOpts))?.next ?? []).find((m) => m.content.startsWith("needle phrase"));
+  expect(fallback?.content).toContain('history_search {"query":"needle phrase');
+  expect(fallback?.content).toContain('then {"row":N}');
+});
+
+test("the rewrite reports the operator messages it stopped sending, never the newest two", () => {
+  const history = [...longAsks(24), ...rounds(14)];
+  const plan = planBoundedRewrite(history, buildSlateFrame(slate(), frameOpts));
+  const dropped = plan?.droppedOperators ?? [];
+  expect(dropped.length).toBeGreaterThan(0);
+  const keptTexts = (plan?.next ?? []).map((m) => m.content);
+  for (const m of dropped) expect(keptTexts.some((c) => c.startsWith(m.content.slice(0, 20)))).toBe(false);
+  expect(dropped.some((m) => m.content.startsWith("ask 23"))).toBe(false);
+  expect(dropped.some((m) => m.content.startsWith("ask 22"))).toBe(false);
+  expect(keptTexts.some((c) => c.startsWith("ask 23"))).toBe(true);
+});
+
+test("with few short operator messages nothing is dropped, so no pointer is owed", () => {
+  const plan = planBoundedRewrite([...Array.from({ length: 6 }, (_, i) => op(`ask ${i}`)), ...rounds(14)], buildSlateFrame(slate(), frameOpts));
+  expect(plan?.droppedOperators).toEqual([]);
+});
+
 // ---- AC5: the notice ------------------------------------------------------------------
 
 test("one notice per batch names the steps that leave, one round before they do", () => {
@@ -266,6 +306,45 @@ test("one notice per batch names the steps that leave, one round before they do"
   // asking again in the same batch says nothing
   expect(leavingNotice(history, workingMemoryState(history))).toBeUndefined();
   expect(formatStepRanges([1, 2, 3, 7, 9, 10])).toBe("1-3, 7, 9-10");
+});
+
+test("the notice names the operator messages that leave next, with a call that reads each, and says the Trail does not list them", () => {
+  const history: NormalizedMessage[] = [...longAsks(24), ...rounds(BOUNDED_KEEP_ROUNDS + 3)];
+  const notice = leavingNotice(history, workingMemoryState(history));
+  expect(notice?.text).toMatch(/\d+ earlier operator messages will no longer be sent/);
+  expect(notice?.text).toMatch(/history_search \{"ts":"2026-10-02T09:00:\d\d\.000Z","role":"user"\}/);
+  expect(notice?.text).toContain("ask 0");
+  expect(notice?.text).not.toContain("ask 23");
+  expect(notice?.text).toContain("Trail records tool calls only");
+  // Short asks all stay, so the notice does not claim any are leaving.
+  const calm: NormalizedMessage[] = [op("go"), ...rounds(BOUNDED_KEEP_ROUNDS + 3)];
+  expect(leavingNotice(calm, workingMemoryState(calm))?.text).not.toContain("operator message");
+});
+
+test("the instruction tells the model how many operator messages stay and where the rest are", () => {
+  expect(buildWorkingMemoryInstruction()).toContain("Only the two newest operator messages stay in the request");
+  expect(buildWorkingMemoryInstruction()).toContain("history_search");
+});
+
+test("an applied rewrite hands back a pointer that names the count and how to find one, without the leaving marker", async () => {
+  const history = [...longAsks(24), ...rounds(14)];
+  const result = await rewriteWorkingMemory({
+    history,
+    sessionDir: dir,
+    slate: slate(),
+    frame: { nonce: NONCE, scrub, ts: "t" },
+    contextWindow: 128_000,
+    providerId: "openai-codex",
+    remainingRounds: 30,
+    atPlanBoundary: false,
+    forced: true,
+    beforeApply: () => {},
+  });
+  expect(result.applied).toBe(true);
+  expect(result.droppedOperators).toBeGreaterThan(0);
+  expect(result.operatorPointer).toContain(`${result.droppedOperators} earlier operator messages`);
+  expect(result.operatorPointer).toContain('history_search {"query"');
+  expect(result.operatorPointer).not.toContain(LEAVING_NOTICE_MARKER);
 });
 
 // ---- AC12 / AC14: thresholds and the cost gate ----------------------------------------

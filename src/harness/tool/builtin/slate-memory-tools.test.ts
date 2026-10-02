@@ -3,7 +3,14 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { NOTES_MAX_TOKENS, appendTrailEntry, readSlate, writeSlate, type Slate } from "../../../session/slate";
-import { historySearchTool, recallStepTool, slateNoteTool, slateTrailTool } from "./slate-memory-tools";
+import {
+  MESSAGE_PAGE_CHARS,
+  canPrefilterRaw,
+  historySearchTool,
+  recallStepTool,
+  slateNoteTool,
+  slateTrailTool,
+} from "./slate-memory-tools";
 import { slateReadTool } from "./slate-tool";
 
 const ts = "2026-10-02T00:00:00.000Z";
@@ -179,10 +186,12 @@ test("history_search finds text in the archive, newest first, and filters by rol
   await writeFile(path.join(dir, "archive.jsonl"), `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`);
   const search = historySearchTool(get);
   const all = (await search.invoke({ query: "registry" })).output.split("\n");
-  expect(all).toHaveLength(3);
+  // Three hits, then the line that names the call for reading one in full.
+  expect(all).toHaveLength(4);
   expect(all[0]).toContain("row 3");
   expect(all[0]).toContain("step 7");
   expect(all[2]).toContain("row 1");
+  expect(all[3]).toContain('history_search {"row":N}');
   const onlyUser = (await search.invoke({ query: "registry", role: "user" })).output;
   expect(onlyUser).toContain("row 1");
   expect(onlyUser).not.toContain("row 3");
@@ -210,4 +219,86 @@ test("the readers answer with an error, not a throw, when there is no session", 
   expect((await slateTrailTool(none).invoke({})).isError).toBe(true);
   expect((await recallStepTool(none).invoke({ step: 1 })).isError).toBe(true);
   expect((await historySearchTool(none).invoke({ query: "abc" })).isError).toBe(true);
+});
+
+async function writeArchive(rows: ReadonlyArray<Record<string, unknown>>): Promise<void> {
+  await writeFile(path.join(dir, "archive.jsonl"), `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`);
+}
+
+test("history_search finds a query that holds a newline or a quote, which the raw JSON line spells as an escape", async () => {
+  await writeArchive([
+    { role: "user", content: "first line\nsecond line of the ask", ts: "t1" },
+    { role: "user", content: 'she said "ship it today" twice', ts: "t2" },
+    { role: "assistant", content: "", ts: "t3", toolCalls: [{ id: "c", name: "write_file", arguments: '{"path":"a.ts","text":"x\\ny"}' }] },
+    { role: "user", content: "unrelated", ts: "t4" },
+  ]);
+  const search = historySearchTool(get);
+  const newline = (await search.invoke({ query: "first line\nsecond" })).output;
+  expect(newline).toContain("row 1");
+  const quote = (await search.invoke({ query: '"ship it today"' })).output;
+  expect(quote).toContain("row 2");
+  // A backslash in a tool-call argument is searched in its decoded form too.
+  const inCall = (await search.invoke({ query: '"text":"x\\ny"' })).output;
+  expect(inCall).toContain("row 3");
+  expect((await search.invoke({ query: '"ship it tomorrow"' })).output).toContain("no match");
+});
+
+test("canPrefilterRaw is false exactly for the characters a JSON line escapes", () => {
+  expect(canPrefilterRaw("plain words 123")).toBe(true);
+  expect(canPrefilterRaw("with'single and\u00e9")).toBe(true);
+  expect(canPrefilterRaw('a "quote"')).toBe(false);
+  expect(canPrefilterRaw("back\\slash")).toBe(false);
+  expect(canPrefilterRaw("new\nline")).toBe(false);
+  expect(canPrefilterRaw("tab\there")).toBe(false);
+  expect(canPrefilterRaw("sep\u2028arator")).toBe(false);
+});
+
+test("history_search reads one message in full by row, in pages, and names the call for the next page", async () => {
+  const long = `${"a".repeat(MESSAGE_PAGE_CHARS)}${"b".repeat(MESSAGE_PAGE_CHARS)}${"c".repeat(100)}`;
+  await writeArchive([
+    { role: "user", content: "short one", ts: "t1" },
+    { role: "user", content: long, ts: "t2" },
+  ]);
+  const search = historySearchTool(get);
+  const first = (await search.invoke({ row: 2 })).output;
+  expect(first).toContain(`row 2 user t2: characters 0-${MESSAGE_PAGE_CHARS} of ${long.length}`);
+  expect(first).toContain(`next page: history_search {"row":2,"offset":${MESSAGE_PAGE_CHARS}}`);
+  expect(first).not.toContain("b");
+  const second = (await search.invoke({ row: 2, offset: MESSAGE_PAGE_CHARS })).output;
+  expect(second).toContain(`next page: history_search {"row":2,"offset":${2 * MESSAGE_PAGE_CHARS}}`);
+  expect(second).toContain("b".repeat(50));
+  const last = (await search.invoke({ row: 2, offset: 2 * MESSAGE_PAGE_CHARS })).output;
+  expect(last).toContain("c".repeat(100));
+  expect(last).toContain("(end of message)");
+  // Reassembled, the pages are the whole message.
+  const body = (out: string): string => out.split("\n").slice(1, -1).join("\n");
+  expect(`${body(first)}${body(second)}${body(last)}`).toBe(long);
+  const past = await search.invoke({ row: 2, offset: long.length + 1 });
+  expect(past.isError).toBe(true);
+  expect(past.output).toContain("past the end");
+  expect((await search.invoke({ row: 9 })).isError).toBe(true);
+});
+
+test("history_search recalls a message by its timestamp and role, exactly as the clip notice names it", async () => {
+  const stamp = "2026-10-02T09:00:01.000Z";
+  await writeArchive([
+    { role: "assistant", content: "an answer with the same time", ts: stamp },
+    { role: "user", content: "the ask that was clipped ".repeat(200), ts: stamp },
+    { role: "user", content: "later", ts: "2026-10-02T09:00:02.000Z" },
+  ]);
+  const search = historySearchTool(get);
+  // The assistant row comes first in the archive: the role filter is what selects the operator's message.
+  const user = (await search.invoke({ ts: stamp, role: "user" })).output;
+  expect(user).toContain("row 2 user");
+  expect(user).toContain("the ask that was clipped");
+  expect(user).not.toContain("an answer with the same time");
+  const both = (await search.invoke({ ts: stamp })).output;
+  expect(both).toContain("row 1 assistant");
+  expect(both).toContain("1 more message(s) share this timestamp: rows 2");
+  expect((await search.invoke({ ts: "2000-01-01T00:00:00.000Z" })).isError).toBe(true);
+});
+
+test("history_search needs a query or a row or a ts", async () => {
+  await writeArchive([{ role: "user", content: "x", ts: "t" }]);
+  expect((await historySearchTool(get).invoke({})).isError).toBe(true);
 });

@@ -5,14 +5,24 @@
 // Nothing in this file contains an answer; the answers live in long-tasks.ts, which is stripped
 // from every worktree before an agent sees it.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import { exceedsSpillThreshold } from "../../src/harness/tool/output-spill";
 import type { CommandRunner } from "../../src/harness/tool/builtin/shell-exec-tool";
-import type { SlateSessionRef } from "../../src/session/slate-lifecycle";
+import {
+  ensureSlateOpened,
+  mintTimestampAttemptId,
+  readSlateSession,
+  type SlateSessionRef,
+} from "../../src/session/slate-lifecycle";
+import type { Slate } from "../../src/session/slate";
+import { buildSlateFrame } from "../../src/session/slate-frame";
+import type { InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
+import type { NormalizedMessage } from "../../src/harness/provider/types";
+import { WORKING_MEMORY_TOOL_NAMES } from "../../src/harness/tool/builtin/slate-memory-tools";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { ABLATION_GOLD_ARTIFACT_PATH } from "./ablation-tasks";
 import { LONG_GOLD_ARTIFACT_PATHS, type LongCase, type LongOracleResult, type LongTask, type ReadWorktreeFile } from "./long-tasks";
@@ -81,14 +91,79 @@ export function writeSeedFiles(root: string, files: LongCase["seedFiles"]): void
   }
 }
 
+/** The `runAgentTurn` options of a long run: a working-memory host (live session dir, a REAL open slate, archive pruning). */
+export type LongTurnOptions = { slateSession: SlateSessionRef; pruneArchive: true };
+
 /**
- * The `runAgentTurn` options a long run needs for spill and prune to be reachable: a live session dir
- * (spill files and pruned-result files go there) and `pruneArchive` (this runner keeps the originals in
- * memory and on disk, like the shell hosts). A plain object literal is a valid `SlateSessionRef`:
- * `slateSessionDir` only refuses a ref flagged `detached`.
+ * The `runAgentTurn` options a long run needs for the working-memory path to run for real: a live
+ * session dir, `pruneArchive`, and a slate that EXISTS on disk. A ref flagged `opened: true` without a
+ * slate.json makes `readSlateSession` return undefined, the frame comes out empty, and the rewrite
+ * silently degrades to the reasoning trim plus observation packs while the system prompt still
+ * promises Notes and a Trail (the measurement defect flow 393's review found in AC6/AC9). So the
+ * slate is opened here, through the same `ensureSlateOpened` the shell uses, and the run is refused
+ * if it is not readable afterwards.
  */
-export function longTurnOptions(sessionDir: string, cwd: string): { slateSession: SlateSessionRef; pruneArchive: true } {
-  return { slateSession: { dir: sessionDir, cwd, opened: true }, pruneArchive: true };
+export async function openLongTurnOptions(
+  sessionDir: string,
+  cwd: string,
+  runtime: { provider: string; model: string },
+  mintAttemptId: () => string = mintTimestampAttemptId,
+): Promise<LongTurnOptions> {
+  const ref: SlateSessionRef = { dir: sessionDir, cwd, opened: false };
+  await ensureSlateOpened(ref, mintAttemptId, runtime);
+  return { slateSession: ref, pruneArchive: true };
+}
+
+/**
+ * Throws unless a run is on the real working-memory path: the slate is readable, its frame is not empty
+ * (the Anchors block alone makes it non-empty) and the four memory tools are registered. A run that
+ * fails this measures the degraded mode and must not produce a number.
+ */
+export async function assertWorkingMemoryPath(options: LongTurnOptions, tools: readonly InteractiveTool[]): Promise<void> {
+  const names = new Set(tools.map((t) => t.definition.name));
+  const missing = WORKING_MEMORY_TOOL_NAMES.filter((n) => !names.has(n));
+  if (missing.length > 0) {
+    throw new Error(`long run is not on the working-memory path: tools missing from the runner: ${missing.join(", ")}`);
+  }
+  let slate: Slate | undefined;
+  try {
+    slate = await readSlateSession(options.slateSession);
+  } catch (cause) {
+    throw new Error(`long run is not on the working-memory path: slate unreadable (${(cause as Error).message})`, { cause });
+  }
+  if (slate === undefined) {
+    throw new Error("long run is not on the working-memory path: no slate.json in the session dir, so the frame would be empty");
+  }
+  const frame = buildSlateFrame(slate, { nonce: "assert", scrub: (t) => t });
+  if (frame.length === 0) {
+    throw new Error("long run is not on the working-memory path: the slate frame is empty");
+  }
+}
+
+/**
+ * The runner's equivalent of the shell's archive writer: every message the history ever held lands in
+ * `<sessionDir>/archive.jsonl`, so `history_search` has something to read. The cursor follows the same
+ * rule as the shell (`syncArchive` + the rebase on a shortening): sync BEFORE a rewrite, point the cursor
+ * at the new end AFTER it.
+ */
+export function createRunnerArchive(sessionDir: string, history: readonly NormalizedMessage[]): { sync: () => void; rebase: () => void } {
+  const file = join(sessionDir, "archive.jsonl");
+  let next = 0;
+  return {
+    sync: () => {
+      const rows: string[] = [];
+      for (; next < history.length; next++) {
+        const m = history[next];
+        if (m === undefined) continue;
+        const { reasoning: _reasoning, ...row } = m;
+        rows.push(JSON.stringify({ ...row, kind: "message", ts: m.ts ?? new Date().toISOString() }));
+      }
+      if (rows.length > 0) appendFileSync(file, `${rows.join("\n")}\n`, "utf8");
+    },
+    rebase: () => {
+      next = history.length;
+    },
+  };
 }
 
 /**
