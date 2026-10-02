@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, open } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -135,8 +136,55 @@ function safeFileStem(toolCallId: string): string {
   return stem.length > 0 ? stem : "call";
 }
 
+/** Directory mode of `tool-output/` and file mode of what it holds: owner only, like the session store. */
+const TOOL_OUTPUT_DIR_MODE = 0o700;
+const TOOL_OUTPUT_FILE_MODE = 0o600;
+/** Most numeric suffixes tried when a generated name already exists. */
+const MAX_NAME_ATTEMPTS = 50;
+
 /**
- * Flow 387 T11: write `text` in full to `<sessionDir>/tool-output/<id>.txt`
+ * Flow 387 review r1 F-004 + F-011: write `text` to a NEW file under
+ * `<sessionDir>/tool-output/` and return its path, or `undefined` on failure.
+ *
+ * The name is `<ms>-<sha256[0..8]>-<stem>.txt`, not just the tool-call id: the Gemini
+ * fallback id (`read_file#0`) and the compat fallback id (`call_idx:0`) repeat every
+ * round, and a later file overwrote the one an earlier placeholder named. It is opened
+ * exclusively (`wx`) and retried with a `-<n>` suffix on collision, so an existing file
+ * is never replaced. Dir 0700 / file 0600 (the session store's modes).
+ */
+async function writeUniqueOutputFile(sessionDir: string, toolCallId: string, text: string): Promise<string | undefined> {
+  const dir = path.join(sessionDir, TOOL_OUTPUT_DIRNAME);
+  try {
+    await mkdir(dir, { recursive: true, mode: TOOL_OUTPUT_DIR_MODE });
+    await chmod(dir, TOOL_OUTPUT_DIR_MODE);
+    const hash = createHash("sha256").update(text).digest("hex").slice(0, 8);
+    const base = `${Date.now()}-${hash}-${safeFileStem(toolCallId)}`;
+    for (let attempt = 0; attempt < MAX_NAME_ATTEMPTS; attempt++) {
+      const filePath = path.join(dir, `${base}${attempt === 0 ? "" : `-${attempt}`}.txt`);
+      let handle;
+      try {
+        handle = await open(filePath, "wx", TOOL_OUTPUT_FILE_MODE);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+          continue;
+        }
+        throw error;
+      }
+      try {
+        await handle.writeFile(text, "utf8");
+      } finally {
+        await handle.close();
+      }
+      return filePath;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Flow 387 T11: write `text` in full to a fresh file under `<sessionDir>/tool-output/`
  * regardless of size and return the path, or `undefined` when the write failed.
  * Used before an old tool result is cleared from the request, so the placeholder
  * can always name a file `read_file` can open. `text` is already redacted history.
@@ -146,42 +194,53 @@ export async function writeToolOutputFile(
   toolCallId: string,
   text: string,
 ): Promise<string | undefined> {
-  const dir = path.join(sessionDir, TOOL_OUTPUT_DIRNAME);
-  const filePath = path.join(dir, `${safeFileStem(toolCallId)}.txt`);
-  try {
-    await mkdir(dir, { recursive: true });
-    await writeFile(filePath, text, "utf8");
-    return filePath;
-  } catch {
-    return undefined;
-  }
+  return writeUniqueOutputFile(sessionDir, toolCallId, text);
 }
 
-/** The spill file named by a {@link renderSpillPreview} marker in `content`, if any. */
-export function extractSpillPath(content: string): string | undefined {
-  const m = /full output saved to (.+?) — read it with read_file/.exec(content);
-  return m?.[1];
+/**
+ * True when `candidate` is lexically inside `<sessionDir>/tool-output`. Prune takes a
+ * message's `spillPath` only when it passes this, so a tampered `context.jsonl` cannot
+ * point a placeholder elsewhere either.
+ */
+export function isInsideToolOutputDir(sessionDir: string, candidate: string): boolean {
+  if (!path.isAbsolute(candidate)) {
+    return false;
+  }
+  const rel = path.relative(path.join(sessionDir, TOOL_OUTPUT_DIRNAME), path.resolve(candidate));
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+}
+
+export interface SpillResult {
+  /** What the model sees: `text` itself, or head + marker + tail. */
+  text: string;
+  /** The file holding the full text; set only when this call spilled it. */
+  spillPath?: string;
 }
 
 /**
  * Return `text` untouched when it is under both thresholds or there is no
- * session dir; otherwise write it in full to `<sessionDir>/tool-output/<id>.txt`
- * and return the head+tail view. A failed write degrades to the original text —
- * never lose the output because the disk refused it.
+ * session dir; otherwise write it in full to a fresh file under
+ * `<sessionDir>/tool-output/` and return the head+tail view together with the file's
+ * path. A failed write degrades to the original text — never lose the output because
+ * the disk refused it.
+ *
+ * Flow 387 review r1 F-002: the path is returned as DATA for the caller to record on
+ * the tool message; nothing ever parses it back out of the text.
  *
  * `text` must already be redacted: the file holds exactly what history would.
  */
-export async function spillLargeToolOutput(text: string, ctx: SpillContext): Promise<string> {
+export async function spillToolOutput(text: string, ctx: SpillContext): Promise<SpillResult> {
   if (ctx.sessionDir === undefined || !exceedsSpillThreshold(text)) {
-    return text;
+    return { text };
   }
-  const dir = path.join(ctx.sessionDir, TOOL_OUTPUT_DIRNAME);
-  const filePath = path.join(dir, `${safeFileStem(ctx.toolCallId)}.txt`);
-  try {
-    await mkdir(dir, { recursive: true });
-    await writeFile(filePath, text, "utf8");
-  } catch {
-    return text;
+  const filePath = await writeUniqueOutputFile(ctx.sessionDir, ctx.toolCallId, text);
+  if (filePath === undefined) {
+    return { text };
   }
-  return renderSpillPreview(text, filePath);
+  return { text: renderSpillPreview(text, filePath), spillPath: filePath };
+}
+
+/** {@link spillToolOutput} when only the model-visible text is needed. */
+export async function spillLargeToolOutput(text: string, ctx: SpillContext): Promise<string> {
+  return (await spillToolOutput(text, ctx)).text;
 }

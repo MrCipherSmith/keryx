@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { NormalizedMessage, NormalizedToolCall } from "../harness/provider/types";
@@ -90,7 +90,11 @@ test("collapses old exchanges into one text record per exchange, keeps the newes
     expect(r.reasoning).toBeUndefined();
   }
   const first = records[0] as NormalizedMessage;
-  const file = path.join(sessionDir, "tool-output", "c0.txt");
+  const file = path.join(
+    sessionDir,
+    "tool-output",
+    readdirSync(path.join(sessionDir, "tool-output")).find((f) => f.endsWith("-c0.txt")) as string,
+  );
   expect(first.content).toBe(`${COLLAPSED_HEADER}\nread_file(src/c0.ts) → ok, full output: ${file}`);
   expect(readFileSync(file, "utf8").startsWith("c0:")).toBe(true);
   // The protected window is untouched and still structured.

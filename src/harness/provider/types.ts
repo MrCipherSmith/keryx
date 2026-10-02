@@ -264,6 +264,15 @@ export interface NormalizedMessage {
    */
   isError?: true;
   /**
+   * Flow 387 review r1 F-002: tool only; the file holding this result's full text,
+   * recorded by the harness when it spilled the output (or, after a prune, when it
+   * saved it). Store-only bookkeeping like `isError`: persisted in `context.jsonl`,
+   * never sent to a provider (request builders construct payloads field by field).
+   * Prune takes the path ONLY from here and never parses it out of `content`, which
+   * a page, an MCP result or a committed file controls.
+   */
+  spillPath?: string;
+  /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
    * it to disk). Optional and store-only bookkeeping: no request builder

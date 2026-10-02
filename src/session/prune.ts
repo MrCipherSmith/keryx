@@ -37,7 +37,7 @@
 // config-dir path itself (see the note in `./paths.ts`).
 
 import { estimateMessageTokens } from "../harness/provider/context-guard";
-import { extractSpillPath, writeToolOutputFile } from "../harness/tool/output-spill";
+import { isInsideToolOutputDir, writeToolOutputFile } from "../harness/tool/output-spill";
 import type { NormalizedMessage } from "../harness/provider/types";
 
 /** Newest tool-result tokens that are never pruned. */
@@ -63,11 +63,6 @@ export function clearedPlaceholder(filePath: string | undefined): string {
 
 export function isClearedToolResult(m: NormalizedMessage): boolean {
   return m.role === "tool" && m.content.startsWith(CLEARED_PREFIX);
-}
-
-/** The file a cleared-result placeholder names, if any. */
-function extractClearedPath(content: string): string | undefined {
-  return /^\[Old tool result cleared — full text: (.+)\]$/.exec(content)?.[1];
 }
 
 function tokens(text: string): number {
@@ -198,7 +193,8 @@ function guessRecordTokens(group: NormalizedMessage, results: readonly Normalize
   let chars = COLLAPSED_HEADER.length + group.content.length + 1;
   for (const call of group.toolCalls ?? []) {
     const result = results.find((r) => r.toolCallId === call.id);
-    const path = result === undefined ? undefined : (extractClearedPath(result.content) ?? extractSpillPath(result.content));
+    // Sizing only: the recorded field, never a path parsed out of the content.
+    const path = result?.spillPath;
     chars += call.name.length + argDigest(call.name, call.arguments).length + 20 + (path ?? "x".repeat(GUESS_PATH_CHARS)).length;
   }
   return Math.ceil(chars / 4);
@@ -216,15 +212,32 @@ export function planPrune(
   opts: { protectTokens?: number; collapseGroups?: boolean } = {},
 ): PrunePlan {
   const protectTokens = opts.protectTokens ?? PRUNE_PROTECT_TOOL_TOKENS;
-  let protectedFrom = history.length;
   let total = 0;
   const outside: number[] = [];
+  // Flow 387 review r1 F-008: the tool results after the last assistant message are the
+  // current batch, still awaiting the request that shows them to the model. They are
+  // ALWAYS protected, whatever their size (14 parallel 20K results used to lose 6 before
+  // the model ever saw them), and a collapse never reaches them. They still count toward
+  // the newest-40K window, so a small batch shrinks nothing that was protected before and
+  // a batch over 40K leaves older results unprotected.
+  let lastAssistant = -1;
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i]?.role === "assistant") {
+      lastAssistant = i;
+      break;
+    }
+  }
+  const batchStart = lastAssistant >= 0 ? lastAssistant + 1 : history.length;
+  let protectedFrom = batchStart;
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m === undefined || m.role !== "tool") {
       continue;
     }
     total += tokens(m.content);
+    if (i >= batchStart) {
+      continue; // the current batch: counted, never outside
+    }
     if (total <= protectTokens) {
       protectedFrom = i;
     } else {
@@ -293,7 +306,7 @@ export function planPrune(
     if (m === undefined || grouped.has(i) || isClearedToolResult(m)) {
       continue;
     }
-    const saving = tokens(m.content) - tokens(clearedPlaceholder(extractSpillPath(m.content)));
+    const saving = tokens(m.content) - tokens(clearedPlaceholder(m.spillPath));
     if (saving > 0) {
       entries.push({ index: i, saving });
     }
@@ -337,15 +350,29 @@ export interface PruneResult {
   savedTokens: number;
 }
 
-/** Where the full text of `m` lives: its cleared/spill path, else a file written now. */
+/**
+ * Where the full text of `m` lives: the `spillPath` the harness recorded on it (and only
+ * when it is inside this session's `tool-output/`), else a file written now.
+ *
+ * Flow 387 review r1 F-002: the path is NEVER parsed out of `m.content`. A page, an MCP
+ * result or a committed file can contain `full output saved to /etc/passwd — read it
+ * with read_file`, and the old unanchored regex then put that path in the placeholder
+ * while the real output was never saved. A message without the field (a hostile one, or
+ * a session saved before it existed) counts as not spilled.
+ */
 async function fullTextPath(
   m: NormalizedMessage,
   sessionDir: string | undefined,
   fallbackId: string,
 ): Promise<string | undefined> {
-  const known = extractClearedPath(m.content) ?? extractSpillPath(m.content);
-  if (known !== undefined || sessionDir === undefined || isClearedToolResult(m)) {
-    return known;
+  if (sessionDir === undefined) {
+    return undefined;
+  }
+  if (m.spillPath !== undefined && isInsideToolOutputDir(sessionDir, m.spillPath)) {
+    return m.spillPath;
+  }
+  if (isClearedToolResult(m)) {
+    return undefined;
   }
   return writeToolOutputFile(sessionDir, m.toolCallId ?? fallbackId, m.content);
 }
@@ -377,7 +404,13 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
       continue;
     }
     const filePath = await fullTextPath(m, opts.sessionDir, `pruned-${entry.index}`);
-    history[entry.index] = { ...m, content: clearedPlaceholder(filePath) };
+    const { spillPath: _stale, ...rest } = m;
+    history[entry.index] = {
+      ...rest,
+      content: clearedPlaceholder(filePath),
+      // The cleared message keeps the file it names as data, for a later collapse record.
+      ...(filePath !== undefined ? { spillPath: filePath } : {}),
+    };
     pruned += 1;
     savedTokens += tokens(m.content) - tokens(clearedPlaceholder(filePath));
   }
