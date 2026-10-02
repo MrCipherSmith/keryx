@@ -22,7 +22,7 @@
 import { redactSensitiveText } from "../security/service";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
 import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
-import { DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
+import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
 
 /** The label a Telegram line carries in the queue and the transcript. */
 export const TG_SOURCE = "tg" as const;
@@ -137,13 +137,32 @@ export function composeReply(text: string): string {
   return `${safe.slice(0, REMOTE_REPLY_MAX_CHARS)}\n[cut: the full reply is in the shell]`;
 }
 
+/**
+ * What the shell takes from the client's answer. Fail closed: only an explicit `allow` or `always` is a
+ * yes; a missing, unknown or malformed decision is a deny, and `always` counts as one only when an
+ * "Always" was offered. Exported for the tests.
+ */
+export function mapApprovalAnswer(got: unknown, offered: boolean): RemoteApprovalAnswer {
+  if (got === null || typeof got !== "object") return { decision: "deny", always: false };
+  const o = got as { decision?: unknown; approvalId?: unknown; fromId?: unknown };
+  const yes = o.decision === "allow" || o.decision === "always";
+  const approvalId = typeof o.approvalId === "string" && o.approvalId.length > 0 ? o.approvalId : undefined;
+  const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+  return {
+    decision: yes ? "allow" : "deny",
+    always: o.decision === "always" && offered,
+    ...(approvalId === undefined ? {} : { approvalId }),
+    ...(fromId === undefined ? {} : { fromId }),
+  };
+}
+
 /** The approval prompt: redacted and within the server's limit. Exported for the tests. */
 export function composeApprovalPrompt(prompt: string): string {
   const safe = redactSensitiveText(prompt).trim();
-  return safe.length <= MAX_APPROVAL_PROMPT_CHARS ? safe : `${safe.slice(0, MAX_APPROVAL_PROMPT_CHARS - 1)}…`;
+  if (safe.length <= MAX_APPROVAL_PROMPT_CHARS) return safe;
+  const note = "\n[cut: the rest of this prompt is in the shell]";
+  return `${safe.slice(0, MAX_APPROVAL_PROMPT_CHARS - note.length - 1)}…${note}`;
 }
-
-const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
 
 /**
  * What the topic is asked: the tool, the command or input a human would read, and the
@@ -171,8 +190,13 @@ export function describeApprovalForTopic(
     } catch {
       // not JSON: show it as it is
     }
-    shown = shown.length > APPROVAL_INPUT_PREVIEW_CHARS ? `${shown.slice(0, APPROVAL_INPUT_PREVIEW_CHARS)}…` : shown;
+    const total = shown.length;
+    shown = total > APPROVAL_INPUT_PREVIEW_CHARS ? `${shown.slice(0, APPROVAL_INPUT_PREVIEW_CHARS)}…` : shown;
     lines.push(`Approve ${tool}?`, shown);
+    // Said out loud: a cut tail is not shown, and the operator must know the prompt is not the whole call.
+    if (total > APPROVAL_INPUT_PREVIEW_CHARS) {
+      lines.push(`[cut: only the first ${APPROVAL_INPUT_PREVIEW_CHARS} of ${total} characters are shown; the rest is in the shell]`);
+    }
   }
   if (meta?.destructive === true) lines.push("Warning: this can delete or overwrite files.");
   if (meta?.credentials === true) lines.push("Warning: this touches the agent's own permission or credential files.");
@@ -680,15 +704,10 @@ export class RemoteBridge {
           ...(options.remember === undefined ? {} : { remember: options.remember }),
           ...(signal === undefined ? {} : { signal }),
         });
-        answer = {
-          decision: got.decision === "deny" ? "deny" : "allow",
-          always: got.decision === "always" && options.remember !== undefined,
-          ...(got.approvalId === undefined ? {} : { approvalId: got.approvalId }),
-          ...(got.fromId === undefined ? {} : { fromId: got.fromId }),
-        };
+        answer = mapApprovalAnswer(got, options.remember !== undefined);
       } else {
-        const decision = await client.requestApproval(text, timeoutMs);
-        answer = { decision: decision === "deny" ? "deny" : "allow", always: false };
+        const decision: unknown = await client.requestApproval(text, timeoutMs);
+        answer = { decision: decision === "allow" || decision === "always" ? "allow" : "deny", always: false };
       }
     } catch {
       answer = { decision: "deny", always: false };

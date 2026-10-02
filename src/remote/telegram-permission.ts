@@ -13,7 +13,8 @@ import type { ApprovalMeta } from "../commands/agent";
 import type { PermissionMode } from "../commands/permission-mode";
 import { suggestShellPatterns } from "../lib/shell-permissions";
 import type { RemotePermissionMode } from "./config";
-import { MAX_REMEMBER_PATTERN_CHARS } from "./protocol";
+import { redactSensitiveText } from "../security/service";
+import { APPROVAL_INPUT_PREVIEW_CHARS, MAX_REMEMBER_PATTERN_CHARS } from "./protocol";
 
 /** Where the mode in force came from. */
 export type ModeSource =
@@ -66,16 +67,27 @@ export interface RememberOffer {
  * pattern passes the same validators (`suggestShellPatterns`). The exact command is preferred; the
  * first-word prefix is offered only when the exact form is not allowed (for example `docker *` stays
  * banned, so such a command never gets a prefix grant here either). A pattern too long for the
- * button request is not offered. The pattern comes from the command the shell parsed, never from
- * model text.
+ * button request is not offered, and a too-long exact command is never replaced by its prefix. Nothing
+ * is offered when the prompt cuts the command short, or when redaction would change the pattern shown.
+ * The pattern comes from the command the shell parsed, never from model text.
  */
 export function telegramRememberOffer(ev: ShellApprovalEval): RememberOffer | undefined {
   if (ev.destructive || ev.credentials || ev.sacReviewConfirmation || ev.publishLease || ev.hookAsk || ev.untrustedOrigin) {
     return undefined;
   }
+  // The operator approves what the prompt shows. A command whose tail the prompt cuts off is not fully
+  // shown, so nothing is offered to remember for it.
+  if (ev.command.length > APPROVAL_INPUT_PREVIEW_CHARS) return undefined;
   const { exact, prefix, offerExact, offerPrefix } = suggestShellPatterns(ev.command);
-  if (offerExact && exact.length <= MAX_REMEMBER_PATTERN_CHARS) return { pattern: exact, kind: "exact" };
-  if (offerPrefix && prefix.length <= MAX_REMEMBER_PATTERN_CHARS) return { pattern: prefix, kind: "prefix" };
+  // An exact command that is too long for the button request must not quietly become a first-word
+  // prefix (`git *`): that would grant far more than the prompt showed. No Always for it at all.
+  // The topic shows the pattern redacted. When redaction changes it, what is shown is not what would be
+  // stored, so it is not offered: the operator never grants a pattern they could not read.
+  const shownAsStored = (pattern: string): boolean => redactSensitiveText(pattern) === pattern;
+  if (offerExact) {
+    return exact.length <= MAX_REMEMBER_PATTERN_CHARS && shownAsStored(exact) ? { pattern: exact, kind: "exact" } : undefined;
+  }
+  if (offerPrefix && prefix.length <= MAX_REMEMBER_PATTERN_CHARS && shownAsStored(prefix)) return { pattern: prefix, kind: "prefix" };
   return undefined;
 }
 
@@ -103,4 +115,26 @@ export function evaluateTelegramShellApproval(input: {
     autoApprove: evaluation.autoApprove,
     offer: evaluation.autoApprove ? undefined : telegramRememberOffer(evaluation),
   };
+}
+
+/** The Telegram user a remote audit line names: `, user 42`, or nothing when it is not known. */
+function userSuffix(userId: number | undefined): string {
+  return userId === undefined ? "" : `, user ${userId}`;
+}
+
+/**
+ * The remote event line for a call that ran in a Telegram turn without a tap, because of the mode
+ * (AC15). It names the mode in force and the Telegram user who sent the line.
+ */
+export function modeAutoApprovalAudit(input: { mode: PermissionMode; userId: number | undefined; preview: string }): string {
+  return `auto-approved (${input.mode}${userSuffix(input.userId)}): ${input.preview}`;
+}
+
+/**
+ * The remote event line for a shell command a saved or session rule let through in a Telegram turn
+ * (AC15). Same user id as {@link modeAutoApprovalAudit}: a rule match is as unattended as a mode.
+ */
+export function savedRuleAutoApprovalAudit(input: { userId: number | undefined; command: string }): string {
+  const shown = input.command.length > 200 ? `${input.command.slice(0, 199)}…` : input.command;
+  return `auto-approved by a saved rule${input.userId === undefined ? "" : ` (user ${input.userId})`}: ${shown}`;
 }

@@ -257,6 +257,12 @@ export type ApprovalDecision = "allow" | "deny" | "always";
 /** The longest pattern a `remember` offer may carry. */
 export const MAX_REMEMBER_PATTERN_CHARS = 300;
 
+/**
+ * How much of a tool's command or input an approval prompt shows (flow 396). A longer call is cut and
+ * the prompt says so; and no "Always" is offered for a call whose tail the operator could not see.
+ */
+export const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
+
 // ---- request bodies -----------------------------------------------------------
 
 export interface RegisterBody {

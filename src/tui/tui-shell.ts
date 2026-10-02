@@ -316,9 +316,11 @@ import { evaluateShellApproval } from "../commands/shell-approval";
 import {
   evaluateTelegramShellApproval,
   formatModeInForce,
+  modeAutoApprovalAudit,
   modeInForce,
   type ModeInForce,
   type RememberOffer,
+  savedRuleAutoApprovalAudit,
 } from "../remote/telegram-permission";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
@@ -5716,7 +5718,7 @@ export async function launchTuiAgentShell(opts: {
         if (judged.autoApprove) {
           const shown = judged.evaluation.command.length > 200 ? `${judged.evaluation.command.slice(0, 199)}…` : judged.evaluation.command;
           io.onSystem?.(`✓ auto-approved shell (saved rule): ${shown}\n`);
-          bridge.recordApproval(`auto-approved by a saved rule: ${shown}`);
+          bridge.recordApproval(savedRuleAutoApprovalAudit({ userId: bridge.telegramTurnUserId, command: judged.evaluation.command }));
           return approvedAnswer();
         }
         offer = judged.offer;
@@ -5890,6 +5892,9 @@ export async function launchTuiAgentShell(opts: {
     const modeNow = (): ModeInForce => modeForTurn(remoteBridge?.telegramTurnActive === true);
     io.permissionMode = () => modeNow().mode;
     io.trustedMcpTools = new Map<string, string>();
+    // Flow 396: a trust grant made in the shell never lets an MCP `use_tool` skip the prompt in a turn
+    // that came from Telegram; there it always asks.
+    io.mcpGrantsApply = () => remoteBridge?.telegramTurnActive !== true;
     // Read fresh on every call: a grant holds only while the tool's definition
     // in the live catalog still matches the fingerprint stored with it.
     io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
@@ -5935,8 +5940,7 @@ export async function launchTuiAgentShell(opts: {
       // Flow 396: a call that ran in a Telegram turn without a tap is also written to the remote
       // panel's event list, with the Telegram user who sent the line (redacted and capped there).
       if (remoteBridge?.telegramTurnActive === true) {
-        const uid = remoteBridge.telegramTurnUserId;
-        remoteBridge.recordApproval(`auto-approved (${inForce.mode}${uid === undefined ? "" : `, user ${uid}`}): ${preview}`);
+        remoteBridge.recordApproval(modeAutoApprovalAudit({ mode: inForce.mode, userId: remoteBridge.telegramTurnUserId, preview }));
       }
       transcript.add(
         new otui.TextRenderable(r, {

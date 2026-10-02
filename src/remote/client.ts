@@ -37,7 +37,6 @@ import {
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalResultBody,
-  type ApprovalEvent,
   isApprovalId,
   type ChoiceEvent,
   type PromptBody,
@@ -118,7 +117,21 @@ export interface ApprovalAnswer {
   fromId?: number;
 }
 
-interface PressedApproval {
+/**
+ * An approval event from the stream, read without trusting its shape (flow 396). It needs an id to
+ * mean anything; a decision that is not exactly `allow`, `always` or `deny` is a `deny`, never a yes.
+ * `fromId` is kept only when it is a whole number. Exported for the tests.
+ */
+export function readApprovalEvent(parsed: unknown): { approvalId: string; pressed: PressedApproval } | undefined {
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const o = parsed as { approvalId?: unknown; decision?: unknown; fromId?: unknown };
+  if (typeof o.approvalId !== "string" || o.approvalId.length === 0) return undefined;
+  const decision: ApprovalDecision = o.decision === "allow" || o.decision === "always" ? o.decision : "deny";
+  const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+  return { approvalId: o.approvalId, pressed: { decision, ...(fromId === undefined ? {} : { fromId }) } };
+}
+
+export interface PressedApproval {
   decision: ApprovalDecision;
   fromId?: number;
 }
@@ -388,7 +401,11 @@ export class RemoteClient {
       if (!response.ok) {
         return { decision: "deny" };
       }
-      approvalId = ((await response.json()) as ApprovalResponse).approvalId;
+      const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;
+      if (typeof id !== "string" || id.length === 0) {
+        return { decision: "deny" };
+      }
+      approvalId = id;
     } catch {
       return { decision: "deny" };
     }
@@ -724,7 +741,7 @@ export class RemoteClient {
       // callbacks are handled at once, below.
       this.inboundChain = this.inboundChain.then(() => this.handleInbound(inbound)).catch(() => undefined);
     } else if (event === "approval") {
-      this.handleApprovalFrame(parsed as ApprovalEvent);
+      this.handleApprovalFrame(parsed);
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
       this.resolveChoice(choice.promptId, choice.index);
@@ -784,15 +801,12 @@ export class RemoteClient {
    * question already given up on). A repeat for an id already settled is acknowledged again with the
    * same outcome (the first ack may have been lost) but is not said or resolved twice.
    */
-  private handleApprovalFrame(approval: ApprovalEvent): void {
-    const approvalId = approval?.approvalId;
-    if (!isApprovalId(approvalId) || (approval.decision !== "allow" && approval.decision !== "deny" && approval.decision !== "always")) {
+  private handleApprovalFrame(parsed: unknown): void {
+    const read = readApprovalEvent(parsed);
+    if (read === undefined || !isApprovalId(read.approvalId)) {
       return;
     }
-    const pressed: PressedApproval = {
-      decision: approval.decision,
-      ...(approval.fromId === undefined ? {} : { fromId: approval.fromId }),
-    };
+    const { approvalId, pressed } = read;
     const seen = this.seenApprovals.get(approvalId);
     if (seen === "pending") {
       // Parked and waiting: its own ack goes out when it settles.

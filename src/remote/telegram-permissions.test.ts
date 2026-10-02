@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { RemoteClient } from "./client";
+import { readApprovalEvent, type RemoteClient } from "./client";
 import {
   DEFAULT_APPROVAL_WAIT_MS,
   DEFAULT_RUN_TIMEOUT_MS,
@@ -362,5 +362,54 @@ describe("the Always button (AC9, AC10)", () => {
     const prompt = await untilPrompt(threadId);
     const everything = `${prompt.message.text} ${(prompt.message.inlineKeyboard ?? []).flat().map((b) => b.text).join(" ")}`;
     expect(everything).not.toContain(token);
+  });
+});
+
+describe("a malformed approval event is never a yes (fail closed)", () => {
+  /** Feed one raw `approval` frame to the client, as the stream would. */
+  function feed(client: RemoteClient, payload: unknown): void {
+    (client as unknown as { handleFrame: (event: string, data: string) => void }).handleFrame("approval", typeof payload === "string" ? payload : JSON.stringify(payload));
+  }
+  function pendingId(client: RemoteClient): string {
+    const waiters = (client as unknown as { waiters: Map<string, unknown> }).waiters;
+    return [...waiters.keys()][0] as string;
+  }
+
+  test("a decision that is not allow, always or deny resolves the waiting call as a deny", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const { client } = await session("sess-mal-0001", "malformed");
+    for (const decision of ["yes", "ALLOW", "", 1, null, true, { x: 1 }, undefined]) {
+      const answer = client.askApproval("Run it?", 10_000, { remember: "ls" });
+      await until(() => (client as unknown as { waiters: Map<string, unknown> }).waiters.size === 1, "the waiter");
+      feed(client, { approvalId: pendingId(client), ...(decision === undefined ? {} : { decision }), fromId: 7 });
+      const got = await answer;
+      expect(got.decision).toBe("deny");
+    }
+  });
+
+  test("a payload without a usable approval id is ignored; the call keeps waiting", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const { client } = await session("sess-mal-0002", "malformed");
+    const answer = client.askApproval("Run it?", 10_000);
+    await until(() => (client as unknown as { waiters: Map<string, unknown> }).waiters.size === 1, "the waiter");
+    const id = pendingId(client);
+    for (const payload of ["not json", "null", "5", "[]", { decision: "allow" }, { approvalId: 5, decision: "allow" }, { approvalId: "", decision: "allow" }]) {
+      feed(client, payload);
+    }
+    expect((client as unknown as { waiters: Map<string, unknown> }).waiters.size).toBe(1);
+    feed(client, { approvalId: id, decision: "allow", fromId: "not a number" });
+    const got = await answer;
+    expect(got.decision).toBe("allow");
+    expect(got.fromId).toBeUndefined();
+  });
+
+  test("readApprovalEvent keeps a whole-number user id and nothing else", () => {
+    expect(readApprovalEvent({ approvalId: "a1", decision: "always", fromId: 9 })).toEqual({ approvalId: "a1", pressed: { decision: "always", fromId: 9 } });
+    expect(readApprovalEvent({ approvalId: "a1", decision: "allow", fromId: 1.5 })).toEqual({ approvalId: "a1", pressed: { decision: "allow" } });
+    expect(readApprovalEvent({ approvalId: "a1", decision: "maybe" })).toEqual({ approvalId: "a1", pressed: { decision: "deny" } });
+    expect(readApprovalEvent(null)).toBeUndefined();
+    expect(readApprovalEvent("x")).toBeUndefined();
   });
 });

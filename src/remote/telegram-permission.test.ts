@@ -9,8 +9,17 @@ import type { ShellApprovalIO } from "../commands/shell-approval";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
-import { evaluateTelegramShellApproval, formatModeInForce, modeInForce, telegramRememberOffer } from "./telegram-permission";
+import {
+  evaluateTelegramShellApproval,
+  formatModeInForce,
+  modeAutoApprovalAudit,
+  modeInForce,
+  savedRuleAutoApprovalAudit,
+  telegramRememberOffer,
+} from "./telegram-permission";
+import { redactSensitiveText } from "../security/service";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import { APPROVAL_INPUT_PREVIEW_CHARS, MAX_REMEMBER_PATTERN_CHARS } from "./protocol";
 
 describe("modeInForce: one shell mode, a Telegram default until /mode changes it", () => {
   const base = { shellMode: "ask", changedThisSession: false, telegramDefault: "trust" } as const;
@@ -200,6 +209,77 @@ describe("a Telegram trust turn is gated exactly like a local trust turn", () =>
     expect(calls).toEqual([]);
   });
 
+  describe("MCP use_tool is a floor: it asks in a Telegram trust turn even for a tool the operator trusted in the shell", () => {
+    function useTool(): { tool: InteractiveTool; ran: () => boolean } {
+      let invoked = false;
+      return {
+        ran: () => invoked,
+        tool: {
+          definition: {
+            name: "use_tool",
+            description: "call an MCP tool",
+            inputSchema: {
+              type: "object",
+              properties: { tool_name: { type: "string" }, arguments: { type: "object" } },
+              required: ["tool_name"],
+              additionalProperties: true,
+            },
+            risk: "destructive",
+          },
+          invoke: async () => {
+            invoked = true;
+            return { output: "mcp ran", isError: false };
+          },
+        },
+      };
+    }
+
+    async function driveMcp(opts: { telegram: boolean; granted: boolean; mode: PermissionMode }): Promise<{ asked: number; ran: boolean }> {
+      const { tool, ran } = useTool();
+      let asked = 0;
+      const grants = new Map<string, string>();
+      if (opts.granted) grants.set("srv__lookup", "fp-1");
+      const io: AgentIO = {
+        write: () => {},
+        requestApproval: async () => {
+          asked += 1;
+          return false;
+        },
+        permissionMode: () => opts.mode,
+        trustedMcpTools: grants,
+        mcpToolFingerprint: () => "fp-1",
+        mcpToolDestructive: () => false,
+        mcpGrantsApply: () => !opts.telegram,
+      };
+      await runAgentTurn(
+        io,
+        {
+          provider: scripted("", "use_tool", JSON.stringify({ tool_name: "srv__lookup", arguments: {} })),
+          providerId: "s",
+          modelId: "m",
+          tools: [tool],
+          systemInstruction: "sys",
+          idSeq: () => `id-${seq++}`,
+        },
+        [],
+        "go",
+      );
+      return { asked, ran: ran() };
+    }
+
+    test("control: a local trust turn with the operator's grant runs the tool without asking", async () => {
+      expect(await driveMcp({ telegram: false, granted: true, mode: "trust" })).toEqual({ asked: 0, ran: true });
+    });
+
+    test("a Telegram trust turn asks for the same granted tool and, refused, does not run it", async () => {
+      expect(await driveMcp({ telegram: true, granted: true, mode: "trust" })).toEqual({ asked: 1, ran: false });
+    });
+
+    test("an ungranted MCP tool asks in a Telegram trust turn too", async () => {
+      expect(await driveMcp({ telegram: true, granted: false, mode: "trust" })).toEqual({ asked: 1, ran: false });
+    });
+  });
+
   test("with permissionMode ask the old behaviour is back: even ls asks", async () => {
     const telegram = await drive("ls -la", telegramMode("ask"));
     expect(telegram).toEqual(await drive("ls -la", () => "ask"));
@@ -301,10 +381,35 @@ describe("what a Telegram prompt may offer to remember (AC6)", () => {
     expect(judged.offer?.pattern).not.toBe("bash *");
   });
 
-  test("a pattern too long for the button request is not offered as an exact grant", () => {
-    const long = `echo ${"a".repeat(400)}`;
-    const judged = judge(long, []);
-    expect(judged.offer?.kind).not.toBe("exact");
+  test("an exact command too long for the button request gets no Always at all, never its prefix", () => {
+    for (const long of [`echo ${"a".repeat(400)}`, `git commit -m ${"x".repeat(400)}`, `bun test ${"src/a.test.ts ".repeat(40)}`]) {
+      const judged = judge(long, []);
+      expect(judged.autoApprove).toBe(false);
+      expect(judged.offer).toBeUndefined();
+    }
+  });
+
+  test("a command just inside the limit still offers its exact form", () => {
+    const edge = `echo ${"a".repeat(MAX_REMEMBER_PATTERN_CHARS - 5)}`;
+    expect(edge.length).toBe(MAX_REMEMBER_PATTERN_CHARS);
+    expect(judge(edge, []).offer).toEqual({ pattern: edge, kind: "exact" });
+  });
+
+  test("a command the prompt would cut short gets no Always: the operator cannot see all of it", () => {
+    const longTail = `bun test ${"a".repeat(APPROVAL_INPUT_PREVIEW_CHARS)}`;
+    const judged = judge(longTail, []);
+    expect(judged.autoApprove).toBe(false);
+    expect(judged.offer).toBeUndefined();
+  });
+
+  test("a pattern that redaction would change is never offered: shown and stored must be the same text", () => {
+    const secret = "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIjKlMnOp";
+    expect(redactSensitiveText(secret)).not.toBe(secret);
+    for (const command of [`echo ${secret}`, `bun test ${secret}`]) {
+      const offer = judge(command, []).offer;
+      if (offer !== undefined) expect(redactSensitiveText(offer.pattern)).toBe(offer.pattern);
+    }
+    expect(judge(`echo ${secret}`, []).offer).toBeUndefined();
   });
 
   test("telegramRememberOffer works from the evaluation alone", () => {
@@ -315,5 +420,25 @@ describe("what a Telegram prompt may offer to remember (AC6)", () => {
       io: fakeIo([]),
     });
     expect(telegramRememberOffer(evaluation)?.pattern).toBe("bun test src/foo.test.ts");
+  });
+});
+
+describe("the remote audit lines (AC15)", () => {
+  test("a mode auto-approval names the mode and the Telegram user", () => {
+    expect(modeAutoApprovalAudit({ mode: "trust", userId: 42, preview: "bun test" })).toBe("auto-approved (trust, user 42): bun test");
+    expect(modeAutoApprovalAudit({ mode: "trust", userId: undefined, preview: "bun test" })).toBe("auto-approved (trust): bun test");
+  });
+
+  test("a saved-rule auto-approval carries the Telegram user id like the mode path does", () => {
+    expect(savedRuleAutoApprovalAudit({ userId: 42, command: "bun test src/foo.test.ts" })).toBe(
+      "auto-approved by a saved rule (user 42): bun test src/foo.test.ts",
+    );
+    expect(savedRuleAutoApprovalAudit({ userId: undefined, command: "bun test" })).toBe("auto-approved by a saved rule: bun test");
+  });
+
+  test("the user id comes before the command, so the event ring's cut never loses it", () => {
+    const line = savedRuleAutoApprovalAudit({ userId: 1234567, command: `bun test ${"x".repeat(400)}` });
+    expect(line.slice(0, 60)).toContain("user 1234567");
+    expect(line.length).toBeLessThan(300);
   });
 });

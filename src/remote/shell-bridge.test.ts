@@ -13,6 +13,7 @@ import {
   composeApprovalPrompt,
   composeReply,
   describeApprovalForTopic,
+  mapApprovalAnswer,
 } from "./shell-bridge";
 
 const META: InboundMeta = { updateId: 1, threadId: 7, fromId: 9, receivedAt: 0 };
@@ -578,4 +579,54 @@ test("applyPolicy: no limit set after enable() means the next turn is never canc
   h.bridge.turnStarted(TG_SOURCE);
   await new Promise((r) => setTimeout(r, 60));
   expect(h.calls).not.toContain("cancel");
+});
+
+test("fail closed: only an explicit allow or always is a yes; anything else the client returns is a deny", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { askApproval?: (text: string, ms: number, opts: { remember?: string }) => Promise<unknown> };
+  for (const odd of [{ decision: "yes" }, { decision: undefined }, { decision: null }, { decision: 1 }, { decision: "ALLOW" }, {}, null, undefined, "allow", 7]) {
+    client.askApproval = async () => odd;
+    const got = await h.bridge.askApproval("run ls", { remember: "ls" });
+    expect(got.decision).toBe("deny");
+    expect(got.always).toBe(false);
+  }
+  client.askApproval = async () => ({ decision: "allow" });
+  expect((await h.bridge.askApproval("run ls")).decision).toBe("allow");
+  client.askApproval = async () => ({ decision: "always" });
+  expect(await h.bridge.askApproval("run ls", { remember: "ls" })).toMatchObject({ decision: "allow", always: true });
+  // "always" with no offer is still a yes for this call, and never a rule.
+  expect(await h.bridge.askApproval("run ls")).toMatchObject({ decision: "allow", always: false });
+});
+
+test("fail closed: a client without askApproval (legacy path) denies anything but an explicit allow", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { approvalAnswer: unknown };
+  for (const odd of ["yes", undefined, null, 1, "ALLOW", "", {}]) {
+    client.approvalAnswer = odd;
+    expect(await h.bridge.requestApproval("run ls")).toBe("deny");
+  }
+  client.approvalAnswer = "allow";
+  expect(await h.bridge.requestApproval("run ls")).toBe("allow");
+});
+
+test("mapApprovalAnswer keeps only well-formed ids and user ids", () => {
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: "a1", fromId: 9 }, false)).toEqual({ decision: "allow", always: false, approvalId: "a1", fromId: 9 });
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: "", fromId: "9" }, false)).toEqual({ decision: "allow", always: false });
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: 5, fromId: 1.5 }, false)).toEqual({ decision: "allow", always: false });
+  expect(mapApprovalAnswer({ decision: "always", fromId: 9 }, false)).toEqual({ decision: "allow", always: false, fromId: 9 });
+  expect(mapApprovalAnswer({ decision: "deny", fromId: 9 }, true)).toEqual({ decision: "deny", always: false, fromId: 9 });
+});
+
+test("a cut approval prompt says so, and says how much was cut", () => {
+  const long = describeApprovalForTopic("shell_exec", JSON.stringify({ command: `echo ${"z".repeat(3000)}` }));
+  expect(long).toContain("[cut: only the first 1500 of 3005 characters are shown");
+  expect(long).toContain("…");
+  const short = describeApprovalForTopic("shell_exec", JSON.stringify({ command: "echo hi" }));
+  expect(short).not.toContain("[cut");
+  const composed = composeApprovalPrompt("y".repeat(10_000));
+  expect(composed.length).toBeLessThanOrEqual(3_000);
+  expect(composed).toContain("[cut: the rest of this prompt is in the shell]");
+  expect(composeApprovalPrompt("short")).toBe("short");
 });

@@ -347,6 +347,12 @@ export interface AgentIO {
    */
   trustedMcpTools?: Map<string, string>;
   /**
+   * Flow 396: whether the operator's `trustedMcpTools` grants may skip the prompt for this call.
+   * A turn that came from Telegram returns `false`: an MCP `use_tool` always asks there, even for a
+   * tool the operator trusted in the shell. Absent or `true`: grants apply as before.
+   */
+  mcpGrantsApply?: () => boolean;
+  /**
    * The CURRENT definition fingerprint for an MCP FQN, from the live catalog,
    * or `undefined` when the tool is gone. A grant is honoured only while this
    * still equals the fingerprint stored with it; absent, no grant can be made.
@@ -3735,7 +3741,7 @@ async function runAgentTurnCore(
               : { check: deps.hardDeny, onDenied: io.onUnattendedDenial },
             deps.hooks,
             untrustedOrigin,
-            io.trustedMcpTools,
+            io.mcpGrantsApply?.() === false ? undefined : io.trustedMcpTools,
             io.mcpToolFingerprint,
             io.mcpToolDestructive,
             deps.unattended === true ? undefined : io.beforeMutation,

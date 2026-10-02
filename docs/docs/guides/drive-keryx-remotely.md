@@ -338,13 +338,18 @@ is recorded as an `approval` event with the Telegram user id of the person who s
 the message. The things that always ask still ask, exactly as in a shell `trust` turn:
 destructive commands, privilege escalation, downloaders, an agent's credential files,
 a flow or acceptance confirmation, a git publish lease, a hook that asks, untrusted
-content, a destructive `apply_patch`, and any MCP `use_tool`. `/plan` still refuses
+content, a destructive `apply_patch`, and any MCP `use_tool` (a grant you made in the shell
+for an MCP tool does not apply to a Telegram turn). `/plan` still refuses
 mutations, and `apply_patch` outside the project root is refused in every mode. There
 is no extra Telegram-only floor for network or outside-project commands.
 
 When something asks, the question goes to the topic as `Allow | Always: <pattern> |
 Deny`. The **Always** button is offered only when the same rules as the shell dock
-accept the pattern, and it saves it to `permissions.json`; the topic then says
+accept the pattern, and it saves it to `permissions.json`. It is not offered when the
+command is longer than the 300-character pattern limit (it never falls back to a
+broader prefix such as `git *`), when the question had to cut the command short, or
+when hiding a secret would change the pattern shown. A cut question says so and
+names how many characters were shown; the topic then says
 `Remembered: <pattern>`. A press from someone who is not allowed, a press after the
 question expired, and a second press of the same button save nothing and approve
 nothing. A saved or session pattern approves a matching command without a question,
@@ -370,8 +375,9 @@ To go back to the old behaviour set `"permissionMode": "ask"`, `"runTimeoutMs":
 **One permission mode.** The shell has one permission mode. The config's
 `permissionMode` applies to Telegram turns until `/mode` changes the mode in this
 session; after that the shell's mode wins. `/mode ask` from the topic runs directly;
-`/mode trust` and `/mode auto` keep their Yes / No button. `auto` is never taken from
-the config. The shell shows which one is in force, `trust (Telegram default)` or `ask
+`/mode trust` and `/mode auto` keep their Yes / No button, and one tap commits them: the
+shell's own "Switch to auto mode?" confirmation is asked only when `/mode auto` is typed
+in the shell. `auto` is never taken from the config. The shell shows which one is in force, `trust (Telegram default)` or `ask
 (shell /mode)`, and `keryx serve status` says when the shell overrides the default.
 `/remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]` changes
 the saved defaults and the running shell's copy only, not the mode you set with
