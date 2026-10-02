@@ -11,7 +11,7 @@
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
   "status": "in-progress",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T20:18:58.388Z",
+  "updatedAt": "2026-10-02T20:19:44.381Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,7 +92,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -444,6 +445,11 @@
       "at": "2026-10-02T20:18:58.388Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T20:19:44.381Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
