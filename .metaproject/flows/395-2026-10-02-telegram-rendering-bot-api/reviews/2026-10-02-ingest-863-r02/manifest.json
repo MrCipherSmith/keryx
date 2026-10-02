@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-10-02T17:12:58.398Z",
-  "updatedAt": "2026-10-02T17:13:01.440Z",
+  "createdAt": "2026-10-02T19:20:21.061Z",
+  "updatedAt": "2026-10-02T19:20:24.222Z",
   "flow": {
     "id": "395",
     "path": ".metaproject/flows/395-2026-10-02-telegram-rendering-bot-api"

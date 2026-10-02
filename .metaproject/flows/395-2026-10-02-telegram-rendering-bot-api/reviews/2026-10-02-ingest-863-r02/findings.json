@@ -45,6 +45,16 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-10-02-ingest-863-r02#S-002"
+    "global_id": "2026-10-02-ingest-863-r02#S-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 42dc5731: src/remote/format-html.ts link() appends escapeHtml(hostMarker(label, url)) after the anchor; src/remote/format-link.ts hostMarker shows the target host as ` (→ host)` when the label reads as an address for another host (scheme, www. or dotted host; userinfo in label or target always shows the host; IDN shown as punycode). Checked by running it: [https://good.example](https://evil.example/x) renders <a href=\"https://evil.example/x\">https://good.example</a> (→ evil.example), and [docs](https://evil.example/x) is unchanged. src/remote/format-link.test.ts (19 tests) passes at 42dc5731; with the marker removed from link() 13 of those 19 fail. Read from git show 42dc5731 and a bun run of the renderer.",
+      "verifier": "flow395-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "42dc5731"
+    }
   }
 ]
