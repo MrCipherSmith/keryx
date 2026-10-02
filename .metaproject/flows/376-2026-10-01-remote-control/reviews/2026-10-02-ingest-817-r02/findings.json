@@ -9,11 +9,11 @@
     "evidence": "Read src/remote/client.ts (target, post and the stream GET both go through it) and src/remote/service.ts, shell-token.ts at 34bf0f80; reproduced with a scratch script, the squatter received the Bearer token on every retry.",
     "confidence": "high",
     "file": "src/remote/client.ts",
-    "line": null,
+    "line": 326,
     "quote": "    if (!isLoopbackAddress(endpoint.value.address)) {",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/client.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 290
     },
     "class_scope": {
@@ -24,7 +24,7 @@
       ],
       "enumeration_method": "keryx ctx rg for fetchImpl( and authorization across src/remote at 34bf0f80; the only shell-side sender is client.ts, and both its calls go through target(), so one fix covers both"
     },
-    "global_id": "2026-10-01-ingest-817#F-001",
+    "global_id": "2026-10-02-ingest-817-r02#F-001",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -33,7 +33,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (the PR head b55951eb holds identical src/remote and src/tui trees): src/remote/client.ts target() refuses when isAlive(endpoint.pid) is false, before readShellToken; src/remote/service.ts mints a fresh shell token on every start (shell-token.ts mintShellToken); tests in src/remote/review-fixes.test.ts. Residual: while serve's pid is alive the token still goes over loopback TCP to the port."
+      "evidence": "fixed in 4f1326d2 (PR head b55951eb holds byte-identical src/remote and src/tui, checked by git diff --stat 4f1326d2 b55951eb; main HEAD still has it): src/remote/client.ts target() refuses when isAlive(endpoint.pid) is false (L329-334) before readShellToken; src/remote/service.ts mints a fresh shell token on every start (shell-token.ts mintShellToken); tests src/remote/review-fixes.test.ts 'a pid that is not running: no request is made' and 'a restarted serve rejects the old token'. Residual: while serve's pid is alive the token still goes over loopback TCP to the port (no Unix socket); the reported SIGKILL-then-squat case no longer works."
     }
   },
   {
@@ -50,7 +50,7 @@
     "quote": "        if (update.update_id <= this.offset.highWater) {",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/hub.ts",
+      "reason": "the quote does not appear in the file",
       "reported_line": 404
     },
     "class_scope": {
@@ -63,12 +63,16 @@
       ],
       "enumeration_method": "keryx ctx rg for 'updateId <=|update_id <=|<= this\\.|highWater' under src/remote at 34bf0f80; five sites"
     },
-    "global_id": "2026-10-01-ingest-817#F-002",
+    "global_id": "2026-10-02-ingest-817-r02#F-002",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: no highWater comparison is left in hub.ts, poller.ts or client.ts. PollerState (inbound.ts) keeps a bounded set of exact recent ids; hub.receive() drops only an exact seen id and resets the set when a batch holds an unseen id below the highest (a numbering restart). poller.ts sends no offset on the first call and only the just-accepted batch's max+1 afterwards. client.ts dedupes with completedIds (exact, 256 bound) and serve with per-session exact-id books (http-surface.ts remember/complete/deliver). review-fixes.test.ts 'a line whose id is below one the shell finished still runs; the same id again does not' (targeted run, pass): after ids above, a batch with update_id 1 is delivered and a repeat of it is dropped. The 147-test slice, including restart.test.ts and single-poller.test.ts, passes. Depends on Telegram behaviour, so the real-bot case is covered only by the fake bot API.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb and main HEAD): no highWater comparison remains. src/remote/inbound.ts PollerState keeps a bounded set of exact ids (seen/reset), hub.ts receive() resets on an unseen id below the top, poller.ts sends no stored offset, client.ts completedIds (exact, bounded), http-surface.ts per-session Set<number> books; src/remote/review-fixes.test.ts 'a line whose id is below one the shell finished still runs; the same id again does not'. Real-bot behaviour covered only by the fake Bot API."
     }
   },
   {
@@ -81,14 +85,14 @@
     "evidence": "Read src/remote/poll-lock.ts and createOwnerOnlyFileExclusive in src/lib/config-dir.ts at 34bf0f80: open with wx precedes the write of the pid.",
     "confidence": "high",
     "file": "src/remote/poll-lock.ts",
-    "line": null,
+    "line": 116,
     "quote": "      unlinkSync(file);",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/poll-lock.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 80
     },
-    "global_id": "2026-10-01-ingest-817#F-003",
+    "global_id": "2026-10-02-ingest-817-r02#F-003",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -97,7 +101,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/poll-lock.ts createWhole() link()s a fully written staging file, stale lock renamed aside and re-checked, young pid-less lock held; mintShellToken replaces ensureShellToken; src/remote/poll-lock.test.ts."
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/poll-lock.ts createWhole() link()s a fully written staging file, a stale lock is renamed aside and re-checked, a young pid-less lock is held (EMPTY_LOCK_GRACE_MS); mintShellToken (atomic, after the lock is held) replaces ensureShellToken; src/remote/poll-lock.test.ts."
     }
   },
   {
@@ -110,14 +114,14 @@
     "evidence": "Read src/remote/http-surface.ts deliverCallback at 34bf0f80: noteDecision is called unconditionally.",
     "confidence": "high",
     "file": "src/remote/http-surface.ts",
-    "line": null,
+    "line": 667,
     "quote": "        void this.noteDecision(sessionId, approval.decision);",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/http-surface.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 630
     },
-    "global_id": "2026-10-01-ingest-817#F-004",
+    "global_id": "2026-10-02-ingest-817-r02#F-004",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -126,7 +130,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/http-surface.ts deliverCallback announces only when stream.write returned true; src/remote/review-fixes.test.ts 'a decision that could not be handed to the shell is not announced as granted'. Residual: no ack of approval frames by the shell."
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/http-surface.ts deliverCallback sets told = stream?.write(...) === true and calls noteDecision only when told (L665-668); src/remote/review-fixes.test.ts 'a decision that could not be handed to the shell is not announced as granted'. Residual: the shell does not ack approval frames, so a write into a half-open socket can still be announced (the finding's 'better' option, not its minimum)."
     }
   },
   {
@@ -143,15 +147,19 @@
     "quote": "  private readonly completed = new Map<string, number>();",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/http-surface.ts",
+      "reason": "the quote does not appear in the file",
       "reported_line": 222
     },
-    "global_id": "2026-10-01-ingest-817#F-005",
+    "global_id": "2026-10-02-ingest-817-r02#F-005",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: http-surface.ts register() compares the new `name#threadId` binding with this.bound and, on a change, deletes completed[sessionId] and sent[sessionId]; deregister clears all three. The books are now per-session sets of exact ids, not a cumulative mark. review-fixes.test.ts 'a topic that is rebound forgets which ids the old binding finished (MINOR-3)' (targeted run, pass): a session acks update N on topic alpha, re-registers as beta, and a delivery with the same update id N on the new topic is sent as an inbound frame instead of resolving silently.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/http-surface.ts register() deletes completed/sent for the session when the name#threadId binding changes (L325-329), deregister clears all three; src/remote/review-fixes.test.ts 'a topic that is rebound forgets which ids the old binding finished'."
     }
   },
   {
@@ -168,15 +176,19 @@
     "quote": "        await this.api.answerCallbackQuery({ callbackQueryId: id }).catch(() => undefined);",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/hub.ts",
+      "reason": "the quote does not appear in the file",
       "reported_line": 419
     },
-    "global_id": "2026-10-01-ingest-817#F-006",
+    "global_id": "2026-10-02-ingest-817-r02#F-006",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: hub.ts receive() no longer awaits answerCallbackQuery. answerCallback() starts the request, races it with a short ANSWER_CALLBACK_TIMEOUT_MS timer, clears the timer in finally and is never awaited inside the serial lock. review-fixes.test.ts 'an answerCallbackQuery that never returns does not hold up receive' (targeted run, pass): receive() returns inside 500 ms against an api whose answerCallbackQuery never settles.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/hub.ts answerCallback() is not awaited in receive() and is raced with ANSWER_CALLBACK_TIMEOUT_MS (5s); src/remote/review-fixes.test.ts 'an answerCallbackQuery that never returns does not hold up receive'."
     }
   },
   {
@@ -193,15 +205,19 @@
     "quote": "      log = new DurableLog<InboundEntry>({ file: this.fileFor(bindingKey), parse: parseEntry });",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/inbound.ts",
+      "reason": "the quote does not appear in the file",
       "reported_line": 87
     },
-    "global_id": "2026-10-01-ingest-817#F-007",
+    "global_id": "2026-10-02-ingest-817-r02#F-007",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: inbound.ts builds the DurableLog with maxEntries: MAX_INBOUND_PER_TOPIC (500), append() returns the count dropped, and hub.receive() raises a delivery-failed event and a status line in the topic naming how many oldest were dropped. review-fixes.test.ts '505 into a topic nobody is reading: the oldest 5 go, the topic is told, the rest are delivered in order' (targeted run, pass): the dropped notice is sent to the thread, and after a hub restart exactly 500 are delivered, first m5 and last m504.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/inbound.ts DurableLog built with maxEntries: MAX_INBOUND_PER_TOPIC (500), append() returns the dropped count and hub.receive() tells the topic; src/remote/review-fixes.test.ts '505 into a topic nobody is reading: the oldest 5 go, the topic is told'."
     }
   },
   {
@@ -214,14 +230,14 @@
     "evidence": "Read src/remote/shell-bridge.ts accept and client.ts onLine/ack ordering at 34bf0f80.",
     "confidence": "high",
     "file": "src/remote/shell-bridge.ts",
-    "line": null,
+    "line": 327,
     "quote": "      this.host.runLine(line);",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 288
     },
-    "global_id": "2026-10-01-ingest-817#F-008",
+    "global_id": "2026-10-02-ingest-817-r02#F-008",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -230,7 +246,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts disable() drops queued tg lines via host.dropQueuedTelegramLines and tells the shell and the topic; src/remote/shell-bridge.test.ts, src/tui/main-queue.test.ts."
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts disable() calls host.dropQueuedTelegramLines() (L268), tells the shell and replies in the topic; src/tui/tui-shell.ts wires it to dropQueuedBySource(mainQueue, TG_SOURCE) in src/tui/main-queue.ts; tests src/remote/shell-bridge.test.ts 'turning off tells the shell and the topic which queued Telegram lines were dropped', src/tui/main-queue.test.ts."
     }
   },
   {
@@ -247,7 +263,7 @@
     "quote": "    this.client = undefined;",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "reason": "the quote matches at least 2 places in the file (lines 237, 260, and the scan stopped there); an anchor chosen among them would be a guess",
       "reported_line": 244
     },
     "class_scope": {
@@ -258,12 +274,16 @@
       ],
       "enumeration_method": "keryx ctx rg 'disable\\(\\)|void .*disable' over src/tui and src/remote at 34bf0f80; the three sites above are the ones that start a close without waiting or wait on an already-started one"
     },
-    "global_id": "2026-10-01-ingest-817#F-009",
+    "global_id": "2026-10-02-ingest-817-r02#F-009",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: shell-bridge.ts keeps `closing`, the promise of the close in flight; disable() called while it is set awaits it and returns false, and enable() awaits it too. The destroy hook and the finally in tui-shell.ts therefore both wait for the real deregister, and stopRemoteForSessionSwitch now says the topic is 'being deleted' and prints 'the topic is deleted' only after the close resolves. shell-bridge.test.ts 'a second disable while the first is still closing waits for the close, and does not close twice' and 'enable while a close is still running waits for it, so two topics are not alive at once' pass, and 'disable records history first, then deregisters; a second disable after it is a no-op' still passes. The old 'a second disable is a no-op' test no longer encodes the race.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts keeps this.closing; a disable() while it is set awaits it (L254-256) and enable() awaits it too; src/tui/tui-shell.ts stopRemoteForSessionSwitch says the topic is deleted only after the close resolves; src/remote/shell-bridge.test.ts 'a second disable while the first is still closing waits for the close, and does not close twice'."
     }
   },
   {
@@ -294,12 +314,16 @@
       ],
       "enumeration_method": "keryx ctx rg 'mainQueue.push|reinsertMainQueueItem|source: TG_SOURCE' over src/tui at 34bf0f80; only the edit reinsert rebuilds an entry field by field and drops source"
     },
-    "global_id": "2026-10-01-ingest-817#F-010",
+    "global_id": "2026-10-02-ingest-817-r02#F-010",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: main-queue.ts adds PendingQueueEdit with an optional source, pendingQueueEditFor(removed, at) and reinsertEditedMainQueueItem(), and tui-shell.ts uses them in editMainQueue (pendingQueueEdit = pendingQueueEditFor(edited.removed, index)) and at the reinsert, so the old field-by-field rebuild is gone. main-queue.test.ts 'editing a Telegram line and re-queuing it keeps source tg, so the drained turn is labelled' (targeted run, pass) edits a tg item, requeues it, drains it with drainIdleMainQueue and sees dispatched[0].source === 'tg'; 'editing a typed line does not gain a source, and an absent source stays absent' passes. The tests exercise the helpers; the shell's use of them was confirmed by reading the two call sites.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/tui/main-queue.ts pendingQueueEditFor()/reinsertEditedMainQueueItem() carry source; src/tui/tui-shell.ts uses both (L7407, L7945); src/tui/main-queue.test.ts 'editing a Telegram line and re-queuing it keeps source tg, so the drained turn is labelled'. The shell call sites are confirmed by reading, not by a TUI-level test."
     }
   },
   {
@@ -316,10 +340,14 @@
     "quote": "                surface.detach(reason);",
     "locator": {
       "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/service.ts",
+      "reason": "the quote matches at least 2 places in the file (lines 95, 166, and the scan stopped there); an anchor chosen among them would be a guess",
       "reported_line": 159
     },
-    "global_id": "2026-10-01-ingest-817#F-011"
+    "global_id": "2026-10-02-ingest-817-r02#F-011",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "operator: decided to keep serve running when it loses the poller race and to reword AC5 to match, instead of making serve exit (flow 376 journal.md: ac-updated AC5 at 2026-10-01T07:56:38Z, ac-confirmed AC5 'criterion reworded to match behavior on operator decision (poll 25)'). The current AC5 text matches src/remote/service.ts onPollerStatus (surface.detach, notice, hub.stop; listener kept)."
+    }
   },
   {
     "id": "F-012",
@@ -338,12 +366,16 @@
       "reason": "the quote does not appear in the file",
       "reported_line": 28
     },
-    "global_id": "2026-10-01-ingest-817#F-012",
+    "global_id": "2026-10-02-ingest-817-r02#F-012",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: src/standard/help-groups.test.ts gains a describe 'remote control is documented where operators look' that reads README.md, docs/docs/cli-reference.md, .metaproject/wiki/architecture/remote-control.md and CHANGELOG.md and requires each to mention remote control, requires three cli-reference phrases (token rotation, the 500 cap, the dropped-lines notice), and requires package.json above 0.3.46. Targeted run of help-groups.test.ts: pass (part of the 147). The documents hold 4, 5, 13 and 3 mentions, so deleting a whole section does not by itself fail the mention test; the phrase checks on cli-reference are the stricter ones. It is a mention-level check, not a content check.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/standard/help-groups.test.ts describe 'remote control is documented where operators look' requires README.md, docs/docs/cli-reference.md, .metaproject/wiki/architecture/remote-control.md and CHANGELOG.md to mention remote control, three cli-reference phrases, and package.json above 0.3.46."
     }
   },
   {
@@ -356,14 +388,14 @@
     "evidence": "Read src/remote/shell-bridge.ts enable/disable and src/remote/client.ts close at 34bf0f80.",
     "confidence": "medium",
     "file": "src/remote/client.ts",
-    "line": null,
+    "line": 231,
     "quote": "    if (this.started && this.name !== undefined) {",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/client.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 195
     },
-    "global_id": "2026-10-01-ingest-817#F-013",
+    "global_id": "2026-10-02-ingest-817-r02#F-013",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -372,7 +404,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/client.ts close() awaits the in-flight register before deregistering; src/remote/review-fixes.test.ts 'the register finishes, then the client deregisters: no orphan topic is left behind'."
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/client.ts close() awaits the in-flight register (this.registering) before checking this.name and deregistering; src/remote/review-fixes.test.ts 'the register finishes, then the client deregisters: no orphan topic is left behind'."
     }
   },
   {
@@ -392,12 +424,16 @@
       "reason": "the quote does not appear in the file",
       "reported_line": 5816
     },
-    "global_id": "2026-10-01-ingest-817#F-014",
+    "global_id": "2026-10-02-ingest-817-r02#F-014",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: stopRemoteForSessionSwitch calls remoteBridge.disable(), and disable() synchronously invokes the new dropQueuedTelegramLines host hook, which tui-shell.ts implements with dropQueuedBySource(mainQueue, TG_SOURCE): the tg entries leave the shell queue before the session is replaced, and the bridge reports them to the shell and the topic. shell-bridge.test.ts 'turning off tells the shell and the topic which queued Telegram lines were dropped' and main-queue.test.ts 'dropQueuedBySource splits the Telegram lines out in queue order and keeps the rest' pass (targeted run). The session-switch call itself was confirmed by reading, not by a TUI test.",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/tui/tui-shell.ts stopRemoteForSessionSwitch calls remoteBridge.disable(), which synchronously runs dropQueuedTelegramLines (shell-bridge.ts L268) so tg entries leave mainQueue before the session is replaced; tests src/remote/shell-bridge.test.ts, src/tui/main-queue.test.ts. The session-switch call site is confirmed by reading, not by a TUI-level test."
     }
   },
   {
@@ -410,14 +446,14 @@
     "evidence": "Read src/remote/shell-bridge.ts assistantText at 34bf0f80 and onAssistantText call sites in agent.ts.",
     "confidence": "medium",
     "file": "src/remote/shell-bridge.ts",
-    "line": null,
+    "line": 353,
     "quote": "    if (text.trim().length > 0) this.lastAssistantText = text;",
     "locator": {
-      "state": "unlocatable",
-      "reason": "no such file at this round's head: src/remote/shell-bridge.ts",
+      "state": "derived",
+      "method": "exact",
       "reported_line": 314
     },
-    "global_id": "2026-10-01-ingest-817#F-015",
+    "global_id": "2026-10-02-ingest-817-r02#F-015",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
@@ -426,7 +462,7 @@
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts toolCall() clears lastAssistantText, wired from src/tui/tui-shell.ts onToolCall; src/remote/shell-bridge.test.ts 'text followed by a tool call is narration...'."
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/remote/shell-bridge.ts toolCall() clears lastAssistantText; src/tui/tui-shell.ts (L4781) calls remoteBridge?.toolCall() from the onToolCall wrapper; tests src/remote/shell-bridge.test.ts 'text followed by a tool call is narration...' and 'a failed turn without text says so'."
     }
   },
   {
@@ -446,12 +482,16 @@
       "reason": "the quote matches at least 2 places in the file (lines 7398, 7425, and the scan stopped there); an anchor chosen among them would be a guess",
       "reported_line": 7382
     },
-    "global_id": "2026-10-01-ingest-817#F-016",
+    "global_id": "2026-10-02-ingest-817-r02#F-016",
     "verification": {
       "verdict": "refuted",
       "method": "execution",
       "evidence": "at 4f1326d2: tui-shell.ts removeMainQueue reads the item at the index and, when its source is TG_SOURCE, calls remoteBridge.queuedLineRemoved(question) before removing it; shell-bridge.ts queuedLineRemoved pushes an event and replies in the topic that the message was removed from the queue and will not run. shell-bridge.test.ts 'removing a Telegram line from the shell queue tells its topic' passes (targeted run).",
       "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 4f1326d2 (identical at PR head b55951eb): src/tui/tui-shell.ts removeMainQueue (L7392-7397) calls remoteBridge?.queuedLineRemoved(question) for TG_SOURCE items; src/remote/shell-bridge.ts queuedLineRemoved replies in the topic; src/remote/shell-bridge.test.ts 'removing a Telegram line from the shell queue tells its topic'."
     }
   }
 ]
