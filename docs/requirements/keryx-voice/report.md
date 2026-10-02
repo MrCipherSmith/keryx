@@ -37,7 +37,7 @@ First follow-up flow: inbound voice in the topic, transcribed locally and delive
 - `no-live-network.test.ts` allows `fetch` only in `bot-api-http.ts`.
 - ffmpeg, opusenc, piper, whisper and espeak-ng are absent on this machine.
 
-## 3. Speech-to-text options (a 15 s message)
+## 3. Speech-to-text options (a 15 s message; cloud background, superseded)
 
 | Option | Type | Size | Dependency | Price | Per message |
 |---|---|---|---|---|---|
@@ -50,11 +50,11 @@ First follow-up flow: inbound voice in the topic, transcribed locally and delive
 - Russian and English: all are multilingual. Vosk small-ru WER 9.8 (doc). Russian quality of whisper.cpp tiny/base is unverified. Latency was not measured for any option.
 - Sources (doc): console.groq.com/docs/speech-to-text, the Yandex Cloud pricing page, costgoat.com, alphacephei.com/vosk/models.
 
-## 4. Text-to-speech options (a 300 character reply)
+## 4. Text-to-speech options (a 300 character reply; cloud background, superseded)
 
 | Option | Type | Size | Dependency | Price | RU / EN | Per reply | Output |
 |---|---|---|---|---|---|---|---|
-| Piper | local | 52 MB + about 60 MB per voice | spawn a binary | $0 | both | $0 | WAV, needs an encoder |
+| Piper (helyx build) | local | 52 MB + about 60 MB per voice (the sherpa int8 export in section 8 is about 21 MB) | spawn a binary | $0 | both | $0 | WAV, needs an encoder |
 | Yandex v1 | cloud | 0 | `fetch` | $11 / M chars | RU best, EN available | $0.0033 | `oggopus`, usable directly |
 | OpenAI tts-1 | cloud | 0 | `fetch` | $15 / M chars | both | $0.0045 | `opus`, usable directly |
 | Groq Orpheus | cloud | 0 | `fetch` | $22 / M chars | EN only | $0.0066 | WAV, 200 character cap |
@@ -64,12 +64,12 @@ First follow-up flow: inbound voice in the topic, transcribed locally and delive
 - Kokoro and espeak-ng were considered. Kokoro is not recommended: it brings back the heavy stack keryx already removed.
 - Cloud TTS latency and Opus encoding latency were not measured.
 
-## 5. Dependency paths
+## 5. Dependency paths (cloud background, superseded)
 
 - No new npm dependency: Groq STT with the OGG sent straight in, Yandex `oggopus` or OpenAI `opus` for TTS, and a multipart `sendVoice`. 0 MB and 0 packages added, with about 300-400 lines of new source (estimate).
 - Smallest dependency: `@evan/opus`, 1 package and 3.6 MB (measured), only needed once a local engine produces WAV. An Ogg muxer would be extra in-house code.
 
-## 6. Smallest first step: expected outcome of follow-up flow 1
+## 6. Smallest first step: expected outcome of follow-up flow 1 (cloud background, superseded: the first step is local, see Recommendation)
 
 A voice message from an allowed user in a paired topic is downloaded (`getFile`, 20 MB cap, token scrubbed), transcribed by Groq whisper-large-v3-turbo through one `fetch` call, and delivered as `🎤 <text>` exactly once, with no duplicates after a restart. The transcript is echoed in the topic. With no key, or on any failure, the topic gets one plain message and the poller is never blocked. `dependencies` stays `{}`. `no-live-network.test.ts` is extended by one named file. Tests use fakes only. The TUI shows the voice status.
 
@@ -141,4 +141,4 @@ Native sizes are registry data; only linux-x64 was installed and run. Not measur
 
 ## Not done
 
-Cloud calls were not made (sections 3-6 are registry and documentation data). The measurements in section 8 are for Linux x64 only; arm64 and macOS were not run.
+Cloud calls were not made (sections 3-6 are registry and documentation data). The measurements in section 8 are for Linux x64 only; arm64 and macOS were not run, and Windows was not investigated.
