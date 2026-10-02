@@ -21,3 +21,4 @@
 - 2026-10-02T19:50:46.064Z - task-done: T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)
 - 2026-10-02T20:03:35.526Z - task-done: T9: keryx permissions list|remove and /permissions modal (AC11)
 - 2026-10-02T20:19:50.776Z - task-done: T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)
+- 2026-10-02T20:25:30.451Z - task-done: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)

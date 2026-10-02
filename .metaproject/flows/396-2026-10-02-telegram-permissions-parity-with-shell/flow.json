@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T20:19:50.776Z",
+  "updatedAt": "2026-10-02T20:25:30.451Z",
   "source": {
     "type": "description",
     "ref": null
@@ -209,7 +209,7 @@
       "id": "T11",
       "title": "Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6",
         "T7",
@@ -223,7 +223,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -345,6 +346,11 @@
       "at": "2026-10-02T20:19:50.776Z",
       "event": "task-done",
       "detail": "T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)"
+    },
+    {
+      "at": "2026-10-02T20:25:30.451Z",
+      "event": "task-done",
+      "detail": "T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)"
     }
   ],
   "acKinds": {

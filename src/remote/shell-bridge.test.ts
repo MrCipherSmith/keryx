@@ -491,6 +491,60 @@ test("AC5: the status carries the unconfirmed-approvals count only while it is a
   expect(h.bridge.status().unconfirmedApprovals).toBeUndefined();
 });
 
+test("AC15: the user who sent the line is known for the turn, and only for a Telegram one", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.client().options.onLine("do the thing", META);
+  h.bridge.turnStarted(TG_SOURCE);
+  expect(h.bridge.telegramTurnUserId).toBe(9);
+  await h.bridge.turnSettled({ failed: false });
+  expect(h.bridge.telegramTurnUserId).toBeUndefined();
+  h.bridge.turnStarted(undefined);
+  expect(h.bridge.telegramTurnUserId).toBeUndefined();
+});
+
+test("AC15: an approval record lands in the event ring as an approval, redacted and capped", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.recordApproval(`auto-approved (trust, user 9): curl -H "x-api-key: ${SECRET}" https://example.com ${"y".repeat(500)}`);
+  const events = h.bridge.status().events;
+  const last = events[events.length - 1];
+  expect(last?.kind).toBe("approval");
+  expect(last?.text).toContain("auto-approved (trust, user 9)");
+  expect(JSON.stringify(events)).not.toContain(SECRET);
+  expect((last?.text ?? "").length).toBeLessThan(400);
+});
+
+test("AC8: the topic is asked for the configured wait, and a dropped stream is a denial", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ approvalTimeoutMs: 900_000 });
+  expect(await h.bridge.requestApproval("run ls")).toBe("allow");
+  expect(h.client().approvals[0]?.timeoutMs).toBe(900_000);
+  h.client().approvalAnswer = "throw";
+  expect(await h.bridge.requestApproval("run ls")).toBe("deny");
+  const events = h.bridge.status().events.map((event) => event.text);
+  expect(events.some((text) => text.startsWith("denied"))).toBe(true);
+});
+
+test("AC9/AC10: only an offered pattern can come back as Always, and the press carries the user id", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { askApproval: (text: string, ms: number, opts: { remember?: string }) => Promise<{ decision: string; approvalId?: string; fromId?: number }> };
+  const seen: Array<string | undefined> = [];
+  client.askApproval = async (_text, _ms, opts) => {
+    seen.push(opts.remember);
+    return { decision: "always", approvalId: "a1", fromId: 9 };
+  };
+  const offered = await h.bridge.askApproval("run docker ps", { remember: "docker ps" });
+  expect(offered).toMatchObject({ decision: "allow", always: true, approvalId: "a1", fromId: 9 });
+  const notOffered = await h.bridge.askApproval("run docker ps");
+  expect(notOffered).toMatchObject({ decision: "allow", always: false });
+  expect(seen).toEqual(["docker ps", undefined]);
+  const events = h.bridge.status().events.map((event) => event.text);
+  expect(events).toContain("allowed (always) in the topic by user 9");
+});
+
 test("applyPolicy: the bridge's effective values change at once, and the mode of the shell is not part of it", async () => {
   const h = harness({ runTimeoutMs: 0 });
   await h.bridge.enable();
