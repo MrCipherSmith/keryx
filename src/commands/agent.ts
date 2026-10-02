@@ -66,7 +66,7 @@ import {
   type UsageAnchor,
 } from "../harness/provider/context-guard";
 import { compactWithFallback } from "../session/compact";
-import { pruneToolOutputs, type PruneResult } from "../session/prune";
+import { isClearedToolResult, pruneToolOutputs, type PruneResult } from "../session/prune";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
@@ -2701,6 +2701,42 @@ async function runAgentTurnCore(
   const lastErrorByHash = new Map<string, string>();
   const errorStreakByHash = new Map<string, number>();
   const warnedFailingHashes = new Set<string>();
+  /**
+   * Flow 387 T24: the signature of every call admitted this turn, by call id. Pruning, collapse
+   * and compaction replace an old result with "re-read the saved file"; a model that does so
+   * issues the SAME call again, which must not count as a loop while the earlier result is no
+   * longer in context. {@link forgetHiddenHashes} reads this to find which signatures lost
+   * every visible result.
+   */
+  const hashByCallId = new Map<string, string>();
+  /**
+   * Flow 387 T24: call after any history rewrite (prune, collapse, compaction, in-turn cut).
+   * A signature none of whose results is still present as a live (not cleared) tool message
+   * has its attempt count and identical-error streak reset, so re-reading what the harness
+   * hid is not refused. A signature with a result still in context keeps its count, so a
+   * genuine loop (identical calls the model can see) is still stopped. Reasoning stripping
+   * leaves every result visible, so it resets nothing.
+   */
+  const forgetHiddenHashes = (): void => {
+    if (hashByCallId.size === 0) return;
+    const visible = new Set<string>();
+    for (const m of history) {
+      if (m.role !== "tool" || m.toolCallId === undefined || isClearedToolResult(m)) continue;
+      const h = hashByCallId.get(m.toolCallId);
+      if (h !== undefined) visible.add(h);
+    }
+    for (const h of new Set(hashByCallId.values())) {
+      if (visible.has(h)) continue;
+      budget.attempts.delete(h);
+      lastErrorByHash.delete(h);
+      errorStreakByHash.delete(h);
+      warnedFailingHashes.delete(h);
+    }
+    // Drop the bookkeeping of ids that no longer have a visible result.
+    for (const [id, h] of [...hashByCallId]) {
+      if (!visible.has(h)) hashByCallId.delete(id);
+    }
+  };
   // Scoped to THIS turn only (this one `runAgentTurnCore` call) — matches how
   // every competitor harness we compared against (Codex's Guardian, grok-build's
   // Auto Mode classifier) re-evaluates untrusted-content risk per turn/action
@@ -2893,6 +2929,7 @@ async function runAgentTurnCore(
     const pruneResult = await pruneHistory(io, deps, history, pruneSessionDir(options));
     if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
+      forgetHiddenHashes(); // flow 387 T24: re-reading a cleared result is not a repeat
       system(
         `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ${pruneResult.reasoningStripped} old reasoning replays dropped, ~${pruneResult.savedTokens} tokens) in the request.\n`,
       );
@@ -2914,6 +2951,7 @@ async function runAgentTurnCore(
         // comment) means every caller holds this exact array reference across
         // the whole turn.
         history.splice(0, history.length, ...compacted.context);
+        forgetHiddenHashes(); // flow 387 T24: compaction / in-turn cut removed old results
         deps.onContextCompaction?.({
           removed: compacted.removed,
           context: compacted.context,
@@ -3138,6 +3176,7 @@ async function runAgentTurnCore(
           const overflowPrune = await pruneHistory(io, deps, history, pruneSessionDir(options), 1);
           if (overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             usageAnchors.delete(history);
+            forgetHiddenHashes(); // flow 387 T24
           }
           // Flow 387 review r1 F-006: the estimator just under-measured (or the window is
           // unknown), so the usual 85%-of-window test cannot pick the cut. Aim for 70% of the
@@ -3163,6 +3202,7 @@ async function runAgentTurnCore(
           if (!compacted.noop) {
             await firePreCompactBestEffort(deps, overflowEstimate);
             history.splice(0, history.length, ...compacted.context);
+            forgetHiddenHashes(); // flow 387 T24
             deps.onContextCompaction?.({
               removed: compacted.removed,
               context: compacted.context,
@@ -3465,7 +3505,9 @@ async function runAgentTurnCore(
     // rather than threading live results back into a synchronous pre-pass.
     const reservationByCallId = new Map<string, ReturnType<typeof reserveToolAttempt>>();
     for (const call of calls) {
-      reservationByCallId.set(call.id, reserveToolAttempt(budget, call.name, call.input));
+      const reserved = reserveToolAttempt(budget, call.name, call.input);
+      reservationByCallId.set(call.id, reserved);
+      if (reserved.ok) hashByCallId.set(call.id, reserved.hash); // flow 387 T24
     }
     const spawnConcurrencyCandidates = calls.filter(
       (call) => call.name === "spawn_subagent" && reservationByCallId.get(call.id)?.ok === true,
