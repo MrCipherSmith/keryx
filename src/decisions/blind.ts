@@ -52,6 +52,12 @@ export const DEFAULT_IRREVERSIBLE: readonly string[] = [
   "заливк",
   "залью",
   "накат",
+  // "зарелизить" and "релизнуть" already contain "релиз"
+  "затег",
+  "тегнут",
+  "тегани",
+  "тегнем",
+  "тегну",
 ];
 
 /**
@@ -72,6 +78,12 @@ export const STRONG_PATTERNS: readonly RegExp[] = [
   /(?:^|[^\p{L}\p{N}])tag\p{L}*\s+(?:the\s+|this\s+|it\s+as\s+|it\s+)?(?:version|build|head|commit)(?![\p{L}\p{N}])/u,
   /т[еэ]г\p{L}*\s+(?:\S+\s+){0,2}?(?:верси|релиз|v?\d+\.\d+)/u,
   /верси\p{L}*\s+(?:\S+\s+){0,2}?т[еэ]г/u,
+  // cutting or bumping a version is releasing it: "cut 0.3.62", "bump the version", "cut a tag"
+  /(?:^|[^\p{L}\p{N}])cut\s+(?:\S+\s+){0,2}?(?:v\d+\.\d+|v?\d+\.\d+\.\d+|version|build|tag|release)(?![\p{L}\p{N}])/u,
+  /(?:^|[^\p{L}\p{N}])bump\p{L}*\s+(?:\S+\s+){0,3}?(?:version|release|build|v\d+\.\d+|v?\d+\.\d+\.\d+|major|minor|patch)(?![\p{L}\p{N}])/u,
+  /(?:^|[^\p{L}\p{N}])tag\s+(?:it|this|that|them)(?![\p{L}\p{N}])(?=\s*(?:$|[?!.,;:)])|\s+(?:now|too|and|as|with|then)(?![\p{L}\p{N}]))/u,
+  /(?:подн\p{L}*|повыс\p{L}*)\s+(?:\S+\s+){0,2}?верси/u,
+  /верси\p{L}*\s+(?:\S+\s+){0,2}?(?:подн|повыс)/u,
   // sending something to a package registry
   /(?:^|[^\p{L}\p{N}])(?:to|into|в|на)\s+(?:the\s+)?(?:npm|pypi|crates\.io|rubygems|registry)(?![\p{L}\p{N}])/u,
   // "в прод", "на продакшн" (and not "в продукт")

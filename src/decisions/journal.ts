@@ -155,9 +155,14 @@ export async function recordReason(cwd: string, id: string, text: string | undef
   return true;
 }
 
-/** Inside a flow, every answer also leaves one line in that flow's journal.md (AC9). Never throws. */
+/**
+ * Inside a flow, every answer also leaves one line in that flow's journal.md (AC9).
+ * Never throws. A flow that was only inferred (the one flow in progress, named by
+ * neither KERYX_FLOW nor the branch) is a guess: the record stays in the project-wide
+ * journal with its `inferred` flag, and nothing is written into the flow's own file.
+ */
 async function journalToFlow(cwd: string, open: OpenRecord, answer: AnswerRecord, matched: boolean | null): Promise<void> {
-  if (open.flow === null) return;
+  if (open.flow === null || open.flowSource === "inferred") return;
   try {
     const dir = await resolveFlowDir(cwd, open.flow);
     const verdict = matched === null ? "no recommendation" : matched ? "followed the recommendation" : `recommended ${open.recommendation?.optionId ?? "?"}`;

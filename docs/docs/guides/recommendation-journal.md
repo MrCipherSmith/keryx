@@ -23,8 +23,9 @@ flow, the answer also adds one line to that flow's `journal.md`; outside a flow
 only the project-wide journal is written. The flow is `KERYX_FLOW` when it is set,
 else the flow named by the git branch (`flow-392`, or the flow's slug), else the
 only flow in progress. The last one is a guess: it is recorded as `inferred`
-(`flowSource` on the record is `env`, `branch` or `inferred`) and the report marks
-those flows `(inferred)` and counts them. The stage is the kind of the task in progress, or the
+(`flowSource` on the record is `env`, `branch` or `inferred`), the report marks
+those flows `(inferred)` and counts them, and nothing is written into that flow's
+own `journal.md`, because attribution that is a guess must not write into a flow. The stage is the kind of the task in progress, or the
 flow's status.
 
 ## Blind questions
@@ -46,7 +47,9 @@ unused import", "remove dead code", "force a type") are not mistaken for a relea
   Russian root matches inside a word, so `запушить` counts). Strong patterns
   count too: `git reset --hard`, `clean -f`, `checkout --`, `rm -rf`,
   `branch -D`, `--force`, tagging a version (`tag v1.4.0`, `тег версии`),
-  publishing to a registry (`to npm`, `в npm`) and going to production (`в прод`,
+  cutting or bumping a version (`cut 0.3.62`, `bump the version`, `tag it`,
+  `поднять версию`, `затегать`, `зарелизить`), publishing to a registry (`to npm`,
+  `в npm`) and going to production (`в прод`,
   `на продакшн`). Add your own words in
   `.metaproject/decisions.config.json`; they are strong too, and the file extends
   the built-in list and cannot shorten it:

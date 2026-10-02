@@ -223,6 +223,7 @@ The journal is one file per repository, .metaproject/data/decisions/journal.json
 under the main checkout (every worktree shares it; it is git-ignored). Inside a
 flow (--flow <id>, KERYX_FLOW, the flow's branch, or the only flow in progress;
 the last is a guess, recorded as "inferred" and shown so in the report)
-the answer also adds a line to that flow's journal.md. A failure here never
+the answer also adds a line to that flow's journal.md, except for an inferred
+flow, which only stays in the project-wide journal. A failure here never
 stops the question.`);
 }
