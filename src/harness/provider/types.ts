@@ -301,6 +301,15 @@ export interface NormalizedRequest {
   /** Tool definitions with schemas and risk metadata. */
   tools?: NormalizedToolDefinition[];
   options?: NormalizedRequestOptions;
+  /**
+   * Flow 387 T5: a stable key for the provider's prompt-prefix cache — the
+   * shell session id. keryx re-sends the full history every round, so a
+   * provider that routes by this key (OpenAI Responses / Codex
+   * `prompt_cache_key`) can serve the shared prefix from cache. Absent when
+   * the caller has no session (never invented by an adapter); adapters that
+   * have no such field ignore it.
+   */
+  promptCacheKey?: string;
   budget: NormalizedBudget;
   /** Stream mode. */
   stream: boolean;

@@ -84,6 +84,23 @@ test("subscription login -> saved grant -> native factory -> streamed answer and
   expect(body.input).toContainEqual({ type: "function_call_output", call_id: "call_fixtureWeather0001", output: "sunny" });
 });
 
+// Flow 387 T5 (AC8): `prompt_cache_key` is the session id from the request —
+// stable across the rounds of one session, different between sessions, absent
+// (never invented) when the request carries none, and clamped to 64 chars.
+test("codex requests carry prompt_cache_key from the request, stable per session", async () => {
+  const root = configDir(); saved(root);
+  const bodies: Record<string, unknown>[] = [];
+  const fetch = mockFetch((_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(textStream); });
+  const provider = makeProvider("openai-codex", "gpt-5.4", { fetch, configDir: root, env: {} });
+  await collect(provider, { ...request(), promptCacheKey: "session-a" });
+  await collect(provider, { ...request(), promptCacheKey: "session-a", requestId: "round-2" });
+  await collect(provider, { ...request(), promptCacheKey: "session-b" });
+  await collect(provider, request());
+  await collect(provider, { ...request(), promptCacheKey: "x".repeat(100) });
+  expect(bodies.map((body) => body.prompt_cache_key)).toEqual(["session-a", "session-a", "session-b", undefined, "x".repeat(64)]);
+  expect(bodies[0]).toMatchObject({ store: false, tool_choice: "auto" });
+});
+
 test("long-running provider reads the new saved credential on every stream", async () => {
   const root = configDir(); saved(root, "first-access");
   const headers: string[] = [];

@@ -4537,6 +4537,31 @@ test("REGRESSION: a plan published FOR APPROVAL ends the turn — the continuati
   expect(said).not.toContain("still has actionable items");
 });
 
+// Flow 387 T5: every request of a live session carries the session id as the
+// provider prompt-cache key (stable across rounds); no session -> no key.
+test("flow 387 T5: requests carry promptCacheKey = the session id, and none without a session", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const deps = (provider: AgentDeps["provider"]): AgentDeps => ({
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  });
+  const withSession = scriptedProvider([[{ kind: "text_delta", text: "one" }, { kind: "model_end" }]]);
+  await runAgentTurn(collectingIo().io, deps(withSession.provider), [], "hello", { slateSession: { dir, cwd, opened: true } });
+  await runAgentTurn(collectingIo().io, deps(withSession.provider), [], "again", { slateSession: { dir, cwd, opened: true } });
+  expect(withSession.requests.map((r) => r.promptCacheKey)).toEqual([path.basename(dir), path.basename(dir)]);
+
+  const without = scriptedProvider([[{ kind: "text_delta", text: "one" }, { kind: "model_end" }]]);
+  await runAgentTurn(collectingIo().io, deps(without.provider), [], "hello");
+  expect(without.requests).toHaveLength(1);
+  expect("promptCacheKey" in without.requests[0]!).toBe(false);
+});
+
 test("the control: with planFollowThrough opted in, a plan with real work left still gets the single follow-through round", async () => {
   const dir = await tempSlateDir();
   const cwd = await tempProjectCwd();

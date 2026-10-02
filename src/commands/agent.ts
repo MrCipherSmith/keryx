@@ -22,6 +22,7 @@ import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import { randomBytes } from "node:crypto";
+import { basename } from "node:path";
 import { aliasHookToolName, derivePolicyProfileId, type ShellHookContext } from "./agent-hooks";
 import { tightenOutcome } from "../harness/hooks/compose";
 import { IMPACT_EVIDENCE_HOOK_ID } from "../harness/hooks/builtins";
@@ -52,7 +53,7 @@ import type {
   ProviderPort,
   ProviderReplayItem,
 } from "../harness/provider/types";
-import { estimateRequestTokens, needsCompaction } from "../harness/provider/context-guard";
+import { estimateRequestTokens, isContextOverflowError, needsCompaction } from "../harness/provider/context-guard";
 import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
@@ -1107,6 +1108,22 @@ function buildRequestOptions(
       ...(reasoning !== undefined ? { reasoning } : {}),
     },
   };
+}
+
+/**
+ * Flow 387 T5: the provider prompt-cache key for a turn — the live session id.
+ * The slate ref's `dir` is `sessionDir(project, sessionId)`, so its basename IS
+ * the session id; every live surface (readline shell, TUI, `/goal`, harness
+ * one-shot) already threads `slateSession`, which makes this one derivation
+ * cover them all instead of a per-call-site option that one site could forget.
+ * Absent ref (no session) -> `{}`: never a made-up key.
+ */
+function buildPromptCacheKey(
+  slateSession: SlateSessionRef | undefined,
+): { promptCacheKey: string } | Record<string, never> {
+  if (slateSession === undefined) return {};
+  const id = basename(slateSession.dir);
+  return id === "" ? {} : { promptCacheKey: id };
 }
 
 /**
@@ -2639,6 +2656,11 @@ async function runAgentTurnCore(
   // run this turn, a later toolless round is a normal wrap-up/summary reply,
   // not the stalled shape the reprompt targets, so it must not fire again.
   let turnExecutedToolCall = false;
+  // Flow 387 T6: true once THIS round has already been retried after a provider
+  // context-overflow rejection (compact once, retry once). Reset the moment a
+  // round completes without an error, so a later round can recover again but a
+  // retry that overflows a second time ends the turn instead of looping.
+  let overflowRetried = false;
   for (;;) {
     if (roundState.round >= roundState.maxRounds) {
       if (subagentBudget !== undefined) {
@@ -2703,6 +2725,7 @@ async function runAgentTurnCore(
       tools: toolDefs,
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
       ...buildRequestOptions(deps, reasoningEffort),
+      ...buildPromptCacheKey(options.slateSession),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -2755,6 +2778,9 @@ async function runAgentTurnCore(
     const nameById = new Map<string, string>();
     const calls: PendingCall[] = [];
     let errored = false;
+    // Flow 387 T6: the round's normalized provider error, held back (not yet
+    // printed) when it is a context overflow that may still be recovered.
+    let pendingOverflowError: NormalizedError | undefined;
 
     try {
       const streamOptions = {
@@ -2821,7 +2847,11 @@ async function runAgentTurnCore(
             reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
           }
         } else if (event.kind === "provider_error") {
-          system(formatProviderErrorMessage(event.error));
+          if (!overflowRetried && isContextOverflowError(event.error)) {
+            pendingOverflowError = event.error;
+          } else {
+            system(formatProviderErrorMessage(event.error));
+          }
           errored = true;
           break;
         } else if (event.kind === "model_end") {
@@ -2883,8 +2913,34 @@ async function runAgentTurnCore(
       return {};
     }
     if (errored) {
+      // Flow 387 T6: a provider context-overflow rejection (the window was
+      // unknown or the estimate undershot, so the pre-request guard did not
+      // fire) is recovered ONCE: compact, then retry the same round. Only when
+      // the failed round produced no output of its own, and only when
+      // compaction actually shrinks something — a noop surfaces the error now.
+      if (pendingOverflowError !== undefined) {
+        if (assistantMessage === undefined && calls.length === 0) {
+          const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
+          const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+          if (!compacted.noop) {
+            await firePreCompactBestEffort(deps, overflowEstimate);
+            history.splice(0, history.length, ...compacted.context);
+            deps.onContextCompaction?.({
+              removed: compacted.removed,
+              context: compacted.context,
+              estimate: overflowEstimate,
+            });
+            overflowRetried = true;
+            roundState.round -= 1; // the retry is the same round, not a new one
+            system("\n[compact] Provider rejected the request as too large; compacted the context, retrying once.\n");
+            continue;
+          }
+        }
+        system(formatProviderErrorMessage(pendingOverflowError));
+      }
       return {};
     }
+    overflowRetried = false;
     if (calls.length === 0) {
       // Flow 347 T6 (AC8): a round in THIS turn already executed a tool call
       // (`turnExecutedToolCall`), or this toolless reply is itself a

@@ -575,6 +575,14 @@ export class OpenAiProvider implements ProviderPort {
       // configured output budget therefore cannot reach this surface; the
       // turn budget still bounds the round on the keryx side.
       ...(codex === undefined ? { max_output_tokens: request.budget.maxOutputTokens } : { store: false, tool_choice: "auto", parallel_tool_calls: true, tools: [] }),
+      // Flow 387 T5: `prompt_cache_key` = the session id (from the request,
+      // never invented here), so the provider routes every round of a session
+      // to the same prefix cache. Sent on both branches (Codex and the native
+      // Responses API both accept it); absent when the caller has no session.
+      // Clamped to 64 chars — the documented ceiling (pi does the same).
+      ...(request.promptCacheKey !== undefined && request.promptCacheKey !== ""
+        ? { prompt_cache_key: request.promptCacheKey.slice(0, 64) }
+        : {}),
       // `temperature` stays conditional: genuinely absent (not merely
       // defaulted) on every request until an operator configures one (AC3).
       // NEVER sent alongside `reasoning` below — the Responses API 400s a
