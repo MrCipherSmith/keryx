@@ -38,11 +38,25 @@ export interface OutboundEntry {
   createdAt: number;
 }
 
+/** What Telegram answered for one sent part: where the message lives, so it can be edited later. */
+export interface SentMessageInfo {
+  messageId: number;
+  chatId: number;
+  threadId?: number;
+  /** The plain (pre-HTML) text of the part that was sent. */
+  text: string;
+}
+
 export interface OutboundMessage {
   chatId: number;
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /**
+   * Called once, in memory only, after the LAST part (the one that carries the keyboard) was
+   * sent. Not durable: a restart resends the entry without it, and the caller must cope.
+   */
+  onSent?: (info: SentMessageInfo) => void;
 }
 
 export interface FlushResult {
@@ -97,6 +111,7 @@ export class OutboundQueue {
   private readonly onDrop: (entry: OutboundEntry, reason: string) => void;
   private readonly onFallback: (entry: OutboundEntry) => void;
   private readonly retryDelayMs: number;
+  private readonly sentHooks = new Map<string, (info: SentMessageInfo) => void>();
   private blockedUntil = 0;
   private flushing: Promise<FlushResult> | undefined;
 
@@ -143,8 +158,12 @@ export class OutboundQueue {
         ...(message.keyboard === undefined || index !== parts.length - 1 ? {} : { keyboard: message.keyboard }),
         createdAt: this.now(),
       };
+      if (message.onSent !== undefined && index === parts.length - 1) {
+        this.sentHooks.set(entry.id, message.onSent);
+      }
       const { dropped } = this.log.add(entry);
       for (const gone of dropped) {
+        this.sentHooks.delete(gone.id);
         this.onDrop(gone, "outbound queue is full; oldest message dropped");
       }
       entries.push(entry);
@@ -157,6 +176,7 @@ export class OutboundQueue {
     let removed = 0;
     for (const entry of this.log.pending()) {
       if (entry.chatId === chatId && entry.threadId === threadId) {
+        this.sentHooks.delete(entry.id);
         this.log.ack(entry.id);
         removed += 1;
       }
@@ -174,6 +194,24 @@ export class OutboundQueue {
     return this.flushing;
   }
 
+  private notifySent(entry: OutboundEntry, messageId: number): void {
+    const hook = this.sentHooks.get(entry.id);
+    if (hook === undefined) {
+      return;
+    }
+    this.sentHooks.delete(entry.id);
+    try {
+      hook({
+        messageId,
+        chatId: entry.chatId,
+        ...(entry.threadId === undefined ? {} : { threadId: entry.threadId }),
+        text: entry.text,
+      });
+    } catch {
+      // An observer that throws must never cost the operator the message or block the queue.
+    }
+  }
+
   private async run(): Promise<FlushResult> {
     let sent = 0;
     let dropped = 0;
@@ -187,7 +225,7 @@ export class OutboundQueue {
         return { sent, dropped, remaining: this.log.size, retryInMs: wait, stoppedBy: "rate limited" };
       }
       try {
-        await sendHtml(
+        const result = await sendHtml(
           this.api,
           {
             chatId: entry.chatId,
@@ -199,6 +237,7 @@ export class OutboundQueue {
         );
         this.log.ack(entry.id);
         sent += 1;
+        this.notifySent(entry, result.message_id);
       } catch (error) {
         const description = describe(error);
         if (isBotApiError(error) && error.kind === "rate-limited") {
@@ -210,6 +249,7 @@ export class OutboundQueue {
           return { sent, dropped, remaining: this.log.size, retryInMs: this.retryDelayMs, stoppedBy: description };
         }
         this.log.ack(entry.id);
+        this.sentHooks.delete(entry.id);
         dropped += 1;
         this.onDrop(entry, description);
       }

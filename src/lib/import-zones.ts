@@ -254,6 +254,10 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // owns no project state of its own beyond its snapshot and delivery files,
   // and only `commands/` and `tui/` import it, so it is a client-zone leaf.
   { segment: "scheduler", zone: "client" },
+  // Flow 387: tests that keep the docs in step with the code (the Telegram command lists against
+  // `src/remote/command-gateway.ts`). It holds only tests, reads the markdown files, and imports a
+  // client-zone module, so it is a client-zone leaf; nothing imports it.
+  { segment: "docs", zone: "client" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

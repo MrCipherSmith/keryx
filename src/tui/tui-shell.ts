@@ -71,6 +71,8 @@ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { BUSY_REASON } from "../remote/command-gateway";
+import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
   type ChannelsPanelHandle,
@@ -82,6 +84,7 @@ import {
 } from "./channels-surface";
 import {
   isRemoteControlCommand,
+  commandEchoText,
   labelTelegramLine,
   mountRemotePanel,
   openRemoteControl,
@@ -212,6 +215,7 @@ import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
 import {
   buildSessionInfoSnapshot,
+  formatSessionInfoText,
   isSessionInfoCommand,
   openSessionInfo,
 } from "./session-info";
@@ -4534,6 +4538,23 @@ export async function launchTuiAgentShell(opts: {
      * external run has its own sidebar row and inspector, and awaiting it here
      * would block the composer for the length of a vendor run.
      */
+    // Flow 387: a slash command that finishes later than its handler returns (an async report)
+    // registers that work here. A long delegated run does not: it runs alongside the shell, and
+    // the commands from the topic go one at a time. A command run for the Telegram topic waits for it, so
+    // the topic gets the result and not only the first progress line. Failures are kept, not thrown:
+    // they decide whether the command counts as failed.
+    const commandWork = new Set<Promise<unknown>>();
+    const commandWorkFailures: string[] = [];
+    const trackCommandWork = (work: () => Promise<unknown>): void => {
+      const settled: Promise<unknown> = work()
+        .catch((error: unknown) => {
+          commandWorkFailures.push(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          commandWork.delete(settled);
+        });
+      commandWork.add(settled);
+    };
     const runDelegate = (line: string): void => {
       const parsed = parseDelegateCommand(line.trim().replace(/^\/\S+\s*/, ""));
       if (!parsed.ok) {
@@ -5030,7 +5051,7 @@ export async function launchTuiAgentShell(opts: {
     };
     /** Bare `/external`: the full status block, freshly read. */
     const showExternalStatus = (): void => {
-      void loadExternalStatus()
+      trackCommandWork(() => loadExternalStatus()
         .then((status) => {
           externalStatus = status;
           refreshExternalSidebar();
@@ -5040,7 +5061,7 @@ export async function launchTuiAgentShell(opts: {
         })
         .catch((error: unknown) => {
           io.onSystem?.(`external: ${error instanceof Error ? error.message : String(error)}\n`);
-        });
+        }));
     };
 
     // Approval gate: `shell_exec` (remembered patterns) + `spawn_subagent` (MAE).
@@ -5839,6 +5860,13 @@ export async function launchTuiAgentShell(opts: {
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
     const stopRemoteForSessionSwitch = (): void => {
+      // Flow 387 (AC17): a `/new`, `/clear` or `/resume` typed in the Telegram topic keeps the
+      // topic. The history interval closes on the session being left; `sessionEntered` opens
+      // the next one right after the live session is replaced.
+      if (remoteBridge?.keepingTopic === true) {
+        remoteBridge.sessionLeaving();
+        return;
+      }
       if (remoteBridge?.active !== true) return;
       // The close is asynchronous (it deregisters, which deletes the topic): say it is
       // being turned off now, and that the topic is gone only once it really is.
@@ -5861,6 +5889,7 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -6383,6 +6412,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -6398,8 +6428,12 @@ export async function launchTuiAgentShell(opts: {
       return true;
     };
 
+    // `/resume` and `/sessions`. The Telegram topic's picker (flow 387, AC17) reaches the same body
+    // with the chosen session pre-selected through `pendingResumeTarget`, so there is one resume path.
+    let pendingResumeTarget: SessionSummary | undefined;
     const resumeSessionInteractive = async (): Promise<void> => {
-      const found = await pickRecentSession();
+      const found = pendingResumeTarget ?? (await pickRecentSession());
+      pendingResumeTarget = undefined;
       if (found === undefined) {
         return;
       }
@@ -8067,7 +8101,8 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
-            content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
+            // Flow 387: a command from the Telegram topic says so (`tg ❯ /model`).
+            content: otui.t`${roleChunk(otui, "accent", commandEchoText(line, source))}`,
             marginTop: 1,
           }),
         );
@@ -8362,13 +8397,13 @@ export async function launchTuiAgentShell(opts: {
           // see `jev-risk-command.ts`'s own header for why.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-risk: scoring the working diff's hunks…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runJevRiskForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-risk: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isJevScenariosCommand(command.name)) {
@@ -8376,13 +8411,13 @@ export async function launchTuiAgentShell(opts: {
           // same shape as `/risk` immediately above.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-scenarios: checking likely-affected scenarios…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runJevScenariosForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-scenarios: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isJevRulesCommand(command.name)) {
@@ -8390,13 +8425,13 @@ export async function launchTuiAgentShell(opts: {
           // see `jev-rules-command.ts`'s own header for why.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-rules: checking the working diff against project rules…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runJevRulesForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-rules: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isStaledocsCommand(command.name)) {
@@ -8404,13 +8439,13 @@ export async function launchTuiAgentShell(opts: {
           // see `jev-docs-command.ts`'s own header for why.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-docs: checking the working diff against documentation…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runStaledocsForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-docs: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isOpencommentsCommand(command.name)) {
@@ -8425,13 +8460,13 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           io.onSystem?.(`review-jev-comments: checking open comments on ${repoArg}#${prNumber}…\n`);
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runOpencommentsForShell(cwd, repoArg, prNumber)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-comments: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isJevContractCommand(command.name)) {
@@ -8439,13 +8474,13 @@ export async function launchTuiAgentShell(opts: {
           // see `jev-contract-command.ts`'s own header for why.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-contract: checking claims against the working diff…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runJevContractForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-contract: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isJevTriageCommand(command.name)) {
@@ -8453,13 +8488,13 @@ export async function launchTuiAgentShell(opts: {
           // package, not a modal — see `jev-triage-command.ts`'s own header.
           const cwd = inspectorCwd();
           io.onSystem?.("review-jev-triage: triaging the latest review package…\n");
-          void (async () => {
+          trackCommandWork(async () => {
             try {
               io.onSystem?.(`${await runJevTriageForShell(cwd)}\n`);
             } catch (error) {
               io.onSystem?.(`review-jev-triage: ${error instanceof Error ? error.message : String(error)}\n`);
             }
-          })();
+          });
           return;
         }
         if (isRewindCommand(command.name)) {
@@ -8529,7 +8564,7 @@ export async function launchTuiAgentShell(opts: {
           // flow 373: the shell's one-step opt-in to the agent RUNTIME (the same
           // enable/disable the CLI calls). Not `/external`, the privacy switch.
           const arg = line.trim().split(/\s+/).slice(1).join(" ");
-          void runExternalAgentsCommand(arg, opts.session?.cwd ?? process.cwd()).then((text) => io.onSystem?.(text));
+          trackCommandWork(() => runExternalAgentsCommand(arg, opts.session?.cwd ?? process.cwd()).then((text) => io.onSystem?.(text)));
           return;
         }
         if (isExternalCommand(command.name)) {
@@ -8538,7 +8573,7 @@ export async function launchTuiAgentShell(opts: {
           // see the flow's own AC8 scope note, mirroring `/route`'s header).
           const arg = line.trim().split(/\s+/).slice(1).join(" ").trim().toLowerCase();
           if (arg === "on" || arg === "off") {
-            void setExternalEnabled(arg);
+            trackCommandWork(() => setExternalEnabled(arg));
             return;
           }
           if (arg.length > 0) {
@@ -8588,10 +8623,10 @@ export async function launchTuiAgentShell(opts: {
           // Flow 353 (AC2): same aggregate report `keryx doctor` prints,
           // inside the session — one call into the shared builder, never a
           // second implementation of any one check.
-          void (async () => {
+          trackCommandWork(async () => {
             const report = await buildDoctorReport(sessionCwd);
             io.onSystem?.(`${formatDoctorReport(report)}\n`);
-          })();
+          });
           return;
         }
         if (command.name === "/setup") {
@@ -9343,6 +9378,118 @@ export async function launchTuiAgentShell(opts: {
       },
     });
 
+    // --- flow 387: run a command for the Telegram topic and collect what it printed -------------
+    //
+    // A slash command prints through `io.onSystem` or a toast; some finish later and register that
+    // work with `trackCommandWork`. The helper wraps both outputs for the duration, waits for the
+    // work this command started, then for the output to be quiet for two beats. It never waits for a
+    // model turn: a command from the topic that arrives while the operator's own turn runs must not
+    // be held by it. Success is the handler's: it did not throw and its tracked work did not fail.
+    const captureShellOutput = async (run: () => void | Promise<void>): Promise<CommandOutcome> => {
+      const chunks: string[] = [];
+      let active = true;
+      let ok = true;
+      const previous = io.onSystem;
+      const previousToast = chrome.showToast;
+      const capture = (text: string): void => {
+        if (active) chunks.push(text);
+        previous?.(text);
+      };
+      const captureToast = (message: string): void => {
+        if (active) chunks.push(`${message}\n`);
+        previousToast(message);
+      };
+      const before = new Set(commandWork);
+      commandWorkFailures.length = 0;
+      io.onSystem = capture;
+      chrome.showToast = captureToast;
+      try {
+        await run();
+        let seen = chunks.length;
+        let quiet = 0;
+        while (quiet < 2 || [...commandWork].some((work) => !before.has(work))) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 150));
+          if (chunks.length !== seen) {
+            seen = chunks.length;
+            quiet = 0;
+          } else {
+            quiet += 1;
+          }
+        }
+      } catch (error) {
+        ok = false;
+        chunks.push(`${error instanceof Error ? error.message : String(error)}\n`);
+      } finally {
+        active = false;
+        if (io.onSystem === capture) {
+          if (previous) io.onSystem = previous;
+          else delete io.onSystem;
+        }
+        if (chrome.showToast === captureToast) chrome.showToast = previousToast;
+      }
+      if (commandWorkFailures.length > 0) {
+        ok = false;
+        chunks.push(`${commandWorkFailures.splice(0).join("\n")}\n`);
+      }
+      return { output: chunks.join("").trim(), ok };
+    };
+
+    // The shell's own transcript line for a command that came from the topic and does not go through
+    // `runLine` (the two that are answered from state here).
+    const echoRemoteCommand = (line: string): void => {
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `c${uid++}`,
+          content: otui.t`${roleChunk(otui, "accent", commandEchoText(line, TG_SOURCE))}`,
+          marginTop: 1,
+        }),
+      );
+    };
+
+    // `/status` as text for the topic: the same snapshot the modal shows, without its provider-limit
+    // lookups (no network call for a status line), plus the mode and the queue.
+    const remoteStatusText = async (): Promise<string> => {
+      const cwd = inspectorCwd();
+      const [workspaces, flows] = await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
+      const snapshot = buildSessionInfoSnapshot({
+        summary: liveSession.summary,
+        selection: currentSel,
+        version: packageJson.version,
+        usage: lastUsage,
+        estimateTokens: estimateContextTokens(history),
+        sessionText: history.map((message) => message.content).join("\n"),
+        workspaces,
+        flows,
+      });
+      return (
+        `${formatSessionInfoText(snapshot).trimEnd()}\n\n` +
+        `Mode: ${permissionMode}${readOnly ? " (read-only on)" : ""}\n` +
+        `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${mainQueue.length} waiting`
+      );
+    };
+
+    // What the topic runs for a text command. `/status` and `/mode` answer from state: the modal
+    // and the picker they open in the shell have nothing to send, and `/mode auto` was already
+    // confirmed with a button press in the topic, so the shell's own dialog is not asked again.
+    const runRemoteCommand = async (line: string): Promise<CommandOutcome> => {
+      const name = findAgentCommand(line, "agent")?.name;
+      const first = (line.trim().split(/\s+/)[1] ?? "").toLowerCase();
+      if (name === "/status") {
+        echoRemoteCommand(line);
+        return await captureShellOutput(async () => {
+          io.onSystem?.(`${await remoteStatusText()}\n`);
+        });
+      }
+      if (name === "/mode" && (first === "" || first === "auto")) {
+        echoRemoteCommand(line);
+        return await captureShellOutput(() => {
+          if (first === "auto") commitPermissionMode("auto");
+          io.onSystem?.(`Permission mode: ${permissionMode} (ask, trust or auto)\n`);
+        });
+      }
+      return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));
+    };
+
     // --- flow 376: remote control (the Telegram topic) -----------------------
     //
     // Created here, like `busWakeController`, because the host closes over `runLine` and
@@ -9393,6 +9540,84 @@ export async function launchTuiAgentShell(opts: {
           mainQueue = kept;
           paintMainQueue();
           return dropped.map((item) => item.question);
+        },
+        // Flow 387: slash commands and button pickers from the topic. Each member is a thin
+        // call into code the shell already has; none of them shows or accepts a credential.
+        runCommand: runRemoteCommand,
+        busyRefusal: (line) => {
+          const command = findAgentCommand(line, "agent");
+          const decision = classifyBusyDispatch({
+            line,
+            commandName: command?.name,
+            isSessionInfo: isSessionInfoCommand(line),
+            isFlows: isFlowsCommand(line),
+            isWorkspace: isWorkspaceCommand(line),
+            isReview: isReviewCommand(line),
+            isMcp: isMcpToolsCommand(line),
+            isMcpConsumer: isMcpConsumerCommand(line),
+          });
+          // A slash line is never queued as chat from the topic, so "not a command" is a refusal too.
+          return decision === "deferred" || decision === "not-a-command" ? BUSY_REASON : undefined;
+        },
+        listProviders: async () => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const connected = await filterConnectedDetectedProviders(detected, {});
+          return connected.map((prov) => ({
+            id: prov.name,
+            label: prov.label ?? prov.name,
+            ...(prov.name === currentSel.provider ? { current: true } : {}),
+          }));
+        },
+        listModels: async (providerId) => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const name = providerId ?? currentSel.provider;
+          const prov = detected.find((d) => d.name === name);
+          if (prov === undefined) return undefined;
+          const resolved = await modelsForPicker(prov);
+          return {
+            provider: prov.label ?? prov.name,
+            models: resolved.models.map((id) => ({
+              id,
+              label: id,
+              ...(name === currentSel.provider && id === currentSel.model ? { current: true } : {}),
+            })),
+          };
+        },
+        switchModel: async (modelId, providerId) => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const name = providerId ?? currentSel.provider;
+          const prov = detected.find((d) => d.name === name);
+          if (prov === undefined) return { output: "That provider is not connected here.", ok: false };
+          const baseUrl = name === currentSel.provider ? currentSel.baseUrl : prov.baseUrl;
+          await switchTo(
+            baseUrl === undefined ? { provider: name, model: modelId } : { provider: name, model: modelId, baseUrl },
+          );
+          try {
+            await applyRuntimeSwitchToSlate({
+              slateSession,
+              runtime: { provider: currentSel.provider, model: currentSel.model },
+              history,
+              onHistoryChange: io.onHistoryChange,
+            });
+          } catch {
+            // best-effort bookkeeping around a switch that already happened, as `/model` does
+          }
+          return { output: `Model: ${currentSel.provider}/${currentSel.model}`, ok: true };
+        },
+        listSessions: async () =>
+          listSessions(sessionCwd).map((row) => ({
+            id: row.id,
+            label: `${shortSessionId(row.id)} · ${row.title}`,
+            ...(row.id === liveSession.summary.id ? { current: true } : {}),
+          })),
+        resumeSession: async (id) => {
+          const found = findSession(sessionCwd, id);
+          if (found === undefined) return { output: "Session not found in this project.", ok: false };
+          pendingResumeTarget = found;
+          const outcome = await captureShellOutput(() => resumeSessionInteractive());
+          pendingResumeTarget = undefined;
+          // The switch happened when the live session is now the one asked for.
+          return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },
         onChange: () => liveRemotePanel?.refresh(),
       },

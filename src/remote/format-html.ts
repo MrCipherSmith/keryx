@@ -26,7 +26,7 @@
 // entities", sends the original part once as plain text.
 
 import { closesFence, fenceOpening } from "./format";
-import { type BotApi, isBotApiError, type SendMessageParams } from "./types";
+import { type BotApi, type InlineKeyboard, isBotApiError, type SendMessageParams } from "./types";
 
 export function escapeHtml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -477,4 +477,35 @@ export async function sendHtml(
     }
     return api.sendMessage(plain);
   }
+}
+
+/**
+ * Replace the text of a message the bot sent with `params.text` (plain Markdown-ish text)
+ * rendered as Telegram HTML. No `inlineKeyboard` removes the buttons. If Telegram refuses the
+ * markup, `onFallback` is told and the text is edited in once more with no parse mode. Any other
+ * failure (including "message is not modified") is thrown as it is.
+ */
+export async function editHtml(
+  api: BotApi,
+  params: { chatId: number; messageId: number; text: string; inlineKeyboard?: InlineKeyboard },
+  onFallback?: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await api.editMessageText({ ...params, text: renderTelegramHtml(params.text), parseMode: "HTML" });
+  } catch (error) {
+    if (!isEntityParseError(error)) {
+      throw error;
+    }
+    try {
+      onFallback?.(error);
+    } catch {
+      // A throwing observer must never cost the operator the edit.
+    }
+    await api.editMessageText(params);
+  }
+}
+
+/** Telegram refuses an edit that changes nothing; for a settle that is the state we wanted. */
+export function isNotModified(error: unknown): boolean {
+  return isBotApiError(error) && error.kind === "rejected" && /message is not modified/i.test(error.message);
 }
