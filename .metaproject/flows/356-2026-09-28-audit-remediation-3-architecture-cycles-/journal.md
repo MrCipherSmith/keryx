@@ -1,0 +1,35 @@
+# Flow Journal
+
+- 2026-09-28T11:57:09.964Z - flow created
+- 2026-09-28T11:57:38.577Z - frozen: 1 criteria; checksum recorded
+- 2026-09-28T11:57:38.725Z - started
+- 2026-09-28T11:57:38.868Z - task-added: T5: Cycles, retryableFor, orphans (AC1-AC3)
+- 2026-09-28T11:57:39.017Z - task-added: T6: Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)
+- 2026-09-28T11:57:39.160Z - task-added: T7: L-16 and S-11 (AC7)
+- 2026-09-28T11:57:39.310Z - task-added: T8: Ledger, README, docs, changelog, bump (AC8)
+- 2026-09-28T11:57:39.460Z - task-done: T1: Collect remaining context
+- 2026-09-28T11:57:39.607Z - task-done: T2: Implement per plan
+- 2026-09-28T11:57:39.750Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-28T11:57:39.894Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-28T12:17:01.424Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-ar3
+- 2026-09-28T12:20:19.243Z - ac-updated: same format defect as flow 355: '- ACn (ref):' reformatted to '- ACn: (ref)', wording unchanged
+- 2026-09-28T13:31:31.662Z - task-done: T5: Cycles, retryableFor, orphans (AC1-AC3)
+- 2026-09-28T13:31:31.980Z - task-done: T6: Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)
+- 2026-09-28T13:31:32.297Z - task-done: T7: L-16 and S-11 (AC7)
+- 2026-09-28T13:31:32.607Z - task-attempt: T8: started (attempt 1) — PR #782 open; review round 1 dispatched; release 0.3.23
+- 2026-09-28T16:29:35.395Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/782 (warning: PR is not a draft)
+- 2026-09-28T16:29:35.572Z - ac-confirmed: AC1: 8 -> 2 cycles (only the A-4 facade loops, accepted); moves: impact-evidence, cli-registry, wiki/key-files, mcp-servers/json-utils; avoidable-bypass ceiling 150. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:35.734Z - ac-confirmed: AC2: retryableFor once in provider-port; mergeUsage per adapter (recorded). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:35.898Z - ac-confirmed: AC3: gdgraph orphans reads bunfig preloads, comments stripped. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.058Z - ac-confirmed: AC4: security scan respects ignore rules, still reads secret-bearing names, coverage complete on this repo (~30 s). PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.225Z - ac-confirmed: AC5: G-4 accepted (fresh init 0 warnings, pinned); keryx update prunes stale worktrees, never with commits ahead, local or ignored-but-not-carryover files. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.387Z - ac-confirmed: AC6: doctor outside a project: one warn, exit 0 (smoke: exit 0); project search bounded; worktree check from the main checkout. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.553Z - ac-confirmed: AC7: compat in-band error classified, unknown codes not retried; Grok TOML never echoes raw values. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.714Z - ac-confirmed: AC8: tsc, lint, gates green; ledger, README, CHANGELOG 0.3.23/0.3.24. PR #782 + #786 merged, released as 0.3.24 and installed (0.3.23 tag never published); review rounds 1-2 closed (signed: altsay [stated])
+- 2026-09-28T16:29:36.870Z - task-done: T8: Ledger, README, docs, changelog, bump (AC8)
+- 2026-09-28T16:29:37.030Z - completing
+- 2026-09-28T16:29:41.483Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-28T16:29:41.484Z - completion-failed: review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#782 was last collected against 0998ca2d472077cf833b4e3cc325b7b4768c0034 (round 1), but the PR head is 7457ed83a6a4980594577810f53df98e2b232638. Everything anyone said after 0998ca2d472077cf833b4e3cc325b7b4768c0034 is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 782 --sha <pr-head>`.
+- 2026-09-28T16:29:50.277Z - completing: merged commit: 7ceecf5e772041be78bd352ded02af423f98946b
+- 2026-09-28T16:29:54.621Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-28T16:29:54.622Z - done: all gates passed

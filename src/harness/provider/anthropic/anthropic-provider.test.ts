@@ -59,7 +59,7 @@ import type {
   AnthropicProviderDeps,
   AnthropicProviderDescriptorDocument,
 } from "./anthropic-provider";
-import { AnthropicProvider } from "./anthropic-provider";
+import { AnthropicProvider, withCacheBreakpoints } from "./anthropic-provider";
 import { assertEventValid, defaultRetryable } from "../provider-port";
 import type { NormalizedError, NormalizedEvent, NormalizedEventKind, NormalizedRequest, StreamOptions } from "../types";
 // Reused (not rewritten) to validate `descriptorDocument()` against the
@@ -706,16 +706,17 @@ test("a linked assistant call is sent as a tool_use block and its result as tool
   const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
     messages: Array<{ role: string; content: unknown }>;
   };
+  // flow 387 T15: the last two messages carry a cache breakpoint on their last block.
   expect(body.messages[1]).toEqual({
     role: "assistant",
     content: [
       { type: "text", text: "checking" },
-      { type: "tool_use", id: "c1", name: "get_cwd", input: { a: 1 } },
+      { type: "tool_use", id: "c1", name: "get_cwd", input: { a: 1 }, cache_control: { type: "ephemeral" } },
     ],
   });
   expect(body.messages[2]).toEqual({
     role: "user",
-    content: [{ type: "tool_result", tool_use_id: "c1", content: "/tmp" }],
+    content: [{ type: "tool_result", tool_use_id: "c1", content: "/tmp", cache_control: { type: "ephemeral" } }],
   });
 });
 
@@ -766,7 +767,9 @@ test("an unlinked, text-less tool-call turn never reaches the wire (Anthropic re
   const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
     messages: Array<{ role: string; content: unknown }>;
   };
-  expect(body.messages).toEqual([{ role: "user", content: "pick one" }]);
+  expect(body.messages).toEqual([
+    { role: "user", content: [{ type: "text", text: "pick one", cache_control: { type: "ephemeral" } }] },
+  ]);
 });
 
 test("an unlinked pair keeps the previous plain-text mapping", async () => {
@@ -784,7 +787,104 @@ test("an unlinked pair keeps the previous plain-text mapping", async () => {
   const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
     messages: Array<{ role: string; content: unknown }>;
   };
-  expect(body.messages[1]).toEqual({ role: "user", content: "/tmp" });
+  expect(body.messages[1]).toEqual({
+    role: "user",
+    content: [{ type: "text", text: "/tmp", cache_control: { type: "ephemeral" } }],
+  });
+});
+
+// --- flow 387 T15: prompt caching + usage accounting -------------------------
+
+function countCacheControl(value: unknown): number {
+  if (Array.isArray(value)) return value.reduce((n: number, v) => n + countCacheControl(v), 0);
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return Object.entries(record).reduce(
+      (n, [k, v]) => n + (k === "cache_control" ? 1 : countCacheControl(v)),
+      0,
+    );
+  }
+  return 0;
+}
+
+test("T15: cache_control breakpoints sit on the last tool, the system block and the last two messages (max 4)", async () => {
+  const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const request: NormalizedRequest = {
+    ...buildRequest("request-cache"),
+    tools: [
+      { name: "a", description: "first", inputSchema: { type: "object" } },
+      { name: "b", description: "second", inputSchema: { type: "object" } },
+    ],
+    messages: [
+      { role: "user", content: "one" },
+      { role: "assistant", content: "two", provenance: "model" },
+      { role: "user", content: "three" },
+      { role: "assistant", content: "four", provenance: "model" },
+      { role: "user", content: "five" },
+    ],
+  };
+  await collectEvents(provider.stream(request, { attemptId: "attempt-cache" }));
+  const body = JSON.parse((calls[0]?.init?.body as string) ?? "{}") as {
+    system: Array<Record<string, unknown>>;
+    tools: Array<Record<string, unknown>>;
+    messages: Array<{ content: unknown }>;
+  };
+  const eph = { type: "ephemeral" };
+  expect(body.tools[0]?.cache_control).toBeUndefined();
+  expect(body.tools[1]?.cache_control).toEqual(eph);
+  expect(body.system).toEqual([{ type: "text", text: "fixture system instruction", cache_control: eph }]);
+  expect(countCacheControl(body.messages.slice(0, 3))).toBe(0);
+  expect(body.messages[3]?.content).toEqual([{ type: "text", text: "four", cache_control: eph }]);
+  expect(body.messages[4]?.content).toEqual([{ type: "text", text: "five", cache_control: eph }]);
+  expect(countCacheControl(body)).toBe(4);
+});
+
+test("T15: placement is byte-stable across identical requests and never exceeds 4 breakpoints", () => {
+  const messages = Array.from({ length: 10 }, (_, i) => ({ role: i % 2 === 0 ? "user" : "assistant", content: `m${i}` }));
+  const tools = [{ name: "t", input_schema: {} }];
+  const first = withCacheBreakpoints("sys", messages, tools);
+  const second = withCacheBreakpoints("sys", messages, tools);
+  expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+  expect(countCacheControl(first)).toBe(4);
+  // inputs are not mutated
+  expect(countCacheControl(messages)).toBe(0);
+  expect(countCacheControl(tools)).toBe(0);
+});
+
+test("T15: thinking blocks and empty system/tools get no breakpoint", () => {
+  const result = withCacheBreakpoints(
+    "",
+    [{ role: "assistant", content: [{ type: "thinking", thinking: "x", signature: "s" }] }],
+    undefined,
+  );
+  expect(result.system).toBe("");
+  expect(result.tools).toBeUndefined();
+  expect(countCacheControl(result)).toBe(0);
+});
+
+test("T15: usage folds cache reads/writes into inputTokens and reports them as subsets", async () => {
+  const sse = [
+    'event: message_start\ndata: {"type":"message_start","message":{"id":"m","usage":{"input_tokens":5,"cache_read_input_tokens":1000,"cache_creation_input_tokens":200,"output_tokens":1}}}\n\n',
+    'event: content_block_start\ndata: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}\n\n',
+    'event: content_block_stop\ndata: {"type":"content_block_stop","index":0}\n\n',
+    'event: message_delta\ndata: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":7}}\n\n',
+    'event: message_stop\ndata: {"type":"message_stop"}\n\n',
+  ].join("");
+  const { fetch: fetchMock } = makeFetchMock(
+    () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+  );
+  const provider = new AnthropicProvider({ fetch: fetchMock, grant: validGrant() });
+  const events = await collectEvents(provider.stream(buildRequest("request-usage"), { attemptId: "attempt-usage" }));
+  const usage = events.find((e) => e.kind === "usage_update")?.usage;
+  expect(usage).toEqual({
+    exact: true,
+    inputTokens: 1205,
+    outputTokens: 7,
+    totalTokens: 1212,
+    cacheReadTokens: 1000,
+    cacheWriteTokens: 200,
+  });
 });
 
 test("C-03: a non-JSON HTTP error keeps Anthropic's generic status message", async () => {

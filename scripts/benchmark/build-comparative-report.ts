@@ -15,10 +15,13 @@
 // Regenerate with (no live credentials needed — this step is pure synthesis over fixtures):
 //   bun scripts/benchmark/build-comparative-report.ts
 
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { buildAblationManifest, buildRawBaselineManifest, type AblationTaskInput, type RawBaselineTaskInput } from "../../src/metrics/ablation-runner";
+import type { AblationVariant } from "../../src/metrics/ablation-runner";
+import { aggregateLeg, ac10Verdict, ac11Verdict, renderTokenTable, type LegAggregate, type LegFixture, type Verdict } from "./token-metrics";
 import { buildComparativeReport, validateComparativeReport, type ComparativeLegs, type ComparativeReport } from "../../src/metrics/comparative";
 
+const resolvePath = (p: string): string => (p.startsWith("/") ? p : `${process.cwd()}/${p}`);
 const FIXTURES_DIR = new URL("../../fixtures/benchmark/keryx/", import.meta.url);
 
 /** Injectable side effects for {@link finalizeComparativeReport} — real I/O in `main`, spies in tests. */
@@ -80,6 +83,52 @@ export async function finalizeComparativeReport(
   return 1;
 }
 
+export type TokenEconomySection = {
+  readonly legs: readonly LegAggregate[];
+  readonly ac10: Verdict;
+  readonly ac11: Verdict;
+  readonly markdown: string;
+};
+
+/**
+ * Pure assembly of the AC10/AC11 section from the mutating-ablation leg fixtures (one per
+ * harness+model) and an optional keryx baseline fixture (a run on `main` before the flow).
+ * `variant` picks which ablation arm is compared (context-on = each harness as it ships).
+ * AC11 compares the FIRST keryx leg against the baseline.
+ */
+export function buildTokenEconomySection(
+  fixtures: readonly LegFixture[],
+  baseline: LegFixture | undefined,
+  variant: AblationVariant = "context-on",
+): TokenEconomySection {
+  const legs = fixtures.map((f) => aggregateLeg(f, variant));
+  const ac10 = ac10Verdict(legs);
+  const keryxLeg = legs.find((l) => l.harness === "keryx");
+  const baselineLeg = baseline === undefined ? undefined : aggregateLeg(baseline, variant);
+  const ac11 = ac11Verdict(keryxLeg, baselineLeg);
+  const gapLines = legs.flatMap((l) => l.gaps.map((g) => `- ${l.harness}/${l.model}: ${g}`));
+  const markdown = [
+    "Mean tokens per task run and success rate, per harness and model",
+    "",
+    renderTokenTable(legs),
+    ...(gapLines.length > 0 ? ["", "Gaps (reported as n/a, never estimated):", ...gapLines] : []),
+    "",
+    ac10.line,
+    ac11.line,
+  ].join("\n");
+  return { legs, ac10, ac11, markdown };
+}
+
+function parseFlag(argv: readonly string[], flag: string): string | undefined {
+  const i = argv.indexOf(flag);
+  return i >= 0 ? argv[i + 1] : undefined;
+}
+
+async function readLegFixture(url: URL): Promise<LegFixture> {
+  const raw = JSON.parse(await readFile(url, "utf8")) as { provider?: string; model: string; tasks: LegFixture["tasks"] };
+  return { provider: raw.provider ?? "unknown", model: raw.model, tasks: raw.tasks };
+}
+
 async function readFixture<T>(name: string): Promise<{ model: string; tasks: T[] }> {
   const raw = await readFile(new URL(name, FIXTURES_DIR), "utf8");
   return JSON.parse(raw) as { model: string; tasks: T[] };
@@ -121,6 +170,18 @@ async function main(): Promise<void> {
     printReport: (contents) => console.log(contents),
     logLine: (line) => console.error(line),
   });
+
+  // AC10/AC11 token-economy section: every committed mutating-ablation leg fixture, plus
+  // an optional `--baseline <file>` (a keryx run on main). Legacy fixtures captured before
+  // T13a carry no instrumentation and show up as n/a gaps rather than being skipped.
+  const names = (await readdir(FIXTURES_DIR)).filter((n) => /^ablation-mutating-results.*\.json$/.test(n)).sort();
+  if (names.length > 0) {
+    const fixtures = await Promise.all(names.map((n) => readLegFixture(new URL(n, FIXTURES_DIR))));
+    const baselinePath = parseFlag(process.argv, "--baseline");
+    const baseline = baselinePath === undefined ? undefined : await readLegFixture(new URL(`file://${resolvePath(baselinePath)}`));
+    const section = buildTokenEconomySection(fixtures, baseline);
+    console.error(`\n# token economy (AC10/AC11), legs: ${names.join(", ")}\n${section.markdown}`);
+  }
   if (code !== 0) process.exit(code);
 }
 

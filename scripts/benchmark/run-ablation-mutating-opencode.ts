@@ -30,7 +30,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
-import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
+import { buildAblationManifest, computeAblationDelta, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 // A real, reproduced finding (2026-08-14, see plan.md's mutating-ablation section):
 // opencode resolves "project root" via a linked `git worktree`'s shared `.git` and
@@ -39,6 +39,7 @@ import { checkGoldLeakage } from "../../src/metrics/leakage";
 // same WorktreePort shape as createGitWorktreePort, just backed by `git clone`.
 import { createGitClonePort } from "../../src/harness/child/git-clone-port";
 import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, cliPrompt, type MutatingTask } from "./mutating-tasks";
+import { fixtureFilename, opencodeMetrics, type InstrumentedSeedSample } from "./token-metrics";
 
 /** Injectable side effects for {@link finalizeMutatingOpencodeRun} — real I/O in `main`, spies in tests. */
 export type AblationEmissionIO = {
@@ -60,7 +61,7 @@ export async function finalizeMutatingOpencodeRun(
   validation: { readonly valid: boolean; readonly errors: readonly string[] },
   io: AblationEmissionIO,
 ): Promise<number> {
-  const resultsFilename = "ablation-mutating-results-opencode.json";
+  const resultsFilename = RESULTS_FILENAME;
   if (validation.valid) {
     await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
     io.printManifest(JSON.stringify(manifest, null, 2));
@@ -81,7 +82,11 @@ export async function finalizeMutatingOpencodeRun(
 }
 
 const SEEDS = [1, 2, 3] as const;
-const MODEL = "opencode/deepseek-v4-flash-free";
+const DEFAULT_MODEL = "opencode/deepseek-v4-flash-free";
+// `--model <provider/model>` is passed straight to `opencode run -m`, so the recorded id is the model actually used.
+const MODEL_FLAG = process.argv.indexOf("--model");
+const MODEL = (MODEL_FLAG >= 0 ? process.argv[MODEL_FLAG + 1] : undefined) ?? DEFAULT_MODEL;
+const RESULTS_FILENAME = fixtureFilename("ablation-mutating-results-opencode.json", DEFAULT_MODEL, MODEL);
 const CONTEXT_STRIP_PATHS = [".metaproject", "AGENTS.md", "CLAUDE.md"];
 const MCP_CONFIG_STRIP_PATHS = ["opencode.json", ".mcp.json"];
 
@@ -107,7 +112,7 @@ async function runTestInWorktree(root: string, seedTestFile: string): Promise<bo
   return exitCode === 0;
 }
 
-async function runSeed(task: MutatingTask, variant: AblationVariant, seed: number, root: string): Promise<AblationSeedSample> {
+async function runSeed(task: MutatingTask, variant: AblationVariant, seed: number, root: string): Promise<InstrumentedSeedSample> {
   await writeFile(join(root, task.seedTestFile), task.seedTestContent, "utf8");
 
   // Real, reproduced root cause (2026-08-14): `Bun.spawn`'s `cwd` option sets the
@@ -142,7 +147,10 @@ async function runSeed(task: MutatingTask, variant: AblationVariant, seed: numbe
   // Independent verification: a real `bun test` run in the worktree opencode edited —
   // never opencode's own claim.
   const success = await runTestInWorktree(root, task.seedTestFile);
-  return { seed, success, tokens, toolCalls };
+  // opencode's step_finish tokens split input (already uncached) / cache.read / cache.write; one event per
+  // model request. Tool-call arguments are in the tool_use events but are opencode's own tool names, not
+  // keryx's read_file/search_code, so repeatedReads stays null (AC11 is a keryx-only metric).
+  return { seed, success, tokens, toolCalls, model: MODEL, metrics: opencodeMetrics(events), repeatedReads: null };
 }
 
 async function main(): Promise<void> {
@@ -154,8 +162,8 @@ async function main(): Promise<void> {
     const taskInputs: AblationTaskInput[] = [];
     for (const task of MUTATING_TASKS) {
       console.error(`\n# task: ${task.name}`);
-      const contextOnSamples: AblationSeedSample[] = [];
-      const contextOffSamples: AblationSeedSample[] = [];
+      const contextOnSamples: InstrumentedSeedSample[] = [];
+      const contextOffSamples: InstrumentedSeedSample[] = [];
       for (const variant of ["context-on", "context-off"] as const) {
         const samples = variant === "context-on" ? contextOnSamples : contextOffSamples;
         for (const seed of SEEDS) {
@@ -180,7 +188,11 @@ async function main(): Promise<void> {
             }
             const sample = await runSeed(task, variant, seed, root);
             samples.push(sample);
-            console.error(`  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls}`);
+            console.error(
+              `  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls} ` +
+                `uncachedIn=${sample.metrics.uncachedInputTokens ?? "n/a"} cachedIn=${sample.metrics.cachedInputTokens ?? "n/a"} ` +
+                `out=${sample.metrics.outputTokens ?? "n/a"} requests=${sample.metrics.requests ?? "n/a"}`,
+            );
           } finally {
             await port.remove(worktreeId).catch((cause) => {
               console.error(`worktree[${worktreeId}] cleanup failed: ${(cause as Error).message}`);
@@ -209,13 +221,17 @@ async function main(): Promise<void> {
         "walk past. Success is decided by an independent `bun test` run after " +
         "opencode's turn, never by trusting its own claim. Captured live, no fabricated " +
         "samples.",
+      metricsNote:
+        "per sample: metrics summed over opencode's step_finish events (input is already the uncached " +
+        "portion; cache.read/cache.write reported separately; one event per model request); " +
+        "repeatedReads is null (keryx-only metric).",
       model: MODEL,
       provider: "opencode-cli",
       generated_by: "bun scripts/benchmark/run-ablation-mutating-opencode.ts",
       captured: new Date().toISOString().slice(0, 10),
       tasks: taskInputs,
     };
-    const resultsUrl = new URL("../../fixtures/benchmark/keryx/ablation-mutating-results-opencode.json", import.meta.url);
+    const resultsUrl = new URL(`../../fixtures/benchmark/keryx/${RESULTS_FILENAME}`, import.meta.url);
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");
     for (const input of taskInputs) {

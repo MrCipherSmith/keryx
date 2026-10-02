@@ -223,6 +223,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx mcp remove|enable|disable|trust|untrust <name>\n",
     "  keryx mcp doctor [name] [--json]\n",
     "  keryx mcp auth|logout <name>\n",
+    // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
+    // over three lines) and a Commands: summary row.
+    "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
+    "                                               recommendation before showing it, the human's choice after;\n",
+    "                                               report = match share by mode and stage, deviations (no model)\n",
+    "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
     // The derived subcommand index appended to the flat block: every group's
     // full vocabulary, generated from the dispatcher's own table.
     `\n${formatSubcommandIndex()}`,
@@ -301,6 +307,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       // also documents `flow init --outcome-author`.
       '  keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)\n',
       "  `flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag is absent) or `human`, and `human` only when the flag says so — never inferred from a git identity, an owner or the environment. A flow without the field reads `unknown`. The flag labels a sample and gates nothing.\n",
+      // Flow 390: where a flow came from — the setter's usage line and the note that also
+      // documents `flow init --origin`.
+      '  keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]   (where the flow came from; journaled, gates nothing)\n',
+      "  `flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.\n",
       // Flow 364: the read-only completion check.
       "  keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)\n",
     ],

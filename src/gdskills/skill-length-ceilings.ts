@@ -101,12 +101,12 @@ export const DEFAULT_SKILL_LENGTH_CEILING = 500;
  * what is left.
  */
 const CEILINGS_BY_KEY = {
-  "core/reviewer-skill-creator": 280,
+  "core/reviewer-skill-creator": 279,
   "orchestration/code-verifier": 339,
   "orchestration/context-collector": 671,
   "orchestration/feature-analyzer": 447,
   "orchestration/feature-dev": 177,
-  "orchestration/flow-orchestrator": 696,
+  "orchestration/flow-orchestrator": 694,
   "orchestration/issue-analyzer": 373,
   "orchestration/job-documenter": 414,
   "orchestration/job-orchestrator": 2243,

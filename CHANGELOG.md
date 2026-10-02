@@ -3,6 +3,84 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.63] — 2026-10-02
+### Fixed
+- The managed ignore block that `keryx init` and `keryx update` write now covers `.metaproject/data/decisions/`, so the recommendation journal no longer shows up in `git status` of a project that uses keryx (this repository already ignored it by hand).
+
+[Changes since 0.3.62](https://github.com/MrCipherSmith/keryx/compare/v0.3.62...v0.3.63)
+
+## [0.3.62] — 2026-10-02
+### Added
+- **Recommendation journal.** Every agent question with options now writes one record to `.metaproject/data/decisions/journal.jsonl`: the flow and stage, the question, the options, the recommendation and its reason, the display mode, the option order, the human's choice, the time to answer and an optional reason for deviating. The recommendation is written before the question is shown. One question in three is asked blind (no "recommended" mark, random order) and the recommendation is revealed right after the answer; a blind question is never used for anything on the irreversible list, which has two tiers: strong terms (release, publish, unpublish, deploy, delete, push and their Russian equivalents) always count, weak terms (merge, drop, remove, force and the like) count only next to a risk target such as main, production, a branch or a table in the same question or option, or in the `--action` tag, which agents should pass for anything irreversible; the list is extendable in `.metaproject/decisions.config.json`. A changed answer after the reveal keeps both entries (`/decisions change <option>`); after a deviation the TUI asks the human once for an optional reason and the `ask_user` tool result waits for the answer (no timeout; an empty or skipped answer is recorded as absent and releases the wait), and the reason can be added or changed later with `/decisions reason <why>` or `keryx decisions reason`; `/decisions reason|change` act on the latest decision of this session (or flow), name it, and say that a changed answer may not reach the agent. Free text is collapsed to one capped line. A flow inferred from the single in-progress flow is recorded as `inferred` and marked in the report. `keryx decisions report` prints the match share by mode and stage and the deviations with their reasons, with no model call. Any agent can drive the journal with `keryx decisions open|answer|reason`. The shell has a `/decisions` report modal and a sidebar row. Journaling itself never blocks or delays a question, and a journaling failure never throws into it; the one deliberate wait is the optional reason prompt after a deviation. The flow and stage come from `KERYX_FLOW`, the branch or the only flow in progress, and inside a flow it also adds a line to that flow's `journal.md`. One journal serves every worktree of the repository. An answer must be one of the options; unreadable journal lines are skipped and counted in the report; a blind question hides a `(Recommended)` mark written into a label. The irreversible list also catches the synonyms of releasing (ship, rollout, promote, go live, tag a version, publish to npm, выпустить, залить, отправить в прод, накатить) and destructive commands (`git reset --hard`, `clean -f`, `checkout --`, `rm -rf`); an ambiguous weak verb with no real object ("Merge it now?") counts as irreversible, an identifier in a question about code (rename `deleteUser`) does not. The `ask_user` tool takes an optional `action` tag and `irreversible: true`, which force a non-blind question, and its description tells the agent to set them. `keryx decisions report` counts, per stage, the questions where blind was refused. `/decisions change` and `/decisions reason` with no id only act on a decision of the current session and otherwise name the decision they would have touched. Cutting, bumping or tagging a version ("Cut 0.3.62?", "Bump the version and tag it?", "версию поднять и затегать", зарелизить, релизнуть) counts as a release. A decision whose flow was only inferred is kept in the project-wide journal with the `inferred` flag and is not written into that flow's own `journal.md`; only a flow named by `KERYX_FLOW`, the branch or `--flow` gets the line.
+
+### Fixed
+- `keryx flow origin set` no longer carries the old quote and source over when the kind changes, and `/flow origin` with no id prints a bounded summary instead of every flow.
+
+[Changes since 0.3.61](https://github.com/MrCipherSmith/keryx/compare/v0.3.61...v0.3.62)
+
+## [0.3.61] — 2026-10-02
+### Fixed
+- The orchestrator skills, their input-contract schemas and the `/goal --auto` comment no longer say the three orchestrators share one round bound of three: the review/fix bound of `flow-orchestrator` is five, the self-fix bounds of `job-orchestrator` and `task-implementer` stay at three.
+
+[Changes since 0.3.60](https://github.com/MrCipherSmith/keryx/compare/v0.3.60...v0.3.61)
+
+## [0.3.60] — 2026-10-02
+### Changed
+- **Review round bound: five.** A review/fix loop may now run five rounds before the orchestrator re-plans (`REVIEW_ROUND_CAP` and the `flow-orchestrator` skill, were three). The bounds of `job-orchestrator` and `task-implementer` self-fix stay at three, the review-gate behaviour is unchanged: the cap only adds a note and only a human can dismiss a finding.
+
+[Changes since 0.3.59](https://github.com/MrCipherSmith/keryx/compare/v0.3.59...v0.3.60)
+
+## [0.3.59] — 2026-10-02
+### Added
+- **Flow origin.** Every flow can record where it came from: `human-request`, `agent-finding` or `agent-proposal`, set with `keryx flow init --origin <kind> --quote "<verbatim>" --source "<ref>"`. A `human-request` is accepted only with the person's own words and a source; otherwise the origin stays `unknown` and a note says why. The Outcome criteria template carries three lines (the request verbatim, the agent's formalization, how to observe it), `outcomeAuthor` is derived from the origin unless set, `keryx flow origin set <id> <kind> --reason` changes it with a journal line, and `flow status`, `product open`, the flow inspector and the new `/flow` shell command show it. The product's G1a is counted by origin. Nothing is gated on the origin: flows without one still init, freeze and complete.
+
+[Changes since 0.3.58](https://github.com/MrCipherSmith/keryx/compare/v0.3.58...v0.3.59)
+
+## [0.3.58] — 2026-10-02
+### Added
+- **Scheduled digest.** `keryx serve` can send a periodic digest to a service topic in Telegram: what changed in your pull requests, issues, reviews and CI since the previous digest, plus the product board. The schedule is stored like any other (`keryx schedule`), a slot fires at most once, GitHub is read only through a read-only `gh` allowlist, and the delivery result (sent, queued for retry, or refused) is recorded and shown in `keryx schedule list` and the schedule modal. If the summarizing sub-agent is unavailable the digest goes out as plain facts. See the scheduled-digest guide.
+
+[Changes since 0.3.57](https://github.com/MrCipherSmith/keryx/compare/v0.3.57...v0.3.58)
+
+## [0.3.57] — 2026-10-02
+### Added
+- **Slash commands and button pickers from the Telegram topic.** A line that starts with `/` in a paired topic now runs through a command gateway with an explicit allowlist instead of being refused. Text commands (`/help`, `/status`, `/doctor`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, ...) answer in the topic, redacted. `/model` and `/connect` arrive as inline-keyboard pickers (provider, then model); picker buttons are single-use, expire, and are bound to the session and message. `/mode trust|auto`, `/plan off`, `/delegate` and `/external*` run only after a Yes/No button press. `/new` and `/clear` start a fresh conversation in the same topic with a separator line. Commands that handle credentials or end the shell (`/exit`, `/channels`, `/provider`, `/setup`, `/mcp trust`, `/guard`, `/route`, `/editguard`, ...) stay local and the topic says so. The bot's command menu lists exactly the allowed commands. The `/remote-control` modal lists recent remote commands.
+- **Message state in the topic.** Each operator message shows its state through a Telegram reaction (received, accepted, working, done, failed) and the topic shows the "typing" action while a turn runs.
+### Changed
+- **Approval and picker prompts are edited in place.** After a press the buttons are removed and the message shows the result instead of a separate "Approval granted." message.
+
+[Changes since 0.3.56](https://github.com/MrCipherSmith/keryx/compare/v0.3.56...v0.3.57)
+
+## [0.3.56] — 2026-10-01
+### Changed
+- **Telegram replies are rendered as HTML.** Replies and status texts that `keryx serve` sends to Telegram were plain text, with literal `**` and backticks. They now go out with `parse_mode` `HTML`: bold, italic, strike, inline code, fenced code blocks (with their language), headings, quotes, bullets and `http(s)` links are rendered; text outside those constructs is escaped (`&`, `<`, `>`), unclosed or ambiguous markup (`snake_case_name`, `a*b*c`, a lone `**`) stays literal, and a fenced block that crosses a split is two valid `<pre>` blocks. Telegram counts the 4096-character limit after parsing, so a rendered part is never longer than the plain one. If Telegram answers 400 "can't parse entities", that one message is sent again as plain text and a `format-fallback` event is recorded. Approval prompts are sent as a code block so the operator sees exactly what they approve.
+
+[Changes since 0.3.55](https://github.com/MrCipherSmith/keryx/compare/v0.3.55...v0.3.56)
+
+## [0.3.55] — 2026-10-01
+### Fixed
+- **A timeout while starting a pairing no longer erases the bot token.** The shell wrote the new token, asked `serve` to open the pairing, and on any failure put the old file back, even when `serve` had simply not answered in time and may have taken the token, or had answered `superseded` because a newer start owns the file. It now puts the previous token back only when `serve` definitely refused (a rejected token, `already-connected`, `serve` not running and the like), and only when the file still holds exactly the token this start wrote: a token another shell wrote in between is left alone.
+- **A rejected token no longer cancels a valid start in progress.** A second `/channels` start with a token Telegram refuses used to answer `superseded` to a valid start that was still waiting for Telegram. Only a token Telegram accepted supersedes an earlier start now; of two valid starts the later one still wins.
+- **Stopping `serve` while a pairing is starting no longer leaves a poller behind.** A start waiting for Telegram when `serve` stopped could still begin polling afterwards and park a pairing in the stopped controller. It now answers `superseded` and starts nothing.
+
+[Changes since 0.3.54](https://github.com/MrCipherSmith/keryx/compare/v0.3.54...v0.3.55)
+
+## [0.3.54] — 2026-10-01
+### Fixed
+- **`flow check` no longer fails a clone over stale remote branches.** 0.3.53 judged every remote-tracking ref alike, so a fresh clone of this repository reported about thirty `duplicate-id` failures against old branches cut before earlier renumberings (and `flow list` tagged those flows `dup id`). Only a clash with the default branch (`<remote>/main`, `<remote>/master`, the `<remote>/HEAD` target) fails the check now; a clash with any other remote branch is a warning (`flow id <n> is also used on <ref> by a different flow (...); ignore it if that branch is stale, otherwise renumber one of them before it merges`) and does not change the exit code or the `dup id` tag. `flow init` and `flow renumber --to` still reserve numbers held by every known remote branch.
+
+[Changes since 0.3.53](https://github.com/MrCipherSmith/keryx/compare/v0.3.53...v0.3.54)
+
+## [0.3.53] — 2026-10-01
+### Added
+- **Flow ids no longer clash with other branches.** Flow ids come from a clone-local ledger, so a second clone or an unfetched branch could hand out a number another branch already used (on 2026-10-01 `origin/main` held 360-365 that differed from the local 360-365). `flow init` now reserves every number held by a known remote branch (the remote-tracking refs this clone has, read without a network, up to 500 refs, `<remote>/main` first; a branch that was never fetched is invisible, and `flow renumber` is the repair), `flow renumber --to` refuses such an id, and `flow check` fails a local folder whose number a remote branch holds under a different folder name as `duplicate-id`, naming the ref and ending with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. No remotes, no refs or no git means nothing is known and nothing changes.
+- **`flow check` warns about a flow folder that is not committed.** After the normal output it prints `flow folder <dir> is not committed: commit it in the same PR as the code`. It is a warning: the exit code does not change. `flow list` and the TUI (the `/governance` flow list and the flow detail) tag the same flows `not committed`, and a clash with a remote branch `dup id`.
+- **A `folder-committed` completion gate.** `flow complete` and `flow check-complete` fail while the flow folder is not in `HEAD`, with `flow folder <dir> is not committed. Commit it (git add .metaproject/flows/<dir> && git commit) in the PR that carries the code, then run flow complete again`. Opt-in per package (`gates.folderCommitted`, written by `flow init`): flows created from 0.3.53 on carry it, older packages report the gate `skipped`, as does a directory that is not a git repository.
+### Changed
+- The rule is stated in the docs and the flow skills: the flow folder is committed in the same PR as the code, and the commit at closing is a rule to follow. The `folder-committed` gate does not enforce it; it requires only that the flow's `flow.json` is in `HEAD` before closing.
+
+[Changes since 0.3.52](https://github.com/MrCipherSmith/keryx/compare/v0.3.52...v0.3.53)
+
 ## [0.3.52] — 2026-10-01
 ### Security
 - **The shell now checks that the process it talks to is `serve`.** Before, nothing authenticated the listener to the shell: if `serve` died without cleanup and another local user bound its loopback port, the shell sent that listener its token and then wrote whatever "ready" pairing answer came back (an attacker's Telegram id as the operator, an attacker's group) into `config.json`. The shell now sends a nonce-bound HMAC of the shell token instead of the token, and `serve` signs every shell-route answer in `x-keryx-serve-proof`. A missing or wrong proof (another process, a tampered body, a replayed answer, a `serve` from before this version) is refused with "restart `keryx serve`" and nothing is written. This covers the seven `/channels` routes and every remote-control call (register, approval, reply, heartbeat, ack, deregister and the stream, whose fake lines and approval decisions a squatter could otherwise feed to the shell). `serve` still accepts the raw token from an older shell. A restarting `serve` now removes the previous endpoint file before it mints its token, and the shell reads the token before the endpoint, so a new token is never sent to a port left over from an earlier `serve`; the shell no longer follows redirects, so a redirect cannot replay a request at the real `serve`.

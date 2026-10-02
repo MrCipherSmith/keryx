@@ -455,6 +455,8 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["heartbeat", "POST"],
   ["reply", "POST"],
   ["approval", "POST"],
+  ["prompt", "POST"],
+  ["state", "POST"],
   ["ack", "POST"],
   ["stream", "GET"],
   // The channels plane (flow 377): connect Telegram, test it, disconnect it.
@@ -473,6 +475,8 @@ export type RemoteRouteName =
   | "heartbeat"
   | "reply"
   | "approval"
+  | "prompt"
+  | "state"
   | "ack"
   | "stream"
   | "channels-status"

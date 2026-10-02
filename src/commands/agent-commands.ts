@@ -244,6 +244,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
+    name: "/decisions",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions reason <why> and /decisions change <option> follow up on the last answer",
+    modes: AGENT_ONLY,
+  },
+  {
     // The installer view under the name that says what it does: it wires this
     // project into an editor, the TUI half of `keryx integrate`. R700-09:
     // renamed from `/integrations` — that name sat one letter from the CLI
@@ -296,6 +302,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // now inaccurate. TUI-only, same reasoning as `/conform`.
     name: "/staledocs",
     description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 390 (AC8): shows where a flow came from and sets it with a reason.
+    // TUI-only, a one-shot text surface like `/staledocs`; never a gate.
+    name: "/flow",
+    description: "Show a flow's origin, or set it — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\"",
     modes: AGENT_ONLY,
   },
   {

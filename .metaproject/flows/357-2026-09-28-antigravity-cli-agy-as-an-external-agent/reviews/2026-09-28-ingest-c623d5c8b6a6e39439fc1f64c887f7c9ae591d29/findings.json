@@ -1,0 +1,25 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow357-pr788-review",
+    "severity": "minor",
+    "problem": "DENIED_CAUSE_MARKERS is a single flat regex list matched against ANY codec's classifyFailure() cause string in buildOutcome (line 681), with no per-agent scoping. This PR adds two markers (`waiting (for|on) .*(approval|permission)`, `blocked (on|waiting) .*(approval|permission)`) written for antigravity-cli's headless-denial wording, but they apply to codex-cli and claude-cli failures equally.",
+    "impact": "A future codex-cli or claude-cli failure whose vendor-reported error text happens to contain this wording would be misclassified ExternalCompletionStatus 'Denied' instead of 'Error', with no current test guarding against that regression for the two new markers specifically.",
+    "suggested_fix": "Add a regression test asserting a codex-cli/claude-cli failure containing the two new phrases still classifies as intended, or scope the two new markers to antigravity-cli only.",
+    "evidence": "Read src/harness/external/runtime.ts:188-202 (DENIED_CAUSE_MARKERS) and :679-683 (buildOutcome's unscoped match against `cause`). Confirmed no existing fixture under fixtures/external/ (codex-cli or claude-cli) contains this wording via `keryx ctx rg`, and ran `bun test` on src/harness/external/codec/codex-cli.test.ts, src/harness/external/codec/claude-cli.test.ts, src/harness/external/runtime.test.ts, src/harness/run-external-factory.test.ts, src/commands/agents-external-run.test.ts: 181 pass, 0 fail — no current regression, but no test pins the new markers' cross-agent scope either.",
+    "confidence": "medium",
+    "file": "src/harness/external/runtime.ts",
+    "line": 188,
+    "global_id": "2026-09-28-ingest-c623d5c8b6a6e39439fc1f64c887f7c9ae591d29#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Adversarial check: tried to refute by (1) checking whether DENIED_CAUSE_MARKERS is scoped per-agent anywhere upstream of the match — it is not; buildOutcome (runtime.ts:664-692) calls codec.classifyFailure(outcome) generically for whichever codec was resolved by entry.id, and the resulting `cause` string is tested against the SAME shared DENIED_CAUSE_MARKERS array regardless of which agent produced it, confirmed by reading getExternalCodec/runExternalChild's codec resolution and buildOutcome's call site. (2) Checked whether codex-cli/claude-cli's own classifyFailure text is structurally prevented from ever containing the new markers' wording — it is not: codex admits structured retry/child_failed event text and narrated stdout lines, claude admits terminal.message + stderr + retry messages, neither of which excludes the literal words 'waiting'/'blocked'/'approval'/'permission'. (3) Ran the full existing codex-cli.test.ts, claude-cli.test.ts, runtime.test.ts, run-external-factory.test.ts and agents-external-run.test.ts suites (181 tests) — all pass, confirming no CURRENT fixture triggers a false positive, so this is a latent risk, not an active bug. (4) Confirmed via `keryx ctx rg` that no fixture file under fixtures/external/ for any agent contains the new markers' wording. The finding as stated (unscoped shared surface, no dedicated regression test for the two new markers, no current misfire) holds exactly as reported.",
+      "verifier": "flow357-pr788-verify"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 77bc5e79: the two loose markers were replaced by the single exact tag (blocked on approval) that only the antigravity codec emits, plus a cross-agent regression test (codex turn.failed mentioning waiting for approval stays Error). Re-verified as refuted in round 2 at head aa3973c3."
+    }
+  }
+]

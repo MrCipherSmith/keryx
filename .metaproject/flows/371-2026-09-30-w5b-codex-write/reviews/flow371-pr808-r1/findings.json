@@ -1,0 +1,224 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow371-pr808-review",
+    "severity": "major",
+    "problem": "The codex write confinement rests on three `-c sandbox_workspace_write.*` keys, but the version gate is a floor only (>= 0.159.0) with no ceiling. codex accepts an unknown or renamed `-c` key silently: `codex -c sandbox_workspace_write.bogus_key_zzz=true features list` exits 0, and `--strict-config` is not wired in. The knownGoodRange for codex has no max, so nothing even warns on a newer codex.",
+    "impact": "If a later codex renames or removes exclude_slash_tmp / exclude_tmpdir_env_var / network_access, every version above the floor passes the gate and runs with /tmp writable or the network open, with no error. The human review only sees the captured worktree diff, not writes outside it. codex has shipped 12 minor versions between the recorded 0.147.0 and 0.159.0.",
+    "suggested_fix": "Give the verified version a ceiling (refuse or at least require an explicit opt-in above the newest measured version), or add a cheap post-hoc or pre-run self-check that the keys took effect. At minimum warn above the highest measured version. Consider --strict-config if it covers -c overrides on exec.",
+    "evidence": "Read runtime.ts:396-405 and dispatch.ts:98 (floor-only compare). registry.ts:34 knownGoodRange has no max. Ran `codex -c sandbox_workspace_write.bogus_key_zzz=true features list` -> exit 0; with --strict-config -> 'not supported for codex features', so strictness is not even available there.",
+    "confidence": "medium",
+    "file": "src/harness/external/dispatch.ts",
+    "line": null,
+    "quote": "export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, string>> = { \"codex-cli\": \"0.159.0\" };",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 98
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/dispatch.ts",
+        "src/harness/external/runtime.ts",
+        "src/harness/external/registry.ts"
+      ],
+      "enumeration_method": "keryx ctx rg for CODEC_WRITE_VERIFIED_VERSIONS, compareVersions and knownGoodRange; only runtime.ts:399 consumes the gate and it is floor-only"
+    },
+    "global_id": "flow371-pr808-r1#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At a7b86fc2 runtime.test.ts 'a newer (unverified) codex is Denied' and write-run.test.ts 'newer than verified' pass: the window is 0.159.2 up to, not including, 0.160.0",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at a7b86fc2: write gate admits codex 0.159.2 up to, not including, 0.160.0; newer is refused (runtime.test.ts, write-run.test.ts)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow371-pr808-review",
+    "severity": "minor",
+    "problem": "The version parse drops pre-release suffixes, so a pre-release of the floor passes it. versionPattern captures only `\\d+.\\d+.\\d+`, so `codex-cli 0.159.0-alpha.3` is read as 0.159.0 and compareVersions(…, '0.159.0') is 0.",
+    "impact": "An alpha cut from before the 0.159.0 stable (whose sandbox behaviour was not measured) is accepted as 'the verified version' for a write run. Low probability, but the gate claims exactly-this-version semantics.",
+    "suggested_fix": "For the write gate, read the full version token and refuse any suffix (or treat a pre-release as older than its release), or require the banner to match `^codex-cli \\d+\\.\\d+\\.\\d+$`.",
+    "evidence": "Read registry.ts:33 (versionPattern), registry.ts:147-150 (parseAgentVersion uses match[1]), registry.ts:157-171 (compareVersions is numeric-only) and runtime.ts:399. The gate only ever sees the truncated string.",
+    "confidence": "medium",
+    "file": "src/harness/external/registry.ts",
+    "line": null,
+    "quote": "    versionPattern: \"codex-cli (\\\\d+\\\\.\\\\d+\\\\.\\\\d+)\",",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 33
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/registry.ts",
+        "src/harness/external/runtime.ts"
+      ],
+      "enumeration_method": "keryx ctx rg for compareVersions and parseAgentVersion; runtime.ts:399 is the only write-gate consumer"
+    },
+    "global_id": "flow371-pr808-r1#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At a7b86fc2 runtime.test.ts 'a pre-release of the floor' and registry.test.ts 'keeps a pre-release suffix' pass: a pre-release is refused",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at a7b86fc2: a pre-release banner is parsed with its suffix and refused by the write gate (runtime.test.ts, registry.test.ts)"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow371-pr808-review",
+    "severity": "minor",
+    "problem": "The floor 0.159.0 is documented as the version whose confinement was verified, but the flow's own measurement on 0.159.0 was `codex exec -s workspace-write --ignore-user-config` (no --ignore-rules, no exclude_* keys in that run description), and the --ignore-rules result is attributed only to 0.159.2 in the codec comment. The complete keryx argv is therefore recorded as measured only on 0.159.2, yet the docs say both versions were measured for the whole set.",
+    "impact": "On 0.159.0 it is unmeasured whether --ignore-rules exists or works. If absent, clap rejects it and the run fails with a misleading 'rejected this command line' classification. If present but different, the verified-floor claim is unsupported. A user on 0.159.0/0.159.1 is admitted on an unmeasured basis.",
+    "suggested_fix": "Either raise the floor to 0.159.2 (the only version measured with the full flag set) or record a 0.159.0 measurement of the full argv. Correct the docs to say which version was measured with which flags.",
+    "evidence": "Read codex-cli.ts:44-53 ('measured live on codex 0.159.0' then '--ignore-rules ... measured on 0.159.2'); flow 371 description.md:10 ('codex 0.159.0, `codex exec -s workspace-write --ignore-user-config`, scratch repo'); docs/docs/guides/external-agent-write.md:44 ('0.159.0 and 0.159.2' for the flag set). Local codex is 0.159.2, so 0.159.0 could not be re-checked.",
+    "confidence": "medium",
+    "file": "src/harness/external/dispatch.ts",
+    "line": null,
+    "quote": "export const CODEC_WRITE_VERIFIED_VERSIONS: Readonly<Record<string, string>> = { \"codex-cli\": \"0.159.0\" };",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 98
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/dispatch.ts",
+        "src/harness/external/codec/codex-cli.ts",
+        "docs/docs/guides/external-agent-write.md",
+        "README.md"
+      ],
+      "enumeration_method": "keryx ctx rg for '0.159' across src, docs and README"
+    },
+    "global_id": "flow371-pr808-r1#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At a7b86fc2 the floor is now 0.159.2, the only version measured with the full flag set; the 'old floor' tests in runtime.test.ts and write-run.test.ts pass",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at a7b86fc2: floor raised to 0.159.2, the only version measured with the full flag set; docs and comments say so"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow371-pr808-review",
+    "severity": "minor",
+    "problem": "Docs state things the recorded measurement does not show: (a) 'It cannot send them anywhere because the network is closed' while the evidence is only 'DNS lookups fail' (no direct-IP TCP, no AF_UNIX test); (b) 'a follow-up turn can never run under a weaker sandbox than the first turn' while only the resume argv text is unit-tested and resume was never run, and no keryx path executes a write-run resume (write runs are CLI-only, resume argv is only printed for operator runs, which are hard read-only); (c) all confinement results come from a scratch repo with a plain .git directory, not keryx's real layout (linked worktree whose .git is a file, placed under os.tmpdir(), i.e. inside the very /tmp the exclusions target).",
+    "impact": "Operators are told stronger guarantees than were observed, in a security-relevant warning box. 'cannot send it anywhere' and 'can never run under a weaker sandbox' are absolute statements; the `.git is read-only` / `writes outside the worktree fail` results were not shown for the actual worktree layout.",
+    "suggested_fix": "Reword to what was measured (DNS resolution failed; confinement observed in a scratch repository), drop 'can never' for resume or add a measured resume test, and either measure once in a real keryx-cut linked worktree under /tmp or say it was not.",
+    "evidence": "Read docs/docs/guides/external-agent-write.md:44-67 and docs/docs/harness.md:385-392; flow 371 description.md:10 says scratch repo; write-run.ts:344 and agents-external.ts:521 place worktrees under tmpdir(); grep shows resumeArgv is only set via external-operator paths whose sandbox is OPERATOR_SANDBOX ('read-only', external-operator.ts:80). I could not reproduce with `codex sandbox` because it needs a permission profile and is not the `exec -s` code path.",
+    "confidence": "medium",
+    "file": "docs/docs/guides/external-agent-write.md",
+    "line": null,
+    "quote": "- The network is closed (DNS lookups fail).",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 48
+    },
+    "class_scope": {
+      "sites": [
+        "docs/docs/guides/external-agent-write.md",
+        "docs/docs/harness.md",
+        "README.md",
+        "src/harness/external/codec/codex-cli.ts"
+      ],
+      "enumeration_method": "keryx ctx rg for 'cannot send', 'never run under a weaker', 'scratch' across docs, README and codec comments"
+    },
+    "global_id": "flow371-pr808-r1#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At a7b86fc2 docs, README and CHANGELOG now say a DNS lookup failed and the scratch repository was used; the 'can never run under a weaker sandbox' wording is gone",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at a7b86fc2: docs, README and CHANGELOG reworded to what was measured (DNS lookup failed, scratch repository, resume argv unit-tested only)"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow371-pr808-review",
+    "severity": "minor",
+    "problem": "Claude-only write wording survives in places this PR did not touch: README.md:490 '(or, for `claude-cli` only, a reviewed write ...)' contradicts README.md:522; src/flow/templates.ts:254-260 (shipped flow template text) says worktree-write is implemented 'for the ACP transport only' and that line-stream dispatch is 'REFUSED ... everywhere'; dispatch.ts:15 comment says 'for claude-cli alone among the line-stream agents'; subagent-dispatch.schema.json:168 still says refused 'in the read-only release'.",
+    "impact": "Contradictory documentation inside the README, and text in a shipped template and the dispatch contract that misdescribes the feature to users and to model callers (the template text is read by agents).",
+    "suggested_fix": "Update README.md:490, the flow template paragraph, the dispatch.ts header comment and the schema description to name claude-cli and codex-cli.",
+    "evidence": "Read README.md:486-525, src/flow/templates.ts:248-260, src/harness/external/dispatch.ts:12-16, and keryx ctx rg for 'claude-only|only claude|claude-cli only|read-only release'. Some of this predates flow 371 (flow 370 left it), but flow 371 widens the gap.",
+    "confidence": "high",
+    "file": "README.md",
+    "line": null,
+    "quote": "  **read-only** task (or, for `claude-cli` only, a reviewed write — see below)",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 490
+    },
+    "class_scope": {
+      "sites": [
+        "README.md",
+        "src/flow/templates.ts",
+        "src/harness/external/dispatch.ts",
+        "src/gdskills/contracts/subagent-dispatch.schema.json"
+      ],
+      "enumeration_method": "keryx ctx rg -i 'claude-only|only claude|claude-cli only|for claude-cli alone|read-only release' over src, docs, README.md, CHANGELOG.md (CHANGELOG hit is a historical entry and is left alone)"
+    },
+    "global_id": "flow371-pr808-r1#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At a7b86fc2 README.md, src/flow/templates.ts, dispatch.ts header and both subagent-dispatch schema copies now name claude-cli and codex-cli",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed at a7b86fc2: README, flow template, dispatch.ts header and both schema copies now name claude-cli and codex-cli"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow371-pr808-review",
+    "severity": "minor",
+    "problem": "Read-only codex runs (and any other non-write codex use) are launched without --ignore-rules. By the PR's own measurement (0.159.2), user exec-policy rules let shell commands run outside the sandbox; `codex exec --help` says the flag skips 'user or project execpolicy .rules files', so a repo-committed project rule in the worktree is in scope too.",
+    "impact": "A 'read-only' codex child can run a command that a user or project rule allows outside the sandbox, so the read-only guarantee is only as good as the operator's rule set. This is pre-existing and not introduced by this PR, but the PR's measurement shows it is exploitable and the flag is already known to be safe to pass. The change intentionally kept read-only argv byte-identical, which is why it is left open.",
+    "suggested_fix": "Pass --ignore-rules for read-only too, guarded by a version check (the flag is verified on 0.159.2; unknown on the 0.147.0 knownGoodRange minimum), and update the read-only argv golden tests. If it stays out of scope, document the gap.",
+    "evidence": "Read codex-cli.ts:93-115 (the flag is pushed only under worktree-write); `codex exec --help` text for --ignore-rules; codex-cli.ts:44-53 comment records the measured out-of-sandbox writes. I did not run a codex model prompt, so the read-only exploit itself is not reproduced by me.",
+    "confidence": "medium",
+    "file": "src/harness/external/codec/codex-cli.ts",
+    "line": 109,
+    "quote": "  if (input.sandbox === \"worktree-write\") argv.push(...CODEX_WRITE_CONFINEMENT_FLAGS);",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 107
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/codec/codex-cli.ts"
+      ],
+      "enumeration_method": "keryx ctx rg for buildArgv|buildCodexArgv|buildCodexResumeArgv across src; the only codex argv builders are buildCodexArgv and buildCodexResumeArgv in codex-cli.ts"
+    },
+    "global_id": "flow371-pr808-r1#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "At a7b86fc2 the read-only codex argv has no --ignore-rules; left as is because the flag is unmeasured on the oldest supported codex, and documented in harness.md and CHANGELOG.md",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "At a7b86fc2 read-only codex argv still lacks --ignore-rules; the flag is unmeasured on the oldest supported codex, so it is documented in harness.md and CHANGELOG.md and left for a follow-up. decided-by: orchestrator, reported to the operator"
+    }
+  }
+]

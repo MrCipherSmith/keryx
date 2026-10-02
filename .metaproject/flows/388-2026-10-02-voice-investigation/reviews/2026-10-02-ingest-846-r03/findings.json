@@ -1,0 +1,89 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "minor",
+    "problem": "Section 6 'Smallest first step' still specifies a Groq cloud transcription flow, while the Recommendation and the operator decision say speech recognition is local from the first version. Only the intro marks sections 3 to 6 as background.",
+    "impact": "A reader who opens section 6 directly plans the wrong first follow-up flow (cloud, Groq key) against the operator decision.",
+    "suggested_fix": "Mark the headings of sections 3 to 6 as superseded cloud background, or point section 6 at the local first step in the Recommendation.",
+    "evidence": "Read docs/requirements/keryx-voice/report.md lines 5-11 (Recommendation) and 72-76 (section 6) at b856f1d8.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 72,
+    "quote": "## 6. Smallest first step: expected outcome of follow-up flow 1",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 72
+    },
+    "global_id": "2026-10-02-ingest-846-r03#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Re-read report.md at b856f1d8: lines 72-74 specify Groq whisper-large-v3-turbo as the first step; lines 5-11 and the operator decision say local from the first version.",
+      "verifier": "flow388-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 4d6f962b on chore/flow-388-complete (docs/requirements/keryx-voice/report.md). Supersedes the r02 dismissals, which no human had decided. Headings of sections 3-6 now say cloud background, superseded."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "minor",
+    "problem": "The install-weight table covers Linux x64, Linux arm64, macOS arm64 and macOS x64 only. Windows is neither covered nor declared out of scope.",
+    "impact": "The follow-up flow could assume Windows support that nobody investigated.",
+    "suggested_fix": "State in the Not done section whether Windows is out of scope or unverified.",
+    "evidence": "Read report.md lines 131-144 at b856f1d8; the word Windows does not appear in the file.",
+    "confidence": "medium",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 133,
+    "quote": "| Stack | Linux x64 | Linux arm64 | macOS arm64 | macOS x64 |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 133
+    },
+    "global_id": "2026-10-02-ingest-846-r03#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Searched report.md for Windows at b856f1d8: no match; the install-weight table lists four platforms only.",
+      "verifier": "flow388-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 4d6f962b on chore/flow-388-complete (docs/requirements/keryx-voice/report.md). Supersedes the r02 dismissals, which no human had decided. Not done section now says Windows was not investigated."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow388-docs-consistency",
+    "severity": "info",
+    "problem": "Piper voice size is about 60 MB per voice in section 4 and about 21 MB per voice in section 8, without saying the first is the chat bot's own Piper build and the second is the int8 sherpa export.",
+    "impact": "Two figures for the same product in one report can read as an error; no decision depends on it because section 4 is background.",
+    "suggested_fix": "Name the stack next to each figure.",
+    "evidence": "Read report.md lines 27, 57 and 120 at b856f1d8.",
+    "confidence": "high",
+    "file": "docs/requirements/keryx-voice/report.md",
+    "line": 57,
+    "quote": "| Piper | local | 52 MB + about 60 MB per voice | spawn a binary | $0 | both | $0 | WAV, needs an encoder |",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 57
+    },
+    "global_id": "2026-10-02-ingest-846-r03#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "report.md line 57 says about 60 MB per voice, line 120 says about 21 MB each; neither names the other stack.",
+      "verifier": "flow388-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in commit 4d6f962b on chore/flow-388-complete (docs/requirements/keryx-voice/report.md). Supersedes the r02 dismissals, which no human had decided. Section 4 Piper row names the chat bot's build and the 21 MB sherpa figure."
+    }
+  }
+]

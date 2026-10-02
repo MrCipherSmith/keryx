@@ -48,7 +48,7 @@ export function describeAction(action: TriggerAction): string {
     // Flow 295: a scheduled agent task (the confirmed, signed local schedule).
     const d = action.dispatch;
     return (
-      `agent-task(${d.provider}/${d.model}, mode ${d.permissionMode}, ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ` +
+      `${action.digest !== undefined ? "digest" : "agent-task"}(${d.provider}/${d.model}, mode ${d.permissionMode}, ceiling $${d.ceilingUsd}, max ${d.maxSeconds}s, ` +
       `granted: ${action.grants.tools.length > 0 ? action.grants.tools.join(",") : "none"}` +
       (action.grants.network === "full" ? `, NETWORK ON — ${NETWORK_ON_WARNING}` : ", network off") +
       ")"

@@ -1,0 +1,24 @@
+# Flow Journal
+
+- 2026-09-29T09:08:40.704Z - flow created
+- 2026-09-29T09:09:13.001Z - frozen: 9 criteria; checksum recorded
+- 2026-09-29T09:09:13.360Z - started
+- 2026-09-29T10:39:46.129Z - ac-confirmed: AC1: shipped in 0.3.33 (#796); outcome-author-init.test.ts green in CI; live smoke on installed 0.3.33: flow init --outcome-author human recorded human (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:46.289Z - ac-confirmed: AC2: outcome-author-set.test.ts green in CI, including the racing-setter test. The CLI route was missing in 0.3.33 (Unknown command: outcome); fixed in 0.3.34 (#797) with a router drift test and a real-cli test; live smoke on 0.3.34: human -> agent wrote one journal line, a repeat wrote nothing (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:46.450Z - ac-confirmed: AC3: outcome-author-template.test.ts green in CI: description.md byte-identical to the template for human, agent and no flag (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:46.612Z - ac-confirmed: AC4: outcome-author-status.test.ts and product/outcome-author.test.ts green in CI; live smoke: flow status prints the author, product index carries it, a flow made by 0.3.32 reads unknown (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:46.773Z - ac-confirmed: AC5: flow-inspector-outcome-author.test.ts and product-open-surface.test.ts green in CI; no live TUI screenshot taken (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:46.937Z - ac-confirmed: AC6: never-gates, no-model, bulk-budget and import-policy suites green in CI on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:47.105Z - ac-confirmed: AC7: the three grep conditions hold on main at c39438ad; four-cell G1a and the split G1b are in both documents (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:47.275Z - ac-confirmed: AC8: typecheck and the flow/product/cli suites green in CI (18/18 on the head); docs, registry pins, README, module page, CHANGELOG 0.3.33 and package.json are in the release (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:47.436Z - ac-confirmed: AC9: stop recorded in the journal: P0 W1 waits for the operator; smoke on installed 0.3.33/0.3.34 showed each init value, the setter's journal line and unknown on an old flow (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T10:39:47.602Z - task-done: T1: Collect remaining context
+- 2026-09-29T10:39:47.770Z - task-done: T2: Implement per plan
+- 2026-09-29T10:39:47.934Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T10:39:48.094Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T10:44:00.000Z - STOP: P0 W1 (external agents live) waits for the operator's word. Smoke on installed 0.3.33/0.3.34: init values, setter journal line, unknown on an old flow. The 0.3.33 route bug was fixed in 0.3.34 (#797).
+- 2026-09-29T10:41:38.447Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/796 (warning: PR is not a draft) (base: main)
+- 2026-09-29T10:41:39.771Z - completing
+- 2026-09-29T10:41:43.442Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-29T10:41:43.443Z - done: all gates passed
+- 2026-10-01T12:22:20.503Z - renumbered: 365 -> 383: duplicate id with a flow from another clone (main holds 360-365); housekeeping

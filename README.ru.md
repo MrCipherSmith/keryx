@@ -1,4 +1,4 @@
-<!-- synced-with: README.md @ 97ed073f -->
+<!-- synced-with: README.md @ PENDING -->
 
 <p align="center">
   <picture>
@@ -122,6 +122,7 @@ keryx gdgraph affected src/price.ts
 | Чёткий критерий готовности для делегированной работы | Flows с зафиксированными критериями, журналами, подписанными подтверждениями и пакетами ревью | [Managed work](https://mrciphersmith.github.io/keryx/modules/managed-work/) |
 | Проверка состояния кода и нужные тесты | Единый отчёт о состоянии с результатом pass, warn или fail и подбор связанных тестов | [Quality](https://mrciphersmith.github.io/keryx/modules/quality/) |
 | Повторяемые процедуры вместо импровизации | Версионируемые навыки, синхронизированные правила агентов и проверенное обучение | [Skills, rules and learning](https://mrciphersmith.github.io/keryx/modules/skills-and-learning/) |
+| Запись того, что агент рекомендовал и что выбрали вы | Журнал рекомендаций со слепыми вопросами и отчётом о совпадениях | [Recommendation journal](https://mrciphersmith.github.io/keryx/guides/recommendation-journal/) |
 | Обслуживание проекта без вашего участия | Триггеры, задачи агента по расписанию и HTTP-вход, по умолчанию привязанный к loopback | [Automation](https://mrciphersmith.github.io/keryx/modules/automation/) |
 
 ## Как это работает

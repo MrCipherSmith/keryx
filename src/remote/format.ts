@@ -4,12 +4,15 @@
 // of messages to send. The outbound queue calls it for every message, so nothing
 // reaches the Bot API unsplit.
 //
-// Parse mode: NONE. The Bot API client (`bot-api-http.ts`) sends no `parse_mode`,
-// so Telegram shows the text exactly as written and there is nothing to escape:
-// a stray `_`, `*` or `<` in a model reply cannot make Telegram refuse the
-// message. A fenced code block therefore shows its backticks literally; it is
-// still kept whole (or closed and reopened) so a block never starts in one
-// message and silently ends in the next.
+// Parse mode: HTML, applied AFTER splitting. This file works on the plain
+// Markdown-ish text a model writes and never emits a tag; `renderTelegramHtml`
+// (`format-html.ts`) turns each part into Telegram HTML at send time, and the
+// outbound queue resends a part as plain text if Telegram refuses the markup.
+// Telegram counts the 4096-unit limit after it has parsed the entities, so a
+// rendered part is never longer than the plain part measured here. A fenced
+// code block is kept whole (or closed and reopened) so each part holds balanced
+// fences and renders as its own `<pre>`; a literal backtick run that is not a
+// fence stays plain text and is escaped, never rendered as a half-open tag.
 //
 // Rules:
 //   - A text that fits in one message is sent as is, with no part number.
@@ -48,7 +51,8 @@ interface Piece {
 
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
-function openingFence(line: string): Fence | undefined {
+/** The marker and info string of a line that opens a fenced block, if it is one. */
+export function fenceOpening(line: string): { marker: string; info: string } | undefined {
   const match = FENCE_LINE.exec(line);
   if (match === null) {
     return undefined;
@@ -58,10 +62,20 @@ function openingFence(line: string): Fence | undefined {
   if (marker.length > MAX_FENCE_MARKER || (marker.startsWith("`") && info.includes("`"))) {
     return undefined;
   }
+  return { marker, info };
+}
+
+function openingFence(line: string): Fence | undefined {
+  const opening = fenceOpening(line);
+  if (opening === undefined) {
+    return undefined;
+  }
+  const { marker, info } = opening;
   return { marker, header: info.length > 0 && info.length <= MAX_FENCE_INFO ? `${marker}${info}` : marker };
 }
 
-function closesFence(line: string, fence: Fence): boolean {
+/** Whether `line` closes the block opened with `fence` (same character, at least as long, nothing else). */
+export function closesFence(line: string, fence: Pick<Fence, "marker">): boolean {
   const match = FENCE_LINE.exec(line);
   if (match === null) {
     return false;
@@ -165,6 +179,8 @@ export function formatReply(text: string, limit: number = TELEGRAM_MAX_TEXT): st
   if (limit < MIN_LIMIT) {
     throw new RangeError(`formatReply: limit must be at least ${MIN_LIMIT}`);
   }
+  // One line ending for the splitter and the renderer: fences are recognised on "\n" lines only.
+  text = text.replace(/\r\n?/g, "\n");
   if (text.trim().length === 0) {
     return [];
   }

@@ -92,7 +92,9 @@ choice the operator makes knowingly. See the
 ## Scheduled agent tasks need the machine on
 
 `keryx schedule` hands a confirmed task to the operating system's scheduler
-(systemd user timers, launchd or cron). Keryx runs no daemon.
+(systemd user timers, launchd or cron). Keryx runs no daemon. The one exception is
+a digest (`keryx schedule add --digest`): it has no operating-system timer and is run
+by `keryx serve`, so it does nothing while `keryx serve` is stopped.
 
 - **Missed runs.** A machine that is off or asleep misses runs. systemd and
   launchd run one catch-up run at the next boot or wake; cron runs none.

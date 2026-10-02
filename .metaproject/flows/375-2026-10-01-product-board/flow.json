@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "375",
+  "slug": "product-board",
+  "title": "Product board: flow board as a dashboard",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T03:48:33.462Z",
+  "updatedAt": "2026-10-01T03:50:24.291Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0ccff7e8cc27f05904150c9b60e9227635bb99aa833cd42c67d2950de5009407",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T03:48:33.462Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T03:49:02.080Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T03:49:02.256Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T03:50:24.291Z",
+      "event": "ac-updated",
+      "detail": "Reclassify ACs into the [verify: exec|invariant|judged|none] grammar so flow ac kinds reports them; wording unchanged, no confirmations existed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/product/board.test.ts"
+    },
+    "AC2": {
+      "kind": "judged"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/product/board-stale.test.ts"
+    },
+    "AC4": {
+      "kind": "invariant",
+      "check": "bun test src/product/board-invariants.test.ts"
+    },
+    "AC5": {
+      "kind": "none",
+      "reason": "a judgement about readability, recorded in the journal"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/product/board-model.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/product/bulk-budget.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/product/board-dashboard.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/tui/product-open-surface.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/standard/help-groups.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "npm view @mrciphersmith/keryx version"
+    },
+    "AC12": {
+      "kind": "none",
+      "reason": "a live smoke of the installed release, recorded in the journal"
+    },
+    "AC13": {
+      "kind": "invariant",
+      "check": "bun test src/product"
+    }
+  }
+}

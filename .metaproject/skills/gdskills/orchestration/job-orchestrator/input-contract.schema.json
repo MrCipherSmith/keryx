@@ -106,7 +106,7 @@
           "minimum": 1,
           "maximum": 3,
           "default": 3,
-          "description": "Max review → fix iterations. Three: the same bound `task-implementer`, `flow-orchestrator` and SKILL.md 2.7 carry, pinned across all of them by src/gdskills/round-bound.test.ts. The default was 2 here, which made the contract disagree with the skill it validates."
+          "description": "Max review → fix iterations. Three: the same bound `task-implementer` and SKILL.md 2.7 carry (`flow-orchestrator`'s review bound is five, by operator decision), pinned by src/gdskills/round-bound.test.ts. The default was 2 here, which made the contract disagree with the skill it validates."
         },
         "plan_approval": {
           "type": "boolean",

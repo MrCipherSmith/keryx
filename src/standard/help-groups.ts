@@ -380,6 +380,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/flow",
+    group: "Managed work",
+    summary: "Show a flow's origin, or set it with a reason — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\".",
+  },
+  {
+    kind: "slash",
     name: "/opencomments",
     group: "Managed work",
     summary: "List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>.",
@@ -439,7 +445,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "schedule",
     group: "Automation",
-    summary: "Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove.",
+    summary: "Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram.",
   },
   {
     kind: "cli",
@@ -452,6 +458,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
+  },
+  {
+    kind: "cli",
+    name: "decisions",
+    group: "Automation",
+    summary: "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind).",
   },
   {
     kind: "cli",
@@ -507,6 +519,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary:
       "Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background.",
+  },
+  {
+    kind: "slash",
+    name: "/decisions",
+    group: "Automation",
+    summary: "Recommendation journal report: match share by mode and stage, and the deviations with their reasons.",
   },
   {
     kind: "slash",

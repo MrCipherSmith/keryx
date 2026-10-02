@@ -65,6 +65,7 @@ import { runAgentTurn } from "../commands/agent";
 import type { AgentDeps } from "../commands/agent";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { readTaskCostStore, taskCostKey } from "../harness/routing/task-cost";
+import { setModelProfileField } from "../harness/routing/model-profile";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 import type { DetectedProvider } from "../commands/select";
 import { readSlate, writeSlate } from "../session/slate";
@@ -845,15 +846,16 @@ test("recordTurnTaskCostBestEffort: cacheReadTokens is billed at the cached-inpu
 });
 
 // Review r1 (item 2): the 50% discount is OpenAI's own documented rate — a
-// non-OpenAI provider (curated "anthropic"/"claude-sonnet-5": priceInputPerMillion 3)
-// has no researched cached-input rate here, so its cacheReadTokens are billed
-// at the FULL input rate rather than fabricating a discount.
-test("recordTurnTaskCostBestEffort: a non-OpenAI provider's cacheReadTokens are billed at the full input rate, not discounted", async () => {
-  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-non-openai-"));
+// provider with no researched cached-input rate (curated "zai" has none here)
+// bills its cacheReadTokens at the FULL input rate rather than fabricating a discount.
+test("recordTurnTaskCostBestEffort: a provider without a researched cache rate bills cacheReadTokens at the full input rate", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-other-"));
   try {
+    await setModelProfileField("other-prov", "m", { field: "priceInputPerMillion", value: 3 }, dir, () => 1000);
+    await setModelProfileField("other-prov", "m", { field: "priceOutputPerMillion", value: 15 }, dir, () => 1000);
     await recordTurnTaskCostBestEffort({
-      providerId: "anthropic",
-      modelId: "claude-sonnet-5",
+      providerId: "other-prov",
+      modelId: "m",
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadTokens: 400_000,
@@ -861,10 +863,58 @@ test("recordTurnTaskCostBestEffort: a non-OpenAI provider's cacheReadTokens are 
       userConfigDir: dir,
     });
     const store = readTaskCostStore(dir);
+    const key = taskCostKey("other-prov", "m", "default");
+    expect(store[key]).toHaveLength(1);
+    expect(store[key]![0]!.costUsd).toBeCloseTo(3.0, 6);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// flow 387 T16 — Anthropic cache reads ~0.1x and 5-minute writes ~1.25x of the
+// input rate; both are SUBSETS of inputTokens. curated "claude-sonnet-5": $3 in / $15 out.
+test("recordTurnTaskCostBestEffort: Anthropic cache reads and writes are billed at their own multipliers", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-anthropic-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-5",
+      inputTokens: 1205,
+      outputTokens: 100,
+      cacheReadTokens: 1000,
+      cacheWriteTokens: 200,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
     const key = taskCostKey("anthropic", "claude-sonnet-5", "default");
     expect(store[key]).toHaveLength(1);
-    // 1,000,000 tokens @ $3/M, all at full price — cacheReadTokens changes nothing here.
-    expect(store[key]![0]!.costUsd).toBeCloseTo(3.0, 6);
+    // 5 full @ $3/M + 1000 read @ $0.30/M + 200 write @ $3.75/M + 100 out @ $15/M
+    // = (15 + 300 + 750 + 1500) / 1e6 = $0.002565. Naive all-full-price would be 0.005115.
+    expect(store[key]![0]!.costUsd).toBeCloseTo(0.002565, 9);
+    expect(store[key]![0]!.inputTokens).toBe(1205);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("recordTurnTaskCostBestEffort: Anthropic cache counts beyond inputTokens are clamped, never double counted", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "keryx-task-cost-cache-anthropic-clamp-"));
+  try {
+    await recordTurnTaskCostBestEffort({
+      providerId: "anthropic",
+      modelId: "claude-sonnet-5",
+      inputTokens: 1000,
+      outputTokens: 0,
+      cacheReadTokens: 900,
+      cacheWriteTokens: 500,
+      success: true,
+      userConfigDir: dir,
+    });
+    const store = readTaskCostStore(dir);
+    const key = taskCostKey("anthropic", "claude-sonnet-5", "default");
+    // 900 read @ 0.30 + 100 write (clamped) @ 3.75 = 270 + 375 = 645 / 1e6.
+    expect(store[key]![0]!.costUsd).toBeCloseTo(0.000645, 9);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

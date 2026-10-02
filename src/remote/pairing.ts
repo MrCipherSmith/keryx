@@ -22,6 +22,7 @@
 
 import { randomInt } from "node:crypto";
 import { redactSensitiveText } from "../security/service";
+import { sendHtml } from "./format-html";
 import { type HubTimers, realTimers } from "./hub";
 import { type PollerStatus, UpdatePoller } from "./poller";
 import type { PairingState } from "./protocol";
@@ -302,9 +303,10 @@ export class Pairing {
     // The code's ten minutes are spent; the group step gets its own.
     this.expiresAt = this.now() + this.ttlMs;
     this.armExpiryTimer();
-    await this.options.api
-      .sendMessage({ chatId: message.chat.id, text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator." })
-      .catch(() => undefined);
+    await sendHtml(this.options.api, {
+      chatId: message.chat.id,
+      text: "Paired. Now add me to your group (a group with Topics turned on) and make me an administrator.",
+    }).catch(() => undefined);
     const early = [...this.earlyGroups.values()];
     const earlyMoves = this.earlyMigrations;
     this.earlyGroups.clear();

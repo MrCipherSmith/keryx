@@ -1,0 +1,28 @@
+# Flow Journal
+
+- 2026-09-29T15:43:28.251Z - flow created
+- 2026-09-29T15:46:27.897Z - frozen: 9 criteria; checksum recorded
+- 2026-09-29T15:46:28.050Z - started
+- 2026-09-29T15:46:32.936Z - ac-updated: AC8: "The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a scripted `/rewind` round trip through the real CLI route. [verify: judged — the release evidence and the smoke output in the flow journal]" -> "# gdctx rg summary" (marker syntax: judged takes no arguments)
+- 2026-09-29T15:46:49.530Z - ac-updated: AC8: "# gdctx rg summary" -> "The change ships as the next patch release: CI green on the PR head, a review round against the PR head with the verifier on, and the installed build passes `keryx --version`, `keryx review tier`, `keryx mcp list` and a scripted `/rewind` round trip through the real CLI route. [verify: judged]" (restore AC8 text with valid marker)
+- 2026-09-29T20:48:04.153Z - ac-confirmed: AC1: bun test src/rewind/snapshot.test.ts passes on merged main 75a5fa99 and in CI on PR 800 head ae2bfdbc (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:10.565Z - ac-confirmed: AC2: shadow-isolation.test.ts passes in CI on PR 800 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:10.934Z - ac-confirmed: AC3: restore.test.ts passes in CI on PR 800, including the apply_patch and shell_exec end-to-end test (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:11.244Z - ac-confirmed: AC4: history.test.ts and apply.test.ts pass in CI; F-001 stale-index case fixed in ae2bfdbc (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:11.538Z - ac-confirmed: AC5: rewind-inspector and slash registry tests pass in CI; /rewind answered in the installed 0.3.37 readline shell (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:11.914Z - ac-confirmed: AC6: retention.test.ts passes in CI on PR 800 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:12.270Z - ac-confirmed: AC7: docs:links and mkdocs strict build green in CI; guide, README, CHANGELOG, version 0.3.37 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:12.564Z - ac-confirmed: AC8: CI green on head ae2bfdbc, review round with verifier recorded (flow367-pr800-r1, r2), installed 0.3.37 passes keryx --version, review tier, mcp list and /rewind in keryx shell (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:24.108Z - ac-confirmed: AC9: Flow stops after the release smoke; write mode for external agents was not touched and waits for the operator's word (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T20:48:24.446Z - task-done: T1: Collect remaining context
+- 2026-09-29T20:48:24.735Z - task-done: T2: Implement per plan
+- 2026-09-29T20:48:25.041Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T20:48:25.348Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T21:00:00Z - release smoke (installed 0.3.37): `keryx --version` = 0.3.37; `keryx review tier` = tier standard; `keryx mcp list` lists the configured servers; `/rewind` in `keryx shell --agent --no-tui` answered "No snapshots yet this session." Review round flow367-pr800-r1/r2 at head ae2bfdbc: F-001 acted-on, F-002 and F-003 accepted residual risk (decided-by orchestrator, disclosed to the operator).
+- 2026-09-29T20:48:31.627Z - completing: merged commit: 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5
+- 2026-09-29T20:48:31.691Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-29T20:48:31.694Z - completion-failed: review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against ae2bfdbc8370826b644ad5621ee89897a315d8c6, but the completion names merged commit 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5, and ae2bfdbc8370826b644ad5621ee89897a315d8c6 is neither contained in it (git reports it is not an ancestor) nor does it carry the same tree (round f36f05f858653ee600289af59a7540124926705f, merged b69a4e064eb50020cdaefced73d6f8a74285d122). So the reviewers did not read what merged: the base moved under the branch, or the merge was edited. Re-running the round against the branch will not close this — ingest a round against the merged commit (`keryx review ingest … --head 75a5fa9949c2f1fc86ceb8519c6eb4f0a3ae18d5`), or record the pull request on the flow so the round is compared against the PR head rather than against the merge.
+- 2026-09-29T20:48:38.457Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/800 (warning: PR is not a draft) (base: main)
+- 2026-09-29T20:48:38.802Z - completing
+- 2026-09-29T20:48:42.930Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-29T20:48:42.932Z - done: all gates passed

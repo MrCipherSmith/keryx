@@ -9,7 +9,7 @@
 // (not a hard-coded anthropic-only path). Progress via onPage + stderr.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { buildGraph } from "../gdgraph/build";
 import { loadGdgraphConfig } from "../gdgraph/config";
@@ -25,6 +25,8 @@ import { classifyPage, computeGraphFanIn, computePageGraphSignals } from "./clas
 import { collectPages, computeModuleKeyFiles, keyFilesForPage } from "./collect";
 import { loadWikiConfig, type WikiConfig } from "./config";
 import { enrichPageDeep } from "./deep-enrich";
+import { openWikiWriteContext, type WikiWriteContext, writeWikiPage } from "./history";
+import { checkPageInvariants, describeViolations, preserveEnrichInvariants, unwrapFencedReply } from "./page-invariants";
 import type { ResumeState } from "./resume-state";
 import { wikiValidate } from "./service";
 import { computePageNodeHash, isPageUnchangedSinceLastEnrich } from "./staleness";
@@ -107,6 +109,11 @@ export interface WikiEnrichInput {
   guardOutput?: typeof guardOutput;
   /** Cancels scheduling, model work, and persistence for this enrichment run. */
   signal?: AbortSignal;
+  /**
+   * The history run every page write is recorded under (flow 367). Defaults to
+   * a fresh `wiki enrich` run; the CLI passes one naming the exact command.
+   */
+  history?: WikiWriteContext;
 }
 
 /** Draft vs accepted (and other) split for planning / agent prompts. */
@@ -153,6 +160,8 @@ export interface WikiEnrichResult {
   model: string;
   credentialAvailable: boolean;
   concurrency: number;
+  /** History run the written pages are recorded under; undo with `wiki restore --run`. */
+  historyRunId?: string;
   pages: WikiEnrichPageResult[];
   enriched: number;
   dryRun: number;
@@ -187,7 +196,12 @@ Rules:
 - Do not invent APIs, files, or behavior that are not implied by the page's own
   title, type, and summary. When unsure, describe intent at a high level.
 - Prefer short paragraphs and bullet lists over walls of text.
+- Leave the "## Changelog" section and the frontmatter exactly as given: keryx
+  restores both after your edit and records the edit in the changelog itself.
 - Return ONLY the full Markdown page (frontmatter + body), no commentary.`;
+
+/** The changelog entry every successful enrich write adds (flow 367). */
+const ENRICH_CHANGELOG_NOTE = "Prose rewritten by `keryx wiki enrich`.";
 
 /** Resolve provider/model: explicit input → shell auth.json → fallbacks. */
 export function resolveEnrichProviderModel(input: {
@@ -771,6 +785,10 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
   const systemPrompt = await loadSystemPrompt(input.cwd);
   const total = pages.length;
   const onPage = input.onPage ?? defaultEnrichProgress;
+  const history = input.history ?? (await openWikiWriteContext(input.cwd, "wiki enrich"));
+  if (!input.dryRun) {
+    result.historyRunId = history.runId;
+  }
 
   // Ordered results matching input page order (parallel workers write by index).
   //
@@ -861,6 +879,10 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         };
       }
 
+      // Flow 367: the prompt shows the page in a ```markdown fence and models
+      // often answer in one; unwrap it before anything reads the reply.
+      enriched = unwrapFencedReply(enriched).trim();
+
       // Model sometimes returns body-only; re-attach original frontmatter.
       enriched = repairEnrichedFrontmatter(original, enriched);
 
@@ -876,6 +898,17 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       // Never let this write change Status — see the flow 194 / issue #391
       // comment above `wikiEnrich`'s `validate` declaration.
       enriched = setFrontmatterStatus(enriched, extractFrontmatterStatus(original));
+
+      // Flow 367: the model changes prose only. Front matter, the changelog and
+      // a managed Reference block come back from the original, plus one entry
+      // for this write; a page that still breaks an invariant is not written.
+      // Unconditional, like the think-tag guard: not a `validate` toggle.
+      enriched = preserveEnrichInvariants(original, enriched, ENRICH_CHANGELOG_NOTE);
+      const broken = checkPageInvariants(original, enriched);
+      if (broken.length > 0) {
+        onPage({ index, total, path: page.relativePath, status, phase: "failed" });
+        return { path: page.relativePath, action: "failed" as const, reason: `invariant: ${describeViolations(broken)}` };
+      }
 
       if (input.dryRun) {
         onPage({ index, total, path: page.relativePath, status, phase: "done" });
@@ -906,7 +939,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
         onPage({ index, total, path: page.relativePath, status, phase: "failed" });
         return { path: page.relativePath, action: "failed" as const, reason: materialized.reason };
       }
-      await writeFile(page.absolutePath, materialized.content, "utf8");
+      await writeWikiPage(history, page.absolutePath, materialized.content);
 
       onPage({ index, total, path: page.relativePath, status, phase: "done" });
       return {
@@ -939,6 +972,7 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       onPage,
       input,
       env,
+      history,
     });
   }
 
@@ -1071,6 +1105,7 @@ interface RlmCtx {
   env: Record<string, string | undefined>;
   graph: GraphData;
   pageIndex: (relativePath: string) => number;
+  history: WikiWriteContext;
 }
 
 interface RunRlmPipelineInput {
@@ -1087,6 +1122,7 @@ interface RunRlmPipelineInput {
   onPage: EnrichOnPage;
   input: WikiEnrichInput;
   env: Record<string, string | undefined>;
+  history: WikiWriteContext;
 }
 
 interface FinalizeResult {
@@ -1126,7 +1162,8 @@ function finalizeEnrichedText(
       structuralError: "unclosed or stray <think>/<thinking> tag in model output",
     };
   }
-  const cleaned = stripped.content.trim();
+  // Flow 367: unwrap a reply the model fenced as ```markdown (see the RLM-off path).
+  const cleaned = unwrapFencedReply(stripped.content).trim();
   if (cleaned.length === 0) {
     return { content: original, structuralError: "empty model response after stripping reasoning block" };
   }
@@ -1137,6 +1174,12 @@ function finalizeEnrichedText(
   }
   if (structuralError === null) {
     content = setFrontmatterStatus(content, extractFrontmatterStatus(original));
+    // Flow 367: same invariant step as the RLM-off path, for both RLM tiers.
+    content = preserveEnrichInvariants(original, content, ENRICH_CHANGELOG_NOTE);
+    const broken = checkPageInvariants(original, content);
+    if (broken.length > 0) {
+      structuralError = `invariant: ${describeViolations(broken)}`;
+    }
   }
   return { content, structuralError };
 }
@@ -1203,7 +1246,7 @@ async function finishSuccess(
       ...(extra.deepToolCalls !== undefined ? { deepToolCalls: extra.deepToolCalls } : {}),
     };
   }
-  await writeFile(page.absolutePath, materialized.content, "utf8");
+  await writeWikiPage(ctx.history, page.absolutePath, materialized.content);
   ctx.onPage({
     index,
     total: ctx.total,
@@ -1652,6 +1695,7 @@ async function runRlmPipeline(ctxInput: RunRlmPipelineInput): Promise<WikiEnrich
     env: ctxInput.env,
     graph,
     pageIndex,
+    history: ctxInput.history,
   };
 
   type Prepared =

@@ -1,0 +1,1341 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "394",
+  "slug": "shell-token-economy",
+  "title": "keryx shell spends fewer tokens than competing harnesses without losing quality",
+  "status": "done",
+  "createdAt": "2026-10-02T06:02:04.112Z",
+  "updatedAt": "2026-10-02T15:24:32.854Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-02T12:04:46.138Z",
+      "note": "loadSessionLimits openai-codex reads context_window/max_context_window from /models (src/commands/model-limits.ts, subscription-models.ts; tests model-limits.test.ts incl. absent-field case). Live probe 2026-10-02: gpt-6.1-sol -> 272000 live-models (journal). Guard armed via makeAgentDeps."
+    },
+    "AC2": {
+      "at": "2026-10-02T12:04:49.856Z",
+      "note": "Overflow -> compact once + retry once; second overflow ends the turn (src/commands/agent.ts, isContextOverflowError/parseOverflowLimits in context-guard.ts). Tests: agent.overflow-retry.test.ts (fake provider), agent.host-contracts.test.ts, context-guard.test.ts incl. Anthropic/Gemini wording (review r1 F-005/F-006)."
+    },
+    "AC3": {
+      "at": "2026-10-02T12:04:52.025Z",
+      "note": "estimateWithUsageAnchor = last provider input usage + chars/4 since; replay bytes counted; falls back without anchor (context-guard.ts). Tests: context-guard.test.ts incl. 600K-char replayed reasoning tripping needsCompaction where the old estimate does not."
+    },
+    "AC4": {
+      "at": "2026-10-02T12:04:53.630Z",
+      "note": "anchorsAnnouncement: one full Anchors block then deltas; compaction re-emits one (src/session/anchors-announce.ts, compact.ts). Test: anchors-announce.test.ts 20-change test asserts exactly one full block and bytes = first block + deltas."
+    },
+    "AC5": {
+      "at": "2026-10-02T12:04:55.061Z",
+      "note": "isOperatorMessage + injected marker; summary keeps every operator request >=500 chars, merges previous summary, lists files read/modified (src/session/compact.ts). Tests: compact.test.ts reproduces the 2026-10-01 pattern (3 trailing injected messages), legacy unmarked session, merge, file lists."
+    },
+    "AC6": {
+      "at": "2026-10-02T12:04:56.275Z",
+      "note": "planPrune protects the newest 40K tool-output tokens (+ unseen batch), placeholder names a readable saved file, >=20K threshold, archive keeps originals, prune -> remeasure -> compact (src/session/prune.ts, agent.ts). Tests: prune.test.ts incl. one-operator-turn session, prune-collapse.test.ts, prune-spill-safety.test.ts, agent.host-contracts.test.ts."
+    },
+    "AC7": {
+      "at": "2026-10-02T12:04:57.404Z",
+      "note": "spillToolOutput: >2000 lines or >50KB written in full to <session>/tool-output (unique name, 0600), model gets head+tail+counts+path+read_file/search_code hint (src/harness/tool/output-spill.ts). Tests: output-spill.test.ts asserts file content equals original; spill-read-access.test.ts. Live: long runner spilled 1 output (long-session-report.md)."
+    },
+    "AC8": {
+      "at": "2026-10-02T12:04:59.252Z",
+      "note": "Codex requests carry prompt_cache_key = session id, stable per session, different between sessions (openai-provider.ts; openai-codex-provider.test.ts). Live probe in journal: endpoint accepts the field; with session-id/thread-id headers cacheReadTokens 2304/2426 vs 0 without."
+    },
+    "AC9": {
+      "at": "2026-10-02T12:05:01.243Z",
+      "note": "scripts/benchmark/replay-session-shape.ts + .test.ts (deterministic, synthetic, no project content): window 272000 (gpt-6.1-sol via AC1), threshold 231200; branch peak 96,783 < threshold; total 7,374,769 vs main-before 14,848,882 = -50.3% (journal, commit f0fb5aa2 numbers)."
+    },
+    "AC10": {
+      "at": "2026-10-02T12:05:02.735Z",
+      "note": "comparative-report.md + fixtures ablation-mutating-results-{openai-codex,codex}-gpt-6.1-sol.json: same model gpt-6.1-sol, 3 tasks x 2 variants x 3 seeds; keryx 12,628 mean uncached input per task (context-on) vs codex CLI 35,199 -> keryx lowest (+0.0%). opencode reference on nemotron-3-ultra-free reported separately (fixture committed)."
+    },
+    "AC11": {
+      "at": "2026-10-02T12:05:05.252Z",
+      "note": "comparative-report.md, context-on arm: keryx success 100% vs main baseline 100% (baseline-main fixture), repeated reads after compaction/prune 0 vs 0. Known limitation recorded by owner decision: long-session-report.md (both 0/22; branch re-read loop) moved to flow 388."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/849"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context.md holds code sites and the 15-harness comparison study"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into specific tasks T5-T11 per plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "every implementation task added tests (agent.host-contracts, prune*, compact*, output-spill, context-guard, acp/server-archive, replay-session-shape, token-metrics); CI typecheck-and-tests on the PR"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "three managed review rounds (2026-10-02-ingest-849, -r02, -r03 retried at cdfc1639), all blocker/major/minor findings acted-on; PR #849"
+    },
+    {
+      "id": "T5",
+      "title": "Codex prompt_cache_key = session id + live probe (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:35:28.643Z",
+            "outcome": "started",
+            "detail": "387-T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commits ef3b8248 + header fix; live probe in journal: endpoint accepts prompt_cache_key, session-id header gives 2304/2426 cached"
+    },
+    {
+      "id": "T6",
+      "title": "Codex context window from /models + overflow compact-and-retry (AC1, AC2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:35:29.740Z",
+            "outcome": "started",
+            "detail": "387-T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commits 7abf9584 + ef3b8248; live window 272000 for gpt-6.1-sol"
+    },
+    {
+      "id": "T7",
+      "title": "Usage-anchored request estimate incl. reasoning bytes (AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:45:33.840Z",
+            "outcome": "started",
+            "detail": "387-T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 3155948f; concern: Anthropic inputTokens may exclude cache reads — checked in T14 dispatch"
+    },
+    {
+      "id": "T8",
+      "title": "Operator-turn accounting + merged summary in compaction (AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:57:35.134Z",
+            "outcome": "started",
+            "detail": "387-T8T9 combined dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "operator-turn accounting + merged summary; concern: compaction no-ops below 3 operator turns, handled in T11"
+    },
+    {
+      "id": "T9",
+      "title": "Single Anchors block with delta updates (AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:57:36.996Z",
+            "outcome": "started",
+            "detail": "387-T8T9 combined dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "single Anchors block + deltas, derived from history"
+    },
+    {
+      "id": "T10",
+      "title": "Spill large tool output to session file (AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:45:37.452Z",
+            "outcome": "started",
+            "detail": "387-T10"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 3155948f; readability of spill files by read tools moved to T14"
+    },
+    {
+      "id": "T11",
+      "title": "Prune old tool outputs behind protected window, prune before compact (AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:06:02.841Z",
+            "outcome": "started",
+            "detail": "387-T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "prune + compactWithFallback; open: pruning inactive with <2 operator turns (AC6 literal), wrap-up compaction sites not wired"
+    },
+    {
+      "id": "T12",
+      "title": "Synthetic session-shape replay fixture and before/after numbers (AC9)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:19:39.281Z",
+            "outcome": "started",
+            "detail": "387-T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "replay committed; AC9 met: peak 96,260 < 231,200; total -50.5% vs main-before"
+    },
+    {
+      "id": "T13",
+      "title": "Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-02T07:09:09.155Z",
+            "outcome": "started",
+            "detail": "387-T13a benchmark instrumentation only (live runs after T12)"
+          },
+          {
+            "at": "2026-10-02T07:19:28.668Z",
+            "outcome": "blocked",
+            "detail": "instrumentation landed; live comparative runs wait for T17 + T12"
+          },
+          {
+            "at": "2026-10-02T07:48:31.641Z",
+            "outcome": "started",
+            "detail": "387-T13b live comparative runs"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "comparative-report.md + fixtures: AC10 met on same-model keryx vs codex CLI; opencode reference leg committed"
+    },
+    {
+      "id": "T14",
+      "title": "Let read_file/search_code read the current session's tool-output spill dir (read-only) so spilled output is recoverable",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T06:57:38.316Z",
+            "outcome": "started",
+            "detail": "387-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "read-only spill access via resolveSpillReadable; security-boundary widening flagged for review"
+    },
+    {
+      "id": "T15",
+      "title": "Anthropic: cache_control breakpoints on the stable prefix + count cache_read/cache_creation in inputTokens",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:04:10.572Z",
+            "outcome": "started",
+            "detail": "387-T15"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "breakpoints + usage mapping; follow-up: Anthropic cache discount in estimateTaskCostUsd (tui-shell.ts) — cost display currently overestimates"
+    },
+    {
+      "id": "T16",
+      "title": "Anthropic cache-read/write discount in estimateTaskCostUsd (cost display overestimates after T15)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:19:40.493Z",
+            "outcome": "started",
+            "detail": "387-T16"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "0.1x/1.25x Anthropic multipliers; noted: some models cheaper (overestimate, never under); curated claude-sonnet-5 prices may be stale"
+    },
+    {
+      "id": "T17",
+      "title": "Prune inside a long single operator turn per re-frozen AC6 (protect newest 40K + the turn's operator message); wire prune into wrap-up compaction sites",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:17:04.069Z",
+            "outcome": "started",
+            "detail": "387-T17 via T11 worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "planPrune protects newest 40K only; wrap-up sites use pruneThenCompact"
+    },
+    {
+      "id": "T18",
+      "title": "Collapse old tool exchanges (call args + reasoning + result) into one-line text records outside the protected window; live-probe Codex accepts it; rerun T12 replay",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:28:40.793Z",
+            "outcome": "started",
+            "detail": "387-T18 via T11 worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "collapse landed + live Codex probe ok; replay now -44.9% total (AC9 needs -50%), peak 101,830"
+    },
+    {
+      "id": "T19",
+      "title": "Keep encrypted reasoning replay only on the last 3 assistant rounds (inside the protected window too); live-probe a structured call without its reasoning on Codex; rerun T12 replay",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T07:41:47.571Z",
+            "outcome": "started",
+            "detail": "387-T19 via T11 worker"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "newest-3 reasoning kept; live Codex probe ok"
+    },
+    {
+      "id": "T20",
+      "title": "Fix core-package boundary: compact.ts/prune.ts/output-spill.ts leaked into the src/core.ts module graph (CI core-package.test.ts)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T08:02:50.110Z",
+            "outcome": "started",
+            "detail": "387-T20"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "dependency inverted; core-package + core-graph tests pass locally"
+    },
+    {
+      "id": "T21",
+      "title": "Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T08:33:46.224Z",
+            "outcome": "started",
+            "detail": "387-T21 A (hosts/loop) + B (prune/spill) in worktree flow-387-r1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F-001..F-013 + F-020 fixed (commits f0fb5aa2, cada82aa, merged); round 2 review pending"
+    },
+    {
+      "id": "T22",
+      "title": "Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-02T09:29:31.035Z",
+            "outcome": "started",
+            "detail": "387-T22a design long tasks (no live runs)"
+          },
+          {
+            "at": "2026-10-02T10:10:26.916Z",
+            "outcome": "started",
+            "detail": "387-T22b live long runs: registry-recall, branch vs main, 1 seed"
+          },
+          {
+            "at": "2026-10-02T11:05:43.112Z",
+            "outcome": "started",
+            "detail": "387-T22d branch vs main long run at 128K after T24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "long-session-report.md: both 0/22; branch re-read loop recorded as known limitation, moved to flow 388 by owner decision"
+    },
+    {
+      "id": "T23",
+      "title": "Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T10:27:35.138Z",
+            "outcome": "started",
+            "detail": "387-T23 round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F-021..F-029 fixed; F-029 helper merge for agent tests left (signatures differ)"
+    },
+    {
+      "id": "T24",
+      "title": "Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T10:58:17.474Z",
+            "outcome": "started",
+            "detail": "387-T24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "per-signature reset after history rewrite; guard still refuses visible loops"
+    },
+    {
+      "id": "T25",
+      "title": "Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T11:28:53.134Z",
+            "outcome": "started",
+            "detail": "387-T25 in worktree flow-387-r3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 26778180 merged; F-032/F-033/F-024/F-029/F-034 fixed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T06:02:04.112Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T06:07:05.603Z",
+      "event": "task-added",
+      "detail": "T5: Codex prompt_cache_key = session id + live probe (AC8)"
+    },
+    {
+      "at": "2026-10-02T06:07:09.973Z",
+      "event": "task-added",
+      "detail": "T6: Codex context window from /models + overflow compact-and-retry (AC1, AC2)"
+    },
+    {
+      "at": "2026-10-02T06:07:10.730Z",
+      "event": "task-added",
+      "detail": "T7: Usage-anchored request estimate incl. reasoning bytes (AC3)"
+    },
+    {
+      "at": "2026-10-02T06:07:11.484Z",
+      "event": "task-added",
+      "detail": "T8: Operator-turn accounting + merged summary in compaction (AC5)"
+    },
+    {
+      "at": "2026-10-02T06:07:12.257Z",
+      "event": "task-added",
+      "detail": "T9: Single Anchors block with delta updates (AC4)"
+    },
+    {
+      "at": "2026-10-02T06:07:13.013Z",
+      "event": "task-added",
+      "detail": "T10: Spill large tool output to session file (AC7)"
+    },
+    {
+      "at": "2026-10-02T06:07:13.803Z",
+      "event": "task-added",
+      "detail": "T11: Prune old tool outputs behind protected window, prune before compact (AC6)"
+    },
+    {
+      "at": "2026-10-02T06:07:14.561Z",
+      "event": "task-added",
+      "detail": "T12: Synthetic session-shape replay fixture and before/after numbers (AC9)"
+    },
+    {
+      "at": "2026-10-02T06:07:15.422Z",
+      "event": "task-added",
+      "detail": "T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)"
+    },
+    {
+      "at": "2026-10-02T06:07:21.143Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T06:07:21.934Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T06:14:21.698Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T06:14:26.415Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T06:35:28.643Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 387-T5"
+    },
+    {
+      "at": "2026-10-02T06:35:29.740Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 387-T6"
+    },
+    {
+      "at": "2026-10-02T06:45:05.193Z",
+      "event": "task-done",
+      "detail": "T6: Codex context window from /models + overflow compact-and-retry (AC1, AC2)"
+    },
+    {
+      "at": "2026-10-02T06:45:33.840Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 387-T7"
+    },
+    {
+      "at": "2026-10-02T06:45:37.452Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 387-T10"
+    },
+    {
+      "at": "2026-10-02T06:48:30.683Z",
+      "event": "task-done",
+      "detail": "T5: Codex prompt_cache_key = session id + live probe (AC8)"
+    },
+    {
+      "at": "2026-10-02T06:56:51.203Z",
+      "event": "task-added",
+      "detail": "T14: Let read_file/search_code read the current session's tool-output spill dir (read-only) so spilled output is recoverable"
+    },
+    {
+      "at": "2026-10-02T06:56:52.500Z",
+      "event": "task-done",
+      "detail": "T7: Usage-anchored request estimate incl. reasoning bytes (AC3)"
+    },
+    {
+      "at": "2026-10-02T06:56:53.517Z",
+      "event": "task-done",
+      "detail": "T10: Spill large tool output to session file (AC7)"
+    },
+    {
+      "at": "2026-10-02T06:57:35.134Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 387-T8T9 combined dispatch"
+    },
+    {
+      "at": "2026-10-02T06:57:36.997Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 387-T8T9 combined dispatch"
+    },
+    {
+      "at": "2026-10-02T06:57:38.316Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 387-T14"
+    },
+    {
+      "at": "2026-10-02T07:03:57.049Z",
+      "event": "task-done",
+      "detail": "T14: Let read_file/search_code read the current session's tool-output spill dir (read-only) so spilled output is recoverable"
+    },
+    {
+      "at": "2026-10-02T07:04:00.356Z",
+      "event": "task-added",
+      "detail": "T15: Anthropic: cache_control breakpoints on the stable prefix + count cache_read/cache_creation in inputTokens"
+    },
+    {
+      "at": "2026-10-02T07:04:10.573Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 387-T15"
+    },
+    {
+      "at": "2026-10-02T07:05:51.379Z",
+      "event": "task-done",
+      "detail": "T8: Operator-turn accounting + merged summary in compaction (AC5)"
+    },
+    {
+      "at": "2026-10-02T07:05:53.222Z",
+      "event": "task-done",
+      "detail": "T9: Single Anchors block with delta updates (AC4)"
+    },
+    {
+      "at": "2026-10-02T07:06:02.842Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 387-T11"
+    },
+    {
+      "at": "2026-10-02T07:08:55.265Z",
+      "event": "task-done",
+      "detail": "T15: Anthropic: cache_control breakpoints on the stable prefix + count cache_read/cache_creation in inputTokens"
+    },
+    {
+      "at": "2026-10-02T07:09:08.175Z",
+      "event": "task-added",
+      "detail": "T16: Anthropic cache-read/write discount in estimateTaskCostUsd (cost display overestimates after T15)"
+    },
+    {
+      "at": "2026-10-02T07:09:09.155Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 387-T13a benchmark instrumentation only (live runs after T12)"
+    },
+    {
+      "at": "2026-10-02T07:14:11.477Z",
+      "event": "task-done",
+      "detail": "T11: Prune old tool outputs behind protected window, prune before compact (AC6)"
+    },
+    {
+      "at": "2026-10-02T07:16:11.080Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"Before each request, tool results outside a protected window (the newest 40K estimated tokens of tool output and the last 2 operator turns) are replaced in the outgoing request by a fixed placeholder naming the spill file, only when that saves at least 20K estimated tokens; `archive.jsonl` keeps the original text. Pruning runs before compaction, and compaction runs only if the request is still over threshold after pruning. Tests cover the threshold, the protected window and the archive content.\" -> \"Before each request, tool results outside a protected window (the newest 40K estimated tokens of tool output, plus the operator message that started the current turn) are replaced in the outgoing request by a fixed placeholder naming a readable file with the full text, only when that saves at least 20K estimated tokens; archive.jsonl keeps the original text. Pruning acts inside a long single operator turn too. Pruning runs before compaction, and compaction runs only if the request is still over threshold after pruning. Tests cover the threshold, the protected window, a one-operator-turn session and the archive content.\" (Owner decision 2026-10-02: protecting the whole last 2 operator turns disables pruning in few-turn sessions (the motivating 2026-10-01 shape), leaving only the lossier in-turn compaction; protect the newest 40K tokens + the turn's operator message instead. No confirmations existed.)"
+    },
+    {
+      "at": "2026-10-02T07:16:39.364Z",
+      "event": "task-added",
+      "detail": "T17: Prune inside a long single operator turn per re-frozen AC6 (protect newest 40K + the turn's operator message); wire prune into wrap-up compaction sites"
+    },
+    {
+      "at": "2026-10-02T07:17:04.069Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 387-T17 via T11 worker"
+    },
+    {
+      "at": "2026-10-02T07:19:28.669Z",
+      "event": "task-attempt",
+      "detail": "T13: blocked (attempt 2) — instrumentation landed; live comparative runs wait for T17 + T12"
+    },
+    {
+      "at": "2026-10-02T07:19:39.281Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 387-T12"
+    },
+    {
+      "at": "2026-10-02T07:19:40.493Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 387-T16"
+    },
+    {
+      "at": "2026-10-02T07:20:50.136Z",
+      "event": "task-done",
+      "detail": "T17: Prune inside a long single operator turn per re-frozen AC6 (protect newest 40K + the turn's operator message); wire prune into wrap-up compaction sites"
+    },
+    {
+      "at": "2026-10-02T07:23:07.344Z",
+      "event": "task-done",
+      "detail": "T16: Anthropic cache-read/write discount in estimateTaskCostUsd (cost display overestimates after T15)"
+    },
+    {
+      "at": "2026-10-02T07:28:39.796Z",
+      "event": "task-added",
+      "detail": "T18: Collapse old tool exchanges (call args + reasoning + result) into one-line text records outside the protected window; live-probe Codex accepts it; rerun T12 replay"
+    },
+    {
+      "at": "2026-10-02T07:28:40.793Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 387-T18 via T11 worker"
+    },
+    {
+      "at": "2026-10-02T07:40:55.809Z",
+      "event": "task-done",
+      "detail": "T18: Collapse old tool exchanges (call args + reasoning + result) into one-line text records outside the protected window; live-probe Codex accepts it; rerun T12 replay"
+    },
+    {
+      "at": "2026-10-02T07:41:46.736Z",
+      "event": "task-added",
+      "detail": "T19: Keep encrypted reasoning replay only on the last 3 assistant rounds (inside the protected window too); live-probe a structured call without its reasoning on Codex; rerun T12 replay"
+    },
+    {
+      "at": "2026-10-02T07:41:47.571Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 387-T19 via T11 worker"
+    },
+    {
+      "at": "2026-10-02T07:47:23.665Z",
+      "event": "task-done",
+      "detail": "T19: Keep encrypted reasoning replay only on the last 3 assistant rounds (inside the protected window too); live-probe a structured call without its reasoning on Codex; rerun T12 replay"
+    },
+    {
+      "at": "2026-10-02T07:47:24.504Z",
+      "event": "task-done",
+      "detail": "T12: Synthetic session-shape replay fixture and before/after numbers (AC9)"
+    },
+    {
+      "at": "2026-10-02T07:48:31.641Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 3) — 387-T13b live comparative runs"
+    },
+    {
+      "at": "2026-10-02T08:02:49.138Z",
+      "event": "task-added",
+      "detail": "T20: Fix core-package boundary: compact.ts/prune.ts/output-spill.ts leaked into the src/core.ts module graph (CI core-package.test.ts)"
+    },
+    {
+      "at": "2026-10-02T08:02:50.110Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 387-T20"
+    },
+    {
+      "at": "2026-10-02T08:08:04.058Z",
+      "event": "task-done",
+      "detail": "T20: Fix core-package boundary: compact.ts/prune.ts/output-spill.ts leaked into the src/core.ts module graph (CI core-package.test.ts)"
+    },
+    {
+      "at": "2026-10-02T08:33:30.578Z",
+      "event": "task-added",
+      "detail": "T21: Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013"
+    },
+    {
+      "at": "2026-10-02T08:33:46.224Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 387-T21 A (hosts/loop) + B (prune/spill) in worktree flow-387-r1"
+    },
+    {
+      "at": "2026-10-02T09:29:30.132Z",
+      "event": "task-added",
+      "detail": "T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens"
+    },
+    {
+      "at": "2026-10-02T09:29:31.035Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 387-T22a design long tasks (no live runs)"
+    },
+    {
+      "at": "2026-10-02T10:10:14.184Z",
+      "event": "task-done",
+      "detail": "T21: Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013"
+    },
+    {
+      "at": "2026-10-02T10:10:26.916Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 2) — 387-T22b live long runs: registry-recall, branch vs main, 1 seed"
+    },
+    {
+      "at": "2026-10-02T10:27:34.217Z",
+      "event": "task-added",
+      "detail": "T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029"
+    },
+    {
+      "at": "2026-10-02T10:27:35.139Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 387-T23 round 2 fixes"
+    },
+    {
+      "at": "2026-10-02T10:31:32.309Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell, codex CLI and opencode, and a committed comparative report runs all three on the same task set (model per leg stated, any mismatch disclosed). In that report keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest.\" -> \"The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell and codex CLI on the same model (gpt-6.1-sol via the ChatGPT subscription), and a committed comparative report runs both on the same task set; in it keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest. opencode is run on a free OpenCode Zen model and reported separately as a different-model reference, not part of the verdict.\" (Owner decision 2026-10-02: opencode cannot run gpt-6.1-sol (Zen balance empty; its own OpenAI OAuth expired) and Zen's free models are served only to the opencode client (keryx gets HTTP 403), so no same-model keryx/opencode pair exists; verdict on the same-model codex CLI pair, opencode as a disclosed reference. No confirmations existed.)"
+    },
+    {
+      "at": "2026-10-02T10:47:02.748Z",
+      "event": "task-done",
+      "detail": "T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029"
+    },
+    {
+      "at": "2026-10-02T10:58:16.596Z",
+      "event": "task-added",
+      "detail": "T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH"
+    },
+    {
+      "at": "2026-10-02T10:58:17.474Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 387-T24"
+    },
+    {
+      "at": "2026-10-02T11:05:25.696Z",
+      "event": "task-done",
+      "detail": "T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH"
+    },
+    {
+      "at": "2026-10-02T11:05:43.113Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 3) — 387-T22d branch vs main long run at 128K after T24"
+    },
+    {
+      "at": "2026-10-02T11:28:02.733Z",
+      "event": "task-added",
+      "detail": "T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers"
+    },
+    {
+      "at": "2026-10-02T11:28:53.134Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 387-T25 in worktree flow-387-r3"
+    },
+    {
+      "at": "2026-10-02T11:53:18.615Z",
+      "event": "task-done",
+      "detail": "T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers"
+    },
+    {
+      "at": "2026-10-02T11:53:20.093Z",
+      "event": "task-done",
+      "detail": "T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens"
+    },
+    {
+      "at": "2026-10-02T11:53:21.438Z",
+      "event": "task-done",
+      "detail": "T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)"
+    },
+    {
+      "at": "2026-10-02T12:04:32.558Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T12:04:34.011Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T12:04:46.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: loadSessionLimits openai-codex reads context_window/max_context_window from /models (src/commands/model-limits.ts, subscription-models.ts; tests model-limits.test.ts incl. absent-field case). Live probe 2026-10-02: gpt-6.1-sol -> 272000 live-models (journal). Guard armed via makeAgentDeps. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:49.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Overflow -> compact once + retry once; second overflow ends the turn (src/commands/agent.ts, isContextOverflowError/parseOverflowLimits in context-guard.ts). Tests: agent.overflow-retry.test.ts (fake provider), agent.host-contracts.test.ts, context-guard.test.ts incl. Anthropic/Gemini wording (review r1 F-005/F-006). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:52.026Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: estimateWithUsageAnchor = last provider input usage + chars/4 since; replay bytes counted; falls back without anchor (context-guard.ts). Tests: context-guard.test.ts incl. 600K-char replayed reasoning tripping needsCompaction where the old estimate does not. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:53.630Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: anchorsAnnouncement: one full Anchors block then deltas; compaction re-emits one (src/session/anchors-announce.ts, compact.ts). Test: anchors-announce.test.ts 20-change test asserts exactly one full block and bytes = first block + deltas. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:55.061Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: isOperatorMessage + injected marker; summary keeps every operator request >=500 chars, merges previous summary, lists files read/modified (src/session/compact.ts). Tests: compact.test.ts reproduces the 2026-10-01 pattern (3 trailing injected messages), legacy unmarked session, merge, file lists. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:56.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: planPrune protects the newest 40K tool-output tokens (+ unseen batch), placeholder names a readable saved file, >=20K threshold, archive keeps originals, prune -> remeasure -> compact (src/session/prune.ts, agent.ts). Tests: prune.test.ts incl. one-operator-turn session, prune-collapse.test.ts, prune-spill-safety.test.ts, agent.host-contracts.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:57.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: spillToolOutput: >2000 lines or >50KB written in full to <session>/tool-output (unique name, 0600), model gets head+tail+counts+path+read_file/search_code hint (src/harness/tool/output-spill.ts). Tests: output-spill.test.ts asserts file content equals original; spill-read-access.test.ts. Live: long runner spilled 1 output (long-session-report.md). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:59.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Codex requests carry prompt_cache_key = session id, stable per session, different between sessions (openai-provider.ts; openai-codex-provider.test.ts). Live probe in journal: endpoint accepts the field; with session-id/thread-id headers cacheReadTokens 2304/2426 vs 0 without. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:01.243Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: scripts/benchmark/replay-session-shape.ts + .test.ts (deterministic, synthetic, no project content): window 272000 (gpt-6.1-sol via AC1), threshold 231200; branch peak 96,783 < threshold; total 7,374,769 vs main-before 14,848,882 = -50.3% (journal, commit f0fb5aa2 numbers). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:02.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: comparative-report.md + fixtures ablation-mutating-results-{openai-codex,codex}-gpt-6.1-sol.json: same model gpt-6.1-sol, 3 tasks x 2 variants x 3 seeds; keryx 12,628 mean uncached input per task (context-on) vs codex CLI 35,199 -> keryx lowest (+0.0%). opencode reference on nemotron-3-ultra-free reported separately (fixture committed). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:05.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: comparative-report.md, context-on arm: keryx success 100% vs main baseline 100% (baseline-main fixture), repeated reads after compaction/prune 0 vs 0. Known limitation recorded by owner decision: long-session-report.md (both 0/22; branch re-read loop) moved to flow 388. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:25:43.701Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/849 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-02T12:26:40.357Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T12:26:51.056Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T12:26:51.070Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-02T12:29:57.076Z",
+      "event": "renumbered",
+      "detail": "387 -> 392: duplicate id with 387-2026-10-02-telegram-commands, which reached main first (05:12 UTC) from another clone; this flow was created later (06:02 UTC); 391 is the highest id on main — move the later flow"
+    },
+    {
+      "at": "2026-10-02T15:24:32.854Z",
+      "event": "renumbered",
+      "detail": "392 -> 394: second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-02T12:04:46.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:49.856Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:52.025Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:53.630Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:55.061Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:56.275Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:57.404Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:59.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:01.243Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:02.735Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:05.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:26:51.070Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d",
+      "headCommit": "061456ff266222acfcb57bfb308ca7547a6acf61"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T12:26:51.056Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "061456ff266222acfcb57bfb308ca7547a6acf61 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "061456ff266222acfcb57bfb308ca7547a6acf61 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "25 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "387-2026-10-02-shell-token-economy is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    }
+  ],
+  "merged": {
+    "commit": "061456ff266222acfcb57bfb308ca7547a6acf61",
+    "ref": "origin/main",
+    "at": "2026-10-02T12:26:51.070Z"
+  }
+}

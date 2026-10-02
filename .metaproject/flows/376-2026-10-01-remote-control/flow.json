@@ -1,0 +1,821 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "376",
+  "slug": "remote-control",
+  "title": "Remote control: a shell session in a Telegram topic",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T04:13:25.170Z",
+  "updatedAt": "2026-10-01T07:56:57.233Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T07:56:52.841Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC2": {
+      "at": "2026-10-01T07:56:53.076Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC3": {
+      "at": "2026-10-01T07:56:53.304Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC4": {
+      "at": "2026-10-01T07:56:53.596Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC5": {
+      "at": "2026-10-01T07:56:53.929Z",
+      "note": "single-poller.test.ts; criterion reworded to match behavior on operator decision (poll 25); CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48"
+    },
+    "AC6": {
+      "at": "2026-10-01T07:56:54.254Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC7": {
+      "at": "2026-10-01T07:56:54.582Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC8": {
+      "at": "2026-10-01T07:56:54.912Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC9": {
+      "at": "2026-10-01T07:56:55.238Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC10": {
+      "at": "2026-10-01T07:56:55.576Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC11": {
+      "at": "2026-10-01T07:56:55.903Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC12": {
+      "at": "2026-10-01T07:56:56.235Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC14": {
+      "at": "2026-10-01T07:56:56.564Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC15": {
+      "at": "2026-10-01T07:56:56.898Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    },
+    "AC16": {
+      "at": "2026-10-01T07:56:57.233Z",
+      "note": "reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Block 1: remote registry, durable queues, single poller, topic lifecycle, orphan, allowlist on a fake Bot API",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "block 1 built in keryx-w376, 121 tests pass incl. core-package guard"
+    },
+    {
+      "id": "T6",
+      "title": "Block 2: shell-to-serve channel (register, heartbeat, SSE, reconnect, local token, line injection, approvals as buttons)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "block 2 built: /v1/remote routes, client, SSE; remote and serve tests green"
+    },
+    {
+      "id": "T7",
+      "title": "Block 3: TUI surface, slash and readline commands, session history",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "block 3 built: shell bridge, /remote-control, TUI surfaces, history; pty smoke on fake serve"
+    },
+    {
+      "id": "T8",
+      "title": "Block 4: run timeout, reply formatting and splitting, docs, version, release",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "block 4: format, docs, 0.3.47"
+    },
+    {
+      "id": "T9",
+      "title": "Independent review (review-orchestrator) and PR",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T04:13:25.170Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T04:23:19.291Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T04:23:19.803Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T04:24:05.107Z",
+      "event": "task-added",
+      "detail": "T5: Block 1: remote registry, durable queues, single poller, topic lifecycle, orphan, allowlist on a fake Bot API"
+    },
+    {
+      "at": "2026-10-01T04:24:05.597Z",
+      "event": "task-added",
+      "detail": "T6: Block 2: shell-to-serve channel (register, heartbeat, SSE, reconnect, local token, line injection, approvals as buttons)"
+    },
+    {
+      "at": "2026-10-01T04:24:06.052Z",
+      "event": "task-added",
+      "detail": "T7: Block 3: TUI surface, slash and readline commands, session history"
+    },
+    {
+      "at": "2026-10-01T04:24:06.460Z",
+      "event": "task-added",
+      "detail": "T8: Block 4: run timeout, reply formatting and splitting, docs, version, release"
+    },
+    {
+      "at": "2026-10-01T04:24:06.897Z",
+      "event": "task-added",
+      "detail": "T9: Independent review (review-orchestrator) and PR"
+    },
+    {
+      "at": "2026-10-01T04:58:57.502Z",
+      "event": "task-done",
+      "detail": "T5: Block 1: remote registry, durable queues, single poller, topic lifecycle, orphan, allowlist on a fake Bot API"
+    },
+    {
+      "at": "2026-10-01T05:29:00.483Z",
+      "event": "task-done",
+      "detail": "T6: Block 2: shell-to-serve channel (register, heartbeat, SSE, reconnect, local token, line injection, approvals as buttons)"
+    },
+    {
+      "at": "2026-10-01T05:58:54.102Z",
+      "event": "task-done",
+      "detail": "T7: Block 3: TUI surface, slash and readline commands, session history"
+    },
+    {
+      "at": "2026-10-01T06:10:51.008Z",
+      "event": "task-done",
+      "detail": "T8: Block 4: run timeout, reply formatting and splitting, docs, version, release"
+    },
+    {
+      "at": "2026-10-01T07:53:14.093Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: lifecycle.test.ts; live smoke from npm 0.3.48 with a fake Bot API: /remote-control smoke-a created topic, off deleted it, closing the shell deleted the second one; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:14.270Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: naming.test.ts; second review fix: topic rebind resets finished ids; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:14.447Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: roundtrip.test.ts; smoke from npm 0.3.48: a Telegram line showed as 'tg > ...' in the shell and the reply came back to the same topic; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:14.612Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: history.test.ts; remote intervals in sessions list, -r/-c start nothing; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:14.786Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: orphan.test.ts; review fix: close() awaits in-flight register, disable awaits the first close; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:14.951Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: approval.test.ts; review fix: 'Approval granted.' posted only when the stream write succeeded; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.128Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: allowlist.test.ts; journal holds id and time only; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.295Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: token-secrecy.test.ts; smoke from npm: serve log and Bot API call log contain no token; all files mode 600; shell token minted per serve start (review MAJOR-1); CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.461Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: restart.test.ts, restart.http.test.ts; review MAJOR-2: dedupe by exact id, no persisted offset; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.625Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: run-limits.test.ts; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.799Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: remote-control-surface.test.ts; smoke from npm: sidebar 'Remote off|<topic>', modal with status, topic, last heartbeat, tg label; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:15.966Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: no-live-network.test.ts; smoke used a fetch preload fake, no real Telegram contact; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:16.135Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: help-groups.test.ts now asserts README, cli-reference, wiki and CHANGELOG mention remote control and version above 0.3.46; package.json 0.3.48; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:53:16.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: manual smoke from @mrciphersmith/keryx 0.3.48 installed from npm: serve (remote on) + shell, /remote-control opens and closes a topic through a fake Bot API (fetch preload redirecting api.telegram.org); recorded in journal; CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:38.225Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"A second `keryx serve` on the same bot token does not poll, exits with the reason, and the first keeps polling (one poller per token; fake API answers 409). [verify: exec `bun test src/remote/single-poller.test.ts`]\" -> \"A second `keryx serve` on the same bot token meets a 409 from Telegram, stops polling for good and says why in its log and in the remote-control status; it keeps serving its other routes, and the first keeps polling (one poller per token; fake API answers 409). [verify: exec `bun test src/remote/single-poller.test.ts`]\" (operator decision 2026-10-01 (poll 25): AC wording follows the behavior; the second serve does not exit, it stops polling and reports the conflict)"
+    },
+    {
+      "at": "2026-10-01T07:56:52.841Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:53.076Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:53.304Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:53.596Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:53.929Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: single-poller.test.ts; criterion reworded to match behavior on operator decision (poll 25); CI 18/18 green on PR #817 (merged dcd423d0), released as 0.3.48 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:54.254Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:54.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:54.912Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:55.238Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:55.576Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:55.903Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:56.235Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:56.565Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:56.898Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T07:56:57.233Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: reconfirmed after AC5 reword (confirmations voided by ac update); evidence unchanged: test named in the criterion green in CI 18/18 on PR #817 (merged dcd423d0), npm 0.3.48 smoke (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/remote/lifecycle.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/remote/naming.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/remote/roundtrip.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/remote/history.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/remote/single-poller.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/remote/orphan.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/remote/approval.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/remote/allowlist.test.ts"
+    },
+    "AC9": {
+      "kind": "invariant",
+      "check": "bun test src/remote/token-secrecy.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/remote/restart.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/remote/run-limits.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/tui/remote-control-surface.test.ts"
+    },
+    "AC13": {
+      "kind": "judged"
+    },
+    "AC14": {
+      "kind": "invariant",
+      "check": "bun test src/remote/no-live-network.test.ts"
+    },
+    "AC15": {
+      "kind": "exec",
+      "check": "bun test src/standard/help-groups.test.ts"
+    },
+    "AC16": {
+      "kind": "none",
+      "reason": "a manual smoke from the published package, recorded in the journal"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T07:53:14.093Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:14.269Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:14.447Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:14.612Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:14.786Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:14.951Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.128Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.295Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.461Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.625Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.799Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:15.966Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:16.135Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:53:16.297Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:fbb130ae4ca993af9281b21ef24ea7e69b812ca9f452a616f4f0ecc0355551fc"
+    },
+    {
+      "at": "2026-10-01T07:56:52.841Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:53.076Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:53.304Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:53.596Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:53.929Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:54.254Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:54.582Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:54.912Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:55.238Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:55.576Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:55.903Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:56.235Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:56.564Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:56.898Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    },
+    {
+      "at": "2026-10-01T07:56:57.233Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:ab68fdd70652ad513f856df16e83086ea9caa172632c91e8918ffc14fa41db35"
+    }
+  ]
+}

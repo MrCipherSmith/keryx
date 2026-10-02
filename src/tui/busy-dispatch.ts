@@ -92,6 +92,11 @@ export type BusyDispatchTarget =
    */
   | "approvals"
   /**
+   * `/decisions` (flow 392): the recommendation journal's report. A read-only look at
+   * a file on disk; it never touches the main turn.
+   */
+  | "decisions"
+  /**
    * `/external-diff` (flow 370): claude write runs awaiting review. Landing cuts a new local
    * branch in a throwaway worktree, so it never touches the main turn's checkout.
    */
@@ -138,6 +143,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/channels") return "channels";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
+  if (commandName === "/decisions") return "decisions";
   if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";

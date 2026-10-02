@@ -993,6 +993,19 @@ Refusals print their code and exit non-zero (except where noted):
   readline shell (`--no-tui`) can only print that it is off. Each time it is
   turned on or off is recorded in the session's history (see
   [sessions](#sessions)).
+  Slash commands typed in the topic run only if they are on a fixed list
+  (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
+  and `/clear` (same topic, one separator line), button pickers (`/model`,
+  `/connect`, `/resume`), and commands that ask first with a Yes/No button
+  (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
+  and `/delegate`, `/external` and `/external-agents`, which name the agent and say
+  it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
+  `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+  bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
+  the shell) and are refused in the topic with the reason. A command from the topic
+  never cancels the turn running in the shell. The modal
+  has a Commands tab with the recent ones. Full list and rules:
+  [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal
   lists Telegram: when it is not connected there is one button, Connect; when it is,
   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in
@@ -2033,6 +2046,36 @@ same list is `/approvals`. The client contract for a chat bridge is
 
 ---
 
+## decisions
+
+The recommendation journal: what an agent recommended when it asked a question
+with options, how it was shown, what you chose and how long you took. See
+[Keep a record of what an agent recommended](guides/recommendation-journal.md).
+
+```
+keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
+keryx decisions answer <id> --choice <id> [--other] [--reason "<why>"] [--json]
+keryx decisions reason <id> --text "<why>" [--json]
+keryx decisions report [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list is never blind: strong terms (release, ship, rollout, promote, publish, unpublish, deploy, delete, push, `git reset --hard`, `rm -rf`, tagging a version, publishing to npm, going to production, the Russian equivalents, plus `.metaproject/decisions.config.json`) always count; weak terms (merge, drop, remove, force and the like) count next to a risk target (main, production, a branch, a PR, a table, ...) in the same question or option, or in `--action`, or when their object is only a pronoun ("Merge it now?"). Pass `--action` for anything irreversible: any non-empty tag makes the question non-blind, and it is the reliable path. A flow found only as the single flow in progress is recorded as `inferred`. |
+| `answer <id>` | `--choice`, `--other`, `--reason`, `--json` | Records the choice (it must be one of the options; `--other` marks a free-form answer) and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says the human should be asked for a reason, once; the command does not wait, the caller asks (the TUI `ask_user` path waits for it, and an empty answer releases the wait). |
+| `reason <id>` | `--text`, `--json` | Records the reason for a deviation; an empty text is recorded as absent. |
+| `report` | `--json` | Deterministic, no model: match share by mode and by stage, every deviation with its reason, and how many questions looked irreversible and had blind refused because of it, per stage. |
+
+`--flow` and `--stage` default to what the checkout says: `KERYX_FLOW`, else the
+flow named by the git branch, else the only flow in progress (a guess, marked `inferred` in the record and the report). The journal is
+`.metaproject/data/decisions/journal.jsonl` under the main checkout, shared by every
+worktree; inside a flow the answer also adds a line to that flow's `journal.md`.
+In the TUI the report is `/decisions`, `/decisions reason <why>` adds the optional
+reason and `/decisions change <option>` changes the latest answer asked in this
+session (a decision of another session is named and left alone).
+
+---
+
 ## update
 
 Refresh managed "service" files (templates, manifests, skills, hooks, dashboard)
@@ -2424,7 +2467,7 @@ store the schedule and install an OS timer that runs the task unattended. Each r
 leaves a **report** you read later in `keryx shell` or with `keryx schedule show`.
 
 keryx still runs no daemon of its own. The OS scheduler calls `keryx trigger run
-<name>` from the project root:
+<name>` from the project root (a digest is the exception: `keryx serve` runs it, see below):
 
 | Backend | Where | Catch-up after the machine was off/asleep |
 |---|---|---|
@@ -2437,6 +2480,9 @@ keryx schedule add --name <name> --every "<cadence>" --prompt "<task>" \
     --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
     [--max-seconds 600] [--mode ask|trust] [--network off|full|allowlist] \
     [--domain example.com]... [--tool <id>]... [--repo owner/name]... [--backend systemd|launchd|cron] [--yes]
+keryx schedule add --digest --name <name> --every "<cadence>" \
+    --provider <p> --model <m> --rates <in>,<out> --ceiling <usd> \
+    [--repo owner/name]... [--topic <name>] [--memory-mb 512] [--max-seconds 600] [--yes]
 keryx schedule list
 keryx schedule show <name>
 keryx schedule pause <name>
@@ -2454,6 +2500,31 @@ keryx schedule remove <name> [--yes]
 | `resume <name>` | Re-enable both. No new confirmation is asked, so resume first checks that the entry still carries this machine's signature and that every granted binary still matches its pin, and refuses with the reason otherwise. It reinstalls the keryx recorded when you confirmed the card, never the one running `resume`. |
 | `run <name>` | One pass now (`keryx trigger run --schedule <name>`: local schedules only). |
 | `remove <name>` | After a confirmation, uninstall the timer and delete the entry. keryx deletes only files that carry its `# keryx-managed <projecthash> <name>` header. Anything else found at those paths is left untouched and named. |
+
+**Digest (`add --digest`).** A digest is a schedule that reads GitHub and the flow board and
+sends you what changed, what is stuck, what needs your decision and every "PR merged, flow
+closed, effect not checked" chain, in Telegram. See the guide
+[Get a GitHub and board digest on a schedule](guides/scheduled-digest.md). In short:
+
+- **Who runs it.** `keryx serve`. A digest has **no OS timer** (`install: none`), so `pause`,
+  `resume` and `remove` touch no timer, and serve must be running. A missed time runs once when
+  serve comes back, and a time is claimed before the run starts, so it is never run twice.
+- **Configuration.** `--every` is the schedule; `--repo` (repeatable, default
+  `MrCipherSmith/keryx`) is the only set of repositories it may read; `--topic` (default
+  `Digest`) is the service topic used when the project has no live remote session, otherwise the
+  digest goes into that session's topic. `--prompt` is not needed. A digest defaults its tools to
+  `gh.pr.list`, `gh.issue.list`, `gh.pr.review-requested` and `gh.run.failed`.
+- **Read-only.** Every `gh` tool is on a read-only allow-list (`pr list|view|checks`,
+  `issue list|view`, `run list`) with a fixed argv and no writing word, and the digest never calls
+  `gh auth switch` or `gh auth login`. `gh` runs as the account the project path selects
+  (`~/work/**` the work account, everything else the personal one).
+- **Limits.** `--ceiling` (dollars, for the optional model summary), `--max-seconds` (timeout)
+  and `--memory-mb` (memory growth during the run, default 512). A run over a limit is stopped
+  and reported.
+- **Baseline.** The first run only records a snapshot and is marked `baseline`; a later run with
+  no changes has no items.
+- **Seeing it.** `list` and `show` print the digest, its next run, the last run's status and
+  the last delivery; `/schedules` in `keryx shell` shows the same, with `p` to pause or resume.
 
 **Drafting checks the provider before the card is even shown.** `add`, `/schedule`
 and the agent's `schedule_create` tool all draft through the same code, which
@@ -2538,7 +2609,8 @@ store or the reports. **No grant lifts any of it.**
   domain list after confirmation refuses the run with `grants-changed`, the same as
   changing anything else about it.
 - **Granted tools:** a fixed, reviewed catalogue: `gh.pr.list`, `gh.pr.view`,
-  `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`. It includes no
+  `gh.pr.checks`, `gh.issue.list`, `gh.issue.view`, `gh.run.list`, `gh.pr.review-requested`,
+  `gh.run.failed` (all read-only: see the digest above). It includes no
   `gh api` and no free-form argv. **keryx runs a granted tool itself, outside the
   sandbox, with your credentials**, via `execFile`:
   - there is no shell;
@@ -3221,6 +3293,8 @@ keryx wiki freshness
 keryx wiki refresh
 keryx wiki verify --page <path> | --baseline
 keryx wiki migrate-markers
+keryx wiki history <page> [--json] | keryx wiki history --runs [--json]
+keryx wiki restore <page> [--version vNNNN] [--json] | keryx wiki restore --run <run-id> [--force] [--json]
 keryx wiki sections list [--json]
 keryx wiki sections resolve <section-ref> [--json]
 keryx wiki sections sync [--dry-run] [--accept-reoccupation <ref>[,<ref>...]] [--json]
@@ -3235,18 +3309,35 @@ keryx wiki sections migrate [--dry-run]
 | `sections sync` | `--dry-run`, `--accept-reoccupation <ref>[,<ref>...]`, `--json` | Rebuild the section index from the pages on disk: register the current stable identities and tombstone the ones that disappeared. The only command in this area that writes. Exits `1` when any identity is *reoccupied* — removed, then re-minted at the same address by a different document — because a tombstone and a live document claiming one address is a contradiction, not a completed sync. `--accept-reoccupation` is the only exit from that state: it lifts the named tombstones and records permanently that the content was substituted rather than restored, which `sections resolve` then reports on every read. Accepting a page ref also accepts the sections inside that page. |
 | `sections migrate` | `--dry-run` | Insert versioned identity markers into pages that have none. Content is preserved byte for byte apart from the markers, and the round trip is asserted before anything is written. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
-| `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. |
+| `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. On an existing draft, `--force` regenerates only the generator's sections — `## Reference` and `## Related Wiki` (keeping lines an enricher added there), and a map page's data sections only while that page was never enriched — and keeps front matter, prose and changelog, adding one changelog entry and a Version bump. A page that would still lose a changelog entry, front-matter key or managed block is left alone and the command exits `1`. |
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
-| `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
+| `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Also reports `Version` lower than the newest changelog entry, and — against the page's previous version in its history — a dropped `## Changelog`, a removed or reworded changelog entry (attestations included), a dropped front-matter key or managed block, and a duplicated section. Only a change keryx recorded is judged this way: a page edited outside keryx since its last recorded version is not (it may be deliberate, and nothing records it until keryx next writes the page), and a page with no history yet gets only the Version check. An unreadable page history is reported as an issue of its own. Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
-| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Strips a complete `<think>`/`<thinking>` block out of model output before it reaches a page, and rejects (does not write) content that still carries a stray, unclosed tag — both checks ignore a tag shown inside a fenced code block or inline code span, so a page documenting this guard with a `<think>` example keeps it intact instead of having it stripped or the whole page rejected. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
+| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only and validates. It never changes a page's `Status`, front matter or changelog: those come back from the original after the model's turn, one changelog entry (`Prose rewritten by keryx wiki enrich`) and a Version bump are added, and a reply wrapped in a ```` ```markdown ```` fence is unwrapped first. A page that would still drop a managed Reference block is not written (`failed`, reason `invariant: …`). Strips a complete `<think>`/`<thinking>` block out of model output before it reaches a page, and rejects (does not write) content that still carries a stray, unclosed tag — both checks ignore a tag shown inside a fenced code block or inline code span, so a page documenting this guard with a `<think>` example keeps it intact instead of having it stripped or the whole page rejected. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
 | `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 | `freshness` | — | Read-only backlog: which pages the code has moved under since each was last verified, classified and ordered by how far behind. Writes only its own report, never a page. Always exits `0` — a report, not a gate. |
 | `refresh` | — | **Writes pages.** Deterministic, model-free regeneration of the managed `## Reference` blocks from the graph. Prose is never touched. |
 | `verify` | `--page <path>` \| `--baseline` | Stamp provenance (`VerifiedAt`, `VerifiedScope`) without touching content. Refuses to run bare: stamping every page silently would assert a review that did not happen, so the whole-corpus form must be asked for by name. |
 | `migrate-markers` | — | One-off, idempotent: wrap pre-existing `## Reference` sections in the managed markers `refresh` needs. Authors no content. |
+| `history` | `<page>`, `--runs`, `--json` | Print a page's version index (every version: when, which command and run, sha256, link to the stored copy; first row is current), or with `--runs` the runs that changed pages, newest first. Read-only. |
+| `restore` | `<page>`, `--version vNNNN`, `--run <id>`, `--force`, `--json` | Put a page back to a recorded version — by default undoing its last change (a hand edit back to the last recorded version, otherwise the version before the current one) — or with `--run` undo every page one run changed: changed pages go back, created ones are deleted, deleted ones return. A page changed again after that run is reported as a conflict and left alone unless `--force` (exit `1` on conflicts). The restore is itself recorded, so it can be undone the same way. |
+
+**Page history.** Every command that writes or deletes a wiki page or `index.md` —
+`new`, `index`, `collect`, `enrich`, `refresh`, `verify`, `migrate-markers`, `restore`,
+`keryx sync --apply` and the SAC wiki owner-writer — first records the page's exact
+current bytes as a plain `.md` file in `.metaproject/data/gdwiki/history/<page>/`, next
+to an `index.md` listing the versions, and prints the run id to undo with. A failure to
+record leaves the page untouched. Retention is the newest 20 stored versions per page
+(`history.keep` in `.metaproject/wiki.config.json`); each page's index keeps at most 200
+rows and `runs.jsonl` is trimmed to its newest half past 2 MB. The folder ignores itself
+for git (a `.gitignore` of `*` at its root) besides keryx's managed block. A version file
+named in an `index.md` is only used if it has the shape keryx writes and resolves inside
+that page's folder. Not covered: an edit made outside keryx (by hand, or a script writing
+pages directly) is captured only when the next keryx write to that page finds it, so two
+such edits in a row keep only the last; history is local to the machine, and deleting
+`.metaproject/data/` deletes it; `.sections.json` and `templates/page.md` have none.
 
 `VerifiedAt` records **that the code in a page's scope has not moved since that
 revision** — not that the page was ever correct. A page can be wrong from the day
@@ -3306,7 +3397,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `route <query-or-target>` | `--json` | Score/rank registry entries against a free-text query or path. |
 | `catalog` | `--profile minimal\|recommended\|full\|custom` | Print the bundled catalog for a profile. |
 | `install` | `--profile <profile>` | Install bundled skills, catalog, manifest, and contracts. Requires `.metaproject/`. |
-| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the pre-309 behavior above. `--dry-run` prints the resolved plan without writing. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
+| `install --profile <manifest-profile>` | `--with <component>` (repeatable), `--without <component>` (repeatable), `--target <harness>`, `--include-deprecated`, `--dry-run`, `--json`, `--force` | Resolve and apply a profile→modules/components install-manifest plan instead of the legacy profile copy. Triggered by any manifest flag, or a non-legacy `--profile` id (e.g. `core`, `react`, `nestjs`, `python`) — the four legacy ids (`minimal\|recommended\|full\|custom`) with no manifest flags still run the legacy profile copy above. `--dry-run` prints the resolved plan without writing, and its `Apply this plan:` hint repeats every `--with`, `--without`, `--include-deprecated`, `--target` and `--profile` that was passed. A `--with`/`--without` id that is unknown, or that cannot change the plan for the chosen profile (judged by effect: the id must change the set of modules the profile selects, so `--profile full --without framework:react` and `--profile react --with framework:react` are refused as no-ops), exits non-zero and lists the ids that would change the plan. Reads `.metaproject/data/stack/stack.json` (from `keryx stack detect`) when present to bias module selection; absent or unreadable fails open. `--force` overwrites drifted files; without it, a drifted/unrecorded existing file is skipped, not overwritten. v1 install destinations exist only for `--target claude` and `--target keryx-shell`. |
 | `doctor` | `--target <harness>`, `--json` | Compare the recorded install-state for a target against disk: `ok`/`drifted`/`missing`/`orphaned` per path. Exits `1` if anything is not `ok`. |
 | `uninstall` | `--target <harness>` (required), `--module <module-id>`, `--force`, `--json` | Remove only the paths recorded in install-state for a target, optionally scoped to one module. A drifted file is refused unless `--force`. |
 | `create <target>` | `--module <m>`, `--name <n>`, `--format auto\|single\|package`, `--dry-run` | Create and register a project-skill package. (`keryx skills generate` is an alias.) |
@@ -3324,7 +3415,7 @@ keryx skills stocktake [--scope bundled|all] [--quick] [--json]
 | `scout <name-or-description>` | `--record <pack-dir>`, `--include-imports`, `--candidate <dir>`, `--scope bundled\|all`, `--json` | Pre-creation dedupe gate — does an existing skill already cover this? Scores the query against the catalog (bundled by default, `--scope all` includes project-skills); `--candidate` vets a not-yet-created skill directory; `--record` persists the scout result under a pack directory. `--include-imports` additionally scores the query against every recorded entry in `~/.keryx/skills/external-imports.json` (see [bundle import --external](#bundle)), with the same lexical scorer, reporting `searched: false` and a named reason when the registry is absent or corrupt rather than a silently empty match list. |
 | `eval <skill-id>` | `--strictness low\|medium\|high`, `--trials N`, `--runner <provider>[:<model>]`, `--judge <provider>[:<model>]`, `--scope bundled\|all`, `--model-grader`, `--json` | Behavioral compliance eval — trigger accuracy + scenario pass rate. Scenarios that need a runner capability are reported `not-run`, not failed, when none is configured. `--runner` splits at the first `:` into provider and optional model (e.g. `--runner deepseek:deepseek-chat`, `--runner ollama:llama3.1:latest`); `src/commands/model-eval-runner.ts` wires this through, dispatching each scenario as a single-turn call with the skill's `SKILL.md` as the system prompt. `--scope` (default `all` for `eval`, unlike `scout`/`stocktake`/`judge-check`, which default to `bundled`) selects which catalog the skill id resolves against and the triggers are scored against — a stack-pack eval gate document requires `--scope bundled` explicitly; the pack gate refuses a report recorded with `scope: "all"`. `--judge <provider>[:<model>]` (same `provider[:model]` split as `--runner`, via `src/commands/model-eval-judge.ts`, called at `temperature: 0` for the closest a provider gets to deterministic scoring) grades every `"grader": "judge"` behavior scenario with a live LLM judge instead of leaving it `skipped`; the judge is a separate build and separate calls from the runner under test, even when both name `deepseek:deepseek-chat`. Building either an unknown `--runner`/`--judge` provider, or one with no credential, fails closed before any scenario runs. With `--judge`, the report gains `judge` (provider), `judgeModel`, and `judgePromptVersion` (the judge prompt version that produced the recorded verdicts); every report also gains `catalogDigest` (the bundled catalog the trigger scenarios were scored against, kept as informational context only — trigger scenarios are always re-scored live against the current catalog, never trusted from the report) and, per ran behavior scenario, `trialRecords` — one entry per trial (`output`, `outputSha256`, `deterministic` results, `judge` verdict, `passed`) so the report can be re-derived (`regradeRecordedReport`) without re-running the model. The stable-pack gate (`checkSkillReportForPackGate`) requires the report's `(runner, model)` and, when any scenario carries a judge expectation, its `(judge, judgeModel)` to both be in the gate's allowlisted set (`STACK_PACK_GATE_POLICY`, pinned to `deepseek`/`deepseek-chat` for both roles), `judgePromptVersion` to match the current judge prompt, and the recorded `passes`/`passRate`/trial counts to match what the trial records themselves show — a report from an unlisted runner or judge, a stale prompt version, or counts that disagree with its own records, never clears the gate. **What this proves, and what it does not:** the gate proves internal consistency — the recorded outputs, deterministic results, counts and pass rates are re-derived from the trial records, and trigger results are re-scored live, not re-declared from the report. It does not prove provenance: the trial outputs, judge verdicts, and runner/judge labels are self-declared by whoever ran the eval, and the gate never re-runs the judge model against them ("re-derive"/"re-grade" here means recomputing from what was recorded, not re-judging). The control for provenance is review of the committed `eval.json` / recording diff in the pull request. |
 | `eval --reverify <pack-dir>` | `--judge <provider>[:<model>]` (required), `--sample <n>` (default `10`), `--json` | The live re-judge sampler. Re-judges a RANDOM SAMPLE of `<pack-dir>`'s already-recorded trial outputs (`governance/eval.json`, every ran behavior scenario's `trialRecords` that carry a judge verdict) against the CURRENT live judge, matched against the skill's current `evals.json` by scenario id, and reports where the live verdict disagrees with what was recorded. Read-only — never rewrites `governance/eval.json`. **Threat model:** `eval`'s own stable-pack gate (above) proves a recorded report is internally consistent (`regradeRecordedReport`) and re-scores triggers live, but it cannot prove a recorded JUDGE verdict was ever a genuine live grading rather than, say, a hand-edited recording — nor can it catch the judge PROVIDER's own weights drifting under a pinned model name over time. `--reverify` is the closest available check for exactly those two gaps: a diagnostic a human (or a scheduled job) runs and acts on, not something the gate itself enforces automatically. Exits `1` when the sampled disagreement rate exceeds `REVERIFY_DISAGREEMENT_THRESHOLD` (20%, `src/gdskills/governance/eval.ts`) — deliberately generous, since a live judge is not perfectly deterministic on identical input and a single flaky call among a handful of samples is expected noise, not drift. |
-| `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; fix 1 / R1-4, R1-11 added `vague` and `subtle-wrong`, authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
+| `judge-check <skill-id>` | `--judge <provider>[:<model>]` (required), `--scope bundled\|all` (default `bundled`), `--samples <n>` (default `3`), `--record`, `--json` | Proves a skill's judge-graded scenarios are hard to game. For every scenario carrying a `"grader": "judge"` expectation, runs the canned answer set — `empty`, `echo`, `vague`, `known-wrong`, `subtle-wrong`, `injection`, `stuffed`, `known-right` (eight kinds; `vague` and `subtle-wrong` are authored per scenario from the required `calibration.vague`/`calibration.subtle_wrong` fields) — through the live judge named by `--judge`, using the same grading function `eval`'s own trial loop uses. Each non-`empty` canned answer is graded `--samples` times (default 3) rather than once, because the live judge is not deterministic on identical input; a canned answer is a match only when every sample agrees with the expected verdict and none errored — the recordings this command writes (with `--record`) store all of a canned answer's samples, not a single verdict. Exits `1` if any canned answer's verdict does not match what it should be (`empty`/`echo`/`vague`/`known-wrong`/`subtle-wrong`/`injection`/`stuffed` must all FAIL, `known-right` must PASS). `--record` writes the recorded samples to `src/gdskills/governance/judge-recordings/<pack>__<skill>.json`, keyed by a digest of the exact judge prompt — the integrity guard replays these offline, and a stale recording (an edited rubric, a bumped judge prompt version) is detected rather than silently reused. A recording is a hand-writable file like any other committed artifact: it proves the anti-gaming set was checked against a live judge at record time, not that nobody could have edited it afterward — the same threat model as `eval`'s report, above. |
 | `stocktake` | `--scope bundled\|all`, `--quick`, `--json` | Periodic catalog health check — buckets each skill `keep\|improve\|update\|retire\|merge`. `--quick` skips the slower checks. |
 
 Profiles: `minimal`, `recommended` (default), `full`, `custom`. Contract schemas:
@@ -3574,7 +3665,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human] [--require-confirmation]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human] [--origin <kind> --quote "<verbatim>" --source "<ref>"] [--require-confirmation]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -3587,6 +3678,7 @@ keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail
 keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
 keryx flow owner set <id> --owner "<name>" --reason "<why>"
 keryx flow outcome author <id> agent|human --reason "<why>"
+keryx flow origin set <id> <kind> --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
@@ -3608,10 +3700,11 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human`, `--require-confirmation` (completion then needs a `flow confirm` token) | Scaffold a flow package. Requires a title or issue URL. Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human`, `--origin <kind>`, `--quote "<verbatim>"`, `--source "<ref>"`, `--require-confirmation` (completion then needs a `flow confirm` token) | Scaffold a flow package. Requires a title or issue URL. The new id skips every number a known remote branch already uses, and the package opts into the [folder-committed gate](#the-folder-committed-gate) (`gates.folderCommitted`). Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). `--origin` records where the flow came from, with the evidence its kind needs; without it, or without the evidence, the flow is created with an `unknown` origin and the command says why (see [the origin](#the-origin)). |
+| `origin set <id> <kind>` | `--reason "<why>"`, `--quote "<verbatim>"`, `--source "<ref>"` | Change where the flow came from: `human-request`, `agent-finding`, `agent-proposal`, or `unknown` to clear it. Refuses a missing `--reason` and any other kind. The evidence rule applies, using the quote and source already on the flow or the ones given here; without it nothing is written and the reason is printed. Writes the `origin` field and appends one `journal.md` line naming the old origin, the new one and the reason, together; setting what the flow already holds writes nothing. Works on any flow, never touches `outcomeAuthor`, gates nothing. |
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
-| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), origin (kind, quote, source; `origin: unknown` for a flow without one), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
@@ -3629,14 +3722,14 @@ keryx flow schema [--out <path>]
 Every `ac` subcommand refuses an argument it does not use — an extra positional, an unrecognised flag, or `--text` without `--criterion` (or the reverse) — rather than dropping it silently and reporting success. `ac update <id> AC1 --text "…" --reason "…"` (an older syntax) is refused: `AC1` is not a positional `ac update` accepts. Every value flag (`--note`, `--signed-by`, `--reason`, `--criterion`, `--text`) consumes the very next token as its value even when that value itself starts with `--` (e.g. `--note "--dry-run mode was used"`), unless that next token is itself one of the subcommand's own flag names — then it is refused as a missing value (`missing value for --note`) rather than silently swallowing the next flag as text.
 | `check-ac <id>` | `--diff <ref>`, `--pr <n>`, `--json`, `--refresh` | **ADVISORY.** Jev checks the flow's change against its FROZEN acceptance criteria; never changes flow state and never confirms an AC. `--refresh` bypasses a cached result even when the diff and criteria checksum match. See [check-ac](#flow-check-ac) below. |
 | `implemented <id>` | `--pr <url>` (required) | Transition `in-progress → implemented`; record the draft PR. |
-| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
+| `complete <id>` | `--comment`, `--merged <commit>`, `--signed-by "<name>"`, `--confirm-token <token>` | Run completion gates; on pass `→ done` (optionally comment the issue) and append a completion signature, on fail `→ in-progress`. After a successful completion it prints the same `note:` as `flow status` when the git-tracked flow directory has uncommitted changes (the closing state written after the merge is a common cause); the note never changes the exit code. Every outcome but a dead process leaves the flow in `in-progress` or `done`, never in `completing`: a gate that throws, or a criteria file changed mid-run, is recorded as a failed attempt. See [the owner gate](#the-owner-gate), [the folder-committed gate](#the-folder-committed-gate), [the owner and completion signatures](#the-owner-and-completion-signatures) and [the confirmation token](#the-confirmation-token). |
 | `check-complete <id>` | `--merged <commit>`, `--confirm-token <token>`, `--json` | Evaluate every gate `complete` would, through the same function, and write nothing: no status change, no `completionAttempts` entry, no signature, no lock, no spent token. Also reports whether `complete` could start from the flow's status, and the PR's merge state from the tracker: `merged`, `open`, `closed`, `not-found`, `no-pr`, or `unknown` whenever the tracker did not say (with `--merged`, `merged` means the `main-merge` gate passed). Under each failing gate it names the command that fixes it where one is known, such as `keryx flow ac confirm <id> AC2`. The merge state is reported beside the gates, not as one: the pull-request gate asks for green checks. Exits 0 when `complete` would pass, 1 when it would not, and 2 when the check could not run (an unknown id, say); with `--json` that case prints `{"error":{"message":...}}`. The `/governance` modal's `c` runs the same check. |
 | `confirm <id>` | `--merged` | Mint a completion confirmation token for a flow that requires one. Refuses unless stdin and stdout are terminals, the flow is `implemented` (or `in-progress` with `--merged`), and its criteria are frozen and unchanged. Shows what is being confirmed, asks for a random code typed back on `/dev/tty`, then prints the token once. See [the confirmation token](#the-confirmation-token). With `--merged` the token binds only `merged`, not a commit: the commit is named later, at `flow complete --merged <commit>`, so the token does not pin which commit that is. `--merged` is accepted on an `implemented` flow that records a PR too, matching `flow complete --merged` being allowed from `implemented`; the token then binds `merged`, and a PR completion with it fails as `token_target_mismatch`. |
 | `recover <id>` | `--reason "<why>"` (required) | Move a flow left in `completing` (by a process that died mid-`complete`) back to `in-progress`, recording the reason, the last event before the interruption, and whether the criteria file is intact. Refuses from any other status and while another process holds the flow's lock. `flow status` and the TUI's `/flows` view label such a flow `interrupted` and name this command. |
 | `block <id>` | `--reason "<why>"` (required) | Transition any status `→ blocked`, saving the previous status. |
 | `unblock <id>` | — | Restore the saved previous status. |
-| `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
-| `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. |
+| `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. A local folder whose number the default branch (`<remote>/main`, `<remote>/master` or the `<remote>/HEAD` target) holds under a **different** folder name fails as `duplicate-id`; a clash with any other remote branch is only a **warning** (that branch may be stale), and `flow init` still skips its number. The failure message names the ref and ends with `keryx flow renumber <dir> --to <free id> --reason "<why>"`. A flow folder that is not committed (not in `HEAD`) is a **warning**, never a failure: after the normal output it prints `flow folder <dir> is not committed: commit it in the same PR as the code`, and the exit code is unchanged. Both are silent outside a git repository. `flow list` and the TUI (`/governance` flow list and detail) tag the same flows `dup id` / `not committed`. |
+| `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. Refuses an id a known remote branch uses (`Flow id <id> is already used on <ref> (<dir>) and cannot be reused`). |
 | `repair-reviews` | — | Re-point review records (`manifest.json`, `scope.md`, `findings.json`, review-note links) of flows renumbered before `renumber` rewrote them, by replaying `id-map.json` against each flow's current directory. Idempotent. |
 | `schema` | `--out <path>` | Emit the flow JSON schema. |
 
@@ -3884,6 +3977,35 @@ For an opted-in flow, `complete` fails the owner gate — with the reason
 — while `flow.owner` is absent, and passes it once one is set (`flow init --owner`
 or `flow owner set`).
 
+### The folder-committed gate
+
+The flow folder is committed in the same PR as the code, and the commit at
+closing is a rule to follow, not one the gate checks. The gate requires one
+thing before closing: `flow complete` fails the `folder-committed` gate when
+`.metaproject/flows/<dir>/flow.json` is not in `HEAD`, with the reason
+`flow folder <dir> is not committed. Commit it (git add .metaproject/flows/<dir> && git commit) in the PR that carries the code, then run flow complete again`.
+
+Like `tasks`, `review` and `owner`, the gate is **opt-in per package**
+(`gates.folderCommitted`, written by `flow init`): flows created from 0.3.53 on
+carry the flag; an older package reports the gate `skipped` and is never
+retroactively blocked. The gate is also `skipped` outside a git repository and
+when git cannot answer. It checks the committed `HEAD`, not the index, so a
+staged-but-uncommitted folder still fails. It sits after the owner gate and
+before the review gate in the gate list.
+
+`flow init` and `flow renumber` also avoid clashes across branches. Flow ids
+come from a clone-local ledger, so a second clone, or a branch you have not
+fetched, can hand out a number the first one already used. The ledger now also
+reserves every number held by a **known remote branch**: the remote-tracking
+refs (`refs/remotes/*`) this clone already has, read with `git ls-tree` and no
+network. Up to 500 remote-tracking refs are read (`<remote>/main`,
+`<remote>/master` and the `<remote>/HEAD` target first); a ref this clone never
+fetched is invisible, and the repair for a clash it causes is `flow renumber`.
+Only folders named `NNN-...` (exactly three digits, then a dash) count. `flow renumber --to <id>` refuses an id used on such a branch.
+`flow check` reports a clash that already happened (see below): a failure when the default branch holds the number, a warning for any other remote branch. When the repository
+has no remotes, no refs, or is not a git repository, all of this reads as "nothing
+known" and changes nothing.
+
 ### The owner and completion signatures
 
 A flow can name an **owner** — the human accountable for it — and `ac confirm`/
@@ -3948,6 +4070,49 @@ reading it never rewrites the file. The flag gates nothing: no completion, freez
 creation or index result, and no exit code, depends on it. With `--outcome-author
 human` the `## Outcome criteria` section of `description.md` is the template's own
 text, with no example inserted.
+
+### The origin
+
+A flow's `flow.json` can record where it came from, as `origin`:
+`{kind, quote?, source?}`. The idea of a flow almost always comes from a human and
+is formalized by the agent, so who typed the outcome criterion says little; the
+origin records whose idea it was and keeps the human's own words. There are three
+kinds:
+
+- `human-request`: a human gave the idea, the agent discussed it, the human
+  confirmed the creation;
+- `agent-finding`: the agent found it in a check, review or test, and the human
+  confirmed;
+- `agent-proposal`: the agent proposed a new idea, and the human confirmed.
+
+**Evidence, not assertion.** `flow init --origin human-request --quote "<verbatim>"
+--source "<ref>"` is recorded only with a verbatim quote of the human's first
+message with the idea AND a source (channel, message id or time). The quote is
+stored byte for byte: no translation, no paraphrase, Cyrillic, quotes and line
+breaks intact. `agent-finding` and `agent-proposal` need a source. Without the
+evidence, or with a kind that does not exist, the origin stays `unknown`, the
+command still succeeds (exit `0`) and prints why. The `## Outcome criteria`
+section of the new `description.md` then holds three lines: the request
+(`Запрос (дословно)`, or `Источник` for the two agent kinds), the agent's
+formalization (`Эффект (формализация агента)`) and how to observe it (`Как
+наблюдать (предложение агента)`, marked as the agent's proposal).
+
+`keryx flow origin set <id> <kind> --reason "<why>"` changes it on any flow: the
+reason is required, one `journal.md` line names the old origin, the new one and the
+reason, and setting what the flow already holds writes nothing. There is no mass
+relabelling, and a flow created before the field existed reads `unknown`.
+
+`outcomeAuthor` stays, because G1a is computed on it, but it is secondary: when it
+was not set explicitly it is derived from the origin (`agent`: the agent is the one
+who types the criterion, whoever had the idea), and an explicit setting is never
+overwritten. `flow status`, `product open`, the product index and the TUI flow
+inspector show the origin, and the product module reads G1a by origin and by
+`real criterion | not measured`, with a flow that has no origin counted as
+`unknown`. **The origin gates nothing:** `flow init`, `freeze`, `complete` and the
+product commands succeed on a flow with no origin, an `unknown` one or an invalid
+kind (which `flow check` reports as a schema problem and every reader reads as
+`unknown`). In the shell, `/flow origin <id>` shows it and
+`/flow origin <id> <kind> --reason "<why>"` sets it.
 
 ### The confirmation token
 
@@ -4021,7 +4186,7 @@ Every `flow complete` invocation — pass or fail — appends one entry to
 `FlowState.completionAttempts`: the outcome (`pass`, `fail`, or `skipped`) and
 detail of every gate that attempt evaluated, whether the attempt passed
 overall, and the acceptance-criteria checksum in force at the time. Unlike
-`gates.owner`/`gates.review`/`gates.tasks`, this is not opt-in — it is written
+`gates.owner`/`gates.review`/`gates.tasks`/`gates.folderCommitted`, this is not opt-in — it is written
 on every attempt from every flow, starting the moment this field shipped — and
 it does not bump `schemaVersion`. A `flow.json` written before this field
 existed simply has no `completionAttempts`; `keryx governance report` reads
@@ -4424,9 +4589,10 @@ keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                               [--self <login>] [--round <n>]
                               [--out <findings.json>] [--json] [--fixtures <dir>]
 keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                            --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
+                            --sha <head-sha> --final [--result <file>] [--review <review-id>]
+                            [--round <n>] [--dry-run] [--self <login>]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                            [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
+                            [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]
 keryx review bot run --pr <n> [--repo <owner/repo>] [--max-diff-bytes <n>]
                      [--provider <id>] [--model <id>] [--fixtures <dir>] [--json]
 keryx review bot post --pr <n> [--repo <owner/repo>] [--sha <head-sha>] [--review <id>]

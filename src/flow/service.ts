@@ -12,6 +12,7 @@ import {
 } from "./machine";
 import { reviewGate } from "./review-gate";
 import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
+import { isOriginKind, originSummary, readOrigin, resolveOrigin, type FlowOrigin, type OriginReading } from "./origin";
 // The outcome-author vocabulary, re-exported so the CLI, the product module and the
 // TUI read it through this facade (import policy, rule 2).
 export {
@@ -23,6 +24,21 @@ export {
   type OutcomeAuthor,
   type OutcomeAuthorReading,
 } from "./outcome-author";
+// The origin vocabulary, re-exported for the same reason.
+export {
+  ORIGIN_KINDS,
+  ORIGIN_READINGS,
+  effectiveOutcomeAuthor,
+  isOriginKind,
+  originDetailLines,
+  originSummary,
+  readOrigin,
+  readOriginKind,
+  resolveOrigin,
+  type FlowOrigin,
+  type OriginKind,
+  type OriginReading,
+} from "./origin";
 import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
@@ -142,6 +158,8 @@ import {
   reservedIds,
   resolveAllocationScope,
 } from "./allocation";
+import { flowFoldersInHead } from "./folder-committed";
+import { flowNumberOfDir, knownRemoteFlowDirs, remoteFlowNumbers, safeDirName } from "./remote-flows";
 import {
   renderAcceptanceCriteria,
   renderDescription,
@@ -170,6 +188,7 @@ import type {
   AttemptOutcome,
   TaskAttempts,
   OutcomeAuthorSetResult,
+  OriginSetResult,
 } from "./types";
 
 /**
@@ -231,6 +250,8 @@ function prMergeState(pr: PrObservation, gates: readonly GateOutcome[]): PrMerge
 const UNCONFIRMED_PREFIX = "unconfirmed: ";
 /** The pull-request gate's detail when the flow recorded no PR. */
 const NO_PR_DETAIL = "no PR recorded";
+/** Start of the folder-committed gate's failure detail; `completionFixHint` reads the folder name back through it. */
+const FOLDER_UNCOMMITTED_PREFIX = "flow folder ";
 
 /**
  * Whether `complete` can start from this status (flow 364, review A-001): the
@@ -270,6 +291,14 @@ export function completionFixHint(gate: GateOutcome, flowId: string): string | u
       return "keryx health run";
     case "confirmation":
       return `keryx flow confirm ${flowId} (in a terminal)`;
+    case "folder-committed": {
+      // The gate's own detail names the folder; a gate that could not be
+      // evaluated says something else and has no one-command fix.
+      const dir = gate.detail.startsWith(FOLDER_UNCOMMITTED_PREFIX)
+        ? gate.detail.slice(FOLDER_UNCOMMITTED_PREFIX.length).split(" ")[0]
+        : undefined;
+      return dir ? `git add .metaproject/flows/${dir} && git commit` : undefined;
+    }
     default:
       return undefined;
   }
@@ -583,6 +612,16 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
     // blocked by a concept it predates.
     gates.push(ownerGate(flow));
 
+    // Gate 3c: folder-committed (flow 384). Same opt-in shape: `gates.folderCommitted`,
+    // set by `flow init`. The folder travels in the pull request that carries the
+    // code; one that never reached a commit leaves its number free for every other
+    // clone to take. Caught like every gate that reads the outside world.
+    try {
+      gates.push(await folderCommittedGate(cwd, dir, flow));
+    } catch {
+      gates.push(unevaluableGate("folder-committed"));
+    }
+
     // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
     // basis, and never allowed to pass on absence: a condition that could not
     // be observed fails, because a gate that passes because nothing was
@@ -681,7 +720,28 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // behind. Only an OMITTED flag takes the default; `human` is never chosen
       // for the caller.
       const outcomeAuthor =
-        input.outcomeAuthor === undefined ? DEFAULT_OUTCOME_AUTHOR : parseOutcomeAuthor(input.outcomeAuthor);
+        input.outcomeAuthor === undefined ? undefined : parseOutcomeAuthor(input.outcomeAuthor);
+
+      // The origin never refuses: the evidence rule (`resolveOrigin`) either
+      // yields an origin to record or a note saying why not, and an invalid kind
+      // is only a note. The template keeps the requested words either way.
+      let originNote: string | undefined;
+      let origin: FlowOrigin | undefined;
+      let originDraft: FlowOrigin | undefined;
+      if (input.origin !== undefined) {
+        const resolution = resolveOrigin({ kind: input.origin, quote: input.originQuote, source: input.originSource });
+        origin = resolution.origin;
+        originNote = resolution.note;
+        if (isOriginKind(input.origin)) {
+          originDraft = {
+            kind: input.origin,
+            ...(input.originQuote?.trim() ? { quote: input.originQuote } : {}),
+            ...(input.originSource?.trim() ? { source: input.originSource } : {}),
+          };
+        }
+      } else if (input.originQuote !== undefined || input.originSource !== undefined) {
+        originNote = "--quote/--source were given without --origin; origin stays unknown.";
+      }
 
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
@@ -706,7 +766,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // scope, so a sibling worktree cannot mint the same id (flow 116).
       const scope = await resolveAllocationScope(input.cwd);
       return withFileLock(scope.lockPath, async () => {
-        const id = await nextFlowId(input.cwd, await reservedIds(scope));
+        // Flow 384: the ledger only knows what THIS clone handed out. A number
+        // already spent by a flow folder on a known remote branch is reserved
+        // too, so a second clone or an unfetched-branch gap cannot reuse it.
+        const id = await nextFlowId(input.cwd, [
+          ...(await reservedIds(scope)),
+          ...(await remoteFlowNumbers(input.cwd)),
+        ]);
         const date = now().slice(0, 10);
         const slug = slugify(input.slug ?? title);
         const dir = `${id}-${date}-${slug}`;
@@ -732,6 +798,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             tasks: true,
             review: true,
             owner: true,
+            folderCommitted: true,
             ...(input.requireConfirmation === true || (await readRequireConfirmationDefault(input.cwd))
               ? { confirmation: true }
               : {}),
@@ -760,13 +827,25 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ...(input.owner?.trim()
             ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
             : {}),
-          outcomeAuthor,
+          // Derived from the origin when not named (`effectiveOutcomeAuthor`): a
+          // recorded origin leaves the key absent, no origin keeps the default.
+          ...(outcomeAuthor !== undefined
+            ? { outcomeAuthor }
+            : origin === undefined
+              ? { outcomeAuthor: DEFAULT_OUTCOME_AUTHOR }
+              : {}),
+          ...(origin === undefined ? {} : { origin }),
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
 
         const sourceLabel = input.issue ?? "user description";
-        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(title, sourceLabel));
+        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(
+            title,
+            originDraft === undefined ? sourceLabel : `${sourceLabel} (origin: ${originDraft.kind})`,
+            originDraft,
+          ),
+        );
         await writeFileAtomic(path.join(absolute, "context.md"), context.markdown);
         await writeFileAtomic(path.join(absolute, "plan.md"), renderPlan());
         await writeFileAtomic(path.join(absolute, "tasks.md"), renderTasksDoc());
@@ -775,7 +854,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFlow(input.cwd, dir, flow);
         await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project });
 
-        return { flow, dir: path.relative(input.cwd, absolute), contextNotes: context.notes };
+        return {
+          flow,
+          dir: path.relative(input.cwd, absolute),
+          contextNotes: context.notes,
+          ...(originNote === undefined ? {} : { originNote }),
+        };
       });
     },
 
@@ -887,6 +971,62 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
       });
       return { flow, previous, changed };
+    },
+
+    /**
+     * Change where the flow came from. `reason` is required and single-line; the
+     * field and its journal line are written together by `save()`. The evidence
+     * rule applies to the quote and source already on the flow or given here: if
+     * it is not met, nothing is written and the result carries the reason (the
+     * origin never refuses; the stored quote and source are inherited only when the kind
+     * does not change). `unknown` clears the origin. Works on any flow and
+     * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`. An invalid kind is a note, not an error.
+     */
+    async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {
+      if (!reason?.trim()) {
+        throw new Error('flow origin set requires --reason "<why>"');
+      }
+      validateSingleLineReason(reason);
+      let previous: OriginReading = "unknown";
+      let next: OriginReading = "unknown";
+      let changed = false;
+      let note: string | undefined;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        const before = readOrigin(current.origin);
+        previous = before?.kind ?? "unknown";
+        let after: FlowOrigin | undefined;
+        if (kind !== "unknown" && !isOriginKind(kind)) {
+          note = `origin kind must be one of: human-request, agent-finding, agent-proposal, unknown (got "${kind}"); the origin is unchanged.`;
+          next = previous;
+          return current;
+        }
+        if (kind !== "unknown") {
+          // The stored quote and source are evidence for the kind they were recorded
+          // under. Keep them only while the kind stays the same; a switch to another
+          // kind needs its own evidence, so nothing is carried over.
+          const carried = before?.kind === kind ? before : undefined;
+          const resolution = resolveOrigin({
+            kind,
+            quote: quote !== undefined && quote.length > 0 ? quote : carried?.quote,
+            source: source !== undefined && source.length > 0 ? source : carried?.source,
+          });
+          if (resolution.origin === undefined) {
+            note = resolution.note;
+            next = previous;
+            return current;
+          }
+          after = resolution.origin;
+        }
+        next = after?.kind ?? "unknown";
+        if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) {
+          return current;
+        }
+        changed = true;
+        if (after === undefined) delete current.origin;
+        else current.origin = after;
+        return save(cwd, dir, current, "origin-set", `${originSummary(before)} -> ${originSummary(after)} (${reason.trim()})`);
+      });
+      return { flow, previous, next, changed, ...(note === undefined ? {} : { note }) };
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {
@@ -1620,6 +1760,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               "Pick a fresh number (see .metaproject/flows/id-map.json).",
           );
         }
+        // Flow 384: a number another branch already uses would only move the
+        // collision to the next merge.
+        const remoteUse = (await knownRemoteFlowDirs(cwd)).find(
+          (entry) => flowNumberOfDir(entry.dir) === Number(to),
+        );
+        if (remoteUse) {
+          throw new Error(
+            `Flow id ${to} is already used on ${remoteUse.ref} (${safeDirName(remoteUse.dir)}) and cannot be reused. ` +
+              "Pick a fresh number.",
+          );
+        }
 
         const toDir = `${to}${fromDir.slice(3)}`;
         // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
@@ -1664,6 +1815,60 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               `duplicate flow id ${id}, shared with ${group.filter((other) => other !== dir).join(", ")}` +
               ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
           });
+        }
+      }
+      // Flow 384: the same rule across clones. A local folder whose number a
+      // known remote branch holds under a DIFFERENT folder name is a different
+      // flow with the same id; the same name on every ref is just the one flow.
+      // Each ref is judged on its own: a branch holding this very folder does not
+      // hide another branch that holds the same number under another name.
+      // Only a clash with the default branch (main, master, what <remote>/HEAD
+      // points at) fails the check: any other remote branch may be stale, cut
+      // before a renumbering, and would make every real clone report dozens of
+      // false duplicates. Those are warnings; `flow init` still skips their numbers.
+      const warnings: FlowCheckResult["warnings"] = [];
+      const remoteDirs = await knownRemoteFlowDirs(cwd);
+      if (remoteDirs.length > 0) {
+        for (const dir of allDirs) {
+          const clashes = remoteDirs.filter(
+            (entry) => entry.dir !== dir && flowNumberOfDir(entry.dir) === Number(flowIdOf(dir)),
+          );
+          const primary = clashes.find((entry) => entry.primary);
+          const other = clashes[0];
+          if (primary) {
+            issues.push({
+              flow: dir,
+              kind: "duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${primary.ref} by a different flow (${safeDirName(primary.dir)})` +
+                ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
+            });
+          } else if (other) {
+            warnings.push({
+              flow: dir,
+              kind: "branch-duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${other.ref} by a different flow (${safeDirName(other.dir)});` +
+                ` ignore it if that branch is stale, otherwise renumber one of them before it merges`,
+            });
+          }
+        }
+      }
+      // Flow 384: a folder that is not in HEAD is a warning, never a failure: it
+      // is the state every flow is in between `flow init` and its first commit.
+      const inHead = await flowFoldersInHead(cwd, allDirs).catch(() => {
+        // HEAD could not be read: say nothing rather than call every folder untracked.
+        return null;
+      });
+      if (inHead !== null) {
+        for (const dir of allDirs) {
+          if (!inHead.has(dir)) {
+            warnings.push({
+              flow: dir,
+              kind: "untracked",
+              message: `flow folder ${dir} is not committed: commit it in the same PR as the code`,
+            });
+          }
         }
       }
       for (const dir of allDirs) {
@@ -1754,7 +1959,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           });
         }
       }
-      return { ok: issues.length === 0, issues };
+      return { ok: issues.length === 0, issues, warnings };
     },
   };
 }
@@ -1824,7 +2029,8 @@ function unevaluableGate(
     | "confirmation"
     | "main-merge"
     | "pull-request"
-    | "base-branch",
+    | "base-branch"
+    | "folder-committed",
 ): GateOutcome {
   return {
     name,
@@ -2036,6 +2242,40 @@ function ownerGate(flow: FlowState): GateOutcome {
     };
   }
   return { name: "owner", status: "pass", detail: `owner: ${flow.owner.value}` };
+}
+
+/**
+ * The folder-committed gate (flow 384). Opt-in per package: `gates.folderCommitted`
+ * is written by `flow init`, so flows created from 0.3.53 on are covered and no
+ * earlier package is retroactively failed (it reports `skipped`). Passes when the
+ * flow folder's `flow.json` is in `HEAD`; fails with the command that fixes it
+ * when it is not; `skipped` outside a git repository, where there is no HEAD to
+ * read.
+ */
+async function folderCommittedGate(cwd: string, dir: string, flow: FlowState): Promise<GateOutcome> {
+  if (!flow.gates?.folderCommitted) {
+    return {
+      name: "folder-committed",
+      status: "skipped",
+      detail:
+        "folder-committed gate not enabled for this package (created before the gate); " +
+        "flows created by this keryx version opt in automatically",
+    };
+  }
+  const committed = await flowFoldersInHead(cwd, [dir]);
+  if (committed === null) {
+    return { name: "folder-committed", status: "skipped", detail: "not a git repository; nothing to compare the flow folder with" };
+  }
+  if (!committed.has(dir)) {
+    return {
+      name: "folder-committed",
+      status: "fail",
+      detail:
+        `${FOLDER_UNCOMMITTED_PREFIX}${dir} is not committed. Commit it (git add .metaproject/flows/${dir} && git commit) ` +
+        "in the PR that carries the code, then run flow complete again",
+    };
+  }
+  return { name: "folder-committed", status: "pass", detail: `${dir} is committed in HEAD` };
 }
 
 /**

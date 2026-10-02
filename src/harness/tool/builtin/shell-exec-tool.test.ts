@@ -247,7 +247,7 @@ test("F5c: the default runner (no processGroup) still kills a simple in-flight c
   expect(elapsedMs).toBeLessThan(3_000);
 });
 
-/** One `ps -eo pid,pgid,cmd` row, parsed. */
+/** One `ps -eo pid,pgid,command` row, parsed. */
 interface PsRow {
   pid: number;
   pgid: number;
@@ -255,7 +255,7 @@ interface PsRow {
 }
 
 function psRows(): PsRow[] {
-  const out = Bun.spawnSync(["ps", "-eo", "pid,pgid,cmd"], { stdout: "pipe" });
+  const out = Bun.spawnSync(["ps", "-eo", "pid,pgid,command"], { stdout: "pipe" });
   const text = new TextDecoder().decode(out.stdout);
   const rows: PsRow[] = [];
   for (const line of text.split("\n").slice(1)) {

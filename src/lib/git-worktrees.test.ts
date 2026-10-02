@@ -4,7 +4,7 @@
 // `.claude/worktrees` must resolve to the same place from the main checkout
 // and from a linked worktree.
 
-import { mkdir, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -16,6 +16,7 @@ import {
   findStaleWorktrees,
   hasUncommittedChanges,
   pruneWorktree,
+  resolveGitCommonDir,
   resolveMainCheckoutRoot,
 } from "./git-worktrees";
 
@@ -82,6 +83,50 @@ describe("resolveMainCheckoutRoot / claudeWorktreesDir", () => {
     await ageDir(worktreePath, 10);
     expect(await resolveMainCheckoutRoot(worktreePath)).toBe(mainRoot);
     expect(await claudeWorktreesDir(worktreePath)).toBe(path.join(mainRoot, ".claude", "worktrees"));
+  });
+
+  test("reached through a symlinked path, resolves to the canonical main checkout from both main and linked worktree", async () => {
+    // The macOS shape ($TMPDIR is a symlink) reproduced on any platform: git
+    // prints a relative `.git` from the main checkout, which used to resolve
+    // against the symlinked cwd, while a linked worktree printed a realpath.
+    const canonicalMain = await realpath(mainRoot);
+    const linkDir = await mkdtemp(path.join(tmpdir(), "keryx-git-worktrees-link-"));
+    const link = path.join(linkDir, "main-link");
+    try {
+      await symlink(mainRoot, link, "dir");
+      const worktreePath = await addWorktree("wlink", "agent/wlink");
+      expect(await resolveGitCommonDir(link)).toBe(path.join(canonicalMain, ".git"));
+      expect(await resolveGitCommonDir(worktreePath)).toBe(path.join(canonicalMain, ".git"));
+      expect(await resolveMainCheckoutRoot(link)).toBe(canonicalMain);
+      expect(await claudeWorktreesDir(link)).toBe(path.join(canonicalMain, ".claude", "worktrees"));
+    } finally {
+      await rm(linkDir, { recursive: true, force: true });
+    }
+  });
+
+  test("a symlinked `.git` directory still resolves to the checkout, not to the symlink's target parent", async () => {
+    // `<repo>/.git -> <elsewhere>/repo.git`. Canonicalising the WHOLE common-dir
+    // path follows that link, so `dirname` named `<elsewhere>` instead of the
+    // checkout. Only the directory part is canonicalised.
+    //
+    // Measured limit, not covered here: from a LINKED worktree git itself prints
+    // the realpath of the target (`<elsewhere>/repo.git`), so there the checkout
+    // cannot be recovered from the path at all and main/worktree disagree.
+    const base = await mkdtemp(path.join(tmpdir(), "keryx-git-worktrees-symgit-"));
+    try {
+      const checkout = path.join(base, "repo");
+      const elsewhere = path.join(base, "elsewhere");
+      await mkdir(checkout);
+      await mkdir(elsewhere);
+      await git(checkout, ["init", "-q", "-b", "main"]);
+      await rename(path.join(checkout, ".git"), path.join(elsewhere, "repo.git"));
+      await symlink(path.join(elsewhere, "repo.git"), path.join(checkout, ".git"), "dir");
+      const canonicalCheckout = await realpath(checkout);
+      expect(await resolveGitCommonDir(checkout)).toBe(path.join(canonicalCheckout, ".git"));
+      expect(await resolveMainCheckoutRoot(checkout)).toBe(canonicalCheckout);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
   });
 
   test("outside a git repository, resolves to undefined rather than throwing", async () => {

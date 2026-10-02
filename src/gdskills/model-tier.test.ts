@@ -691,6 +691,18 @@ describe("AC14: skills declare a tier, never a model name", () => {
     expect(Object.keys(declared).length).toBeGreaterThan(0);
     for (const tier of Object.values(declared)) expect(MODEL_TIERS).toContain(tier as never);
   });
+
+  test("a CRLF file and a BOM file declare their tier as an LF file does", () => {
+    // Read through the shared frontmatter reader, which treats `\r\n` as `\n` and
+    // ignores a leading BOM; the parse this replaced read a BOM file as having
+    // no frontmatter at all.
+    const lf = `---\nname: x\n${SKILL_TIER_KEY}: deep\n---\n# X\n`;
+    expect(parseSkillModelTier(lf)).toBe("deep");
+    expect(parseSkillModelTier(lf.replace(/\n/g, "\r\n"))).toBe("deep");
+    const bom = String.fromCharCode(0xfeff);
+    expect(parseSkillModelTier(bom + lf)).toBe("deep");
+    expect(parseSkillModelTier(bom + lf.replace(/\n/g, "\r\n"))).toBe("deep");
+  });
 });
 
 describe("AC17: the model-selection rule permits adaptive selection", () => {

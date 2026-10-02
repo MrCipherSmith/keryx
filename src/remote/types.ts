@@ -89,11 +89,44 @@ export interface SendMessageParams {
   text: string;
   messageThreadId?: number;
   inlineKeyboard?: InlineKeyboard;
+  /** Left out: plain text. "HTML": `text` is Telegram HTML (see `format-html.ts`). */
+  parseMode?: "HTML";
 }
+
+/** One entry of the bot's command menu (`setMyCommands`). Telegram: 1-32 chars of a-z, 0-9, `_`; description 1-256. */
+export interface BotCommandMenuEntry {
+  command: string;
+  description: string;
+}
+
+/** A state shown on a message as a Telegram reaction: one emoji, or none to clear it. */
+export type BotReactionEmoji = string;
+
+/** The chat actions this package sends. */
+export type BotChatAction = "typing";
 
 export interface BotApi {
   getUpdates(params: GetUpdatesParams): Promise<BotUpdate[]>;
   sendMessage(params: SendMessageParams): Promise<{ message_id: number }>;
+  /**
+   * Replace the inline keyboard of a message the bot sent. An empty or missing `inlineKeyboard`
+   * removes the buttons. Telegram answers 400 "message is not modified" when nothing changes.
+   */
+  editMessageReplyMarkup(params: { chatId: number; messageId: number; inlineKeyboard?: InlineKeyboard }): Promise<void>;
+  /** Replace the text (and optionally the keyboard) of a message the bot sent; no keyboard removes the buttons. */
+  editMessageText(params: {
+    chatId: number;
+    messageId: number;
+    text: string;
+    parseMode?: "HTML";
+    inlineKeyboard?: InlineKeyboard;
+  }): Promise<void>;
+  /** Set the bot's command menu for the group. */
+  setMyCommands(params: { commands: BotCommandMenuEntry[]; chatId?: number }): Promise<void>;
+  /** Put one reaction on a message, or clear it when `emoji` is undefined. */
+  setMessageReaction(params: { chatId: number; messageId: number; emoji?: BotReactionEmoji }): Promise<void>;
+  /** Show a chat action (the "typing" indicator) in a chat, or in one forum topic. */
+  sendChatAction(params: { chatId: number; action: BotChatAction; messageThreadId?: number }): Promise<void>;
   createForumTopic(params: { chatId: number; name: string }): Promise<{ message_thread_id: number }>;
   deleteForumTopic(params: { chatId: number; messageThreadId: number }): Promise<void>;
   editForumTopic(params: { chatId: number; messageThreadId: number; name: string }): Promise<void>;

@@ -19,7 +19,9 @@ import {
   REMOTE_TABS,
   TG_ECHO_MARKER,
   TG_LABEL,
+  commandEchoText,
   formatAge,
+  formatRemoteCommandLines,
   formatRemoteEventLines,
   formatRemoteStatusLines,
   isRemoteControlCommand,
@@ -207,11 +209,11 @@ function openModalFake(getStatus: () => RemoteStatus, onToggle: () => void = () 
   };
 }
 
-test("modal: title, the Status and Events tabs, and the footer", () => {
+test("modal: title, the Status, Events and Commands tabs, and the footer", () => {
   const m = openModalFake(() => ON);
   const input = m.input()!;
   expect(input.title).toBe(REMOTE_CONTROL_COMMAND);
-  expect(input.tabs.map((t) => t.id)).toEqual(["status", "events"]);
+  expect(input.tabs.map((t) => t.id)).toEqual(["status", "events", "commands"]);
   expect(input.tabs).toEqual(REMOTE_TABS as never);
   expect(input.initialTab).toBe("status");
   expect(input.footer).toEqual(REMOTE_FOOTER as never);
@@ -371,4 +373,62 @@ otuiTest("transcript: a Telegram line is echoed with the tg marker; a typed line
   } finally {
     h.destroy();
   }
+});
+
+// ---- Flow 387, AC13: recent remote commands --------------------------------------
+
+function at(second: number, kind: RemoteEvent["kind"], text: string): RemoteEvent {
+  return { at: Date.UTC(2026, 9, 2, 10, 0, second), kind, text };
+}
+
+const COMMAND_EVENTS: RemoteEvent[] = [
+  at(1, "line", "Telegram: fix the build"),
+  at(2, "command", "/model"),
+  at(3, "command", "/model switched"),
+  at(4, "command", "refused /mcp: Not available remotely. Run it in the shell."),
+  at(5, "command", "/mode waiting for a press in the topic"),
+  at(6, "status", "heartbeat ok"),
+];
+
+test("commands tab: only remote commands, newest first, with the time", () => {
+  const lines = formatRemoteCommandLines({ ...ON, events: COMMAND_EVENTS });
+  expect(lines).toHaveLength(4);
+  expect(lines[0]).toBe("10:00:05  /mode waiting for a press in the topic");
+  expect(lines.at(-1)).toBe("10:00:02  /model");
+  expect(lines.join("\n")).not.toContain("fix the build");
+  expect(lines.join("\n")).not.toContain("heartbeat");
+});
+
+test("commands tab: a refused command is listed with the reason", () => {
+  const lines = formatRemoteCommandLines({ ...ON, events: COMMAND_EVENTS });
+  expect(lines.some((line) => line.includes("refused /mcp") && line.includes("Not available remotely"))).toBe(true);
+});
+
+test("commands tab: a confirmation still waiting for a press is listed", () => {
+  const lines = formatRemoteCommandLines({ ...ON, events: COMMAND_EVENTS });
+  expect(lines.some((line) => line.includes("/mode waiting for a press in the topic"))).toBe(true);
+});
+
+test("commands tab: an empty note, and at most the ring size", () => {
+  expect(formatRemoteCommandLines(ON)).toEqual(["No remote commands yet."]);
+  const many = Array.from({ length: REMOTE_EVENT_LIMIT + 5 }, (_, i) => at(i % 60, "command", `/cmd${i}`));
+  expect(formatRemoteCommandLines({ ...ON, events: many })).toHaveLength(REMOTE_EVENT_LIMIT);
+});
+
+test("modal commands tab: paints the recent remote commands and follows the live status", () => {
+  let status: RemoteStatus = { ...ON, events: [] };
+  const m = openModalFake(() => status);
+  m.switchTo("commands");
+  expect(m.text("commands")).toBe("No remote commands yet.");
+  status = { ...ON, events: COMMAND_EVENTS };
+  m.switchTo("commands");
+  expect(m.text("commands")).toContain("refused /mcp");
+  expect(m.text("commands")).toContain("/mode waiting for a press in the topic");
+  expect(m.text("commands")).not.toContain("fix the build");
+});
+
+test("the transcript echo of a slash command carries the tg label only when it came from the topic", () => {
+  expect(commandEchoText("/model", TG_SOURCE)).toBe("tg ❯ /model");
+  expect(commandEchoText("/model")).toBe("❯ /model");
+  expect(commandEchoText("/model", undefined)).toBe("❯ /model");
 });

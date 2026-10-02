@@ -5,6 +5,7 @@
 import type { NextTaskDecision } from "./machine";
 import type { Identity } from "./identity";
 import type { AcKindError, AcKindReport, AcKindRecord } from "./ac-kinds";
+import type { FlowOrigin, OriginReading } from "./origin";
 import type { OutcomeAuthor, OutcomeAuthorReading } from "./outcome-author";
 export type { Identity, IdentityBasis } from "./identity";
 
@@ -147,6 +148,14 @@ export type FlowGates = {
    */
   owner?: boolean | undefined;
   /**
+   * Run the folder-committed gate in `complete()` (flow 384). Set to `true` by
+   * `flow init` for every package created from 0.3.53 on. ABSENT on earlier
+   * packages, where the gate reports `skipped` and never fails a completion —
+   * the same opt-in shape as `tasks`/`review`/`owner`: flow folders that were
+   * never committed are history this gate must not retroactively fail.
+   */
+  folderCommitted?: boolean | undefined;
+  /**
    * Require a terminal-minted confirmation token for `complete()` (flow 299,
    * AC2). Written by `flow init --require-confirmation`, or by `flow init`
    * when `.metaproject/tasks.config.json` has
@@ -272,6 +281,15 @@ export type FlowState = {
    */
   outcomeAuthor?: OutcomeAuthor | undefined;
   /**
+   * Where the flow came from: `{kind, quote?, source?}` with kind
+   * `human-request`, `agent-finding` or `agent-proposal`. Optional and additive:
+   * ABSENT on every flow created before it existed and on every flow whose
+   * evidence was not enough, and readers treat absence as `unknown`. Recorded by
+   * `flow init --origin` and changed only by `flow origin set`, which leaves a
+   * journal line. Nothing gates on it. See `./origin`.
+   */
+  origin?: FlowOrigin | undefined;
+  /**
    * Append-only signing record (flow 289, AC4). Absent on a flow that has
    * never had an `ac confirm` or a passing `complete` recorded under this
    * field's existence, and on every pre-existing flow.json (additive, like
@@ -384,6 +402,7 @@ export type GateOutcome = {
     | "review"
     | "base-branch"
     | "owner"
+    | "folder-committed"
     | "confirmation";
   status: "pass" | "fail" | "skipped";
   detail: string;
@@ -455,6 +474,16 @@ export type FlowInitInput = {
    * the flow is created). Omitted means `agent`. Never inferred. See `FlowState.outcomeAuthor`.
    */
   outcomeAuthor?: string | undefined;
+  /**
+   * Where the flow came from, as the raw flag values. `origin` is the kind
+   * (`human-request`, `agent-finding`, `agent-proposal`); `originQuote` is the
+   * human's request verbatim and `originSource` the channel, message id or
+   * time. Evidence rule: see `resolveOrigin`. Never refuses: missing evidence or
+   * an invalid kind leaves the origin `unknown` and sets `FlowInitResult.originNote`.
+   */
+  origin?: string | undefined;
+  originQuote?: string | undefined;
+  originSource?: string | undefined;
   /** Opt this flow into the confirmation gate (flow 299). See `FlowGates.confirmation`. */
   requireConfirmation?: boolean | undefined;
 };
@@ -462,6 +491,8 @@ export type FlowInitResult = {
   flow: FlowState;
   dir: string;
   contextNotes: string[];
+  /** Why the requested origin was not recorded (missing evidence, invalid kind). Absent when it was recorded or none was asked for. */
+  originNote?: string | undefined;
 };
 
 export type FlowTaskAddInput = {
@@ -535,7 +566,22 @@ export type FlowCheckIssue = {
     | "attempts";
   message: string;
 };
-export type FlowCheckResult = { ok: boolean; issues: FlowCheckIssue[] };
+/**
+ * Something `flow check` reports that does NOT fail it (flow 384). `untracked`:
+ * the flow folder is not in `HEAD`. `branch-duplicate-id`: a remote branch other
+ * than the default one holds a different flow under the same number.
+ */
+export type FlowCheckWarning = {
+  flow: string;
+  kind: "untracked" | "branch-duplicate-id";
+  message: string;
+};
+export type FlowCheckResult = {
+  ok: boolean;
+  issues: FlowCheckIssue[];
+  /** Additive: `ok` ignores these. */
+  warnings: FlowCheckWarning[];
+};
 
 /** One recorded `flow renumber`, kept in .metaproject/flows/id-map.json. */
 export type FlowIdMapEntry = {
@@ -569,6 +615,16 @@ export interface OutcomeAuthorSetResult {
   flow: FlowState;
   previous: OutcomeAuthorReading;
   changed: boolean;
+}
+
+/** What `originSet` did: the readings before and after, whether it wrote anything, and why not when it did not. */
+export interface OriginSetResult {
+  flow: FlowState;
+  previous: OriginReading;
+  next: OriginReading;
+  changed: boolean;
+  /** Why the origin was not changed because of missing evidence. Absent otherwise. */
+  note?: string | undefined;
 }
 
 export interface FlowService {
@@ -679,6 +735,14 @@ export interface FlowService {
    * nothing, so it also works on a flow that is already closed.
    */
   outcomeAuthorSet(input: { cwd: string; id: string; author: string; reason: string }): Promise<OutcomeAuthorSetResult>;
+  originSet(input: {
+    cwd: string;
+    id: string;
+    kind: string;
+    reason: string;
+    quote?: string | undefined;
+    source?: string | undefined;
+  }): Promise<OriginSetResult>;
   complete(input: {
     cwd: string;
     id: string;

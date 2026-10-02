@@ -691,10 +691,20 @@ sha256s it; `freeze` refuses if there are zero real criteria; `assertAcIntact`
 recomputes the checksum before most mutations and throws (directing to `ac update`)
 if the file was edited outside the CLI. **Completion gates** (`complete`), in evaluation order: acceptance-criteria (checksum
 intact and every criterion confirmed), pull-request (or main-merge for a direct-merge
-handoff with no open PR), base-branch, tasks and owner (each **opt-in per package**,
+handoff with no open PR), base-branch, tasks, owner and folder-committed (each **opt-in per package**,
 written by `flow init`; older packages report them `skipped` rather than being
 retroactively blocked), review (opt-in; a clean review round was actually observed),
 health (`deps.healthGate(cwd)`), and security (omitted when the module is disabled).
+The folder-committed gate (`gates.folderCommitted`, written by `flow init` from 0.3.53;
+a non-git directory also reports it `skipped`) fails while the flow folder is not in
+`HEAD`. The flow folder is committed in the same PR as the code; the gate requires only
+that `flow.json` is in `HEAD` before closing. `flow init` and `flow renumber` avoid
+numbers used on known remote branches (`src/flow/remote-flows.ts`: up to 500
+remote-tracking refs, no network; a never-fetched ref is invisible and the repair is
+`flow renumber`), and `flow check` reports a clash with the default branch as
+`duplicate-id` (a clash with any other remote branch is a non-failing
+`branch-duplicate-id` warning) and an uncommitted folder as a non-failing `untracked`
+warning.
 `passed = gates.every(g => g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
 `complete` each append a signature (who, when, what was signed, and the identity's
 basis — `stated`/`derived`/`unknown`), and `complete` persists every

@@ -203,14 +203,14 @@ imported: 3 overwritten: 0 updated: 0 skipped: 1 would-import: 0 would-overwrite
 
 A reviewer that cites `<dir>/<name>.mdc` reads `.metaproject/rules/project/<dir>/<name>.mdc` when that file exists,
 and `.metaproject/rules/<dir>/<name>.mdc` otherwise. `keryx init`, `keryx update` and `keryx skills install` overwrite
-rules/core with keryx's own rules and leave rules/project alone. `keryx review reviewers` lists each such reference
-under `shadowedRules`.
+rules/core with keryx's own rules (the manifest form of `skills install` skips files it has no record of) and leave
+rules/project alone. `keryx review reviewers` lists each such reference under `shadowedRules`.
 
 Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.
 ```
 
-The note's "`keryx skills install` overwrite rules/core" is true of one of its
-two forms. **`keryx init`, `keryx update` and the legacy-profile form of
+The note's "`keryx skills install` overwrite rules/core" is true of the legacy
+profile form; the manifest form skips files it has no record of (below). **`keryx init`, `keryx update` and the legacy-profile form of
 `keryx skills install`** (`--profile minimal|recommended|full|custom` with no
 manifest flag) copy keryx's rules over `rules/core`. The manifest form with
 `--target keryx-shell` also writes `rules/core`, but skips an existing file its
@@ -281,7 +281,8 @@ reports one status:
   and the project has no file for yet; the overlay's goes to
   `.metaproject/rules/project/core/<name>.mdc` rather than to `rules/core`,
   because `keryx init`, `keryx update` and the legacy-profile
-  `keryx skills install` overwrite `rules/core` with keryx's own rules.
+  `keryx skills install` overwrite `rules/core` with keryx's own rules (the
+  manifest form skips files it has no record of).
 - `unresolved` — no `rules/` directory beside the source has it. Add the file by
   hand, or the reviewer keeps citing a rule the project lacks.
 
@@ -674,10 +675,11 @@ $ keryx review reviewers
 - review-acme-api: `vendor/acme-overlay/skills/review-acme-api/SKILL.md` changed since 2026-09-30T15:49:48.204Z
 …
 $ keryx skills update review/review-acme-api --dry-run
+# skills update
 …
-## would import (1) — dry run, nothing written
+## would update (1) — dry run, nothing written
 
-- review/review-acme-api (overwrites the existing one)
+- review/review-acme-api
 …
 $ keryx skills update review/review-acme-api
 …

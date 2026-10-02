@@ -248,3 +248,13 @@ test("AC5: completionFixHint names a command only for a failing gate with a know
   expect(completionFixHint({ name: "health", status: "pass", detail: "health gate: pass" }, "7")).toBeUndefined();
   expect(completionFixHint({ name: "review", status: "fail", detail: "x" }, "7")).toBeUndefined();
 });
+
+test("completionFixHint names the commit for an uncommitted flow folder, and nothing for an unevaluable gate", () => {
+  const dir = "007-2026-10-01-thing";
+  const detail = `flow folder ${dir} is not committed. Commit it (git add .metaproject/flows/${dir} && git commit) in the PR that carries the code, then run flow complete again`;
+  expect(completionFixHint({ name: "folder-committed", status: "fail", detail }, "007")).toBe(
+    `git add .metaproject/flows/${dir} && git commit`,
+  );
+  expect(completionFixHint({ name: "folder-committed", status: "fail", detail: "gate could not be evaluated" }, "007")).toBeUndefined();
+  expect(completionFixHint({ name: "folder-committed", status: "pass", detail }, "007")).toBeUndefined();
+});

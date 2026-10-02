@@ -8,6 +8,7 @@ import type { LifecycleState } from "../memory/lifecycle";
 // carried verbatim into `WikiValidateIssue["kind"]` below. Type-only, so this
 // does not make `./template-structure.ts` a runtime dependency of this module.
 import type { TemplateStructureIssueKind } from "./template-structure";
+import type { WikiWriteContext } from "./history";
 
 export type WikiPageType =
   | "architecture"
@@ -130,6 +131,8 @@ export type WikiCreatePageInput = {
   slug: string;
   title?: string | undefined;
   force?: boolean | undefined;
+  /** History run an overwrite is recorded under (flow 367); defaults to `wiki new`. */
+  history?: WikiWriteContext | undefined;
 };
 export type WikiCreatePageResult = {
   path: string;
@@ -192,6 +195,8 @@ export type WikiCollectInput = {
   limit?: number | undefined;
   changed?: boolean | undefined;
   since?: string | undefined;
+  /** History run page writes are recorded under (flow 367); defaults to `wiki collect`. */
+  history?: WikiWriteContext | undefined;
 };
 
 export type WikiCollectedPage = {
@@ -201,6 +206,9 @@ export type WikiCollectedPage = {
   action: "created" | "updated" | "skipped";
   // Set when the security gate (enforced/ci) suppressed this page's write.
   securityReason?: string;
+  // Set when regenerating would have broken a page invariant (flow 367): the
+  // page is left as it was and the run exits non-zero.
+  invariantReason?: string;
 };
 
 export type WikiCollectResult = {
@@ -210,6 +218,8 @@ export type WikiCollectResult = {
   skipped: number;
   pages: WikiCollectedPage[];
   index: WikiIndexResult;
+  /** History run the written pages are recorded under; undo with `wiki restore --run`. */
+  historyRunId: string;
 };
 
 export type WikiAskInput = {

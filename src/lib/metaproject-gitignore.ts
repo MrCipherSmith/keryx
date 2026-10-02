@@ -363,6 +363,10 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/gdctx/artifacts/
 .metaproject/data/gdwiki/artifacts/
 .metaproject/data/gdwiki/link-check/
+# Per-page wiki version history (flow 367): every enrich/collect run stores the
+# pages it replaced. Local undo state; committing it would put that churn into
+# every branch that runs a wiki command.
+.metaproject/data/gdwiki/history/
 .metaproject/data/health/history/
 .metaproject/data/health/artifacts/latest.md
 .metaproject/data/health/artifacts/latest.json
@@ -406,6 +410,9 @@ export function renderMetaprojectGitignoreBlock(): string {
 # entries rather than inheriting coverage that does not exist.
 .metaproject/data/learning/observations/
 .metaproject/data/learning/candidates/
+# Recommendation journal (flow 392): what the human chose and why they deviated.
+# Personal runtime state, written 0o600.
+.metaproject/data/decisions/
 `;
 }
 

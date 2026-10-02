@@ -76,8 +76,10 @@ import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
 import { printTriggerHelp, triggerCommand } from "./commands/trigger";
 import { scheduleCommand } from "./commands/schedule";
+import { decisionsCommand, printDecisionsHelp } from "./commands/decisions";
 import { governanceCommand, printGovernanceHelp } from "./commands/governance";
-import { productCommand } from "./commands/product";
+import { productCommand, readDigestBoard } from "./commands/product";
+import { registerBoardReader } from "./scheduler/digest-board";
 import { hooksCommand, printHooksHelp } from "./commands/hooks";
 import { bundleCommand, printBundleHelp } from "./commands/bundle";
 import { learnCommand, printLearnHelp } from "./commands/learn";
@@ -87,6 +89,9 @@ import { setupCommand } from "./commands/setup";
 import { GROUP_SUBCOMMANDS } from "./lib/group-subcommands";
 import { MCP_CONSUMER_SUBCOMMANDS } from "./commands/mcp-servers";
 import packageJson from "../package.json" with { type: "json" };
+
+// Flow 389: the scheduled digest reads the flow board through the product command, the only reader of the product index.
+registerBoardReader(readDigestBoard);
 
 export const VERSION = packageJson.version;
 
@@ -172,6 +177,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   trigger: triggerCommand,
   schedule: scheduleCommand,
   governance: governanceCommand,
+  decisions: decisionsCommand,
   product: productCommand,
   hooks: hooksCommand,
   bundle: bundleCommand,
@@ -407,6 +413,9 @@ const USAGE_LINES = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
+  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its
+                                               recommendation before showing it, the human's choice after;
+                                               report = match share by mode and stage, deviations (no model)
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)
@@ -492,6 +501,7 @@ Commands:
   trigger   Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code
   schedule  Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove
   governance Read-only report over already-recorded spend, confirmations, signatures and gate outcomes
+  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose
   product   The product's intent as a derived index, and the intents closed in code that nobody looked back at
   hooks     Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration
   bundle    Portable bundle export/import of skills, rules, agents, memory and hooks across scopes and harnesses
@@ -659,6 +669,7 @@ const RICH_GROUP_HELP: ReadonlyMap<string, (rest: readonly string[]) => void> = 
   ["trigger", () => printTriggerHelp()],
   ["serve-mcp", () => printServeMcpHelp()],
   ["governance", () => printGovernanceHelp()],
+  ["decisions", () => printDecisionsHelp()],
   ["hooks", () => printHooksHelp()],
   ["bundle", () => printBundleHelp()],
   ["learn", () => printLearnHelp()],

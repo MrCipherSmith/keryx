@@ -25,6 +25,11 @@ export const TG_LABEL = TG_SOURCE;
 export const TG_ECHO_MARKER = `${TG_LABEL} ❯`;
 
 /** `[tg] text`, for the queue panel and any plain-text listing. */
+/** The transcript line for a typed slash command: `❯ /model`, or `tg ❯ /model` when it came from the topic. */
+export function commandEchoText(line: string, source?: string): string {
+  return source === TG_SOURCE ? `${TG_ECHO_MARKER} ${line}` : `❯ ${line}`;
+}
+
 export function labelTelegramLine(text: string): string {
   return `[${TG_LABEL}] ${text}`;
 }
@@ -108,6 +113,18 @@ export function formatRemoteEventLines(status: RemoteStatus): string[] {
   return [...status.events].reverse().slice(0, REMOTE_EVENT_LIMIT).map((event: RemoteEvent) => `${clock(event.at)}  ${event.kind.padEnd(8)} ${event.text}`);
 }
 
+/**
+ * Flow 387: the recent slash commands that came from the topic, newest first. Refused commands and
+ * confirmations still waiting for a press are in it, because the router records both as "command"
+ * events. A confirmation that was answered or has expired is followed by a later line for the same
+ * command; the waiting line stays in the list as the history of what was asked.
+ */
+export function formatRemoteCommandLines(status: RemoteStatus): string[] {
+  const commands = status.events.filter((event) => event.kind === "command");
+  if (commands.length === 0) return ["No remote commands yet."];
+  return [...commands].reverse().slice(0, REMOTE_EVENT_LIMIT).map((event: RemoteEvent) => `${clock(event.at)}  ${event.text}`);
+}
+
 /** The readline shell's `/remote-control`: the status block, then the recent events. */
 export function renderRemoteControlText(status: RemoteStatus): string {
   return `${[...formatRemoteStatusLines(status), "", "Recent events:", ...formatRemoteEventLines(status)].join("\n")}\n`;
@@ -135,6 +152,7 @@ export function readlineRemoteControlText(line: string): string {
 export const REMOTE_TABS = [
   { id: "status", label: "Status" },
   { id: "events", label: "Events" },
+  { id: "commands", label: "Commands" },
 ] as const;
 
 export type PresentRemoteOptions = {
@@ -176,7 +194,9 @@ export function presentRemoteControl(
 
   const linesFor = (tab: string): string[] => {
     const status = options.getStatus();
-    return tab === "events" ? formatRemoteEventLines(status) : formatRemoteStatusLines(status);
+    if (tab === "events") return formatRemoteEventLines(status);
+    if (tab === "commands") return formatRemoteCommandLines(status);
+    return formatRemoteStatusLines(status);
   };
   const content = (tab: string): string => {
     const lines = linesFor(tab);

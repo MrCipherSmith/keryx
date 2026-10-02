@@ -296,7 +296,7 @@ const CREATE_FLAGS = [
 
 const BUDGET_FLAGS = ["--spent", "--ceiling", "--parallel", "--outstanding", "--reviewers"] as const;
 
-const COMMENTS_COLLECT_FLAGS = [
+export const COMMENTS_COLLECT_FLAGS = [
   "--repo",
   "--pr",
   "--self",
@@ -311,7 +311,7 @@ const COMMENTS_COLLECT_FLAGS = [
   "--json",
 ] as const;
 
-const COMMENTS_REPLY_FLAGS = [
+export const COMMENTS_REPLY_FLAGS = [
   "--repo",
   "--pr",
   // Accepted here only as the fallback for a record that carries no identity yet
@@ -3828,18 +3828,25 @@ function reviewHelpSection(name: string): string {
   return body.join("\n").trimEnd();
 }
 
+/**
+ * The `comments collect|reply` usage entries, printed by both `keryx review
+ * --help` and `keryx review comments --help`: one text, so the two cannot list
+ * different flags. `review-help.test.ts` checks it against the parsers' flag lists.
+ */
+const COMMENTS_USAGE = `  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
+                                [--self <login>] [--round <n>]
+                                [--out <findings.json>] [--json] [--fixtures <dir>]
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
+                              --sha <head-sha> --final [--result <file>] [--review <review-id>]
+                              [--round <n>] [--dry-run] [--self <login>]
+                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
+                              [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]`;
+
 function printCommentsHelp(): void {
   console.log(`keryx review comments
 
 Usage:
-  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
-                                [--self <login>] [--round <n>]
-                                [--out <findings.json>] [--json] [--fixtures <dir>]
-  keryx review comments reply --repo <owner/repo> --pr <n> --sha <head-sha> --final
-                              [--outcomes <file|->] [--result <file>] [--review <review-id>]
-                              [--round <n>] [--dry-run] [--self <login>]
-                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                              [--flow-link <url>] [--allow-closed-pr] [--fixtures <dir>]
+${COMMENTS_USAGE}
 
 ${reviewHelpSection("comments")}
 `);
@@ -3917,13 +3924,7 @@ Usage:
                     [--verifier ${VERIFICATION_METHODS.join("|")}] [--security]
                     [--session-provider <id>] [--session-model <id>]
                     [--catalog <file|->] [--json]
-  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
-                                [--self <login>] [--round <n>]
-                                [--out <findings.json>] [--json] [--fixtures <dir>]
-  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                              --sha <head-sha> --final [--round <n>] [--dry-run]
-                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                              [--flow-link <url>] [--fixtures <dir>]
+${COMMENTS_USAGE}
   keryx review ci-triage --run <id> [--job <name>] [--test <name>] [--repo <owner/repo>]
                          [--model <jev-1.13|jev-latest>] [--fixtures <dir>] [--json]
   keryx review conform --ref <doc> (--pr <n> | --report <dir> | --diff <ref>)

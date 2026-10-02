@@ -112,6 +112,7 @@ continues with the wiki, a recorded decision and the shell.
 | A clear finish line for delegated work | Flows with frozen criteria, journals, signed confirmations and review packages | [Managed work](https://mrciphersmith.github.io/keryx/modules/managed-work/) |
 | A health gate and the tests that matter | One health report with a pass, warn or fail gate, and related-test selection | [Quality](https://mrciphersmith.github.io/keryx/modules/quality/) |
 | Repeatable procedures instead of improvised ones | Versioned skills, synced agent rules and reviewed learning | [Skills, rules and learning](https://mrciphersmith.github.io/keryx/modules/skills-and-learning/) |
+| A record of what an agent recommended and what you chose | A recommendation journal with blind questions and a match report | [Recommendation journal](https://mrciphersmith.github.io/keryx/guides/recommendation-journal/) |
 | Upkeep without you at the keyboard | Triggers, scheduled agent tasks and an HTTP entry that binds to loopback by default | [Automation](https://mrciphersmith.github.io/keryx/modules/automation/) |
 
 ## How it works

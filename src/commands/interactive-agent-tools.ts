@@ -17,6 +17,7 @@ import {
 } from "../harness/tool/builtin/background-job-registry";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
+import { withSpillSearch } from "../harness/tool/builtin/spill-search";
 import { executionPlanTools } from "../harness/tool/builtin/execution-plan-tool";
 import { slateReadTool, slateWriteSeedTool } from "../harness/tool/builtin/slate-tool";
 import { webFetchTool } from "../harness/tool/builtin/web-fetch-tool";
@@ -28,7 +29,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
+import { journaledAskUser } from "../tui/ask-user-bridge";
 import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
@@ -203,9 +204,14 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   // The project tools and their gate (K-009), assembled by the one function
   // `keryx acp` also calls — so the two rosters cannot drift (flow 288, AC1).
   const project = buildProjectTools(input.cwd, input.metaprojectPort);
-  const metaprojectTools = project.all;
+  // Flow 387 T14: `search_code` is wrapped (not widened in its three backings) so an
+  // absolute path inside this session's spilled-output dir is searchable. `offered`
+  // is rebuilt from the wrapped objects so the project filter below still matches.
+  const wrap = new Map(project.all.map((tool) => [tool, withSpillSearch(tool, getSessionDir)] as const));
+  const metaprojectTools = project.all.map((tool) => wrap.get(tool) ?? tool);
+  const projectOffered = project.offered.map((tool) => wrap.get(tool) ?? tool);
   const built: InteractiveTool[] = [
-    ...builtinReadOnlyTools(input.cwd),
+    ...builtinReadOnlyTools(input.cwd, { getSessionDir }),
     ...metaprojectTools,
     webFetchTool({ cwd: input.cwd }),
     webSearchTool(input.searchController, { cwd: input.cwd }),
@@ -231,7 +237,8 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     workspaceListTool(input.cwd),
     workspaceShowTool(input.cwd),
     workspaceProposeTool(input.cwd, getSessionDir),
-    createAskUserTool(invokeAskUserHost),
+    // Flow 392: the same picker, with the recommendation journal around it.
+    createAskUserTool(journaledAskUser(input.cwd)),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     ...executionPlanTools(getSessionDir),
@@ -262,7 +269,7 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   // "unknown" in a plain repository would make the same command line fail in one
   // directory and pass in the next.
   assertDeniableTools(built, denied);
-  const offered = built.filter((tool) => !metaprojectTools.includes(tool) || project.offered.includes(tool));
+  const offered = built.filter((tool) => !metaprojectTools.includes(tool) || projectOffered.includes(tool));
   return denyInteractiveTools(offered, denied);
 }
 

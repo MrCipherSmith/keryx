@@ -1,0 +1,603 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "358",
+  "slug": "model-tier-generation-agent-fallback",
+  "title": "Model tier: generation-aware ranking and agent fallback (Sonnet 5.5 > Sonnet 5)",
+  "status": "done",
+  "createdAt": "2026-09-28T21:13:50.245Z",
+  "updatedAt": "2026-09-28T22:29:12.222Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-28T22:28:45.851Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC2": {
+      "at": "2026-09-28T22:28:46.148Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC4": {
+      "at": "2026-09-28T22:28:46.436Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC5": {
+      "at": "2026-09-28T22:28:46.731Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC6": {
+      "at": "2026-09-28T22:28:47.020Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC7": {
+      "at": "2026-09-28T22:28:47.308Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC8": {
+      "at": "2026-09-28T22:28:47.605Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC9": {
+      "at": "2026-09-28T22:28:47.904Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC10": {
+      "at": "2026-09-28T22:28:48.221Z",
+      "note": "Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/."
+    },
+    "AC3": {
+      "at": "2026-09-28T22:28:48.526Z",
+      "note": "Step-down light implemented and tested in PR #790 (24c230b7). One clause, smallest class on signal, has no tier to map to and is not implemented; accepted by the implementer as a deviation."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T5",
+      "title": "context",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T6",
+      "title": "generation rank and step-down light",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T7",
+      "title": "agent fallback port, cache, agent-ranked schema",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T8",
+      "title": "wire into spawn_subagent, review tier, TUI row",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T9",
+      "title": "curated lineup and compile.ts regression test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T10",
+      "title": "docs, CHANGELOG, bump 0.3.27",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    },
+    {
+      "id": "T11",
+      "title": "verify and review",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Delivered in PR #790 (24c230b7)"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T21:13:50.245Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-28T21:14:25.365Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-28T21:14:25.686Z",
+      "event": "task-added",
+      "detail": "T5: context"
+    },
+    {
+      "at": "2026-09-28T21:14:26.004Z",
+      "event": "task-added",
+      "detail": "T6: generation rank and step-down light"
+    },
+    {
+      "at": "2026-09-28T21:14:26.327Z",
+      "event": "task-added",
+      "detail": "T7: agent fallback port, cache, agent-ranked schema"
+    },
+    {
+      "at": "2026-09-28T21:14:26.649Z",
+      "event": "task-added",
+      "detail": "T8: wire into spawn_subagent, review tier, TUI row"
+    },
+    {
+      "at": "2026-09-28T21:14:26.968Z",
+      "event": "task-added",
+      "detail": "T9: curated lineup and compile.ts regression test"
+    },
+    {
+      "at": "2026-09-28T21:14:27.330Z",
+      "event": "task-added",
+      "detail": "T10: docs, CHANGELOG, bump 0.3.27"
+    },
+    {
+      "at": "2026-09-28T21:14:27.656Z",
+      "event": "task-added",
+      "detail": "T11: verify and review"
+    },
+    {
+      "at": "2026-09-28T21:14:27.988Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-28T22:28:45.851Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:46.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:46.436Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:46.731Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:47.020Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:47.309Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:47.605Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:47.904Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:48.221Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Implemented and tested in PR #790 (merged 24c230b7); review rounds recorded in flow reviews/. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:28:48.527Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Step-down light implemented and tested in PR #790 (24c230b7). One clause, smallest class on signal, has no tier to map to and is not implemented; accepted by the implementer as a deviation. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-28T22:29:04.805Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-28T22:29:05.124Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-28T22:29:05.438Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-28T22:29:05.731Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-28T22:29:06.040Z",
+      "event": "task-done",
+      "detail": "T5: context"
+    },
+    {
+      "at": "2026-09-28T22:29:06.370Z",
+      "event": "task-done",
+      "detail": "T6: generation rank and step-down light"
+    },
+    {
+      "at": "2026-09-28T22:29:06.702Z",
+      "event": "task-done",
+      "detail": "T7: agent fallback port, cache, agent-ranked schema"
+    },
+    {
+      "at": "2026-09-28T22:29:07.008Z",
+      "event": "task-done",
+      "detail": "T8: wire into spawn_subagent, review tier, TUI row"
+    },
+    {
+      "at": "2026-09-28T22:29:07.347Z",
+      "event": "task-done",
+      "detail": "T9: curated lineup and compile.ts regression test"
+    },
+    {
+      "at": "2026-09-28T22:29:07.672Z",
+      "event": "task-done",
+      "detail": "T10: docs, CHANGELOG, bump 0.3.27"
+    },
+    {
+      "at": "2026-09-28T22:29:08.003Z",
+      "event": "task-done",
+      "detail": "T11: verify and review"
+    },
+    {
+      "at": "2026-09-28T22:29:12.169Z",
+      "event": "completing",
+      "detail": "merged commit: 24c230b7219025259b9010346ab63f38a3bf8f29"
+    },
+    {
+      "at": "2026-09-28T22:29:12.220Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-28T22:29:12.222Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-28T22:28:45.851Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:46.148Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:46.436Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:46.731Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:47.020Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:47.308Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:47.605Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:47.904Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:48.221Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:28:48.526Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    },
+    {
+      "at": "2026-09-28T22:29:12.221Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a",
+      "headCommit": "24c230b7219025259b9010346ab63f38a3bf8f29"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-09-28T22:29:12.220Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "24c230b7219025259b9010346ab63f38a3bf8f29 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "skipped",
+          "detail": "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "11 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:af76df20453eee668cbf38e90f55cc45160623a149cf993ab6fe7ecae9441c6a"
+    }
+  ],
+  "merged": {
+    "commit": "24c230b7219025259b9010346ab63f38a3bf8f29",
+    "ref": "origin/main",
+    "at": "2026-09-28T22:29:12.221Z"
+  }
+}

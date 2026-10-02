@@ -10,6 +10,11 @@
 //   - Any other 4xx (the topic is gone, the bot was kicked) will never succeed:
 //     the entry is dropped and reported rather than blocking the queue forever.
 //
+// Text is stored as the plain Markdown-ish text `formatReply` produced and rendered
+// to Telegram HTML only when it is sent (`sendHtml`). If Telegram refuses the markup
+// (400 "can't parse entities") that one part is resent once as plain text and
+// `onFallback` records it; a restart never sees stale HTML on disk.
+//
 // A crash between a successful send and its ack resends that one message on the
 // next start. Telegram offers no idempotency key, so outbound is at-least-once.
 
@@ -19,6 +24,7 @@ import { redactSensitiveText } from "../security/service";
 import { DurableLog, type LoadReport } from "./durable-log";
 import { ensureRemoteDir, OUTBOUND_FILE } from "./paths";
 import { formatReply } from "./format";
+import { sendHtml } from "./format-html";
 import { type BotApi, type InlineKeyboard, isBotApiError, isRetryable } from "./types";
 
 export const OUTBOUND_MAX_ENTRIES = 200;
@@ -32,11 +38,25 @@ export interface OutboundEntry {
   createdAt: number;
 }
 
+/** What Telegram answered for one sent part: where the message lives, so it can be edited later. */
+export interface SentMessageInfo {
+  messageId: number;
+  chatId: number;
+  threadId?: number;
+  /** The plain (pre-HTML) text of the part that was sent. */
+  text: string;
+}
+
 export interface OutboundMessage {
   chatId: number;
   threadId?: number;
   text: string;
   keyboard?: InlineKeyboard;
+  /**
+   * Called once, in memory only, after the LAST part (the one that carries the keyboard) was
+   * sent. Not durable: a restart resends the entry without it, and the caller must cope.
+   */
+  onSent?: (info: SentMessageInfo) => void;
 }
 
 export interface FlushResult {
@@ -56,6 +76,8 @@ export interface OutboundQueueOptions {
   maxEntries?: number;
   /** Called for an entry that was discarded: bound overflow or a permanent refusal. */
   onDrop?: (entry: OutboundEntry, reason: string) => void;
+  /** Called when Telegram refused the HTML of an entry and it was resent as plain text. */
+  onFallback?: (entry: OutboundEntry) => void;
   /** Default retry delay for a network or server error. */
   retryDelayMs?: number;
 }
@@ -87,7 +109,9 @@ export class OutboundQueue {
   private readonly now: () => number;
   private readonly log: DurableLog<OutboundEntry>;
   private readonly onDrop: (entry: OutboundEntry, reason: string) => void;
+  private readonly onFallback: (entry: OutboundEntry) => void;
   private readonly retryDelayMs: number;
+  private readonly sentHooks = new Map<string, (info: SentMessageInfo) => void>();
   private blockedUntil = 0;
   private flushing: Promise<FlushResult> | undefined;
 
@@ -95,6 +119,7 @@ export class OutboundQueue {
     this.api = options.api;
     this.now = options.now;
     this.onDrop = options.onDrop ?? (() => undefined);
+    this.onFallback = options.onFallback ?? (() => undefined);
     this.retryDelayMs = options.retryDelayMs ?? 5_000;
     const directory = ensureRemoteDir(options.dir);
     this.log = new DurableLog<OutboundEntry>({
@@ -133,8 +158,12 @@ export class OutboundQueue {
         ...(message.keyboard === undefined || index !== parts.length - 1 ? {} : { keyboard: message.keyboard }),
         createdAt: this.now(),
       };
+      if (message.onSent !== undefined && index === parts.length - 1) {
+        this.sentHooks.set(entry.id, message.onSent);
+      }
       const { dropped } = this.log.add(entry);
       for (const gone of dropped) {
+        this.sentHooks.delete(gone.id);
         this.onDrop(gone, "outbound queue is full; oldest message dropped");
       }
       entries.push(entry);
@@ -147,6 +176,7 @@ export class OutboundQueue {
     let removed = 0;
     for (const entry of this.log.pending()) {
       if (entry.chatId === chatId && entry.threadId === threadId) {
+        this.sentHooks.delete(entry.id);
         this.log.ack(entry.id);
         removed += 1;
       }
@@ -164,6 +194,24 @@ export class OutboundQueue {
     return this.flushing;
   }
 
+  private notifySent(entry: OutboundEntry, messageId: number): void {
+    const hook = this.sentHooks.get(entry.id);
+    if (hook === undefined) {
+      return;
+    }
+    this.sentHooks.delete(entry.id);
+    try {
+      hook({
+        messageId,
+        chatId: entry.chatId,
+        ...(entry.threadId === undefined ? {} : { threadId: entry.threadId }),
+        text: entry.text,
+      });
+    } catch {
+      // An observer that throws must never cost the operator the message or block the queue.
+    }
+  }
+
   private async run(): Promise<FlushResult> {
     let sent = 0;
     let dropped = 0;
@@ -177,14 +225,19 @@ export class OutboundQueue {
         return { sent, dropped, remaining: this.log.size, retryInMs: wait, stoppedBy: "rate limited" };
       }
       try {
-        await this.api.sendMessage({
-          chatId: entry.chatId,
-          text: entry.text,
-          ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
-          ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
-        });
+        const result = await sendHtml(
+          this.api,
+          {
+            chatId: entry.chatId,
+            text: entry.text,
+            ...(entry.threadId === undefined ? {} : { messageThreadId: entry.threadId }),
+            ...(entry.keyboard === undefined ? {} : { inlineKeyboard: entry.keyboard }),
+          },
+          () => this.onFallback(entry),
+        );
         this.log.ack(entry.id);
         sent += 1;
+        this.notifySent(entry, result.message_id);
       } catch (error) {
         const description = describe(error);
         if (isBotApiError(error) && error.kind === "rate-limited") {
@@ -196,6 +249,7 @@ export class OutboundQueue {
           return { sent, dropped, remaining: this.log.size, retryInMs: this.retryDelayMs, stoppedBy: description };
         }
         this.log.ack(entry.id);
+        this.sentHooks.delete(entry.id);
         dropped += 1;
         this.onDrop(entry, description);
       }

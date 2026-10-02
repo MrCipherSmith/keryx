@@ -1,0 +1,319 @@
+{
+  "note": "RAW per-seed MUTATING-ablation results, opencode CLI leg: `opencode run --auto` (its own built-in agent loop, free OpenCode Zen deepseek-v4-flash-free provider — the SAME model family keryx's own harness legs use) makes a real code edit to make a seeded failing test pass, twice per seed — context-on (unmodified checkout) vs context-off (AGENTS.md/.metaproject stripped) — each seed in its own fresh, FULLY INDEPENDENT git clone (src/harness/child/git-clone-port.ts), not a linked git worktree — a real, reproduced finding found opencode resolves project root via a linked worktree's shared .git and writes into the MAIN checkout instead, confirmed and reverted; a real clone has no shared .git to walk past. Success is decided by an independent `bun test` run after opencode's turn, never by trusting its own claim. Captured live, no fabricated samples.",
+  "metricsNote": "per sample: metrics summed over opencode's step_finish events (input is already the uncached portion; cache.read/cache.write reported separately; one event per model request); repeatedReads is null (keryx-only metric).",
+  "model": "opencode/nemotron-3-ultra-free",
+  "provider": "opencode-cli",
+  "generated_by": "bun scripts/benchmark/run-ablation-mutating-opencode.ts",
+  "captured": "2026-10-02",
+  "tasks": [
+    {
+      "taskId": "harness:ablation-mutating:atomic-json-write",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 211339,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 150003,
+              "cachedInputTokens": 60480,
+              "cacheWriteTokens": 0,
+              "outputTokens": 677,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 248832,
+            "toolCalls": 6,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 217376,
+              "cachedInputTokens": 30240,
+              "cacheWriteTokens": 0,
+              "outputTokens": 916,
+              "requests": 7
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 253056,
+            "toolCalls": 7,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 135148,
+              "cachedInputTokens": 116640,
+              "cacheWriteTokens": 0,
+              "outputTokens": 1010,
+              "requests": 7
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 204397,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 147333,
+              "cachedInputTokens": 56160,
+              "cacheWriteTokens": 0,
+              "outputTokens": 731,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 241985,
+            "toolCalls": 6,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 210647,
+              "cachedInputTokens": 30240,
+              "cacheWriteTokens": 0,
+              "outputTokens": 810,
+              "requests": 7
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 136504,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 109786,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 591,
+              "requests": 4
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:flag-present",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 174630,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 147988,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 532,
+              "requests": 5
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 208272,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 181704,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 491,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 174764,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 143724,
+              "cachedInputTokens": 30240,
+              "cacheWriteTokens": 0,
+              "outputTokens": 539,
+              "requests": 5
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 168909,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 116265,
+              "cachedInputTokens": 51840,
+              "cacheWriteTokens": 0,
+              "outputTokens": 537,
+              "requests": 5
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 168445,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 141733,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 538,
+              "requests": 5
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 167616,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 89193,
+              "cachedInputTokens": 77760,
+              "cacheWriteTokens": 0,
+              "outputTokens": 532,
+              "requests": 5
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    },
+    {
+      "taskId": "harness:ablation-mutating:read-text-file-or",
+      "contextOn": {
+        "variant": "context-on",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 235519,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 144044,
+              "cachedInputTokens": 90720,
+              "cacheWriteTokens": 0,
+              "outputTokens": 554,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 236755,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 197100,
+              "cachedInputTokens": 38880,
+              "cacheWriteTokens": 0,
+              "outputTokens": 570,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 201611,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 161975,
+              "cachedInputTokens": 38880,
+              "cacheWriteTokens": 0,
+              "outputTokens": 493,
+              "requests": 5
+            },
+            "repeatedReads": null
+          }
+        ]
+      },
+      "contextOff": {
+        "variant": "context-off",
+        "samples": [
+          {
+            "seed": 1,
+            "success": true,
+            "tokens": 228783,
+            "toolCalls": 5,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 228070,
+              "cachedInputTokens": 0,
+              "cacheWriteTokens": 0,
+              "outputTokens": 563,
+              "requests": 6
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 2,
+            "success": true,
+            "tokens": 196665,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 169857,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 611,
+              "requests": 5
+            },
+            "repeatedReads": null
+          },
+          {
+            "seed": 3,
+            "success": true,
+            "tokens": 195803,
+            "toolCalls": 4,
+            "model": "opencode/nemotron-3-ultra-free",
+            "metrics": {
+              "uncachedInputTokens": 169153,
+              "cachedInputTokens": 25920,
+              "cacheWriteTokens": 0,
+              "outputTokens": 521,
+              "requests": 5
+            },
+            "repeatedReads": null
+          }
+        ]
+      }
+    }
+  ]
+}

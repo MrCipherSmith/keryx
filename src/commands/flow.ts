@@ -9,8 +9,10 @@ import {
   confirmPreconditionError,
   createFlowService,
   describeAcKind,
+  effectiveOutcomeAuthor,
   intentNoteForNewFlow,
-  readOutcomeAuthor,
+  originDetailLines,
+  readOrigin,
   renderAcCheckAdvisoryNotice,
   renderAcCheckReport,
   renderAcKindDistribution,
@@ -354,6 +356,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runOwner(args.slice(1));
       case "outcome":
         return await runOutcome(args.slice(1));
+      case "origin":
+        return await runOrigin(args.slice(1));
       case "implemented":
         return await runImplemented(args.slice(1));
       case "complete":
@@ -407,6 +411,11 @@ async function runInit(args: string[]): Promise<void> {
     requireConfirmation: args.includes("--require-confirmation"),
     // Never inferred: `agent` unless the flag is given, `human` only when it says so.
     outcomeAuthor: outcomeAuthorFlag(args),
+    // Evidence, not assertion: the service records the origin only with the
+    // evidence its kind needs and otherwise says why not. Never refuses.
+    origin: optionValue(args, "--origin"),
+    originQuote: textFlag(args, "--quote"),
+    originSource: textFlag(args, "--source"),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
@@ -416,7 +425,11 @@ async function runInit(args: string[]): Promise<void> {
     console.log(`  base:   ${result.flow.baseBranch}`);
   }
   console.log(`  owner:  ${result.flow.owner?.value ?? style.dim("not set")}`);
-  console.log(`  outcome author: ${readOutcomeAuthor(result.flow.outcomeAuthor)}`);
+  console.log(`  outcome author: ${outcomeAuthorLine(result.flow)}`);
+  for (const line of originDetailLines(readOrigin(result.flow.origin), "  ")) console.log(line);
+  if (result.originNote !== undefined) {
+    console.log(`  ${style.yellow(WARN)} ${result.originNote}`);
+  }
   if (result.flow.gates?.confirmation) {
     console.log(`  confirmation: required ${style.dim("(a terminal-minted token: `keryx flow confirm <id>`)")}`);
   }
@@ -433,6 +446,26 @@ async function runInit(args: string[]): Promise<void> {
     `Write hard, verifiable criteria in ${style.cyan("acceptance-criteria.md")}.`,
     `Freeze and start: ${style.cyan(`keryx flow freeze ${result.flow.id}`)} then ${style.cyan(`flow start ${result.flow.id}`)}.`,
   ]);
+}
+
+/**
+ * The value of a free-text flag such as `--quote`: the next token as it is,
+ * unless it is itself a flag (`--word`), so a quote that starts with dashes or
+ * a dash and a space is kept byte for byte. `--name=value` works too.
+ */
+function textFlag(args: string[], name: string): string | undefined {
+  const index = args.indexOf(name);
+  if (index >= 0) {
+    const next = args[index + 1];
+    return next !== undefined && !/^--[A-Za-z][\w-]*(=|$)/.test(next) ? next : undefined;
+  }
+  return args.find((argument) => argument.startsWith(`${name}=`))?.slice(name.length + 1);
+}
+
+/** The outcome author a flow shows: an explicit value, else derived from the origin, else `unknown`. */
+function outcomeAuthorLine(flow: { outcomeAuthor?: unknown; origin?: unknown }): string {
+  const reading = effectiveOutcomeAuthor(flow);
+  return flow.outcomeAuthor === undefined && reading !== "unknown" ? `${reading} (derived from origin)` : reading;
 }
 
 /**
@@ -521,9 +554,32 @@ async function runList(args: string[] = []): Promise<void> {
   // A number shared by two packages makes every bare-id command ambiguous —
   // say so here, where the listing is what usually reveals it.
   const shared = duplicateFlowIds(flows.map((flow) => flow.id));
+  // Flow 384: the two folder-hygiene problems `flow check` reports, as a tag
+  // beside the row. One check pass for the whole list; informational, so a
+  // failure to compute it is silence.
+  const remoteClash = new Set<string>();
+  const notCommitted = new Set<string>();
+  try {
+    const checked = await getService().check({ cwd: process.cwd() });
+    for (const issue of checked.issues) {
+      if (issue.kind === "duplicate-id") remoteClash.add(issue.flow);
+    }
+    for (const warning of checked.warnings ?? []) {
+      if (warning.kind === "untracked") notCommitted.add(warning.flow);
+    }
+  } catch {
+    // `flow check` owns this report.
+  }
   heading(`Flows (${flows.length})`);
   for (const flow of flows) {
-    const marker = shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "";
+    // `flow.dir` is the project-relative path; the check keys by folder name.
+    const folder = flow.dir.slice(flow.dir.lastIndexOf("/") + 1);
+    const tags = [
+      ...(remoteClash.has(folder) && !shared.has(flow.id) ? ["dup id"] : []),
+      ...(notCommitted.has(folder) ? ["not committed"] : []),
+    ];
+    const hygieneMarker = tags.length > 0 ? ` ${style.yellow(tags.map((tag) => `[${tag}]`).join(" "))}` : "";
+    const marker = (shared.has(flow.id) ? ` ${style.red(`${symbols.cross} duplicate id`)}` : "") + hygieneMarker;
     console.log(
       `  ${style.bold(flow.id)}${marker} ${style.dim("[")}${flowStatusLabel(flow.status)}${style.dim("]")} ${flow.title} ${style.dim(`(tasks ${flow.tasksDone}/${flow.tasksTotal})`)}`,
     );
@@ -589,7 +645,10 @@ async function runStatus(args: string[]): Promise<void> {
   // learn who owns or last signed this flow.
   // The author of the outcome criterion. A flow without the field reads `unknown`,
   // and reading it writes nothing.
-  console.log(`  outcome author: ${readOutcomeAuthor(flow.outcomeAuthor)}`);
+  console.log(`  outcome author: ${outcomeAuthorLine(flow)}`);
+  // Where the flow came from. A flow without one, or with a kind this build does
+  // not know, reads `unknown`; reading writes nothing and gates nothing.
+  for (const line of originDetailLines(readOrigin(flow.origin), "  ")) console.log(line);
   console.log(
     `  owner:   ${flow.owner?.value ? `${flow.owner.value} ${style.dim(`[${flow.owner.basis}]`)}` : style.dim("not set")}`,
   );
@@ -1010,11 +1069,55 @@ async function runOutcome(args: string[]): Promise<void> {
     author,
     reason: optionValue(rest, "--reason") ?? "",
   });
-  const after = readOutcomeAuthor(result.flow.outcomeAuthor);
+  const after = effectiveOutcomeAuthor(result.flow);
   console.log(
     result.changed
       ? `  ${style.green(symbols.ok)} Outcome author ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(after)}`
       : `  ${style.dim(symbols.bullet)} Outcome author already ${style.bold(after)}; nothing written`,
+  );
+}
+
+const ORIGIN_USAGE =
+  'Usage: keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]';
+
+/** `flow origin set`: change where a flow came from. Journaled; works on any flow; never gates. */
+async function runOrigin(args: string[]): Promise<void> {
+  if (args[0] !== "set") {
+    throw new Error(ORIGIN_USAGE);
+  }
+  // `<id> <kind>` are the two positionals; the values of --reason, --quote and --source are not.
+  const rest = args.slice(1);
+  const positionals: string[] = [];
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i] ?? "";
+    if (arg === "--reason" || arg === "--quote" || arg === "--source") {
+      i += 1;
+    } else if (!arg.startsWith("--")) {
+      positionals.push(arg);
+    }
+  }
+  const id = positionals[0];
+  const kind = positionals[1];
+  if (!id || kind === undefined || positionals.length > 2) {
+    throw new Error(ORIGIN_USAGE);
+  }
+  const result = await getService().originSet({
+    cwd: process.cwd(),
+    id,
+    kind,
+    reason: optionValue(rest, "--reason") ?? "",
+    quote: textFlag(rest, "--quote"),
+    source: textFlag(rest, "--source"),
+  });
+  if (result.note !== undefined) {
+    console.log(`  ${style.yellow(WARN)} ${result.note}`);
+    console.log(`  ${style.dim(symbols.bullet)} Origin stays ${style.bold(result.previous)}; nothing written`);
+    return;
+  }
+  console.log(
+    result.changed
+      ? `  ${style.green(symbols.ok)} Origin ${result.previous} ${style.cyan(symbols.arrow)} ${style.bold(result.next)}`
+      : `  ${style.dim(symbols.bullet)} Origin already ${style.bold(result.next)}; nothing written`,
   );
 }
 
@@ -1349,13 +1452,18 @@ async function runCheck(): Promise<void> {
   const result = await getService().check({ cwd: process.cwd() });
   if (result.ok) {
     console.log(`  ${style.green(symbols.ok)} All flows are consistent.`);
-    return;
+  } else {
+    heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
+    for (const issue of result.issues) {
+      console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+    }
+    process.exitCode = 1;
   }
-  heading(`${style.red(symbols.cross)} flow check: ${result.issues.length} issue(s)`);
-  for (const issue of result.issues) {
-    console.log(`  ${style.red(symbols.cross)} ${style.dim(`[${issue.kind}]`)} ${style.bold(issue.flow)}: ${issue.message}`);
+  // Flow 384: warnings never change the exit code — an uncommitted folder is
+  // the normal state between `flow init` and the first commit.
+  for (const warning of result.warnings) {
+    console.log(`  ${style.yellow(WARN)} ${warning.message}`);
   }
-  process.exitCode = 1;
 }
 
 async function runRenumber(args: string[]): Promise<void> {
@@ -1564,6 +1672,7 @@ function printHelp(): void {
     'keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"   (repair an unsatisfiable dependsOn)',
     'keryx flow owner set <id> --owner "<name>" --reason "<why>"   (the human accountable; never inferred)',
     'keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)',
+    'keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]   (where the flow came from; journaled, gates nothing)',
     'keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]',
     'keryx flow ac update <id> --reason "<why>"   (re-freeze the file as already edited; VOIDS prior confirmations)',
     'keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"   (rewrite/append that one criterion, then re-freeze; VOIDS prior confirmations)',
@@ -1595,6 +1704,9 @@ function printHelp(): void {
       "is absent) or `human`, and `human` only when the flag says so — never inferred from a git " +
       "identity, an owner or the environment. A flow without the field reads `unknown`. The flag " +
       "labels a sample and gates nothing.",
+  );
+  note(
+    "`flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.",
   );
   note(
     "`flow confirm` mints a short-lived, single-use token only for a flow created with " +

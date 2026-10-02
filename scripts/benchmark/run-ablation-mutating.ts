@@ -28,7 +28,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
 import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
-import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
+import { buildAblationManifest, computeAblationDelta, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port";
 import { builtinMetaprojectTools } from "../../src/harness/tool/builtin/metaproject-tools";
@@ -37,6 +37,7 @@ import { shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
 import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, type MutatingTask } from "./mutating-tasks";
+import { KeryxUsageAccumulator, RepeatedReadTracker, fixtureFilename, type InstrumentedSeedSample } from "./token-metrics";
 
 const SEEDS = [1, 2, 3] as const;
 
@@ -89,8 +90,13 @@ function argValue(flag: string, fallback: string): string {
 
 const PROVIDER_NAME = argValue("--provider", "deepseek");
 const MODEL = argValue("--model", PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown");
-const RESULTS_FILENAME =
+// Optional name of an AgentDeps hook T11's context prune calls (e.g. `--prune-hook onContextPrune`);
+// when absent, prune events are not observed and the result records `pruneHook: null`.
+const PRUNE_HOOK = process.argv.includes("--prune-hook") ? argValue("--prune-hook", "") || null : null;
+// Keyed on provider AND model (a provider-only suffix let a second same-provider model clobber a committed fixture).
+const LEGACY_FILENAME =
   PROVIDER_NAME === "deepseek" ? "ablation-mutating-results.json" : `ablation-mutating-results-${PROVIDER_NAME}.json`;
+const RESULTS_FILENAME = fixtureFilename(LEGACY_FILENAME, PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown", MODEL);
 
 function buildTools(root: string, variant: AblationVariant): InteractiveTool[] {
   const basic = builtinReadOnlyTools(root);
@@ -126,7 +132,7 @@ async function runSeed(
   worktreeId: string,
   port: ReturnType<typeof createGitWorktreePort>,
   idSeq: () => string,
-): Promise<AblationSeedSample> {
+): Promise<InstrumentedSeedSample> {
   const created = await port.create(worktreeId);
   const root = created.path;
   try {
@@ -142,7 +148,9 @@ async function runSeed(
     await writeFile(join(root, task.seedTestFile), task.seedTestContent, "utf8");
 
     const provider = makeProvider(PROVIDER_NAME, MODEL, { fetch });
+    const tracker = new RepeatedReadTracker(PRUNE_HOOK);
     const deps: AgentDeps = {
+      onContextCompaction: () => tracker.onCompaction(),
       provider,
       providerId: PROVIDER_NAME,
       modelId: MODEL,
@@ -151,6 +159,8 @@ async function runSeed(
       idSeq,
       maxToolCalls: 20,
     };
+    if (PRUNE_HOOK !== null) (deps as unknown as Record<string, unknown>)[PRUNE_HOOK] = () => tracker.onPrune();
+    const usageAcc = new KeryxUsageAccumulator();
     let tokens = 0;
     let sawUsage = false;
     let toolCalls = 0;
@@ -162,10 +172,12 @@ async function runSeed(
       requestApproval: async () => true,
       onUsage: (usage) => {
         sawUsage = true;
+        usageAcc.addUsage(usage);
         tokens += usage.totalTokens ?? (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
       },
-      onToolCall: () => {
+      onToolCall: (name, input) => {
         toolCalls += 1;
+        tracker.onToolCall(name, input);
       },
     };
     const history: NormalizedMessage[] = [];
@@ -174,7 +186,15 @@ async function runSeed(
     // Independent verification: a real `bun test` run against the seeded test, in the
     // SAME worktree the agent edited — never the agent's own "DONE" claim.
     const success = await runTestInWorktree(root, task.seedTestFile);
-    return { seed, success, tokens: sawUsage ? tokens : null, toolCalls };
+    return {
+      seed,
+      success,
+      tokens: sawUsage ? tokens : null,
+      toolCalls,
+      model: MODEL,
+      metrics: usageAcc.metrics(),
+      repeatedReads: tracker.result(),
+    };
   } finally {
     await port.remove(worktreeId).catch((cause) => {
       console.error(`worktree[${worktreeId}] cleanup failed: ${(cause as Error).message}`);
@@ -198,8 +218,8 @@ async function main(): Promise<void> {
     const taskInputs: AblationTaskInput[] = [];
     for (const task of MUTATING_TASKS) {
       console.error(`\n# task: ${task.name}`);
-      const contextOnSamples: AblationSeedSample[] = [];
-      const contextOffSamples: AblationSeedSample[] = [];
+      const contextOnSamples: InstrumentedSeedSample[] = [];
+      const contextOffSamples: InstrumentedSeedSample[] = [];
       for (const variant of ["context-on", "context-off"] as const) {
         const samples = variant === "context-on" ? contextOnSamples : contextOffSamples;
         for (const seed of SEEDS) {
@@ -207,7 +227,10 @@ async function main(): Promise<void> {
           const sample = await runSeed(task, variant, seed, worktreeId, port, idSeq);
           samples.push(sample);
           console.error(
-            `  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls}`,
+            `  ${variant} seed=${seed}: success=${sample.success} tokens=${sample.tokens ?? "n/a"} toolCalls=${sample.toolCalls} ` +
+              `uncachedIn=${sample.metrics.uncachedInputTokens ?? "n/a"} cachedIn=${sample.metrics.cachedInputTokens ?? "n/a"} ` +
+              `out=${sample.metrics.outputTokens ?? "n/a"} requests=${sample.metrics.requests ?? "n/a"} ` +
+              `repeatedAfterCompactionOrPrune=${sample.repeatedReads?.repeatedAfterCompactionOrPrune ?? "n/a"}`,
           );
         }
       }
@@ -227,6 +250,11 @@ async function main(): Promise<void> {
         "isolated git worktree (mutating tasks cannot reuse a worktree across seeds). " +
         "Success is decided by an independent `bun test` run after the agent's turn, never " +
         "by trusting the agent's own claim. Captured live, no fabricated samples.",
+      metricsNote:
+        "per sample: metrics = uncached/cached/cacheWrite/output tokens + request count summed over every " +
+        "model request of the task (null when the provider did not report it for every request); " +
+        "repeatedReads = exact-repeat read_file/search_code calls, and those with a compaction/prune " +
+        "between the earlier identical call and the repeat (flow 387 T13a, AC10/AC11).",
       model: MODEL,
       provider: PROVIDER_NAME,
       generated_by: "bun scripts/benchmark/run-ablation-mutating.ts",

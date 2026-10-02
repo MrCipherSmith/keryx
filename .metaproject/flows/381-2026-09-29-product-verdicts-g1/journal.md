@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-09-29T06:29:36.390Z - flow created
+- 2026-09-29T06:31:11.476Z - frozen: 12 criteria; checksum recorded
+- 2026-09-29T06:31:11.829Z - started
+- 2026-09-29T07:30:00.000Z - STOP BEFORE G1a (AC12). Released as 0.3.31 (PR #794, 6a82a348). Live smoke on the real corpus after install: 424 intents (348 flows, 76 packages), 130 without an intent statement, 0 parse failures, closed in code 310: observed 0 (helped 0, no effect 0, harmed 0, inconclusive 0), criterion stated 0, none stated 310. The before arm did not move: nothing was written into an existing flow. G1a is read only once ten new flows exist that were created after 0.3.31; G1b two to four weeks after the release of those ten. Until both pass nothing beyond `index` and `open` is built: no map, no admit, no product-admit skill, no integration lines. Design decisions of mine, overrulable: a malformed observation line is a failure but the flow stays in the open queue; the untouched template hint is not a declared criterion; a package observation is stored and parsed but does not remove the package from open (packages are always open); the flow init note prints for every title-only flow, because the template holds no statement; the helpers reach product through the flow facade because the import-policy ratchet counted a direct import.
+- 2026-09-29T07:46:45.812Z - ac-confirmed: AC1: observation.test.ts: four verdicts parse, the index stores verdict and note; fenced example ignored (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:45.968Z - ac-confirmed: AC2: observation-errors.test.ts: malformed line is a failure naming the flow, index exits 1, the flow stays in open, no double count in staleness (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.127Z - ac-confirmed: AC3: open.test.ts and product-open-surface.test.ts: verdict counts in index summary, open header and the /product view; live smoke on 0.3.31 prints observed 0 (helped 0, no effect 0, harmed 0, inconclusive 0) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.291Z - ac-confirmed: AC4: templates.test.ts and extract.test.ts: Outcome criteria section with the hint; untouched hint is no criterion; a real bullet starting with the hint words survives (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.448Z - ac-confirmed: AC5: docpack-observation.test.ts: Outcome observations section parsed with the same grammar, malformed line names the package, comments and fences stripped (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.608Z - ac-confirmed: AC6: flow-init-intent-note.test.ts: one informational line, exit code unchanged (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.766Z - ac-confirmed: AC7: implementation-plan.md holds G1a, G1b and calendar time; grep check passes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:46.930Z - ac-confirmed: AC8: metrics-and-validation.md holds 310 of 310 and the caption the instrument did not exist; grep check passes (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.087Z - ac-confirmed: AC9: never-gates, no-model and bulk-budget tests green; only index and open exist; import-policy ratchet back at its ceiling after routing the helpers through the flow facade (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.246Z - ac-confirmed: AC10: live smoke after install: 310 of 310 unchanged; git diff of the PR touches no existing flow directory and no existing package README (only the metrics document added, the plan edited) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.412Z - ac-confirmed: AC11: typecheck clean, product and flow suites green, CI 18/18 on ebe617b9, README, cli-reference, modules page, module page, CHANGELOG 0.3.31 and version bump present (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.571Z - ac-confirmed: AC12: journal entry STOP BEFORE G1a written; operator told on the operator chat channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.727Z - task-done: T1: Collect remaining context
+- 2026-09-29T07:46:47.896Z - task-done: T2: Implement per plan
+- 2026-09-29T07:46:48.145Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T07:46:48.400Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T07:46:50.683Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/794 (warning: PR is not a draft) (base: main)
+- 2026-09-29T07:46:52.257Z - completing
+- 2026-09-29T07:46:56.800Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-29T07:46:56.801Z - done: all gates passed
+- 2026-10-01T12:22:19.646Z - renumbered: 363 -> 381: duplicate id with a flow from another clone (main holds 360-365); housekeeping

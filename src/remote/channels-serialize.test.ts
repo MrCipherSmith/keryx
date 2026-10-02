@@ -106,6 +106,46 @@ test("two pairs at once: the first is superseded, the second runs, and only one 
   await until(() => api.activePollers() === 0, "the poller to stop");
 });
 
+test("F-203: a token Telegram rejects does not supersede a valid start still waiting for Telegram", async () => {
+  const slow = new GatedApi(1);
+  const bad = new FakeBotApi();
+  bad.setTokenRejected(true);
+  const apis: FakeBotApi[] = [slow, bad];
+  let opened = 0;
+  const { host } = await makeHost(slow, { openApi: () => ({ ok: true, api: apis[opened++]! }) });
+  const controller = new ChannelsController({ host });
+  const first = controller.handle("channels-pair", request);
+  await until(() => slow.waiting === 1, "the first getMe to be in flight");
+
+  const refused = await controller.handle("channels-pair", request);
+  expect(refused.status).toBe(422);
+  expect(await errorCode(refused)).toBe("token-rejected");
+
+  slow.release();
+  expect((await first).status).toBe(200);
+  expect((await controller.handle("channels-pairing", request)).status).toBe(200);
+  await until(() => slow.activePollers() === 1, "the first start's poller");
+  await controller.stop();
+});
+
+test("F-201: a serve that stops while a start waits for Telegram gets no poller and no pairing", async () => {
+  const api = new GatedApi(1);
+  const { host } = await makeHost(api);
+  const controller = new ChannelsController({ host });
+  const pending = controller.handle("channels-pair", request);
+  await until(() => api.waiting === 1, "getMe to be in flight");
+
+  await controller.stop();
+  api.release();
+  const response = await pending;
+
+  expect(response.status).toBe(409);
+  expect(await errorCode(response)).toBe("superseded");
+  expect(api.activePollers()).toBe(0);
+  expect((await controller.handle("channels-pairing", request)).status).toBe(404);
+  expect(await statusState(controller)).toBe("not-connected");
+});
+
 test("a pair queued behind a disconnect is superseded by it", async () => {
   const api = new GatedApi(0);
   const { host } = await makeHost(api);
