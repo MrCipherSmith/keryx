@@ -217,7 +217,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
 
   const refresh = async (): Promise<void> => {
     if (disposed) return;
-    let n = 0;
+    let n: number;
     try {
       n = await count();
     } catch {

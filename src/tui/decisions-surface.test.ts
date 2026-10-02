@@ -100,7 +100,7 @@ test("the report modal shows the same lines the CLI report prints", async () => 
     content: string;
     constructor(_r: unknown, opts: { id: string; content: string }) {
       this.content = opts.content;
-      painted = this;
+      painted = { content: opts.content };
     }
   }
   const handle = presentDecisions(open, { TextRenderable: FakeText }, {}, { text, visibleRows: 40 });
