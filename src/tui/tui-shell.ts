@@ -70,6 +70,8 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
+import { permissionsSlashText } from "../commands/permissions-command";
+import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
 import type { CommandOutcome } from "../remote/command-router";
@@ -300,7 +302,6 @@ import {
   parseShellExecCommand,
   shellPermissionsFingerprint,
   shellPermissionsPath,
-  loadShellPermissions,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
@@ -3741,7 +3742,8 @@ export async function launchTuiAgentShell(opts: {
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
   /** Session-scoped allow patterns (plus persisted permissions.json). */
-  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
+  const sessionShellAllow = new Set<string>();
   /** The stored-permission migration warning is shown at most once per session. */
   let permissionMigrationShown = false;
   /**
@@ -6692,6 +6694,29 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
       });
     };
+    // Flow 396: `/permissions`. Bare: the modal. `list` and `remove <n|pattern>`: a line in the transcript.
+    // A removal also leaves this shell's session set and refreshes the tamper fingerprint, so the rule stops
+    // approving at once and the shell does not warn about a change it made itself.
+    const permissionsChanged = (): void => {
+      permissionsFingerprintAtStart = shellPermissionsFingerprint();
+    };
+    const showPermissions = (): void => {
+      openPermissions(otui, chrome, {
+        sessionAllow: sessionShellAllow,
+        onChanged: permissionsChanged,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
+    const runPermissionsCommand = (line: string): void => {
+      const rest = line.trim().slice(PERMISSIONS_COMMAND.length).trim();
+      if (rest.length === 0) {
+        showPermissions();
+        return;
+      }
+      io.onSystem?.(permissionsSlashText(rest, { sessionAllow: sessionShellAllow, onChanged: permissionsChanged }));
+    };
     const showReviews = (): void => {
       void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
         .then(() => liveReviewsPanel?.refresh())
@@ -8091,6 +8116,10 @@ export async function launchTuiAgentShell(opts: {
             routeApprovalsCommand(line, true, approvals);
             return;
           }
+          case "permissions": {
+            runPermissionsCommand(line);
+            return;
+          }
           case "decisions": {
             routeDecisionsCommand(line, decisionsPanel);
             return;
@@ -8490,6 +8519,10 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (command.name === PERMISSIONS_COMMAND) {
+          runPermissionsCommand(line);
           return;
         }
         if (routeDecisionsCommand(line, decisionsPanel)) {

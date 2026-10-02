@@ -218,6 +218,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "                                               Print the sample reply in each Telegram rendering mode\n",
     "                                               (tables, lists, rules); no network\n",
     "  remote    Telegram remote control: preview how replies are rendered, with no network\n",
+    // Flow 396: `keryx permissions`, a brand-new verb, so a USAGE_BODY block and a Commands: summary row.
+    "  keryx permissions list [--json] | remove <number|pattern>\n",
+    "                                               The saved shell rules an Always answer left behind; take one back\n",
+    "  permissions The saved shell rules (what Always remembered): list them, remove one\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

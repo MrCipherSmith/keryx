@@ -455,6 +455,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "permissions",
+    group: "Automation",
+    summary: "The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one.",
+  },
+  {
+    kind: "cli",
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
@@ -506,6 +512,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/approvals",
     group: "Automation",
     summary: "Pending remote approvals with scope, consequence and expiry — allow or deny one call, once.",
+  },
+  {
+    kind: "slash",
+    name: "/permissions",
+    group: "Automation",
+    summary: "The saved shell rules (what Always remembered): honoured or not, session grants — remove one.",
   },
   {
     kind: "slash",

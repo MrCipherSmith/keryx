@@ -1997,6 +1997,30 @@ same list is `/approvals`. The client contract for a chat bridge is
 
 ---
 
+## permissions
+
+The saved shell rules: what an **Always** answer remembered, in the shell or from
+Telegram. Reads and edits the same `permissions.json` the shell approver reads on
+every call, so it needs no running shell.
+
+```
+keryx permissions list [--json]
+keryx permissions remove <number|pattern>
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` _(also the bare default)_ | `--json` | The rules that run without asking, then the ones the validators no longer honour (kept in the file, with the reason), numbered. `--json` prints `path` and `rules[]` with `n`, `pattern`, `honoured` and `reason`. |
+| `remove <number\|pattern>` | — | Take one rule back by the number `list` prints, or by its exact text. Other rules are left exactly as they were. The command asks again from then on. |
+
+A rule can only be removed here or in the shell, never from a chat, and nothing in
+this verb adds one. A running shell stops using a removed rule on its next
+approval and, when the removal came from another process, shows its tamper warning
+for the changed file. In the shell and the TUI the same list is `/permissions`
+(`/permissions remove <number|pattern>`), and the TUI opens it as a modal.
+
+---
+
 ## decisions
 
 The recommendation journal: what an agent recommended when it asked a question

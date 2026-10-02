@@ -251,6 +251,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 396: the saved shell rules an Always answer leaves behind (also from Telegram). Listed and
+    // removed here; never from a chat.
+    name: "/permissions",
+    description: "The saved shell rules (what Always remembered): honoured or not, session grants; remove one",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
     name: "/decisions",
     description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions reason <why> and /decisions change <option> follow up on the last answer",

@@ -92,6 +92,11 @@ export type BusyDispatchTarget =
    */
   | "approvals"
   /**
+   * `/permissions` (flow 396): the saved shell rules. Listing and removing one edit a file on disk and
+   * the shell's own rule set; neither touches the main turn.
+   */
+  | "permissions"
+  /**
    * `/decisions` (flow 392): the recommendation journal's report. A read-only look at
    * a file on disk; it never touches the main turn.
    */
@@ -143,6 +148,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/channels") return "channels";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
+  if (commandName === "/permissions") return "permissions";
   if (commandName === "/decisions") return "decisions";
   if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;

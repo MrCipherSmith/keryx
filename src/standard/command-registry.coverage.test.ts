@@ -53,6 +53,11 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
     reason:
       "the local answer path for remote approvals (flow 369): allow/deny is a consent decision and must never be a callable operation for an agent — a descriptor would advertise it to exactly the caller the approval exists to gate; the same reason learn accept is excluded",
   },
+  {
+    verb: "permissions",
+    reason:
+      "the saved shell rules (flow 396): removing one changes what runs without asking, a consent decision that must stay with the human at a terminal and never be a callable operation for the agent the rules gate",
+  },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
   {

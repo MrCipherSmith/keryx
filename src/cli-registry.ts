@@ -62,6 +62,7 @@ import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
 import { approvalsCommand } from "./commands/approvals";
+import { permissionsCommand } from "./commands/permissions-command";
 import { updateCommand } from "./commands/update";
 import { dashboardCommand } from "./commands/dashboard";
 import { agentsCommand } from "./commands/agents";
@@ -135,6 +136,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   auth: authCommand,
   serve: serveCommand,
   approvals: approvalsCommand,
+  permissions: permissionsCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
   dash: (rest) => dashboardCommand(rest.length > 0 ? rest : ["open"]),
@@ -275,6 +277,8 @@ export const USAGE_BODY = `Usage:
   keryx serve config init|set|show
   keryx approvals list [--all] [--json] | allow <id> | deny <id>
                                                Answer, from this machine, a call a remote turn is waiting on (once, that call only)
+  keryx permissions list [--json] | remove <number|pattern>
+                                               The saved shell rules an Always answer left behind; take one back
   keryx update [--skip-runtime] [--hooks]
   keryx dashboard build
   keryx dashboard open
@@ -455,6 +459,7 @@ Commands:
   projects  Inspect the user-global registry of initialized projects
   serve     Loopback-bound authenticated HTTP entry (off by default; read-only routes)
   approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)
+  permissions The saved shell rules (what Always remembered): list them, remove one
   update    Refresh managed service files without touching data artifacts
   dashboard Build or open the project admin dashboard
   dash      Rebuild and open .metaproject/keryx-dashboard.html

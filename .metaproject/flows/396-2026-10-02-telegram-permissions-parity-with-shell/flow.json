@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T19:50:46.064Z",
+  "updatedAt": "2026-10-02T20:03:35.526Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,7 +174,7 @@
       "id": "T9",
       "title": "keryx permissions list|remove and /permissions modal (AC11)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -184,7 +184,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -333,6 +334,11 @@
       "at": "2026-10-02T19:50:46.064Z",
       "event": "task-done",
       "detail": "T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)"
+    },
+    {
+      "at": "2026-10-02T20:03:35.526Z",
+      "event": "task-done",
+      "detail": "T9: keryx permissions list|remove and /permissions modal (AC11)"
     }
   ],
   "acKinds": {

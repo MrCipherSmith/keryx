@@ -352,6 +352,39 @@ export function allowShellPattern(pattern: string, dir?: string): string {
 }
 
 /**
+ * Remove one allow pattern (exact text, trimmed) from the stored file. Flow 396: the way a saved
+ * "Always" grant is taken back, from the CLI, the shell's `/permissions` and its modal.
+ *
+ * It edits the RAW list and writes every other entry back untouched, including an entry that no
+ * longer passes validation: {@link saveShellPermissions} would drop those, and removing one rule
+ * must never silently delete another one the operator can still see (and fix) in the file.
+ *
+ * Returns whether the pattern was in the file. A file that cannot be read or parsed is left alone
+ * and reports `false`. Never throws.
+ */
+export function removeShellPattern(pattern: string, dir?: string): boolean {
+  const wanted = pattern.trim();
+  if (wanted.length === 0) return false;
+  try {
+    const file = shellPermissionsPath(dir);
+    if (!existsSync(file)) return false;
+    const read = readConfigFile(file);
+    if (!read.ok) return false;
+    const raw: unknown = JSON.parse(read.text);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return false;
+    const allowRaw = (raw as { allow?: unknown }).allow;
+    if (!Array.isArray(allowRaw)) return false;
+    const kept = allowRaw.filter((entry) => !(typeof entry === "string" && entry.trim() === wanted));
+    if (kept.length === allowRaw.length) return false;
+    ensureKeryxConfigDir(path.dirname(file));
+    writeOwnerOnlyFile(file, `${JSON.stringify({ ...(raw as object), allow: kept }, null, 2)}\n`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * OpenCode-style glob: `*` = any run of chars **including newlines** (heredoc /
  * multiline shell_exec), `?` = one char (any, including newline), other chars literal.
  * Pure.
