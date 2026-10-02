@@ -1,6 +1,6 @@
 # PRD: Telegram permissions parity with the shell
 
-Status: DRAFT for the operator. Not frozen. Flow 396.
+Status: operator answers received 2026-10-02; criteria frozen with this text. Flow 396.
 Owner: MrCipherSmith. Origin: human-request (helyx-channel message 178829, 2026-10-02T19:14Z; decisions in poll 47).
 
 ## 1. Problem
@@ -36,10 +36,10 @@ Derived goals:
 ## 3. Non-goals
 
 - No new harness policy profile and no change to `resolveRemoteProfile`, `localBaselineProfile` or `serve.json`. (The idea of a "remote-shell" profile was dropped: the profiles gate `keryx serve` HTTP turns, a different surface; the Telegram turn already runs under the shell's own mode, and the ceiling rule of flow 131 D5 is satisfied by construction because the remote posture can never exceed `trust`.)
-- No `auto` mode from Telegram configuration. (`/mode auto` from the topic keeps its existing button-confirmed path; unchanged.)
+- No `auto` mode from Telegram configuration: the config key accepts `ask` and `trust` only. (`/mode auto` typed in the topic already works as in the shell, through a button confirm and then the shell's own confirm; the shell mode then follows it. Unchanged, see section 4.2.)
 - No change to who may talk to the bot: `allowedUserIds` stays the only gate.
 - No new network sandbox for Telegram turns. The shell has none for local turns either; parity means the same classifier floors (see section 5).
-- No change to the HTTP `serve` approval broker or `serve.json approval.expirySeconds` (open question 4).
+- No change to the HTTP `serve` approval broker or `serve.json approval.expirySeconds` (decision 4, section 8). The 15-minute wait applies to Telegram only.
 
 ## 4. Design
 
@@ -49,7 +49,7 @@ Three optional keys, validated by the existing closed schema (unknown keys still
 
 | key | values | default when absent | note |
 |---|---|---|---|
-| `permissionMode` | `ask` \| `trust` | `trust` | `auto` is not accepted here. `ask` restores today's behaviour. |
+| `permissionMode` | `ask` \| `trust` | `trust` | The mode a Telegram-started turn starts with while nobody has changed the shell's mode in this session (section 4.2). `auto` is not accepted here. `ask` restores today's behaviour. |
 | `runTimeoutMs` | `0` = none, or 1..604800000 | `0` (none) | today default 1800000. An explicit positive value in an existing file still applies. |
 | `approvalTimeoutMs` | 30000..3600000 | `900000` | delivered to the shell at registration, like `runTimeoutMs`. |
 
@@ -57,7 +57,15 @@ Default change is deliberate (operator decision) and applies to existing install
 
 ### 4.2 Effective mode for a Telegram turn
 
-`io.permissionMode` returns the remote `permissionMode` while `bridge.telegramTurnActive`, and the shell's own mode otherwise. The risk gate in `agent.ts` is untouched, so every floor the shell has still holds: `/plan` read-only denies all non-read calls; credentials, SAC/`flow confirm` confirmation, a `git-publish` lease, a `PreToolUse` hook ask and untrusted external content force a prompt; `destructive` (command classifier and patch classifier) asks under `trust`. Auto-approved Telegram calls are printed in the transcript (`◇ auto-approved (trust)`) and mirrored as an `approval` event in the remote panel, with the Telegram user id.
+There is one permission mode per shell session, and `/mode` typed in the topic changes it exactly as `/mode` typed in the shell does. There is no separate Telegram-only mode. The config key `permissionMode` is only the starting value for Telegram-started turns. Precisely:
+
+- The shell tracks a flag "mode changed this session", set whenever `/mode` commits a new mode, whether typed in the shell or in the topic (and whether or not it was saved to the project).
+- Flag not set: a Telegram-started turn runs under the config `permissionMode` (default `trust`); the operator's own turns run under the shell mode as before (default `ask`).
+- Flag set: the shell's mode wins for every turn, Telegram-started or not; the config value is ignored for the rest of the session.
+- `/mode ask|trust|auto` from the topic keeps its present gateway behaviour (`ask` runs directly; `trust` and `auto` need a button press, and `auto` also the shell's own confirm). After it succeeds the shell mode is that value and the flag is set. `auto` is therefore reachable from Telegram only through that existing confirmed path, never through configuration.
+- Display: the running shell (sidebar line, `/settings` rows, `/remote-policy` with no arguments) shows the mode in force and its source: `trust (Telegram default)` or `ask (shell /mode)`. `keryx serve status` is a separate process with no view of a running shell, so it prints the config default and says that a running shell's `/mode` overrides it. `/remote-policy mode <m>` changes the saved config default (and the running shell's copy of it, so it applies at once) and never touches the shell's own mode or the "changed this session" flag. The three policy values reach a shell at registration (`RegisterResponse` carries `permissionMode`, `approvalTimeoutMs` and `runTimeoutMs`).
+
+The risk gate in `agent.ts` is untouched, so every floor the shell has still holds: `/plan` read-only denies all non-read calls; credentials, SAC/`flow confirm` confirmation, a `git-publish` lease, a `PreToolUse` hook ask and untrusted external content force a prompt; `destructive` (command classifier and patch classifier) asks under `trust`. Auto-approved Telegram calls are printed in the transcript (`◇ auto-approved (trust)`) and mirrored as an `approval` event in the remote panel, with the Telegram user id.
 
 ### 4.3 Allowlist parity
 
@@ -102,7 +110,7 @@ New exposure and its limits:
 - `trust` means an allowed Telegram user (and prompt-injection that reaches the agent through the model) can run non-destructive commands and edit project files without a tap. Mitigations: `allowedUserIds`, the floors above, per-call transcript lines, `permissionMode: ask` as a one-key rollback, `/plan`.
 - "Always" can widen the allowlist from a phone. Mitigations: same validators as the local dock, no prefix for interpreters/runners, nothing offered on a floored call, every grant is recorded and listed, one command revokes it.
 - No limit on a run: cost and runaway risk. Mitigation: `/stop`, and the operator can set `runTimeoutMs` back to a number.
-- Not covered, same as the local shell: a non-destructive shell command that reads outside the project or reaches the network (for example a plain `curl` to an API) is not gated by `trust` beyond the classifier. See open question 2.
+- Not covered, same as the local shell (decision 3, section 8: parity, no Telegram-only floor): a non-destructive shell command that reads outside the project or reaches the network (for example a plain `curl` to an API) is not gated by `trust` beyond the classifier. The shell's own floors stay.
 
 ## 6. Test strategy
 
@@ -112,9 +120,11 @@ Unit and e2e against the fake bot API (`src/remote/fake-bot-api.ts`), no live ag
 
 One release, version bump above main at merge time. The three keys are optional; installs without them move to `trust`, no limit, 15 minutes. Release note says so and names the rollback (`permissionMode: "ask"`, `runTimeoutMs: 1800000`, `approvalTimeoutMs: 300000` in `~/.local/share/keryx/remote/config.json`, or `/remote-policy`). README and docs site (answer-remote-approvals, drive-keryx-remotely, cli-reference, commands-by-task, limitations) updated in the same PR. No live external agents; the operator confirms in the topic `geekom:keryx`.
 
-## 8. Open questions
+## 8. Decisions (operator, 2026-10-02)
 
-1. Should `/mode` typed in the topic change the remote mode (session only) or the shell's mode as it does today? Draft: unchanged (shell mode), the remote default lives in `/remote-policy`.
-2. Add a Telegram-only floor for shell commands that name absolute paths outside the project or use the network? The shell has none; draft keeps parity.
-3. `Always: <pattern>` shows the pattern in the button. Telegram limits button text; long patterns are cut to fit, the full pattern is in the message body.
-4. Raise `serve.json approval.expirySeconds` default too (HTTP surface)? Draft: no.
+1. `/mode` typed in the topic changes the shell's permission mode, as it does locally; it is not a separate Telegram-only mode. The config `permissionMode` is the starting mode of a Telegram-started turn until `/mode` has changed the shell's mode in this session; after that the shell's mode wins. Section 4.2 states the interplay with display. `auto` stays unavailable from configuration; the shell's `/mode auto` already works from the topic (button, then shell confirm) and is followed as is.
+2. No Telegram-only floor for network or outside-project commands: parity with the shell. The shell's own floors stay.
+3. The 15-minute approval wait is Telegram only (`approvalTimeoutMs`). The HTTP serve expiry (`serve.json approval.expirySeconds`) is not changed.
+4. `Always: <pattern>` shows the pattern in the button. Telegram limits button text; long patterns are cut to fit, the full pattern is in the message body.
+
+The draft had recommended a separate Telegram-only mode for decision 1; the operator chose the opposite and this PRD follows the operator.

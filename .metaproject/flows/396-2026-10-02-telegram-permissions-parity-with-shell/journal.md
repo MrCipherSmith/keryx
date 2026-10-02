@@ -12,3 +12,6 @@
 - 2026-10-02T19:24:37.785Z - task-added: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)
 - 2026-10-02T19:24:38.221Z - task-added: T12: Docs (README + docs site pages) and version bump (AC16,AC17)
 - 2026-10-02T19:24:38.623Z - task-depends-set: T4: dependsOn T11, T12 (was empty) — review runs after implementation, tests and docs
+- 2026-10-02T19:30:44.780Z - frozen: 19 criteria; checksum recorded
+- 2026-10-02T19:30:45.235Z - started
+- 2026-10-02T19:30:48.524Z - task-done: T1: Collect remaining context
