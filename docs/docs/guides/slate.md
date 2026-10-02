@@ -19,7 +19,7 @@ review pipeline a keryx-native session already uses.
     this — see [`/goal`](goal.md) for the deterministic-start / autonomous-
     continuation entry point, or
     [`docs/requirements/slate/`](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/slate)
-    for the full spec (SLATE-1…21 shipped, this page covers SLATE-22…26).
+    for the full spec.
 
 ## The three tools
 
@@ -172,4 +172,4 @@ top of a shared store.
 - [Shared Agent Context](shared-agent-context.md) — the propose / review
   pipeline every closed slate with a bound workspace dispatches into.
 - [Requirements: Slate](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/slate) —
-  full spec, acceptance criteria, and the SLATE-1…26 history.
+  full spec, acceptance criteria and history.

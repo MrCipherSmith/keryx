@@ -22,7 +22,7 @@
     ]
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx-openai-subscription",
+    "codebase_path": "~/goodea/keryx-openai-subscription",
     "branch": "codex/openai-subscription",
     "context_path": ".metaproject/flows/342-2026-09-25-openai-api-and-chatgpt-subscription-as-s/context.md"
   },

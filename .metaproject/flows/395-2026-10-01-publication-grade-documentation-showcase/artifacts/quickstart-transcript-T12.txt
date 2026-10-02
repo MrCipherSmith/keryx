@@ -1,0 +1,307 @@
+# Getting started tutorial transcript (docs/docs/getting-started/quickstart.md)
+# date: 2026-10-01T09:42:21Z
+# keryx: 0.3.46 (published npm package on PATH)  bun: 1.4.2  os: Darwin arm64
+# env: fresh empty start directory; HOME isolated to an empty scratch dir; no provider API keys; NO_COLOR=1
+# every command below is run verbatim, in order, in one shell session
+
+$ mkdir -p demo/src && cd demo
+[exit 0]
+
+$ printf 'export function applyDiscount(total: number, percent: number): number {\n  return Math.round(total * (100 - percent)) / 100;\n}\n' > src/price.ts
+[exit 0]
+
+$ printf 'import { applyDiscount } from "./price";\n\nexport function cartTotal(prices: number[], discount = 0): number {\n  return applyDiscount(prices.reduce((a, b) => a + b, 0), discount);\n}\n' > src/cart.ts
+[exit 0]
+
+$ printf 'import { cartTotal } from "./cart";\n\nexport const checkout = (prices: number[]) => cartTotal(prices, 10);\n' > src/checkout.ts
+[exit 0]
+
+$ git init -q && git add -A && git commit -qm "Initial commit"
+[exit 0]
+
+$ keryx --version
+0.3.46
+[exit 0]
+
+$ keryx init --yes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  keryx init
+  Setting up a .metaproject workspace in demo/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Created .metaproject
+  9 of 9 modules enabled
+  ✓ gdgraph (code graph, symbols, affected context)
+  ✓ gdctx (token-aware command/read output)
+  ✓ gdwiki (project knowledge base)
+  ✓ gdskills (profile: recommended)
+  ✓ health (quality scoring & gate)
+  ✓ testing (test context & intelligence)
+  ✓ memory (lessons, decisions, constraints)
+  ✓ tasks (agent-first flow lifecycle)
+  ✓ security (scanning, redaction, guardrails, audit)
+
+Agent entrypoints
+  Ignore rules: .git/info/exclude now holds keryx's managed block (38 entries); .gitignore is not modified.
+  CLAUDE.local.md: created with the keryx block (gitignored, per checkout).
+  Codex: skipped — AGENTS.md does not exist, and AGENTS.override.md is only ever generated from it. Create AGENTS.md, or set the codex entry's scope to "shared" in .metaproject/metaproject.json.
+
+Git hooks
+  ✓ gdgraph post-commit
+  ✓ gdskills post-commit
+  ✓ health post-commit
+  ✓ testing post-commit
+  · testing pre-push
+  ✓ security pre-push
+  ✓ security agent (.claude)
+  ✓ .keryx/sandbox-policy.json (sandbox policy skeleton (no secrets))
+  ✓ registered in the project registry
+
+Next steps
+  → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
+  → Generate the code graph: keryx gdgraph build.
+  → Start a managed flow: keryx flow init --title "...".
+  → API keys: keryx shell → /connect (user-global auth.json) — never put keys in .keryx/sandbox-policy.json.
+  → Open .metaproject/keryx-dashboard.html for the human dashboard.
+  → After pulling changes, run keryx update to refresh service files.
+[exit 0]
+
+$ git add -A && git commit -qm "Add keryx workspace"
+keryx post-commit: rebuilding gdgraph after a graph-relevant commit
+keryx post-commit: gdgraph rebuilt; versioned graph artifacts may now differ from the commit
+keryx post-commit: gdskills verified
+keryx post-commit: health report may be stale; run 'keryx health run --changed --since HEAD~1 --source typescript,complexity' explicitly
+keryx post-commit: dashboard/service files may be stale; run 'keryx update --skip-runtime' or 'keryx dashboard build' explicitly
+[exit 0]
+
+$ keryx doctor
+keryx doctor
+
+  ! version: keryx 0.3.46 → 0.3.48 is available
+      fix: npm install -g @mrciphersmith/keryx@latest
+  ✓ bun: Bun 1.4.2 (floor >=1.3.14)
+  ✓ ripgrep: rg at <path>/rg
+  ✓ sandbox: Seatbelt (sandbox-exec) available
+  ✓ providers: 1 provider(s) configured: rapid-mlx
+  ✓ mcp: 0 server(s) configured; run `keryx mcp doctor` to also check connectivity
+  ✓ integrations: no drift in any installed integration
+  ✓ standard: workspace is Metaproject Standard compliant
+  ✓ entrypoints: managed block in CLAUDE.local.md (local); hooks in .claude/settings.local.json (local)
+  ✓ worktrees: no .claude/worktrees directory
+  ✓ graph-freshness: code graph is fresh
+  ! wiki-freshness: no wiki freshness report has been produced; run `keryx wiki freshness`. This is not evidence that the wiki is fresh.
+      fix: keryx wiki freshness
+[exit 0]
+
+$ keryx gdgraph build
+gdgraph build complete: 3 nodes, 2 edges
+summary: <scratch>/t12-quickstart/fresh/demo/.metaproject/data/gdgraph/artifacts/summary.md
+[exit 0]
+
+$ keryx gdgraph affected src/price.ts
+# Affected context for src/price.ts
+
+## Dependencies
+- none
+
+## Dependents
+- src/cart.ts
+[exit 0]
+
+$ keryx wiki collect
+# gdwiki collect
+
+created: 3
+updated: 0
+skipped: 0
+index: .metaproject/wiki/index.md
+
+- created: .metaproject/wiki/architecture/project-map.md (gdgraph)
+- created: .metaproject/wiki/components/src.md (gdgraph)
+- created: .metaproject/wiki/architecture/testing-map.md (testing)
+
+enrichment needed: 1 component page(s) still Status: draft
+→ enrich prose via the gdwiki skill (cheap model, 1 subagent per page).
+  - components/src.md
+[exit 0]
+
+$ keryx wiki status
+# gdwiki status
+
+enabled: yes
+wiki root: .metaproject/wiki
+total pages: 3
+
+## Pages by type
+- architecture: 2
+- domain-model: 0
+- business-rule: 0
+- user-scenario: 0
+- component: 1
+- service: 0
+- integration: 0
+- decision: 0
+
+last index generated: 2026-10-01T09:42:25.613Z
+last link check: never
+[exit 0]
+
+$ keryx memory new decision --title "Prices round to whole cents"
+Created decision entry: .metaproject/memory/decisions/prices-round-to-whole-cents.md
+[exit 0]
+
+$ keryx memory transition decisions/prices-round-to-whole-cents.md --to accepted --reason "agreed with the team"
+Transitioned decisions/prices-round-to-whole-cents.md: draft -> accepted.
+[exit 0]
+
+$ keryx memory search "cents"
+# memory search: cents
+
+Results: 1
+
+### 1. Prices round to whole cents  (score 2.334)
+- type: decision | status: accepted | confidence: medium | version: 0.2.0
+- matched 1/1 terms; status accepted; confidence medium
+- provenance: manual | author: unknown | confirmedBy: unknown
+- summary: (none)
+- entry: decisions/prices-round-to-whole-cents.md
+[exit 0]
+
+$ keryx shell --provider fake -p "What does src/cart.ts depend on?"
+  keryx — fake/fake-echo · agent · <scratch>/t12-quickstart/fresh/demo
+  Type a message, or /help for commands.
+
+
+Keryx update 0.3.46 → 0.3.48
+npm install -g @mrciphersmith/keryx@latest
+  ❯   Session 095fa82b · per-project (keryx shell -c to continue)
+  bus: joined as @agent-1 · 0 peers
+
+  ● keryx
+
+  [error] FakeProvider: no transcript matches request hash c9b42b10bbbc35355e4fd214d9fd6515f3652c4a663c5512699c025866989f2d
+
+  ────────────────────────
+
+  ❯ [exit 0]
+
+$ keryx status
+Metaproject: ready
+Root: .metaproject
+Modules:
+  gdgraph: enabled
+  gdctx: enabled
+  gdwiki: enabled
+  gdskills: enabled
+  memory: enabled
+  tasks: enabled
+  health: enabled
+  testing: enabled
+  security: enabled
+  sac: disabled
+[exit 0]
+
+# ----------------------------------------------------------------
+# Appendix: commands that need a model credential (used to settle the limitations page).
+# Same isolated environment, no provider API keys, in a separate copy of a demo repo
+# (package.json + src/{price,cart,checkout,cart.test}.ts) after keryx init --yes.
+
+$ keryx flow init --title "Demo flow"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  flow init
+  Created flow 001
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✓ Demo flow
+  .metaproject/flows/001-2026-10-01-demo-flow
+  status: initializing
+  owner:  not set
+  outcome author: agent
+  note: no intent statement extractable from description.md — the product index will hold no statement for this flow
+
+Next steps
+  → Enrich context.md, formalize description.md, and write plan.md.
+  → Write hard, verifiable criteria in acceptance-criteria.md.
+  → Freeze and start: keryx flow freeze 001 then flow start 001.
+[exit 0]
+
+$ keryx test suggest src/cart.ts
+No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
+No API keys found in the environment or ~/.local/share/keryx/auth.json. Enter a key in `keryx shell` (/connect) or export e.g. DEEPSEEK_API_KEY / ZAI_API_KEY.
+[exit 1]
+
+$ keryx flow plan 1
+No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
+No API keys found in the environment or ~/.local/share/keryx/auth.json. Enter a key in `keryx shell` (/connect) or export e.g. DEEPSEEK_API_KEY / ZAI_API_KEY.
+[exit 1]
+
+$ keryx memory reflect --narrate
+# memory reflect
+
+clusters (>= 3): 0
+created pattern drafts: 0 (skipped 0 existing)
+
+
+## Narration
+No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
+No API keys found in the environment or ~/.local/share/keryx/auth.json. Enter a key in `keryx shell` (/connect) or export e.g. DEEPSEEK_API_KEY / ZAI_API_KEY.
+[exit 1]
+
+$ keryx health explain src/cart.ts --narrate
+No health metrics for src/cart.ts. Run `keryx health run` first.
+[exit 0]
+
+$ keryx wiki enrich
+# gdwiki enrich
+
+provider: anthropic (claude-haiku-4-5-20251001)
+credential available: no
+concurrency: 1
+mode: batch drafts only
+enriched: 0  dry-run: 0  skipped: 3  failed: 0
+
+- skipped: architecture/project-map.md — no credential for provider "anthropic" (set its API key env var or enter it in keryx shell)
+- skipped: architecture/testing-map.md — no credential for provider "anthropic" (set its API key env var or enter it in keryx shell)
+- skipped: components/src.md — no credential for provider "anthropic" (set its API key env var or enter it in keryx shell)
+[exit 0]
+
+
+$ keryx health run
+# Code Health: INCOMPLETE
+
+scope: project
+project score: 100 (trend: unknown)
+findings: 0
+
+- INCOMPLETE: required source unavailable: eslint
+- INCOMPLETE: required source unavailable: typescript
+- OPTIONAL: sonarqube source skipped
+- OPTIONAL: coverage source missing
+- WARN: optional source failed: dependencyAudit
+
+report: .metaproject/data/health/artifacts/latest.md
+json: .metaproject/data/health/artifacts/latest.json
+[exit 1]
+
+$ keryx health explain src/cart.ts --narrate
+No health metrics for src/cart.ts. Run `keryx health run` first.
+[exit 0]
+
+$ keryx health explain src --narrate
+# health explain: src
+
+kind: module
+health_score: 100 (trend: stable, regression: 0)
+risk_score: 0
+findings: 0
+coverage: n/a
+complexity: max 1, 0 above threshold
+
+## Findings
+- none
+
+## Narration
+No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
+No API keys found in the environment or ~/.local/share/keryx/auth.json. Enter a key in `keryx shell` (/connect) or export e.g. DEEPSEEK_API_KEY / ZAI_API_KEY.
+[exit 1]
+
+# Note: absolute paths in the output above are replaced with <scratch> and <path>; nothing else is edited.

@@ -8,7 +8,7 @@ Source: ~/notes/flowB-remote-control-prd-draft.md (operator answers B1-B4 in for
 A live `keryx shell` session can only be driven from the terminal. `keryx serve`
 gives remote turns over HTTP but leaves the Telegram card to the client, and the
 existing `keryx-telegram-transport` design is a topic per project with no code. To
-work with keryx from Telegram the operator goes through helyx today.
+work with keryx from Telegram the operator goes through a separate chat bot today.
 
 ## Expected Outcome
 
@@ -23,7 +23,7 @@ history records when remote control was on.
 
 ## Outcome criteria
 
-- For 5 days in a row, at least once a day I work with keryx from Telegram through remote-control, without opening the terminal and without using helyx for keryx. Observed by the operator and recorded as an `outcome-observed:` line in this flow's journal.
+- For 5 days in a row, at least once a day I work with keryx from Telegram through remote-control, without opening the terminal and without using the separate chat bot for keryx. Observed by the operator and recorded as an `outcome-observed:` line in this flow's journal.
 
 ## Out of Scope
 

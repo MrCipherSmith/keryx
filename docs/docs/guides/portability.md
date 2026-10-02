@@ -9,7 +9,7 @@ project on one machine. **Portable bundles** are that transfer unit, and
 
 This guide is task-oriented. For the full flag reference see
 [cli-reference.md](../cli-reference.md); for the design rationale see
-`docs/requirements/keryx-agent-platform-expansion/workstreams/W4-portability.md`.
+the portability workstream spec under `docs/requirements/keryx-agent-platform-expansion/workstreams/`.
 
 ## Scopes and roots
 
@@ -254,7 +254,7 @@ bytes that were actually scanned.
    dedupe gate — an existing local skill judged a duplicate or an overlap
    rejects the candidate, so an operator authors a fork through the normal
    path instead of the catalog quietly growing near-duplicates.
-3. Every candidate that survives scout also runs through the W8 security
+3. Every candidate that survives scout also runs through the security
    audit for secrets, prompt-injection text, and auto-run directives, over
    EVERY file in the snapshot — `SKILL.md` and any other markdown/reference
    file included, not just script files. A markdown-only skill (no scripts

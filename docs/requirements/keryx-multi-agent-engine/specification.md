@@ -213,7 +213,7 @@ non-`spawn_subagent` types in the same batch keep the existing sequential path
 — this is a scoped, additive branch, not a rewrite of the whole loop.
 
 **`maxSubagentConcurrency` default:** implemented as `DEFAULT_MAX_SUBAGENT_
-CONCURRENCY = 3` (not grok-build's 32 — reasoning: cannot assume uniform
+CONCURRENCY = 3` (not the 32 another harness uses — reasoning: cannot assume uniform
 provider rate-limit headroom). No env/config-file wiring yet; the field lives
 on `AgentDeps` as an injected constant, matching the pattern of existing
 `maxTreeDepth`/`maxChildrenPerRun`.

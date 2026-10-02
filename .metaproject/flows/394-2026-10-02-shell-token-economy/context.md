@@ -69,12 +69,12 @@ Use `keryx gdgraph affected <file>` for blast radius.
 - Anchors appended: `src/commands/agent.ts` ~2423 and ~3439; renderer `src/session/slate.ts` `renderAnchorsBlock`.
 - Codex request body: `src/harness/provider/openai/openai-provider.ts` ~577 (`store:false`, no `prompt_cache_key`, full replayed `input`).
 
-### Competitor study (`~/sandbox/forks`, 15 harnesses, 2026-10-02)
+### Study of other agent harnesses (`~/sandbox/forks`, 15 harnesses, 2026-10-02)
 
-- **Window + triggers:** codex reads the window from `/models` (90% compact, 95% hard cap; skip when unknown); grok-build prefires before 85%; pi and kilocode compact-and-retry on an overflow error.
-- **Token estimate:** codex, pi, deepseek-harness anchor on the last provider-reported usage and estimate only the delta since.
-- **Old tool outputs:** opencode protects the newest ~40K tokens and the last 2 turns, prunes older outputs to `[Old tool result content cleared]` only when it saves >20K; gemini-cli masks past 50K protected/30K buffer and leaves a file path; qwen-code adds idle/time triggers; deepseek-harness prunes, remeasures, and summarises only if still over pressure.
+- **Window + triggers:** codex reads the window from `/models` (90% compact, 95% hard cap; skip when unknown); another harness prefires before 85%; pi and one more harness compact-and-retry on an overflow error.
+- **Token estimate:** codex, pi and another harness anchor on the last provider-reported usage and estimate only the delta since.
+- **Old tool outputs:** opencode protects the newest ~40K tokens and the last 2 turns, prunes older outputs to `[Old tool result content cleared]` only when it saves >20K; gemini-cli masks past 50K protected/30K buffer and leaves a file path; another harness adds idle/time triggers; a third prunes, remeasures, and summarises only if still over pressure.
 - **Large output:** opencode/pi cap at 2000 lines / 50KB and spill the full text to a file with a retrieval hint; cline and codex middle-truncate (48K chars / 10KB).
 - **Summary:** opencode and pi use an incremental anchored summary (prior summary fed back) with a ~20K-token verbatim tail and read/modified file lists; cline keeps a deterministic no-LLM fallback that preserves every typed user prompt; gemini-cli verifies its snapshot with a second probe call.
-- **Injected context:** codex `WorldState.render_diff` emits only changes; deepseek-harness re-injects on content-hash change; grok-build rebuilds one replaced reminder; aider never stores the reminder in history.
-- **Cache:** codex, opencode and pi send `prompt_cache_key` = session id; codex also continues with `previous_response_id` when the prefix is unchanged; aider/opencode/crush place cache breakpoints on the stable prefix.
+- **Injected context:** codex `WorldState.render_diff` emits only changes; another harness re-injects on content-hash change; a third rebuilds one replaced reminder; a fourth never stores the reminder in history.
+- **Cache:** codex, opencode and pi send `prompt_cache_key` = session id; codex also continues with `previous_response_id` when the prefix is unchanged; opencode, crush and one more harness place cache breakpoints on the stable prefix.

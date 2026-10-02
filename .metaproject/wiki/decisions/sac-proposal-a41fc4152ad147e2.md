@@ -177,7 +177,7 @@ not stated to supersede this one.
 | Field | Value |
 |-------|-------|
 | Source | sac-proposal |
-| Session | [session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md](../../workspaces/workspace-e1b704272f124ba7/session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md) |
+| Session | `session-evidence/77720896-3aa2-4cc6-84c5-5694efdc4c01.md` (raw session transcript, kept local and not committed; the SHA-256 below identifies it) |
 | SHA-256 | `aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e` |
 | Created | 2026-08-14 |
 | Updated | 2026-08-14 |

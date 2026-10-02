@@ -15,12 +15,12 @@
     "verification": {
       "verdict": "confirmed",
       "method": "execution",
-      "evidence": "bun test src/harness/provider/stream-contract.test.ts (from /home/altsay/keryx-ar1) -> 12 pass, 0 fail, 40 expect() calls. Read the exact test at stream-contract.test.ts:170-185, named \"compat: CURRENT (unchanged, documented gap) — an in-band {error} envelope is not read at all; the stream ends with no terminal event whatsoever, not even a generic malformed\". Its body sends a bare `data: {\"error\":{...}}` SSE frame with no pending tool call and asserts `expect(providerErrors(events)).toHaveLength(0)` and `expect(events.some((e) => e.kind === \"model_end\")).toBe(false)` — exactly the claimed 'no provider_error, no model_end' shape.",
+      "evidence": "bun test src/harness/provider/stream-contract.test.ts (from ~/keryx-ar1) -> 12 pass, 0 fail, 40 expect() calls. Read the exact test at stream-contract.test.ts:170-185, named \"compat: CURRENT (unchanged, documented gap) — an in-band {error} envelope is not read at all; the stream ends with no terminal event whatsoever, not even a generic malformed\". Its body sends a bare `data: {\"error\":{...}}` SSE frame with no pending tool call and asserts `expect(providerErrors(events)).toHaveLength(0)` and `expect(events.some((e) => e.kind === \"model_end\")).toBe(false)` — exactly the claimed 'no provider_error, no model_end' shape.",
       "verifier": "review-verifier"
     },
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "docs/requirements/keryx-audit-remediation/findings.md L-16, decided-by: altsay (operator, helyx 2026-09-28)"
+      "evidence": "docs/requirements/keryx-audit-remediation/findings.md L-16, decided-by: altsay (operator, operator chat channel 2026-09-28)"
     }
   },
   {
@@ -146,7 +146,7 @@
     "verification": {
       "verdict": "confirmed",
       "method": "execution",
-      "evidence": "bun test src/commands/shell-agent-repl.test.ts -t \"AC7\" (from /home/altsay/keryx-ar1) -> 6 pass, 0 fail, 10 expect() calls, including the target test. Read test body at shell-agent-repl.test.ts:821-865: only expect(leaseBox.current).toBeUndefined() and expect(busBox.current).toBeUndefined() (863-864) — no order/sequence assertion. Read shell.ts:2950-2955: production finally runs leaveBus(); releaseLease(); in that order — correct today but unguarded by this test.",
+      "evidence": "bun test src/commands/shell-agent-repl.test.ts -t \"AC7\" (from ~/keryx-ar1) -> 6 pass, 0 fail, 10 expect() calls, including the target test. Read test body at shell-agent-repl.test.ts:821-865: only expect(leaseBox.current).toBeUndefined() and expect(busBox.current).toBeUndefined() (863-864) — no order/sequence assertion. Read shell.ts:2950-2955: production finally runs leaveBus(); releaseLease(); in that order — correct today but unguarded by this test.",
       "verifier": "review-verifier"
     },
     "disposition": {

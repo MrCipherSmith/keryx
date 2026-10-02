@@ -83,7 +83,7 @@ GREEN after: **46 pass, 0 fail, 567 expect()**, raw `.metaproject/data/gdctx/raw
 
 ## Verification — exact counts and raw log paths
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ### The finding itself
 

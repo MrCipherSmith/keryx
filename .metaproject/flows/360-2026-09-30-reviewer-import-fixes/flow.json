@@ -19,7 +19,7 @@
   "acConfirmed": {
     "AC1": {
       "at": "2026-10-01T07:21:18.761Z",
-      "note": "import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-vantage-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781."
+      "note": "import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-acme-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781."
     },
     "AC2": {
       "at": "2026-10-01T07:21:18.935Z",
@@ -1172,7 +1172,7 @@
     {
       "at": "2026-09-30T16:45:48.141Z",
       "event": "ac-updated",
-      "detail": "AC15: \"(new)\" -> \"The `reviewer-skill-creator` frontmatter no longer carries a trigger naming one overlay (\"import vantage reviewers\"); a neutral trigger (\"import overlay reviewers\") routes the same intent, and the trigger-collision and catalog checks pass.\" (scope extension chosen by the user on 2026-09-30: replace the overlay-specific trigger with a neutral one)"
+      "detail": "AC15: \"(new)\" -> \"The `reviewer-skill-creator` frontmatter no longer carries a trigger naming one overlay (\"import acme reviewers\"); a neutral trigger (\"import overlay reviewers\") routes the same intent, and the trigger-collision and catalog checks pass.\" (scope extension chosen by the user on 2026-09-30: replace the overlay-specific trigger with a neutral one)"
     },
     {
       "at": "2026-09-30T16:46:06.196Z",
@@ -1407,7 +1407,7 @@
     {
       "at": "2026-10-01T07:21:18.761Z",
       "event": "ac-confirmed",
-      "detail": "AC1: import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-vantage-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC1: import-skills.test.ts 'tree import selection' (refusal without --only naming every candidate; --only imports only matches; deprecated and bundled-name skips), import-reviewers.test.ts (same refusal in review import's wording), import-only.test.ts (--only through skillsCommand and reviewCommand); keryx ctx rg 'review-acme-' src finds no hit outside tests/fixtures. Re-confirmed by the round-3 reviewer importing the real 9-reviewer overlay with --only. CI green at 3cf1d781. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-10-01T07:21:18.935Z",

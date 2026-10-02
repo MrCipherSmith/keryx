@@ -24,42 +24,42 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+      "path": "~/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Two offline ProviderPort regression tests proving a tool invocation cap is independent from round count and needs a distinct terminal reason.",
       "hash": "3bc480596ba9e1edd37080d5c761ea6cf4b9553745b8ed3eb4c18723cba310ef"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
+      "path": "~/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Offline subprocess test for temporary stress JSON output and the existing maxRounds resolver.",
       "hash": "8b4d37036e73ae7f1f0030cbbcc05085e0312be8fdeee7e4a16da71636747910"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.test.ts",
+      "path": "~/goodea/keryx/scripts/benchmark/run-containment.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Pure import-safe tests requiring concrete-port preservation and fail-closed undefined-port handling.",
       "hash": "ddac6138ae7e4c3cbc8a2ea04ca04c7f96d6b84d18596a6618603159320e244d"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/typecheck.test.ts",
+      "path": "~/goodea/keryx/scripts/typecheck.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Scripts config coverage/current-clean test plus guarded temporary TS2322 injection test.",
       "hash": "1af8fc2eb27c0a9cbe29a121cddf88c86897a282d61f4796f62cc34ee34932e3"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
       "kind": "report",
       "exists": true,
       "summary": "Exact test_case_specs with criterion mapping, test IDs, focused run command, required pure seam, and GREEN commands.",
       "hash": "bd1c8e90d25b5b55c5c1a8350216ad86182bb6ee8fb8e772e07c8ce101d36591"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
       "kind": "report",
       "exists": true,
       "summary": "Immutable RED, root typecheck, and full scripts diagnostic evidence with bounded corrections and routing audit.",

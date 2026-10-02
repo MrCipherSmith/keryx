@@ -112,7 +112,7 @@ This page describes the model as it stands after phases P0–P2 of `docs/require
 
 The default spawner passes `detached: true` to `Bun.spawn`, making the direct child a fresh process-group leader (POSIX `setsid` semantics — confirmed empirically on Bun 1.3.14/macOS). Every kill path signals `-pid` (negative — "the whole process group"), never a bare PID, so a grandchild the command backgrounds and forgets about (`sh -c 'cmd &'`) is reached too.
 
-This closes the exact process-ownership bug class hit live by other tools (opencode's FD-inheritance hangs, Codex's sandboxed-`pgrep` blindness) — losing track of the group, not just the direct child, is the actual common failure mode across surveyed prior art.
+This closes the exact process-ownership bug class hit live by other tools (FD-inheritance hangs, sandboxed-`pgrep` blindness) — losing track of the group, not just the direct child, is the actual common failure mode across surveyed prior art.
 
 ### Sandbox Reuse
 
@@ -202,15 +202,15 @@ Structural mirror of the Subagent Inspector (flow 162), file for file:
 
 ## Prior Art
 
-Surveyed before designing this: Claude Code, Codex CLI, Gemini CLI, aider, opencode, Cline, plus non-AI job control (`tmux`, `&`+`jobs`+`kill %1`, `systemd-run --user`+`journalctl -f`).
+Surveyed before designing this: other agent CLIs, plus non-AI job control (`tmux`, `&`+`jobs`+`kill %1`, `systemd-run --user`+`journalctl -f`).
 
 **Decisions made deliberately against or beyond prior art:**
 
 - **Push on completion, not polling.** Flow 173 surveyed this and chose polling. Flow 265 reversed that decision (brainstorm D-02) once a reference implementation existed: a finished task now delivers its own outcome, and reading is a choice rather than the only channel. The poll-on-demand read survives as `shell_task_output`.
 
-- **No recurring per-turn reminder.** Claude Code's most-reported bug against this feature (issues #11190/#11716/#13249) is a harness-injected "job still running" reminder that keeps firing even after the job finishes or is killed. keryx does not inject a recurring reminder at all: a running task produces no message, and a finished one produces exactly one. The single message now arrives when the task ends rather than when it starts.
+- **No recurring per-turn reminder.** The most-reported bug against this feature in other agent CLIs is a harness-injected "job still running" reminder that keeps firing even after the job finishes or is killed. keryx does not inject a recurring reminder at all: a running task produces no message, and a finished one produces exactly one. The single message now arrives when the task ends rather than when it starts.
 
-- **Kill by process group, not bare PID.** opencode's FD-inheritance hangs and Codex's sandboxed-`pgrep` blindness are the same root bug from two different angles. This is the one requirement this flow treats as non-negotiable.
+- **Kill by process group, not bare PID.** FD-inheritance hangs and sandboxed-`pgrep` blindness are the same root bug from two different angles. This is the one requirement this flow treats as non-negotiable.
 
 - **No stricter approval gate for backgrounding.** Every surveyed tool that gates approval at all reuses the same gate for foreground and background. keryx does too, deliberately.
 

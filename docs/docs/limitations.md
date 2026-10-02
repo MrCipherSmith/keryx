@@ -1,69 +1,64 @@
 # Limitations
 
-keryx is pre-1.0. The deterministic core — graph, wiki, memory, testing, health,
-review, tasks and security — runs offline with no model provider, and that is the
-part the product is built around. This page lists what is *not* there yet, what
-each gap actually costs you, and what to use instead.
+Keryx is pre-1.0. The deterministic core (graph, wiki, memory, testing, health,
+review, tasks and security) runs offline with no model provider, and that is
+the part the product is built around. This page lists what is not there yet,
+what each gap costs you, and what to use instead.
 
 ## Summary
 
 | Limitation | Impact | Alternative |
 |------------|--------|-------------|
-| Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals; with a registry an `ask` becomes a pending approval answered over `/v1/approvals` or `keryx approvals` | Run tool-using turns locally |
-| `harness exec --allowed-domains` is macOS-only | The interactive/general sandbox's domain-level egress policy, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both; a *scheduled agent-task*'s own `network: "allowlist"` (flow 301) is a separate mechanism, Linux-only |
-| No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search remains fully available |
-| No bundled ML security classifiers | Detection is rules plus entropy, not a model | Deterministic detectors run on the full corpus and are evaluated in CI |
-| ripgrep is external | `keryx ctx rg` exits non-zero without `rg` on `PATH` | Install ripgrep, or let the agent read files directly |
-| Model commands need a credential | Five commands exit non-zero without one | Every other command is deterministic and offline |
-| Windows is unverified | The core CLI is not exercised on Windows in CI | Use macOS or Linux, or WSL |
-| No tools in the non-interactive harness | `keryx harness run` and `keryx serve` are single text turns | `keryx shell` is where tools actually run |
+| Linux sandbox has no domain allowlist | Domain-level egress rules, credential masking and TLS termination refuse to run on Linux | Filesystem containment and network on/off work on both platforms |
+| Windows is unverified | The CLI is not exercised on Windows in CI, and there is no OS sandbox | Use macOS, Linux or WSL |
+| Model commands need a credential | Four commands exit 1 without a provider; `wiki enrich` skips pages | Every other command is deterministic and offline |
+| ripgrep is external | `keryx ctx rg` and the agent's code search exit non-zero without `rg` | Install ripgrep |
+| No bundled embedding runtime | No semantic ranking in memory search | Lexical memory search is fully available |
+| No bundled ML security classifiers | Detection is rules plus entropy | The deterministic detectors are evaluated in CI |
+| No tools in the non-interactive harness | `keryx harness run` and `keryx serve` complete single text turns | `keryx shell` is where tools run |
+| Remote approvals need a tool registry | The stock `keryx serve` registers no tools, so it raises no approvals | Run tool-using turns locally |
 | Replay validates a log, it does not re-execute | A fixture check cannot tell you whether a run would behave the same today | Record and compare fixtures for integrity |
-| Session branches never merge | A fork diverges permanently | Re-fork from a shared ancestor |
-| No session↔workspace auto-bind | Every SAC call needs an explicit `workspaceId` | `keryx workspace list`, then pass the id |
-| SAC MCP is stdio-only | HTTP MCP returns `sac_transport_denied` | Use `keryx serve-mcp` (stdio) or the CLI |
-| SAC source reads need POSIX `openat` | Fail-closed on platforms without `O_NOFOLLOW` | Use macOS or Linux |
-| Policy experiment is synthetic / off | No production learned policy | Keep the deterministic baseline |
+| Session branches never merge | A fork diverges permanently | Fork again from a shared ancestor |
+| Shared Agent Context is experimental | Every call needs an explicit workspace id; its MCP tools work over stdio only; source reads need POSIX `openat` | `keryx workspace list`, then pass the id; use `keryx serve-mcp` over stdio |
+
+## Commands that need a model credential
+
+These commands add model-written text on top of deterministic data. Without a
+configured provider credential they behave as follows (checked on 0.3.46 with
+no keys in the environment):
+
+| Command | Without a credential |
+|---|---|
+| `keryx test suggest <file>` | exits 1 |
+| `keryx flow plan <id>` | exits 1 |
+| `keryx memory reflect --narrate` | prints the deterministic part, then exits 1 |
+| `keryx health explain <target> --narrate` | prints the deterministic part, then exits 1 |
+| `keryx wiki enrich` | exits 0 and marks each page skipped |
+
+```text
+No credential for provider "anthropic" (set ANTHROPIC_API_KEY, or pass --provider <name>).
+```
+
+Nothing else in the CLI needs a provider. `--provider <name>` selects another
+configured provider; see [Connect a model provider](guides/connect-a-provider.md).
 
 ## Optional AI features are not bundled
 
-Two model-backed features have no runtime shipped: semantic memory search and the
-ML security detectors. The ONNX stack was removed to keep the package small, so
-their runtime identifiers are empty strings:
+Two model-backed features ship without a runtime: semantic memory search and
+the ML security detectors. Their runtime identifiers are empty in the release,
+so enabling them is a code change, not a download. Both run on their
+deterministic floor, which is the shipped and tested behaviour:
 
-- `src/memory/config.ts` — `runtime: ""` for the memory embedding seam
-- `src/security/detect/index.ts` — `SECURITY_MODEL_RUNTIME = ""`
-
-Re-enabling them means setting those constants and installing a
-transformers.js-API package — it is a code change, not a downloadable asset.
-
-Both features run on their deterministic floor in the meantime, and that floor is
-the shipped, tested behaviour:
-
-- **memory** — lexical retrieval with indexing, dedup, bitemporal validity and
-  module/entity/class filters.
-- **security** — deterministic rules plus entropy analysis, measured against a
-  committed evaluation corpus (`keryx security eval --corpus all`).
-
-## Commands that require a model credential
-
-These five commands add model-generated output on top of deterministic data and
-exit non-zero without a configured provider credential:
-
-- `keryx test suggest <file>`
-- `keryx flow plan <id>`
-- `keryx memory reflect --narrate`
-- `keryx health explain <target> --narrate`
-- `keryx wiki enrich` — the exception that degrades rather than failing: it exits
-  `0` and marks the affected pages skipped.
-
-Nothing else in the CLI needs a provider.
+- **Memory:** lexical retrieval with indexing, deduplication, validity dates and
+  module, entity and class filters.
+- **Security:** rules plus entropy analysis, measured against a committed
+  evaluation corpus (`keryx security eval --corpus all`).
 
 ## Code search needs ripgrep
 
-`keryx ctx rg` and the agent harness's `search_code` tool shell out to
-[ripgrep](https://github.com/BurntSushi/ripgrep). Without `rg` on `PATH` the
-command exits non-zero rather than falling back to a slower scan, so the failure
-is visible instead of silently different.
+`keryx ctx rg` and the shell's `search_code` tool run ripgrep. Without `rg` on
+`PATH` they exit non-zero instead of falling back to a slower scan, so the
+failure is visible.
 
 ```bash
 brew install ripgrep      # macOS
@@ -72,151 +67,135 @@ apt install ripgrep       # Debian/Ubuntu
 
 ## Tree-sitter grammars are optional
 
-The symbol and call graph uses tree-sitter grammars that are **not bundled**.
-When a grammar is absent, `gdgraph` falls back to its deterministic import
-resolver — the dependency graph, affected sets, cycles, orphans and repo map all
-still work. Grammar-backed symbol extraction is the part that is unavailable.
+The symbol and call graph needs tree-sitter grammars, which are not bundled.
+Without them the file graph, affected sets, cycles, orphans and the repository
+map all work; symbol extraction does not. `keryx gdgraph assets pull <id>`
+downloads a pinned grammar.
 
 ## Platform support
 
 | Platform | Status |
 |----------|--------|
-| macOS | Full support, including the complete policy sandbox (Seatbelt), domain allowlist, credential masking and TLS termination |
-| Linux | Full core support. OS sandbox via `bubblewrap` (`bwrap` on `PATH`): filesystem containment and network on/off. The domain allowlist, credential masking and TLS termination **refuse to run** rather than degrading to full host network |
-| Windows | The core CLI is not exercised in CI on Windows; the OS sandbox is macOS/Linux only |
+| macOS | Full support, including the complete OS sandbox: filesystem containment, network off, domain allowlist, credential masking and TLS termination. |
+| Linux | Full core support. OS sandbox through `bubblewrap` (`bwrap` on `PATH`): filesystem containment and network on/off. The domain allowlist, credential masking and TLS termination **refuse to run** rather than fall back to full network. |
+| Alpine, musl, BusyBox | No standalone binary; the npm launcher's shebang needs a full `env`. |
+| Windows | The CLI is not exercised on Windows in CI, and there is no OS sandbox, so contained runs fail closed. |
 
-The macOS-only tier is a fail-closed decision: a domain allowlist that quietly
-became "all network" on Linux would be worse than one that says it cannot run.
-The refusal is enforced at the spawn point, so `KERYX_SANDBOX_ALLOW_UNSANDBOXED`
-cannot reach it. That variable still does what it was written for — running
-uncontained when no launcher is installed, which is a degradation an operator
-knowingly accepts — and nothing more.
-See the [operator guide](https://github.com/MrCipherSmith/keryx/blob/main/docs/requirements/keryx-os-sandbox/operator-guide.md)
-for the containment matrix and the
-[Linux verification runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/verification/linux-sandbox-verification.md)
-for what has been verified on a real host.
+The Linux refusal is deliberate: an allowlist that quietly became full network
+access would be worse than one that says it cannot run. The refusal happens
+where the process is spawned, so `KERYX_SANDBOX_ALLOW_UNSANDBOXED` cannot reach
+it. That variable only lets a run proceed when no launcher is installed, as a
+choice the operator makes knowingly. See the
+[security model](concepts/security-model.md#os-sandbox) and the
+[Linux verification runbook](https://github.com/MrCipherSmith/keryx/blob/main/docs/verification/linux-sandbox-verification.md).
 
 ## Scheduled agent tasks need the machine on
 
-`keryx schedule` hands a confirmed task to the OS scheduler. keryx itself runs no daemon. The one exception is a digest (`keryx schedule add --digest`), which has no OS timer and is run by `keryx serve`, so it does nothing while serve is stopped.
+`keryx schedule` hands a confirmed task to the operating system's scheduler
+(systemd user timers, launchd or cron). Keryx runs no daemon. The one exception is
+a digest (`keryx schedule add --digest`): it has no operating-system timer and is run
+by `keryx serve`, so it does nothing while `keryx serve` is stopped.
 
-- **Missed runs:** a machine that is off or asleep misses runs. systemd
-  (`Persistent=true`) and launchd run one catch-up run at the next boot or wake;
-  cron runs none.
-- **Logged out:** without linger, a systemd `--user` timer does not run while you are
-  logged out. keryx shows the linger state on the confirmation card and never
-  enables it.
-- **Network:** `off`, `full`, or `allowlist` (flow 301, Linux only — a macOS or
-  non-Linux schedule refuses `allowlist` with the reason, never silently falling
-  back to `off` or `full`). `allowlist` reaches only the domains you name, through a
-  loopback proxy keryx runs outside the sandbox, and governs ONLY the agent's own
-  `shell_exec` commands — the model call and every granted tool already run outside
-  the sandbox on your own network, unaffected by this grant. Honest limits of
-  `allowlist` itself:
-  - A tool that ignores `HTTP_PROXY`/`HTTPS_PROXY` gets no network at all (the
-    sandbox's netns has no other route out) — this can look like `off` even though
-    the mode is `allowlist`.
-  - HTTPS is a blind `CONNECT` relay by default (no TLS termination), so the proxy
-    cannot see the TLS SNI or an in-tunnel `Host` header — only the CONNECT
-    authority is checked. A client could in principle address something else once
-    inside an allowed tunnel; termination (already used for credential masking
-    elsewhere) would close this but is not the default here.
-  - DNS resolution happens once, outside the sandbox, and the proxy connects to the
-    exact address it checked — a deliberate defence against DNS rebinding — but this
-    also means a domain that legitimately changes IP between confirmation and a run
-    is resolved fresh each run, not pinned across runs.
-  - HTTP/2 and WebSockets over the blind relay are not specially handled; most CLI
-    tools (curl, git, npm, pip) negotiate HTTP/1.1 and work as expected.
-- **Platform:** the hardened unattended sandbox is Linux-only, so a macOS schedule
-  runs in `ask` mode with granted tools only.
-- **The signing key and an interactive agent:** each confirmed schedule is signed
-  with an HMAC keyed by a per-machine secret. The secret lives outside the project,
-  in keryx's user-global directory (`schedule-hmac.key`, 0600). A committed or forged
-  store therefore never runs, and a scheduled run cannot see the key because its sandbox
-  hides `$HOME`. But an interactive agent running as the same user, in `trust` mode
-  with an unrestricted shell, could in principle read the key by spelling its path in a
-  way the text floor does not recognise. The floor turns every command or patch that
-  names the key, the schedule store or the systemd/launchd unit directories into a
-  prompt. That makes reading the key an ask, not an impossibility.
-- **The scheduler-control floor is text analysis.** The shell floor parses commands the
-  way a shell would, so quoting, escapes, wrappers (`env -u`, `sudo`, `nohup`,
-  `bash -c '…'`) and a `cd` into a unit directory are all seen. But a same-user shell
-  in `trust` mode can always spell a command so no text check sees it: a variable, a
-  script file, an interpreter one-liner. The gates behind it:
-  - `keryx schedule add`, `resume` and `run` require an interactive terminal on stdin
-    and stdout, `--yes` included, so a pipe or an MCP/ACP client cannot create,
-    re-enable or fire a schedule;
-  - the terminal requirement alone is not enough, because an agent can make a
-    terminal: `script -qfc 'keryx shell' /dev/null`, `tmux`, `screen` or `unbuffer`
-    give a nested keryx a pseudo-terminal the agent types into, and so reaches the
-    `/schedule` card and the `/schedules` keys. Two things cover that path. A keryx
-    started from an agent's shell inherits `KERYX_TOOL_CALL=1`, and its `/schedule`,
-    `schedule_create`, pause, resume, run-now and delete all refuse. And starting an
-    interactive keryx (`keryx`, `keryx shell`) or a terminal driver around one, or
-    typing into a running session (`tmux send-keys`, `screen -X stuff`), is in the
-    always-ask family: you are asked every time, and the answer is never remembered;
-  - every stored schedule must carry this machine's signature, and resume checks the
-    signature and every binary pin before it re-enables a timer. The timer runs the
-    keryx recorded (and signed) when you confirmed the card, never the one that
-    pressed resume, and a keryx running from inside the project is refused when the
-    schedule is drafted.
+- **Missed runs.** A machine that is off or asleep misses runs. systemd and
+  launchd run one catch-up run at the next boot or wake; cron runs none.
+- **Logged out.** Without lingering enabled, a systemd user timer does not run
+  while you are logged out. Keryx shows the linger state when you confirm the
+  schedule and never enables it for you.
+- **Platform.** The hardened unattended sandbox is Linux-only. A macOS schedule
+  runs in `ask` mode with only the tools you granted.
+- **Network.** A schedule's network is `off`, `full` or `allowlist`. `allowlist`
+  is Linux-only; elsewhere it is refused with a reason, never replaced by `off`
+  or `full`. It governs only the agent's own shell commands; the model call and
+  granted tools run outside the sandbox on your network. Its limits:
+    - A tool that ignores `HTTP_PROXY`/`HTTPS_PROXY` gets no network at all,
+      which can look like `off`.
+    - HTTPS passes through a blind `CONNECT` relay, so only the requested host
+      is checked, not the TLS server name inside the tunnel.
+    - DNS is resolved once, outside the sandbox, and the proxy connects to the
+      address it checked. A domain that changes address is resolved fresh on
+      each run.
+    - HTTP/2 and WebSockets over the relay are not specially handled; most
+      command-line tools use HTTP/1.1 and work.
+- **The signing key.** Each confirmed schedule is signed with a per-machine key
+  kept owner-only in your user config directory. A committed or forged schedule
+  never runs, and a scheduled run cannot see the key because its sandbox hides
+  your home directory. An interactive agent running as you in `trust` mode with
+  an unrestricted shell could in principle read the key by spelling its path in
+  a way the command check does not recognise. Every command that names the key,
+  the schedule store or the scheduler unit directories asks first, so reading
+  the key is an ask, not an impossibility.
+- **The command check is text analysis.** It parses quoting, escapes, wrappers
+  (`env -u`, `sudo`, `nohup`, `bash -c '…'`) and `cd` into a unit directory.
+  A same-user shell in `trust` mode can still spell a command so no text check
+  sees it. The gates behind it:
+    - `keryx schedule add`, `resume` and `run` need an interactive terminal on
+      stdin and stdout, even with `--yes`, so a pipe or an MCP or ACP client
+      cannot create, re-enable or fire a schedule.
+    - A Keryx started from an agent's shell inherits `KERYX_TOOL_CALL=1`, and
+      its schedule commands refuse. Starting an interactive Keryx or a terminal
+      driver around one, or typing into a running session through a terminal
+      multiplexer, always asks and is never remembered.
+    - Every stored schedule must carry this machine's signature, and resume
+      re-checks it and every pinned binary. The timer runs the `keryx` binary
+      recorded when you confirmed, and a `keryx` running from inside the project
+      is refused when the schedule is drafted.
 
-  The honest limit stays: an agent running as your user, in `trust` mode, can unset
-  `KERYX_TOOL_CALL` in a way the text floor does not see, or drive a terminal through
-  a program the floor does not know. The floor makes that an ask, and your answer is
-  the boundary.
-- **A script wrapper's own configuration.** A pinned `#!` wrapper (and its interpreter)
-  cannot change without the schedule being refused, and it runs from an empty directory,
-  so the project cannot steer it. What the wrapper reads from its own global
-  configuration (`~/.config/...`, an account file) is the operator's machine, and outside
-  what keryx pins.
-- **Granted binaries between checks.** A granted program is hashed once at the start of
-  a run, and its inode, size and mtime are re-checked before every exec. What is left is
-  the window between that last stat and the kernel's exec, which is milliseconds.
+    An agent running as you in `trust` mode can still unset `KERYX_TOOL_CALL`
+    in a way the check does not see. The check makes that an ask, and your
+    answer is the boundary.
+- **Script wrappers.** A pinned script wrapper and its interpreter cannot change
+  without the schedule being refused, and it runs from an empty directory. What
+  the wrapper reads from its own configuration in your home directory is
+  outside what Keryx pins.
+- **Binaries between checks.** A granted program is hashed at the start of a
+  run, and its inode, size and modification time are checked again before every
+  exec. The remaining window is the milliseconds between that check and the
+  exec.
 
-See [schedule](cli-reference.md#schedule).
+See [schedule](cli-reference.md#schedule) in the CLI reference.
 
 ## Remote approvals apply only where tools are registered
 
-`keryx serve` accepts turns over a loopback-bound authenticated HTTP listener. A
-turn whose policy decision is `ask` becomes a durable pending approval that a
-person answers over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or locally
-with `keryx approvals` (see [Answer a remote approval](guides/answer-remote-approvals.md)).
-Unanswered approvals deny at expiry. But the stock listener registers no tools, so
-it raises no approvals today; they become reachable when a tool registry is
-injected into the turn. A Telegram or web card for these approvals, session-wide
-grants from a remote answer, and approvals for unattended trigger runs are not
-built. (A `keryx shell` session driven from a Telegram topic with `/remote-control`
-has its own Allow/Deny buttons in the topic; that path has been exercised only
-against a fake Bot API, not real Telegram. In that path a topic holds at most 500
-undelivered lines, and a pure-collision batch after Telegram renumbers its updates,
-one whose ids are all ones already seen, cannot be told from a redelivery and is
-dropped.)
+`keryx serve` accepts turns over an authenticated HTTP listener that binds to loopback by default.
+A turn whose policy decision is `ask` becomes a durable pending approval that a
+person answers once over `GET /v1/approvals` and `POST /v1/approvals/{id}`, or
+locally with `keryx approvals`. Unanswered approvals deny at expiry. The stock
+listener registers no tools, so it raises no approvals today; they become
+reachable when a tool registry is supplied to the turn. Approval cards in chat
+or web clients for these approvals, session-wide grants from a remote answer,
+and approvals for unattended trigger runs are not built. See
+[Answer a remote approval](guides/answer-remote-approvals.md).
 
-Boundaries that hold:
+A `keryx shell` session driven from a Telegram topic with `/remote-control` has
+its own Allow and Deny buttons in the topic. That path has been exercised only
+against a fake Bot API, not real Telegram. A topic holds at most 500
+undelivered lines, and a batch whose update ids all collide with ones already
+seen after Telegram renumbers its updates cannot be told from a redelivery and
+is dropped.
 
-- The remote policy profile is compared against the local one on every turn, and
-  a weaker remote profile is refused rather than accepted.
-- Authentication happens *before* routing, so an unauthenticated caller cannot
-  distinguish a known path from an unknown one.
+What does hold:
+
+- The remote policy profile is compared with the local one on every turn, and a
+  weaker remote profile is refused.
+- Authentication happens before routing, so an unauthenticated caller cannot
+  tell a real path from a missing one.
 
 ## Harness gaps
 
-Three of them, each stated in full on [the harness page](./harness.md#what-the-harness-does-not-do-yet):
+Each is described on [the harness page](harness.md#what-the-harness-does-not-do-yet):
 
-- **No shipped non-interactive path registers a tool.** Both production
-  executors are refusals, so `keryx harness run` and `keryx serve` complete a
-  single text turn. Tools run in `keryx shell`.
-- **Replay is `validate-log`.** `keryx harness replay` checks that a fixture
-  still describes the run it was built from. It re-executes nothing and contacts
-  nothing, so it is an integrity check, not divergence detection.
-  `simulate-recorded-results` is not implemented.
-- **Branch merge is out of scope.** `keryx sessions fork` branches a
-  conversation and records its ancestry; there is no merge back.
+- **No non-interactive path registers a tool.** `keryx harness run` and
+  `keryx serve` complete a single text turn. Tools run in `keryx shell`.
+- **Replay validates a log.** `keryx harness replay` checks that a fixture still
+  describes the run it came from. It re-executes nothing and contacts nothing.
+- **Branches do not merge.** `keryx sessions fork` branches a conversation and
+  records its ancestry; there is no merge back.
+- **External agents mostly read.** Delegated agent CLIs are read-only, except
+  the two with a reviewed write mode, and a running external agent is not
+  supervised; the parent sees only its result.
 
 ## Format stability
 
-The `.metaproject/` layout, artifact formats and CLI surface are still moving
-before 1.0. `keryx update` refreshes managed service files without touching data
-artifacts, and the [changelog](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md)
-records what changed in each release, including a standing known-gaps list.
+The `.metaproject/` layout, artifact formats and CLI surface still change
+before 1.0. `keryx update` refreshes managed files without touching your data,
+and the [changelog](project/changelog.md) records what changed in each release.

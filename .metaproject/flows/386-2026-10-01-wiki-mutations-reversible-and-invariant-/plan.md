@@ -100,7 +100,7 @@ page's previous version in its history folder.
 7. `wiki validate` checks for Version/changelog/attestation drift.
 8. Tests per AC; real-store round-trip (`diff -rq` = 0) recorded as AC2 evidence.
 9. Docs: wiki module contract + help text, including what is not covered.
-10. Release; verify in vantage-frontend via npm install + `keryx update` (never the dev
+10. Release; verify in acme-frontend via npm install + `keryx update` (never the dev
     checkout).
 
 ## Risks

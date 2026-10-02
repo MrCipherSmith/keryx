@@ -4083,8 +4083,8 @@ cross-family-review:
   That is not \`single-family\`: nobody decided.
 
 ci-triage:
-  Advisory-only flaky/infra/real-regression triage for one failed CI run's job
-  (flow 306). Scores a redacted, bounded excerpt of the job's own log against
+  Advisory-only flaky/infra/real-regression triage for one failed CI run's job.
+  Scores a redacted, bounded excerpt of the job's own log against
   Jev (TypeSafe System One): three probabilities, one per bucket, printed with
   the top pick and labelled ADVISORY — it never reruns a job, writes a status
   check, or merges anything; that path does not exist in this command.
@@ -4097,11 +4097,10 @@ ci-triage:
   optional \`ci-history.json\`, \`jev-response.json\`) — no real \`gh\` call, no
   real network, the same discipline \`--fixtures\` already gives \`comments\`.
   Vendor-reported accuracy only: this classifier ships with no measured
-  precision/recall on this repository's own history (PLAN.md's Phase 7
-  evaluation is where that gets measured).
+  precision/recall on this repository's own history.
 
 conform:
-  Reference-document conformance mode (flow 308): a rules file, a skill, or a
+  Reference-document conformance mode: a rules file, a skill, or a
   project skill is split deterministically into clauses (no model call), each
   tagged \`state_kind: pr|report|hunk\` and \`checkable\`. Every checkable clause
   is scored by Jev against DETERMINISTIC FACTS keryx computes first (PR body
@@ -4132,7 +4131,7 @@ conform:
   \`--fixtures <dir>\` answers the pr-kind read (\`pr.json\`), every Jev call
   (\`jev-response.json\`), and (with \`--explain\`) the explanation pass
   (\`explain-response.json\`) — no real \`gh\` call, no real network.
-  Flow 326: the report is ONE row per clause, not one row per hunk × clause.
+  The report is ONE row per clause, not one row per hunk × clause.
   A hunk-kind clause's row names how many hunks were judged and how many fell
   below \`--threshold\`, the single worst hunk (location + probability), and up
   to \`--max-hunks\` (default ${DEFAULT_MAX_HUNKS}) further violating hunk locations;
@@ -4143,9 +4142,8 @@ conform:
   were skipped.
   Honest limits: this mode is the least mechanical use of Jev in this
   repository — deciding whether a PR body names an out-of-scope list is closer
-  to judgement than a styling checklist bullet. See flow 308's own journal
-  (.metaproject/flows/308-*/journal.md) for the measured usefulness and
-  limits of a live run against real pull requests and a real review package.
+  to judgement than a styling checklist bullet; treat its scores as a prompt
+  for a human reading, not as a verdict.
 
 complete:
   --finding/--disposition/--evidence record what became of a named finding, and
@@ -4261,7 +4259,7 @@ learn:
   configured list a default, and one invocation could teach a project from
   somebody it never named.
 
-  \`--reviewer <id>\` (W3) is a sibling mode: it applies an accepted, human-reviewed
+  \`--reviewer <id>\` is a sibling mode: it applies an accepted, human-reviewed
   \`domain: review-conventions\` learned-pattern record (from \`keryx learn accept\`)
   into \`.metaproject/rules/reviewers/<id>.mdc\` — the per-reviewer rule this
   project has learned from that reviewer's own comments, never the literal login.

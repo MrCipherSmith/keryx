@@ -3,8 +3,7 @@ import { fetchOpenAiCodexModels } from "../commands/subscription-models";
 //
 // A new IO implementation of the existing `AgentIO` hook surface (src/commands/
 // agent.ts): it renders into an OpenTUI transcript and drives `runAgentTurn` from
-// a `split-footer` composer (a fixed footer input over a scrolling main region —
-// the Pi/grok layout). Chrome parity with the readline shell: assistant text →
+// a `split-footer` composer (a fixed footer input over a scrolling main region). Chrome parity with the readline shell: assistant text →
 // one sibling renderable per markdown segment, styled by the worker-free
 // `markdownToChunks` (the native `MarkdownRenderable` is deliberately NOT used —
 // flow 109 decision D-2); `● keryx` role header; `⚙ tool(args)` (via the pure
@@ -1002,7 +1001,7 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     onAssistantText: (text) => {
       messages.finalize(text);
     },
-    // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
+    // Reasoning is COLLAPSED to a one-line marker instead of
     // dumping the whole chain-of-thought; `line count` hints at its length.
     //
     // flow 268 T17 (AC16): built from `onReasoningEnd`, not the older
@@ -1548,7 +1547,7 @@ export function isUserPromptApprovalCard(tool: string): boolean {
   return tool === "user_prompt";
 }
 
-/** Outcomes of the interactive shell_exec approval picker (OpenCode-style). */
+/** Outcomes of the interactive shell_exec approval picker. */
 export type ShellApprovalChoice = "once" | "always-exact" | "always-prefix" | "deny";
 
 /** Outcomes of the wiki-enrich pre-router picker. */
@@ -3249,7 +3248,7 @@ export function selectProviderModelInTui(
             process.env[envKey] = kr.value;
             // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
             noteSavedCredentialEnv([envKey]);
-            saveApiKey(envKey, kr.value, options.configDir); // persist (0600), opencode-style
+            saveApiKey(envKey, kr.value, options.configDir); // persist (0600)
           }
           // kind === "skip" → proceed without a key (curated fallback models)
           return "ok";
@@ -3969,7 +3968,7 @@ export async function launchTuiAgentShell(opts: {
       r.destroy();
       return true; // could not select; treat as a clean exit (do not fall back)
     }
-    // Persist the chosen provider/model (opencode-style) so the next launch reuses it.
+    // Persist the chosen provider/model so the next launch reuses it.
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Flow 303 (AC14): from here until `createShellChrome` paints the header,
     // transcript and focused composer below, the renderer's root would

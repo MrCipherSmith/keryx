@@ -83,8 +83,8 @@ Score `keryx shell` on agentic tasks:
 - **False-premise / bullshit-resistance:** prompts that are plausible-sounding
   nonsense (reified metaphor, temporal category error, misapplied mechanism, wrong
   unit of analysis); the correct outcome is to identify and reject them. Honest
-  rejection scores `correctness: 1`; engaging scores 0. May reuse the external
-  [BullshitBench](https://github.com/petergpt/bullshit-benchmark) dataset pinned to a
+  rejection scores `correctness: 1`; engaging scores 0. May reuse an external
+  false-premise benchmark dataset pinned to a
   commit, graded by the judge panel. See
   [metrics-and-validation](metrics-and-validation.md#false-premise-resistance).
 

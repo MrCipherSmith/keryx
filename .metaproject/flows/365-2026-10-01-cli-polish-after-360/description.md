@@ -7,7 +7,7 @@ verifying and reviewing flow 360.
 ## Problem
 
 1. `reviewer-skill-creator`'s frontmatter carries a routing trigger that names one overlay
-   ("import vantage reviewers"). Overlay names are not a Keryx concept.
+   ("import acme reviewers"). Overlay names are not a Keryx concept.
 2. `keryx skills install --with <module-id>` for a module outside the profile's closure exits 0 and changes
    nothing; the dry-run `Apply this plan` hint drops `--with`, `--without` and `--include-deprecated`.
 3. `keryx skills update` prints the import renderer's `# skills import` / `would import` headings and none of

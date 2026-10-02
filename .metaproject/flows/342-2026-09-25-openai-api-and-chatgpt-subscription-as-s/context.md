@@ -1,7 +1,7 @@
 # Context
 Version: 0.1.0
 
-Root: /Users/Goodea/goodea/keryx-openai-subscription
+Root: ~/goodea/keryx-openai-subscription
 Branch: codex/openai-subscription
 Base: main at 0a5d23eb0
 

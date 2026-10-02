@@ -11,7 +11,7 @@
 - 2026-09-28T11:57:39.607Z - task-done: T2: Implement per plan
 - 2026-09-28T11:57:39.750Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-28T11:57:39.894Z - task-done: T4: Self-review and prepare draft PR
-- 2026-09-28T12:17:01.424Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar3
+- 2026-09-28T12:17:01.424Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-ar3
 - 2026-09-28T12:20:19.243Z - ac-updated: same format defect as flow 355: '- ACn (ref):' reformatted to '- ACn: (ref)', wording unchanged
 - 2026-09-28T13:31:31.662Z - task-done: T5: Cycles, retryableFor, orphans (AC1-AC3)
 - 2026-09-28T13:31:31.980Z - task-done: T6: Security scan coverage, module data dirs, worktree prune, doctor follow-ups (AC4-AC6)

@@ -199,6 +199,6 @@ Report the defect fixed only when all of these hold:
   the evidence and its class, the surviving hypotheses with their killing
   observations, and the instrumentation that would settle it.
 
-Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
-(MIT) is why this set carries a debugging skill at all; the step order, the
+Credit: an MIT-licensed skills library (see THIRD_PARTY_NOTICES.md) is why
+this set carries a debugging skill at all; the step order, the
 evidence classes and the non-reproduction protocol were written here, not taken.

@@ -1,56 +1,52 @@
 # Documentation
 
-This directory separates documentation by purpose so current behavior, product
-intent, implementation plans, and release evidence do not get mixed together.
+This directory holds two kinds of material, kept apart on purpose: the user
+documentation that is published as a site, and the project records that explain
+how and why Keryx was built.
 
-## Current behavior
+## User documentation
 
-- [Developer documentation](docs/README.md) — entry point for setup,
-  architecture, modules, CLI behavior, and workspace lifecycle.
-- [Complete setup and agent workflows](docs/complete-setup-and-agent-workflows.md)
-  — global installation, project configuration, command reference, scripts, and
-  copy-ready agent prompts.
-- [Agent installation playbook](docs/agent-installation-playbook.md) — autonomous
-  Gherkin scenarios for complete setup, validation, repair, and handoff.
-- [Documentation index](docs/index.md) — compact navigation for the generated
-  current-behavior reference.
-- [OpenAI API and ChatGPT subscriptions](docs/cli-reference.md#openai-api-and-chatgpt-subscriptions)
-  — separate providers, browser-completed device login, and connection checks.
+The published site is at <https://mrciphersmith.github.io/keryx/>. Its source is
+in this repository:
 
-## Product intent
+- [`docs/`](docs/index.md) — every page in the site navigation: getting started,
+  guides, module pages, concepts and the reference. Start at
+  [`docs/index.md`](docs/index.md).
+- [`examples/`](examples/review-bot.yml) — example configuration the guides refer
+  to.
+- [`assets/`](assets/keryx-logo.png) — images used by the README and the site.
+- [`integrations/`](integrations/harness-capability-matrix.json) — the
+  capability matrix of supported agent harnesses, checked for drift in CI.
 
-- [Requirements roadmap](requirements/roadmap.md) — requirements packages and
-  their verified implementation state.
-- [Managed Review Feedback Loop](requirements/managed-review-feedback-loop/README.md)
-  — requirements and contracts for managed review packages.
-- [Keryx Memory Reliability](requirements/keryx-memory-reliability/README.md)
-  — corrective requirements and implementation tracking for side-effect-free
-  recall, accepted-only agent influence, durable lifecycle, and generated data.
+## Project records
 
-## Plans and reports
+These are history and evidence. They are kept where they are, are not part of
+the site, and describe intent or measurements at a date, so they can differ from
+shipped behaviour. For what Keryx does today, use the site.
 
-- [Shared Agent Context Improvements Program](requirements/shared-agent-context-improvements-program/README.md)
-  — dependency-ordered implementation waves for twelve SAC improvement
-  packages, with copy-ready phase prompts, evidence gates, rollback, and a
-  live progress/statistics dashboard.
-- [Keryx Improvements 1 — SAC, memory, and orchestration analysis](analysis/keryx-improvements-1/2026-08-14/report/en/report.md)
-  — integrated audit of Shared Agent Context and its Context Operations, Flow,
-  Harness/session, MCP, Security, knowledge-owner, worktree, and policy seams;
-  includes twelve independently deliverable future requirement packages.
-- [Implementation plans](plans/) — bounded plans that may become cleanup
-  candidates after their acceptance criteria are implemented and verified.
-- [Release readiness — 2026-07-10](report/release-readiness-2026-07-10/release-readiness.md)
-  — verification results, release blockers, and the prioritized cleanup plan.
-- [Implementation spec](report/release-readiness-2026-07-10/implementation-spec.md)
-  — approved scope and acceptance criteria for this documentation pass.
+| Directory | What it holds | Status |
+| --- | --- | --- |
+| [`requirements/`](requirements/roadmap.md) | Per-feature requirement packages, the requirements roadmap and the [backlog](requirements/backlog.md) | Historical intent; may differ from shipped behaviour |
+| `decisions/` | Harness decision records | Accepted decisions |
+| `analysis/` | Audits and analyses | Point in time |
+| `plans/` | Implementation and announcement plans | Point in time; may be stale |
+| `report/` | Release-readiness and benchmark reports | Point in time |
+| `reviews/` | Review fix plans | Point in time |
+| `verification/` | Verification evidence and runbooks | Point in time |
+| `skills/` | Log of rejected skill changes | Log |
+
+The direction of the project is in [`ROADMAP.md`](../ROADMAP.md); the shape of
+the code is in [`ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ## Documentation policy
 
-- Repository documentation is English-only.
-- `docs/docs/` describes current behavior and must be verified against source or
-  live CLI help.
-- `docs/requirements/` describes intended behavior and must label implementation
-  status explicitly.
-- Generated `.metaproject` artifacts are refreshed through the project CLI; raw
-  and reproducible outputs remain ignored according to the managed `.gitignore`
-  policy.
+- English is canonical. [`README.ru.md`](../README.ru.md) is a maintained
+  translation of the README, not a second source of truth.
+- `docs/docs/` describes shipped behaviour and is checked against the code and
+  the live CLI help. Tests compare the CLI reference with the command registry.
+- The records above describe intent or evidence at a date and say so.
+- Pages for users do not carry internal tracking identifiers.
+- Generated `.metaproject/` artifacts are refreshed through the CLI; raw and
+  reproducible output stays ignored according to the managed `.gitignore`.
+- Build the site locally with `pip install -r requirements-docs.txt` and
+  `mkdocs serve`; see [CONTRIBUTING.md](../CONTRIBUTING.md#documentation).

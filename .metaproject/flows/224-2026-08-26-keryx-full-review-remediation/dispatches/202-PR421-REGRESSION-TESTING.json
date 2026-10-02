@@ -19,12 +19,12 @@
     {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/full-suite-baseline-comparison.md", "kind": "report", "exists": true}
   ],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-regression/SKILL.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-regression/SKILL.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-testing-practices/SKILL.md"
   ],
   "constraints": [
-    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, or command.",
+    "Use exact worktree root ~/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, or command.",
     "Read-only: do not modify files, flow state, commits, PR, or review package.",
     "Review origin/main...a7f3961f49bf5a8b4d93903579eab18b67527323; do not re-report pre-existing baseline failures unless worsened by the diff.",
     "Use gdgraph first, gdwiki where relevant, gdctx for output, and keryx ctx rg for text search."

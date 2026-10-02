@@ -74,7 +74,7 @@ Verified from OpenTUI docs/repo:
 - The native core is Zig-compiled; the build "creates platform-specific libraries
   automatically loaded by the TypeScript layer" — prebuilt binaries via npm, so end
   users should not need Zig.
-- Proven in a Bun coding-agent TUI (`superagent-ai/grok-cli`).
+- Proven in another Bun coding-agent TUI.
 
 `(SPIKE)` items — **resolved** by the flow-059 Phase 0 spike (GO verdict; see
 ADR-0005). Answers as shipped:

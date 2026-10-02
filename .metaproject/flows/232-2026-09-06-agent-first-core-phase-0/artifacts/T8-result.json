@@ -24,49 +24,49 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-implementation-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-implementation-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Pre-code implementation contract for independent invocation counting, script corrections, and offline verification.",
       "hash": "512ea425f933b8a817f8294efb1f2f517fe0e9c9a5e8cb8b5375f6951e5c6011"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Change report with behavior, exact commands, immutable logs, hashes, full-suite caveat, and routing audit.",
       "hash": "d20f966e90cf530b68a5c70a10a3b2758901be9bc1e5c8c2450830738aacc02f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+      "path": "~/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Offline actual-invocation budget acceptance and edge-case tests.",
       "hash": "c25040491fb4726a5d5d1e17a5f95150e0f86043a16809bbe929db5f163c6553"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
+      "path": "~/goodea/keryx/scripts/stress/keryx-shell-stress.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Offline temporary stress report fixture.",
       "hash": "8b4d37036e73ae7f1f0030cbbcc05085e0312be8fdeee7e4a16da71636747910"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.test.ts",
+      "path": "~/goodea/keryx/scripts/benchmark/run-containment.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Pure containment listener-port resolution tests.",
       "hash": "ddac6138ae7e4c3cbc8a2ea04c7f96d6b84d18596a6618603159320e244d"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/scripts/typecheck.test.ts",
+      "path": "~/goodea/keryx/scripts/typecheck.test.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Scripts target coverage/cleanliness and injected strict-error rejection tests.",
       "hash": "3d1cf8d3648b4e2c0a2f5c5cccc4cb5dfc0aa190c9a30396be4ede3ff5965b03"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-13-11-373Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T11-13-11-373Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Changed-related strict test run: 604 passed, 0 failed.",

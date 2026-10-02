@@ -24,46 +24,46 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Full Stage 1 review: scope hashes, severity counts, per-criterion verdict table, 7 findings with class_scope, confirmed clean areas, evidence table with raw log SHA-256, routing audit, keryx:findings JSON block."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Probe P1-P6: recursion/cycle, external+unreadable leak canaries, --max-files/--max-bytes exhaustion, clean+incomplete, flag behaviour, single-file target. Drives securityCommand with --json on mkdtemp fixtures."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Probe of runGate/runReport over 13 latest.json artifact states, plus an end-to-end scan(incomplete)->runGate control and the non-recursive directory scan case."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw scan-probe output.",
       "hash": "687f8e8cd335cdcd892640cd375c11fa5f4bad714e31bc5d0e0be69392aefa83"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Raw gate-probe output.",
       "hash": "c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-15-07-546Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-15-07-546Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "bun test src/commands/security-recursive-scan.test.ts -> 3 pass / 0 fail / 18 expect() calls.",
       "hash": "396272a8f0c0cad7be8a151225a6c21c3211d249329a4d8bc9e23a1ce051457f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-56-413Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-56-413Z_run.log",
       "kind": "context",
       "exists": true,
       "summary": "Extracted gate-probe SUMMARY, E2E control and non-recursive case.",
@@ -72,19 +72,19 @@
   ],
   "changed_files": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
       "change": "added (review artifact)"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json",
       "change": "added (subagent-result artifact)"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
       "change": "added (probe script)"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
       "change": "added (probe script)"
     }
   ],

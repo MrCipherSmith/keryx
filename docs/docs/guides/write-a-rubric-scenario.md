@@ -4,11 +4,11 @@ A stack-pack skill's behavioral evals used to grade an answer by string
 matching — `contains`/`regex`/`not-contains` against the answer text. That
 graded wording, not behavior: an answer that correctly warned against
 `@ts-ignore` failed a `not-contains "@ts-ignore"` check for saying the token
-at all, alongside an answer that actually used it. Flow 316 replaced that for
-behavior scenarios with a rubric graded by a separate LLM judge call. This
+at all, alongside an answer that actually used it. Behavior scenarios are now
+graded by a rubric that a separate LLM judge call applies. This
 guide covers how to write one.
 
-## Exclusion clauses in a `description`/`triggers` are safe to write (flow 334)
+## Exclusion clauses in a `description`/`triggers` are safe to write
 
 This section is unrelated to judge rubrics above — it is about the
 SEPARATE, purely lexical trigger scorer (`src/gdskills/governance/scout.ts`:
@@ -22,14 +22,14 @@ own-trigger-routes-back check, and `bundle/external.ts`'s vetting of an
 external skill import candidate (which scores the candidate's own
 `name + description` the same way).
 
-Before flow 334, that scorer was a plain bag-of-words/IDF match with no
+Previously the trigger scorer was a plain bag-of-words/IDF match with no
 negation handling: text inside a skill's own exclusion clause — "Use when X.
 **Not for** Y (use \`other-skill\` instead)." — counted Y's words as ordinary
 POSITIVE evidence for the skill, exactly as if the description had claimed
 them. Authors were working around this by stripping words out of
 descriptions and stuffing eval prompts with jargon instead of writing the
-clause the convention already recommends. Concrete measured case: before the
-fix, `ts-js-node/nodejs-implementation`'s description — "... Not for UI
+clause the convention already recommends. Concrete measured case: before
+exclusion stripping, `ts-js-node/nodejs-implementation`'s description — "... Not for UI
 markup/rendering code (use the matching UI framework pack) or writing/fixing
 tests (use nodejs-testing)." — scored 0.682 against the query "write vitest
 tests for this service", purely from "writing"/"tests" sitting inside its own
@@ -53,7 +53,7 @@ substitute for reading it):
   or apply fixes.` Broad on purpose (any `does not`, not just a scope
   disclaimer), so an ordinary capability statement using that phrase is also
   affected; write around it if that costs you description-support for a
-  word you need (see the "Does not" tradeoff noted in the flow 334 journal).
+  word you need (this is a deliberate tradeoff of the broad `does not` rule).
 - A sentence that OPENS with `never`/`Never` — e.g. `Never run this against
   a database migration.` (a mid-sentence `never` in otherwise-ordinary prose
   — "a fix that never widens beyond the failure" — is deliberately left
@@ -127,15 +127,15 @@ A judge expectation carries no `value` — `rubric`/`pass_criteria`/
 "anti_patterns": ["@ts-ignore", "as any"]
 ```
 
-`vague` and `subtle_wrong` (fix 1 / R1-4, R1-11) are required alongside
+`vague` and `subtle_wrong` are required alongside
 `known_right`/`known_wrong` — all four must be non-empty and pairwise
 different:
 
 - **`vague`** — a plausible, generic answer of 1-3 sentences that points in
   the right direction ("fix the type instead of hiding the error", "add the
   missing dependency") but gives no concrete fix. Must FAIL. This is the
-  leniency class review round 1 on PR #698 found the live judge passing
-  before this fix (R1-4): a one-sentence paraphrase of the rubric's own
+  leniency class a review found the live judge passing before the
+  concreteness rule: a one-sentence paraphrase of the rubric's own
   direction, with nothing concrete shown, cleared some scenarios' judge
   calls.
 - **`subtle_wrong`** — a reasonable-sounding, well-written answer that still
@@ -195,7 +195,7 @@ deterministic expectation is true AND the judge verdict is `pass`.
   one as something a grader can check against the answer's actual content
   ("names X as the first step", "wraps the error with %w"), not a
   restatement of the rubric.
-- **The concreteness rule (fix 1 / R1-4).** A pass criterion holds only when
+- **The concreteness rule.** A pass criterion holds only when
   it is *concretely* present in the answer — the specific change, code, or
   step is actually shown or named, not merely gestured at or promised. An
   answer that only names the right direction ("fix the type instead of
@@ -240,7 +240,7 @@ answer that solves the task without naming that exact token.
 
 **Never use `not-contains` on a judge scenario.** Integrity rule I8 (below)
 refuses it outright, and it is exactly the check that produced the
-mis-specified batch-1 graders flow 316 replaced: a `not-contains
+mis-specified early graders the judge replaced: a `not-contains
 "@ts-ignore"` check fails a correct answer that warns against `@ts-ignore`
 just as readily as it fails one that uses it — the token's mere presence
 proves nothing about which the answer actually did. A judge scenario's
@@ -266,7 +266,7 @@ below). They drive both the anti-gaming harness and these integrity rules:
   satisfy I6/I7 by accident (it will appear almost anywhere). Name the
   specific form instead: `` `any` `` (backtick-quoted) or `as any` reads as
   a real anti-pattern token; a bare `any` does not.
-- **I7c (fix 1 / R1-7).** Every `anti_patterns` token also appears
+- **I7c.** Every `anti_patterns` token also appears
   (case-insensitive) in the scenario's own judge expectation — its `rubric`
   or a `fail_criteria` entry — not just in `known_wrong` or `SKILL.md` prose.
   `anti_patterns` is authoring metadata for I6/I7; without I7c a token could
@@ -286,8 +286,8 @@ scenario above) can omit it.
 ## The anti-gaming requirement
 
 Every judge scenario must be proven hard to game against eight canned
-answers (`antiGamingAnswers`, `src/gdskills/governance/judge.ts`; fix 1 /
-R1-4, R1-11 widened this from six kinds to eight):
+answers (`antiGamingAnswers`, `src/gdskills/governance/judge.ts`; the
+set was widened from six kinds to eight):
 
 | Kind | Built from | Must grade |
 |---|---|---|
@@ -309,9 +309,9 @@ merits — the judge has to resist the added attack text specifically.
 `vague` and `subtle-wrong` prove something different: not resistance to an
 attack, but that the judge actually enforces the concreteness rule and
 catches a realistic failure mode, rather than passing anything that gestures
-in the right direction or sounds confident. Review round 1 on PR #698 found
-the live judge passing some `vague` answers before this fix — see the
-concreteness rule above.
+in the right direction or sounds confident. A review found the live judge
+passing some `vague` answers before the concreteness rule existed. See that
+rule above.
 
 ### Recording the calibration
 
@@ -356,21 +356,20 @@ repository can compute a `judgeRequestDigest` and author the expected
 samples without ever calling a judge. Treat it like any other committed
 artifact whose truth depends on the process that produced it: the real
 control is reviewing the recording's diff in the pull request alongside the
-scenario it backs, not the recording's mere presence. See the gate's own
-threat-model note in `docs/requirements/keryx-agent-platform-expansion/
-workstreams/W1-stack-catalog.md` for the same point applied to `eval`'s
-trial records.
+scenario it backs, not the recording's mere presence. The gate's own
+threat-model note, in the stack catalog requirements under
+`docs/requirements/`, makes the same point for `eval`'s trial records.
 
 ## The opt-in live check
 
 `src/commands/stack-pack-judge-calibration.live.test.ts` runs the same
-anti-gaming set against a real DeepSeek call, but only when
+anti-gaming set against a real judge-model call, but only when
 `KERYX_LIVE_JUDGE=1` is set — it costs real tokens and money, so it never
 runs by default in CI or locally. Every other integrity check, including the
 AG rule above, runs against the **recorded** verdicts and needs no network
 access or `KERYX_LIVE_JUDGE`.
 
-Flow 317 added a related but distinct live check: `keryx skills eval
+There is also a related but distinct live check: `keryx skills eval
 --reverify <pack-dir> [--sample N] --judge <provider>[:<model>]` re-judges a
 random sample of already-recorded TRIAL outputs (not the canned anti-gaming
 answers `judge-check` uses) against the current live judge, and reports
@@ -403,12 +402,12 @@ on every scenario in the shipped tree:
   scenario's own `calibration.known_wrong`.
 - **I7b.** every `anti_patterns` token is at least 4 characters long, or
   contains a non-letter character.
-- **I7c (fix 1 / R1-7).** every `anti_patterns` token appears
+- **I7c.** every `anti_patterns` token appears
   (case-insensitive) in the scenario's own judge expectation — its `rubric`
   or a `fail_criteria` entry.
 - **I8.** a judge scenario carries no `not-contains` expectation.
 - **I9.** every stack-pack behavior scenario is a judge scenario.
-- **I10 (fix 1 / R1-6).** no `fail_criteria` entry is a negation-only note
+- **I10.** no `fail_criteria` entry is a negation-only note
   (for example, a standalone "Mentioning X only to warn against it is not a
   failure.") — that sentence must be folded into the fail criterion it
   qualifies, never listed as its own criterion.
@@ -428,16 +427,15 @@ report clears `checkSkillReportForPackGate`
 (`src/gdskills/governance/eval.ts`), which requires, on top of the integrity
 checks above:
 
-- `strictness: "high"`, `trials >= PACK_MIN_TRIALS` (`10` as of flow 317 —
+- `strictness: "high"`, `trials >= PACK_MIN_TRIALS` (`10`,
   raised from `5`: several scenarios in the first honest runs sat exactly on
   the `PACK_BEHAVIOR_PASS_FLOOR`, one flipped trial away from failing either
   direction; doubling the trial count halves that single-flip swing), `scope: "bundled"`;
 - `(runner, model)` and, when the report has any judge scenario,
   `(judge, judgeModel)` both in `STACK_PACK_GATE_POLICY`
-  (`src/gdskills/governance/gate-policy.ts`) — pinned to DeepSeek
-  `deepseek-chat` for both roles;
-- `runnerPromptVersion` equal to the current `RUNNER_PROMPT_VERSION` (flow
-  317: every `--runner` call now appends a uniform "answer in text, no
+  (`src/gdskills/governance/gate-policy.ts`) — pinned to one named
+  model for both roles;
+- `runnerPromptVersion` equal to the current `RUNNER_PROMPT_VERSION` (every `--runner` call appends a uniform "answer in text, no
   tools" system note, since the single-turn runner has no tool wiring at all
   and a model that tries one anyway produces a non-answer);
 - `judgePromptVersion` equal to the current `JUDGE_PROMPT_VERSION`;
@@ -460,11 +458,10 @@ the trial outputs, the judge's verdicts, the runner/judge labels, and every
 AG recording described above are self-declared by whoever ran the eval, and
 nothing here re-runs the judge model against them. The actual control for
 provenance is review of the committed `eval.json` / recording diff in the
-pull request, the same way any other committed artifact is reviewed. See
-`docs/requirements/keryx-agent-platform-expansion/workstreams/
-W1-stack-catalog.md`, "Threat model: what the gate proves, and what it does
-not (fix 1, R1-2)", for the full statement and the planned follow-up (FU6, a
-live re-judge sampler).
+pull request, the same way any other committed artifact is reviewed. The
+"Threat model: what the gate proves, and what it does not" section of the
+stack catalog requirements under `docs/requirements/` has the full statement
+and the planned follow-up, a live re-judge sampler.
 
 ## Never tune a SKILL.md to pass
 
@@ -472,18 +469,16 @@ If a scenario's known-right answer fails under the judge, or a real gate run
 scores lower than expected, the fix is the rubric, the criteria, or the
 calibration — never `SKILL.md`. Editing a skill's own instructions to make
 an eval pass after seeing the run is tuning the skill to the grader, the
-exact failure mode flow 314 and flow 316 both exist to close; it also
+exact failure mode the judge exists to close; it also
 invalidates the eval as a signal that the skill actually behaves correctly
-for an unseen prompt. When flow 316's honest gate run found `python` and
-`go` scenarios that were themselves under-specified or too narrow (see
-`docs/requirements/keryx-agent-platform-expansion/workstreams/
-W1-stack-catalog.md`, "Implementation notes: grader reliability
-(flow 316)"), the fix was recorded as follow-up work on the grader, not
+for an unseen prompt. When the first honest gate run found `python` and
+`go` scenarios that were themselves under-specified or too narrow (the
+"grader reliability" notes in the same requirements record this), the fix was recorded as follow-up work on the grader, not
 applied mid-run — and no `SKILL.md` was touched.
 
-### The lesson from this flow: a prompt with no code needs a rubric that fits
+### The lesson: a prompt with no code needs a rubric that fits
 
-Two scenarios failed for the same underlying reason before fix 1:
+Two scenarios failed for the same underlying reason under early graders:
 `python-build-fix`'s `mypy-error-no-blanket-suppress` (prompt: "mypy reports a
 type error on a function I touched. Fix it.") and, under the hardened judge,
 `react-build-fix`'s `no-disable-hooks-lint` (prompt carries no code either).

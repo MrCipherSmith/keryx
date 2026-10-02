@@ -53,7 +53,7 @@ evidence, not only with code.
 - [ ] Add graph-proximity rerank where the gdgraph artifacts are valid.
 - [ ] Implement the schema-defined adapter SPI, starting with a read-only
   external adapter fixture rather than a production network integration.
-- [ ] Consider Graphiti, Cognee and OpenViking only after the Wave 3 evals.
+- [ ] Consider external temporal-graph and memory engines only after the Wave 3 evals.
 
 ## Dependencies and release gates
 

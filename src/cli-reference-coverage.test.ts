@@ -1,6 +1,17 @@
 import { readdir, readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { Glob } from "bun";
 import { expect, test } from "bun:test";
-import { CLI_ROUTES, USAGE_BODY } from "./cli";
+import { orphans, parseMkdocs } from "../scripts/check-docs-nav";
+import {
+  CLI_ROUTES,
+  USAGE_BODY,
+  groupsWithKnownSubcommands,
+  knownSubcommandsFor,
+  printCommandHelp,
+  shouldInterceptHelp,
+} from "./cli";
+import { MODULE_COMMANDS } from "./commands/module-commands";
 import { skillsCommand } from "./commands/skills";
 import { memoryCommand } from "./commands/memory";
 import { securityCommand } from "./commands/security";
@@ -18,7 +29,6 @@ import { securityCommand } from "./commands/security";
 // verb added without a section fails here rather than shipping.
 
 const CLI_REFERENCE = new URL("../docs/docs/cli-reference.md", import.meta.url);
-const DOCS_INDEX = new URL("../docs/docs/index.md", import.meta.url);
 const MKDOCS = new URL("../mkdocs.yml", import.meta.url);
 
 // Verbs that are deliberately not their own section, each with the reason.
@@ -159,6 +169,139 @@ test("every routed subcommand is named in its verb's reference section", async (
   expect(missing.sort()).toEqual([]);
 });
 
+// Subcommand-level coverage, derived from the vocabulary the dispatcher itself
+// validates against (`src/lib/group-subcommands.ts`, plus `keryx mcp`'s set
+// assembled in `cli-registry.ts`) and from `workspace`'s manifest list in
+// `module-commands.ts`. The test above scrapes handler source for `=== "x"`
+// literals and misses every group that dispatches through a table; these read
+// the same table `keryx <group> <typo>` is checked against, so a subcommand
+// the CLI accepts cannot be missing from the reference or from the help.
+function subcommandVocabulary(): Map<string, string[]> {
+  const vocabulary = new Map<string, string[]>();
+  for (const group of groupsWithKnownSubcommands()) {
+    // `session` is the singular alias of `sessions`: same handler, same
+    // vocabulary, covered under `sessions`.
+    if (group === "session") continue;
+    vocabulary.set(
+      group,
+      (knownSubcommandsFor(group) ?? []).filter((name) => name !== "help"),
+    );
+  }
+  vocabulary.set("workspace", [...new Set([...(vocabulary.get("workspace") ?? []), ...MODULE_COMMANDS.sac])]);
+  return vocabulary;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** `<group> <sub>` as whole words: `flow check` is not satisfied by `flow check-ac`. */
+function namesSubcommand(text: string, group: string, sub: string): boolean {
+  return new RegExp(`(?<![\\w-])${escapeRegExp(group)} ${escapeRegExp(sub)}(?![\\w-])`).test(text);
+}
+
+/** Whole-word presence of `sub` (help text writes `remove|enable|disable`, `enable|on`). */
+function mentionsWord(text: string, sub: string): boolean {
+  return new RegExp(`(?<![\\w-])${escapeRegExp(sub)}(?![\\w-])`).test(text);
+}
+
+/** Every `## <group>…` section of the reference (`## mcp` and `## mcp (consumer) …`), joined. */
+function groupSections(reference: string, group: string): string {
+  const out: string[] = [];
+  let inFence = false;
+  let inGroup = false;
+  for (const line of reference.split("\n")) {
+    if (line.startsWith("```")) inFence = !inFence;
+    if (!inFence && line.startsWith("## ")) {
+      inGroup = line.slice(3).trim().split(/\s+/)[0]?.replace(/`/g, "") === group;
+    }
+    if (inGroup) out.push(line);
+  }
+  return out.join("\n");
+}
+
+test("every dispatched subcommand is named as `<group> <subcommand>` in its reference section", async () => {
+  const reference = await readFile(CLI_REFERENCE, "utf8");
+  const vocabulary = subcommandVocabulary();
+  // Scrape guard: an emptied table would make the loop below check nothing.
+  expect(vocabulary.size).toBeGreaterThan(30);
+
+  const missing: string[] = [];
+  for (const [group, subs] of vocabulary) {
+    const section = groupSections(reference, group);
+    if (section.length === 0) {
+      missing.push(`${group} (no section)`);
+      continue;
+    }
+    for (const sub of subs) {
+      if (!namesSubcommand(section, group, sub)) missing.push(`${group} ${sub}`);
+    }
+  }
+  expect(missing.sort()).toEqual([]);
+});
+
+async function captureAll(run: () => Promise<void> | void): Promise<string> {
+  const lines: string[] = [];
+  const log = console.log;
+  const error = console.error;
+  const sink = (...args: unknown[]): void => {
+    lines.push(args.map((a) => String(a)).join(" "));
+  };
+  console.log = sink;
+  console.error = sink;
+  try {
+    await run();
+  } finally {
+    console.log = log;
+    console.error = error;
+  }
+  return lines.join("\n");
+}
+
+test("`keryx <group> --help` lists every subcommand the group dispatches", async () => {
+  const missing: string[] = [];
+  for (const [group, subs] of subcommandVocabulary()) {
+    const route = CLI_ROUTES[group];
+    expect(route).toBeDefined();
+    // Exactly what `main()` does for `keryx <group> --help`: an intercepted
+    // group gets a help printer, never its route; the others are the verbs
+    // whose own bare `--help` branch is a pure print (`HELP_SAFE_VERBS`).
+    const output = await captureAll(async () => {
+      if (shouldInterceptHelp(group, ["--help"])) await printCommandHelp(group, ["--help"]);
+      else await route?.(["--help"]);
+    });
+    for (const sub of subs) {
+      if (!mentionsWord(output, sub)) missing.push(`${group} ${sub}`);
+    }
+  }
+  expect(missing.sort()).toEqual([]);
+});
+
+test("`keryx --help` lists every subcommand of every group", () => {
+  const start = USAGE_BODY.indexOf("\nSubcommands");
+  expect(start).toBeGreaterThan(0);
+  // Rows are `  <group>  sub sub …`, wrapped onto deeper-indented lines.
+  const rows = new Map<string, string>();
+  let current: string | undefined;
+  for (const line of USAGE_BODY.slice(start + 1).split("\n").slice(1)) {
+    const row = /^ {2}([a-z][a-z-]*) +(.*)$/.exec(line);
+    if (row?.[1] !== undefined) {
+      current = row[1];
+      rows.set(current, row[2] ?? "");
+    } else if (current !== undefined && /^ {4,}\S/.test(line)) {
+      rows.set(current, `${rows.get(current) ?? ""} ${line.trim()}`);
+    }
+  }
+  const missing: string[] = [];
+  for (const [group, subs] of subcommandVocabulary()) {
+    const row = rows.get(group) ?? "";
+    for (const sub of subs) {
+      if (!mentionsWord(row, sub)) missing.push(`${group} ${sub}`);
+    }
+  }
+  expect(missing.sort()).toEqual([]);
+});
+
 test("the documented-elsewhere allowance never hides a verb that has no section", async () => {
   // An allow-list is only honest while each entry is still true. `dash` and
   // `session` are excused because another section covers them — if that
@@ -293,39 +436,23 @@ test("skills eval/judge-check/stocktake --help print dedicated help and do nothi
   expect(stocktakeHelp).toContain("keryx skills stocktake");
 });
 
-test("the docs index lists exactly the guides the mkdocs nav publishes", async () => {
-  const [index, mkdocs] = await Promise.all([readFile(DOCS_INDEX, "utf8"), readFile(MKDOCS, "utf8")]);
+// The docs index is a landing page with cards and the nav is grouped, so
+// neither "the index lists exactly the nav" test applies any more. The invariant
+// that matters is the one `scripts/check-docs-nav.ts` enforces in CI: every nav
+// entry is a real page, and every page is in the nav or declared `not_in_nav` /
+// `exclude_docs`. Asserted here against the real tree so `bun test` catches it
+// before CI does.
+test("every mkdocs nav page exists and every docs page is in the nav or declared out of it", async () => {
+  const mkdocs = await readFile(MKDOCS, "utf8");
+  const cfg = parseMkdocs(mkdocs);
 
-  const navGuides = new Set(Array.from(mkdocs.matchAll(/guides\/([a-z0-9-]+\.md)/g), (m) => m[1]));
-  const indexGuides = new Set(Array.from(index.matchAll(/guides\/([a-z0-9-]+\.md)/g), (m) => m[1]));
+  // Scrape guard: a parser that silently finds nothing would pass vacuously.
+  expect(cfg.nav.size).toBeGreaterThan(30);
 
-  // Same scrape guard as above.
-  expect(navGuides.size).toBeGreaterThan(5);
+  const base = new URL(`../${cfg.docsDir}/`, import.meta.url);
+  const files = [...new Glob("**/*.md").scanSync({ cwd: fileURLToPath(base) })];
 
-  expect([...indexGuides].sort()).toEqual([...navGuides].sort());
-});
-
-// Flow 302 (AC7): the guides test above only ever covered `guides/*.md` — the
-// nine top-level pages (architecture, harness, modules, cli-reference, …)
-// were never checked against the nav at all, so one could be added to
-// `mkdocs.yml` and never linked from the index, or removed from the index
-// and left dangling in the nav, with nothing here noticing either way.
-test("the docs index lists exactly the top-level pages the mkdocs nav publishes", async () => {
-  const [index, mkdocs] = await Promise.all([readFile(DOCS_INDEX, "utf8"), readFile(MKDOCS, "utf8")]);
-
-  // Nav entries for top-level pages are indented exactly two spaces (nested
-  // "Guides:" entries are indented six); `index.md` is the current page and
-  // never links to itself, so it is excluded from the expectation.
-  const navPages = new Set(
-    Array.from(mkdocs.matchAll(/^ {2}- [^\n]*: ([a-z0-9-]+\.md)$/gm), (m) => m[1]).filter(
-      (name): name is string => name !== undefined && name !== "index.md",
-    ),
-  );
-
-  // Same scrape guard as above.
-  expect(navPages.size).toBeGreaterThan(5);
-
-  const indexPages = new Set(Array.from(index.matchAll(/\(\.\/([a-z0-9-]+\.md)\)/g), (m) => m[1]));
-
-  expect([...indexPages].sort()).toEqual([...navPages].sort());
+  expect(orphans(files, cfg)).toEqual([]);
+  expect([...cfg.nav].filter((f) => !files.includes(f))).toEqual([]);
+  expect(cfg.nav.has("index.md")).toBe(true);
 });

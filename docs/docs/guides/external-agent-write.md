@@ -11,9 +11,22 @@ These are the only write paths for an external agent that keryx applies itself.
 the [ACP client guide](acp-client.md).
 
 Everything on this page needs the external agent capability to be on, as for any
-[external child](../harness.md#external-children-a-vendor-cli-as-a-child-agent):
-`externalAgents.enabled: true` in your user config, and the agent's CLI (`claude`
-or `codex`) installed and logged in.
+[external child](../harness.md#external-children-a-vendor-cli-as-a-child-agent),
+and the agent's CLI (`claude` or `codex`) installed and logged in. Turn the
+capability on with:
+
+```bash
+keryx agents external enable
+```
+
+```text
+user config: externalAgents.enabled set to true
+no project manifest here; only the user config applies
+external agents: on
+```
+
+`keryx agents external disable` turns it off again. In the shell, the same
+switch is `/external-agents on`.
 
 ## Run it
 
@@ -55,7 +68,7 @@ just as mandatory: without it, the exec-policy rules in your own `codex`
 configuration can let shell commands run outside the sandbox (writes to `/tmp` and
 `$HOME` succeeded in the test); with it they were refused.
 
-`codex` validates its final answer against a schema through OpenAI structured
+`codex` validates its final answer against a schema through the provider's structured
 output, which accepts a narrower JSON Schema than the subagent-result contract. keryx
 therefore hands `codex` a strict copy of the contract (every property required,
 optional ones nullable, closed objects, unsupported keywords removed), then drops the
@@ -191,7 +204,7 @@ commands above; it never lands anything.
 - No write for `antigravity-cli` (`agy`). A live test showed its file-edit tool
   writes outside the working directory (to `/tmp` and into `.git/hooks`), and its
   headless shell is auto-denied only for commands, not for file edits, so keryx
-  keeps refusing `--write` for it. Write for Gemini is not planned.
+  keeps refusing `--write` for it. Write for the ACP agent is not planned.
 - No model review of the diff. The mandatory review is you, on the diff that is
   shown.
 - No auto-approve, no unattended landing, no push and no pull request from the

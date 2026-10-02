@@ -137,7 +137,7 @@ export function isBunExecPath(execPath: string): boolean {
  * Node (`keryx` run via a Node-based version manager, or a `node
  * dist/cli.js`-style invocation) would break outright. Node does not
  * auto-load a cwd `.env`/`bunfig.toml` the way a shebang-bypassing Bun
- * invocation does (see docs/docs/onboarding.md's "Environment isolation"),
+ * invocation does (see docs/docs/concepts/security-model.md's "Environment isolation"),
  * so it needs none of this in the first place — `isBunExecPath` gates the
  * insertion on the interpreter actually being Bun.
  */

@@ -26,12 +26,12 @@
     "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3",
     "disposition": {
       "state": "dismissed-incorrect",
-      "evidence": "refuted by review-verifier (execution): `bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (/home/altsay/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head."
+      "evidence": "refuted by review-verifier (execution): `bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head."
     },
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "`bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (/home/altsay/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head.",
+      "evidence": "`bun run src/cli.ts integrate cursor,claude --dry-run` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> exit 0, writes both `.cursor/mcp.json` and `.mcp.json` dry-run previews, no 'Unknown command' message. `keryx ctx rg \"integrate\" src/lib/group-subcommands.ts` shows no `integrate` row in GROUP_SUBCOMMANDS, only a comment (lines 181-182) explaining the deliberate exclusion. Fixed by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e, which removed the `integrate` row from GROUP_SUBCOMMANDS. No longer reproduces at this head.",
       "verifier": "review-verifier"
     }
   },
@@ -55,12 +55,12 @@
     "global_id": "2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3",
     "disposition": {
       "state": "dismissed-incorrect",
-      "evidence": "refuted by review-verifier (execution): `bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (/home/altsay/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head."
+      "evidence": "refuted by review-verifier (execution): `bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head."
     },
     "verification": {
       "verdict": "refuted",
       "method": "execution",
-      "evidence": "`bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (/home/altsay/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head.",
+      "evidence": "`bun test src/cli.test.ts` at cbbbe29f36fac4a3305ce1b5548bfa8ce3063079 (~/keryx, tree identical to origin/main 503c20c6) -> 68 pass, 0 fail. `keryx ctx rg \"comma-joined\" src/cli.test.ts` confirms the positive guard test named by T3's suggested_fix exists at src/cli.test.ts:337 -- \"a group whose first positional is a comma-joined list is not in the map and is never refused\" -- exercising integrate's comma-joined form. Added by commit 861be8c20e366df1c1a6eea22728ab2e0d2a886e. No longer reproduces at this head.",
       "verifier": "review-verifier"
     }
   }

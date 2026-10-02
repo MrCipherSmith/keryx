@@ -30,17 +30,49 @@ body:
   - type: input
     id: version
     attributes:
-      label: keryx version or commit
-      placeholder: "keryx --version, or git commit SHA"
+      label: keryx version
+      description: Output of `keryx --version`, or the commit SHA if you run from source.
+      placeholder: "0.3.46"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Install method
+      options:
+        - npm (npm install -g @mrciphersmith/keryx)
+        - Standalone binary
+        - Install script (managed clone in ~/.keryx)
+        - Project clone (.metaproject/runtime/keryx)
+        - From source (bun ./src/cli.ts)
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15 arm64, Ubuntu 24.04 x64"
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Model provider and model
+      description: Only if the problem involves `keryx shell`, `keryx harness`, or another model command. Write "none" otherwise.
+      placeholder: "ollama / llama3.1"
+  - type: textarea
+    id: doctor
+    attributes:
+      label: keryx doctor output
+      description: Run `keryx doctor` (or `keryx doctor --json`) in the affected project and paste the result. Remove anything private first.
+      render: text
+    validations:
+      required: true
   - type: textarea
     id: environment
     attributes:
-      label: Environment
-      description: OS, Bun version, package manager, project framework, and relevant CI/runtime details.
-      placeholder: |
-        macOS 15
-        Bun 1.3.x
-        React/Vite frontend
+      label: Other environment details
+      description: Bun version if not shown by doctor, project framework, CI runner, and anything else relevant.
   - type: textarea
     id: artifacts
     attributes:

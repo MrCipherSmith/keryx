@@ -14,7 +14,7 @@ None found. The fix commit is a pure test-file rewrite (22 insertions, 26 deleti
 ### Verified clean
 
 - `bun test src/cli.test.ts` at `70538bea` — 68 pass, 0 fail, 309 expect() calls.
-- Mutation-in: re-adding `["integrate", ["cursor","claude","opencode","vscode","generic","all"]]` to `src/lib/group-subcommands.ts` and re-running the new test alone (`bun test src/cli.test.ts -t "comma-joined list is not in the map"`) fails on `expect([...groupsWithKnownSubcommands()]).not.toContain("integrate")`. Reverted; `git -C /home/altsay/keryx-w5 status --porcelain` shows only the pre-existing untracked `.metaproject/data/governance/` directory, unchanged from before the check.
+- Mutation-in: re-adding `["integrate", ["cursor","claude","opencode","vscode","generic","all"]]` to `src/lib/group-subcommands.ts` and re-running the new test alone (`bun test src/cli.test.ts -t "comma-joined list is not in the map"`) fails on `expect([...groupsWithKnownSubcommands()]).not.toContain("integrate")`. Reverted; `git -C ~/keryx-w5 status --porcelain` shows only the pre-existing untracked `.metaproject/data/governance/` directory, unchanged from before the check.
 
 ### How this review was run
 

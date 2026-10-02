@@ -1,6 +1,6 @@
 # Commands by task
 
-Every `keryx` CLI verb and every `keryx shell` command, grouped by task — the same grouping `keryx help` and the OpenTUI shell's `/help` modal use (`src/standard/help-groups.ts`, flow 303).
+Every `keryx` CLI verb and every `keryx shell` command, grouped by task — the same grouping `keryx help` and the OpenTUI shell's `/help` modal use (`src/standard/help-groups.ts`). Two aliases (`session` for `sessions`, `skill-verify-skill` for `skills verify`) and one internal helper are left out; the [CLI reference](cli-reference.md) has every subcommand and flag.
 
 Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-task.ts`, and `src/standard/commands-by-task.test.ts` fails when this page drifts from the table it is generated from.
 
@@ -55,7 +55,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 
 | CLI command | Summary |
 |---|---|
-| `keryx sessions` | List or export per-project shell sessions. |
+| `keryx sessions` | List, fork (branch), export or locate per-project shell sessions. |
 
 | Shell command | Summary |
 |---|---|
@@ -148,8 +148,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx acp` | Speak ACP v1 (newline-delimited JSON-RPC) over stdio, for an ACP client (e.g. an editor). |
-| `keryx agents` | Manage optional global agent bootstrap instructions. |
-| `keryx mcp` | Retired spelling of serve-mcp / integrate; still works, names its replacement. |
+| `keryx agents` | Agent catalog (list, show, export, verify, generate), optional global bootstrap instructions, the external-agent runtime and the agent monitor. |
+| `keryx mcp` | The MCP servers keryx connects to (list, add, trust, doctor, auth); mcp serve/install are retired spellings of serve-mcp/integrate. |
 | `keryx integrate` | Wire this project into an editor or agent as an MCP server. |
 | `keryx integrations` | Install, audit and uninstall Keryx's hooks and instructions in another coding agent (see also /integrate, unrelated). |
 | `keryx serve-mcp` | Expose Metaproject services over the Model Context Protocol (opt-in). |
@@ -182,7 +182,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx sandbox` | Report OS sandbox launcher availability and the per-capability containment matrix. |
 | `keryx modules` | View and toggle Metaproject modules (interactive). |
 | `keryx projects` | Inspect the user-global registry of initialized projects. |
-| `keryx serve` | Loopback-bound authenticated HTTP entry (off by default; read-only routes). |
+| `keryx serve` | Authenticated HTTP entry, loopback by default (off by default; read-only routes). |
 | `keryx rules` | Sync root AGENTS.md/CLAUDE.md into high-priority project rules. |
 | `keryx harness` | Run a single provider turn (harness run) and print structured events. |
 | `keryx version` | Check whether a newer npm release is available. |

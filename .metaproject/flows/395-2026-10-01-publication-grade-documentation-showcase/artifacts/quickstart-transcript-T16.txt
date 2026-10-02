@@ -1,0 +1,310 @@
+# T16 / AC7 quickstart verification transcripts
+# Part 1: README.md Quickstart block, run in <scratch>/t16-readme/start
+# Part 2: docs/docs/getting-started/quickstart.md, every bash block, run in <scratch>/t16-quickstart/start
+# 'keryx' is a wrapper: exec bun <repo>/src/cli.ts "$@". Absolute temp paths are replaced with <scratch>.
+# Interactive 'keryx shell' (no -p) is described in prose only in both documents and is not executed here.
+# The tutorial's non-interactive 'keryx shell --provider fake -p ...' IS executed (Part 2).
+
+################ Part 1 ################
+# README.md Quickstart transcript
+# date: 2026-10-01T10:16:08Z
+# keryx: 0.3.50 (source checkout, branch docs/publication-grade-docs at d90150bf, run as: bun src/cli.ts)  bun: 1.4.2  os: Darwin arm64
+# env: fresh empty start directory; HOME and XDG dirs isolated to an empty scratch dir; no provider API keys; NO_COLOR=1; stdin </dev/null
+# every command below is run verbatim, in order, in one shell session
+
+$ mkdir -p demo/src && cd demo
+[exit 0]
+
+$ printf 'export function applyDiscount(total: number, percent: number): number {\n  return Math.round(total * (100 - percent)) / 100;\n}\n' > src/price.ts
+[exit 0]
+
+$ printf 'import { applyDiscount } from "./price";\n\nexport function cartTotal(prices: number[], discount = 0): number {\n  return applyDiscount(prices.reduce((a, b) => a + b, 0), discount);\n}\n' > src/cart.ts
+[exit 0]
+
+$ printf 'import { cartTotal } from "./cart";\n\nexport const checkout = (prices: number[]) => cartTotal(prices, 10);\n' > src/checkout.ts
+[exit 0]
+
+$ git init -q && git add -A && git commit -qm "Initial commit"
+[exit 0]
+
+$ keryx init --yes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  keryx init
+  Setting up a .metaproject workspace in demo/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Created .metaproject
+  9 of 9 modules enabled
+  ✓ gdgraph (code graph, symbols, affected context)
+  ✓ gdctx (token-aware command/read output)
+  ✓ gdwiki (project knowledge base)
+  ✓ gdskills (profile: recommended)
+  ✓ health (quality scoring & gate)
+  ✓ testing (test context & intelligence)
+  ✓ memory (lessons, decisions, constraints)
+  ✓ tasks (agent-first flow lifecycle)
+  ✓ security (scanning, redaction, guardrails, audit)
+
+Agent entrypoints
+  Ignore rules: .git/info/exclude now holds keryx's managed block (38 entries); .gitignore is not modified.
+  CLAUDE.local.md: created with the keryx block (gitignored, per checkout).
+  Codex: skipped — AGENTS.md does not exist, and AGENTS.override.md is only ever generated from it. Create AGENTS.md, or set the codex entry's scope to "shared" in .metaproject/metaproject.json.
+
+Git hooks
+  ✓ gdgraph post-commit
+  ✓ gdskills post-commit
+  ✓ health post-commit
+  ✓ testing post-commit
+  · testing pre-push
+  ✓ security pre-push
+  ✓ security agent (.claude)
+  ✓ .keryx/sandbox-policy.json (sandbox policy skeleton (no secrets))
+  ✓ registered in the project registry
+
+Next steps
+  → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
+  → Generate the code graph: keryx gdgraph build.
+  → Start a managed flow: keryx flow init --title "...".
+  → API keys: keryx shell → /connect (user-global auth.json) — never put keys in .keryx/sandbox-policy.json.
+  → Open .metaproject/keryx-dashboard.html for the human dashboard.
+  → After pulling changes, run keryx update to refresh service files.
+[exit 0]
+
+$ git add -A && git commit -qm "Add keryx workspace"
+keryx post-commit: rebuilding gdgraph after a graph-relevant commit
+keryx post-commit: gdgraph rebuilt; versioned graph artifacts may now differ from the commit
+keryx post-commit: gdskills verified
+keryx post-commit: health report may be stale; run 'keryx health run --changed --since HEAD~1 --source typescript,complexity' explicitly
+keryx post-commit: dashboard/service files may be stale; run 'keryx update --skip-runtime' or 'keryx dashboard build' explicitly
+[exit 0]
+
+$ keryx doctor
+keryx doctor
+
+  ✓ version: keryx 0.3.50 is up to date
+  ✓ bun: Bun 1.4.2 (floor >=1.3.14)
+  ✓ ripgrep: rg at /opt/homebrew/bin/rg
+  ✓ sandbox: Seatbelt (sandbox-exec) available
+  ✓ providers: 1 provider(s) configured: rapid-mlx
+  ✓ mcp: 0 server(s) configured; run `keryx mcp doctor` to also check connectivity
+  ✓ integrations: no drift in any installed integration
+  ✓ standard: workspace is Metaproject Standard compliant
+  ✓ entrypoints: managed block in CLAUDE.local.md (local); hooks in .claude/settings.local.json (local)
+  ✓ worktrees: no .claude/worktrees directory
+  ✓ graph-freshness: code graph is fresh
+  ! wiki-freshness: no wiki freshness report has been produced; run `keryx wiki freshness`. This is not evidence that the wiki is fresh.
+      fix: keryx wiki freshness
+[exit 0]
+
+$ keryx gdgraph build
+gdgraph build complete: 3 nodes, 2 edges
+summary: <scratch>/t16-readme/start/demo/.metaproject/data/gdgraph/artifacts/summary.md
+[exit 0]
+
+$ keryx gdgraph affected src/price.ts
+# Affected context for src/price.ts
+
+## Dependencies
+- none
+
+## Dependents
+- src/cart.ts
+[exit 0]
+
+
+################ Part 2 ################
+# Getting started tutorial transcript (docs/docs/getting-started/quickstart.md)
+# date: 2026-10-01T10:16:08Z
+# keryx: 0.3.50 (source checkout, branch docs/publication-grade-docs at d90150bf, run as: bun src/cli.ts)  bun: 1.4.2  os: Darwin arm64
+# env: fresh empty start directory; HOME and XDG dirs isolated to an empty scratch dir; no provider API keys; NO_COLOR=1; stdin </dev/null
+# every command below is run verbatim, in order, in one shell session
+
+$ mkdir -p demo/src && cd demo
+[exit 0]
+
+$ printf 'export function applyDiscount(total: number, percent: number): number {\n  return Math.round(total * (100 - percent)) / 100;\n}\n' > src/price.ts
+[exit 0]
+
+$ printf 'import { applyDiscount } from "./price";\n\nexport function cartTotal(prices: number[], discount = 0): number {\n  return applyDiscount(prices.reduce((a, b) => a + b, 0), discount);\n}\n' > src/cart.ts
+[exit 0]
+
+$ printf 'import { cartTotal } from "./cart";\n\nexport const checkout = (prices: number[]) => cartTotal(prices, 10);\n' > src/checkout.ts
+[exit 0]
+
+$ git init -q && git add -A && git commit -qm "Initial commit"
+[exit 0]
+
+$ keryx init --yes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  keryx init
+  Setting up a .metaproject workspace in demo/
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Created .metaproject
+  9 of 9 modules enabled
+  ✓ gdgraph (code graph, symbols, affected context)
+  ✓ gdctx (token-aware command/read output)
+  ✓ gdwiki (project knowledge base)
+  ✓ gdskills (profile: recommended)
+  ✓ health (quality scoring & gate)
+  ✓ testing (test context & intelligence)
+  ✓ memory (lessons, decisions, constraints)
+  ✓ tasks (agent-first flow lifecycle)
+  ✓ security (scanning, redaction, guardrails, audit)
+
+Agent entrypoints
+  Ignore rules: .git/info/exclude now holds keryx's managed block (38 entries); .gitignore is not modified.
+  CLAUDE.local.md: created with the keryx block (gitignored, per checkout).
+  Codex: skipped — AGENTS.md does not exist, and AGENTS.override.md is only ever generated from it. Create AGENTS.md, or set the codex entry's scope to "shared" in .metaproject/metaproject.json.
+
+Git hooks
+  ✓ gdgraph post-commit
+  ✓ gdskills post-commit
+  ✓ health post-commit
+  ✓ testing post-commit
+  · testing pre-push
+  ✓ security pre-push
+  ✓ security agent (.claude)
+  ✓ .keryx/sandbox-policy.json (sandbox policy skeleton (no secrets))
+  ✓ registered in the project registry
+
+Next steps
+  → Read .metaproject/index.md first; open .metaproject/routing.md for the full module map and intent router.
+  → Generate the code graph: keryx gdgraph build.
+  → Start a managed flow: keryx flow init --title "...".
+  → API keys: keryx shell → /connect (user-global auth.json) — never put keys in .keryx/sandbox-policy.json.
+  → Open .metaproject/keryx-dashboard.html for the human dashboard.
+  → After pulling changes, run keryx update to refresh service files.
+[exit 0]
+
+$ git add -A && git commit -qm "Add keryx workspace"
+keryx post-commit: rebuilding gdgraph after a graph-relevant commit
+keryx post-commit: gdgraph rebuilt; versioned graph artifacts may now differ from the commit
+keryx post-commit: gdskills verified
+keryx post-commit: health report may be stale; run 'keryx health run --changed --since HEAD~1 --source typescript,complexity' explicitly
+keryx post-commit: dashboard/service files may be stale; run 'keryx update --skip-runtime' or 'keryx dashboard build' explicitly
+[exit 0]
+
+$ keryx doctor
+keryx doctor
+
+  ✓ version: keryx 0.3.50 is up to date
+  ✓ bun: Bun 1.4.2 (floor >=1.3.14)
+  ✓ ripgrep: rg at /opt/homebrew/bin/rg
+  ✓ sandbox: Seatbelt (sandbox-exec) available
+  ✓ providers: 1 provider(s) configured: rapid-mlx
+  ✓ mcp: 0 server(s) configured; run `keryx mcp doctor` to also check connectivity
+  ✓ integrations: no drift in any installed integration
+  ✓ standard: workspace is Metaproject Standard compliant
+  ✓ entrypoints: managed block in CLAUDE.local.md (local); hooks in .claude/settings.local.json (local)
+  ✓ worktrees: no .claude/worktrees directory
+  ✓ graph-freshness: code graph is fresh
+  ! wiki-freshness: no wiki freshness report has been produced; run `keryx wiki freshness`. This is not evidence that the wiki is fresh.
+      fix: keryx wiki freshness
+[exit 0]
+
+$ keryx gdgraph build
+gdgraph build complete: 3 nodes, 2 edges
+summary: <scratch>/t16-quickstart/start/demo/.metaproject/data/gdgraph/artifacts/summary.md
+[exit 0]
+
+$ keryx gdgraph affected src/price.ts
+# Affected context for src/price.ts
+
+## Dependencies
+- none
+
+## Dependents
+- src/cart.ts
+[exit 0]
+
+$ keryx wiki collect
+# gdwiki collect
+
+created: 3
+updated: 0
+skipped: 0
+index: .metaproject/wiki/index.md
+
+- created: .metaproject/wiki/architecture/project-map.md (gdgraph)
+- created: .metaproject/wiki/components/src.md (gdgraph)
+- created: .metaproject/wiki/architecture/testing-map.md (testing)
+
+enrichment needed: 1 component page(s) still Status: draft
+→ enrich prose via the gdwiki skill (cheap model, 1 subagent per page).
+  - components/src.md
+[exit 0]
+
+$ keryx wiki status
+# gdwiki status
+
+enabled: yes
+wiki root: .metaproject/wiki
+total pages: 3
+
+## Pages by type
+- architecture: 2
+- domain-model: 0
+- business-rule: 0
+- user-scenario: 0
+- component: 1
+- service: 0
+- integration: 0
+- decision: 0
+
+last index generated: 2026-10-01T10:16:14.315Z
+last link check: never
+[exit 0]
+
+$ keryx memory new decision --title "Prices round to whole cents"
+Created decision entry: .metaproject/memory/decisions/prices-round-to-whole-cents.md
+[exit 0]
+
+$ keryx memory transition decisions/prices-round-to-whole-cents.md --to accepted --reason "agreed with the team"
+Transitioned decisions/prices-round-to-whole-cents.md: draft -> accepted.
+[exit 0]
+
+$ keryx memory search "cents"
+# memory search: cents
+
+Results: 1
+
+### 1. Prices round to whole cents  (score 2.334)
+- type: decision | status: accepted | confidence: medium | version: 0.2.0
+- matched 1/1 terms; status accepted; confidence medium
+- provenance: manual | author: unknown | confirmedBy: unknown
+- summary: (none)
+- entry: decisions/prices-round-to-whole-cents.md
+[exit 0]
+
+$ keryx shell --provider fake -p "What does src/cart.ts depend on?"
+  keryx — fake/fake-echo · agent · <scratch>/t16-quickstart/start/demo
+  Type a message, or /help for commands.
+
+  ❯   Session 15c2313c · per-project (keryx shell -c to continue)
+  bus: joined as @agent-1 · 0 peers
+
+  ● keryx
+
+  [error] FakeProvider: no transcript matches request hash 6529df3631ad42da995d99caf2e29752cf3ef679aa4012e57d9bb1c0677e3c8e
+
+  ────────────────────────
+
+  ❯ [exit 0]
+
+$ keryx status
+Metaproject: ready
+Root: .metaproject
+Modules:
+  gdgraph: enabled
+  gdctx: enabled
+  gdwiki: enabled
+  gdskills: enabled
+  memory: enabled
+  tasks: enabled
+  health: enabled
+  testing: enabled
+  security: enabled
+  sac: disabled
+[exit 0]
+

@@ -1,5 +1,11 @@
-blank_issues_enabled: true
+blank_issues_enabled: false
 contact_links:
-  - name: Security or private repository concern
-    url: https://github.com/MrCipherSmith/keryx
-    about: Please avoid posting private repository data in public issues.
+  - name: Report a security vulnerability privately
+    url: https://github.com/MrCipherSmith/keryx/security/advisories/new
+    about: Do not open a public issue for a vulnerability. See SECURITY.md for the process.
+  - name: Read the documentation
+    url: https://mrciphersmith.github.io/keryx/
+    about: Install, quickstart, guides, and the CLI reference.
+  - name: Where to get help
+    url: https://github.com/MrCipherSmith/keryx/blob/main/SUPPORT.md
+    about: What to include so a question or bug can be answered quickly.

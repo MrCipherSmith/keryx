@@ -248,8 +248,8 @@ export type SetEnabledOptions = {
  *      answer.
  *
  * The project file is never touched. Toggling a server for yourself must not
- * produce a diff for everyone — Grok Build's rule, and the reason the overlay
- * exists at all.
+ * produce a diff for everyone — that is the reason the overlay exists at
+ * all.
  */
 export function setServerEnabled(options: SetEnabledOptions): StoreResult {
   const file = overlayFile(options.configDir);

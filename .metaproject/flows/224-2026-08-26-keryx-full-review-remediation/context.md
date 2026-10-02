@@ -34,7 +34,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-- Worktree: `/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation`; branch `fix/full-project-review-remediation-2026-08-24`; base `1ece28b2818d6ce2d5bfa89e0bc8a8b57b96c797`.
+- Worktree: `~/goodea/keryx/.worktrees/full-review-remediation`; branch `fix/full-project-review-remediation-2026-08-24`; base `1ece28b2818d6ce2d5bfa89e0bc8a8b57b96c797`.
 - Review validation: background shell and SAC runtime cycles confirmed; modal-host/shell-chrome is type-only in one direction and allowed; 25 graph orphans are intentional.
 - Import count correction: 17 harness-to-command/TUI/SAC matches in 12 files are not all violations; `src/lib imports nothing above` is disproved by 32 imports in 12 files.
 - Catch correction: 65 textual hits = 63 clauses plus 2 comments; 14 production comment-only sites require explicit disposition, not mechanical rewriting.

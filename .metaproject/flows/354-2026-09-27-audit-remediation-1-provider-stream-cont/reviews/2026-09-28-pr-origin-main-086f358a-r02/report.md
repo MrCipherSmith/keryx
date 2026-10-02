@@ -27,7 +27,7 @@ Compat `mergeUsage` now takes `cacheReadTokens` and reads `usage.prompt_tokens_d
 The AC7 runtime test in `shell-agent-repl.test.ts` now wraps the real `BusClient.leave()` to record whether the lease is still held at the instant it fires, and asserts it is — proving `leaveBus()` runs strictly before `releaseLease()`, the exact ordering the deleted source-text audit checked. `findings.md`'s R-I3 row and the test's own name were updated to say the runtime test is now a strict superset, not merely equivalent.
 
 ### review-logic-F-001 — confirmed, deferred (operator decision)
-The compat adapter's in-band-`{error}`-with-no-pending-tool-call gap is untouched by 086f358a (the commit only changes `mergeUsage`/`cacheReadTokens` in this file). `stream-contract.test.ts` still pins it at 12/12 pass. `docs/requirements/keryx-audit-remediation/findings.md` now records it as ledger row **L-16**, "open (review r1, item 5): deferred, not fixed in this flow." Dismissed on round 1's package as `dismissed-deprioritised`, evidence `docs/requirements/keryx-audit-remediation/findings.md L-16, decided-by: altsay (operator, helyx 2026-09-28)`.
+The compat adapter's in-band-`{error}`-with-no-pending-tool-call gap is untouched by 086f358a (the commit only changes `mergeUsage`/`cacheReadTokens` in this file). `stream-contract.test.ts` still pins it at 12/12 pass. `docs/requirements/keryx-audit-remediation/findings.md` now records it as ledger row **L-16**, "open (review r1, item 5): deferred, not fixed in this flow." Dismissed on round 1's package as `dismissed-deprioritised`, evidence `docs/requirements/keryx-audit-remediation/findings.md L-16, decided-by: altsay (operator, operator chat channel 2026-09-28)`.
 
 ## Delta review (086f358a itself)
 

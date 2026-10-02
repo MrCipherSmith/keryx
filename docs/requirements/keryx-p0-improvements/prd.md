@@ -6,7 +6,7 @@ Version: 0.1.0
 
 keryx's position in the market is a layer of durable project knowledge and
 managed work above any coding agent, plus a harness of its own. The
-competitive review ([competitive-review.md](competitive-review.md)) found the
+2026-09-27 functional review found the
 position sound and the proof thin in one place and the basics missing in four:
 
 - **The one capability nobody else has is unproven.** `keryx agents external
@@ -15,11 +15,11 @@ position sound and the proof thin in one place and the basics missing in four:
   been run against a real vendor process." A reader who checks stops trusting
   the rest of the page.
 - **No file rewind.** A turn that edits the wrong files can be undone only
-  with git by hand. Claude Code (`/rewind`), Gemini CLI (`/restore`), Kiro and
-  OpenCode snapshot files per turn. keryx's `flushSessionCheckpoint` saves the
+  with git by hand. Claude Code (`/rewind`), Gemini CLI (`/restore`) and other
+  agents snapshot files per turn. keryx's `flushSessionCheckpoint` saves the
   transcript, not the tree.
-- **Review lives on the laptop.** keryx's review has more machinery than any
-  competitor's — several reviewers, a verifier that deletes findings it cannot
+- **Review lives on the laptop.** keryx's review has more machinery than
+  comparable tools — several reviewers, a verifier that deletes findings it cannot
   reproduce, findings anchored to a quoted line, price per round — and no way
   to run on a pull request without a person at a terminal. Cursor Bugbot ships
   one number ("70 %+ of flags resolved before merge"); keryx cannot produce
@@ -111,7 +111,7 @@ types do what they expect.
 - W4.1 An approval request is a record: id, turn, tool, risk class, summary,
   expiry. `keryx serve` and trigger dispatch write it instead of a denial when
   a transport is configured.
-- W4.2 Transports: the helyx channel (Telegram), a `keryx approvals` CLI on
+- W4.2 Transports: the operator chat channel (Telegram), a `keryx approvals` CLI on
   another machine, and the `keryx serve` HTTP surface. One approval is one
   single-use grant, as today's interactive grants.
 - W4.3 Expiry produces a denial with reason `approval-expired`; the turn

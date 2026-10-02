@@ -8,7 +8,7 @@ all four detail files.
 Compiled at flow 276 against `origin/main` at `398acb4a`.
 
 
-Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/musing-meitner-168482`
+Worktree: `~/goodea/keryx/.claude/worktrees/musing-meitner-168482`
 Scope files: `src/mcp-servers/approval-wiring.test.ts`, `src/mcp-servers/invariants.test.ts`, plus Job 2 inventory closure.
 
 All line numbers were verified against the worktree with `keryx ctx rg` rather than carried over from the scan.

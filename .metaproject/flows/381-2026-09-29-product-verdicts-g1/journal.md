@@ -15,7 +15,7 @@
 - 2026-09-29T07:46:47.087Z - ac-confirmed: AC9: never-gates, no-model and bulk-budget tests green; only index and open exist; import-policy ratchet back at its ceiling after routing the helpers through the flow facade (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-29T07:46:47.246Z - ac-confirmed: AC10: live smoke after install: 310 of 310 unchanged; git diff of the PR touches no existing flow directory and no existing package README (only the metrics document added, the plan edited) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-29T07:46:47.412Z - ac-confirmed: AC11: typecheck clean, product and flow suites green, CI 18/18 on ebe617b9, README, cli-reference, modules page, module page, CHANGELOG 0.3.31 and version bump present (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
-- 2026-09-29T07:46:47.571Z - ac-confirmed: AC12: journal entry STOP BEFORE G1a written; operator told on the helyx channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T07:46:47.571Z - ac-confirmed: AC12: journal entry STOP BEFORE G1a written; operator told on the operator chat channel; nothing beyond index and open built (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-29T07:46:47.727Z - task-done: T1: Collect remaining context
 - 2026-09-29T07:46:47.896Z - task-done: T2: Implement per plan
 - 2026-09-29T07:46:48.145Z - task-done: T3: Add/adjust tests and make them pass

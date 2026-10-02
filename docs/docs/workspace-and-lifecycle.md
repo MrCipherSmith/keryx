@@ -57,7 +57,17 @@ data/
 ├── gdskills/{artifacts,proposals,reports}/          # skill learn/verify outputs
 ├── security/{artifacts,incidents,policies,raw,redactions}/  # scan reports, incidents, redactions
 ├── tasks/{artifacts}/                               # flow (task) run outputs
-└── memory/{index,embeddings}/                      # optional disposable memory catalog/cache
+├── memory/{index,embeddings}/                      # optional disposable memory catalog/cache
+├── wiki/                                            # wiki freshness queue (freshness-queue.jsonl)
+├── trigger/                                         # runs.jsonl ledger, schedules.json (per machine), reports/
+├── governance/artifacts/                            # latest.md / latest.json from `governance report`
+├── product/                                         # index.json, the disposable intent index
+├── retention/                                       # last-auto-sweep stamp
+├── forgetting/                                      # journal.jsonl, the deletion trail
+├── learning/                                        # observations, candidates, graduation proposals
+├── bundles/                                         # applied-state.json (what a bundle import wrote)
+├── integrations/install-state/                      # per-runtime install records
+└── sac/                                             # target locks for accepted proposals
 ```
 
 ## Source of truth vs generated `data/` — the data-vs-service invariant
@@ -100,7 +110,7 @@ whichever worktree runs `update`. The same block lists the per-developer agent
 files keryx writes (`CLAUDE.local.md`, `AGENTS.override.md`,
 `.claude/settings.local.json` — see
 [where the block goes](#where-the-block-goes-local-and-shared-scope)), and a
-`CLAUDE.local.md` left over after Claude went back to shared is listed whether
+`CLAUDE.local.md` left over after the `claude` runtime went back to shared is listed whether
 or not this checkout has one. `.metaproject/` ignored as a whole is no
 exception: a blanket `.metaproject/` line in `.gitignore` is one branch's rule,
 so the block still carries every entry, and a worktree whose branch lacks that
@@ -180,7 +190,7 @@ manifest records:
 - `updatedAt` — ISO timestamp of the last lifecycle write.
 - `paths{}` — resolved workspace paths (`root`, etc.).
 - `agentEntrypoints{ root[], claudeSettings, metaproject: ".metaproject/index.md" }` —
-  where the managed block and the Claude hooks go, one `root` entry per runtime
+  where the managed block and the `claude` hooks go, one `root` entry per runtime
   with its scope, plus the workspace index (see
   [where the block goes](#where-the-block-goes-local-and-shared-scope)).
 - `modules{}` — a map keyed by **module id**, one entry per module. Each entry
@@ -190,7 +200,7 @@ manifest records:
   - per-module settings — e.g. gdskills stores `profile`, `skills`, `catalog`,
     `projectSkills`, and a `projectSkillRegistry[]`.
   - `hooks{ gitPostCommit?, prePush?, agent?, postUpdate }` — which hooks this
-    module installs (`security` also records `agent` → the Claude settings file,
+    module installs (`security` also records `agent` → the `claude` settings file,
     `.claude/settings.local.json` by default).
   - `commands[]` — the module's canonical CLI subcommand list.
 
@@ -211,17 +221,19 @@ Current canonical lists:
 | gdgraph | build, query, affected, repomap |
 | gdctx | status, diff, rg, read, run, show |
 | gdwiki | status, new, collect, index, check-links, validate |
-| gdskills | status, list, inspect, route, catalog, install, create, verify, learn, export, sync, contracts |
-| memory | new, index, search, ingest, check, reflect |
+| gdskills | status, list, inspect, route, catalog, install, create, import, update, verify, learn, export, sync, contracts |
+| memory | new, index, search, supersede, transition, ingest, check, reflect |
 | tasks | init, list, status, freeze, start, task, ac, implemented, complete, block, unblock, check |
 | health | run, status, gate, sources, explain, baseline, trend |
 | testing | init, analyze, run, status, context, explain, related, report |
 | security | status, scan, check-input, check-output, redact, report, policy, incidents |
+| sac (opt-in) | create, list, show, add-resource, archive, remove-resource, rename, overview, read, propose, confirm-review, review, handoff, collaboration, policy-readiness, catch-up, list-proposals, dismiss-candidate |
 
 **Naming skew to remember:** the manifest key `tasks` corresponds to the CLI verb
-`flow` (the flow command routes the `tasks` subcommand set), and the manifest key
+`flow` (the flow command routes the `tasks` subcommand set), the manifest key
 `gdwiki` corresponds to the CLI verb `wiki` (legacy `wiki` manifest keys are
-migrated forward on read).
+migrated forward on read), and the opt-in module `sac` corresponds to the CLI verb
+`workspace`.
 
 ## Agent entrypoints and the managed routing block
 
@@ -242,7 +254,7 @@ prose) is preserved. The block adds per-skill
 routing policies (consult `.metaproject/index.md` and the module skills before
 doing raw file/code work) for gdgraph, gdwiki, gdctx, gdskills, testing, memory,
 and flow, plus a **Model choice** policy (`src/lib/model-choice.ts`) telling
-Claude Code and Codex CLI which model tier to run on — the flagship tier for
+the `claude` and `codex` runtimes which model tier to run on — the flagship tier for
 planning/review, one tier down for subagents/docs/unattended work, the
 smallest tier only for trivial work — in tier words, adding a concrete
 provider/model id only when this project's `routing.config.json` resolves and
@@ -319,37 +331,37 @@ block is ever written anywhere else. A
 `CLAUDE.local.md` the team tracks gets no block; the output says to untrack it
 or set the claude entry to `"shared"`.
 
-**Claude Code** loads `CLAUDE.local.md` after `CLAUDE.md`. Claude Code also counts
+**The `claude` runtime** loads `CLAUDE.local.md` after `CLAUDE.md`. It also counts
 a `CLAUDE.local.md` as a `CLAUDE.md` when it decides whether to fall back to
 `AGENTS.md`, so in a repository that has `AGENTS.md` and no `CLAUDE.md`, the
 `CLAUDE.local.md` keryx creates starts with an `@AGENTS.md` import; without it,
-Claude would stop reading the team's instructions. A `CLAUDE.local.md` you
+the runtime would stop reading the team's instructions. A `CLAUDE.local.md` you
 already had only gets the block.
 
-**Codex** has no additive local file: it reads `AGENTS.override.md` *instead of*
+**The `codex` runtime** has no additive local file: it reads `AGENTS.override.md` *instead of*
 `AGENTS.md` in the same directory. So the mode is always stated, never inferred:
 
 - `override` (default) — `AGENTS.override.md` is generated as a provenance line,
   the block, then the full content of `AGENTS.md`. A bare block is never written
-  there, because it would hide the team's `AGENTS.md` from Codex. The override is
+  there, because it would hide the team's `AGENTS.md` from the runtime. The override is
   regenerated by `keryx update` and `keryx rules sync`, not when `AGENTS.md`
-  changes: until then Codex reads the old copy, and `keryx doctor` reports it as
-  stale. Codex also reads at most 32 KiB of project instructions by default
+  changes: until then the runtime reads the old copy, and `keryx doctor` reports it as
+  stale. It also reads at most 32 KiB of project instructions by default
   (`project_doc_max_bytes`), and the override holds `AGENTS.md` plus the block, so
   a large `AGENTS.md` can be cut off. An `AGENTS.override.md` keryx did not
   generate is left alone and reported. When `AGENTS.md` is gone, an override
-  keryx generated (untracked, with its provenance line) is removed, so Codex
+  keryx generated (untracked, with its provenance line) is removed, so the runtime
   does not keep reading the old copy. A `source` reached through a symlink
   leaving the project is never read: the override is not generated, and the
   output and `keryx doctor` say so.
-- `skip` — nothing is written for Codex, and the command output says so. The
-  one change a `skip` run makes to a Codex file is removing an
+- `skip` — nothing is written for `codex`, and the command output says so. The
+  one change a `skip` run makes to a `codex` file is removing an
   `AGENTS.override.md` that keryx generated earlier (its first line is keryx's
   provenance line), so a leftover copy cannot keep hiding `AGENTS.md` from
-  Codex. An `AGENTS.override.md` without that line is yours and is never
+  the runtime. An `AGENTS.override.md` without that line is yours and is never
   touched.
 
-With no `AGENTS.md`, Codex is skipped with a message and no tracked `AGENTS.md`
+With no `AGENTS.md`, `codex` is skipped with a message and no tracked `AGENTS.md`
 or `CLAUDE.md` is created.
 
 **Shared scope** is the explicit opt-in that keeps the block (or the hooks) in the
@@ -359,8 +371,8 @@ runtime's entry to `{ "runtime": "claude", "path": "CLAUDE.md", "scope": "shared
 and run `keryx update`; keryx creates a missing team file under shared scope only.
 A local entry that names a team file is read as "switch this runtime to local"
 and gets the local path. Switching back to shared cleans up the old local
-files, so Claude never reads the block twice and Codex does not keep reading an
-old copy of `AGENTS.md`:
+files, so the `claude` runtime never reads the block twice and `codex` does not keep
+reading an old copy of `AGENTS.md`:
 
 - `CLAUDE.local.md` loses keryx's block, and the `@AGENTS.md` import when
   keryx's comment above it shows keryx added it. A file left with nothing but
@@ -406,7 +418,7 @@ only, not the hooks or `.gitignore`):
   installer you use (ctx, orient, learning observer, jev edit guard). For
   `.gitignore`: delete the block and commit that.
 
-The block and the hooks are never left in both places: Claude Code merges the two
+The block and the hooks are never left in both places: the `claude` runtime merges the two
 settings files, so a hook in both would fire twice. A managed block that stays in
 a tracked file whose scope is local is reported by `keryx doctor` with the fix
 command.
@@ -430,11 +442,11 @@ uncommitted `rules-export` block in a tracked file whose scope is local, with
   worktree of a clone, but `CLAUDE.local.md`, `AGENTS.override.md` and
   `.claude/settings.local.json` are not: a linked worktree has no block and no
   keryx hooks until you run `keryx update` in it.
-- **Cloud and remote Claude sessions** start from a fresh clone, so they have no
+- **Cloud and remote sessions** start from a fresh clone, so they have no
   `CLAUDE.local.md`, and they do not read `.claude/settings.local.json`. For a
   project worked on that way, use shared scope.
 - **Scope is a team setting.** `metaproject.json` is tracked, so the scopes and
-  the Codex mode apply to everyone who pulls it.
+  the `codex` mode apply to everyone who pulls it.
 - **Blank-line-only edits** to a tracked entrypoint count as "equal to `HEAD`"
   during migration, so they are reverted along with the block.
 - **Other harnesses' `rules-export` files** (`GEMINI.md`,
@@ -566,8 +578,9 @@ block into `.git/hooks/<post-commit|pre-push>` (creating a `#!/usr/bin/env sh`
 shebang if the file is new, `chmod 0o755`). Every post-commit hook `return 0`s on
 every branch and so never fails a commit; most are staleness reminders, while the
 gdgraph and dashboard hooks regenerate their artifacts. The blocking exceptions are
-the opt-in testing pre-push gate (blocks on test failure) and the opt-in security
-pre-push gate (blocks in `enforced`/`ci`/`gateway` mode).
+the opt-in testing pre-push gate (blocks on test failure) and the security
+pre-push gate, which is on by default but blocks only in `enforced`/`ci`/`gateway`
+mode (the default `advisory` mode warns).
 
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|
@@ -587,14 +600,14 @@ the workspace never silently re-adds hooks the user removed.
 
 ### Agent hook (`.claude/settings.local.json`)
 
-The `security` module also offers a non-git, project-local **Claude Code agent
+The `security` module also offers a non-git, project-local **`claude` agent
 hook** at `init` (opt out with `--no-security-agent-hook`). Rather than a
 `.git/hooks/*` block, `installSecurityAgentHooks` **merges** two hooks —
 `UserPromptSubmit` → `security check-input --source untrusted-external` and
-`PreToolUse(Write|Edit)` → `security check-output` — into the Claude settings
+`PreToolUse(Write|Edit)` → `security check-output` — into the `claude` settings
 file `agentEntrypoints.claudeSettings` names: `.claude/settings.local.json` by
 default, the tracked `.claude/settings.json` under shared scope. Every other
-keryx-managed Claude hook (ctx guard, orient, learning observer, jev edit guard)
+keryx-managed `claude` hook (ctx guard, orient, learning observer, jev edit guard)
 resolves to the same file, so none is ever split across the two. The
 merge is **merge-safe**: a `_keryxManaged: "security-agent-hooks"` sentinel
 keeps re-install idempotent and preserves every pre-existing key and user hook.
@@ -608,7 +621,7 @@ Two additional opt-in integrations are installed explicitly rather than by
 
 - `keryx orient install-hook --runtime <id>` injects a bounded project-root
   `.metaproject/index.md` excerpt plus the graph map and wiki index
-  at turn start for Claude, Codex, or Cursor.
+  at turn start for the `claude`, `codex` or `cursor` runtimes.
 - `keryx ctx install-hook --runtime <id>` installs the gdctx routing guard, which
   blocks broad raw shell/search reads and recommends the bounded `ctx` command.
 

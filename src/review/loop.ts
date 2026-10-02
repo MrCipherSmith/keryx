@@ -9,8 +9,7 @@
  * — which is indistinguishable from a hard problem that needed all three rounds.
  *
  * A counter cannot tell "making progress slowly" from "stuck". Repetition can.
- * OpenHands ships a stuck detector with five patterns, on by default, for
- * exactly this reason.
+ * That is why a stuck detector looks for repetition patterns rather than counting.
  *
  * # What fires
  *

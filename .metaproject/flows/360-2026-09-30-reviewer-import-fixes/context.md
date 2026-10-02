@@ -62,7 +62,7 @@ Verified in source on 2026-09-30 (line numbers from the 0.3.39-era tree; re-loca
   `importReferencedRules` (existing target → `present` with no content compare; a bundled
   `core/` name absent in the project → `unresolved`), `runSkillsImportCommand`,
   `printSkillsImportHelp` (unreachable, see cli-registry).
-- `src/review/import-reviewers.ts` — `OVERLAY_REVIEWER_PREFIX = "review-vantage-"`,
+- `src/review/import-reviewers.ts` — `OVERLAY_REVIEWER_PREFIX = "review-acme-"`,
   `runImportReviewers`, `printImportHelp` (unreachable).
 - `src/review/reviewers.ts` — `collectReviewers`, `metadataList` (already reads
   `metadata.paths`), `descriptionPathTriggers` (requires `*`), `descriptionFlags`,

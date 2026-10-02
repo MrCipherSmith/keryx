@@ -7,7 +7,7 @@ Scope: R2-5 (E-03 §4 AC-R2-5) — SC_R04_SHELL_CONTAINMENT runtime half / F-1. 
 + W12 inheritBudget + W7 evidence + W8 receipt. Offline suite = fake adapter ONLY; thin real
 `node:child_process` adapter behind `allowRealSubprocess`, live smoke NOT in CI. NO new dep
 (child_process is stdlib; `deps {}`). Deterministic (injected id/clock). Fail-closed. D-02. Root
-`/Users/Goodea/goodea/keryx` (branch feature/keryx-release2-subprocess-executor). Worktree-guard.
+`~/goodea/keryx` (branch feature/keryx-release2-subprocess-executor). Worktree-guard.
 Commits/PR: NO co-authorship.
 
 | ID | Kind | Model | Title / definition |

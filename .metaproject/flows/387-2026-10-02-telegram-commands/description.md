@@ -17,7 +17,7 @@ The operator works with keryx from Telegram without opening a terminal. A slash 
 - First version: text commands (class A) and button pickers (class B).
 - `/delegate` and `/external*`: allowed after a Yes/No button confirmation.
 - `/new` and `/clear` keep the same topic with a separator line (operator, message 177222: "Согласен").
-- Message state as in helyx, in this first version (operator, message 177222): the operator sees that a message arrived, was read and is in work, and a "typing" indicator while the agent works. Done through reactions on the message plus the typing chat action.
+- Message state as in the operator's existing chat bot, in this first version (operator, message 177222): the operator sees that a message arrived, was read and is in work, and a "typing" indicator while the agent works. Done through reactions on the message plus the typing chat action.
 - Approval message UX (operator, message 177244, screenshot): today a press leaves the buttons on the question and sends a separate "Approval granted." message. Wanted: the question message is edited, the buttons are removed and replaced by the result. Applies to the existing approval prompts and to the new pickers and confirmations.
 
 Default I chose, not yet confirmed: `/mcp trust`, `/guard`, `/route` and `/editguard` stay local (they change policy and were not part of the poll).

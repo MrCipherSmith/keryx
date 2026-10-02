@@ -336,6 +336,14 @@
     "reason": "id 347 was taken on main by the flow-198 duplicate renumbering (review-jev-contract, #767) while this branch was open; 351 is the next free id on main and in open PRs"
   },
   {
+    "from": "363",
+    "to": "367",
+    "fromDir": "363-2026-10-01-publication-grade-documentation-showcase",
+    "toDir": "367-2026-10-01-publication-grade-documentation-showcase",
+    "at": "2026-10-01T10:14:38.603Z",
+    "reason": "id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch"
+  },
+  {
     "from": "360",
     "to": "378",
     "fromDir": "360-2026-09-28-mcp-trust-followups",
@@ -422,5 +430,13 @@
     "toDir": "394-2026-10-02-shell-token-economy",
     "at": "2026-10-02T15:24:32.854Z",
     "reason": "second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one"
+  },
+  {
+    "from": "367",
+    "to": "395",
+    "fromDir": "367-2026-10-01-publication-grade-documentation-showcase",
+    "toDir": "395-2026-10-01-publication-grade-documentation-showcase",
+    "at": "2026-10-02T16:35:23.074Z",
+    "reason": "main now has its own 367 (renumbered w2-rewind); 395 is the first id free on every remote branch after fetch --all"
   }
 ]

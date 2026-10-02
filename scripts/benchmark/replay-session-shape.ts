@@ -1,5 +1,5 @@
 // Flow 387 T12 (AC9): deterministic replay of a synthetic session shaped like the
-// 2026-10-01 vantage-frontend session, measured on two request-preparation models.
+// 2026-10-01 acme-frontend session, measured on two request-preparation models.
 //
 // Only the SHAPE of the real session is reproduced (message mix, sizes, anchor churn,
 // notification cadence); every byte of content is seeded filler. The generator is

@@ -999,7 +999,7 @@ Actions:
               reservation. A killed run's reservation stays counted until
               \`keryx trigger resolve <runId> --spent <usd>\`.
 
-  agent-task  (flow 295) a free-form scheduled agent task: one unattended turn on
+  agent-task  a free-form scheduled agent task: one unattended turn on
               the operator's prompt, a report in .metaproject/data/trigger/reports/.
               Created only by \`keryx schedule add\` / /schedule, never by hand.
 

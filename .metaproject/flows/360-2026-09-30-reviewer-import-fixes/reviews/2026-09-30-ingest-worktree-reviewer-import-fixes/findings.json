@@ -141,7 +141,7 @@
     "reviewer": "review-logic",
     "severity": "major",
     "problem": "metadata.flags entries are taken verbatim.",
-    "impact": "flags: [vantage], ['--Vantage '] and 'flags: --vantage --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
+    "impact": "flags: [acme], ['--Acme '] and 'flags: --acme --house' produce unmatched entries; a YAML block list is ignored; three spellings of one flag give familyFlags [] so the correctly spelled reviewer is dispatched without the path gate.",
     "suggested_fix": "Normalise entries and drop those not matching ^--[a-z][a-z0-9-]*$ with a visible warning.",
     "evidence": "Reproduced by the logic probe and review-verifier f006.ts with a control case.",
     "confidence": "high",
@@ -159,7 +159,7 @@
     "verification": {
       "verdict": "confirmed",
       "method": "execution",
-      "evidence": "bun run scratchpad/r360/review-verifier/f006.ts: verbatim entries kept; three spellings give familyFlags [] for all; control with one spelling gives familyFlags [--vantage].",
+      "evidence": "bun run scratchpad/r360/review-verifier/f006.ts: verbatim entries kept; three spellings give familyFlags [] for all; control with one spelling gives familyFlags [--acme].",
       "verifier": "review-verifier"
     }
   },

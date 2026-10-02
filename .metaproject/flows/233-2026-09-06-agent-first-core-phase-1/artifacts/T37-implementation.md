@@ -1,6 +1,6 @@
 # T37 implementation — stop an unusable manifest or config from silently removing the security posture
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Owned files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Owned files
 only: `src/security/guard.ts`, `src/security/guard.test.ts`,
 `src/security/config.ts`, `src/security/service.ts` (the `runGate`/
 `runReport`/`readLatestReport` region), `src/security/types.ts` (additive).
@@ -9,7 +9,7 @@ touched. Did not review my own fix (per dispatch instruction).
 
 Spec written before coding: `T37-spec.md` (same directory).
 
-All raw logs below are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs below are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Baseline (before any edit)
 

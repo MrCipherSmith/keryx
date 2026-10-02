@@ -10,7 +10,7 @@ Source: user runbook prompt (Release 2, Wave R2-4). Frozen scope from
 The interactive `keryx` shell (flow 021, merged) is a minimal REPL that HARDCODES
 `provider="ollama"` / `model="llama3.1:latest"` (shell.ts:203-204). So bare `keryx` auto-
 targets a local model that may not exist and offers no way to see/choose providers or
-models from the CLI — unlike opencode, where you select provider+model interactively.
+models from the CLI — unlike other terminal agents, where you select provider+model interactively.
 R2-4 turns the shell into a proper interactive CLI/TUI adapter over the SAME stable
 CLI/JSONL-RPC runtime ports (no runtime-contract change — SC_R13_TUI intent), with
 provider/model detection + selection and no hardcoded default.

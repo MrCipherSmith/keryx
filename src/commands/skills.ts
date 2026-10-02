@@ -1887,9 +1887,9 @@ Commands:
   scout     Pre-creation dedupe gate: does an existing skill already cover this?
   eval      Behavioral compliance eval: trigger accuracy + scenario pass rate. --judge
             <provider>[:<model>] grades judge-graded behavior scenarios with a live LLM judge.
-  judge-check Proves a skill's judge-graded scenarios are hard to game: runs the canned
-              empty/echo/known-wrong/injection/stuffed/known-right answers through the live
-              judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
+  judge-check Proves a skill's judge-graded scenarios are hard to game: runs the eight canned
+              answers (empty, echo, vague, known-wrong, subtle-wrong, injection, stuffed,
+              known-right) through the live judge and exits 1 on any mismatch. --record saves the verdicts for offline replay.
   stocktake Periodic catalog health check: keep|improve|update|retire|merge
 `);
 }
@@ -1979,7 +1979,7 @@ Examples:
   keryx skills ${command} src/pipelines --module pipelines --name pipelines-module
   keryx skills ${command} PipelineStepStore --module pipelines --name pipeline-step-store --dry-run
   keryx skills ${command} "review profile" --module review --name b091-profile \\
-      --origin ~/.vantage-frontend/rules/core/code-review-b091-profile.mdc
+      --origin ~/.acme-frontend/rules/core/code-review-b091-profile.mdc
 `);
 }
 

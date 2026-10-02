@@ -1,4 +1,4 @@
-import { createSpawnSubagentTool } from "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool";
+import { createSpawnSubagentTool } from "~/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool";
 
 const requests: any[] = [];
 const fleetEvents: any[] = [];
@@ -45,7 +45,7 @@ const provider = {
 
 let id = 0;
 const tool = createSpawnSubagentTool({
-  cwd: "/Users/Goodea/goodea/keryx",
+  cwd: "~/goodea/keryx",
   getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
   makeProvider: () => provider as any,
   getDetectedProviders: () => [{ name: "ollama" }],

@@ -39,8 +39,8 @@ only. `/session-info` and `/info` are **not** aliases.
 
 - Building the modal/tab host (sibling package; already implemented).
 - Session picker (`/sessions`, `/resume`) rewrite.
-- Grok-only fields keryx does not have: SuperGrok OAuth vs API-key
-  lecture, model hash, sandbox profile, `grok login` upsell.
+- Fields other agent CLIs show that keryx does not have: vendor OAuth vs
+  API-key lecture, model hash, sandbox profile, login upsell.
 - Click-to-copy / drag-select (mouse). Keyboard-first.
 - Mutating the session from this surface (rename, fork, compact).
 - Restoring `/session-info` / `/info` as aliases.

@@ -83,7 +83,7 @@
     "global_id": "2026-09-30-ingest-810#F-003",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: altsay — follow-up: byte-exact manifest patch (operator choice Б, helyx message 174705, 2026-09-30)"
+      "evidence": "decided-by: altsay — follow-up: byte-exact manifest patch (operator choice Б, operator chat channel message 174705, 2026-09-30)"
     }
   },
   {
@@ -106,7 +106,7 @@
     "global_id": "2026-09-30-ingest-810#F-004",
     "disposition": {
       "state": "dismissed-deprioritised",
-      "evidence": "decided-by: altsay — follow-up: busy-turn handling of /external-agents (operator reply, helyx message 174712, 2026-09-30)"
+      "evidence": "decided-by: altsay — follow-up: busy-turn handling of /external-agents (operator reply, operator chat channel message 174712, 2026-09-30)"
     }
   }
 ]

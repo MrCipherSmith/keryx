@@ -951,8 +951,8 @@ describe("negation-aware scoring against the real bundled catalog (flow 334)", (
     "platform/hookify::safe hooks",
     // - python-code-review's own "pr"/"bugs" generic trigger. Outranker at
     //   this merge: flutter-dart/flutter-code-review (was react/react-code-
-    //   review at the flow-335-only measurement) — the specific competitor
-    //   keeps shifting as more packs join, the loss itself persists.
+    //   review at the flow-335-only measurement) — the specific outranking
+    //   skill keeps shifting as more packs join, the loss itself persists.
     "python/python-code-review::check this python pr for bugs",
     // - api-truth vs. review/review-pr-feedback, and deploy vs.
     //   angular/angular-code-review, and test-gen vs.

@@ -51,7 +51,7 @@
     },
     "AC9": {
       "at": "2026-09-30T08:26:42.951Z",
-      "note": "operator report sent via helyx with the live result, claude's real permission flag and what remains for codex/agy"
+      "note": "operator report sent via the operator chat channel with the live result, claude's real permission flag and what remains for codex/agy"
     }
   },
   "pr": {
@@ -225,7 +225,7 @@
     {
       "at": "2026-09-30T08:26:42.952Z",
       "event": "ac-confirmed",
-      "detail": "AC9: operator report sent via helyx with the live result, claude's real permission flag and what remains for codex/agy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+      "detail": "AC9: operator report sent via the operator chat channel with the live result, claude's real permission flag and what remains for codex/agy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     },
     {
       "at": "2026-09-30T08:26:43.131Z",

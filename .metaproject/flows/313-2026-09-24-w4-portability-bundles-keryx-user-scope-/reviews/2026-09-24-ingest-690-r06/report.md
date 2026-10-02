@@ -2,7 +2,7 @@
 
 ## Scope and method
 
-- Worktree `/Users/Goodea/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `95473737`. Diff `caf47f48..95473737` (`pr-690-t19.diff`).
+- Worktree `~/goodea/keryx-ape-313-w4`, branch `flow/313-w4`, HEAD `95473737`. Diff `caf47f48..95473737` (`pr-690-t19.diff`).
 - Read-only. The pre-fix check used `git archive caf47f48` extracted to `review313-r6/pre/`, with the four HEAD test files copied in and `node_modules` symlinked. No checkout, stash or edit touched the repo.
 - Probes are in `review313-r6/`:
   - `pl5.ts` / `pl5.out`: the round-5 probe, re-run unchanged.

@@ -3,7 +3,7 @@
 `keryx shell`/TUI already binds a session to a Slate and a SAC workspace
 implicitly, by watching for an action-intent turn. `/goal <text>` is the
 explicit, deterministic alternative: it opens the Slate immediately, skips
-the heuristic, and — since SLATE-27 — can optionally keep re-driving the
+the heuristic, and — can optionally keep re-driving the
 turn on your behalf instead of stopping after one.
 
 ```text
@@ -13,7 +13,7 @@ turn on your behalf instead of stopping after one.
 Agent-mode only (`keryx shell`, TUI, `harness run --goal ...`). Chat mode has
 no tools and no Slate, so `/goal` has no chat-mode meaning.
 
-## The one-shot form (SLATE-15/16)
+## The one-shot form
 
 ```text
 /goal Add rate limiting to the /export endpoint
@@ -36,7 +36,7 @@ mid-sentence — so ordinary goal text that happens to contain the word
 - Runs exactly one turn, then stops. Whether the goal was actually achieved
   is left to the model's own narrative — nothing re-checks it.
 
-## Bounded autonomous continuation (SLATE-27)
+## Bounded autonomous continuation
 
 ```text
 /goal Migrate the billing module off the deprecated client --auto
@@ -93,8 +93,7 @@ mode changes.
 - Not a general adversarial multi-skeptic committee — one verifier call per
   stop attempt, not several running in parallel.
 - No new persistent goal-state file or event log — the Flow (`flow.json`)
-  is the durable record; `slate.json` stays exactly what SLATE-1/16 already
-  defined.
+  is the durable record; `slate.json` stays exactly what it already was.
 
 ## Where to go next
 
@@ -102,5 +101,3 @@ mode changes.
   workspace binding and wrap-up dispatch `/goal` reuses unchanged.
 - [Slate for external agents](slate.md) — the sibling MCP-exposed surface
   for hands other than keryx's own runtime.
-- [Requirements: `/goal` continuation](https://github.com/MrCipherSmith/keryx/tree/main/docs/requirements/goal-continuation) —
-  the competitor survey this feature is drawn from, and its as-built design.

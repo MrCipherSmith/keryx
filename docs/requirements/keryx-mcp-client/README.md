@@ -59,7 +59,7 @@ full record.
 | [prd.md](prd.md) | Problem, goal, users, requirements, success criteria, risks, recommendation. |
 | [specification.md](specification.md) | Identity, structure, data contracts, integration points, acceptance criteria. |
 | [decisions.md](decisions.md) | Adopted decisions and explicit refusals. |
-| [brainstorm.md](brainstorm.md) | Reference designs studied (deepseek-harness, codex, cline, opencode, helyx), confirmed vendor behavior with sources, and the open architecture question. |
+| [brainstorm.md](brainstorm.md) | Reference designs studied (codex and other agent harnesses), confirmed vendor behavior with sources, and the open architecture question. |
 
 ## Scope
 
@@ -87,8 +87,8 @@ full record.
   connecting to a *specific* server it already controls (`codex mcp-server`),
   not consuming arbitrary third-party MCP servers a user configures.
   That deferred surface is specified separately as
-  [keryx-mcp-servers](../keryx-mcp-servers/README.md) (Grok Build parity;
-  specification ready, not implemented).
+  [keryx-mcp-servers](../keryx-mcp-servers/README.md) (two-tool model
+  bridge; specification ready, not implemented).
 - Widening `keryx-external-agent-runtime`'s vendor registry beyond
   `codex-cli`/`claude-cli`. Tracked separately; see roadmap note.
 - Any change to `keryx-provider-auth` D-01's credential boundary. codex's own

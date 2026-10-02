@@ -13,7 +13,7 @@ key source files, mechanics, the `.metaproject/` paths each module reads and wri
 and cross-module integrations. Behavior described here is what the source actually
 implements.
 
-**Cross-cutting opt-in substrate (roadmap-2026).** The optional, model/asset-backed
+**Cross-cutting opt-in substrate.** The optional, model/asset-backed
 features described below (gdgraph's symbol layer, memory's embedding index, the
 security model backends, etc.) all instantiate three shared, deterministic-safe
 mechanisms rather than each rolling their own: the **Capability System**
@@ -37,35 +37,35 @@ dispatcher (`src/cli.ts`) and the cross-cutting lifecycle commands — `init`,
 `MODULE_COMMANDS`, the single source
 of truth for each module's canonical subcommand list. Its job is to parse the
 top-level subcommand, scaffold the workspace and its nine default-configurable
-modules (plus the opt-in `mcp` module, for a possible tenth), keep
+modules (plus the opt-in `mcp` and `sac` modules), keep
 managed "service" files in sync without ever touching user "data" artifacts, and
 emit both an agent-facing `index.md` and a human-facing HTML dashboard.
 
-**CLI surface (top-level commands).** `main()` is a flat if-chain mapping `args[0]`
-to a handler:
+**CLI surface (top-level commands).** `src/cli.ts` looks the first argument up in
+`CLI_ROUTES` (`src/cli-registry.ts`), which holds every top-level verb. A bare
+`keryx`, `--help` and `-h` print the flat usage block, `--version` and `-v` print the
+package version, and an unknown verb prints an error and the help and exits `1`.
+`keryx help [group|command]` prints the same commands grouped by task, and
+[Commands by task](commands-by-task.md) lists every one of them with its summary;
+the groups below follow that page.
 
-| Command | Action |
+| Group | Commands |
 |---|---|
-| (none) / `--help` / `-h` | `printHelp()` |
-| `--version` / `-v` | prints package version |
-| `init` | scaffold `.metaproject/`, enable modules + hooks, write manifest |
-| `status` | print manifest module enabled/disabled state |
-| `update` | refresh service files, runtime, tasks backfill, dashboard |
-| `dashboard` / `dash` | build/open the HTML dashboard (bare `dash` = `open`) |
-| `modules` | view and toggle modules (`status` / `enable <name>` / `disable <name>` / interactive) |
-| `standard` | validate the workspace against the Metaproject Standard: `validate` / `doctor` / `capabilities` / `emit llms [--stdout]` |
-| `security` | agent I/O + artifact security layer (routed to `securityCommand`) |
-| `mcp` | serve module facades over the Model Context Protocol (routed to `mcpCommand`, opt-in module) |
-| `agents` | manage global agent bootstrap routing (routed to `agentsCommand`) |
-| `gdgraph`, `ctx`, `wiki`, `skills`, `skill-verify-skill`, `health`, `test`, `memory`, `flow`, `rules` | routed to the feature module handler |
-| unknown | error + help + exit 1 |
+| Start here | `init`, `status`, `shell`, `help`, `doctor`, `setup` |
+| Connect a model provider | `auth`, `providers`, `routing`, `external` |
+| Working in the shell | `sessions` (alias `session`) |
+| Project knowledge | `gdgraph`, `ctx`, `wiki`, `memory`, `orient`, `skills` (and `skill-verify-skill`), `stack`, `bundle` |
+| Managed work | `flow`, `job`, `review` |
+| Automation | `trigger`, `schedule`, `approvals`, `governance`, `product`, `hooks`, `learn` |
+| External agents, ACP and MCP | `acp`, `agents`, `mcp` (servers keryx connects to), `integrate`, `integrations`, `serve-mcp`, `bus`, `workspace` |
+| Maintenance and diagnostics | `health`, `test`, `standard`, `update`, `sync`, `security`, `dashboard` (alias `dash`), `metrics`, `sandbox`, `modules`, `projects`, `serve`, `rules`, `harness`, `version`, `retention`, `forgetting`, `commands` |
 
 Key lifecycle flags: `init` accepts `--yes/-y`, `--no-<module>` for each of the 9
-modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `update` accepts
-`--hooks`, `--skip-runtime`, `--no-tasks`.
+default modules, `--gdskills-profile <v>`, and `--no-*-hook` variants; `update` accepts
+`--hooks`, `--skip-runtime`, `--no-tasks` and `--preview`.
 
 **Key files.**
-- `src/cli.ts` — entrypoint `main()` argv dispatcher, `printHelp()`, version.
+- `src/cli.ts` — entrypoint `main()` argv dispatcher and version; `src/cli-registry.ts` — `CLI_ROUTES`, every top-level verb, and the usage text.
 - `src/commands/init.ts` — scaffolds `.metaproject/`, resolves module + hook enablement, writes the manifest.
 - `src/commands/update.ts` — refreshes service files, self-updates the runtime, backfills tasks, builds the dashboard (`buildDashboard` is exported from here).
 - `src/commands/dashboard.ts` — `dashboard build|open` (delegates to `buildDashboard`).
@@ -183,7 +183,7 @@ Queries: `getOrphans` returns nodes with no inbound/outbound resolved edges;
 recursive DFS over `imports` edges only, deduping cycles by canonical rotation
 (reports one representative per rotation, not all elementary circuits).
 
-**Block B additions (symbol layer + ranked map).** An optional **symbol layer** —
+**Symbol layer and ranked map.** An optional **symbol layer** —
 `src/gdgraph/treesitter/`, an adapter over `web-tree-sitter`, opt-in via
 `init --treesitter` — parses sources into function/class/method `SymbolNode`s and
 `calls`/`defines` `CallEdge`s, written **additively** to `storage/symbols.jsonl` +
@@ -236,7 +236,7 @@ agent. Each run records bytes-in vs bytes-out and whether output was truncated.
 | `uninstall-hook` | remove only the managed routing guard for selected runtimes |
 | `--help`/`-h`/(none) | help |
 
-**Key files.** Single-file module `src/commands/ctx.ts` (~637 lines): `ctxCommand`
+**Key files.** Single-file module `src/commands/ctx.ts` (about 1,800 lines): `ctxCommand`
 router, `loadConfig`, per-mode orchestrators (`diffAndSummarize`, `rgAndSummarize`,
 `readAndSummarize`, `runAndSummarize`), `runCommand` (`Bun.spawn`), `writeArtifact`,
 `showArtifact`, and the summarizer/parser helpers.
@@ -318,7 +318,7 @@ untouched. `wikiGenerateIndex` maintains a managed block between
 reports broken ones. `wikiValidate` folds link checks + metadata checks +
 index-staleness into one pass.
 
-**Block C addition (`ask`).** `GdWikiService.ask` (`src/wiki/ask.ts`) answers a
+**`ask`.** `GdWikiService.ask` (`src/wiki/ask.ts`) answers a
 question **deterministically** by lexical (Jaccard) retrieval scoped strictly to the
 project's own collected wiki pages + current (non-superseded, in-validity) memory
 entries — never an arbitrary corpus — returning the top-k **citations** and an
@@ -344,7 +344,7 @@ modules' materialized artifacts, so it must run after those modules produce data
 ## gdskills
 
 **Purpose.** `gdskills` is the working-skills subsystem. It manages **bundled
-skills** (a fixed code-defined catalog of ~90 skills installed into
+skills** (a shipped catalog of 170 `SKILL.md` files (the default `recommended` profile installs 59) installed into
 `.metaproject/skills/gdskills/**`) and **project skills** (per-entity/per-module
 skill packages generated under `.metaproject/project-skills/`). Around these it
 provides routing, verification against repo evidence, auditable learning proposals,
@@ -461,7 +461,7 @@ pass<warn<fail: any P0 → fail, regression ≥10 → fail (≥3 → warn), miss
 source → fail only under `--strict`, coverage below soft floor → warn. `strict` mode
 makes auto-mode importers return `missing` instead of spawning tools.
 
-**Block D addition (hotspots).** A churn×complexity **hotspot** signal
+**Hotspots.** A churn×complexity **hotspot** signal
 (`src/health/metrics/hotspot.ts`, `rankHotspots` — score = git churn × Σ per-function
 cyclomatic complexity, ranked score-desc) is folded **additively** into `healthScore`
 via `scoring.hotspotWeight`, which **defaults to `0`** — so default scores, the
@@ -526,7 +526,7 @@ fallback isn't `"none"` — this makes the pre-push hook block. Note some declar
 config (`changedSelection.strategies` incl. `gdgraph`, `runner` mode, `historyLimit`,
 `keepRawLogs`) is **latent/aspirational** — not honored by current logic.
 
-**Block D additions (coverage-map TIA + smoke tier).** An opt-in **Test Impact
+**Coverage-map test selection and smoke tier.** An opt-in **Test Impact
 Analysis** (`src/testing/coverage-map.ts`, the `coverageMap` capability) selects tests
 **map-first** when a normalized `coverage-map.json` is present — intersecting changed
 files/lines against a `testFile → coveredFiles` map parsed from **existing** lcov /
@@ -561,8 +561,8 @@ mistakes, patterns, and more. Markdown files under `.metaproject/memory/` are th
 source of truth; the module reads, ranks, deduplicates, and consolidates them
 **deterministically** by default — pure token/trigram similarity over canonical
 Markdown (never a generated/inverted index), with an optional
-embedding rerank (Block C) that is opt-in and always degrades back to lexical. It is
-a Mem0-style memory layer reimplemented deterministically, and it feeds a "learning
+embedding rerank that is opt-in and always degrades back to lexical. It is
+a deterministic memory layer, and it feeds a "learning
 signal" (only `accepted` entries) into gdskills.
 
 **CLI surface.** `memoryCommand`:
@@ -595,8 +595,8 @@ a configured transformer-compatible adapter), `check.ts`, `config.ts`, and
 record from `# Title`, `Key: value` header fields, and `##` sections.
 **Deterministic similarity** (`text.ts`): tokenize + jaccard + trigram
 `titleSimilarity`. **Weighted linear ranking** (`search.ts`): score = Σ weight ×
-{relevance, recency (exponential decay), confidence, status, scope}. **Mem0-style
-lifecycle:** `ingest` = ADD new or reconcile (append provenance to) near-duplicates,
+{relevance, recency (exponential decay), confidence, status, scope}. **Ingest and
+reflect lifecycle:** `ingest` = ADD new or reconcile (append provenance to) near-duplicates,
 keyed on `(source, link, date)`; `reflect` = CONSOLIDATE tag-clusters into pattern
 drafts (no LLM synthesis). Dedup marks a duplicate at title-similarity ≥ 0.8 or
 summary-jaccard ≥ 0.6 with a shared scope/tag; conflict detection flags candidate
@@ -605,12 +605,12 @@ metadata, links, dedup, and conflicts; the generated catalog is optional and
 its absence is not an integrity failure. Note `reflect` and
 `relevant` bypass the `MemoryService` interface (5 of the 6 subcommands).
 
-**Block C additions (bitemporal + typing + embeddings).** Entries gained an optional
+**Bitemporal entries, typing and embeddings.** Entries gained an optional
 **bitemporal** header (`Class`, `Valid-From`, `Valid-To`, `Recorded-At`, `Supersedes`,
 `Superseded-By`) parsed by `store.ts`; queries return `current` entries by default
 and honor `--as-of <date>` for a point-in-time view, and `supersede.ts` records a
 **non-destructive** replacement (sets both sides + closes the old validity interval,
-idempotent — it never deletes). Entries authored before Block C omit these fields
+idempotent — it never deletes). Entries authored before the bitemporal fields omit these fields
 and parse exactly as before. **Memory typing** maps every type to a knowledge class
 via `MEMORY_CLASS_MAP` (`semantic`/`episodic`/`procedural`, total and defaulting to
 `semantic`); `inject.ts` splices accepted, current, `procedural`-class memory into
@@ -661,11 +661,13 @@ deterministic mechanics; cognitive work is layered on by gdskills subagents
 | `status <id>` | one flow: status, source, AC state, PR, owner, latest signature, tasks, last 5 history events |
 | `freeze <id>` | record AC checksum, `initializing → ready` |
 | `start <id>` | `ready → in-progress` |
-| `task add <id> --title "<t>" [--kind context\|implement\|test\|review\|docs]` | append a task |
-| `task done <id> <taskId>` | mark a task done |
+| `task add <id> --title "<t>" [--kind context\|implement\|test\|verify\|review\|docs] [--depends T1,T2]` | append a task |
+| `task done <id> <taskId> [--disposition completed\|blocked\|failed\|skipped]` | close a task |
+| `next <id>` | the first task not done whose dependencies are all done |
 | `owner set <id> --owner "<name>" --reason "<why>"` | set/change the flow's owner (accountable human, never inferred); appends a history event |
 | `ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]` | confirm one acceptance criterion; appends a signature |
-| `ac update <id> --reason "<why>"` \| `ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"` | re-freeze AC checksum, void prior confirmations; the `--criterion`/`--text` form (flow 293) additionally rewrites or appends that one criterion's line |
+| `ac update <id> --reason "<why>"` \| `ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"` | re-freeze AC checksum, void prior confirmations; the `--criterion`/`--text` form additionally rewrites or appends that one criterion's line |
+| `ac reseal <id> --reason "<why>"` \| `ac kinds <id>` | re-seal a stale checksum while keeping confirmations; show each criterion's verification kind (read-only, never gates) |
 | `implemented <id> --pr <url>` | `in-progress → implemented`, record draft PR |
 | `complete <id> [--comment] [--merged <commit>] [--signed-by "<name>"]` | run completion gates; pass → `done` (appends a completion signature and records the attempt's gate outcomes), fail → `in-progress` |
 | `block <id> --reason "<why>"` | `* → blocked` (saves previous status) |
@@ -687,27 +689,27 @@ checksums), `flow/context.ts` (deterministic context collection), `flow/types.ts
 `previousStatus`. **AC freeze:** `acChecksum` normalizes the criteria file and
 sha256s it; `freeze` refuses if there are zero real criteria; `assertAcIntact`
 recomputes the checksum before most mutations and throws (directing to `ac update`)
-if the file was edited outside the CLI. **Completion gates** (`complete`): (1)
-acceptance-criteria (intact + every criterion confirmed), (2) pull-request (PR exists
-+ checks green, or skipped if tracker unavailable), (3) health
-(`deps.healthGate(cwd)`), (4) owner — **opt-in per package** (`gates.owner`, written
-by `flow init`; flows created before flow 289 report it `skipped` rather than being
-retroactively blocked) — fails while `flow.owner` is unset, (5) folder-committed — **opt-in per
-package** (`gates.folderCommitted`, written by `flow init` from 0.3.53; older packages
-report it `skipped`, as does a non-git directory) — fails while the flow folder is not in
-`HEAD`. The flow folder is committed in the same PR as the code; the commit at closing
-is a rule to follow, and the gate requires only that `flow.json` is in `HEAD` before
-closing. `flow init` and `flow renumber` avoid numbers used on known remote branches
-(`src/flow/remote-flows.ts`: up to 500 remote-tracking refs, no network; a never-fetched
-ref is invisible and the repair is `flow renumber`), and `flow check`
-reports a clash with the default branch as `duplicate-id` (a clash with any other remote
-branch is a non-failing `branch-duplicate-id` warning) and an uncommitted folder as a
-non-failing `untracked` warning. `passed = gates.every(g
-=> g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
+if the file was edited outside the CLI. **Completion gates** (`complete`), in evaluation order: acceptance-criteria (checksum
+intact and every criterion confirmed), pull-request (or main-merge for a direct-merge
+handoff with no open PR), base-branch, tasks, owner and folder-committed (each **opt-in per package**,
+written by `flow init`; older packages report them `skipped` rather than being
+retroactively blocked), review (opt-in; a clean review round was actually observed),
+health (`deps.healthGate(cwd)`), and security (omitted when the module is disabled).
+The folder-committed gate (`gates.folderCommitted`, written by `flow init` from 0.3.53;
+a non-git directory also reports it `skipped`) fails while the flow folder is not in
+`HEAD`. The flow folder is committed in the same PR as the code; the gate requires only
+that `flow.json` is in `HEAD` before closing. `flow init` and `flow renumber` avoid
+numbers used on known remote branches (`src/flow/remote-flows.ts`: up to 500
+remote-tracking refs, no network; a never-fetched ref is invisible and the repair is
+`flow renumber`), and `flow check` reports a clash with the default branch as
+`duplicate-id` (a clash with any other remote branch is a non-failing
+`branch-duplicate-id` warning) and an uncommitted folder as a non-failing `untracked`
+warning.
+`passed = gates.every(g => g.status !== "fail")` — **skipped gates do not block**. `ac confirm` and
 `complete` each append a signature (who, when, what was signed, and the identity's
-basis — `stated`/`derived`/`unknown`; flow 289), and `complete` persists every
-attempt's gate outcomes onto `FlowState.completionAttempts` regardless of pass/fail
-(flow 291) — `keryx governance report` reads both, plus review-round spend and the
+basis — `stated`/`derived`/`unknown`), and `complete` persists every
+attempt's gate outcomes onto `FlowState.completionAttempts` regardless of pass/fail —
+`keryx governance report` reads both, plus review-round spend and the
 trigger spend ledger, into one cross-flow summary. Every mutation goes through
 `save()` which bumps `updatedAt`, pushes history, writes `flow.json`, and appends to
 `journal.md`. The service is constructed with `FlowServiceDeps` (`tracker`,
@@ -910,18 +912,16 @@ signals) and from `security-audit` (dependency/committed-secret scanning): this
 module protects prompts, external content, generated outputs, and `.metaproject/`
 artifacts. It is **deterministic by default** (rule + entropy detectors; the model
 backends are opt-in and default off) and **leak-safe** — findings never carry raw
-sensitive values, only fixed-width masks and local-only HMAC hashes. The shipped
-scope is spec §16 **Phase 1+2+3** (engine + CLI + write-seam integrations), extended
-by roadmap-2026 **Block E** with modern exfil/PII detectors, a multi-runtime hook
-registry, a red-team eval harness, and **opt-in** model backends (below); the
-always-on gateway mode (Phase 4) remains **not** implemented.
+sensitive values, only fixed-width masks and local-only HMAC hashes. The shipped scope is the engine, the CLI and the write-seam integrations, plus modern
+exfil and PII detectors, a multi-runtime hook registry, a red-team eval harness and
+**opt-in** model backends (below); the always-on gateway proxy is **not** implemented.
 
 **CLI surface.** Dispatched by `securityCommand`:
 
 | Subcommand | Behavior | Exit |
 |---|---|---|
 | `security status` | print effective config: mode, raw retention, gate, config-checksum, per-policy action | 0 |
-| `security scan <path> [--json] [--source <kind>]` | scan a file, resolve a decision, write `artifacts/latest.{md,json}` | mode-gated (see below) |
+| `security scan <path> [--json] [--source <kind>] [--recursive\|--no-recursive] [--exclude <path>]... [--max-files <n>] [--max-bytes <n>]` | scan a file, resolve a decision, write `artifacts/latest.{md,json}` | mode-gated (see below) |
 | `security scan-mcp <manifest\|dir> [--json] [--pin]` | scan MCP tool manifest(s) for injection/exfil signals against a pinned baseline (`--pin` records the baseline) | **1** with `--strict`, on a threat or incomplete coverage (independent of mode) |
 | `security audit-harness [path] [--json] [--ci] [--fix-proposals] [--baseline <file>] [--severity-floor <level>]` | read-only sweep of harness-configuration surfaces; compute score and grade with pass/fail gate; `--ci` sets exit code from gate | 0 in advisory; **1 in `ci` mode on non-passing gate** when `--ci` given |
 | `security audit-harness apply --proposal <id>` | apply a specific fix proposal by id (never auto-applies) | 0 or 1 on error |
@@ -980,7 +980,7 @@ outside the tool), the mode is downgraded, or a policy is disabled — each also
 appends an incident. Reports are written to `data/security/artifacts/latest.{md,json}`;
 `report`/`gate` read that artifact and never re-scan.
 
-**Block E additions (roadmap-2026 hardening).** Modern data-exfiltration detectors
+**Exfiltration, PII and eval additions.** Modern data-exfiltration detectors
 (`src/security/detect/exfil.ts`) flag markdown-image / auto-render **EchoLeak**-style
 leaks (CVE-2025-32711) against a `policies.egress.allowlist` (deny-by-default), and
 `egress.ts` adds always-on **SSRF / cloud-metadata** host detection (RFC-1918 /
@@ -992,12 +992,12 @@ labeled-corpus **red-team eval harness** (`eval/harness.ts`, `security eval [--c
 <injection\|exfil\|structured-pii\|secret\|all>] [--with-model]`) proves detection
 quality against committed fixtures. Two **opt-in** model backends sit on the
 `backends` config seam — both **default off**, resolved through the Capability Seam +
-Asset Resolver: a **Prompt Guard 2** injection adapter (`detect/injection/adapter.ts`,
+Asset Resolver: a prompt-injection model adapter (`detect/injection/adapter.ts`,
 `backends.injectionModel`) and an **NER PII** adapter (`detect/pii/ner-adapter.ts`,
 `backends.piiModel`). All remain leak-safe and degrade to the deterministic rule
 detectors when a dependency/asset is unavailable.
 
-**Audit remediation 2 (flow 355, security depth).** `redactSensitiveText`
+**Redaction depth.** `redactSensitiveText`
 (`redact.ts`) now runs the entropy detector — the SAME thresholds `keryx
 security scan` uses — after the pattern pass, so an opaque high-entropy
 credential with no named prefix (a bearer token, a raw key) is masked as
@@ -1033,9 +1033,9 @@ checksum, `fs/promises`, `path`) + internal `lib/fs`, `lib/args`, `lib/json`,
 `lib/ui`. `init`/`update` scaffold the config, `modules/security.md`, and
 `core/security/README.md` via `security/templates.ts`.
 
-**Write-seam integrations (Phase 3).** A shared in-process guard
+**Write-seam integrations.** A shared in-process guard
 (`src/security/guard.ts`, exporting `guardOutput` / `redactRaw` /
-`securityFlowGate` / `formatGuardWarning`) wraps the frozen Phase 1+2 engine and is
+`securityFlowGate` / `formatGuardWarning`) wraps the scanning and policy engine and is
 now called at **five write seams** — the first real inbound calls into this module
 from other modules:
 
@@ -1052,7 +1052,7 @@ category+count reason**; **disabled is a zero-cost no-op**. The guard degrades t
 engine error, imports only from the engine + shared libs (so the seam stays
 acyclic), and never leaks raw content into reasons or logs.
 
-**Hooks (Phase 4).** Two optional hooks extend enforcement to surfaces outside
+**Agent hooks.** Two optional hooks extend enforcement to surfaces outside
 `keryx`'s own workflows. Both are offered by `init` **only when `security` is
 enabled**, default on (confirm prompt; accepted under `--yes`), and no-op when the
 module is disabled. Both honor `config.mode` — **advisory (the default) warns but
@@ -1068,15 +1068,15 @@ never blocks; enforced/ci/gateway block**.
   skip if `keryx` is not on `PATH`, and is recorded in the manifest at
   `security.hooks.prePush`.
   Opt out with `--no-security-hook`.
-- **agent Claude settings hook** (`.claude/settings.local.json` by default, the
+- **agent `claude` settings hook** (`.claude/settings.local.json` by default, the
   tracked `.claude/settings.json` when `agentEntrypoints.claudeSettings` has scope
   `shared`) — `installSecurityAgentHooks`
   (`src/security/agent-hooks.ts`) merges, merge-safely (a `_keryxManaged:
   "security-agent-hooks"` sentinel keeps re-install idempotent and preserves all
-  existing settings/hooks), two Claude Code hooks: `UserPromptSubmit` →
+  existing settings/hooks), two `claude` runtime hooks: `UserPromptSubmit` →
   `keryx security check-input --source untrusted-external` and
-  `PreToolUse(Write|Edit)` → `keryx security check-output`. Claude
-  Code-specific, project-local, advisory by default; recorded at
+  `PreToolUse(Write|Edit)` → `keryx security check-output`. Specific
+  to the `claude` runtime, project-local, advisory by default; recorded at
   `security.hooks.agent`. Opt out with `--no-security-agent-hook`.
 
 `update` refreshes each hook only when the manifest already records it.
@@ -1085,28 +1085,36 @@ never blocks; enforced/ci/gateway block**.
 
 ## mcp
 
-**Purpose.** `mcp` (Block A, roadmap-2026) is a **new, opt-in, cross-cutting module**
-that exposes keryx's existing module **service facades** over the **Model Context
-Protocol** so an external agent can call them as MCP **Tools** and read generated
-`.metaproject/` artifacts as read-only MCP **Resources**. It adds no new domain logic:
-every Tool is a thin wrapper that shapes input, calls one facade method, and returns
-the typed result. It is **stdio-first** (an isolated localhost HTTP/SSE transport is a
-further opt-in), and `modules.mcp` **defaults off** — the module entry + config are
-scaffolded only via `init --mcp`.
+**Purpose.** `mcp` is an **opt-in, cross-cutting module** that exposes keryx's
+existing module **service facades** over the **Model Context Protocol** so an external
+agent can call them as MCP **Tools** and read generated `.metaproject/` artifacts as
+read-only MCP **Resources**. It adds no new domain logic: every Tool is a thin wrapper
+that shapes input, calls one facade method, and returns the typed result. It is
+**stdio-first** (an isolated localhost HTTP/SSE transport is a further opt-in), and
+`modules.mcp` **defaults off**. Two commands own it: `keryx serve-mcp` runs the server,
+and `keryx integrate` writes the client config that launches it and switches the module
+on. The `keryx mcp` verb is the other direction: it manages the MCP servers keryx
+connects *to* (see [MCP servers in the shell](modules/mcp-servers.md)).
 
-**CLI surface.** Dispatched by `mcpCommand`:
+**CLI surface.** `serveMcpCommand` and `integrateCommand`:
 
 | Subcommand | Behavior |
 |---|---|
-| `mcp` / `mcp serve` | run the stdio JSON-RPC MCP server (default) |
-| `mcp serve --http` | use the isolated localhost HTTP/SSE transport (requires `http.enabled`) |
-| `mcp serve --cwd <project-root>` | expose a specific project regardless of the MCP client's launch directory |
-| `mcp install --runtime <cursor\|claude\|opencode\|generic\|all>` | write project-scoped client config with `--cwd <project-root>` |
-| `mcp uninstall --runtime <cursor\|claude\|opencode\|generic\|all>` | remove only the managed keryx client entry |
-| `mcp --help` / `-h` | usage |
+| `serve-mcp` | run the stdio JSON-RPC MCP server (default) |
+| `serve-mcp --http` | use the isolated localhost HTTP/SSE transport (requires `capabilities.http.enabled`) |
+| `serve-mcp --cwd <project-root>` | expose a specific project regardless of the MCP client's launch directory |
+| `serve-mcp --read-only` | hide every tool marked mutating |
+| `serve-mcp --harness <id>` | bind a cross-harness memory identity for the process (or `KERYX_HARNESS`; the flag wins) |
+| `integrate <cursor\|claude\|opencode\|vscode\|generic\|all> [--dry-run]` | write the project-scoped client config and set `modules.mcp.enabled=true` |
+| `integrate --remove <editor>` | remove only the managed keryx client entry |
+
+<!-- retired-spellings-ok: line — the retired spelling is named here on purpose, to say it is retired -->
+
+The `keryx mcp serve`, `mcp install` and `mcp uninstall` spellings are retired in
+favour of these.
 
 **Key files.**
-- `src/commands/mcp.ts` — thin handler; parses `serve`/`--http`, never imports the SDK.
+- `src/commands/serve-mcp.ts`, `src/commands/integrate.ts` — thin handlers; they never import the SDK.
 - `src/mcp/server.ts` — stdio-first server loop; lazy-loads `@modelcontextprotocol/sdk` via `await import()` and hard-fails with an actionable message when it is absent (the sanctioned opt-in exception).
 - `src/mcp/tools.ts` — the Tool registry over the gdgraph/gdctx/security/memory/health/testing/wiki/flow/standard/sac facades.
 - `src/mcp/resources.ts` — the read-only `metaproject://<class>/<relpath>` Resource registry (`artifacts`/`wiki`/`memory`), path-confined to each class root.
@@ -1127,8 +1135,9 @@ import of the MCP SDK anywhere in `src/`.
 **Data & artifacts.** Reads (read-only) the generated `.metaproject/` trees it serves
 as Resources (`data/**/artifacts`, `wiki/`, `memory/`). Config
 `.metaproject/core/mcp/mcp.config.json` (deep-merged over defaults: transport, HTTP
-host/port default off, Tool include/exclude, Resource roots). `init --mcp` scaffolds
-the `core/mcp/` structure + config and the `modules.mcp` manifest entry.
+host/port default off, Tool include/exclude, Resource roots). Enabling the module
+(`keryx integrate`, or `keryx modules enable mcp`) scaffolds the `core/mcp/` structure
+and config and the `modules.mcp` manifest entry.
 
 **Dependencies / integrations.** Node/Bun builtins + `lib/*` + each module's service
 facade + the security `guard` seam; the MCP SDK (`@modelcontextprotocol/sdk`) is an
@@ -1154,7 +1163,7 @@ references, not copies. It is **not** one of the nine default `init` modules —
 toggle governs the manifest entry and the module's scaffolding, not whether the
 command exists.
 
-**CLI surface.** `workspaceCommand` (`src/commands/workspace.ts`) — seventeen
+**CLI surface.** `workspaceCommand` (`src/commands/workspace.ts`) — eighteen
 subcommands, mirrored in `MODULE_COMMANDS.sac` and checked against this router
 by `module-commands.test.ts`:
 
@@ -1171,6 +1180,7 @@ by `module-commands.test.ts`:
 | `workspace review` | terminal review + owner write |
 | `workspace catch-up` / `dismiss-candidate` | pull-based digest; dismiss an unbound wrap-up candidate |
 | `workspace collaboration <id>` | read-only collaboration overview |
+| `workspace handoff <id> --to <subject> --artifact <ref>` | hand an artifact reference to another subject; the sender is always the local actor |
 | `workspace policy-readiness` | diagnose the opt-in policy-experiment chain |
 
 `keryx commands` **omits** this verb; use `keryx workspace --help`.
@@ -1214,7 +1224,7 @@ Anchors (where it is), a Course pointer (what it is doing), and model-written
 Seeds (what it found worth keeping). keryx's own shell, TUI and `harness run`
 have always had one, living in `slate.json` next to the session. `slate` as a
 surface is the *external hand* onto it — three MCP tools that let any
-MCP-connected harness (Claude Code, Codex, anything speaking MCP) open a slate
+MCP-connected harness (anything speaking MCP) open a slate
 of its own and close it into the same SAC propose/review pipeline a
 keryx-native session uses.
 
@@ -1269,7 +1279,7 @@ under `scope: "shared"` — and
 (2) **distills** — splits large monolithic entrypoints into typed artifacts
 (project rules, procedural skills, or root-only instructions), rewriting the root to
 keep only global/always-on instructions (plus the managed block when it is a shared
-target). Scopes, the Codex `override`/`skip` modes and the migration out of tracked
+target). Scopes, the `codex` `override`/`skip` modes and the migration out of tracked
 files are described in
 [where the block goes](workspace-and-lifecycle.md#where-the-block-goes-local-and-shared-scope).
 
@@ -1380,8 +1390,8 @@ not a new source of project knowledge.
 
 **CLI surface.** `keryx orient [<runtime>]` emits formatted context;
 `orient install-hook --runtime <id|all>` and `uninstall-hook` manage compatible
-turn-start hooks. Hook installation is supported for Claude, Codex, and Cursor;
-Windsurf and Zed are reported as unsupported because they lack a compatible
+turn-start hooks. Hook installation is supported for the `claude`, `codex` and `cursor` runtimes;
+`windsurf` and `zed` are reported as unsupported because they lack a compatible
 context-injection hook.
 
 **Key files.** `src/ctx/orient.ts` builds the bounded project-root
@@ -1417,9 +1427,10 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 | `harness extension --spec <path>` | dispatch one declared extension (the only path that reaches `checkApproval`) |
 | `harness wave --spec <path>` | plan and run a declared multi-agent wave |
 | `harness replay --record <path> [--fixture <p>] [--write-fixture <p>] [--json]` | validate a replay fixture against a recorded run |
+| `agents external enable` / `disable [--json]` | opt in or out of the external agent runtime (the user-global `externalAgents` config) |
 | `agents external list [--json] [--no-probe]` / `probe <id> [--json]` | inspect the external agent registry and its three-state availability; read-only, spends no quota (`src/commands/agents-external.ts`) |
 | `agents external review <run-id>` / `apply <run-id> [--allow-flagged]` / `discard <run-id>` | review, land (as a new local branch `external/<run-id>`, after you type the patch hash prefix at a terminal) or drop a stored `claude-cli --write` or `codex-cli --write` diff ([guide](guides/external-agent-write.md)) |
-| `agents external run <id> --task "<text>" [--unattended] [--write]` | drive one ACP agent (`transport: acp`) with keryx as its client, in a disposable worktree, under keryx's approval gate with the mode lowered to `ask`; spends the operator's quota ([ACP client guide](guides/acp-client.md)) |
+| `agents external run <id> --task "<text>" [--unattended] [--write]` | drive one external agent with keryx as its client (an ACP agent such as `gemini-acp` over its protocol, or a line-stream CLI), in a disposable worktree, under keryx's approval gate with the mode lowered to `ask`; spends the operator's quota ([ACP client guide](guides/acp-client.md)) |
 
 **Key files.**
 - `src/harness/run/run.ts` — `runOffline`, the assembled loop: startup → context manifest → provider stream → policy decision → budget/loop guards → tool executor → redaction + append-only session → completion gate.
@@ -1429,7 +1440,7 @@ other runtime surface (`shell`, `serve`, `sessions`) sits on.
 - `src/harness/completion/gate.ts` — the completion verdict; `flow/managed-flow-port.ts` is its only route into Task Manager.
 - `src/harness/replay/replay.ts` — fixture build and `validate-log` comparison.
 - `src/harness/child/`, `extension/` — child dispatch with budgets, extensions and bounded waves.
-- `src/harness/external/` — the external agent runtime: a two-entry registry described as data, one pure codec per CLI (argv, event parsing, failure classification), the fail-closed `runtime` block validator, the copy-then-strip child environment, prompt assembly, supervision, and `runtime.ts` composing them.
+- `src/harness/external/` — the external agent runtime: a four-entry registry (`codex-cli`, `claude-cli`, `antigravity-cli`, `gemini-acp`, over a line-stream or an ACP transport) described as data, one pure codec per CLI (argv, event parsing, failure classification), the fail-closed `runtime` block validator, the copy-then-strip child environment, prompt assembly, supervision, and `runtime.ts` composing them.
 - `src/capability/external-agents.ts` — the opt-in gate: the user-global `externalAgents` config, the project manifest opt-in, and the remote/CI hard disable. `src/harness/run-external-factory.ts` builds the `runExternal` hook `spawn_subagent` accepts, or returns `undefined` when the capability is off.
 
 **External children.** A dispatch may carry an optional `runtime` block
@@ -1443,13 +1454,13 @@ disposable git worktree with a stripped environment and a restricted tool roster
 reviewed diff that lands as a new local branch; see
 [Let an external agent write](guides/external-agent-write.md) — and refuses for
 the other agents with its own named reason. The capability is **off by default**, opt-in through the user-global
-`externalAgents` config (plus `keryx init --external-agents` inside a workspace),
+`externalAgents` config (`keryx agents external enable` and `disable` toggle it, plus `keryx init --external-agents` inside a workspace),
 and hard disabled on a remote transport or under CI. keryx never reads a vendor
 credential store, so
 availability is `available` / `binary-missing` / `not-probed` and never "ready".
-Every codec is pure, and the whole layer is tested offline against the recorded
-transcripts in `fixtures/external/` — nothing has been run against a real vendor
-process.
+Every codec is pure and tested offline against the recorded transcripts in
+`fixtures/external/`; live runs against the real vendor CLIs are recorded under
+`fixtures/external/live/`.
 
 **How it works.** Every decision core is pure with `clock` and `idSeq` injected;
 the only effect surfaces are injected adapters (`MutationAdapter`,
@@ -1482,7 +1493,7 @@ where tools actually run: the non-interactive harness paths register none.
 
 | Command | Behavior |
 |---|---|
-| `shell [-c\|--continue] [-r\|--resume [id]] [--provider <p>] [--model <m>] [--agent\|--chat] [--tui\|--no-tui]` | start the interactive agent shell |
+| `shell [-c\|--continue] [-r\|--resume [id]] [--fork] [--take-over] [--provider <p>] [--model <m>] [--base-url <url>] [--agent\|--chat] [--tui\|--no-tui] [--name <n>] [--permission-mode <m>\|--ask\|--trust\|--auto] [--deny-tools <a,b>] [-p\|--print <prompt>] [--events-file <path>] [--debug] [--guard]` | start the interactive agent shell; `-p` runs one turn and exits |
 | `sessions list [--json]` | sessions for this project, newest first; forks marked `↳` |
 | `sessions fork <id> [--title "<t>"] [--json]` | branch a session, ancestry recorded |
 | `sessions export <id>` | Markdown transcript |
@@ -1565,7 +1576,7 @@ artifact write to the owning module.
 
 ## serve
 
-**Purpose.** A loopback-bound HTTP entry over the harness, so a bot or another
+**Purpose.** An HTTP entry (loopback by default) over the harness, so a bot or another
 product can drive turns. Opt-in and off until started; not a manifest module.
 
 **CLI surface.** `serve` with the flags in the
@@ -1615,7 +1626,7 @@ every other module (import counts: `fs` 32, `json` 10, `args` 8, `templates` 8,
 - `json.ts` — `readJsonFile<T>` (rethrows `Invalid JSON in <path>`), `readJsonFileOr<T>` (returns fallback on failure).
 - `prompt.ts` — `confirm`, `choice<T>`: TTY prompts that return defaults when stdin isn't a TTY (CI-safe). Depends on `ui.ts`.
 - `ui.ts` — `colorEnabled`, `style`, `symbols`, `banner`, `heading`, `statusLine`, `nextSteps`, `note`, and `help*` renderers.
-- `templates.ts` — ~23 `render*(): string` builders (~1836 LOC) that materialize the generated agent workspace: `renderIndexMarkdown`, `renderMetaprojectDashboardHtml` (+ `MetaprojectDashboardData` type), agent-entrypoint/rules renderers, config/gitignore renderers, git-hook script renderers, and gdgraph/gdctx scaffold renderers.
+- `templates.ts` — 26 `render*(): string` builders (about 3,000 LOC) that materialize the generated agent workspace: `renderIndexMarkdown`, `renderMetaprojectDashboardHtml` (+ `MetaprojectDashboardData` type), agent-entrypoint/rules renderers, config/gitignore renderers, git-hook script renderers, and gdgraph/gdctx scaffold renderers.
 
 **How it works.** Flat utility library — named functions, no classes/DI/barrel;
 callers import files directly. Key patterns: **pure string templating** (the whole

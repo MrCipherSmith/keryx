@@ -8,7 +8,7 @@ Run the real vendors first, read what they actually emit, then fix only what dis
 
 ## Steps
 
-1. Operator enables `externalAgents.enabled` in the keryx user config and accepts the token spend (asked over helyx).
+1. Operator enables `externalAgents.enabled` in the keryx user config and accepts the token spend (asked over the operator chat channel).
 2. Live run per vendor (claude, codex, agy), raw output saved to the scratchpad; compare against `src/harness/external/codec/{claude-cli,codex-cli,antigravity-cli}.ts`.
 3. Fix each disagreement in the codec, failing test first.
 4. Sanitize the transcripts (home path, account, session ids, tokens) into fixtures with a version header; add the fixture-scan test and the replay tests; add the env-gated live test.

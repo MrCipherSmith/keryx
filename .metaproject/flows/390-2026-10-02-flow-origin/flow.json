@@ -225,7 +225,7 @@
     {
       "at": "2026-10-02T15:19:06.252Z",
       "event": "ac-confirmed",
-      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, helyx-channel 178131) [stated])"
+      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, operator chat channel 178131) [stated])"
     },
     {
       "at": "2026-10-02T15:21:17.968Z",
@@ -388,7 +388,7 @@
       "at": "2026-10-02T15:19:06.252Z",
       "kind": "ac-confirm",
       "identity": {
-        "value": "altsay (operator, helyx-channel 178131)",
+        "value": "altsay (operator, operator chat channel 178131)",
         "basis": "stated",
         "source": "`--signed-by` flag"
       },

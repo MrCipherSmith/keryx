@@ -12,14 +12,14 @@
   ],
   "context_refs": [{"path": "docs/requirements/keryx-full-review-remediation/catch-dispositions.md", "kind": "custom", "exists": true}],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/catch-dispositions.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/compat/openai-compat-provider.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/single-turn.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/anthropic/anthropic-provider.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/openai/openai-provider.test.ts",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/src/harness/external/supervise-mcp.test.ts"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/data/testing/context.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/docs/requirements/keryx-full-review-remediation/catch-dispositions.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/compat/openai-compat-provider.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/single-turn.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/anthropic/anthropic-provider.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/provider/openai/openai-provider.test.ts",
+    "~/goodea/keryx/.worktrees/full-review-remediation/src/harness/external/supervise-mcp.test.ts"
   ],
   "constraints": [
     "Read the exact new worktree .metaproject/index.md first and local testing context.",

@@ -55,7 +55,7 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-Phase 1 research, 2026-09-23, worktree `/home/altsay/keryx-sched` (branch `feat/scheduler`,
+Phase 1 research, 2026-09-23, worktree `~/keryx-sched` (branch `feat/scheduler`,
 from main 0.2.155). Research and a draft only: no source code changed.
 
 ### 0. The operator's request, and the decision it reverses

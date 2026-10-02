@@ -29,6 +29,7 @@ const ROOT = path.resolve(import.meta.dir, "..");
 /** Files whose links are part of the published surface. */
 const PATTERNS = [
   "README.md",
+  "README.ru.md",
   "CHANGELOG.md",
   "CONTRIBUTING.md",
   "SECURITY.md",

@@ -48,7 +48,7 @@ Description `React/Next.js conventions reviewer.` with no glob → `paths: ["Rea
 "beside globs"). Literal-only descriptions stay `pathsSource: none`.
 
 **F-006 — `metadata.flags` entries taken verbatim make a reviewer unselectable and defeat `familyFlags`.** `reviewers.ts:338` (`reviewerFlags`), `:215`, `:501`.
-`flags: [vantage]` → `["vantage"]`; `["--Vantage "]` keeps case and space; `flags: --vantage --house` is one entry; a YAML
+`flags: [acme]` → `["acme"]`; `["--Acme "]` keeps case and space; `flags: --acme --house` is one entry; a YAML
 block list is silently ignored. Three spellings of one flag → `familyFlags: []` → the correctly spelled reviewer is
 dispatched without the path gate.
 **Decision:** fix. Normalise (trim, lower-case, split on commas/whitespace, prefix `--` when absent), accept a YAML block

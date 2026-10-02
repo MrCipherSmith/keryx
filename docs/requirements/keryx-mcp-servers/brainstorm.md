@@ -1,8 +1,8 @@
 # Keryx MCP Servers — Brainstorm
 Version: 0.1.0
 
-Reference designs studied for this package. Parity target is Grok Build;
-other harnesses are contrast, not a menu of features to union.
+Reference designs studied for this package, and the behaviours Keryx
+adopted. Other harnesses are contrast, not a menu of features to union.
 
 Sources are trees under `~/sandbox/forks/` plus keryx `main` as of this
 package. This is not a claim those trees match upstream HEAD tomorrow.
@@ -23,14 +23,9 @@ and not the third:
 `keryx-mcp-client` README non-goals already named (3). The TUI caption in
 `src/tui/mcp-inspector.ts` still says keryx does not consume MCP servers.
 
-## Grok Build (parity target)
+## Adopted behaviours
 
-Inspected: `crates/codegen/xai-grok-mcp/`,
-`crates/codegen/xai-grok-config-types/src/mcp.rs`,
-`crates/codegen/xai-grok-pager/docs/user-guide/07-mcp-servers.md`,
-`search_tool` / `use_tool` implementations.
-
-What keryx copies:
+Keryx's own decisions for the consumer surface:
 
 - Native config sections per server; project replaces user on same name.
 - Stdio (`command`/`args`/`env`) and remote (`url`/`headers`).
@@ -38,41 +33,34 @@ What keryx copies:
 - Model does **not** see MCP tools as first-class functions.
   `search_tool` + `use_tool`; system reminder is counts, not schemas.
 - CLI `mcp add|list|remove|enable|disable|doctor`.
-- TUI `/mcps`.
+- A TUI consumer view (`/mcp`, see D-04).
 - OAuth tokens in an owner-only home file.
-- Compat: Claude, Cursor, `.mcp.json`.
+- Compat: Claude, Cursor, `.mcp.json`, and Grok `[mcp_servers.*]` TOML.
 - `${VAR}` expansion.
 - Output byte cap (20_000).
 - Failed server ≠ failed session.
 
-What keryx does **not** copy, with reason:
+Deliberately **not** adopted in v1, with reason:
 
-| Grok detail | Why not v1 |
+| Option | Why not v1 |
 |---|---|
-| TOML `~/.grok/config.toml` | Keryx user config is JSON via `keryxConfigDir`. |
-| `rmcp` 2.1 + quarantined reqwest 0.13 | Keryx already lazy-loads `@modelcontextprotocol/sdk`. |
-| SSE as a distinct ACP tag that still uses HTTP | Copied as an **alias**, not a second client. |
-| Gateway `managed_gateway:` catalog | xAI-specific. |
+| TOML as the native config format | Keryx user config is JSON via `keryxConfigDir`; TOML is only read as a compat source. |
+| A second MCP library | Keryx already lazy-loads `@modelcontextprotocol/sdk`. |
+| SSE as a distinct transport | Kept as an **alias** of streamable HTTP, not a second client. |
+| A vendor-managed gateway catalog | Vendor-specific. |
 | MCP Apps UI / icons | Not in keryx TUI scope. |
-| Subagent `mcpInheritance` | Child tool lists are explicit; see D-11. |
-| `cwd` on stdio that ACP then drops | If we parse `cwd`, we honor it for local stdio. |
+| Subagent MCP inheritance | Child tool lists are explicit; see D-11. |
+| Parsing stdio `cwd` and then dropping it | If we parse `cwd`, we honor it for local stdio. |
 | Plugin `.mcp.json` marketplace | No marketplace (README non-goal). |
 
-Honest Grok gaps we also do not "fix ahead": prompts, sampling,
-elicitation from user servers, roots, live `tools/list_changed` re-index
-of the model catalog. Those are not shipped as model features there.
+Also not built ahead of need: prompts, sampling, elicitation from user
+servers, roots, live `tools/list_changed` re-index of the model catalog.
 
-## OpenCode (contrast)
+## Per-tool registration (contrast)
 
-Inspected: `packages/opencode/src/mcp/index.ts`, `catalog.ts`,
-`packages/core/src/v1/config/mcp.ts`.
-
-- Config key `mcp` in `opencode.json`, `type: "local" | "remote"`.
-- Tools registered on the model as `sanitize(server)_sanitize(tool)`.
-- Resources become three synthetic tools; prompts become slash commands.
-- Sampling/elicitation/tasks capabilities commented out.
-- OAuth callback `127.0.0.1:19876`.
-- No `mcp.json` / `mcpServers` import.
+Another agent harness studied registers every MCP tool on the model as
+`sanitize(server)_sanitize(tool)`, turns resources into three synthetic tools
+and prompts into slash commands, and has no `mcp.json` / `mcpServers` import.
 
 Useful: HTTP-then-SSE fallback; status enum including `needs_auth`;
 `tools/list_changed` cache refresh. Rejected as v1 model bridge (D-01).
@@ -84,24 +72,16 @@ Useful: HTTP-then-SSE fallback; status enum including `needs_auth`;
 (different from keryx-mcp-client, which is keryx as client of *Codex's*
 server). No user-facing SSE. Not the parity target.
 
-## Others (one line each)
+## Others
 
 | Harness | Client? | Note |
 |---|---|---|
-| Cline | yes | `mcpServers`, stdio/SSE/HTTP, `{server}__{tool}`, OAuth. |
 | Gemini CLI | yes | `mcp_{alias}_{tool}` — underscore FQNs break on `_` in names. Avoid. |
-| Qwen Code | yes | Gemini fork; `mcp__server__tool`. |
-| Crush | yes | `mcp_{server}_{tool}`, stdio/HTTP/SSE, OAuth. |
-| Continue | yes, agent mode | websocket extra; OAuth SSE-only. |
-| DeepSeek harness | yes, plugin | stdio + HTTP, `mcp__server__raw`, no OAuth. |
-| Kilocode | yes | OpenCode `mcp` map. |
-| Helyx | no | *Is* an MCP server for Claude. Same confusion keryx already has. |
-| Aider | no | No MCP. |
 
 ## Architecture question (resolved)
 
-Should keryx register MCP tools natively (OpenCode) or behind two builtins
-(Grok)? **Grok.** Recorded as D-01. The interactive agent already has a
+Should keryx register MCP tools natively (per-tool registration) or behind two builtins?
+**Two builtins.** Recorded as D-01. The interactive agent already has a
 closed `InteractiveTool[]`; a two-tool bridge is the smallest seam that
 still matches the requested product.
 

@@ -15,51 +15,45 @@ Standalone, or attached to a managed flow:
 
 ```bash
 keryx review start  --target branch --ref feature/example --reviewers a,b
-keryx review attach --flow 001 --target pull-request --ref 42
+keryx review attach --flow <flow-id> --target pull-request --ref 42
 ```
 
-The full surface:
+The core of the surface, trimmed (`…` marks the parts left out):
 
-```console
-$ keryx review
+```text
 Usage:
   keryx review attach --flow <id> --target <kind> --ref <ref> [--head <sha>]
                       [--reviewers a,b] [--report <path>]
   keryx review start --target <kind> --ref <ref> [--head <sha>] [--reviewers a,b] [--report <path>]
   keryx review ingest --report <path> [--flow <id>] --ref <ref> [--head <sha>]
                       [--verifications <file|->] [--verification-mode off|annotate|filter]
-                      [--scope <scope.json>] [--refuted <file|->]
-                      [--max-findings <n>] [--spent <usd>] [--spend-ceiling <usd>]
-                      [--parallel <n>] [--outstanding <n>]
+                      [--scope <scope.json>] [--blast-radius <blast-radius.json>] …
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
-  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
-                            [--no-related-tests] [--final] [--previous <blast-radius.json>]
-                            [--json | --brief] [--out <file>]
-  keryx review budget [--spent <usd>] [--ceiling <usd>]
-                      [--reviewers a,b] [--parallel <n>] [--outstanding <n>]
-  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
-                                [--self <login>] [--round <n>]
-                                [--out <findings.json>] [--json] [--fixtures <dir>]
-  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                              --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
-                              [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                              [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
-  keryx review loop --flow <flow-id> [--task <Tn>]
-  keryx review stack [--json]
+  keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] …
+  keryx review budget [--spent <usd>] [--ceiling <usd>] …
+  keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha> …
+  keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|-> --review <review-id> …
+  keryx review loop --flow <flow-id> [--task <task-id>]
   keryx review status <review-id-or-path>
-  keryx review complete <review-id-or-path>
-                        [--finding <id> --disposition <state> --evidence <text>]...
-  keryx review lightweight
-
+  keryx review complete <review-id-or-path> [--finding <id> --disposition <state> --evidence <text>]…
+  …
 An unrecognised option is REFUSED, not ignored.
-
-Modes:
-  attach-review, review-flow, ingest
 ```
 
-(The help also prints a paragraph on `scope` and one on verification; both are in
-the [CLI reference](../cli-reference.md#review).)
+`keryx review` also has these subcommands, each covered in the
+[CLI reference](../cli-reference.md#review):
+
+| Subcommand | Use |
+|---|---|
+| `floor`, `tier`, `reviewers`, `stack` | deterministic review floor, review tier for a fix attempt, the reviewer set, stack detection |
+| `ci-triage` | sort a failed CI job as flaky, infra or a real regression |
+| `conform` | check a pull request, report or diff against a reference document |
+| `bot` | run the pull request review bot (`bot run`, `bot post`) |
+| `metrics`, `learn` | findings acted on, dismissed and still open; learning candidates from a PR or reviewer |
+| `import` | import reviewer definitions from a package directory or tree |
+| `lightweight` | the lightweight review mode |
+| `jev-*` | optional review-service checks, see [Use review-service checks in the delivery loop](jev-in-the-delivery-loop.md) |
 
 ### Rounds, and why a second one gets its own directory
 
@@ -363,7 +357,7 @@ feeling.
 ## Stop a fix loop that is not converging
 
 ```bash
-keryx review loop --flow 203 --task T4
+keryx review loop --flow <flow-id> --task <task-id>
 ```
 
 The round bound is five attempts. But a bound that fires on count alone lets an

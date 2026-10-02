@@ -1,0 +1,972 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "395",
+  "slug": "publication-grade-documentation-showcase",
+  "title": "Publication-grade documentation: showcase README, module docs site, Metaproject summary",
+  "status": "in-progress",
+  "createdAt": "2026-10-01T05:03:43.749Z",
+  "updatedAt": "2026-10-02T16:35:23.074Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:3baf70e19e01c0aa05905529804146a9722e1538886de625b3d93e0c1cab0ac8",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "four research workers, research/*.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T18 in plan.md"
+    },
+    {
+      "id": "T5",
+      "title": "Consolidate research into audit-report.md with target IA",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:33:07.993Z",
+            "outcome": "started",
+            "detail": "363-T5 audit report"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Owner approves the target IA (gate before public files change)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "owner approval and answers recorded in journal.md"
+    },
+    {
+      "id": "T7",
+      "title": "Fix keryx --help and cli-reference drift; subcommand-level coverage test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:27.492Z",
+            "outcome": "started",
+            "detail": "363-T7 wave 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:27.784Z",
+            "outcome": "started",
+            "detail": "363-T8 wave 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Area pages batch 1 (areas 1-5)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:15.514Z",
+            "outcome": "started",
+            "detail": "363-T9 wave 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Area pages batch 2 (areas 6-10)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:15.822Z",
+            "outcome": "started",
+            "detail": "363-T10 wave 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Area pages batch 3 (areas 11-15)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.131Z",
+            "outcome": "started",
+            "detail": "363-T11 wave 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Getting started tutorial and concept pages (architecture, security model, Metaproject)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.444Z",
+            "outcome": "started",
+            "detail": "363-T12 wave 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Built with Keryx and Project status pages",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:31:16.760Z",
+            "outcome": "started",
+            "detail": "363-T13 wave 2"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Showcase README, README.ru.md, hero/OG assets",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:56:33.228Z",
+            "outcome": "started",
+            "detail": "363-T14"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:23:28.074Z",
+            "outcome": "started",
+            "detail": "363-T15 wave 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Run README quickstart and tutorial verbatim in a fresh dir; save transcript",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:14:50.389Z",
+            "outcome": "started",
+            "detail": "367-T16 verification after rebase onto main"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "27/27 commands exit 0; artifacts/quickstart-transcript-T16.txt"
+    },
+    {
+      "id": "T17",
+      "title": "Strict build, link check, retired spellings, internal-id and external-name scan",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T16",
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:14:50.696Z",
+            "outcome": "started",
+            "detail": "367-T17 verification after rebase onto main"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "mkdocs --strict exit 0, llms.txt built, check-docs-nav 0 orphans, check-doc-links 0/2047 broken, retired spellings 0 undeclared, typecheck 0, 184/184 docs+help tests, AC10 scan clean (journal)"
+    },
+    {
+      "id": "T18",
+      "title": "review-orchestrator round over the final diff",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T17",
+        "T22"
+      ],
+      "attempts": {
+        "count": 6,
+        "log": [
+          {
+            "at": "2026-10-01T10:31:24.690Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 1"
+          },
+          {
+            "at": "2026-10-01T10:45:38.324Z",
+            "outcome": "failed",
+            "detail": "round 1: 0 blocker, 3 major, 19 minor, 8 info"
+          },
+          {
+            "at": "2026-10-01T10:55:13.771Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 2"
+          },
+          {
+            "at": "2026-10-01T11:05:00.222Z",
+            "outcome": "failed",
+            "detail": "round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)"
+          },
+          {
+            "at": "2026-10-01T11:09:12.828Z",
+            "outcome": "started",
+            "detail": "367-T18 review round 3 (fix verification)"
+          },
+          {
+            "at": "2026-10-01T11:14:49.502Z",
+            "outcome": "failed",
+            "detail": "round 3: 0 blocker, 0 major, 1 minor (R1 serve loopback wording at 9 more sites), 3 info"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "3 review rounds (reviews/round-1..3.md); final minor R1 fixed in T23 and verified by deterministic sweep (journal); 0 blocker/major/minor open"
+    },
+    {
+      "id": "T19",
+      "title": "Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T09:56:33.526Z",
+            "outcome": "started",
+            "detail": "363-T19"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:28:11.826Z",
+            "outcome": "started",
+            "detail": "367-T20"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T17"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:47:12.485Z",
+            "outcome": "started",
+            "detail": "367-T21 round-1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T11:05:23.180Z",
+            "outcome": "started",
+            "detail": "367-T22"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T11:15:04.921Z",
+            "outcome": "started",
+            "detail": "367-T23"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T05:03:43.749Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T07:22:42.466Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T07:22:42.770Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T07:22:43.079Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T07:22:51.467Z",
+      "event": "task-added",
+      "detail": "T5: Consolidate research into audit-report.md with target IA"
+    },
+    {
+      "at": "2026-10-01T07:22:51.767Z",
+      "event": "task-added",
+      "detail": "T6: Owner approves the target IA (gate before public files change)"
+    },
+    {
+      "at": "2026-10-01T07:22:52.069Z",
+      "event": "task-added",
+      "detail": "T7: Fix keryx --help and cli-reference drift; subcommand-level coverage test"
+    },
+    {
+      "at": "2026-10-01T07:22:52.372Z",
+      "event": "task-added",
+      "detail": "T8: Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job"
+    },
+    {
+      "at": "2026-10-01T07:22:52.674Z",
+      "event": "task-added",
+      "detail": "T9: Area pages batch 1 (areas 1-5)"
+    },
+    {
+      "at": "2026-10-01T07:22:52.974Z",
+      "event": "task-added",
+      "detail": "T10: Area pages batch 2 (areas 6-10)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.275Z",
+      "event": "task-added",
+      "detail": "T11: Area pages batch 3 (areas 11-15)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.576Z",
+      "event": "task-added",
+      "detail": "T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)"
+    },
+    {
+      "at": "2026-10-01T07:22:53.874Z",
+      "event": "task-added",
+      "detail": "T13: Built with Keryx and Project status pages"
+    },
+    {
+      "at": "2026-10-01T07:22:54.174Z",
+      "event": "task-added",
+      "detail": "T14: Showcase README, README.ru.md, hero/OG assets"
+    },
+    {
+      "at": "2026-10-01T07:22:54.475Z",
+      "event": "task-added",
+      "detail": "T15: Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map"
+    },
+    {
+      "at": "2026-10-01T07:22:54.775Z",
+      "event": "task-added",
+      "detail": "T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript"
+    },
+    {
+      "at": "2026-10-01T07:22:55.076Z",
+      "event": "task-added",
+      "detail": "T17: Strict build, link check, retired spellings, internal-id and external-name scan"
+    },
+    {
+      "at": "2026-10-01T07:22:55.380Z",
+      "event": "task-added",
+      "detail": "T18: review-orchestrator round over the final diff"
+    },
+    {
+      "at": "2026-10-01T07:22:55.680Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T07:33:07.403Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T07:33:07.700Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T07:33:07.993Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 363-T5 audit report"
+    },
+    {
+      "at": "2026-10-01T07:41:06.962Z",
+      "event": "task-done",
+      "detail": "T5: Consolidate research into audit-report.md with target IA"
+    },
+    {
+      "at": "2026-10-01T09:23:02.996Z",
+      "event": "task-done",
+      "detail": "T6: Owner approves the target IA (gate before public files change)"
+    },
+    {
+      "at": "2026-10-01T09:23:27.492Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 363-T7 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:23:27.784Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 363-T8 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:23:28.074Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 363-T15 wave 1"
+    },
+    {
+      "at": "2026-10-01T09:31:15.515Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 363-T9 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:15.822Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 363-T10 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.131Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 363-T11 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.444Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 363-T12 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:16.761Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 363-T13 wave 2"
+    },
+    {
+      "at": "2026-10-01T09:31:29.708Z",
+      "event": "task-done",
+      "detail": "T15: Meta-files: ARCHITECTURE, SUPPORT, ROADMAP, docs issue template, package.json fields, docs/README map"
+    },
+    {
+      "at": "2026-10-01T09:33:03.189Z",
+      "event": "task-done",
+      "detail": "T8: Site restructure: Diataxis nav, landing page, llms.txt, pinned deps, Zensical trial job"
+    },
+    {
+      "at": "2026-10-01T09:41:02.047Z",
+      "event": "task-done",
+      "detail": "T10: Area pages batch 2 (areas 6-10)"
+    },
+    {
+      "at": "2026-10-01T09:41:40.802Z",
+      "event": "task-done",
+      "detail": "T9: Area pages batch 1 (areas 1-5)"
+    },
+    {
+      "at": "2026-10-01T09:45:17.650Z",
+      "event": "task-done",
+      "detail": "T13: Built with Keryx and Project status pages"
+    },
+    {
+      "at": "2026-10-01T09:48:09.955Z",
+      "event": "task-done",
+      "detail": "T7: Fix keryx --help and cli-reference drift; subcommand-level coverage test"
+    },
+    {
+      "at": "2026-10-01T09:49:58.710Z",
+      "event": "task-done",
+      "detail": "T11: Area pages batch 3 (areas 11-15)"
+    },
+    {
+      "at": "2026-10-01T09:56:24.790Z",
+      "event": "task-done",
+      "detail": "T12: Getting started tutorial and concept pages (architecture, security model, Metaproject)"
+    },
+    {
+      "at": "2026-10-01T09:56:32.907Z",
+      "event": "task-added",
+      "detail": "T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests"
+    },
+    {
+      "at": "2026-10-01T09:56:33.228Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 363-T14"
+    },
+    {
+      "at": "2026-10-01T09:56:33.527Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 363-T19"
+    },
+    {
+      "at": "2026-10-01T10:10:23.705Z",
+      "event": "task-done",
+      "detail": "T14: Showcase README, README.ru.md, hero/OG assets"
+    },
+    {
+      "at": "2026-10-01T10:10:56.819Z",
+      "event": "task-done",
+      "detail": "T19: Cross-lane fixups: redirects, inbound links to retired pages, retired spellings, leftover ids, stale comments, stability wording, index tests"
+    },
+    {
+      "at": "2026-10-01T10:14:38.603Z",
+      "event": "renumbered",
+      "detail": "363 -> 367: id 363 was taken on main by the rules-export flow while this branch was open; 367 is the first id free on every remote branch"
+    },
+    {
+      "at": "2026-10-01T10:14:50.389Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 367-T16 verification after rebase onto main"
+    },
+    {
+      "at": "2026-10-01T10:14:50.696Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 367-T17 verification after rebase onto main"
+    },
+    {
+      "at": "2026-10-01T10:27:53.307Z",
+      "event": "task-done",
+      "detail": "T16: Run README quickstart and tutorial verbatim in a fresh dir; save transcript"
+    },
+    {
+      "at": "2026-10-01T10:27:53.610Z",
+      "event": "task-added",
+      "detail": "T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark"
+    },
+    {
+      "at": "2026-10-01T10:28:11.518Z",
+      "event": "task-depends-set",
+      "detail": "T17: dependsOn T16, T20 (was T14, T15) — verification re-runs after the T20 fixes"
+    },
+    {
+      "at": "2026-10-01T10:28:11.826Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 367-T20"
+    },
+    {
+      "at": "2026-10-01T10:30:21.825Z",
+      "event": "task-done",
+      "detail": "T20: Verification fixes: flow check-complete in cli-reference, README structure test, leftover W/flow ids, getting-started reference links, install above the fold, doctor output trim mark"
+    },
+    {
+      "at": "2026-10-01T10:31:20.495Z",
+      "event": "task-done",
+      "detail": "T17: Strict build, link check, retired spellings, internal-id and external-name scan"
+    },
+    {
+      "at": "2026-10-01T10:31:24.690Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 367-T18 review round 1"
+    },
+    {
+      "at": "2026-10-01T10:45:38.325Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 2) — round 1: 0 blocker, 3 major, 19 minor, 8 info"
+    },
+    {
+      "at": "2026-10-01T10:45:38.653Z",
+      "event": "task-added",
+      "detail": "T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies"
+    },
+    {
+      "at": "2026-10-01T10:45:43.739Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T17, T21 (was T16, T17) — review round 2 runs after the round-1 fixes"
+    },
+    {
+      "at": "2026-10-01T10:47:12.485Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 367-T21 round-1 fixes"
+    },
+    {
+      "at": "2026-10-01T10:54:53.836Z",
+      "event": "task-done",
+      "detail": "T21: Review round 1 fixes: overstated security claims, stale versions, leftover ids, nav-check negation, doc inaccuracies"
+    },
+    {
+      "at": "2026-10-01T10:55:13.771Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 3) — 367-T18 review round 2"
+    },
+    {
+      "at": "2026-10-01T11:05:00.222Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 4) — round 2: 0 blocker, 1 major, 6 minor, 9 info (round 1 was 3/19)"
+    },
+    {
+      "at": "2026-10-01T11:05:00.525Z",
+      "event": "task-added",
+      "detail": "T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures"
+    },
+    {
+      "at": "2026-10-01T11:05:22.871Z",
+      "event": "task-depends-set",
+      "detail": "T18: dependsOn T17, T22 (was T17, T21) — review round 3 checks the round-2 fixes"
+    },
+    {
+      "at": "2026-10-01T11:05:23.180Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 367-T22"
+    },
+    {
+      "at": "2026-10-01T11:09:12.308Z",
+      "event": "task-done",
+      "detail": "T22: Review round 2 fixes: harness.md default policy, nav-check escape and folded blocks, serve loopback wording, MCP import, provider loopback, rules zone, consistent figures"
+    },
+    {
+      "at": "2026-10-01T11:09:12.828Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 5) — 367-T18 review round 3 (fix verification)"
+    },
+    {
+      "at": "2026-10-01T11:14:49.502Z",
+      "event": "task-attempt",
+      "detail": "T18: failed (attempt 6) — round 3: 0 blocker, 0 major, 1 minor (R1 serve loopback wording at 9 more sites), 3 info"
+    },
+    {
+      "at": "2026-10-01T11:14:49.925Z",
+      "event": "task-added",
+      "detail": "T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep"
+    },
+    {
+      "at": "2026-10-01T11:15:04.921Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 367-T23"
+    },
+    {
+      "at": "2026-10-01T11:17:37.276Z",
+      "event": "task-done",
+      "detail": "T23: Round 3 fix: serve described as loopback by default at every site, verified by a deterministic sweep"
+    },
+    {
+      "at": "2026-10-01T11:17:50.206Z",
+      "event": "task-done",
+      "detail": "T18: review-orchestrator round over the final diff"
+    },
+    {
+      "at": "2026-10-02T16:35:23.074Z",
+      "event": "renumbered",
+      "detail": "367 -> 395: main now has its own 367 (renumbered w2-rewind); 395 is the first id free on every remote branch after fetch --all"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    }
+  }
+}

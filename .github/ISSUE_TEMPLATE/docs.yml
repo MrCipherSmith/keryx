@@ -1,0 +1,36 @@
+name: Documentation problem
+description: Report a wrong, missing, or unclear page on the docs site or in a repository document.
+title: "docs: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping keep the docs accurate. If a command in the docs does not behave as written, include the command you ran and what you saw.
+  - type: input
+    id: page
+    attributes:
+      label: Page URL or file path
+      description: The docs site page (https://mrciphersmith.github.io/keryx/...) or the repository file, with the section heading if you can.
+      placeholder: "https://mrciphersmith.github.io/keryx/getting-started/quickstart/"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or unclear
+      description: Say what the page claims and what you found instead. Paste the command and its output if a command is involved.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested fix
+      description: The wording or command you would expect. Optional, but it speeds up the fix.
+  - type: input
+    id: version
+    attributes:
+      label: keryx version
+      description: Output of `keryx --version`. Needed when a command or flag behaves differently from the page.
+      placeholder: "0.3.46"

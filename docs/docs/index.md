@@ -1,58 +1,89 @@
-# keryx — Documentation Index
+---
+description: Keryx is a project-local brain for AI agents and teams. Wiki, code graph, memory, skills and flows in one workspace, plus a terminal shell with its own agent harness.
+---
 
-Developer documentation for the **keryx** CLI.
+# Keryx
 
-These pages describe what the current `main` implementation actually does.
-Product intent and future design work live separately, under
-`docs/requirements/` in the repository; where the two disagree, this section is
-the one that describes shipped behaviour.
+<img src="assets/keryx-mark.svg" alt="" width="72" align="right">
 
-## Contents
+**One project-local brain for your AI agents and your team.**
 
-- [onboarding.md](./onboarding.md) — Install, first-run walkthrough, the typical build loop, and TTY/CI behavior.
-- [complete-setup-and-agent-workflows.md](./complete-setup-and-agent-workflows.md) — Complete global installation, project configuration, commands, operational scripts, and agent prompts.
-- [agent-installation-playbook.md](./agent-installation-playbook.md) — Agent-executable Gherkin setup, repair, validation, and handoff scenarios.
-- [architecture.md](./architecture.md) — System overview, layered architecture, invariants, cross-module data flows, integrations.
-- [harness.md](./harness.md) — The agent runtime: doors, providers, sessions and forking, policy, containment, evidence and the completion gate, record/replay.
-- [integrations.md](./integrations.md) — The harness adapter registry: `keryx integrations install|doctor|uninstall|matrix`, install-state and drift, the generated capability matrix, and per-harness notes (Gemini CLI, Kiro, GitHub Copilot agent, Zed).
-- [hooks.md](./hooks.md) — The `keryx shell` lifecycle hook runtime: the ten events, config files, composition with the policy engine, built-ins, the `keryx hooks` CLI, and the W3/W8 extension points.
-- [modules.md](./modules.md) — Per-module reference: purpose, CLI surface, key files, mechanics, and data paths.
-- [learning.md](./learning.md) — The self-learning loop: observe, extract, review/accept, apply, promote, graduate, prune — what is observed, what is never stored, the confidence model, and consent guarantees.
-- [cli-reference.md](./cli-reference.md) — Every command, subcommand, flag, and exit code.
-- [commands-by-task.md](./commands-by-task.md) — Every command grouped by task, generated from the same table `keryx help` and the TUI's `/help` modal use.
-- [workspace-and-lifecycle.md](./workspace-and-lifecycle.md) — The `.metaproject/` contract, manifest, agent entrypoints, and `init`/`update` lifecycle.
-- [limitations.md](./limitations.md) — Known gaps, platform support, optional AI features, and what to use instead.
+Keryx keeps a project's knowledge, rules and work history in a `.metaproject/` folder next to your code. Your agents read it, the `keryx` shell works from it, and your team reviews it like any other file.
 
-## Releases
+```sh
+npm i -g @mrciphersmith/keryx
+```
 
-- [Changelog](https://github.com/MrCipherSmith/keryx/blob/main/CHANGELOG.md) — what has landed in each release, with a standing known-gaps list.
-- [Releases](https://github.com/MrCipherSmith/keryx/releases) — tagged versions, each published to npm with provenance.
+<div class="hero-buttons" markdown>
+[Get started](getting-started/install.md){ .md-button .md-button--primary }
+[GitHub](https://github.com/MrCipherSmith/keryx){ .md-button }
+</div>
 
-## Guides — organised by what you are trying to do
+![keryx init, doctor and the code graph in a small project](assets/demo.gif)
 
-- [Give an agent context about my repository](guides/give-an-agent-context.md)
-- [Give a subagent a name instead of a paragraph](guides/agent-catalog.md)
-- [Use Shared Agent Context (workspaces, FWK, proposals)](guides/shared-agent-context.md)
-- [Choose an approval mode: ask, trust, auto](guides/permission-modes.md)
-- [Run an agent against a repository without giving it my machine](guides/contain-an-agent.md)
-- [Drive a foreign ACP agent (Gemini CLI) under keryx's policy](guides/acp-client.md)
-- [Let an external agent write, then review and land its diff](guides/external-agent-write.md)
-- [Agent web search](guides/web-search.md)
-- [Use local SearXNG for agent web search](guides/use-local-searxng.md)
-- [Drive keryx from a bot or another product](guides/drive-keryx-remotely.md)
-- [Answer a remote approval from a bot or another product](guides/answer-remote-approvals.md)
-- [Review a branch and keep a durable record](guides/review-with-a-record.md)
-- [Review every pull request with a bot, and measure it](guides/review-as-a-pr-bot.md)
-- [Jev in the delivery loop](guides/jev-in-the-delivery-loop.md)
-- [Get a GitHub and board digest on a schedule](guides/scheduled-digest.md)
-- [`/goal` — deterministic starts, optional autonomous continuation](guides/goal.md)
-- [Slate for external agents](guides/slate.md)
-- [Keep the wiki current](guides/keep-the-wiki-current.md)
-- [Run keryx in CI](guides/run-in-ci.md)
-- [Undo a turn with /rewind](guides/rewind.md)
-- [Keep a record of what an agent recommended and what you chose](guides/recommendation-journal.md)
-- [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
-- [Write a rubric (judge) eval scenario](guides/write-a-rubric-scenario.md)
+## What is in it
 
-**Start here:** new to the project? Begin with [onboarding.md](./onboarding.md),
-then pick the guide that matches your task.
+<div class="grid cards" markdown>
+
+-   **Project knowledge**
+
+    ---
+
+    A wiki, a code graph and project memory that every agent in the project reads from the same place.
+
+    [:octicons-arrow-right-24: Project knowledge](modules/project-knowledge.md)
+
+-   **The shell**
+
+    ---
+
+    A terminal shell where an agent works inside your repository, with approval modes and `/rewind`.
+
+    [:octicons-arrow-right-24: The keryx shell](modules/shell.md)
+
+-   **Managed work**
+
+    ---
+
+    Flows, jobs and tasks with frozen acceptance criteria, journals and evidence.
+
+    [:octicons-arrow-right-24: Managed work](modules/managed-work.md)
+
+-   **Review**
+
+    ---
+
+    Reviews that leave a durable record, and a pull request bot that can be measured.
+
+    [:octicons-arrow-right-24: Review with a durable record](guides/review-with-a-record.md)
+
+-   **Safety**
+
+    ---
+
+    A harness with a policy engine, containment and a completion gate between an agent and your machine.
+
+    [:octicons-arrow-right-24: Harness and safety](modules/harness-and-safety.md)
+
+-   **Connect your agents**
+
+    ---
+
+    Adapters that install Keryx's context into the agents and editors you already use.
+
+    [:octicons-arrow-right-24: Connect your agents](modules/integrations.md)
+
+</div>
+
+## Pick your path
+
+| You are | Start here |
+|---|---|
+| New to Keryx | [Quickstart](getting-started/quickstart.md) |
+| Evaluating it | [Keryx in five minutes](getting-started/concepts.md) and [Project status](project/status.md) |
+| Wiring up an agent | [Connect your agents](modules/integrations.md), and [llms.txt](https://mrciphersmith.github.io/keryx/llms.txt) for the machine-readable index |
+| Contributing | [Built with Keryx](project/built-with-keryx.md) and [Contributing and support](project/contributing.md) |
+
+---
+
+*Keryx is pre-1.0 and published to npm with provenance. macOS is fully supported; Linux supports the core with a sandbox that has no domain allowlist; Windows is unverified. See [Project status](project/status.md) for platforms and stability, and the [Changelog](project/changelog.md) for what changed.*

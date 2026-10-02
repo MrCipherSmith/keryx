@@ -10,8 +10,8 @@
 - 2026-09-27T14:53:54.613Z - task-done: T2: Implement per plan
 - 2026-09-27T14:53:54.932Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-27T14:53:55.279Z - task-done: T4: Self-review and prepare draft PR
-- 2026-09-27T14:53:55.619Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit
-- 2026-09-27T14:53:55.980Z - task-attempt: T6: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit
+- 2026-09-27T14:53:55.619Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-audit
+- 2026-09-27T14:53:55.980Z - task-attempt: T6: started (attempt 1) — Sonnet implementer in ~/keryx-audit
 - 2026-09-27T16:31:47.918Z - task-done: T5: Security: external child env, web redirect credential, subagent timeout quarantine, MCP env filter, MCP oauth fingerprint (AC1-AC5)
 - 2026-09-27T16:31:48.305Z - task-done: T6: Cancel and lifecycle: abort reaches sub-agents (sequential, concurrent batch, wrap-up), shell lease on throw, SIGINT sweeps jobs (AC6-AC7)
 - 2026-09-27T16:31:48.705Z - task-done: T7: Verify, changelog, version bump (AC8)

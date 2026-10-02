@@ -2,7 +2,7 @@
 
 Statuses via `keryx flow task done 030 <taskId>`. TDD. Reuse-only; deterministic/offline; deps `{}`;
 fail-closed; D-02 (commands never write flow.json); no real spawn in CI; frozen untouched. Root
-`/Users/Goodea/goodea/keryx` (branch feature/keryx-harness-cli-wiring). Worktree-guard. Commits/PR:
+`~/goodea/keryx` (branch feature/keryx-harness-cli-wiring). Worktree-guard. Commits/PR:
 NO co-authorship. Mirror `src/commands/harness.ts`'s `run` pattern (injectable deps, fail-closed
 guards, structured JSON, never persists flow state).
 

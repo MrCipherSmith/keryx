@@ -12,6 +12,8 @@ import {
   printCommandHelp,
   shouldInterceptHelp,
 } from "./cli";
+import { formatSubcommandIndex } from "./cli-registry";
+import { HARNESS_PROVIDER_OPTIONS } from "./commands/harness";
 import { ShellFlagError, shellCommand } from "./commands/shell";
 
 // RED tests for flow 021 (interactive `keryx` shell), T5 / AC3.
@@ -204,12 +206,32 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx approvals list [--all] [--json] | allow <id> | deny <id>\n",
     "                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)\n",
     "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
+    // Help that tells the truth: subcommands the dispatch accepts but the
+    // flat block never listed (bus pause/resume, routing stats, the ctx verbs
+    // agents use most, and the consumer `keryx mcp` surface).
+    "  keryx bus pause <@name|@all> --reason <text> [--scope turns|git-publish|advisory] [--ttl 30m] [--json]\n",
+    "  keryx bus resume <leaseId> [--json]           End a pause lease\n",
+    "  keryx routing stats [--json]                 Measured task cost per provider, model and category\n",
+    "  keryx ctx diff [--staged|--stat|<revision>]\n",
+    '  keryx ctx rg "<pattern>" [path] [--json] [--all]\n',
+    "  keryx ctx read <file> [--mode outline|compact|full]\n",
+    "  keryx ctx run -- <command...>\n",
+    "  keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]\n",
+    "  keryx ctx install-hook|uninstall-hook [--runtime <id|all>]\n",
+    "  keryx mcp list [--json]                      MCP servers keryx connects to, and where each is configured\n",
+    "  keryx mcp add <name> -- <command…> | add <name> --transport http <url>\n",
+    "  keryx mcp remove|enable|disable|trust|untrust <name>\n",
+    "  keryx mcp doctor [name] [--json]\n",
+    "  keryx mcp auth|logout <name>\n",
     // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
     // over three lines) and a Commands: summary row.
     "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
     "                                               recommendation before showing it, the human's choice after;\n",
     "                                               report = match share by mode and stage, deviations (no model)\n",
     "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
+    // The derived subcommand index appended to the flat block: every group's
+    // full vocabulary, generated from the dispatcher's own table.
+    `\n${formatSubcommandIndex()}`,
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -222,6 +244,26 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     [
       "  agents    Manage optional global agent bootstrap instructions\n",
       "  agents    Manage optional global agent bootstrap instructions, and the agent catalog (list/show/export/verify/generate)\n",
+    ],
+    [
+      '  keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"\n',
+      `  keryx harness run --provider <${HARNESS_PROVIDER_OPTIONS.join("|")}> --model <m> [--base-url <url>] [--record <path>] "<prompt>"\n`,
+    ],
+    [
+      "  keryx modules [status | enable <name> | disable <name>]\n",
+      "  keryx modules [status | list | interactive | enable|on <name> | disable|off <name>]\n",
+    ],
+    [
+      "  keryx update [--skip-runtime] [--hooks]\n",
+      "  keryx update [--skip-runtime] [--hooks] [--no-tasks] [--preview|--dry-run] [--accept-version|--keep-existing] [--yes]\n",
+    ],
+    [
+      "  sessions  List or export per-project shell sessions\n",
+      "  sessions  List, fork (branch), export or locate per-project shell sessions\n",
+    ],
+    [
+      "  mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement\n",
+      "  mcp       The MCP servers keryx connects to (list, add, trust, doctor, auth); mcp serve/install are retired spellings of serve-mcp/integrate\n",
     ],
   ];
 
@@ -274,6 +316,17 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     ],
   };
 
+  // Lines whose TEXT changed, as [oldLine, newLine] — same mechanism as
+  // REPLACED_LINES above. Shipped help no longer carries internal work ids.
+  const RICH_REPLACED_LINES: Readonly<Record<string, ReadonlyArray<readonly [string, string]>>> = {
+    trigger: [
+      [
+        "  agent-task  (flow 295) a free-form scheduled agent task: one unattended turn on\n",
+        "  agent-task  a free-form scheduled agent task: one unattended turn on\n",
+      ],
+    ],
+  };
+
   test.each(["flow", "trigger", "serve-mcp", "governance"] as const)(
     "the rich `%s --help` output is its pre-flow fixture plus exactly the allowed added lines",
     async (verb) => {
@@ -284,6 +337,10 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       for (const line of RICH_NEW_LINES[verb] ?? []) {
         expect(reconstructed).toContain(line);
         reconstructed = reconstructed.replace(line, "");
+      }
+      for (const [oldLine, newLine] of RICH_REPLACED_LINES[verb] ?? []) {
+        expect(reconstructed).toContain(newLine);
+        reconstructed = reconstructed.replace(newLine, oldLine);
       }
       expect(reconstructed).toBe(preFlow);
     },

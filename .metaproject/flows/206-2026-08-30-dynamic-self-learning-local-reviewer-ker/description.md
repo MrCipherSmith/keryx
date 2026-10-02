@@ -80,5 +80,5 @@ never heard of this reviewer. A rule that says "learn from the boss" is the same
 defect with the noun changed.
 
 **It must not let learned content escape the project.** A proposal applied in
-Vantage Frontend belongs to Vantage Frontend. Nothing in this flow may write
+a consumer project belongs to that project. Nothing in this flow may write
 learned conventions back into `src/gdskills/bundled/`.
