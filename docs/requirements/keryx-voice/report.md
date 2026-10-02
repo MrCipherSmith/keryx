@@ -92,6 +92,8 @@ Still open:
 
 Tags: [M] measured here, [D] documentation or registry data, [U] unverified.
 
+Scope (operator, message 177808): the comparison is local only. For AC1 this section is the comparison: three or more recognition options and four synthesis options, all local, all $0 per use, all through one dependency (`sherpa-onnx-node`). Per option the tables give languages (Russian and English), download size, latency where measured (`not measured` where not) and a source tag. The cloud tables in sections 3 and 4 stay as background only and are not part of the recommendation.
+
 ### One package for recognition and synthesis: sherpa-onnx-node (Apache-2.0)
 
 - Version 1.13.8, published 2026-09-10 [D]. The JS wrapper is 61 KB; native code comes as optional per-platform packages: linux-x64 33 MB, linux-arm64 40 MB, darwin-arm64 34 MB, darwin-x64 38 MB [D npm]. Only linux-x64 was installed and run [M].
