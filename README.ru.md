@@ -1,4 +1,4 @@
-<!-- synced-with: README.md @ PENDING -->
+<!-- synced-with: README.md @ 3d707a62 -->
 
 <p align="center">
   <picture>
