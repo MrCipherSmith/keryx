@@ -304,6 +304,13 @@ import {
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import {
+  evaluateTelegramShellApproval,
+  formatModeInForce,
+  modeInForce,
+  type ModeInForce,
+  type RememberOffer,
+} from "../remote/telegram-permission";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
@@ -5673,13 +5680,55 @@ export async function launchTuiAgentShell(opts: {
         return requestApprovalLocally(tool, inputJson, meta);
       }
       const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+      const approvedAnswer = (): true | { approved: true; fingerprint: string } =>
+        meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      // Flow 396: a shell command is judged by the same allowlist as in the dock (saved and session
+      // patterns, with every exclusion: destructive, credentials, SAC/flow confirm, publish lease,
+      // hook ask, untrusted content). A match runs without a prompt; otherwise the prompt may carry
+      // an "Always" button for the pattern the dock would offer.
+      let offer: RememberOffer | undefined;
+      if (tool === "shell_exec") {
+        const judged = evaluateTelegramShellApproval({
+          inputJson,
+          ...(meta !== undefined ? { meta } : {}),
+          sessionAllow: sessionShellAllow,
+          fingerprintAtStart: permissionsFingerprintAtStart,
+        });
+        if (!permissionTamperShown && judged.evaluation.tampered) {
+          permissionTamperShown = true;
+          io.onSystem?.("⚠ the saved shell permissions changed outside this approval UI — review them before trusting an auto-approve\n");
+        }
+        if (judged.autoApprove) {
+          const shown = judged.evaluation.command.length > 200 ? `${judged.evaluation.command.slice(0, 199)}…` : judged.evaluation.command;
+          io.onSystem?.(`✓ auto-approved shell (saved rule): ${shown}\n`);
+          bridge.recordApproval(`auto-approved by a saved rule: ${shown}`);
+          return approvedAnswer();
+        }
+        offer = judged.offer;
+      }
       io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
       setMainAgent("blocked", "approval (telegram)");
-      const decision = await bridge.requestApproval(describeApprovalForTopic(tool, inputJson, meta));
+      const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });
+      const decision = answer.decision;
+      let rememberedNote = "";
+      if (decision === "allow" && answer.always && offer !== undefined) {
+        // The pattern is the one the shell classified from the command it showed, never text from the
+        // model or from the button, and it goes through the same store and validators as the dock.
+        const stored = allowShellPattern(offer.pattern);
+        if (stored.length > 0) {
+          sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
+        }
+        rememberedNote = stored.length > 0 ? ` and remembered “${stored}”` : ` once; “${offer.pattern}” cannot be remembered`;
+        bridge.recordApproval(stored.length > 0 ? `saved a rule: ${stored}` : "a rule was asked for and refused by the store");
+        await bridge.reportRemembered(answer.approvalId, stored.length > 0);
+      }
       setMainAgent("running", decision === "allow" ? "approved (telegram)" : "denied");
-      io.onSystem?.(decision === "allow" ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`);
+      io.onSystem?.(
+        decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
+      );
       if (decision !== "allow") return false;
-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      return approvedAnswer();
     };
 
     /** Host for ask_user — Claude-style options docked above the composer. */
@@ -5812,7 +5861,19 @@ export async function launchTuiAgentShell(opts: {
     // ever reassigns the `let`, never re-derives this chain.
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
-    io.permissionMode = () => permissionMode;
+    // Flow 396: set when `/mode` commits a mode, typed here or sent from the topic. Until then a turn
+    // that came from Telegram starts under the saved Telegram default; afterwards the shell's mode
+    // wins for every turn. Neither the CLI flag nor a project default counts as a change.
+    let modeChangedThisSession = false;
+    const modeForTurn = (telegramTurn: boolean): ModeInForce =>
+      modeInForce({
+        shellMode: permissionMode,
+        changedThisSession: modeChangedThisSession,
+        telegramTurn,
+        telegramDefault: remoteBridge?.configuredPermissionMode ?? "ask",
+      });
+    const modeNow = (): ModeInForce => modeForTurn(remoteBridge?.telegramTurnActive === true);
+    io.permissionMode = () => modeNow().mode;
     io.trustedMcpTools = new Map<string, string>();
     // Read fresh on every call: a grant holds only while the tool's definition
     // in the live catalog still matches the fingerprint stored with it.
@@ -5848,10 +5909,17 @@ export async function launchTuiAgentShell(opts: {
             : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
+      const inForce = modeNow();
       const label =
-        `◇ auto-approved (${permissionMode})` +
+        `◇ auto-approved (${inForce.mode})` +
         (meta.destructive ? " [destructive]" : "") +
         (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
+      // Flow 396: a call that ran in a Telegram turn without a tap is also written to the remote
+      // panel's event list, with the Telegram user who sent the line (redacted and capped there).
+      if (remoteBridge?.telegramTurnActive === true) {
+        const uid = remoteBridge.telegramTurnUserId;
+        remoteBridge.recordApproval(`auto-approved (${inForce.mode}${uid === undefined ? "" : `, user ${uid}`}): ${preview}`);
+      }
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
@@ -7088,6 +7156,7 @@ export async function launchTuiAgentShell(opts: {
     /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
     const commitPermissionMode = (next: PermissionMode): void => {
       permissionMode = next;
+      modeChangedThisSession = true;
       paintModeRow();
       chrome.showToast(`Permission mode: ${next}`);
     };
@@ -9541,7 +9610,7 @@ export async function launchTuiAgentShell(opts: {
       });
       return (
         `${formatSessionInfoText(snapshot).trimEnd()}\n\n` +
-        `Mode: ${permissionMode}${readOnly ? " (read-only on)" : ""}\n` +
+        `Mode: ${formatModeInForce(modeForTurn(true))}${readOnly ? " (read-only on)" : ""}\n` +
         `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${mainQueue.length} waiting`
       );
     };
@@ -9558,11 +9627,16 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`${await remoteStatusText()}\n`);
         });
       }
-      if (name === "/mode" && (first === "" || first === "auto")) {
+      // `/mode` typed in the topic changes the SHELL's mode, exactly as typed in the shell (flow 396):
+      // there is no Telegram-only mode. A bare `/mode` shows the mode in force for turns from the
+      // topic and where it comes from. `ask` runs directly; `trust` and `auto` were confirmed with a
+      // button press before they got here, so the shell's own dialog is not asked again.
+      const modeWords = line.trim().split(/\s+/).slice(1).filter((word) => word.length > 0);
+      if (name === "/mode" && (first === "" || ((first === "ask" || first === "trust" || first === "auto") && modeWords.length === 1))) {
         echoRemoteCommand(line);
         return await captureShellOutput(() => {
-          if (first === "auto") commitPermissionMode("auto");
-          io.onSystem?.(`Permission mode: ${permissionMode} (ask, trust or auto)\n`);
+          if (first === "ask" || first === "trust" || first === "auto") commitPermissionMode(first);
+          io.onSystem?.(`Permission mode: ${formatModeInForce(modeForTurn(true))} (ask, trust or auto)\n`);
         });
       }
       return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));

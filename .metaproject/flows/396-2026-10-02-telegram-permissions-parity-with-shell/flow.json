@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T19:39:57.242Z",
+  "updatedAt": "2026-10-02T19:46:54.925Z",
   "source": {
     "type": "description",
     "ref": null
@@ -122,7 +122,7 @@
       "id": "T6",
       "title": "Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -132,13 +132,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Always button on the Telegram prompt with remember offer (AC9,AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6"
@@ -149,7 +150,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -315,6 +317,16 @@
       "at": "2026-10-02T19:39:57.242Z",
       "event": "task-done",
       "detail": "T5: Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)"
+    },
+    {
+      "at": "2026-10-02T19:46:54.737Z",
+      "event": "task-done",
+      "detail": "T6: Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)"
+    },
+    {
+      "at": "2026-10-02T19:46:54.925Z",
+      "event": "task-done",
+      "detail": "T7: Always button on the Telegram prompt with remember offer (AC9,AC10)"
     }
   ],
   "acKinds": {
