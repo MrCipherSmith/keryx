@@ -8,9 +8,9 @@
   "id": "377",
   "slug": "channels-pairing",
   "title": "channels: connect Telegram from /channels by pairing",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-10-01T08:08:40.508Z",
-  "updatedAt": "2026-10-01T12:18:58.734Z",
+  "updatedAt": "2026-10-02T04:43:37.214Z",
   "source": {
     "type": "description",
     "ref": null
@@ -71,7 +71,7 @@
     }
   },
   "pr": {
-    "url": "https://github.com/MrCipherSmith/keryx/pull/823"
+    "url": "https://github.com/MrCipherSmith/keryx/pull/830"
   },
   "owner": {
     "value": "altsay",
@@ -421,6 +421,25 @@
       "at": "2026-10-01T12:18:58.734Z",
       "event": "completion-failed",
       "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3, but the PR head is 85ed3ce88b487fbe8987afb75f9dc697f1c6c348. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-10-01T14:28:01.052Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/830 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-02T04:43:33.663Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T04:43:37.213Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 4: passed"
+    },
+    {
+      "at": "2026-10-02T04:43:37.214Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -620,6 +639,17 @@
       },
       "criterion": "AC13",
       "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-02T04:43:37.214Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd",
+      "headCommit": "40ecaf07c2e3cae7b1379440f77049cbee6e3766"
     }
   ],
   "baseBranch": "main",
@@ -779,6 +809,68 @@
       ],
       "passed": false,
       "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
+    },
+    {
+      "at": "2026-10-02T04:43:37.213Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "13 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "40ecaf07c2e3cae7b1379440f77049cbee6e3766 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "40ecaf07c2e3cae7b1379440f77049cbee6e3766 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "folder-committed",
+          "status": "skipped",
+          "detail": "folder-committed gate not enabled for this package (created before the gate); flows created by this keryx version opt in automatically"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 6 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:ab5e7b1e5fb3212074609d95cdc97262f422a324df3160e2d8576dd104d50dfd"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "40ecaf07c2e3cae7b1379440f77049cbee6e3766",
+    "ref": "origin/main",
+    "at": "2026-10-02T04:43:37.214Z"
+  }
 }
