@@ -372,8 +372,8 @@ export class RemoteClient {
    * approval and the Telegram user who pressed, so the shell can audit it and report what became of an
    * "Always" press with {@link reportApprovalResult}. Same fail-closed rule: no press is a deny.
    */
-  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string } = {}): Promise<ApprovalAnswer> {
-    if (!this.connected) {
+  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
+    if (!this.connected || options.signal?.aborted === true) {
       return { decision: "deny" };
     }
     const body: ApprovalBody = {
@@ -404,11 +404,27 @@ export class RemoteClient {
       return { decision: "deny" };
     }
     return new Promise<ApprovalAnswer>((resolve) => {
+      const signal = options.signal;
+      const onAbort = (): void => {
+        // The turn was stopped (flow 396 `/stop`): the question is moot, so it is a deny and a late press finds nothing.
+        const waiter = this.waiters.get(approvalId);
+        if (waiter !== undefined) clearTimeout(waiter.timer);
+        this.waiters.delete(approvalId);
+        resolve({ decision: "deny", approvalId });
+      };
       const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
         this.waiters.delete(approvalId);
         resolve({ decision: "deny" });
       }, timeoutMs);
-      this.waiters.set(approvalId, { resolve: (pressed) => resolve({ ...pressed, approvalId }), timer });
+      this.waiters.set(approvalId, {
+        resolve: (pressed) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve({ ...pressed, approvalId });
+        },
+        timer,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
   }
 

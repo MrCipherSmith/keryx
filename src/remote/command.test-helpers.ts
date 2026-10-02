@@ -37,6 +37,10 @@ export interface CommandHarnessOptions {
   listSessions?: RemoteBridgeHost["listSessions"];
   resumeSession?: RemoteBridgeHost["resumeSession"];
   choiceTimeoutMs?: number;
+  /** The run limit serve delivered, in milliseconds; 0 (the default) is no limit. */
+  runTimeoutMs?: number;
+  /** Answer for `askApproval` (flow 396). Absent: the fake has no such method, as an old client. */
+  askApproval?: NonNullable<RemoteClientLike["askApproval"]>;
 }
 
 export function commandHarness(opts: CommandHarnessOptions = {}) {
@@ -92,7 +96,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
           return "topic-a";
         },
         get runTimeoutMs() {
-          return 0;
+          return opts.runTimeoutMs ?? 0;
         },
         get lastHeartbeatAt() {
           return undefined;
@@ -104,6 +108,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
           return true;
         },
         requestApproval: async () => "deny" as const,
+        ...(opts.askApproval !== undefined ? { askApproval: opts.askApproval } : {}),
         reportState: async (updateId: number, state: MessageState) => {
           fake.reported.push([updateId, state]);
         },

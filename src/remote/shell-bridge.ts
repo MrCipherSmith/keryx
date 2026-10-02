@@ -75,7 +75,7 @@ export interface RemoteApprovalAnswer {
   fromId?: number;
 }
 
-export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn">> {
+export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
   sessionId(): string;
   project(): string;
   /** A turn is running, or something the user typed is waiting to run. */
@@ -185,6 +185,10 @@ export class RemoteBridge {
   private lastAssistantText = "";
   private runTimer: ReturnType<typeof setTimeout> | undefined;
   private timedOut = false;
+  /** `/stop` ended the running Telegram turn (flow 396). */
+  private stoppedByUser = false;
+  /** Aborts a pending approval wait when the turn is stopped or runs out of time. */
+  private turnAbort: AbortController | undefined;
   /** The close of the client being turned off, while it runs. */
   private closing: Promise<void> | undefined;
   private readonly router: RemoteCommandRouter;
@@ -206,6 +210,7 @@ export class RemoteBridge {
       host: {
         isBusy: () => this.host.isBusy(),
         cancelTurn: () => this.host.cancelTurn(),
+        stopTelegramTurn: () => this.stopTelegramTurn(),
         ...(this.host.runCommand !== undefined ? { runCommand: (line: string) => this.host.runCommand!(line) } : {}),
         ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
         ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
@@ -512,14 +517,34 @@ export class RemoteBridge {
     this.tgTurn = true;
     this.lastAssistantText = "";
     this.timedOut = false;
+    this.stoppedByUser = false;
+    this.turnAbort = new AbortController();
+    // 0 or absent is "no limit" (flow 396): only `/stop` or the shell ends such a run.
     const limit = this.client.runTimeoutMs;
     if (limit !== undefined && limit > 0) {
       this.runTimer = setTimeout(() => {
         this.timedOut = true;
         this.push("error", "run time limit reached; stopping the turn");
+        this.turnAbort?.abort();
         this.host.cancelTurn();
       }, limit);
     }
+  }
+
+  /**
+   * `/stop` from the topic (flow 396). Ends a turn that Telegram started, the way Esc ends it in the shell;
+   * a turn the operator started in the shell is not Telegram's to stop. The topic is told by
+   * {@link turnSettled} once the turn has actually ended.
+   */
+  stopTelegramTurn(): "stopped" | "idle" | "operator" {
+    if (this.client === undefined) return "idle";
+    if (!this.tgTurn) return this.host.isBusy() ? "operator" : "idle";
+    if (this.stoppedByUser) return "stopped";
+    this.stoppedByUser = true;
+    this.push("command", "/stop: stopping the turn");
+    this.turnAbort?.abort();
+    this.host.cancelTurn();
+    return "stopped";
   }
 
   /** Assistant text the user would see. Only the last one of the turn is sent. */
@@ -563,13 +588,16 @@ export class RemoteBridge {
     const client = this.client;
     const text = this.lastAssistantText;
     const timedOut = this.timedOut;
+    const stopped = this.stoppedByUser && !timedOut;
     const updateId = this.currentUpdate;
     this.endTurnState();
     if (client === undefined) return;
-    if (updateId !== undefined) this.report(updateId, outcome.failed || timedOut ? "failed" : "done");
+    if (updateId !== undefined) this.report(updateId, outcome.failed || timedOut || stopped ? "failed" : "done");
     let body: string;
-    if (timedOut) {
-      body = "Stopped: this run went over the time limit for runs started from Telegram.";
+    if (stopped) {
+      body = "Stopped by you.";
+    } else if (timedOut) {
+      body = "Stopped: this run went over the time limit you set for runs started from Telegram (runTimeoutMs).";
     } else if (outcome.failed && text.trim().length === 0) {
       body = "The run failed. The details are in the shell.";
     } else if (text.trim().length === 0) {
@@ -587,6 +615,9 @@ export class RemoteBridge {
     this.currentFromId = undefined;
     this.lastAssistantText = "";
     this.timedOut = false;
+    this.stoppedByUser = false;
+    this.turnAbort?.abort();
+    this.turnAbort = undefined;
     if (this.runTimer !== undefined) {
       clearTimeout(this.runTimer);
       this.runTimer = undefined;
@@ -619,7 +650,11 @@ export class RemoteBridge {
       const text = composeApprovalPrompt(prompt);
       const timeoutMs = this.approvalTimeoutMs;
       if (client.askApproval !== undefined) {
-        const got = await client.askApproval(text, timeoutMs, options.remember === undefined ? {} : { remember: options.remember });
+        const signal = this.turnAbort?.signal;
+        const got = await client.askApproval(text, timeoutMs, {
+          ...(options.remember === undefined ? {} : { remember: options.remember }),
+          ...(signal === undefined ? {} : { signal }),
+        });
         answer = {
           decision: got.decision === "deny" ? "deny" : "allow",
           always: got.decision === "always" && options.remember !== undefined,

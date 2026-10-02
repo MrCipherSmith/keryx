@@ -18,3 +18,4 @@
 - 2026-10-02T19:39:57.242Z - task-done: T5: Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)
 - 2026-10-02T19:46:54.737Z - task-done: T6: Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)
 - 2026-10-02T19:46:54.925Z - task-done: T7: Always button on the Telegram prompt with remember offer (AC9,AC10)
+- 2026-10-02T19:50:46.064Z - task-done: T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)

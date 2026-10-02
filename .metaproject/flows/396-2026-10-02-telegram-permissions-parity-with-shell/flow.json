@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T19:46:54.925Z",
+  "updatedAt": "2026-10-02T19:50:46.064Z",
   "source": {
     "type": "description",
     "ref": null
@@ -157,7 +157,7 @@
       "id": "T8",
       "title": "/stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -167,7 +167,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -327,6 +328,11 @@
       "at": "2026-10-02T19:46:54.925Z",
       "event": "task-done",
       "detail": "T7: Always button on the Telegram prompt with remember offer (AC9,AC10)"
+    },
+    {
+      "at": "2026-10-02T19:50:46.064Z",
+      "event": "task-done",
+      "detail": "T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)"
     }
   ],
   "acKinds": {

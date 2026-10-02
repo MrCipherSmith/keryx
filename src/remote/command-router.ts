@@ -56,6 +56,12 @@ export interface RemoteCommandHost {
   isBusy(): boolean;
   /** Stop the running turn. The router never calls it: a command from the topic must not stop a turn. The bridge uses it for a Telegram turn's own run limit. */
   cancelTurn(): void;
+  /**
+   * `/stop` (flow 396): end the running turn if Telegram started it. "stopped" means it was asked to stop (the
+   * bridge says so when the turn ends); "idle" means no turn is running; "operator" means the running turn
+   * was started in the shell, which a topic may not stop.
+   */
+  stopTelegramTurn?(): "stopped" | "idle" | "operator";
   /** Run a slash line as the operator would type it and collect what it printed. */
   runCommand?(line: string): Promise<CommandOutcome>;
   /**
@@ -154,6 +160,8 @@ export class RemoteCommandRouter {
             await this.listSessionsText();
             ended(end, "done");
           });
+        } else if (decision.command === "stop") {
+          this.stop(end);
         } else {
           void this.ctx.reply(this.ctx.compose(remoteHelpText())).catch(() => false);
           ended(end, "done");
@@ -180,6 +188,23 @@ export class RemoteCommandRouter {
         });
         return;
     }
+  }
+
+  /** `/stop`: answered at once, never queued behind the turn it stops. */
+  private stop(end: CommandEnd | undefined): void {
+    const result = this.ctx.host.stopTelegramTurn?.() ?? "idle";
+    if (result === "stopped") {
+      // The topic hears "Stopped by you." when the turn has really ended.
+      ended(end, "done");
+      return;
+    }
+    const text =
+      result === "operator"
+        ? "/stop did nothing: the running turn was started in the shell, so only the shell can stop it."
+        : "/stop did nothing: no run started from Telegram is going on.";
+    this.ctx.record(`/stop: ${result === "operator" ? "turn belongs to the shell" : "nothing to stop"}`);
+    void this.ctx.reply(text).catch(() => false);
+    ended(end, "failed");
   }
 
   /** Resolves when every command taken so far, and every question asked, has finished. */
