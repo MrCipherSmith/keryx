@@ -11,12 +11,12 @@
   "title": "keryx shell spends fewer tokens than competing harnesses without losing quality",
   "status": "in-progress",
   "createdAt": "2026-10-02T06:02:04.112Z",
-  "updatedAt": "2026-10-02T08:33:46.224Z",
+  "updatedAt": "2026-10-02T11:53:21.438Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:eb58ff6372a4082d6ec975ab48bd3fe6848c4ee6daf6a24efad79af40a291845",
+  "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -283,7 +283,7 @@
       "id": "T13",
       "title": "Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T12"
       ],
@@ -309,7 +309,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "comparative-report.md + fixtures: AC10 met on same-model keryx vs codex CLI; opencode reference leg committed"
     },
     {
       "id": "T14",
@@ -473,7 +475,7 @@
       "id": "T21",
       "title": "Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -487,7 +489,107 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F-001..F-013 + F-020 fixed (commits f0fb5aa2, cada82aa, merged); round 2 review pending"
+    },
+    {
+      "id": "T22",
+      "title": "Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-10-02T09:29:31.035Z",
+            "outcome": "started",
+            "detail": "387-T22a design long tasks (no live runs)"
+          },
+          {
+            "at": "2026-10-02T10:10:26.916Z",
+            "outcome": "started",
+            "detail": "387-T22b live long runs: registry-recall, branch vs main, 1 seed"
+          },
+          {
+            "at": "2026-10-02T11:05:43.112Z",
+            "outcome": "started",
+            "detail": "387-T22d branch vs main long run at 128K after T24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "long-session-report.md: both 0/22; branch re-read loop recorded as known limitation, moved to flow 388 by owner decision"
+    },
+    {
+      "id": "T23",
+      "title": "Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T10:27:35.138Z",
+            "outcome": "started",
+            "detail": "387-T23 round 2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "F-021..F-029 fixed; F-029 helper merge for agent tests left (signatures differ)"
+    },
+    {
+      "id": "T24",
+      "title": "Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T10:58:17.474Z",
+            "outcome": "started",
+            "detail": "387-T24"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "per-signature reset after history rewrite; guard still refuses visible loops"
+    },
+    {
+      "id": "T25",
+      "title": "Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-02T11:28:53.134Z",
+            "outcome": "started",
+            "detail": "387-T25 in worktree flow-387-r3"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "commit 26778180 merged; F-032/F-033/F-024/F-029/F-034 fixed"
     }
   ],
   "history": [
@@ -773,6 +875,91 @@
       "at": "2026-10-02T08:33:46.224Z",
       "event": "task-attempt",
       "detail": "T21: started (attempt 1) — 387-T21 A (hosts/loop) + B (prune/spill) in worktree flow-387-r1"
+    },
+    {
+      "at": "2026-10-02T09:29:30.132Z",
+      "event": "task-added",
+      "detail": "T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens"
+    },
+    {
+      "at": "2026-10-02T09:29:31.035Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 387-T22a design long tasks (no live runs)"
+    },
+    {
+      "at": "2026-10-02T10:10:14.184Z",
+      "event": "task-done",
+      "detail": "T21: Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013"
+    },
+    {
+      "at": "2026-10-02T10:10:26.916Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 2) — 387-T22b live long runs: registry-recall, branch vs main, 1 seed"
+    },
+    {
+      "at": "2026-10-02T10:27:34.217Z",
+      "event": "task-added",
+      "detail": "T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029"
+    },
+    {
+      "at": "2026-10-02T10:27:35.139Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 387-T23 round 2 fixes"
+    },
+    {
+      "at": "2026-10-02T10:31:32.309Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell, codex CLI and opencode, and a committed comparative report runs all three on the same task set (model per leg stated, any mismatch disclosed). In that report keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest.\" -> \"The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell and codex CLI on the same model (gpt-6.1-sol via the ChatGPT subscription), and a committed comparative report runs both on the same task set; in it keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest. opencode is run on a free OpenCode Zen model and reported separately as a different-model reference, not part of the verdict.\" (Owner decision 2026-10-02: opencode cannot run gpt-6.1-sol (Zen balance empty; its own OpenAI OAuth expired) and Zen's free models are served only to the opencode client (keryx gets HTTP 403), so no same-model keryx/opencode pair exists; verdict on the same-model codex CLI pair, opencode as a disclosed reference. No confirmations existed.)"
+    },
+    {
+      "at": "2026-10-02T10:47:02.748Z",
+      "event": "task-done",
+      "detail": "T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029"
+    },
+    {
+      "at": "2026-10-02T10:58:16.596Z",
+      "event": "task-added",
+      "detail": "T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH"
+    },
+    {
+      "at": "2026-10-02T10:58:17.474Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 387-T24"
+    },
+    {
+      "at": "2026-10-02T11:05:25.696Z",
+      "event": "task-done",
+      "detail": "T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH"
+    },
+    {
+      "at": "2026-10-02T11:05:43.113Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 3) — 387-T22d branch vs main long run at 128K after T24"
+    },
+    {
+      "at": "2026-10-02T11:28:02.733Z",
+      "event": "task-added",
+      "detail": "T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers"
+    },
+    {
+      "at": "2026-10-02T11:28:53.134Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 387-T25 in worktree flow-387-r3"
+    },
+    {
+      "at": "2026-10-02T11:53:18.615Z",
+      "event": "task-done",
+      "detail": "T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers"
+    },
+    {
+      "at": "2026-10-02T11:53:20.093Z",
+      "event": "task-done",
+      "detail": "T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens"
+    },
+    {
+      "at": "2026-10-02T11:53:21.438Z",
+      "event": "task-done",
+      "detail": "T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)"
     }
   ],
   "acKinds": {

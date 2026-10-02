@@ -81,3 +81,28 @@ T6 done: commits 7abf9584 + ef3b8248 (agent.ts shared with T5). T5: ef3b8248, he
 - 2026-10-02T08:08:04.058Z - task-done: T20: Fix core-package boundary: compact.ts/prune.ts/output-spill.ts leaked into the src/core.ts module graph (CI core-package.test.ts)
 - 2026-10-02T08:33:30.578Z - task-added: T21: Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013
 - 2026-10-02T08:33:46.224Z - task-attempt: T21: started (attempt 1) — 387-T21 A (hosts/loop) + B (prune/spill) in worktree flow-387-r1
+- 2026-10-02T09:29:30.132Z - task-added: T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens
+- 2026-10-02T09:29:31.035Z - task-attempt: T22: started (attempt 1) — 387-T22a design long tasks (no live runs)
+- 2026-10-02T10:10:14.184Z - task-done: T21: Review round 1 fixes (2026-10-02-ingest-849): F-001..F-013
+- 2026-10-02T10:10:26.916Z - task-attempt: T22: started (attempt 2) — 387-T22b live long runs: registry-recall, branch vs main, 1 seed
+- 2026-10-02T10:27:34.217Z - task-added: T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029
+- 2026-10-02T10:27:35.139Z - task-attempt: T23: started (attempt 1) — 387-T23 round 2 fixes
+- 2026-10-02T10:31:32.309Z - ac-updated: AC10: "The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell, codex CLI and opencode, and a committed comparative report runs all three on the same task set (model per leg stated, any mismatch disclosed). In that report keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest." -> "The mutating-ablation benchmark records uncached input, cached input and output tokens per task for keryx shell and codex CLI on the same model (gpt-6.1-sol via the ChatGPT subscription), and a committed comparative report runs both on the same task set; in it keryx shell has the lowest mean uncached input tokens per task, or is within 5% of the lowest. opencode is run on a free OpenCode Zen model and reported separately as a different-model reference, not part of the verdict." (Owner decision 2026-10-02: opencode cannot run gpt-6.1-sol (Zen balance empty; its own OpenAI OAuth expired) and Zen's free models are served only to the opencode client (keryx gets HTTP 403), so no same-model keryx/opencode pair exists; verdict on the same-model codex CLI pair, opencode as a disclosed reference. No confirmations existed.)
+- 2026-10-02T10:47:02.748Z - task-done: T23: Review round 2 fixes (2026-10-02-ingest-849-r02): F-021 ACP archive cursor + load seeding, F-022..F-029
+- 2026-10-02T10:58:16.596Z - task-added: T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH
+- 2026-10-02T10:58:17.474Z - task-attempt: T24: started (attempt 1) — 387-T24
+- 2026-10-02T11:05:25.696Z - task-done: T24: Repeat-guard: a re-read of a file whose earlier result was pruned/collapsed/compacted must not count against MAX_ATTEMPTS_PER_HASH
+- 2026-10-02T11:05:43.113Z - task-attempt: T22: started (attempt 3) — 387-T22d branch vs main long run at 128K after T24
+- 2026-10-02T11:28:02.733Z - task-added: T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers
+- 2026-10-02T11:28:53.134Z - task-attempt: T25: started (attempt 1) — 387-T25 in worktree flow-387-r3
+
+## 2026-10-02 — benchmark results and the quality decision (owner)
+
+- AC10 (same model gpt-6.1-sol, 3 tasks × 2 variants × 3 seeds): keryx 12,628 input per task (context-on), codex CLI 35,199 uncached + 139,079 cached; success 100% both. opencode reference on opencode/nemotron-3-ultra-free: ~160K uncached + ~45K cached, 18/18.
+- AC11 on the short benchmark: success 100% vs main 100% (context-on); repeated reads 0 vs 0. The short tasks never trigger prune, so this shows no regression only.
+- Long-session check (`long-session-report.md`, registry-recall, 128K, 1 seed): both 0/22. main stops after 10/22 files (50 requests); the branch reads all 22 but re-reads after each prune (96 repeats) until the 150-call cap — similar uncached input, ~5× total tokens. Root cause: the model keeps no notes across prune.
+- Owner decision: close 387 with AC11 confirmed on the short benchmark and the long-session result recorded as a known limitation; the re-read loop and note-taking move to flow 388 (slate as working memory), with registry-recall as its main test. T25's bounded repeat-guard reset (F-033) caps the loop's cost meanwhile.
+- Product findings for 388: builtin tools cap output (shell_exec 20 KB, read_file 20K chars) below the 50 KB spill threshold, so spill only fires for uncapped (MCP) tools.
+- 2026-10-02T11:53:18.615Z - task-done: T25: Review round 3 fixes (2026-10-02-ingest-849-r03): F-032 wiring audit inventory, F-033 bounded repeat-guard reset, F-024 enforce pruneArchive contract, F-029 test helpers
+- 2026-10-02T11:53:20.093Z - task-done: T22: Long-session quality check: 1-2 benchmark tasks long enough to trigger prune/collapse/compaction; branch vs main success + repeated reads + tokens
+- 2026-10-02T11:53:21.438Z - task-done: T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)
