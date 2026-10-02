@@ -6,7 +6,9 @@ import { renderSpillPreview } from "../harness/tool/output-spill";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { CLEARED_PREFIX, PRUNE_MIN_SAVING_TOKENS, isClearedToolResult, planPrune, pruneToolOutputs } from "./prune";
 
-// Flow 387 T11 (AC6): send-time pruning of old tool results.
+// Flow 387 T11 (AC6): send-time pruning of old tool results. The only protected
+// window is the newest 40K tokens of tool output (the operator message is never a
+// tool result), so a single long operator turn is pruned too.
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -63,20 +65,41 @@ test("clears results outside the newest 40K tokens and keeps the newest ones", a
   expect(tools.map((m) => m.toolCallId)).toEqual(Array.from({ length: 12 }, (_, i) => `c${i}`));
 });
 
-test("protects everything inside the last 2 operator turns", async () => {
+test("prunes inside the last operator turn too, keeping the operator message and the newest 40K", async () => {
   const sessionDir = tmp();
-  // Results in the LAST turn are huge but inside the protected turns.
-  const history: NormalizedMessage[] = [user("one"), ...pair("old", 40_000), user("two"), user("three")];
-  for (let i = 0; i < 6; i++) {
-    history.push(...pair(`new${i}`, 40_000));
+  // Everything is in ONE (the last) turn: 7 results of 10K tokens.
+  const history: NormalizedMessage[] = [user("one"), user("go")];
+  for (let i = 0; i < 7; i++) {
+    history.push(...pair(`n${i}`, 40_000));
   }
-  const result = await pruneToolOutputs(history, { sessionDir, protectTokens: 0 });
-  // Only the first turn's single result is outside the window, and its saving is
-  // under the batching threshold, so nothing changes.
-  expect(result.pruned).toBe(0);
-  expect(toolsOf(history).some(isClearedToolResult)).toBe(false);
-  const plan = planPrune(history, { protectTokens: 0 });
-  expect(plan.entries.map((e) => e.index)).toEqual([2]);
+  const operator = history[1];
+  const result = await pruneToolOutputs(history, { sessionDir });
+  expect(result.pruned).toBe(3);
+  expect(history[1]).toBe(operator);
+  const tools = toolsOf(history);
+  expect(tools.slice(0, 3).every(isClearedToolResult)).toBe(true);
+  expect(tools.slice(3).some(isClearedToolResult)).toBe(false);
+});
+
+test("one-operator-turn session (~100 results of 5-20K chars): old results cleared, newest 40K kept", async () => {
+  const sessionDir = tmp();
+  const history: NormalizedMessage[] = [user("продолжай")];
+  for (let i = 0; i < 100; i++) {
+    history.push(...pair(`s${i}`, 5_000 + ((i * 1543) % 15_001)));
+  }
+  const before = toolsOf(history).map((m) => Math.ceil(m.content.length / 4));
+  const result = await pruneToolOutputs(history, { sessionDir });
+  const tools = toolsOf(history);
+  const keptFrom = tools.findIndex((m) => !isClearedToolResult(m));
+  expect(result.pruned).toBe(keptFrom);
+  expect(keptFrom).toBeGreaterThan(0);
+  // Everything from keptFrom on is verbatim and fits the 40K window; one more would not.
+  const keptTokens = before.slice(keptFrom).reduce((a, b) => a + b, 0);
+  expect(keptTokens).toBeLessThanOrEqual(40_000);
+  expect(keptTokens + (before[keptFrom - 1] as number)).toBeGreaterThan(40_000);
+  expect(tools.slice(keptFrom).some(isClearedToolResult)).toBe(false);
+  expect(result.savedTokens).toBeGreaterThan(PRUNE_MIN_SAVING_TOKENS);
+  expect(history[0]?.content).toBe("продолжай");
 });
 
 test("does nothing below the 20K-token saving threshold, acts at it", async () => {
@@ -133,10 +156,7 @@ test("without a session dir the placeholder carries no path", async () => {
   expect((toolsOf(history)[0] as NormalizedMessage).content).toBe(`${CLEARED_PREFIX} to save context]`);
 });
 
-test("fewer than 2 operator turns protects the whole history", async () => {
-  const history: NormalizedMessage[] = [user("only")];
-  for (let i = 0; i < 12; i++) {
-    history.push(...pair(`c${i}`, 40_000));
-  }
-  expect(await pruneToolOutputs(history, { sessionDir: undefined })).toEqual({ pruned: 0, savedTokens: 0 });
+test("planPrune with a window larger than all tool output plans nothing", () => {
+  const history = longFirstTurn(3, 40_000);
+  expect(planPrune(history, { protectTokens: 1_000_000 }).entries).toEqual([]);
 });

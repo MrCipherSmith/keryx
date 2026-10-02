@@ -3,8 +3,11 @@
 // A real session carried ~600K chars of tool results (180 messages) that were
 // re-sent on every round. Before each request, results outside a protected window
 // are replaced by a fixed placeholder that names a file holding the full text.
-// Patterns: opencode `session/compaction.ts` prune (protect the last 2 turns + the
-// newest 40K tokens, only act past a 20K saving), gemini-cli `toolOutputMasking`.
+// Patterns: opencode `session/compaction.ts` prune (protect the newest 40K tokens,
+// only act past a 20K saving), gemini-cli `toolOutputMasking`. Unlike opencode there
+// is no protected-turns rule: the context of a real session sat inside one or two
+// long operator turns, so protecting whole turns would prune nothing there. The
+// operator message that started the turn is never a tool result, so it is safe.
 //
 // Only the CONTENT of a `role: "tool"` message changes: the message stays in place
 // with its `toolCallId`, so every assistant tool call keeps its result. The pruned
@@ -18,10 +21,7 @@
 
 import { extractSpillPath, writeToolOutputFile } from "../harness/tool/output-spill";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { indexOfKeepFrom } from "./compact";
 
-/** Operator turns (and everything after their start) that are never pruned. */
-export const PRUNE_PROTECT_OPERATOR_TURNS = 2;
 /** Newest tool-result tokens that are never pruned. */
 export const PRUNE_PROTECT_TOOL_TOKENS = 40_000;
 /** Prune only when it saves at least this many estimated tokens. */
@@ -53,13 +53,12 @@ export interface PrunePlanEntry {
  * Which tool results are outside the protected window, and what clearing them
  * saves. Pure. Walks newest to oldest: tool-result tokens accumulate and the result
  * that pushes the total past the protected budget, and every older one, is a
- * candidate unless it sits inside the last `protectTurns` operator turns.
+ * candidate.
  */
 export function planPrune(
   history: readonly NormalizedMessage[],
-  opts: { protectTurns?: number; protectTokens?: number } = {},
+  opts: { protectTokens?: number } = {},
 ): { entries: PrunePlanEntry[]; savedTokens: number } {
-  const protectFrom = indexOfKeepFrom(history, opts.protectTurns ?? PRUNE_PROTECT_OPERATOR_TURNS);
   const protectTokens = opts.protectTokens ?? PRUNE_PROTECT_TOOL_TOKENS;
   const entries: PrunePlanEntry[] = [];
   let total = 0;
@@ -71,9 +70,7 @@ export function planPrune(
     }
     const size = tokens(m.content);
     total += size;
-    // `indexOfKeepFrom` answers 0 when there are fewer operator turns than asked,
-    // which protects everything; so does an exhausted protected-token budget.
-    if (i >= protectFrom || total <= protectTokens || isClearedToolResult(m)) {
+    if (total <= protectTokens || isClearedToolResult(m)) {
       continue;
     }
     const saving = size - tokens(clearedPlaceholder(extractSpillPath(m.content)));
@@ -88,7 +85,6 @@ export function planPrune(
 export interface PruneOptions {
   /** Live session dir; without one the placeholder carries no path. */
   sessionDir: string | undefined;
-  protectTurns?: number;
   protectTokens?: number;
   /** Overrides {@link PRUNE_MIN_SAVING_TOKENS} (the overflow retry takes any saving). */
   minSavingTokens?: number;
@@ -109,10 +105,7 @@ export interface PruneResult {
  * placeholder (the archive still has the original).
  */
 export async function pruneToolOutputs(history: NormalizedMessage[], opts: PruneOptions): Promise<PruneResult> {
-  const plan = planPrune(history, {
-    ...(opts.protectTurns !== undefined ? { protectTurns: opts.protectTurns } : {}),
-    ...(opts.protectTokens !== undefined ? { protectTokens: opts.protectTokens } : {}),
-  });
+  const plan = planPrune(history, opts.protectTokens !== undefined ? { protectTokens: opts.protectTokens } : {});
   if (plan.entries.length === 0 || plan.savedTokens < (opts.minSavingTokens ?? PRUNE_MIN_SAVING_TOKENS)) {
     return { pruned: 0, savedTokens: 0 };
   }

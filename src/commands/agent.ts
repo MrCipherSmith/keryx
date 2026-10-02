@@ -49,6 +49,7 @@ import type {
   NormalizedRequest,
   NormalizedRequestOptions,
   NormalizedToolCall,
+  NormalizedToolDefinition,
   NormalizedUsage,
   ProviderPort,
   ProviderReplayItem,
@@ -62,7 +63,7 @@ import {
   toUsageAnchor,
   type UsageAnchor,
 } from "../harness/provider/context-guard";
-import { compactMessages, compactWithFallback } from "../session/compact";
+import { compactWithFallback } from "../session/compact";
 import { pruneToolOutputs } from "../session/prune";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { anchorsAnnouncement } from "../session/anchors-announce";
@@ -2292,6 +2293,39 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
     : undefined;
 }
 
+/**
+ * Flow 387 T11: prune → re-estimate → compact for the one-shot final rounds
+ * (`finishWithBudgetSummary`, `finishWithSubmitResult`) that build their own
+ * request. Same order as the round loop; no usage anchor exists on these paths,
+ * so the estimate is the full chars/4 one.
+ */
+async function pruneThenCompact(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  systemInstruction: string,
+  toolDefs: readonly NormalizedToolDefinition[],
+  sessionDir: string | undefined,
+): Promise<void> {
+  const pruned = await pruneToolOutputs(history, { sessionDir });
+  if (pruned.pruned > 0) {
+    io.onHistoryChange?.("tool");
+  }
+  const estimate = estimateRequestTokens(history, systemInstruction, toolDefs);
+  if (!needsCompaction(estimate, deps.contextWindow)) {
+    return;
+  }
+  await firePreCompactBestEffort(deps, estimate);
+  const compacted = compactWithFallback(history, {
+    keepLastUserTurns: 3,
+    fits: (ctx) => !needsCompaction(estimateRequestTokens(ctx, systemInstruction, toolDefs), deps.contextWindow),
+  });
+  if (!compacted.noop) {
+    history.splice(0, history.length, ...compacted.context);
+    deps.onContextCompaction?.({ removed: compacted.removed, context: compacted.context, estimate });
+  }
+}
+
 async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
@@ -2662,7 +2696,15 @@ async function runAgentTurnCore(
           : `round budget exhausted (${stop?.used ?? 0}/${stop?.limit ?? 0} rounds)`;
     system(`\n[budget] Stopping tools: ${why}. One final round to submit a result…\n`);
     roundState.round += 1;
-    const outcome = await finishWithSubmitResult(io, deps, history, parentRunId, why, signal);
+    const outcome = await finishWithSubmitResult(
+      io,
+      deps,
+      history,
+      parentRunId,
+      why,
+      signal,
+      liveSessionDir(options),
+    );
     if (outcome.aborted === true) {
       system("\n[stopped] Model turn interrupted by user.\n");
       return { finishReason: "interrupted" };
@@ -2743,8 +2785,8 @@ async function runAgentTurnCore(
       storedAnchor !== undefined && storedAnchor.providerId === deps.providerId && storedAnchor.modelId === deps.modelId
         ? storedAnchor.anchor
         : undefined;
-    // Flow 387 T11: prune old tool results FIRST (outside the last 2 operator
-    // turns and the newest 40K tokens, only past a 20K saving), re-measure, and
+    // Flow 387 T11: prune old tool results FIRST (everything outside the newest
+    // 40K tokens of tool output, even inside one long turn; only past a 20K saving), re-measure, and
     // compact only if the request is still over the threshold. The pruned form
     // replaces the history entries (stable prefix next round) and is persisted
     // through the host's existing checkpoint; the archive keeps the originals.
@@ -3720,7 +3762,15 @@ async function runAgentTurnCore(
       }
       if (roundState.round < roundState.maxRounds) {
         roundState.round += 1;
-        const wrapUp = await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog }, signal);
+        const wrapUp = await finishWithBudgetSummary(
+        io,
+        deps,
+        history,
+        parentRunId,
+        { maxAttempts, toolLog },
+        signal,
+        liveSessionDir(options),
+      );
         if (wrapUp.aborted) {
           system("\n[stopped] Model turn interrupted by user.\n");
           return { finishReason: "interrupted" };
@@ -3968,6 +4018,8 @@ async function finishWithBudgetSummary(
   // reached the provider call, so the round streamed to completion — the one
   // "final" turn call still uninterruptible by construction.
   signal: AbortSignal | undefined,
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files.
+  sessionDir?: string,
 ): Promise<{ aborted: boolean }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -4013,19 +4065,8 @@ async function finishWithBudgetSummary(
   // Flow 267: same guard as the round loop, before the wrap-up request. No
   // `tools` are sent on this path, so the estimate carries an empty tool-def
   // list — matching what actually goes over the wire here.
-  const wrapUpEstimate = estimateRequestTokens(history, deps.systemInstruction, []);
-  if (needsCompaction(wrapUpEstimate, deps.contextWindow)) {
-    await firePreCompactBestEffort(deps, wrapUpEstimate);
-    const compacted = compactMessages(history, { keepLastUserTurns: 3 });
-    if (!compacted.noop) {
-      history.splice(0, history.length, ...compacted.context);
-      deps.onContextCompaction?.({
-        removed: compacted.removed,
-        context: compacted.context,
-        estimate: wrapUpEstimate,
-      });
-    }
-  }
+  // Flow 387 T11: prune first, then compact only if still over the threshold.
+  await pruneThenCompact(io, deps, history, deps.systemInstruction, [], sessionDir);
   const baseRequest: Omit<NormalizedRequest, "signal"> = {
     providerId: deps.providerId,
     modelId: deps.modelId,
@@ -4090,6 +4131,8 @@ async function finishWithSubmitResult(
   parentRunId: string,
   why: string,
   signal: AbortSignal | undefined,
+  // Flow 387 T11: live session dir for the prune step's `tool-output/` files.
+  sessionDir?: string,
 ): Promise<{ submitted?: SubmittedResult; error?: string; aborted?: true }> {
   const system = (text: string): void => {
     if (io.onSystem !== undefined) {
@@ -4116,15 +4159,8 @@ async function finishWithSubmitResult(
   io.onHistoryChange?.("tool");
 
   const tools = [SUBMIT_RESULT_TOOL_DEFINITION];
-  const estimate = estimateRequestTokens(history, deps.systemInstruction, tools);
-  if (needsCompaction(estimate, deps.contextWindow)) {
-    await firePreCompactBestEffort(deps, estimate);
-    const compacted = compactMessages(history, { keepLastUserTurns: 3 });
-    if (!compacted.noop) {
-      history.splice(0, history.length, ...compacted.context);
-      deps.onContextCompaction?.({ removed: compacted.removed, context: compacted.context, estimate });
-    }
-  }
+  // Flow 387 T11: prune first, then compact only if still over the threshold.
+  await pruneThenCompact(io, deps, history, deps.systemInstruction, tools, sessionDir);
   const baseRequest: Omit<NormalizedRequest, "signal"> = {
     providerId: deps.providerId,
     modelId: deps.modelId,
