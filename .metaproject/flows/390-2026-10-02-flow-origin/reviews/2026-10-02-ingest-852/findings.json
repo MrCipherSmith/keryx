@@ -97,10 +97,6 @@
       "method": "site-check",
       "evidence": "Re-read src/flow/service.ts lines 1003-1007 at the current head: quote and source fall back to the previous origin's whatever the new kind is. Behaviour as described; no fix has landed.",
       "verifier": "flow390-site-check"
-    },
-    "disposition": {
-      "state": "unknown",
-      "evidence": "follow-up, open: inherited quote/source on kind change; not dismissed, needs a human decision"
     }
   },
   {
@@ -126,10 +122,6 @@
       "method": "site-check",
       "evidence": "Re-read src/tui/flow-origin-command.ts lines 98-101 at the current head: the no-id path lists every flow with no cap. Behaviour as described; no fix has landed.",
       "verifier": "flow390-site-check"
-    },
-    "disposition": {
-      "state": "unknown",
-      "evidence": "follow-up, open: /flow origin with no id prints every flow; not dismissed, needs a human decision"
     }
   }
 ]
