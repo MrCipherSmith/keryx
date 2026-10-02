@@ -4,7 +4,7 @@ target: report
 ref: 852
 mode: ingest
 flow: 390 (explicit-flow-id)
-created_at: 2026-10-02T11:35:50.707Z
+created_at: 2026-10-02T15:19:52.284Z
 context_mode: light
 
 ## Stage counts
@@ -25,8 +25,8 @@ claims_received: 4
 claims_applied: 4
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 2
-refuted: 2
+confirmed: 0
+refuted: 4
 unverifiable: 0
 unverified: 0
 
@@ -36,7 +36,7 @@ findings_in: 4
 findings_removed_by_verifier: 0
 findings_retained: 4
 
-`annotate` records verdicts and removes nothing: 2 finding(s) are marked refuted and still reported.
+`annotate` records verdicts and removes nothing: 4 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 

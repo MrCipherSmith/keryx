@@ -93,10 +93,14 @@
     },
     "global_id": "2026-10-02-ingest-852#F-003",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "Re-read src/flow/service.ts lines 1003-1007 at the current head: quote and source fall back to the previous origin's whatever the new kind is. Behaviour as described; no fix has landed.",
-      "verifier": "flow390-site-check"
+      "evidence": "Re-read src/flow/service.ts originSet at c5e365ca1ac940a4dfbb28454ed1b3a3417bee10 (merge of PR #856, release 0.3.62): quote and source fall back to the previous origin only while before?.kind === kind (`carried`); a kind change carries nothing over. Before the fix they fell back to before?.quote whatever the kind, so the finding was real and is fixed at c5e365ca1ac940a4dfbb28454ed1b3a3417bee10.",
+      "verifier": "flow390-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c5e365ca1ac940a4dfbb28454ed1b3a3417bee10 (PR #856, release 0.3.62): flow origin set carries the old quote and source over only while the kind is unchanged"
     }
   },
   {
@@ -118,10 +122,14 @@
     },
     "global_id": "2026-10-02-ingest-852#F-004",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "Re-read src/tui/flow-origin-command.ts lines 98-101 at the current head: the no-id path lists every flow with no cap. Behaviour as described; no fix has landed.",
-      "verifier": "flow390-site-check"
+      "evidence": "Re-read src/tui/flow-origin-command.ts summarizeOrigins at c5e365ca1ac940a4dfbb28454ed1b3a3417bee10 (merge of PR #856, release 0.3.62): `/flow origin` with no id prints a count per kind plus the newest FLOW_ORIGIN_RECENT_LIMIT flows and 'N older not listed'. Before the fix it printed one block per flow, so the finding was real and is fixed at c5e365ca1ac940a4dfbb28454ed1b3a3417bee10.",
+      "verifier": "flow390-closing-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in c5e365ca1ac940a4dfbb28454ed1b3a3417bee10 (PR #856, release 0.3.62): /flow origin with no id prints a bounded summary of the newest flows"
     }
   }
 ]
