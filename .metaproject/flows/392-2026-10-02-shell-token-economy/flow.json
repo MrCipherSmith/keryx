@@ -6,20 +6,65 @@
     "owner": true,
     "folderCommitted": true
   },
-  "id": "387",
+  "id": "392",
   "slug": "shell-token-economy",
   "title": "keryx shell spends fewer tokens than competing harnesses without losing quality",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-10-02T06:02:04.112Z",
-  "updatedAt": "2026-10-02T11:53:21.438Z",
+  "updatedAt": "2026-10-02T12:29:57.076Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-02T12:04:46.138Z",
+      "note": "loadSessionLimits openai-codex reads context_window/max_context_window from /models (src/commands/model-limits.ts, subscription-models.ts; tests model-limits.test.ts incl. absent-field case). Live probe 2026-10-02: gpt-6.1-sol -> 272000 live-models (journal). Guard armed via makeAgentDeps."
+    },
+    "AC2": {
+      "at": "2026-10-02T12:04:49.856Z",
+      "note": "Overflow -> compact once + retry once; second overflow ends the turn (src/commands/agent.ts, isContextOverflowError/parseOverflowLimits in context-guard.ts). Tests: agent.overflow-retry.test.ts (fake provider), agent.host-contracts.test.ts, context-guard.test.ts incl. Anthropic/Gemini wording (review r1 F-005/F-006)."
+    },
+    "AC3": {
+      "at": "2026-10-02T12:04:52.025Z",
+      "note": "estimateWithUsageAnchor = last provider input usage + chars/4 since; replay bytes counted; falls back without anchor (context-guard.ts). Tests: context-guard.test.ts incl. 600K-char replayed reasoning tripping needsCompaction where the old estimate does not."
+    },
+    "AC4": {
+      "at": "2026-10-02T12:04:53.630Z",
+      "note": "anchorsAnnouncement: one full Anchors block then deltas; compaction re-emits one (src/session/anchors-announce.ts, compact.ts). Test: anchors-announce.test.ts 20-change test asserts exactly one full block and bytes = first block + deltas."
+    },
+    "AC5": {
+      "at": "2026-10-02T12:04:55.061Z",
+      "note": "isOperatorMessage + injected marker; summary keeps every operator request >=500 chars, merges previous summary, lists files read/modified (src/session/compact.ts). Tests: compact.test.ts reproduces the 2026-10-01 pattern (3 trailing injected messages), legacy unmarked session, merge, file lists."
+    },
+    "AC6": {
+      "at": "2026-10-02T12:04:56.275Z",
+      "note": "planPrune protects the newest 40K tool-output tokens (+ unseen batch), placeholder names a readable saved file, >=20K threshold, archive keeps originals, prune -> remeasure -> compact (src/session/prune.ts, agent.ts). Tests: prune.test.ts incl. one-operator-turn session, prune-collapse.test.ts, prune-spill-safety.test.ts, agent.host-contracts.test.ts."
+    },
+    "AC7": {
+      "at": "2026-10-02T12:04:57.404Z",
+      "note": "spillToolOutput: >2000 lines or >50KB written in full to <session>/tool-output (unique name, 0600), model gets head+tail+counts+path+read_file/search_code hint (src/harness/tool/output-spill.ts). Tests: output-spill.test.ts asserts file content equals original; spill-read-access.test.ts. Live: long runner spilled 1 output (long-session-report.md)."
+    },
+    "AC8": {
+      "at": "2026-10-02T12:04:59.252Z",
+      "note": "Codex requests carry prompt_cache_key = session id, stable per session, different between sessions (openai-provider.ts; openai-codex-provider.test.ts). Live probe in journal: endpoint accepts the field; with session-id/thread-id headers cacheReadTokens 2304/2426 vs 0 without."
+    },
+    "AC9": {
+      "at": "2026-10-02T12:05:01.243Z",
+      "note": "scripts/benchmark/replay-session-shape.ts + .test.ts (deterministic, synthetic, no project content): window 272000 (gpt-6.1-sol via AC1), threshold 231200; branch peak 96,783 < threshold; total 7,374,769 vs main-before 14,848,882 = -50.3% (journal, commit f0fb5aa2 numbers)."
+    },
+    "AC10": {
+      "at": "2026-10-02T12:05:02.735Z",
+      "note": "comparative-report.md + fixtures ablation-mutating-results-{openai-codex,codex}-gpt-6.1-sol.json: same model gpt-6.1-sol, 3 tasks x 2 variants x 3 seeds; keryx 12,628 mean uncached input per task (context-on) vs codex CLI 35,199 -> keryx lowest (+0.0%). opencode reference on nemotron-3-ultra-free reported separately (fixture committed)."
+    },
+    "AC11": {
+      "at": "2026-10-02T12:05:05.252Z",
+      "note": "comparative-report.md, context-on arm: keryx success 100% vs main baseline 100% (baseline-main fixture), repeated reads after compaction/prune 0 vs 0. Known limitation recorded by owner decision: long-session-report.md (both 0/22; branch re-read loop) moved to flow 388."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/849"
   },
   "baseBranch": "main",
   "owner": {
@@ -68,7 +113,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -76,14 +121,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "every implementation task added tests (agent.host-contracts, prune*, compact*, output-spill, context-guard, acp/server-archive, replay-session-shape, token-metrics); CI typecheck-and-tests on the PR"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -91,7 +138,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "three managed review rounds (2026-10-02-ingest-849, -r02, -r03 retried at cdfc1639), all blocker/major/minor findings acted-on; PR #849"
     },
     {
       "id": "T5",
@@ -960,6 +1009,95 @@
       "at": "2026-10-02T11:53:21.438Z",
       "event": "task-done",
       "detail": "T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)"
+    },
+    {
+      "at": "2026-10-02T12:04:32.558Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T12:04:34.011Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T12:04:46.138Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: loadSessionLimits openai-codex reads context_window/max_context_window from /models (src/commands/model-limits.ts, subscription-models.ts; tests model-limits.test.ts incl. absent-field case). Live probe 2026-10-02: gpt-6.1-sol -> 272000 live-models (journal). Guard armed via makeAgentDeps. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:49.856Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Overflow -> compact once + retry once; second overflow ends the turn (src/commands/agent.ts, isContextOverflowError/parseOverflowLimits in context-guard.ts). Tests: agent.overflow-retry.test.ts (fake provider), agent.host-contracts.test.ts, context-guard.test.ts incl. Anthropic/Gemini wording (review r1 F-005/F-006). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:52.026Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: estimateWithUsageAnchor = last provider input usage + chars/4 since; replay bytes counted; falls back without anchor (context-guard.ts). Tests: context-guard.test.ts incl. 600K-char replayed reasoning tripping needsCompaction where the old estimate does not. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:53.630Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: anchorsAnnouncement: one full Anchors block then deltas; compaction re-emits one (src/session/anchors-announce.ts, compact.ts). Test: anchors-announce.test.ts 20-change test asserts exactly one full block and bytes = first block + deltas. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:55.061Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: isOperatorMessage + injected marker; summary keeps every operator request >=500 chars, merges previous summary, lists files read/modified (src/session/compact.ts). Tests: compact.test.ts reproduces the 2026-10-01 pattern (3 trailing injected messages), legacy unmarked session, merge, file lists. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:56.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: planPrune protects the newest 40K tool-output tokens (+ unseen batch), placeholder names a readable saved file, >=20K threshold, archive keeps originals, prune -> remeasure -> compact (src/session/prune.ts, agent.ts). Tests: prune.test.ts incl. one-operator-turn session, prune-collapse.test.ts, prune-spill-safety.test.ts, agent.host-contracts.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:57.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: spillToolOutput: >2000 lines or >50KB written in full to <session>/tool-output (unique name, 0600), model gets head+tail+counts+path+read_file/search_code hint (src/harness/tool/output-spill.ts). Tests: output-spill.test.ts asserts file content equals original; spill-read-access.test.ts. Live: long runner spilled 1 output (long-session-report.md). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:04:59.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Codex requests carry prompt_cache_key = session id, stable per session, different between sessions (openai-provider.ts; openai-codex-provider.test.ts). Live probe in journal: endpoint accepts the field; with session-id/thread-id headers cacheReadTokens 2304/2426 vs 0 without. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:01.243Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: scripts/benchmark/replay-session-shape.ts + .test.ts (deterministic, synthetic, no project content): window 272000 (gpt-6.1-sol via AC1), threshold 231200; branch peak 96,783 < threshold; total 7,374,769 vs main-before 14,848,882 = -50.3% (journal, commit f0fb5aa2 numbers). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:02.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: comparative-report.md + fixtures ablation-mutating-results-{openai-codex,codex}-gpt-6.1-sol.json: same model gpt-6.1-sol, 3 tasks x 2 variants x 3 seeds; keryx 12,628 mean uncached input per task (context-on) vs codex CLI 35,199 -> keryx lowest (+0.0%). opencode reference on nemotron-3-ultra-free reported separately (fixture committed). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:05:05.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: comparative-report.md, context-on arm: keryx success 100% vs main baseline 100% (baseline-main fixture), repeated reads after compaction/prune 0 vs 0. Known limitation recorded by owner decision: long-session-report.md (both 0/22; branch re-read loop) moved to flow 388. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T12:25:43.701Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/849 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-02T12:26:40.357Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T12:26:51.056Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T12:26:51.070Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-02T12:29:57.076Z",
+      "event": "renumbered",
+      "detail": "387 -> 392: duplicate id with 387-2026-10-02-telegram-commands, which reached main first (05:12 UTC) from another clone; this flow was created later (06:02 UTC); 391 is the highest id on main — move the later flow"
     }
   ],
   "acKinds": {
@@ -996,5 +1134,203 @@
     "AC11": {
       "kind": "unclassified"
     }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-02T12:04:46.138Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:49.856Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:52.025Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:53.630Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:55.061Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:56.275Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:57.404Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:04:59.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:01.243Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:02.735Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:05:05.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    },
+    {
+      "at": "2026-10-02T12:26:51.070Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d",
+      "headCommit": "061456ff266222acfcb57bfb308ca7547a6acf61"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T12:26:51.056Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "061456ff266222acfcb57bfb308ca7547a6acf61 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "061456ff266222acfcb57bfb308ca7547a6acf61 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "25 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: Aleksandr Tsaitler"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "387-2026-10-02-shell-token-economy is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 3 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:a6b6e2331f5741c8eba55104e89baadba8c9e615e2e0d0643c1bebbace90048d"
+    }
+  ],
+  "merged": {
+    "commit": "061456ff266222acfcb57bfb308ca7547a6acf61",
+    "ref": "origin/main",
+    "at": "2026-10-02T12:26:51.070Z"
   }
 }

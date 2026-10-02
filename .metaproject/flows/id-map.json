@@ -398,5 +398,21 @@
     "toDir": "386-2026-10-01-wiki-mutations-reversible-and-invariant-",
     "at": "2026-10-01T17:13:55.211Z",
     "reason": "Collision with 367-2026-09-29-w2-rewind merged to main from another branch while this flow was in progress; 385 is the highest id on main"
+  },
+  {
+    "from": "387",
+    "to": "392",
+    "fromDir": "387-2026-10-02-shell-token-economy",
+    "toDir": "392-2026-10-02-shell-token-economy",
+    "at": "2026-10-02T12:29:57.076Z",
+    "reason": "duplicate id with 387-2026-10-02-telegram-commands, which reached main first (05:12 UTC) from another clone; this flow was created later (06:02 UTC); 391 is the highest id on main — move the later flow"
+  },
+  {
+    "from": "388",
+    "to": "393",
+    "fromDir": "388-2026-10-02-slate-working-memory",
+    "toDir": "393-2026-10-02-slate-working-memory",
+    "at": "2026-10-02T12:30:28.489Z",
+    "reason": "duplicate id with 388-2026-10-02-voice-investigation on main (another clone); this flow was created later and had never reached main; 392 is taken by the renumbered shell-token-economy flow"
   }
 ]
