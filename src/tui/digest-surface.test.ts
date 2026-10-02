@@ -299,8 +299,8 @@ describe("AC8: the /schedules modal", () => {
     expect(text).toContain("\ndigest\n");
     expect(text).toContain("  digest: GitHub (read-only) and the product board for MrCipherSmith/keryx");
     expect(text).toContain("  next run: 2026-10-03T08:00:00.000Z");
-    expect(text).toMatch(/  last run: ok at /);
-    expect(text).toMatch(/  last delivery: sent at /);
+    expect(text).toMatch(/ {2}last run: ok at /);
+    expect(text).toMatch(/ {2}last delivery: sent at /);
     expect(text).toContain("read-only: the digest only reads GitHub (gh) and the flow board; it changes nothing");
   });
 
@@ -325,7 +325,7 @@ describe("AC8: the /schedules modal", () => {
     try {
       const list = schedules.show() as NonNullable<ReturnType<SchedulesSidebar["openModals"]>["list"]>;
       await list.ready;
-      expect(list.visibleLines().join("\n")).toMatch(/> morning \(digest\)  \[active\]  next /);
+      expect(list.visibleLines().join("\n")).toMatch(/> morning \(digest\) {2}\[active\] {2}next /);
       expect(list.selectedName()).toBe("morning");
 
       const detail = schedules.show("morning") as NonNullable<ReturnType<SchedulesSidebar["openModals"]>["detail"]>;

@@ -187,15 +187,15 @@ describe("AC4: a source that could not be read is not mistaken for 'everything c
 
 describe("AC4: a source that answers with a full window is only partly seen", () => {
   const STAMP = "2026-10-01T09:00:00Z";
-  const window = (from: number, to: number): { number: number; title: string; updatedAt: string }[] =>
+  const rows = (from: number, to: number): { number: number; title: string; updatedAt: string }[] =>
     Array.from({ length: to - from + 1 }, (_, i) => ({ number: from + i, title: `PR ${from + i}`, updatedAt: STAMP }));
 
   test("101 open PRs: one falls off the 100-row window, it is not reported as gone and not as new when it returns", async () => {
     // baseline: the window holds PRs 1..100 (PR 101 exists but is not in it yet)
-    await run(ghWith(window(1, 100)));
+    await run(ghWith(rows(1, 100)));
 
     // PR 1 falls off, PR 101 enters; the answer is a full window again
-    const second = await run(ghWith(window(2, 101)));
+    const second = await run(ghWith(rows(2, 101)));
     expect(second.text).toContain("truncated at 100");
     expect(second.text).not.toContain("— closed or merged");
     expect(second.text).not.toContain(`PR ${REPO}#1 `);
@@ -203,7 +203,7 @@ describe("AC4: a source that answers with a full window is only partly seen", ()
     expect(await lastDetail()).toContain("1 change(s)");
 
     // PR 1 is back in the window with the same stamp: it is neither new nor updated
-    const third = await run(ghWith(window(1, 100)));
+    const third = await run(ghWith(rows(1, 100)));
     expect(third.text).toContain("truncated at 100");
     expect(third.text).not.toContain(`PR ${REPO}#1 "PR 1"`);
     expect(third.text).not.toContain("— new");
@@ -215,16 +215,16 @@ describe("AC4: a source that answers with a full window is only partly seen", ()
   });
 
   test("a short answer is complete: PRs that left the list are reported as gone again, and no truncation note is shown", async () => {
-    await run(ghWith(window(1, 100)));
-    const { text } = await run(ghWith(window(1, 3)));
+    await run(ghWith(rows(1, 100)));
+    const { text } = await run(ghWith(rows(1, 3)));
     expect(text).not.toContain("truncated at 100");
     expect(text).toContain(`PR ${REPO}#50 — closed or merged`);
   });
 
   test("only the truncated source is held back: a PR on another source is still reported as gone", async () => {
-    await run(ghWith(window(1, 100)));
+    await run(ghWith(rows(1, 100)));
     // the issue list is short and complete, so its issue leaving is a real change
-    const { text } = await run(ghWith(window(1, 100), []));
+    const { text } = await run(ghWith(rows(1, 100), []));
     expect(text).toContain("truncated at 100");
     expect(text).toContain(`issue ${REPO}#40 — closed or merged`);
     expect(text).not.toContain(`PR ${REPO}#`);
