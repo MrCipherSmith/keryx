@@ -2809,7 +2809,8 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 
   test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
     expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
-    expect(fnBodyPlan).toContain("io.permissionMode = () => permissionMode;");
+    // Flow 396: the getter goes through `modeNow()` (the shell's mode, or the Telegram default for a topic turn).
+    expect(fnBodyPlan).toContain("io.permissionMode = () => modeNow().mode;");
   });
 
   test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {
@@ -2858,7 +2859,7 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd);
     expect(fnBlock).toContain("readOnly = true;\n        paintModeRow();");
     expect(fnBlock).toContain("readOnly = false;\n        paintModeRow();");
-    expect(fnBodyPlan).toContain("permissionMode = next;\n      paintModeRow();");
+    expect(fnBodyPlan).toContain("permissionMode = next;\n      modeChangedThisSession = true;\n      paintModeRow();");
     // Painted once at startup too, so the row is never blank.
     expect(fnBodyPlan).toMatch(/const paintModeRow = [\s\S]*?\n {4}paintModeRow\(\);/);
   });
