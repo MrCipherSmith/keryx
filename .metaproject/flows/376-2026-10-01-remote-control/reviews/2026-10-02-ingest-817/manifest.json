@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-10-01-ingest-817",
+  "reviewId": "2026-10-02-ingest-817",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "report",
     "ref": "817",
-    "head": "4f1326d25c7b976701af5ce3fa8f8c04a0484e04"
+    "head": "b55951eb90c543ae913ef762875a6dfb432faea9"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/scope.md",
-    "coverage": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/coverage.md",
-    "report": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/report.md",
-    "findings": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/findings.json",
-    "learning": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/learning.md",
-    "decisions": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-01-ingest-817/decisions.md"
+    "scope": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/scope.md",
+    "coverage": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/coverage.md",
+    "report": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/report.md",
+    "findings": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/findings.json",
+    "learning": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/learning.md",
+    "decisions": ".metaproject/flows/376-2026-10-01-remote-control/reviews/2026-10-02-ingest-817/decisions.md"
   },
   "coverage": [
     {
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-10-01T06:45:51.633Z",
-  "updatedAt": "2026-10-02T06:13:50.743Z",
+  "createdAt": "2026-10-02T06:12:21.799Z",
+  "updatedAt": "2026-10-02T06:12:49.420Z",
   "flow": {
     "id": "376",
     "path": ".metaproject/flows/376-2026-10-01-remote-control"
