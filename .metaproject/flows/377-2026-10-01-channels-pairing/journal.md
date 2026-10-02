@@ -40,3 +40,7 @@
 - 2026-10-01T12:18:54.044Z - completing: merged commit: 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3
 - 2026-10-01T12:18:58.731Z - completion-attempt-recorded: attempt 3: failed
 - 2026-10-01T12:18:58.734Z - completion-failed: review: 2 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-10-01-ingest-823#F-110 (minor, round 2026-10-01-ingest-823): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against 2e0752a27d6803eb29f6b4f90b88ee87dabd5cf3, but the PR head is 85ed3ce88b487fbe8987afb75f9dc697f1c6c348. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.
+- 2026-10-01T14:28:01.052Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/830 (warning: PR is not a draft)
+- 2026-10-02T04:43:33.663Z - completing
+- 2026-10-02T04:43:37.213Z - completion-attempt-recorded: attempt 4: passed
+- 2026-10-02T04:43:37.214Z - done: all gates passed
