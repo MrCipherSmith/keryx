@@ -3,6 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.60] — 2026-10-02
+### Changed
+- **Review round bound: five.** A review/fix loop may now run five rounds before the orchestrator re-plans (`REVIEW_ROUND_CAP` and the `flow-orchestrator` skill, were three). The bounds of `job-orchestrator` and `task-implementer` self-fix stay at three, the review-gate behaviour is unchanged: the cap only adds a note and only a human can dismiss a finding.
+
+[Changes since 0.3.59](https://github.com/MrCipherSmith/keryx/compare/v0.3.59...v0.3.60)
+
 ## [0.3.59] — 2026-10-02
 ### Added
 - **Flow origin.** Every flow can record where it came from: `human-request`, `agent-finding` or `agent-proposal`, set with `keryx flow init --origin <kind> --quote "<verbatim>" --source "<ref>"`. A `human-request` is accepted only with the person's own words and a source; otherwise the origin stays `unknown` and a note says why. The Outcome criteria template carries three lines (the request verbatim, the agent's formalization, how to observe it), `outcomeAuthor` is derived from the origin unless set, `keryx flow origin set <id> <kind> --reason` changes it with a journal line, and `flow status`, `product open`, the flow inspector and the new `/flow` shell command show it. The product's G1a is counted by origin. Nothing is gated on the origin: flows without one still init, freeze and complete.
