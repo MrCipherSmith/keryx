@@ -16,6 +16,7 @@
 import type { NormalizedMessage } from "../harness/provider/types";
 import { consolidateAnchors, isAnchorsContent, isFullAnchorsContent } from "./anchors-announce";
 import { parseCollapsedRecord, patchPaths } from "./prune";
+import { persistCompacted, type SessionHandle } from "./store";
 
 export interface CompactOptions {
   /** How many trailing operator turns (with following assistant/tool/injected msgs) to keep. */
@@ -448,4 +449,28 @@ export function compactWithFallback(
     return best ?? { context: [...history], removed: 0, summaryText: "", noop: true };
   }
   return { ...inTurn, removed: inTurn.removed + (best?.removed ?? 0) };
+}
+
+/**
+ * Compact the live model context. Archive is preserved (and grown if needed).
+ * Returns the new context array for the caller to swap into memory.
+ *
+ * Lives here, not in `./store`: the state store is in the core entry's graph
+ * (AFC-19) and must not import the compaction chain (prune -> harness/tool).
+ */
+export function compactSession(
+  handle: SessionHandle,
+  context: readonly NormalizedMessage[],
+  archive: readonly NormalizedMessage[],
+  opts?: CompactOptions & { provider?: string; model?: string },
+): { handle: SessionHandle; context: NormalizedMessage[]; result: ReturnType<typeof compactMessages> } {
+  const result = compactMessages(context, opts);
+  if (result.noop) {
+    return { handle, context: [...context], result };
+  }
+  // Archive keeps everything we had before compact + a marker line is not needed
+  // as messages — full prior context already lives in archive.
+  const nextArchive = archive.length >= context.length ? archive : context;
+  const persisted = persistCompacted(handle, result.context, nextArchive, opts);
+  return { handle: persisted.handle, context: result.context, result };
 }
