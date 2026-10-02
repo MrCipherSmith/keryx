@@ -15,6 +15,7 @@
 
 import type { NormalizedMessage } from "../harness/provider/types";
 import { consolidateAnchors, isAnchorsContent, isFullAnchorsContent } from "./anchors-announce";
+import { parseCollapsedRecord, patchPaths } from "./prune";
 
 export interface CompactOptions {
   /** How many trailing operator turns (with following assistant/tool/injected msgs) to keep. */
@@ -151,23 +152,23 @@ function parseArgs(raw: string): Record<string, unknown> {
   }
 }
 
-/** Paths a unified diff writes (`+++ b/path`, or `--- a/path` for a deletion). */
-function patchPaths(patch: string): string[] {
-  const out: string[] = [];
-  for (const line of patch.split("\n")) {
-    const m = /^(?:\+\+\+|---) (?:[ab]\/)?(\S+)/.exec(line);
-    if (m !== null && m[1] !== undefined && m[1] !== "/dev/null") {
-      out.push(m[1]);
-    }
-  }
-  return out;
-}
-
 /** Files read / modified by the assistant tool calls in `messages`, in first-seen order. */
 function filesFromToolCalls(messages: readonly NormalizedMessage[]): { read: string[]; modified: string[] } {
   const read: string[] = [];
   const modified: string[] = [];
   for (const m of messages) {
+    // Flow 387 T18: an old exchange collapsed by `pruneToolOutputs` keeps what it
+    // touched in its digest lines.
+    for (const call of parseCollapsedRecord(m)) {
+      if (call.name === "apply_patch") {
+        modified.push(...call.digest.split(", ").filter((f) => f.length > 0));
+      } else if (READ_TOOLS.has(call.name)) {
+        const file = call.digest.split(" | ")[0] ?? "";
+        if (file.length > 0 && !file.startsWith("pattern=") && !file.startsWith("{")) {
+          read.push(file);
+        }
+      }
+    }
     for (const call of m.role === "assistant" ? (m.toolCalls ?? []) : []) {
       const args = parseArgs(call.arguments);
       if (call.name === "apply_patch" && typeof args.patch === "string") {
@@ -308,6 +309,9 @@ function buildSummary(
 function toolCallCounts(messages: readonly NormalizedMessage[]): string[] {
   const counts = new Map<string, number>();
   for (const m of messages) {
+    for (const call of parseCollapsedRecord(m)) {
+      counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
+    }
     for (const call of m.role === "assistant" ? (m.toolCalls ?? []) : []) {
       counts.set(call.name, (counts.get(call.name) ?? 0) + 1);
     }

@@ -8,7 +8,8 @@ import { CLEARED_PREFIX, PRUNE_MIN_SAVING_TOKENS, isClearedToolResult, planPrune
 
 // Flow 387 T11 (AC6): send-time pruning of old tool results. The only protected
 // window is the newest 40K tokens of tool output (the operator message is never a
-// tool result), so a single long operator turn is pruned too.
+// tool result), so a single long operator turn is pruned too. The T11 tests below run
+// with `collapseGroups: false` (results only); the T18 tests at the end cover collapsing.
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -55,7 +56,7 @@ test("clears results outside the newest 40K tokens and keeps the newest ones", a
   const sessionDir = tmp();
   // 12 results of 10K tokens each: the newest 4 fill the 40K window.
   const history = longFirstTurn(12, 40_000);
-  const result = await pruneToolOutputs(history, { sessionDir });
+  const result = await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   expect(result.pruned).toBe(8);
   expect(result.savedTokens).toBeGreaterThanOrEqual(PRUNE_MIN_SAVING_TOKENS);
   const tools = toolsOf(history);
@@ -73,7 +74,7 @@ test("prunes inside the last operator turn too, keeping the operator message and
     history.push(...pair(`n${i}`, 40_000));
   }
   const operator = history[1];
-  const result = await pruneToolOutputs(history, { sessionDir });
+  const result = await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   expect(result.pruned).toBe(3);
   expect(history[1]).toBe(operator);
   const tools = toolsOf(history);
@@ -88,7 +89,7 @@ test("one-operator-turn session (~100 results of 5-20K chars): old results clear
     history.push(...pair(`s${i}`, 5_000 + ((i * 1543) % 15_001)));
   }
   const before = toolsOf(history).map((m) => Math.ceil(m.content.length / 4));
-  const result = await pruneToolOutputs(history, { sessionDir });
+  const result = await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   const tools = toolsOf(history);
   const keptFrom = tools.findIndex((m) => !isClearedToolResult(m));
   expect(result.pruned).toBe(keptFrom);
@@ -105,11 +106,11 @@ test("one-operator-turn session (~100 results of 5-20K chars): old results clear
 test("does nothing below the 20K-token saving threshold, acts at it", async () => {
   const sessionDir = tmp();
   const small = longFirstTurn(2, 40_000); // 2 x 10K tokens
-  expect((await pruneToolOutputs(small, { sessionDir, protectTokens: 0 })).pruned).toBe(0);
+  expect((await pruneToolOutputs(small, { collapseGroups: false, sessionDir, protectTokens: 0 })).pruned).toBe(0);
   expect(toolsOf(small).some(isClearedToolResult)).toBe(false);
 
   const enough = longFirstTurn(3, 40_000); // 3 x 10K tokens > 20K
-  const result = await pruneToolOutputs(enough, { sessionDir, protectTokens: 0 });
+  const result = await pruneToolOutputs(enough, { collapseGroups: false, sessionDir, protectTokens: 0 });
   expect(result.pruned).toBe(3);
 });
 
@@ -119,7 +120,7 @@ test("archive keeps the original text and a readable file holds it", async () =>
   // What `archive.jsonl` holds: the message objects as they were before pruning.
   const archive = [...history];
   const original = toolsOf(archive).map((m) => m.content);
-  await pruneToolOutputs(history, { sessionDir });
+  await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
 
   expect(toolsOf(archive).map((m) => m.content)).toEqual(original);
   const first = toolsOf(history)[0] as NormalizedMessage;
@@ -130,10 +131,10 @@ test("archive keeps the original text and a readable file holds it", async () =>
 test("is idempotent: already-cleared results are untouched and do not count as savings", async () => {
   const sessionDir = tmp();
   const history = longFirstTurn(12, 40_000);
-  await pruneToolOutputs(history, { sessionDir });
+  await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   const after = history.map((m) => m.content);
-  const again = await pruneToolOutputs(history, { sessionDir });
-  expect(again).toEqual({ pruned: 0, savedTokens: 0 });
+  const again = await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
+  expect(again).toEqual({ pruned: 0, collapsed: 0, savedTokens: 0 });
   expect(history.map((m) => m.content)).toEqual(after);
 });
 
@@ -144,14 +145,14 @@ test("a result the spill already saved keeps its spill path and writes nothing n
   const preview = renderSpillPreview("y".repeat(300_000), spillPath);
   const target = history.findIndex((m) => m.role === "tool");
   history[target] = { ...(history[target] as NormalizedMessage), content: preview };
-  await pruneToolOutputs(history, { sessionDir });
+  await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   expect((history[target] as NormalizedMessage).content).toBe(`${CLEARED_PREFIX} — full text: ${spillPath}]`);
   expect(readdirSync(path.join(sessionDir, "tool-output")).includes("spilled.txt")).toBe(false);
 });
 
 test("without a session dir the placeholder carries no path", async () => {
   const history = longFirstTurn(12, 40_000);
-  const result = await pruneToolOutputs(history, { sessionDir: undefined });
+  const result = await pruneToolOutputs(history, { collapseGroups: false, sessionDir: undefined });
   expect(result.pruned).toBe(8);
   expect((toolsOf(history)[0] as NormalizedMessage).content).toBe(`${CLEARED_PREFIX} to save context]`);
 });

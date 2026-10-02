@@ -64,7 +64,7 @@ import {
   type UsageAnchor,
 } from "../harness/provider/context-guard";
 import { compactWithFallback } from "../session/compact";
-import { pruneToolOutputs } from "../session/prune";
+import { pruneToolOutputs, type PruneResult } from "../session/prune";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { anchorsAnnouncement } from "../session/anchors-announce";
 import type { Slate, SlateAnchors, SlateCourse } from "../session/slate";
@@ -671,7 +671,17 @@ export interface AgentDeps {
    * omits it and is unaffected — the guard still compacts `history` in place
    * regardless, only the persistence/UX side-effect is skipped.
    */
-  onContextCompaction?: (r: { removed: number; context: NormalizedMessage[]; estimate: number }) => void;
+  onContextCompaction?: (r: {
+    removed: number;
+    context: NormalizedMessage[];
+    estimate: number;
+    /**
+     * Flow 387 T18: `"prune"` when old tool exchanges were collapsed into text records
+     * (history got shorter, nothing was summarised). The host persists the new context
+     * and resets its archive cursor like a compaction, but must not count or announce it as one.
+     */
+    kind?: "compact" | "prune";
+  }) => void;
   /**
    * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
    * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
@@ -2294,6 +2304,41 @@ function liveSessionDir(options: RunAgentTurnOptions): string | undefined {
 }
 
 /**
+ * Flow 387 T11/T18: prune old tool exchanges and tell the host. The host flushes
+ * its archive BEFORE history changes (`beforeApply`), so `archive.jsonl` holds the
+ * originals. A collapse shortens `history`, which the host must treat like a
+ * compaction (it resets its archive cursor and persists the new context);
+ * a results-only prune keeps the length, so the ordinary checkpoint is enough.
+ */
+async function pruneHistory(
+  io: AgentIO,
+  deps: AgentDeps,
+  history: NormalizedMessage[],
+  sessionDir: string | undefined,
+  minSavingTokens?: number,
+): Promise<PruneResult> {
+  const lengthBefore = history.length;
+  const result = await pruneToolOutputs(history, {
+    sessionDir,
+    beforeApply: () => io.onHistoryChange?.("tool"),
+    ...(minSavingTokens !== undefined ? { minSavingTokens } : {}),
+  });
+  if (result.pruned > 0) {
+    if (result.collapsed > 0 && deps.onContextCompaction !== undefined) {
+      deps.onContextCompaction({
+        kind: "prune",
+        removed: lengthBefore - history.length,
+        context: [...history],
+        estimate: 0,
+      });
+    } else {
+      io.onHistoryChange?.("tool");
+    }
+  }
+  return result;
+}
+
+/**
  * Flow 387 T11: prune → re-estimate → compact for the one-shot final rounds
  * (`finishWithBudgetSummary`, `finishWithSubmitResult`) that build their own
  * request. Same order as the round loop; no usage anchor exists on these paths,
@@ -2307,10 +2352,7 @@ async function pruneThenCompact(
   toolDefs: readonly NormalizedToolDefinition[],
   sessionDir: string | undefined,
 ): Promise<void> {
-  const pruned = await pruneToolOutputs(history, { sessionDir });
-  if (pruned.pruned > 0) {
-    io.onHistoryChange?.("tool");
-  }
+  await pruneHistory(io, deps, history, sessionDir);
   const estimate = estimateRequestTokens(history, systemInstruction, toolDefs);
   if (!needsCompaction(estimate, deps.contextWindow)) {
     return;
@@ -2790,11 +2832,14 @@ async function runAgentTurnCore(
     // compact only if the request is still over the threshold. The pruned form
     // replaces the history entries (stable prefix next round) and is persisted
     // through the host's existing checkpoint; the archive keeps the originals.
-    const pruneResult = await pruneToolOutputs(history, { sessionDir: liveSessionDir(options) });
+    // Flow 387 T18: old exchanges whose results are all outside the window are
+    // collapsed into one text record, not only cleared.
+    const pruneResult = await pruneHistory(io, deps, history, liveSessionDir(options));
     if (pruneResult.pruned > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
-      io.onHistoryChange?.("tool");
-      system(`\n[prune] Cleared ${pruneResult.pruned} old tool results (~${pruneResult.savedTokens} tokens) from the request.\n`);
+      system(
+        `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ~${pruneResult.savedTokens} tokens) in the request.\n`,
+      );
     }
     const preRequestEstimate =
       pruneResult.pruned > 0
@@ -3034,13 +3079,9 @@ async function runAgentTurnCore(
           const overflowEstimate = estimateRequestTokens(history, roundSystemInstruction, toolDefs);
           // Flow 387 T11: prune first (any saving counts now), then compact with
           // the same fallback as the pre-request guard.
-          const overflowPrune = await pruneToolOutputs(history, {
-            sessionDir: liveSessionDir(options),
-            minSavingTokens: 1,
-          });
+          const overflowPrune = await pruneHistory(io, deps, history, liveSessionDir(options), 1);
           if (overflowPrune.pruned > 0) {
             usageAnchors.delete(history);
-            io.onHistoryChange?.("tool");
           }
           const compacted = compactWithFallback(history, {
             keepLastUserTurns: 3,
@@ -3618,6 +3659,7 @@ async function runAgentTurnCore(
         ),
         provenance: "tool",
         toolCallId: call.id,
+        ...(result.isError === true ? { isError: true as const } : {}),
         ts: now(),
       });
       io.onHistoryChange?.("tool");

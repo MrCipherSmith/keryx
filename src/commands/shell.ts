@@ -2229,6 +2229,14 @@ export async function runAgentRepl(
       if (live === undefined || !leaseWatch.canPersist()) {
         return;
       }
+      if (r.kind === "prune") {
+        // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
+        // The archive already holds the originals (synced before the change);
+        // persist the shorter context and re-point the archive cursor at its end.
+        live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
+        nextArchiveIndex = history.length;
+        return;
+      }
       const persisted = persistCompacted(live, r.context, archive, {
         provider: deps.providerId,
         model: deps.modelId,

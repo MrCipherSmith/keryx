@@ -258,6 +258,12 @@ export interface NormalizedMessage {
   /** Tool only: the id of the assistant call this message answers. */
   toolCallId?: string;
   /**
+   * Flow 387 T18: tool only; `true` when the tool reported failure. Store-only
+   * bookkeeping (never sent to a provider): lets a collapsed old tool exchange say
+   * `ok` or `error` without guessing from the output text.
+   */
+  isError?: true;
+  /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
    * it to disk). Optional and store-only bookkeeping: no request builder

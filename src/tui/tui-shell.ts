@@ -5836,9 +5836,26 @@ export async function launchTuiAgentShell(opts: {
      * shorter `history`. A system-stream line replaces a silent swap so the
      * operator sees WHY the transcript just shrank.
      */
-    const onContextCompaction = (r: { removed: number; context: NormalizedMessage[]; estimate: number }): void => {
+    const onContextCompaction = (r: {
+      removed: number;
+      context: NormalizedMessage[];
+      estimate: number;
+      kind?: "compact" | "prune";
+    }): void => {
       if (!sessionLease.canPersist()) {
         return; // review F1: another shell has this session now
+      }
+      if (r.kind === "prune") {
+        // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
+        // The archive already holds the originals (synced before the change);
+        // persist the shorter context and re-point the archive cursor at its end.
+        liveSession = persistHistory(liveSession, history, {
+          archive,
+          provider: currentSel.provider,
+          model: currentSel.model,
+        });
+        nextArchiveIndex = history.length;
+        return;
       }
       const persisted = persistCompacted(liveSession, r.context, archive, {
         provider: currentSel.provider,

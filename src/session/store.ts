@@ -103,6 +103,8 @@ interface TranscriptLine {
   toolCalls?: NormalizedToolCall[];
   /** The assistant call a tool result answers. */
   toolCallId?: string;
+  /** Flow 387 T18: the tool reported failure (see `NormalizedMessage.isError`). */
+  isError?: true;
   /**
    * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
    * redacted flag, and opaque provider replay items. Round-tripped so a
@@ -401,6 +403,7 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpo
       ...(m.injected === true ? { injected: true as const } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
+      ...(m.isError === true ? { isError: true as const } : {}),
       ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
@@ -535,6 +538,7 @@ function readJsonl(file: string): NormalizedMessage[] {
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }
           : {}),
+        ...(o.isError === true ? { isError: true as const } : {}),
         // Carried forward so a resumed session's next flush reuses the
         // message's ORIGINAL append time instead of re-stamping it with the
         // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`

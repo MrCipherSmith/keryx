@@ -50,6 +50,11 @@ function messageChars(message: EstimatableMessage): number {
   return chars;
 }
 
+/** Flow 387 T18: chars/4 estimate of one message, counted exactly as the request estimate counts it. */
+export function estimateMessageTokens(message: EstimatableMessage): number {
+  return Math.ceil(messageChars(message) / 4);
+}
+
 /** Chars of the non-message request overhead: system instruction + tool schemas. */
 function overheadChars(systemInstruction: string, toolDefs: readonly NormalizedToolDefinition[]): number {
   return systemInstruction.length + (toolDefs.length > 0 ? JSON.stringify(toolDefs).length : 0);
