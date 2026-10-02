@@ -1265,8 +1265,8 @@ with evidence, not silence.
 
 Only runs if NEEDS_FIX is true. Default max: **3 iterations** (`max_review_iterations`).
 
-Three is the shared round bound: `task-implementer`, `flow-orchestrator` and
-this skill all use it. *"The first three to four repair iterations account for
+Three is the self-fix bound `task-implementer` and this skill share
+(`flow-orchestrator`'s review bound is five, by operator decision). *"The first three to four repair iterations account for
 most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
 correctness falls **0.820 -> 0.673** across two forced revisions while
 cumulative ever-correct is **0.847**
