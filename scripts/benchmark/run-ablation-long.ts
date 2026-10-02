@@ -17,9 +17,10 @@
 //   bun scripts/benchmark/run-ablation-long.ts --tasks long --label baseline-main
 //
 // Flags: --provider, --model, --tasks long|<name,name>, --seeds 1,2,3, --context-window <tokens>
-// (default 64000; the compaction guard trips at 85% of it, `0` leaves compaction off), --max-tool-calls
+// (default 128000; the compaction guard trips at 85% of it, `0` leaves compaction off), --max-tool-calls
 // (default 150), --max-rounds (default 150), --label <text>, --dry-run.
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -39,14 +40,17 @@ import {
   dryRun,
   finalizeLongRun,
   labelledFilename,
+  countSpillFiles,
+  longTurnOptions,
   mechanismRollup,
   parseSeeds,
   seedLongWorktree,
   summarizeOracle,
+  uncappedShellRunner,
   worktreeReader,
   type LongRunSample,
 } from "./long-runner-shared";
-import { selectLongTasks, type LongTask } from "./long-tasks";
+import { REGISTRY_DIR, selectLongTasks, type LongTask } from "./long-tasks";
 import { KeryxUsageAccumulator, RepeatedReadTracker, fixtureFilename } from "./token-metrics";
 
 const argv = process.argv;
@@ -54,7 +58,17 @@ const PROVIDER_NAME = argValue(argv, "--provider", "deepseek");
 const MODEL = argValue(argv, "--model", PROVIDER_NAME === "deepseek" ? "deepseek-v4-flash" : "unknown");
 const TASK_SPEC = argValue(argv, "--tasks", "long");
 const SEEDS = parseSeeds(argValue(argv, "--seeds", "1,2,3"));
-const CONTEXT_WINDOW = Number(argValue(argv, "--context-window", "64000"));
+// 128000, not 64000: prune needs ~60K tokens of tool output in history (protect 40K + a 20K saving) and
+// compaction trips at 85% of the window, so a window under ~73K compacts BEFORE prune can ever fire. A live
+// run at 96000 still compacted 25 times (the provider-anchored estimate runs above chars/4), so leave room.
+const CONTEXT_WINDOW = Number(argValue(argv, "--context-window", "128000"));
+// The task's design is "read the file again after its result was pruned", and the per-signature repeat guard
+// (default 3 identical calls, then the turn is wrapped up) cut the first live run short: the same spill file
+// read at start_line 1 a 4th time ended the turn with DONE and no answer.json. Raise it to its ceiling (10).
+process.env.KERYX_AGENT_MAX_ATTEMPTS_PER_HASH ??= "10";
+const DEBUG_DIR =argValue(argv, "--debug-dir", "");
+// --only context-on|context-off: a one-variant probe; it writes no fixture and prints no deltas.
+const ONLY_VARIANT = argValue(argv, "--only", "");
 const MAX_TOOL_CALLS = Number(argValue(argv, "--max-tool-calls", "150"));
 const MAX_ROUNDS = Number(argValue(argv, "--max-rounds", "150"));
 const LABEL = argValue(argv, "--label", "");
@@ -66,7 +80,8 @@ const RESULTS_FILENAME = labelledFilename(
 
 function buildTools(root: string, variant: AblationVariant, getSessionDir: () => string): InteractiveTool[] {
   const basic = builtinReadOnlyTools(root, { getSessionDir });
-  const withShell = [...basic, shellExecTool(root)];
+  // The stock runner caps output at 20 KB, below the spill threshold (50 KB); see uncappedShellRunner.
+  const withShell = [...basic, shellExecTool(root, uncappedShellRunner(root))];
   return variant === "context-off" ? withShell : [...withShell, ...builtinMetaprojectTools(root)];
 }
 
@@ -120,6 +135,7 @@ async function runSeed(
       maxRounds: MAX_ROUNDS,
       ...(contextWindow !== undefined ? { contextWindow } : {}),
     };
+    const toolLog: string[] = [];
     let tokens = 0;
     let sawUsage = false;
     let toolCalls = 0;
@@ -134,6 +150,7 @@ async function runSeed(
       },
       onToolCall: (name, input) => {
         toolCalls += 1;
+        toolLog.push(`${name} ${JSON.stringify(input).slice(0, 300)}`);
         repeated.onToolCall(name, input);
         volume.onToolCall(name, input);
       },
@@ -147,17 +164,26 @@ async function runSeed(
     };
     const history: NormalizedMessage[] = [];
     const startedAt = Date.now();
-    await runAgentTurn(io, deps, history, task.prompt, {
-      slateSession: { dir: sessionDir, cwd: root, opened: true },
-      // Flow 387 review r1 F-001: prune/collapse run only on hosts that keep the originals. This runner
-      // holds the whole run in memory and writes full texts to sessionDir, so it opts in like the shell
-      // hosts do. A `main` checkout ignores the unknown option.
-      pruneArchive: true,
-    } as Parameters<typeof runAgentTurn>[4]);
+    // Flow 387 review r1 F-001: prune/collapse run only on hosts that keep the originals. This runner
+    // holds the whole run in memory and writes full texts to sessionDir, so it opts in like the shell
+    // hosts do (`longTurnOptions`). A `main` checkout ignores the unknown option.
+    await runAgentTurn(io, deps, history, task.prompt, longTurnOptions(sessionDir, root) as Parameters<typeof runAgentTurn>[4]);
     const durationMs = Date.now() - startedAt;
 
     // Independent verification from the files the agent left behind, never its own "DONE".
     const oracle = built.check(worktreeReader(root));
+    if (DEBUG_DIR.length > 0) {
+      const out = join(DEBUG_DIR, `${task.name}-${variant}-${seed}`);
+      mkdirSync(out, { recursive: true });
+      const answer = worktreeReader(root)(`${REGISTRY_DIR}/answer.json`);
+      writeFileSync(join(out, "answer.json"), answer ?? "(answer.json was not written)");
+      const lastAssistant = [...history].reverse().find((m) => m.role === "assistant");
+      writeFileSync(join(out, "final-assistant.txt"), lastAssistant?.content ?? "(none)");
+      writeFileSync(join(out, "oracle.json"), JSON.stringify(summarizeOracle(oracle), null, 2));
+      writeFileSync(join(out, "tool-calls.txt"), toolLog.join("\n"));
+      writeFileSync(join(out, "budget-notes.txt"), budgetNotes.join("\n"));
+      console.error(`  debug files: ${out}`);
+    }
     return {
       seed,
       success: oracle.success,
@@ -169,7 +195,10 @@ async function runSeed(
       task: task.name,
       durationMs,
       oracle: summarizeOracle(oracle),
-      mechanisms: mechanisms.finish(history, contextWindow ?? null),
+      mechanisms: ((m) => {
+        const spills = countSpillFiles(sessionDir);
+        return { ...m, spilledOutputs: Math.max(m.spilledOutputs, spills), fired: { ...m.fired, spill: m.fired.spill || spills > 0 } };
+      })(mechanisms.finish(history, contextWindow ?? null)),
       volume: volume.result(),
       budgetNotes,
     };
@@ -203,6 +232,7 @@ async function main(): Promise<void> {
       console.error(`\n# task: ${task.name}`);
       const cells: Record<AblationVariant, LongRunSample[]> = { "context-on": [], "context-off": [] };
       for (const variant of ["context-on", "context-off"] as const) {
+        if (ONLY_VARIANT !== "" && ONLY_VARIANT !== variant) continue;
         for (const seed of SEEDS) {
           const sample = await runSeed(task, variant, seed, `ablation-long-${PROVIDER_NAME}-${task.name}-${variant}-${seed}`, port, idSeq);
           cells[variant].push(sample);
@@ -214,6 +244,7 @@ async function main(): Promise<void> {
         `  mechanisms (context-on, ${roll.runs} runs): prune fired in ${roll.anyPrune}, collapse ${roll.anyCollapse}, ` +
           `compaction ${roll.anyCompaction}, spill ${roll.anySpill}; volumeOk ${roll.volumeOk}; success ${roll.successes}`,
       );
+      if (ONLY_VARIANT !== "") continue; // a single-variant probe has no pair to validate or write
       taskInputs.push({
         taskId: `harness:ablation-long:${task.name}`,
         contextOn: { variant: "context-on", samples: cells["context-on"] },
@@ -221,6 +252,7 @@ async function main(): Promise<void> {
       });
     }
 
+    if (ONLY_VARIANT !== "") return;
     const resultsFixture = {
       note:
         "RAW per-seed LONG-session results: the SAME agent (src/commands/agent.ts runAgentTurn) and model run tasks built so " +

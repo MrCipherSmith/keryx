@@ -10,6 +10,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
+import { exceedsSpillThreshold } from "../../src/harness/tool/output-spill";
+import type { CommandRunner } from "../../src/harness/tool/builtin/shell-exec-tool";
+import type { SlateSessionRef } from "../../src/session/slate-lifecycle";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 import { ABLATION_GOLD_ARTIFACT_PATH } from "./ablation-tasks";
 import { LONG_GOLD_ARTIFACT_PATHS, type LongCase, type LongOracleResult, type LongTask, type ReadWorktreeFile } from "./long-tasks";
@@ -76,6 +79,52 @@ export function writeSeedFiles(root: string, files: LongCase["seedFiles"]): void
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, file.content, "utf8");
   }
+}
+
+/**
+ * The `runAgentTurn` options a long run needs for spill and prune to be reachable: a live session dir
+ * (spill files and pruned-result files go there) and `pruneArchive` (this runner keeps the originals in
+ * memory and on disk, like the shell hosts). A plain object literal is a valid `SlateSessionRef`:
+ * `slateSessionDir` only refuses a ref flagged `detached`.
+ */
+export function longTurnOptions(sessionDir: string, cwd: string): { slateSession: SlateSessionRef; pruneArchive: true } {
+  return { slateSession: { dir: sessionDir, cwd, opened: true }, pruneArchive: true };
+}
+
+/**
+ * Spilled outputs, counted from the session dir: files under `tool-output/` over the spill threshold.
+ * `io.onToolResult` sees the output BEFORE the spill, and a spilled exchange is later cleared or collapsed
+ * out of the final history, so neither of those can count a spill; the saved file is the durable evidence
+ * (a prune-written file is a result under the threshold, so it never counts).
+ */
+export function countSpillFiles(sessionDir: string): number {
+  const dir = join(sessionDir, "tool-output");
+  if (!existsSync(dir)) return 0;
+  return readdirSync(dir).filter((name) => exceedsSpillThreshold(readFileSync(join(dir, name), "utf8"))).length;
+}
+
+/** Deadline of one command in {@link uncappedShellRunner}. */
+const UNCAPPED_RUNNER_TIMEOUT_MS = 120_000;
+
+/**
+ * A `shell_exec` runner WITHOUT the tool's own 20,000-byte output cap. The stock runner truncates to
+ * 20 KB, which is below the 2000-line / 50 KB spill threshold, so with it no shell output can ever be
+ * spilled and a task built to exercise spill (the 2100-line registry dump) measures nothing. The real
+ * spill path in `runAgentTurn` is unchanged; this only lets a large result reach it.
+ */
+export function uncappedShellRunner(root: string): CommandRunner {
+  return async (command, options) => {
+    const proc = Bun.spawn(["sh", "-c", command], { cwd: root, stdout: "pipe", stderr: "pipe", stdin: "ignore" });
+    const timer = setTimeout(() => proc.kill(), UNCAPPED_RUNNER_TIMEOUT_MS);
+    options?.signal?.addEventListener("abort", () => proc.kill(), { once: true });
+    try {
+      const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited]);
+      const output = err.length > 0 ? `${out}${out.endsWith("\n") || out.length === 0 ? "" : "\n"}${err}` : out;
+      return code === 0 ? { output, isError: false } : { output: output.length > 0 ? output : `exit code ${code}`, isError: true };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 }
 
 /** Worktree reader for the oracle: `undefined` when the file does not exist. */
