@@ -1,6 +1,7 @@
-// Flow 387 review r1: host-gated pruning (F-001), session dir without an open slate
-// (F-007), a stable prompt-cache key for every host (F-009, F-020) and an overflow
-// retry that does not trust the estimator that just under-measured (F-006).
+// What runAgentTurn promises each kind of host (flow 387 review r1/r3): pruning only where the
+// host keeps the originals and can re-point its archive cursor (F-001, F-007, F-024), a stable
+// prompt-cache key for every host (F-009, F-020) and an overflow retry that does not trust the
+// estimator that just under-measured (F-006).
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -8,65 +9,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import { runAgentTurn } from "./agent";
-import type { AgentDeps, AgentIO } from "./agent";
-import type { NormalizedEvent, NormalizedMessage, NormalizedRequest, ProviderDescription } from "../harness/provider/types";
+import { collectingIo, makeDeps, okReply, scriptedProvider, type Script } from "./agent.test-helpers";
+import type { NormalizedMessage } from "../harness/provider/types";
 import { detachSlateSession, type SlateSessionRef } from "../session/slate-lifecycle";
-
-type Script = Partial<NormalizedEvent>[];
-
-function scriptedProvider(scripts: Script[]): { provider: AgentDeps["provider"]; requests: NormalizedRequest[] } {
-  const requests: NormalizedRequest[] = [];
-  const description: ProviderDescription = {
-    capabilities: {
-      streaming: true,
-      toolCalls: true,
-      parallelToolCalls: false,
-      structuredOutput: false,
-      reasoningMetadata: false,
-      promptCaching: false,
-      vision: false,
-      tokenCounting: false,
-      modelListing: false,
-    },
-    descriptor: { providerId: "scripted" },
-  };
-  return {
-    requests,
-    provider: {
-      describe: () => description,
-      stream: (request, opts) => {
-        const events = scripts[requests.length] ?? scripts[scripts.length - 1] ?? [];
-        requests.push(request);
-        return (async function* (): AsyncGenerator<NormalizedEvent> {
-          let sequence = 0;
-          for (const partial of events) {
-            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
-          }
-        })();
-      },
-    },
-  };
-}
-
-function collectingIo(): { io: AgentIO; system: string[] } {
-  const system: string[] = [];
-  return { system, io: { write: () => {}, onSystem: (s) => system.push(s) } };
-}
-
-function makeDeps(provider: AgentDeps["provider"], extra: Partial<AgentDeps> = {}): AgentDeps {
-  let n = 0;
-  return {
-    provider,
-    providerId: "scripted",
-    modelId: "m",
-    tools: [],
-    systemInstruction: "sys",
-    idSeq: () => `id-${n++}`,
-    ...extra,
-  };
-}
-
-const okReply: Script = [{ kind: "text_delta", text: "done" }, { kind: "model_end" }];
 
 const BIG = 80_000;
 
@@ -101,7 +46,7 @@ function longHistory(): NormalizedMessage[] {
 
 let dir: string;
 beforeEach(async () => {
-  dir = await mkdtemp(path.join(tmpdir(), "keryx-review-r1-"));
+  dir = await mkdtemp(path.join(tmpdir(), "keryx-host-contracts-"));
 });
 afterEach(async () => {
   await rm(dir, { recursive: true, force: true });
@@ -116,7 +61,10 @@ test("a shell-class host (pruneArchive + live dir, slate not open) prunes old to
   const before = totalChars(history);
   const slateSession: SlateSessionRef = { dir, cwd: dir, opened: false };
 
-  await runAgentTurn(collectingIo().io, makeDeps(provider), history, "go", { slateSession, pruneArchive: true });
+  await runAgentTurn(collectingIo().io, makeDeps(provider, { onContextCompaction: () => {} }), history, "go", {
+    slateSession,
+    pruneArchive: true,
+  });
 
   expect(totalChars(history)).toBeLessThan(before / 2);
 });
@@ -171,6 +119,40 @@ test("a detached (lease-lost) shell never prunes or writes into the dir it no lo
   await runAgentTurn(collectingIo().io, makeDeps(provider), history, "go", { slateSession, pruneArchive: true });
 
   expect(totalChars(history, original)).toBe(before);
+});
+
+test("pruneArchive without onContextCompaction fails safe: no pruning, one notice, no throw", async () => {
+  // flow 387 review r3 F-024
+  const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
+  const { io, system } = collectingIo();
+  const history = heavyHistory();
+  const original = history.length;
+  const before = totalChars(history);
+  // One io across two turns: the notice is per host, not per turn.
+  const deps = makeDeps(scriptedProvider([okReply]).provider);
+
+  await runAgentTurn(io, deps, history, "go", { slateSession, pruneArchive: true });
+  await runAgentTurn(io, deps, history, "again", { slateSession, pruneArchive: true });
+
+  expect(totalChars(history, original)).toBe(before);
+  const notices = system.filter((line) => line.includes("onContextCompaction"));
+  expect(notices).toHaveLength(1);
+});
+
+test("pruneArchive with onContextCompaction prunes and says nothing about a missing handler", async () => {
+  // flow 387 review r3 F-024
+  const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
+  const { io, system } = collectingIo();
+  const history = heavyHistory();
+  const before = totalChars(history);
+
+  await runAgentTurn(io, makeDeps(scriptedProvider([okReply]).provider, { onContextCompaction: () => {} }), history, "go", {
+    slateSession,
+    pruneArchive: true,
+  });
+
+  expect(totalChars(history)).toBeLessThan(before / 2);
+  expect(system.join("")).not.toContain("onContextCompaction");
 });
 
 // --- F-020 / F-009: prompt-cache key for every host --------------------------------

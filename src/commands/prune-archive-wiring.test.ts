@@ -4,6 +4,11 @@
 // (they sit inside the shells' REPL closures), so each site is pinned at source level. The
 // patterns tolerate whitespace and line breaks, unlike a literal-text match. The readline
 // operator turn is pinned separately by shell.test.ts.
+//
+// Flow 387 review r3 F-032: the shell and TUI pins read the two shell god-files as text, so they are
+// recorded in docs/requirements/keryx-shell-split/source-text-audit-inventory.md (manifest row and
+// the "flow 387" section), which src/shell-source-audits.test.ts re-derives. Changing the number of
+// lines that name those files here changes the manifest count.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
