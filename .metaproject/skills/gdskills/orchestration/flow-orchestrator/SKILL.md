@@ -557,9 +557,7 @@ the bound plus an escalation — never an unbounded loop.
    count survives a session restart. Read the budget from that task's
    `attempts.count` in `flow.json`, never from this session's memory.
 
-   Five here, and three in `task-implementer` and `job-orchestrator`. This skill
-   said six, which was an outlier with nothing behind it. The evidence for a
-   repair loop converges on three: *"the first three to four repair
+   Five here by operator decision (message 178020; review findings surface across rounds, and the repetition check below stops a loop that is not converging), three in `task-implementer` and `job-orchestrator`. This skill said six, an outlier with nothing behind it. The evidence for a repair loop converges on three: *"the first three to four repair
    iterations account for most achievable gains"*
    ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
    **0.820 -> 0.673** across two forced revisions while cumulative ever-correct
@@ -568,13 +566,6 @@ the bound plus an escalation — never an unbounded loop.
    stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
    Rounds four through six were not buying convergence; they were buying
    regressions.
-
-   The review bound is nonetheless deliberately five, an operator decision
-   (message 178020): in a flow, review findings can surface across rounds rather
-   than all at once, so a third round can still be finding new things. The
-   `keryx review loop` repetition check below is what stops a loop that is not
-   converging; the self-fix bounds in `job-orchestrator` and `task-implementer`
-   stay at three.
 
 4. **Before** spending an attempt, and regardless of how much budget is left,
    run the repetition check:
