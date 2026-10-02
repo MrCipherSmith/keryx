@@ -19,3 +19,4 @@
 - 2026-10-02T15:37:53.322Z - ac-updated: Owner decision 2026-10-02 after reviewing NVIDIA's SoL-Pi harness study: add AC13 (age-based ObservationPack, >10 KiB after 2 requests) and AC14 (cache-cost-aware history rewrites, preferring plan-step boundaries); tighten AC11 because shell_exec keeps only the first 20 KB and cuts stderr first. No confirmations existed.
 - 2026-10-02T15:37:54.956Z - task-added: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
 - 2026-10-02T15:37:56.493Z - task-depends-set: T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)
+- 2026-10-02T16:26:30.802Z - owner-changed: Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))
