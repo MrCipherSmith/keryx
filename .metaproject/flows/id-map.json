@@ -414,5 +414,13 @@
     "toDir": "393-2026-10-02-slate-working-memory",
     "at": "2026-10-02T12:30:28.489Z",
     "reason": "duplicate id with 388-2026-10-02-voice-investigation on main (another clone); this flow was created later and had never reached main; 392 is taken by the renumbered shell-token-economy flow"
+  },
+  {
+    "from": "392",
+    "to": "394",
+    "fromDir": "392-2026-10-02-shell-token-economy",
+    "toDir": "394-2026-10-02-shell-token-economy",
+    "at": "2026-10-02T15:24:32.854Z",
+    "reason": "second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one"
   }
 ]

@@ -6,12 +6,12 @@
     "owner": true,
     "folderCommitted": true
   },
-  "id": "392",
+  "id": "394",
   "slug": "shell-token-economy",
   "title": "keryx shell spends fewer tokens than competing harnesses without losing quality",
   "status": "done",
   "createdAt": "2026-10-02T06:02:04.112Z",
-  "updatedAt": "2026-10-02T12:29:57.076Z",
+  "updatedAt": "2026-10-02T15:24:32.854Z",
   "source": {
     "type": "description",
     "ref": null
@@ -1098,6 +1098,11 @@
       "at": "2026-10-02T12:29:57.076Z",
       "event": "renumbered",
       "detail": "387 -> 392: duplicate id with 387-2026-10-02-telegram-commands, which reached main first (05:12 UTC) from another clone; this flow was created later (06:02 UTC); 391 is the highest id on main — move the later flow"
+    },
+    {
+      "at": "2026-10-02T15:24:32.854Z",
+      "event": "renumbered",
+      "detail": "392 -> 394: second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one"
     }
   ],
   "acKinds": {

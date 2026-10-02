@@ -3,8 +3,8 @@
 target: report
 ref: 849
 mode: ingest
-flow: 392 (explicit-flow-id)
-created_at: 2026-10-02T10:25:30.157Z
+flow: 394 (explicit-flow-id)
+created_at: 2026-10-02T12:17:41.729Z
 context_mode: light
 
 ## Stage counts
@@ -15,13 +15,13 @@ construction, refused as a baseline).
 
 ### Dropped by the pre-filter
 
-files_seen: 84
-files_retained: 84
+files_seen: 108
+files_retained: 108
 files_dropped: 0
-blocks_seen: 329
-blocks_retained: 328
+blocks_seen: 367
+blocks_retained: 366
 blocks_dropped: 1
-changed_lines_retained: 16249
+changed_lines_retained: 30072
 changed_lines_dropped: 1
 
 | path | where | reason | why |
@@ -31,22 +31,22 @@ changed_lines_dropped: 1
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 16
-claims_applied: 16
+claims_received: 29
+claims_applied: 29
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 2
-refuted: 14
+confirmed: 3
+refuted: 26
 unverifiable: 0
-unverified: 12
+unverified: 0
 
 ### Retained
 
-findings_in: 28
+findings_in: 29
 findings_removed_by_verifier: 0
-findings_retained: 28
+findings_retained: 29
 
-`annotate` records verdicts and removes nothing: 14 finding(s) are marked refuted and still reported.
+`annotate` records verdicts and removes nothing: 26 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 
@@ -61,9 +61,9 @@ cap that dropped nothing are different facts.
 
 ### Findings cap
 
-limit_per_reviewer: 40
-findings_seen: 28
-findings_retained: 28
+limit_per_reviewer: 50
+findings_seen: 29
+findings_retained: 29
 findings_truncated: 0
 blockers_exempt: 1
 reviewers_truncated: 0
@@ -103,14 +103,14 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 28
+total: 29
 dropped_prefilter: 1
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
 dropped_scope_b: 0
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
-retained: 28
+retained: 29
 
 ### by_reason
 

@@ -124,3 +124,4 @@ T6 done: commits 7abf9584 + ef3b8248 (agent.ts shared with T5). T5: ef3b8248, he
 - 2026-10-02T12:26:51.056Z - completion-attempt-recorded: attempt 1: passed
 - 2026-10-02T12:26:51.070Z - done: all gates passed
 - 2026-10-02T12:29:57.076Z - renumbered: 387 -> 392: duplicate id with 387-2026-10-02-telegram-commands, which reached main first (05:12 UTC) from another clone; this flow was created later (06:02 UTC); 391 is the highest id on main — move the later flow
+- 2026-10-02T15:24:32.854Z - renumbered: 392 -> 394: second collision: 392-2026-10-02-recommendation-journal reached main first (13:36 UTC) from a parallel clone; this flow's renumbered folder landed later (PR #857, 15:14 UTC); 393 is taken by slate-working-memory — move the later one

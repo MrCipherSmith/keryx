@@ -1,11 +1,11 @@
 # Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools
 
 Status: draft (flow-init skill formalizes this)
-Source: user description (Aleksandr Tsaitler, 2026-10-02), follow-up to flow 387
+Source: user description (Aleksandr Tsaitler, 2026-10-02), follow-up to flow 394 (shell token economy; created as 387, renumbered twice after id collisions)
 
 ## Problem
 
-After flow 387, `keryx shell` prunes, collapses and compacts its history, but the request is still
+After flow 394, `keryx shell` prunes, collapses and compacts its history, but the request is still
 "the history, made smaller": it grows with the session until a batch shrinks it, and old work survives
 only as collapsed one-line records inside the history. Slate (Anchors / Course / Seeds, shipped in the
 slate phases, `src/session/slate*.ts`, `slate_read` / `slate_write_seed`) was meant to give the model
@@ -31,14 +31,26 @@ Effect requested by Aleksandr Tsaitler (owner, outcome author: human):
 
 Concretely, judged by:
 
-- On flow 387's session-shape replay (`scripts/benchmark/replay-session-shape.ts`) and comparative
+- On flow 394's session-shape replay (`scripts/benchmark/replay-session-shape.ts`) and comparative
   benchmark (`scripts/benchmark/`), per-request input stays bounded (flat after the first rounds) and
-  total input is lower than flow 387's result.
-- Quality holds: same task success rate as flow 387's branch on the same task set, and repeated reads /
+  total input is lower than flow 394's result.
+- Quality holds: same task success rate as flow 394's branch on the same task set, and repeated reads /
   recall calls do not grow enough to cancel the saving.
 
 ## Out of Scope
 
 - Sharing slate between clients or sessions (slate stays task-local; workspace/SAC unchanged).
-- Changing flow 387's mechanisms other than to route their output into the Trail.
-- An LLM-written summary (separate follow-up noted in flow 387).
+- Changing flow 394's mechanisms other than to route their output into the Trail.
+- An LLM-written summary (separate follow-up noted in flow 394).
+
+## Follow-ups (owner decisions 2026-10-02, from NVIDIA's SoL-Pi study, habr.com/ru/articles/1089370)
+
+- **Evidence-Preserving Reducer — follow-up flow.** A cheaper model (routing tier) extracts the
+  decision-relevant part of a long tool output with exact quotes; the harness verifies every quote against
+  the original and falls back to the original when any quote does not match. SoL-Pi used it on build/test
+  logs. Not in this flow; open as its own flow after 393.
+- **Action Fusion — deferred, needs thought.** SoL-Pi fuses "edit" and "run tests" into one request.
+  Owner's caveat: tests are often better run on CI than locally (this repo's own practice: open a draft PR
+  and read CI), so a fused local test run may cost more than it saves. Revisit only with a design that
+  respects CI-first testing (e.g. fuse edit + a cheap targeted check such as typecheck or `keryx test
+  related` on the touched file, never the full suite).

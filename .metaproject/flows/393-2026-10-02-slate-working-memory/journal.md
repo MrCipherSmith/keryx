@@ -2,3 +2,20 @@
 
 - 2026-10-02T07:47:58.219Z - flow created
 - 2026-10-02T12:30:28.489Z - renumbered: 388 -> 393: duplicate id with 388-2026-10-02-voice-investigation on main (another clone); this flow was created later and had never reached main; 392 is taken by the renumbered shell-token-economy flow
+- 2026-10-02T15:23:09.585Z - task-added: T5: Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)
+- 2026-10-02T15:23:10.653Z - task-added: T6: Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)
+- 2026-10-02T15:23:11.946Z - task-added: T7: slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)
+- 2026-10-02T15:23:13.058Z - task-added: T8: Recall tools slate_trail, recall_step, history_search with session confinement (AC4)
+- 2026-10-02T15:23:14.268Z - task-added: T9: Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)
+- 2026-10-02T15:23:15.539Z - task-added: T10: Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)
+- 2026-10-02T15:23:16.953Z - task-added: T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)
+- 2026-10-02T15:23:18.027Z - task-added: T12: shell_exec spill-instead-of-truncate (AC11)
+- 2026-10-02T15:23:19.012Z - task-added: T13: Window-relative prune thresholds (AC12)
+- 2026-10-02T15:23:20.747Z - task-added: T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)
+- 2026-10-02T15:23:22.078Z - task-done: T1: Collect remaining context
+- 2026-10-02T15:23:23.384Z - task-done: T2: Implement per plan
+- 2026-10-02T15:23:28.502Z - frozen: 12 criteria; checksum recorded
+- 2026-10-02T15:25:04.433Z - ac-updated: flow references only: the shell-token-economy flow was renumbered 392 -> 394 after a second id collision on main; criteria text otherwise unchanged; no confirmations existed
+- 2026-10-02T15:37:53.322Z - ac-updated: Owner decision 2026-10-02 after reviewing NVIDIA's SoL-Pi harness study: add AC13 (age-based ObservationPack, >10 KiB after 2 requests) and AC14 (cache-cost-aware history rewrites, preferring plan-step boundaries); tighten AC11 because shell_exec keeps only the first 20 KB and cuts stderr first. No confirmations existed.
+- 2026-10-02T15:37:54.956Z - task-added: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
+- 2026-10-02T15:37:56.493Z - task-depends-set: T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)
