@@ -90,7 +90,13 @@ test("subscription login -> saved grant -> native factory -> streamed answer and
 test("codex requests carry prompt_cache_key from the request, stable per session", async () => {
   const root = configDir(); saved(root);
   const bodies: Record<string, unknown>[] = [];
-  const fetch = mockFetch((_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(textStream); });
+  const sessionHeaders: Array<[string | null, string | null]> = [];
+  const fetch = mockFetch((_url, init) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    const h = new Headers(init?.headers);
+    sessionHeaders.push([h.get("session-id"), h.get("thread-id")]);
+    return new Response(textStream);
+  });
   const provider = makeProvider("openai-codex", "gpt-5.4", { fetch, configDir: root, env: {} });
   await collect(provider, { ...request(), promptCacheKey: "session-a" });
   await collect(provider, { ...request(), promptCacheKey: "session-a", requestId: "round-2" });
@@ -99,6 +105,16 @@ test("codex requests carry prompt_cache_key from the request, stable per session
   await collect(provider, { ...request(), promptCacheKey: "x".repeat(100) });
   expect(bodies.map((body) => body.prompt_cache_key)).toEqual(["session-a", "session-a", "session-b", undefined, "x".repeat(64)]);
   expect(bodies[0]).toMatchObject({ store: false, tool_choice: "auto" });
+  // The `session-id`/`thread-id` headers (what actually drives the Codex cache)
+  // mirror the key, clamped, and are absent without one.
+  const clamped = "x".repeat(64);
+  expect(sessionHeaders).toEqual([
+    ["session-a", "session-a"],
+    ["session-a", "session-a"],
+    ["session-b", "session-b"],
+    [null, null],
+    [clamped, clamped],
+  ]);
 });
 
 test("long-running provider reads the new saved credential on every stream", async () => {

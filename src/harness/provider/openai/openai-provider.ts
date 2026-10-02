@@ -534,6 +534,18 @@ export class OpenAiProvider implements ProviderPort {
         originator: "keryx",
         "User-Agent": "keryx",
         accept: "text/event-stream",
+        // Flow 387 T5: the Codex backend keys its prompt-prefix cache on the
+        // `session-id`/`thread-id` HEADERS (what codex CLI sends — codex-rs
+        // `build_session_headers`), not on the body `prompt_cache_key` alone.
+        // Probed 2026-10-02 (gpt-6.1-sol): body key only -> second identical
+        // request cacheReadTokens 0; with both headers -> 2304/2426, with or
+        // without the body key. Codex branch only; same 64-char clamp.
+        ...(request.promptCacheKey !== undefined && request.promptCacheKey !== ""
+          ? {
+              "session-id": request.promptCacheKey.slice(0, 64),
+              "thread-id": request.promptCacheKey.slice(0, 64),
+            }
+          : {}),
       }),
     };
     // Reasoning (flow 268 T14, AC9): `request.options.reasoning` is the
