@@ -9,7 +9,14 @@ This page is the contract a chat bridge speaks. It does not cover rendering the
 approval as a Telegram card or a web page; that is the client's job. (The
 Telegram buttons a `/remote-control` session shows are a separate path, over the
 shell-token routes, not these; see
-[Remote control from Telegram](drive-keryx-remotely.md#remote-control-from-telegram).)
+[Remote control from Telegram](drive-keryx-remotely.md#remote-control-from-telegram).
+Those differ from this page in three ways: the button has a third choice,
+`Always: <pattern>`, that saves a rule you can list and remove with
+`keryx permissions`; the question waits 15 minutes by default
+(`approvalTimeoutMs`) and a lapsed question is refused; and a Telegram turn starts
+in `trust`, so only the floors ask. The HTTP expiry on this page, `approval.expirySeconds`
+in `serve.json`, is not changed by any of it. See
+[permissions in a topic](drive-keryx-remotely.md#permissions-in-a-topic).)
 
 ## Read this before you build on it
 

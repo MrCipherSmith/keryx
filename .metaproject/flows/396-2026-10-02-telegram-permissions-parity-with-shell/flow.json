@@ -11,7 +11,7 @@
   "title": "Telegram permissions parity with shell",
   "status": "in-progress",
   "createdAt": "2026-10-02T19:21:02.643Z",
-  "updatedAt": "2026-10-02T20:25:30.451Z",
+  "updatedAt": "2026-10-02T20:31:14.458Z",
   "source": {
     "type": "description",
     "ref": null
@@ -230,7 +230,7 @@
       "id": "T12",
       "title": "Docs (README + docs site pages) and version bump (AC16,AC17)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T10"
       ],
@@ -240,7 +240,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -351,6 +352,11 @@
       "at": "2026-10-02T20:25:30.451Z",
       "event": "task-done",
       "detail": "T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)"
+    },
+    {
+      "at": "2026-10-02T20:31:14.458Z",
+      "event": "task-done",
+      "detail": "T12: Docs (README + docs site pages) and version bump (AC16,AC17)"
     }
   ],
   "acKinds": {

@@ -965,7 +965,10 @@ Refusals print their code and exit non-zero (except where noted):
   `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
   bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
   the shell) and are refused in the topic with the reason. A command from the topic
-  never cancels the turn running in the shell. The modal
+  never cancels the turn running in the shell; `/stop` in the topic ends the run
+  that topic started. A Telegram turn runs in `trust` by default, with the same
+  floors as a shell `trust` turn, and an approval question carries an `Always`
+  button (see `/permissions` and `/remote-policy`). The modal
   has a Commands tab with the recent ones. Full list and rules:
   [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal
@@ -1922,7 +1925,19 @@ Linux and macOS, `%APPDATA%\keryx` on Windows):
 | `chatId` | integer, not 0 | Required. The supergroup (topics enabled, bot an admin with manage topics) the session topics are created in. |
 | `allowedUserIds` | integer array | Required, non-empty. Telegram user ids whose messages and button presses are accepted; anyone else is ignored and their id and time are appended to `remote/rejected.jsonl`. |
 | `orphanMs` | integer, 1 to 604800000 | Optional, default `600000` (10 minutes). How long a topic is kept after its session stops sending heartbeats, before it is deleted. A heartbeat inside the window cancels the deletion. |
-| `runTimeoutMs` | integer, 1 to 604800000 | Optional, default `1800000` (30 minutes). How long a run started from Telegram may take before the shell interrupts it and tells the topic. |
+| `runTimeoutMs` | integer, 0 to 604800000 | Optional, default none. `0` or absent: a run started from Telegram has no time limit (`/stop` in the topic ends it). A positive number: how long it may take before the shell interrupts it and tells the topic. |
+| `permissionMode` | `"ask"` or `"trust"` | Optional, default `trust`. The default permission mode of a turn started from Telegram. Applies until `/mode` changes the mode in that shell session; after that the shell's mode wins. `auto` is never read from here. |
+| `approvalTimeoutMs` | integer, 30000 to 3600000 | Optional, default `900000` (15 minutes). How long an approval question in the topic waits before the command is refused. Telegram only: the HTTP approval expiry in `serve.json` is not changed by it. |
+
+To return to the previous behaviour, set `"permissionMode": "ask"`,
+`"runTimeoutMs": 1800000` and `"approvalTimeoutMs": 300000`. `/remote-policy
+[mode ask|trust] [limit none|<minutes>] [wait <minutes>]` in the shell edits these
+three keys and the running shell's copy; with no argument it prints them, the mode in
+force (`trust (Telegram default)` or `ask (shell /mode)`) and the number of saved
+rules. `keryx serve status` and `--json` print the same posture (the number of allowed
+users, never their ids) and say when the shell's `/mode` overrides the default. The
+Telegram group of `/settings` and the sidebar posture line (a click opens
+`/permissions`) show it in the full-screen shell.
 
 The transport is the single Telegram poller in `keryx serve`; a second `serve` on
 the same token stops on Telegram's conflict answer and does not poll again. Turn

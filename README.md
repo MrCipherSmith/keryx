@@ -1053,6 +1053,17 @@ once to HTML and once to plain text, so a reply is never dropped. `keryx remote
 format-sample` prints the sample in every mode with no network, and `/channels`
 shows the mode and the last fallback; see
 [how replies look in Telegram](docs/docs/guides/drive-keryx-remotely.md#how-replies-look-in-telegram).
+A turn started from Telegram runs under `trust` by default, like a shell `trust`
+turn: ordinary commands in the project run without a question and are recorded with
+the Telegram user id, while destructive commands, privilege escalation, downloaders,
+agent credential files, publish leases, untrusted content and MCP tools still ask.
+The question carries an `Always` button that saves a pattern (list and remove them
+with `keryx permissions` or `/permissions`), waits 15 minutes by default, and there
+is no run limit unless `runTimeoutMs` sets one; `/stop` in the topic ends a run.
+`/remote-policy` and the **Telegram** group of `/settings` change the defaults. To
+get the old behaviour back set `permissionMode: "ask"`, `runTimeoutMs: 1800000` and
+`approvalTimeoutMs: 300000` in `remote/config.json`; see
+[permissions in a topic](docs/docs/guides/drive-keryx-remotely.md#permissions-in-a-topic).
 An approval question is confirmed by the shell: after you press Allow or Deny,
 `serve` waits five seconds for the shell to say it applied the answer to the question
 it was waiting on, then edits the message to "Allowed by ... at ..." or "Denied by ... at ...".

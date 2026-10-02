@@ -272,9 +272,11 @@ that it is off.
   [how replies look in Telegram](#how-replies-look-in-telegram).
 - **Orphans and limits.** If a session stops sending heartbeats, its topic gets a
   notice and is deleted after 10 minutes (`orphanMs`); a heartbeat inside that
-  window brings it back. A run started from Telegram is interrupted after 30
-  minutes (`runTimeoutMs`) and the topic is told. Both are optional integers in
-  `config.json`, in milliseconds.
+  window brings it back. A run started from Telegram has no time limit by default;
+  set `runTimeoutMs` to a positive number of milliseconds and a run is interrupted
+  after that long and the topic is told (`0`, or leaving it out, means no limit).
+  Send `/stop` in the topic to end a run yourself. Both keys are optional integers
+  in `config.json`, in milliseconds.
 - **History.** A session that was driven from a topic records the topic and each
   span in its history: `keryx sessions list` shows a `⇄ remote <topic>` line under
   it, `--json` carries a `remote` field, and the `keryx shell -r` picker marks it
@@ -328,6 +330,61 @@ against are in the spike note, `docs/requirements/keryx-telegram-rendering/spike
 messages have been checked against a fake Bot API only; the live check with a real bot is
 pending.
 
+### Permissions in a topic
+
+A turn started from Telegram runs like a turn in the shell in `trust` mode: ordinary
+commands inside the project run without a question, and every line that runs this way
+is recorded as an `approval` event with the Telegram user id of the person who sent
+the message. The things that always ask still ask, exactly as in a shell `trust` turn:
+destructive commands, privilege escalation, downloaders, an agent's credential files,
+a flow or acceptance confirmation, a git publish lease, a hook that asks, untrusted
+content, a destructive `apply_patch`, and any MCP `use_tool`. `/plan` still refuses
+mutations, and `apply_patch` outside the project root is refused in every mode. There
+is no extra Telegram-only floor for network or outside-project commands.
+
+When something asks, the question goes to the topic as `Allow | Always: <pattern> |
+Deny`. The **Always** button is offered only when the same rules as the shell dock
+accept the pattern, and it saves it to `permissions.json`; the topic then says
+`Remembered: <pattern>`. A press from someone who is not allowed, a press after the
+question expired, and a second press of the same button save nothing and approve
+nothing. A saved or session pattern approves a matching command without a question,
+with the same exclusions as the dock.
+
+The question waits 15 minutes by default (`approvalTimeoutMs`, 30000 to 3600000
+milliseconds, in `remote/config.json`). When it runs out the command is refused, and
+the message says so. This wait is for Telegram only; the HTTP serve approval expiry
+(`approval.expirySeconds` in `serve.json`) is unchanged.
+
+Three optional keys of `remote/config.json` set the defaults, and `/remote-policy` in
+the shell (or the **Telegram** group of `/settings`) changes them:
+
+| Key | Default | Meaning |
+|---|---|---|
+| `permissionMode` | `trust` | `ask` or `trust`. With `ask`, the shell's own prompt rules apply to a Telegram turn. |
+| `runTimeoutMs` | none | A positive number stops a run after that long. `0` or absent means no limit. |
+| `approvalTimeoutMs` | `900000` | How long a question waits, 30000 to 3600000. |
+
+To go back to the old behaviour set `"permissionMode": "ask"`, `"runTimeoutMs":
+1800000` and `"approvalTimeoutMs": 300000`.
+
+**One permission mode.** The shell has one permission mode. The config's
+`permissionMode` applies to Telegram turns until `/mode` changes the mode in this
+session; after that the shell's mode wins. `/mode ask` from the topic runs directly;
+`/mode trust` and `/mode auto` keep their Yes / No button. `auto` is never taken from
+the config. The shell shows which one is in force, `trust (Telegram default)` or `ask
+(shell /mode)`, and `keryx serve status` says when the shell overrides the default.
+`/remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]` changes
+the saved defaults and the running shell's copy only, not the mode you set with
+`/mode`; a `serve` that is already running hands new values to shells that register
+after its own restart or reload.
+
+**Seeing and removing rules.** `keryx permissions list` and `keryx permissions remove
+<number|pattern>` (or `/permissions` in the shell) show and take back what Always
+saved. A rule is never added or removed from a topic. In the full-screen shell the
+sidebar shows a posture line while remote control is on, and a click on it opens the
+`/permissions` modal. `keryx serve status` (and `--json`) prints the posture with the
+number of allowed users and no ids or secrets.
+
 ### Commands from the topic
 
 A line that starts with `/` in the topic is not sent to the model. It goes through a
@@ -346,6 +403,7 @@ Telegram menu names cannot contain a hyphen, so `/external-agents` shows as
 | Text | `/status`, `/doctor`, `/new`, `/clear`, `/compact`, `/think auto\|expand\|hide`, `/goal`, `/queue`, `/reasoning`, `/theme <name>`, `/jevrules`, `/staledocs`, `/opencomments`, `/contract`, `/triage`, `/risk`, `/scenarios` | Runs in the shell as typed; the output comes back as a reply. Whether it worked is taken from the command itself, not from its wording. |
 | Buttons | `/model`, `/connect`, `/resume` | Replies with a picker; the press does the switch. `/connect` shows providers that are already connected, then their models. No key or address is shown. |
 | Built in | `/help`, `/sessions` | Answered without running anything in the shell. |
+| Stop | `/stop` | Ends the run that is going in this topic. The topic gets `Stopped by you.` when the turn has ended. Nothing else is touched. |
 | Asks first | `/mode`, `/plan`, `/delegate`, `/external`, `/external-agents` | See the confirmation rule below. |
 
 **The confirmation rule.** A command that raises trust or sends work outside the
@@ -395,8 +453,8 @@ sidebar row reads "<topic> · N unconfirmed".
 **These commands stay in the shell.** `/exit`, `/quit`, `/channels`, `/provider`,
 `/search-provider`, `/search-connect`, `/remote-control`, `/integrate`, `/copy`,
 `/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
-`/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt`,
-`/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
+`/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt` (use `/stop`),
+`/permissions`, `/remote-policy`, `/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
 `/approvals`, `/decisions`, `/triggers`, `/routing`, `/schedules`, `/jevprofile`, `/schedule`,
 `/rewind`, `/conform` and `/ci`. Bare `/theme` and bare `/think` (and `/think
 collapse`) are refused too; use `/theme <name>` or `/think auto|expand|hide`. They
