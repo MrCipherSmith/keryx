@@ -9,9 +9,9 @@
   "id": "393",
   "slug": "slate-working-memory",
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T20:19:44.381Z",
+  "updatedAt": "2026-10-02T20:19:57.176Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:419086076d5d368a3891a9c6678efadd0af8a433fc88ed7a06e2fbabb9d21b45",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/865"
   },
   "baseBranch": "main",
   "owner": {
@@ -450,6 +450,11 @@
       "at": "2026-10-02T20:19:44.381Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T20:19:57.176Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/865"
     }
   ],
   "acKinds": {

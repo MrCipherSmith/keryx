@@ -35,3 +35,4 @@
 - 2026-10-02T20:18:53.908Z - task-done: T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)
 - 2026-10-02T20:18:58.388Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-10-02T20:19:44.381Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-02T20:19:57.176Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/865
