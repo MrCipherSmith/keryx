@@ -3,6 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.61] — 2026-10-02
+### Fixed
+- The orchestrator skills, their input-contract schemas and the `/goal --auto` comment no longer say the three orchestrators share one round bound of three: the review/fix bound of `flow-orchestrator` is five, the self-fix bounds of `job-orchestrator` and `task-implementer` stay at three.
+
+[Changes since 0.3.60](https://github.com/MrCipherSmith/keryx/compare/v0.3.60...v0.3.61)
+
 ## [0.3.60] — 2026-10-02
 ### Changed
 - **Review round bound: five.** A review/fix loop may now run five rounds before the orchestrator re-plans (`REVIEW_ROUND_CAP` and the `flow-orchestrator` skill, were three). The bounds of `job-orchestrator` and `task-implementer` self-fix stay at three, the review-gate behaviour is unchanged: the cap only adds a note and only a human can dismiss a finding.

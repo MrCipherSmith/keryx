@@ -564,8 +564,8 @@ the bound plus an escalation — never an unbounded loop.
    is **0.847** ([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)) — the
    agent finds the fix and then destroys it, throwing away ~15 points by not
    stopping. Aider hardcodes `max_reflections = 3`; OpenHands' critic uses 3.
-   Rounds four through six were not buying convergence; they were buying
-   regressions.
+   Rounds four through six of a self-fix loop were not buying convergence; they
+   were buying regressions. Review rounds are the exception, as stated above.
 
 4. **Before** spending an attempt, and regardless of how much budget is left,
    run the repetition check:

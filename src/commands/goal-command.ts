@@ -59,11 +59,11 @@ const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
  *
  * # Why this is 8 and not 3 (flow 203, AC8)
  *
- * Three other bounds in this repository disagreed with each other and have been
- * unified to **3**: `task-implementer`'s self-fix attempts, `job-orchestrator`'s
- * `max_review_iterations`, and `flow-orchestrator`'s PR review/fix attempts,
- * which was 6. This one is deliberately NOT 3, and the reason is that it bounds
- * a different thing.
+ * Two repair bounds in this repository were unified to **3**:
+ * `task-implementer`'s self-fix attempts and `job-orchestrator`'s
+ * `max_review_iterations`. `flow-orchestrator`'s PR review/fix attempts was 6 and
+ * is 5 by operator decision (flow 391). This one is deliberately NOT 3, and the
+ * reason is that it bounds a different thing.
  *
  * Those three are **repair** loops: the same artifact revised again against the
  * same failing signal. That is the shape the evidence is about, and the evidence

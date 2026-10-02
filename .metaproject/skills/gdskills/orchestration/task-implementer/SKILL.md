@@ -362,8 +362,8 @@ non-zero exit the signal; if tests were created or modified they must pass.
 
 Maximum 3 self-fix attempts per verification step.
 
-Three, and it is the same three `job-orchestrator` and `flow-orchestrator`
-use: one round bound, not four. *"The first three to four repair iterations
+Three, the same three `job-orchestrator` uses; `flow-orchestrator`'s review
+bound is five by operator decision, so two repair bounds, not four. *"The first three to four repair iterations
 account for most achievable gains"*
 ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197)); correctness falls
 **0.820 -> 0.673** across two forced revisions while cumulative ever-correct is
