@@ -1,6 +1,7 @@
 // /flows inspector: list tab + adjacent detail tab.
 // Newest flow first. `[`/`]` switch flows; ↑/↓ scroll the active tab body.
 
+import { originDetailLines } from "../flow/service";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import { formatAcKindLines } from "./ac-kinds-surface";
 import { formatHygieneTags } from "./flow-hygiene";
@@ -136,6 +137,7 @@ export function formatFlowDetailLines(item: FlowInspectorItem): string[] {
     `${item.id}  ${item.title}`,
     `Status   ${item.status}`,
     `Outcome author  ${item.outcomeAuthor ?? "unknown"}`,
+    ...originDetailLines(item.origin),
     ...(item.interrupted ? [`         ${item.interrupted}`] : []),
     ...(item.uncommitted ? [`         note: ${item.uncommitted}`] : []),
     ...(item.hygiene?.notes ?? []).map((note) => `         ${note}`),

@@ -3578,7 +3578,7 @@ strict status state machine with hard completion gates. The CLI is the sole writ
 of flow state.
 
 ```
-keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human]
+keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>] [--owner "<name>"] [--outcome-author agent|human] [--origin <kind> --quote "<verbatim>" --source "<ref>"]
 keryx flow list
 keryx flow status <id>
 keryx flow freeze <id>
@@ -3591,6 +3591,7 @@ keryx flow task attempt <id> <taskId> --outcome started|failed|blocked [--detail
 keryx flow task depends <id> <taskId> --on T1,T2|none --reason "<why>"
 keryx flow owner set <id> --owner "<name>" --reason "<why>"
 keryx flow outcome author <id> agent|human --reason "<why>"
+keryx flow origin set <id> <kind> --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]
 keryx flow ac confirm <id> <ACn> [--note "<evidence>"] [--signed-by "<name>"]
 keryx flow ac update <id> --reason "<why>"
 keryx flow ac update <id> --criterion ACn --text "<criterion>" --reason "<why>"
@@ -3611,10 +3612,11 @@ keryx flow schema [--out <path>]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human` | Scaffold a flow package. Requires a title or issue URL. The new id skips every number a known remote branch already uses, and the package opts into the [folder-committed gate](#the-folder-committed-gate) (`gates.folderCommitted`). Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). |
+| `init` | `--issue <url>` \| `--title "<t>"`, `--slug <s>`, `--base <branch>`, `--owner "<name>"`, `--outcome-author agent|human`, `--origin <kind>`, `--quote "<verbatim>"`, `--source "<ref>"` | Scaffold a flow package. Requires a title or issue URL. The new id skips every number a known remote branch already uses, and the package opts into the [folder-committed gate](#the-folder-committed-gate) (`gates.folderCommitted`). Writes four default tasks (T1 context, T2 implement, T3 test, T4 review), each marked `origin: "scaffold"` — see [the default task scaffold](#the-default-task-scaffold). `--owner` names the human accountable for the flow (see [the owner and completion signatures](#the-owner-and-completion-signatures)) — never inferred, so an omitted `--owner` leaves the flow with no owner rather than a guessed one. `--outcome-author` records who wrote the outcome criterion: `agent` when omitted, `human` only when the flag says so, never inferred; any other value is refused before the flow is created. It gates nothing (see [the outcome author](#the-outcome-author)). `--origin` records where the flow came from, with the evidence its kind needs; without it, or without the evidence, the flow is created with an `unknown` origin and the command says why (see [the origin](#the-origin)). |
+| `origin set <id> <kind>` | `--reason "<why>"`, `--quote "<verbatim>"`, `--source "<ref>"` | Change where the flow came from: `human-request`, `agent-finding`, `agent-proposal`, or `unknown` to clear it. Refuses a missing `--reason` and any other kind. The evidence rule applies, using the quote and source already on the flow or the ones given here; without it nothing is written and the reason is printed. Writes the `origin` field and appends one `journal.md` line naming the old origin, the new one and the reason, together; setting what the flow already holds writes nothing. Works on any flow, never touches `outcomeAuthor`, gates nothing. |
 | `outcome author <id> agent\|human` | `--reason "<why>"` | Change who wrote the flow's outcome criterion. Refuses a missing or empty `--reason` and any other value. Writes the `outcomeAuthor` field and appends one `journal.md` line naming the old value (or `unknown`), the new value and the reason, together; setting the value already held writes nothing. Gates nothing. |
 | `list` | — | List all flows with status + task counts. |
-| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
+| `status <id>` | — | Print one flow: status, source, AC state, PR, outcome author (`agent`, `human` or `unknown`), origin (kind, quote, source; `origin: unknown` for a flow without one), owner, latest signature, tasks, recent history. For a `done` flow whose directory git tracks, it ends with a `note:` when that directory has uncommitted changes (a common cause is the closing state `flow complete` writes after the merge; informational; nothing gates on it, and a flow directory git does not track gets no note). The TUI's `/flows` detail tab shows the same note. |
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. Also derives each criterion's verification kind from its trailing marker (see [verification kinds](#verification-kinds)) into `acKinds` and prints the distribution. A kind never refuses a freeze; a malformed marker is printed as a warning and reads `unclassified`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
@@ -3980,6 +3982,49 @@ reading it never rewrites the file. The flag gates nothing: no completion, freez
 creation or index result, and no exit code, depends on it. With `--outcome-author
 human` the `## Outcome criteria` section of `description.md` is the template's own
 text, with no example inserted.
+
+### The origin
+
+A flow's `flow.json` can record where it came from, as `origin`:
+`{kind, quote?, source?}`. The idea of a flow almost always comes from a human and
+is formalized by the agent, so who typed the outcome criterion says little; the
+origin records whose idea it was and keeps the human's own words. There are three
+kinds:
+
+- `human-request`: a human gave the idea, the agent discussed it, the human
+  confirmed the creation;
+- `agent-finding`: the agent found it in a check, review or test, and the human
+  confirmed;
+- `agent-proposal`: the agent proposed a new idea, and the human confirmed.
+
+**Evidence, not assertion.** `flow init --origin human-request --quote "<verbatim>"
+--source "<ref>"` is recorded only with a verbatim quote of the human's first
+message with the idea AND a source (channel, message id or time). The quote is
+stored byte for byte: no translation, no paraphrase, Cyrillic, quotes and line
+breaks intact. `agent-finding` and `agent-proposal` need a source. Without the
+evidence, or with a kind that does not exist, the origin stays `unknown`, the
+command still succeeds (exit `0`) and prints why. The `## Outcome criteria`
+section of the new `description.md` then holds three lines: the request
+(`Запрос (дословно)`, or `Источник` for the two agent kinds), the agent's
+formalization (`Эффект (формализация агента)`) and how to observe it (`Как
+наблюдать (предложение агента)`, marked as the agent's proposal).
+
+`keryx flow origin set <id> <kind> --reason "<why>"` changes it on any flow: the
+reason is required, one `journal.md` line names the old origin, the new one and the
+reason, and setting what the flow already holds writes nothing. There is no mass
+relabelling, and a flow created before the field existed reads `unknown`.
+
+`outcomeAuthor` stays, because G1a is computed on it, but it is secondary: when it
+was not set explicitly it is derived from the origin (`agent`: the agent is the one
+who types the criterion, whoever had the idea), and an explicit setting is never
+overwritten. `flow status`, `product open`, the product index and the TUI flow
+inspector show the origin, and the product module reads G1a by origin and by
+`real criterion | not measured`, with a flow that has no origin counted as
+`unknown`. **The origin gates nothing:** `flow init`, `freeze`, `complete` and the
+product commands succeed on a flow with no origin, an `unknown` one or an invalid
+kind (which `flow check` reports as a schema problem and every reader reads as
+`unknown`). In the shell, `/flow origin <id>` shows it and
+`/flow origin <id> <kind> --reason "<why>"` sets it.
 
 ### The confirmation token
 

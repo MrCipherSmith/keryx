@@ -5,7 +5,7 @@
 
 import { parseAcKinds } from "../flow/ac-kinds";
 import type { AcKindRecord } from "../flow/ac-kinds";
-import { fencedLines, flowStatementFrom, outcomeBulletsFrom, proseOutsideFences, readOutcomeAuthor, sectionOf, statementFrom } from "../flow/service";
+import { effectiveOutcomeAuthor, fencedLines, flowStatementFrom, outcomeBulletsFrom, proseOutsideFences, readOrigin, sectionOf, statementFrom } from "../flow/service";
 import { OUTCOME_VERDICTS } from "./types";
 import type { Intent, IntentOutcome, OutcomeVerdict } from "./types";
 
@@ -118,6 +118,7 @@ interface FlowJsonShape {
   merged?: { at?: unknown } | null;
   history?: unknown;
   outcomeAuthor?: unknown;
+  origin?: unknown;
 }
 
 function text(value: unknown): string | null {
@@ -146,6 +147,7 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
   const closed = status === "done";
   const title = text(flow.title) ?? /^#\s+(.+)$/m.exec(description)?.[1]?.trim() ?? repoPath.split("/").at(-1) ?? repoPath;
   const criterion = outcomeCriterionFrom(description) ?? outcomeCriterionFrom(source.criteria ?? "");
+  const origin = readOrigin(flow.origin);
   return {
     id: text(flow.id) ?? repoPath.split("/").at(-1)?.slice(0, 3) ?? repoPath,
     source: "flow",
@@ -158,7 +160,9 @@ export function extractFlowIntent(source: FlowSource, repoPath: string): Intent 
     closedAt: closed ? closedAtOf(flow) : null,
     outcome: { criterion, ...observationFrom(source.journal) },
     // The flow module's own reading, so `unknown` means one thing on every surface.
-    outcomeAuthor: readOutcomeAuthor(flow.outcomeAuthor),
+    // An explicit author wins; without one a recorded origin derives `agent` (flow 390).
+    outcomeAuthor: effectiveOutcomeAuthor(flow),
+    ...(origin === undefined ? {} : { origin }),
   };
 }
 

@@ -1,7 +1,14 @@
 import { DEFAULT_TASKS } from "./default-tasks";
 import { OUTCOME_HINT } from "./description-intent";
+import { renderOriginBullets, type FlowOrigin } from "./origin";
 
-export function renderDescription(title: string, source: string): string {
+/**
+ * `origin` is the requested origin, accepted or not: the template keeps the
+ * human's words even when the evidence rule leaves the recorded origin
+ * `unknown`. Without it the Outcome criteria section holds the plain hint.
+ */
+export function renderDescription(title: string, source: string, origin?: FlowOrigin | undefined): string {
+  const outcome = origin === undefined ? OUTCOME_HINT : renderOriginBullets(origin).join("\n");
   return `# ${title}
 
 Status: draft (flow-init skill formalizes this)
@@ -17,7 +24,7 @@ What must be true when this flow is done.
 
 ## Outcome criteria
 
-${OUTCOME_HINT}
+${outcome}
 
 ## Out of Scope
 

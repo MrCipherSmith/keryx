@@ -116,6 +116,24 @@ export function flowStateSchema(): Record<string, unknown> {
         description:
           "Who wrote the outcome criterion. Written by `flow init --outcome-author` (default `agent`; `human` only when the flag says so, never inferred) and changed only by `flow outcome author`, which journals the change. Absent on flows created before the field existed, and read as `unknown` (neither agent nor human). Gates nothing.",
       },
+      origin: {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind"],
+        description:
+          "Where the flow came from. Written by `flow init --origin <kind> [--quote] [--source]` and changed only by `flow origin set`, which journals the change. `human-request` is recorded only with a verbatim quote and a source; `agent-finding` and `agent-proposal` only with a source. Absent on flows created before the field existed and on flows whose evidence was not enough, and read as `unknown`. Gates nothing.",
+        properties: {
+          kind: { type: "string", enum: ["human-request", "agent-finding", "agent-proposal"] },
+          quote: {
+            type: "string",
+            description: "The human's request, verbatim and byte for byte: no translation, no paraphrase.",
+          },
+          source: {
+            type: "string",
+            description: "Where the request or finding came from: channel, message id, time, or the check that produced it.",
+          },
+        },
+      },
       signatures: {
         type: "array",
         description:

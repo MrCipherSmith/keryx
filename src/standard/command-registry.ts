@@ -451,7 +451,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "tasks",
     command: "flow status",
-    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
+    summary: "One flow's full status: lifecycle state, outcome author (agent, human or unknown), origin (kind, quote, source), AC freeze/confirmation count, PR, owner, latest signature, task list, and recent history.",
     intent: ["статус флоу", "flow status", "flow details", "show one flow"],
     args: [{ name: "<id>", type: "string", required: true, desc: "flow id" }],
     json: false,
@@ -464,7 +464,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "Create a new flow (managed work item): allocates an id, scaffolds its directory, and collects initial " +
       "context from the source issue if one is given. `--owner` is NEVER inferred — only an explicit value " +
       "on this command populates it. `--outcome-author` records who wrote the outcome criterion (default " +
-      "`agent`; `human` only when the flag says so).",
+      "`agent`; `human` only when the flag says so). `--origin` records where the flow came from, with the " +
+      "evidence its kind needs (`human-request`: a verbatim `--quote` and a `--source`; `agent-finding` and " +
+      "`agent-proposal`: a `--source`); without it the origin stays `unknown`.",
     intent: ["создай флоу", "flow init", "start a new flow", "new managed work item", "заведи флоу"],
     args: [
       { name: "title", type: "string", required: false, desc: "work title; required unless --issue is given" },
@@ -484,6 +486,14 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
         required: false,
         desc: "who wrote the outcome criterion: agent (the default when omitted) or human; never inferred, any other value is refused before the flow is created; gates nothing",
       },
+      {
+        name: "origin",
+        type: "string",
+        required: false,
+        desc: "where the flow came from: human-request, agent-finding or agent-proposal; recorded only with its evidence, otherwise it stays unknown and the command still succeeds; an invalid kind is reported and ignored; gates nothing",
+      },
+      { name: "quote", type: "string", required: false, desc: "the human's request, verbatim and byte for byte (required with --origin human-request)" },
+      { name: "source", type: "string", required: false, desc: "where the request or finding came from: channel, message id, time or check (required with every --origin kind)" },
     ],
     json: false,
     read: false,
@@ -521,6 +531,26 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     json: false,
     read: false,
     sideEffects: ["writes flow.json's outcomeAuthor field and appends one journal.md line and a history entry"],
+  },
+  {
+    module: "tasks",
+    command: "flow origin set",
+    summary:
+      "Change where a flow came from (human-request, agent-finding, agent-proposal, or unknown to clear it). Requires a reason; " +
+      "the evidence rule applies (a verbatim quote and a source for human-request, a source for the agent kinds), and without it " +
+      "nothing is written and the reason is printed. Appends one journal line naming the old origin, the new one and the reason. " +
+      "Works on any flow, never changes the outcome author, gates nothing.",
+    intent: ["откуда пришёл флоу", "flow origin set", "set flow origin", "mark flow as human request", "происхождение флоу"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "flow id" },
+      { name: "<kind>", type: "string", required: true, desc: "human-request, agent-finding, agent-proposal or unknown" },
+      { name: "reason", type: "string", required: true, desc: "why the origin is being set or changed; one line" },
+      { name: "quote", type: "string", required: false, desc: "the human's request, verbatim; kept from the flow when omitted" },
+      { name: "source", type: "string", required: false, desc: "channel, message id, time or check; kept from the flow when omitted" },
+    ],
+    json: false,
+    read: false,
+    sideEffects: ["writes flow.json's origin field and appends one journal.md line and a history entry"],
   },
   {
     module: "tasks",

@@ -3,6 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.59] — 2026-10-02
+### Added
+- **Flow origin.** Every flow can record where it came from: `human-request`, `agent-finding` or `agent-proposal`, set with `keryx flow init --origin <kind> --quote "<verbatim>" --source "<ref>"`. A `human-request` is accepted only with the person's own words and a source; otherwise the origin stays `unknown` and a note says why. The Outcome criteria template carries three lines (the request verbatim, the agent's formalization, how to observe it), `outcomeAuthor` is derived from the origin unless set, `keryx flow origin set <id> <kind> --reason` changes it with a journal line, and `flow status`, `product open`, the flow inspector and the new `/flow` shell command show it. The product's G1a is counted by origin. Nothing is gated on the origin: flows without one still init, freeze and complete.
+
+[Changes since 0.3.58](https://github.com/MrCipherSmith/keryx/compare/v0.3.58...v0.3.59)
+
 ## [0.3.58] — 2026-10-02
 ### Added
 - **Scheduled digest.** `keryx serve` can send a periodic digest to a service topic in Telegram: what changed in your pull requests, issues, reviews and CI since the previous digest, plus the product board. The schedule is stored like any other (`keryx schedule`), a slot fires at most once, GitHub is read only through a read-only `gh` allowlist, and the delivery result (sent, queued for retry, or refused) is recorded and shown in `keryx schedule list` and the schedule modal. If the summarizing sub-agent is unavailable the digest goes out as plain facts. See the scheduled-digest guide.

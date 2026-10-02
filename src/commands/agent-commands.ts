@@ -299,6 +299,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 390 (AC8): shows where a flow came from and sets it with a reason.
+    // TUI-only, a one-shot text surface like `/staledocs`; never a gate.
+    name: "/flow",
+    description: "Show a flow's origin, or set it — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\"",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 333 (AC6): open PR review comment triage — reads the existing
     // comment ledger and asks Jev a resolved-by-fix/still-open/not-
     // actionable/needs-escalation choice per open comment. TUI-only.

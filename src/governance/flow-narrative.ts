@@ -5,6 +5,8 @@
 import {
   OUTCOME_HINT,
   flowDeliveryStatementFrom,
+  isOriginPlaceholderBullet,
+  isOriginTemplateBullet,
   outcomeBulletsFrom,
   proseOutsideFences,
   sectionOf,
@@ -35,10 +37,23 @@ function proseEntries(body: string): { entries: string[]; sawHint: boolean } {
   const entries: string[] = [];
   let sawHint = false;
   let open = false;
+  let skippingOrigin = false;
   for (const raw of body.split(/\r?\n/)) {
     const line = raw.trim();
     if (line.length === 0) {
       open = false;
+      continue;
+    }
+    // The origin template's request/source/placeholder bullets (and a multi-line quote) state no effect.
+    if (/^[-*]\s+/.test(line)) {
+      const text = line.replace(/^[-*]\s+/, "");
+      skippingOrigin = isOriginTemplateBullet(text);
+      if (skippingOrigin) {
+        if (isOriginPlaceholderBullet(text)) sawHint = true;
+        open = false;
+        continue;
+      }
+    } else if (skippingOrigin && /^\s+\S/.test(raw)) {
       continue;
     }
     const unquoted = line.replace(/^>\s*/, "").replace(/^[-*]\s+/, "");
