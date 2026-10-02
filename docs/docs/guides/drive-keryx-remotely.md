@@ -324,7 +324,7 @@ chosen and the buttons go away; approval messages are edited the same way.
 `/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
 `/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt`,
 `/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
-`/approvals`, `/triggers`, `/routing`, `/schedules`, `/jevprofile`, `/schedule`,
+`/approvals`, `/decisions`, `/triggers`, `/routing`, `/schedules`, `/jevprofile`, `/schedule`,
 `/rewind`, `/conform` and `/ci`. Bare `/theme` and bare `/think` (and `/think
 collapse`) are refused too; use `/theme <name>` or `/think auto|expand|hide`. They
 ask for a key, change a safety guard or where work is routed, edit another tool's

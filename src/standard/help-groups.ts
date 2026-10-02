@@ -461,6 +461,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "decisions",
+    group: "Automation",
+    summary: "Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind).",
+  },
+  {
+    kind: "cli",
     name: "product",
     group: "Automation",
     summary: "The product's intent as a derived index, and the intents closed in code that nobody looked back at.",
@@ -513,6 +519,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary:
       "Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background.",
+  },
+  {
+    kind: "slash",
+    name: "/decisions",
+    group: "Automation",
+    summary: "Recommendation journal report: match share by mode and stage, and the deviations with their reasons.",
   },
   {
     kind: "slash",

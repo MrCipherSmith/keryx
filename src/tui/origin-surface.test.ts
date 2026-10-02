@@ -150,8 +150,11 @@ describe("/flow origin", () => {
     expect(one).toContain("source: chat 7");
 
     const all = await runFlowOriginForShell(root, "/flow origin", flows);
-    expect(all).toContain("origin: human-request");
-    expect(all).toContain("origin: unknown");
+    // No id: a bounded summary (counts and the newest flows), not one block per flow.
+    expect(all).toContain("origins of 2 flows");
+    expect(all).toContain("human-request 1");
+    expect(all).toContain("unknown 1");
+    expect(all).not.toContain(QUOTE);
   });
 
   test("sets the origin with a reason and journals it", async () => {

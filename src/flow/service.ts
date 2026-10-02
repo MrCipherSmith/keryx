@@ -978,7 +978,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
      * field and its journal line are written together by `save()`. The evidence
      * rule applies to the quote and source already on the flow or given here: if
      * it is not met, nothing is written and the result carries the reason (the
-     * origin never refuses). `unknown` clears the origin. Works on any flow and
+     * origin never refuses; the stored quote and source are inherited only when the kind
+     * does not change). `unknown` clears the origin. Works on any flow and
      * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`. An invalid kind is a note, not an error.
      */
     async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {
@@ -1000,10 +1001,14 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           return current;
         }
         if (kind !== "unknown") {
+          // The stored quote and source are evidence for the kind they were recorded
+          // under. Keep them only while the kind stays the same; a switch to another
+          // kind needs its own evidence, so nothing is carried over.
+          const carried = before?.kind === kind ? before : undefined;
           const resolution = resolveOrigin({
             kind,
-            quote: quote !== undefined && quote.length > 0 ? quote : before?.quote,
-            source: source !== undefined && source.length > 0 ? source : before?.source,
+            quote: quote !== undefined && quote.length > 0 ? quote : carried?.quote,
+            source: source !== undefined && source.length > 0 ? source : carried?.source,
           });
           if (resolution.origin === undefined) {
             note = resolution.note;

@@ -84,6 +84,10 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # `keryx:end` managed block above, for the same reason as the conform cache
 # above: a hand edit inside that block is regenerated away by `keryx update`.
 .metaproject/data/ac-check/
+# `keryx decisions` (flow 392): the recommendation journal records what the operator
+# chose and why they deviated — personal runtime state, not something to commit.
+# Written 0o600. Same placement and reasoning as the entries above.
+.metaproject/data/decisions/
 # Flow 331's review-conform adapter runs `keryx review conform` with its cwd
 # set to bench/jev-review/fixtures/conform-project/ (its own scratch
 # .metaproject/tasks.config.json), so that command writes the same

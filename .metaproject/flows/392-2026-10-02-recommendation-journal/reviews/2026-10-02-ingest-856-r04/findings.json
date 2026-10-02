@@ -1,0 +1,38 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow392-pr856-review-r4",
+    "severity": "minor",
+    "problem": "Two common ways to say 'release it' are still asked blind: 'Cut 0.3.62?' and 'Bump the version and tag it?'. The strong list now has ship, rollout, promote, go live, выпуск, залить and the tag patterns, but 'cut' is not in it and the tag pattern needs 'tag it as', 'tag the version/build/head/commit' or a version number next to 'tag'.",
+    "impact": "AC4: an agent that does not set `irreversible` or `action` and asks 'Cut 0.3.62?' (options Yes/No, Yes recommended) gets the question blind one time in three, with the recommendation hidden. The ask_user tool description now tells the agent it MUST set the flag, so this only affects an agent that does not follow that instruction; the text match is described as the safety net.",
+    "suggested_fix": "Add 'cut a release' and 'cut <version>' and 'tag it' (a bare 'tag it'/'tag this') to STRONG_PATTERNS, or accept the gap and say in the guide that the text match is not exhaustive and the flag is the only guarantee.",
+    "evidence": "Ran openDecision through src/decisions/service.ts at 75fcefed with random=()=>0 and a recommendation: mode 'blind' for 'Cut 0.3.62?' and 'Bump the version and tag it?' (options Yes/No); 'ordinary' for 'Release now?', 'Ship 0.3.62 to npm?', 'Выпустить версию 0.3.62?', 'Отправить в прод?', 'Залить в мастер?', 'Merge it now?', 'git reset --hard HEAD~1?', 'Force-push to main?', 'Удалить ветку?' and 22 of 22 ordinary coding questions stayed eligible. Probe: scratchpad probe-r4.ts and probe3-r4.ts.",
+    "confidence": "medium",
+    "file": "src/decisions/blind.ts",
+    "line": 62,
+    "quote": "export const STRONG_PATTERNS: readonly RegExp[] = [",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 62
+    },
+    "class_scope": {
+      "sites": [
+        "src/decisions/blind.ts STRONG_PATTERNS tag patterns",
+        "src/decisions/blind.ts DEFAULT_IRREVERSIBLE (no 'cut')"
+      ],
+      "enumeration_method": "keryx ctx rg 'STRONG_PATTERNS|DEFAULT_IRREVERSIBLE' src --glob '!*.test.ts' lists the two vocabularies."
+    },
+    "global_id": "2026-10-02-ingest-856-r04#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "At 33e715b6: blind.ts adds STRONG_PATTERNS for 'cut <version|build|tag|release>', 'bump ... version|release|build|major|minor|patch', a bare 'tag it/this', Russian 'поднять/повысить версию' and the roots затег/тегнут/тегани. Probe through openDecision (random=0, recommendation set): ordinary (protected) for 'Cut 0.3.62?', 'Bump the version and tag it?', 'Bump version to 0.3.63?', 'Tag it?', 'Зарелизить?', 'Поднять версию до 0.3.63?', 'Cut a release?'; 26 of 26 ordinary coding questions stay blind-eligible, including 'Which cut of the data should the chart show?', 'Bump the font size in the header?', 'Which tag name for the HTML element?'. bun test src/decisions + 3 TUI/tool files: 266 pass, 0 fail.",
+      "verifier": "flow392-pr856-round5-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "33e715b6"
+    }
+  }
+]

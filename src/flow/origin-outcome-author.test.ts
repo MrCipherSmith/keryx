@@ -62,7 +62,7 @@ test("origin set never overwrites an explicit outcomeAuthor, and never writes on
   expect(after.origin).toEqual({ kind: "agent-finding", source: "ci" });
 
   const bare = await env.service.init({ cwd: env.root, title: "Bare", origin: "human-request", originQuote: "q", originSource: "s" });
-  await env.service.originSet({ cwd: env.root, id: bare.flow.id, kind: "agent-proposal", reason: "it was the agent's idea" });
+  await env.service.originSet({ cwd: env.root, id: bare.flow.id, kind: "agent-proposal", source: "design talk", reason: "it was the agent's idea" });
   expect((await readRawFlow(env.root, bare.dir)).outcomeAuthor).toBeUndefined();
 });
 
