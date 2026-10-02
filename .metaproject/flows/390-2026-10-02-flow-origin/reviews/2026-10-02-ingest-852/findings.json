@@ -1,0 +1,127 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow390-sonnet-code-reviewer",
+    "severity": "major",
+    "problem": "`OpenEntry.origin` was declared required in src/product/types.ts, but src/scheduler/digest-content.test.ts builds an OpenEntry without it. The typecheck fails with TS2322.",
+    "impact": "The PR could not pass typecheck-and-tests; the origin field is new and every existing OpenEntry producer would have had to change.",
+    "suggested_fix": "Make `origin` optional on OpenEntry and have the reader treat absence as unknown.",
+    "evidence": "Read src/product/types.ts line 113 at f48b90ee and the construction in src/scheduler/digest-content.test.ts. Fixed in f4b5e4f7 before merge.",
+    "confidence": "high",
+    "file": "src/product/types.ts",
+    "line": 120,
+    "quote": "readonly origin: OriginReading;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 113
+    },
+    "class_scope": {
+      "sites": [
+        "src/product/types.ts:113 (OpenEntry declaration)",
+        "src/product/open.ts:73 (openEntryLines reads entry.origin)",
+        "src/product/service.ts (builds OpenEntry rows)",
+        "src/scheduler/digest-content.test.ts (builds OpenEntry without origin)"
+      ],
+      "enumeration_method": "keryx ctx rg -l 'OpenEntry\\b' src: four files, all four read for a construction or a read of the origin field."
+    },
+    "global_id": "2026-10-02-ingest-852#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-read src/product/types.ts and src/product/open.ts at fix commit f4b5e4f74060f7db5c847a067f9bf64ba8a134b6 (inside PR #852, merged 7d306103307fa0df8863c637406fd5e0180be34e): OpenEntry.origin is `readonly origin?: OriginReading | undefined` and openEntryLines treats undefined as unknown. At f48b90ee the field was required, so the finding was real and is fixed at f4b5e4f74060f7db5c847a067f9bf64ba8a134b6.",
+      "verifier": "flow390-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f4b5e4f74060f7db5c847a067f9bf64ba8a134b6 (PR #852, before merge): OpenEntry.origin made optional"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow390-sonnet-code-reviewer",
+    "severity": "major",
+    "problem": "`keryx flow origin set <id> robot --reason x` threw and exited 1 on an invalid kind. AC7 says an invalid origin never fails a command: it is reported and the flow carries on.",
+    "impact": "AC7 violated for the one write path that takes a kind from the operator. The old text of the throw was in src/flow/service.ts originSet.",
+    "suggested_fix": "Report the invalid kind as a note, leave the origin unchanged, exit 0; add tests for the service and for the CLI.",
+    "evidence": "Read src/flow/service.ts originSet at f48b90ee: `throw new Error(`origin kind must be one of ...`)` before the mutate. Fixed in f4b5e4f7 with two tests in src/flow/origin-never-gates.test.ts, before merge.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": 984,
+    "quote": "async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 984
+    },
+    "class_scope": {
+      "sites": [
+        "src/flow/service.ts originSet (threw on an invalid kind)",
+        "src/flow/service.ts:735 flow init --origin (already reports an invalid kind, no throw)",
+        "src/flow/origin.ts:52 and :81 (readOrigin and resolveOrigin return undefined or a note)"
+      ],
+      "enumeration_method": "keryx ctx rg 'isOriginKind\\(' in src excluding tests: five call sites, each read for a throw on an invalid kind; only originSet threw."
+    },
+    "global_id": "2026-10-02-ingest-852#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Re-read src/flow/service.ts originSet and src/flow/origin-never-gates.test.ts at fix commit f4b5e4f74060f7db5c847a067f9bf64ba8a134b6: the throw is gone, an invalid kind sets a note, leaves the origin unchanged, and two tests (service and CLI, kind `robot`) assert exit 0 and the note. At f48b90ee the throw was present, so the finding was real and is fixed at f4b5e4f74060f7db5c847a067f9bf64ba8a134b6.",
+      "verifier": "flow390-site-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f4b5e4f74060f7db5c847a067f9bf64ba8a134b6 (PR #852, before merge): invalid kind is a note, two tests in src/flow/origin-never-gates.test.ts"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow390-sonnet-code-reviewer",
+    "severity": "minor",
+    "problem": "originSet inherits the previous quote and source when the kind changes: a human-request to agent-proposal change keeps the human's source and quote unless the caller overrides them.",
+    "impact": "An origin recorded as agent-proposal can still carry the human's verbatim quote and source, which reads as the human having asked for it. Not blocking: the change is journaled and the quote is not used as evidence for a non-human kind.",
+    "suggested_fix": "Drop the inherited quote and source when the kind changes, or require them explicitly.",
+    "evidence": "Read src/flow/service.ts lines 1003-1007: `quote` and `source` fall back to `before?.quote` and `before?.source` whatever the new kind is.",
+    "confidence": "high",
+    "file": "src/flow/service.ts",
+    "line": 1005,
+    "quote": "quote: quote !== undefined && quote.length > 0 ? quote : before?.quote,",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 1005
+    },
+    "global_id": "2026-10-02-ingest-852#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Re-read src/flow/service.ts lines 1003-1007 at the current head: quote and source fall back to the previous origin's whatever the new kind is. Behaviour as described; no fix has landed.",
+      "verifier": "flow390-site-check"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow390-sonnet-code-reviewer",
+    "severity": "minor",
+    "problem": "`/flow origin` with no id loads every flow and prints one block per flow, which is a very large output on a repository with hundreds of flows.",
+    "impact": "The TUI transcript fills with output nobody asked for. Not blocking: it is read-only and the id form is the intended use.",
+    "suggested_fix": "Cap the listing, or list only flows whose origin is not unknown, with a count of the rest.",
+    "evidence": "Read src/tui/flow-origin-command.ts lines 98-101: `service.list({ cwd })` and a loop over every summary.",
+    "confidence": "high",
+    "file": "src/tui/flow-origin-command.ts",
+    "line": 98,
+    "quote": "const flows = await service.list({ cwd });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 98
+    },
+    "global_id": "2026-10-02-ingest-852#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Re-read src/tui/flow-origin-command.ts lines 98-101 at the current head: the no-id path lists every flow with no cap. Behaviour as described; no fix has landed.",
+      "verifier": "flow390-site-check"
+    }
+  }
+]
