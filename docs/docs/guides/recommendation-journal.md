@@ -121,7 +121,7 @@ when it is written and again when it is shown, so it cannot add lines to a flow'
 ## The report
 
 ```text
-keryx decisions report [--json]
+keryx decisions report [--json | --line]
 ```
 
 It prints, from the journal alone:
@@ -158,11 +158,15 @@ One decision per line:
 ```
 
 `recommendation` and `answer` may be `null`; `answer.other: true` marks your own
-words instead of an option. The file is checked whole before anything is written
-(unique option ids, a recommendation and an answer that are options), so one bad
-line writes nothing. An id that is already in the journal is skipped and
-reported, which makes the import safe to repeat; `--dry-run` only counts. It
-prints `Imported: N, skipped: S, with recommendation: R, answered: A, deviations: D`.
+words instead of an option. Each line is checked (unique option ids, a
+recommendation and an answer that are options): a line that is not a decision is
+skipped, named with its line number and why, and counted, and the rest is
+imported. An id that is already in the journal is skipped and reported, which
+makes the import safe to repeat; a backfilled decision whose answer is missing
+(an interrupted write) gets just that answer on the next import. `--dry-run` only
+counts. It prints `Imported: N, skipped: S, with recommendation: R, answered: A,
+deviations: D`, plus `, repaired: R` and `, malformed: M` when there are any. With
+`--json` a failure is `{"error": "..."}`.
 
 An imported decision is **backfilled**: its recommendation was written down after
 the fact, so it is never blind, its time to answer is unknown, and it stays apart

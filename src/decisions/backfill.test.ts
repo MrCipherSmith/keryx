@@ -1,14 +1,14 @@
 // Backfilled decisions: the import, their separation in the report and the one-line
 // summary, and the lookups that must never reach them.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { GROUP_SUBCOMMANDS } from "../lib/group-subcommands";
 import { importBackfill, parseBackfill, renderImportResult } from "./import";
 import { buildReport, renderReport, renderReportLine } from "./report";
-import { answerDecision, changeAnswer, giveReason, latestAnsweredDecision, loadReport, openDecision, reportLine } from "./service";
-import { readRecords } from "./store";
+import { answerDecision, changeAnswer, giveReason, latestAnsweredDecision, loadReport, openDecision, recordReason, reportLine } from "./service";
+import { readJournal, readRecords } from "./store";
 import type { OpenRecord } from "./types";
 
 let root: string;
@@ -81,11 +81,13 @@ describe("import", () => {
     expect(records[2]).toMatchObject({ kind: "reason", id: "bf-p12-q0", at: "2026-08-14T09:30:00.000Z", reason: "the other one is closer to what we do anyway" });
   });
 
-  test("an answer that is the human's own words is kept when it says so, and is refused when it does not", async () => {
+  test("an answer that is the human's own words is kept when it says so, and is skipped as malformed when it does not", async () => {
     const result = await importBackfill(root, file(entry({ answer: { choice: "neither, do X", other: true } })));
     expect(result).toMatchObject({ imported: 1, answered: 1, deviations: 1 });
     expect(await readRecords(root)).toContainEqual(expect.objectContaining({ kind: "answer", choice: "neither, do X", other: true }));
-    await expect(importBackfill(root, file(entry({ id: "bf-2", answer: { choice: "neither, do X" } })))).rejects.toThrow(/is not one of the options/);
+    const bad = await importBackfill(root, file(entry({ id: "bf-2", answer: { choice: "neither, do X" } })));
+    expect(bad.imported).toBe(0);
+    expect(bad.malformed).toEqual([{ line: 1, message: expect.stringMatching(/is not one of the options/) }]);
   });
 
   test("the second import of the same file writes nothing and says which ids it skipped", async () => {
@@ -119,11 +121,75 @@ describe("import", () => {
     ["a single option", { options: [{ id: "o0", label: "A" }] }, /at least two options/],
     ["a date that is not a date", { at: "yesterday" }, /"at" must be an ISO date/],
     ["no question", { question: "  " }, /needs a question/],
-  ])("%s writes nothing, and the message names the line", async (_name, overrides, message) => {
-    const text = file(entry({ id: "ok-1" }), entry(overrides as Record<string, unknown>));
-    await expect(importBackfill(root, text)).rejects.toThrow(message);
-    await expect(importBackfill(root, text)).rejects.toThrow(/nothing was imported; 1 line could not be read:\nline 2:/);
+  ])("%s is skipped with its line number and reason, and the rest is imported", async (_name, overrides, message) => {
+    const text = file(entry({ id: "ok-1" }), entry(overrides as Record<string, unknown>), entry({ id: "ok-3" }));
+    const result = await importBackfill(root, text);
+    expect(result).toMatchObject({ imported: 2, skipped: 0 });
+    expect(result.malformed).toHaveLength(1);
+    expect(result.malformed[0]?.line).toBe(2);
+    expect(result.malformed[0]?.message).toMatch(message);
+    expect((await readRecords(root)).filter((r) => r.kind === "open").map((r) => r.id)).toEqual(["ok-1", "ok-3"]);
+    const printed = renderImportResult(result);
+    expect(printed.split("\n")[0]).toBe("Imported: 2, skipped: 0, with recommendation: 2, answered: 2, deviations: 0, malformed: 1");
+    expect(printed).toMatch(/Malformed \(skipped\):\n {2}line 2: /);
+  });
+
+  test("the summary line has no malformed part when every line was read", async () => {
+    expect(renderImportResult(await importBackfill(root, file(entry())))).not.toContain("malformed");
+  });
+
+  test("a file of only bad lines imports nothing and says so", async () => {
+    const result = await importBackfill(root, "{broken\n[1]\n");
+    expect(result).toMatchObject({ imported: 0, skipped: 0 });
+    expect(result.malformed.map((m) => m.line)).toEqual([1, 2]);
     expect(await readRecords(root)).toEqual([]);
+  });
+
+  test("an open record whose answer is missing (a truncated write) gets just the answer on re-import", async () => {
+    const text = file(entry({ answer: { choice: "o1" }, reason: "closer to what we do" }), entry({ id: "bf-ok" }));
+    await importBackfill(root, text);
+    // simulate the crash: the file keeps bf-p12-q0's open record and everything of bf-ok, but loses the answer and the reason of the first
+    const kept = (await readRecords(root)).filter((r) => !(r.id === "bf-p12-q0" && r.kind !== "open"));
+    const journal = path.join(root, ".metaproject", "data", "decisions", "journal.jsonl");
+    await writeFile(journal, kept.map((r) => `${JSON.stringify(r)}\n`).join(""));
+
+    const dry = await importBackfill(root, text, { dryRun: true });
+    expect(dry).toMatchObject({ imported: 0, skipped: 1, skippedIds: ["bf-ok"], repaired: 1, repairedIds: ["bf-p12-q0"], answered: 1, deviations: 1 });
+    expect(await readRecords(root)).toEqual(kept);
+
+    const again = await importBackfill(root, text);
+    expect(again).toMatchObject({ imported: 0, repaired: 1, repairedIds: ["bf-p12-q0"] });
+    expect(renderImportResult(again).split("\n")[0]).toBe("Imported: 0, skipped: 1, with recommendation: 0, answered: 1, deviations: 1, repaired: 1");
+    const records = await readRecords(root);
+    expect(records.filter((r) => r.id === "bf-p12-q0").map((r) => r.kind)).toEqual(["open", "answer", "reason"]);
+    expect(records.filter((r) => r.kind === "open")).toHaveLength(2);
+    expect(records.find((r) => r.kind === "answer" && r.id === "bf-p12-q0")).toMatchObject({ choice: "o1", at: "2026-08-14T09:30:00.000Z", seq: 1 });
+
+    // and a third import changes nothing
+    const third = await importBackfill(root, text);
+    expect(third).toMatchObject({ imported: 0, skipped: 2, repaired: 0 });
+    expect(await readRecords(root)).toEqual(records);
+  });
+
+  test("a live open without an answer is never given a historical one", async () => {
+    await openDecision({ cwd: root, id: "bf-p12-q0", question: "live", options: OPTIONS });
+    const result = await importBackfill(root, file(entry()));
+    expect(result).toMatchObject({ skipped: 1, repaired: 0 });
+    expect((await readRecords(root)).map((r) => r.kind)).toEqual(["open"]);
+  });
+
+  test("a journal whose last line was cut short is ended with a newline before the batch, so nothing fuses", async () => {
+    const journal = path.join(root, ".metaproject", "data", "decisions", "journal.jsonl");
+    await mkdir(path.dirname(journal), { recursive: true });
+    await writeFile(journal, '{"kind":"answer","id":"old","at":"2026-08-01T00:00:0');
+    const result = await importBackfill(root, file(entry()));
+    expect(result.imported).toBe(1);
+    const raw = await readFile(journal, "utf8");
+    expect(raw.split("\n")[0]).toBe('{"kind":"answer","id":"old","at":"2026-08-01T00:00:0');
+    expect(raw.endsWith("\n")).toBe(true);
+    const { records, skipped } = await readJournal(root);
+    expect(skipped).toBe(1);
+    expect(records.map((r) => [r.kind, r.id])).toEqual([["open", "bf-p12-q0"], ["answer", "bf-p12-q0"]]);
   });
 
   test("a line that is not JSON is named with its line number", () => {
@@ -268,12 +334,15 @@ describe("lookups never reach a backfilled decision", () => {
     expect(await readRecords(root)).toEqual(before);
   });
 
-  test("naming a backfilled decision by id still lets the human add a reason, but not change its answer", async () => {
+  test("naming a backfilled decision by id changes nothing: not its answer, not its reason, on any path", async () => {
     await importBackfill(root, file(entry({ answer: { choice: "o1" } })));
+    const before = await readRecords(root);
     await expect(changeAnswer({ cwd: root, id: "bf-p12-q0", choice: "o0" })).rejects.toThrow(/backfilled historical record/);
-    const done = await giveReason({ cwd: root, id: "bf-p12-q0", text: "later thought" });
-    expect(done).toMatchObject({ id: "bf-p12-q0", recorded: true });
-    expect((await loadReport(root)).backfilled.deviations[0]?.reason).toBe("later thought");
+    await expect(answerDecision({ cwd: root, id: "bf-p12-q0", choice: "o0" })).rejects.toThrow(/backfilled historical record; its answer is not changed/);
+    await expect(recordReason(root, "bf-p12-q0", "later thought")).rejects.toThrow(/backfilled historical record; its reason is not changed/);
+    await expect(recordReason(root, "bf-p12-q0", "later thought", undefined, { replace: true })).rejects.toThrow(/backfilled historical record/);
+    await expect(giveReason({ cwd: root, id: "bf-p12-q0", text: "later thought" })).rejects.toThrow(/backfilled historical record/);
+    expect(await readRecords(root)).toEqual(before);
   });
 });
 

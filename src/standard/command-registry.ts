@@ -1337,12 +1337,12 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     summary:
       "Import historical decisions from a JSON-lines file as backfilled records: the \"before\" arm of a comparison with the live journal. " +
       "Each is marked backfilled, is never blind, keeps the time it was asked, and is reported apart from the live ones. " +
-      "The file is checked whole (one bad line writes nothing); an id already in the journal is skipped, so a second import changes nothing.",
+      "A line that is not a decision is skipped, named with its line number and counted as malformed, and the rest is imported; an id already in the journal is skipped, so a second import changes nothing (except that a backfilled decision missing its answer gets just that answer).",
     intent: ["decisions import", "import historical decisions", "backfill the recommendation journal", "импорт исторических решений", "дозаполнить журнал решений"],
     args: [
       { name: "<file>", type: "string", required: true, desc: "a JSON-lines file, one decision per line: id, at, flow, stage, question, options, recommendation, source, answer, reason" },
       { name: "dry-run", type: "bool", required: false, desc: "check and count without writing" },
-      { name: "json", type: "bool", required: false, desc: "print the counts as JSON" },
+      { name: "json", type: "bool", required: false, desc: "print the counts as JSON (a failure is {\"error\": \"...\"})" },
     ],
     json: true,
     read: false,

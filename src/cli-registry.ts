@@ -402,9 +402,11 @@ export const USAGE_BODY = `Usage:
                                                Spend, confirmations, signatures and gate outcomes,
                                                unified across flows; writes latest.md/latest.json
   keryx governance show [--json]                Reprint the most recently written governance report
-  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its
+  keryx decisions open|answer|reason|report [--json|--line]|import <file.jsonl> [--dry-run] [--json]
+                                               Recommendation journal: record a question with options and its
                                                recommendation before showing it, the human's choice after;
-                                               report = match share by mode and stage, deviations (no model)
+                                               report = match share by mode and stage, deviations (no model);
+                                               import = earlier decisions from a JSON-lines file, kept apart
   keryx product index [--json]                  Read every flow and requirements package into a disposable intent index; reports entries with no stated intent
   keryx product open [--json]                   Intents closed in code with no recorded look back, each with its outcome criterion
   keryx hooks list [--json]                     Resolved keryx shell lifecycle hooks (built-in -> user -> project)

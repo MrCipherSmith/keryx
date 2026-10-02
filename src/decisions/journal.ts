@@ -94,6 +94,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   const records = await readRecords(input.cwd);
   const open = records.find((r): r is OpenRecord => r.kind === "open" && r.id === input.id);
   if (open === undefined) throw new Error(`no open decision with id ${input.id}`);
+  if (open.backfilled === true) throw new Error(`decision ${open.id} is a backfilled historical record; its answer is not changed`);
   const other = input.other === true;
   // a free-form answer is the human's own words: one line, capped, so it cannot forge a journal.md or report line
   const choice = other ? oneLine(input.choice) : input.choice.trim();
@@ -153,7 +154,9 @@ export async function recordReason(
   options: { replace?: boolean } = {},
 ): Promise<boolean> {
   const records = await readRecords(cwd);
-  if (!records.some((r) => r.kind === "open" && r.id === id)) throw new Error(`no open decision with id ${id}`);
+  const open = records.find((r): r is OpenRecord => r.kind === "open" && r.id === id);
+  if (open === undefined) throw new Error(`no open decision with id ${id}`);
+  if (open.backfilled === true) throw new Error(`decision ${id} is a backfilled historical record; its reason is not changed`);
   // `replace` is the human adding or changing the reason later (`/decisions reason <why>`): the latest record wins in the report.
   if (options.replace !== true && records.some((r) => r.kind === "reason" && r.id === id)) return false;
   const reason = text === undefined ? "" : oneLine(text);

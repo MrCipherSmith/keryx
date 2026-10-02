@@ -8,9 +8,11 @@
 //   {"id","at","flow","stage","question","options":[{"id","label"}],
 //    "recommendation":{"optionId","reason"}|null,"source","answer":{"choice","other"?}|null,"reason"?}
 //
-// The file is validated whole before anything is written: one bad line writes
-// nothing. An id already in the journal is skipped (reported, never duplicated),
-// so the same file can be imported twice.
+// A line that cannot be read is skipped, named (line number and why) and counted as
+// malformed; the rest is imported. An id already in the journal is skipped (reported,
+// never duplicated), so the same file can be imported twice. The one exception is a
+// backfilled decision whose answer is missing from the journal (a write that stopped
+// after the open record): the re-import adds the missing answer, and nothing else.
 
 import { DEFAULT_STAGE } from "./journal";
 import { appendRecords, readRecords } from "./store";
@@ -43,14 +45,19 @@ export interface ImportCounts {
   deviations: number;
 }
 
-export interface ImportResult extends ImportCounts {
-  dryRun: boolean;
-  skippedIds: string[];
-}
-
 export interface ImportParseError {
   line: number;
   message: string;
+}
+
+export interface ImportResult extends ImportCounts {
+  dryRun: boolean;
+  skippedIds: string[];
+  /** Backfilled decisions whose answer was missing from the journal and was added now. */
+  repaired: number;
+  repairedIds: string[];
+  /** Lines that were not a decision: skipped, each with its line number and why. */
+  malformed: ImportParseError[];
 }
 
 const isString = (value: unknown): value is string => typeof value === "string";
@@ -141,6 +148,24 @@ export function parseBackfill(text: string): { entries: BackfillEntry[]; errors:
   return { entries, errors };
 }
 
+function answerRecordOf(entry: BackfillEntry, at: string): AnswerRecord | undefined {
+  if (entry.answer === null) return undefined;
+  return {
+    kind: "answer",
+    id: entry.id,
+    at,
+    seq: 1,
+    choice: entry.answer.choice,
+    timeToAnswerMs: 0,
+    changed: false,
+    ...(entry.answer.other ? { other: true } : {}),
+  };
+}
+
+function reasonRecordOf(entry: BackfillEntry, at: string): ReasonRecord | undefined {
+  return entry.reason === undefined ? undefined : { kind: "reason", id: entry.id, at, reason: entry.reason };
+}
+
 /** The records of one backfilled decision: open, then the answer, then the reason, all stamped with the time the question was asked. */
 export function backfillRecords(entry: BackfillEntry): DecisionRecord[] {
   const open: OpenRecord = {
@@ -161,48 +186,67 @@ export function backfillRecords(entry: BackfillEntry): DecisionRecord[] {
     ...(entry.source !== undefined ? { source: entry.source } : {}),
   };
   const records: DecisionRecord[] = [open];
-  if (entry.answer !== null) {
-    const answer: AnswerRecord = {
-      kind: "answer",
-      id: entry.id,
-      at: entry.at,
-      seq: 1,
-      choice: entry.answer.choice,
-      timeToAnswerMs: 0,
-      changed: false,
-      ...(entry.answer.other ? { other: true } : {}),
-    };
-    records.push(answer);
-  }
-  if (entry.reason !== undefined) {
-    const reason: ReasonRecord = { kind: "reason", id: entry.id, at: entry.at, reason: entry.reason };
-    records.push(reason);
-  }
+  const answer = answerRecordOf(entry, entry.at);
+  if (answer !== undefined) records.push(answer);
+  const reason = reasonRecordOf(entry, entry.at);
+  if (reason !== undefined) records.push(reason);
   return records;
 }
 
 /**
- * Import a file of backfilled decisions. Throws, writing nothing, when any line is
- * invalid (the message names every bad line). An id already in the journal is
- * skipped. With `dryRun` nothing is written.
+ * Import a file of backfilled decisions. A line that cannot be read is skipped and
+ * reported in `malformed`; the rest is imported. An id already in the journal is
+ * skipped, except a backfilled decision that has no answer there while the file has
+ * one: only the missing answer (and a missing reason) is added. With `dryRun`
+ * nothing is written.
  */
 export async function importBackfill(cwd: string, text: string, options: { dryRun?: boolean } = {}): Promise<ImportResult> {
   const { entries, errors } = parseBackfill(text);
-  if (errors.length > 0) {
-    const shown = errors.slice(0, 20).map((error) => `line ${error.line}: ${error.message}`);
-    const more = errors.length > shown.length ? [`... and ${errors.length - shown.length} more`] : [];
-    throw new Error(`nothing was imported; ${errors.length} line${errors.length === 1 ? "" : "s"} could not be read:\n${[...shown, ...more].join("\n")}`);
+  const records = await readRecords(cwd);
+  const known = new Map<string, OpenRecord>();
+  const answered = new Set<string>();
+  const reasoned = new Set<string>();
+  for (const record of records) {
+    if (record.kind === "open") known.set(record.id, record);
+    else if (record.kind === "answer") answered.add(record.id);
+    else reasoned.add(record.id);
   }
-  const known = new Set((await readRecords(cwd)).filter((record) => record.kind === "open").map((record) => record.id));
-  const result: ImportResult = { dryRun: options.dryRun === true, imported: 0, skipped: 0, withRecommendation: 0, answered: 0, deviations: 0, skippedIds: [] };
+  const result: ImportResult = {
+    dryRun: options.dryRun === true,
+    imported: 0,
+    skipped: 0,
+    withRecommendation: 0,
+    answered: 0,
+    deviations: 0,
+    skippedIds: [],
+    repaired: 0,
+    repairedIds: [],
+    malformed: errors,
+  };
   const toWrite: DecisionRecord[] = [];
   for (const entry of entries) {
-    if (known.has(entry.id)) {
-      result.skipped += 1;
-      result.skippedIds.push(entry.id);
+    const existing = known.get(entry.id);
+    if (existing !== undefined) {
+      const answer = entry.answer;
+      const repairable =
+        existing.backfilled === true && answer !== null && !answered.has(entry.id) && (answer.other || existing.options.some((option) => option.id === answer.choice));
+      if (!repairable || answer === null) {
+        result.skipped += 1;
+        result.skippedIds.push(entry.id);
+        continue;
+      }
+      // the open record is there but its answer is not: add what is missing, never the open again
+      const missing = [answerRecordOf(entry, existing.at), reasoned.has(entry.id) ? undefined : reasonRecordOf(entry, existing.at)].filter((record): record is AnswerRecord | ReasonRecord => record !== undefined);
+      toWrite.push(...missing);
+      answered.add(entry.id);
+      result.repaired += 1;
+      result.repairedIds.push(entry.id);
+      result.answered += 1;
+      if (existing.recommendation !== null && answer.choice !== existing.recommendation.optionId) result.deviations += 1;
       continue;
     }
-    known.add(entry.id);
+    known.set(entry.id, backfillRecords(entry)[0] as OpenRecord);
+    answered.add(entry.id);
     result.imported += 1;
     if (entry.recommendation !== null) result.withRecommendation += 1;
     if (entry.answer !== null) {
@@ -216,12 +260,23 @@ export async function importBackfill(cwd: string, text: string, options: { dryRu
 }
 
 export function renderImportResult(result: ImportResult): string {
+  const repaired = result.repaired > 0 ? `, repaired: ${result.repaired}` : "";
+  const malformed = result.malformed.length > 0 ? `, malformed: ${result.malformed.length}` : "";
   const lines = [
-    `${result.dryRun ? "Dry run, nothing written. " : ""}Imported: ${result.imported}, skipped: ${result.skipped}, with recommendation: ${result.withRecommendation}, answered: ${result.answered}, deviations: ${result.deviations}`,
+    `${result.dryRun ? "Dry run, nothing written. " : ""}Imported: ${result.imported}, skipped: ${result.skipped}, with recommendation: ${result.withRecommendation}, answered: ${result.answered}, deviations: ${result.deviations}${repaired}${malformed}`,
   ];
   if (result.skippedIds.length > 0) {
     const shown = result.skippedIds.slice(0, 20).map((id) => oneLine(id, 80));
     lines.push(`Skipped (already in the journal): ${shown.join(", ")}${result.skippedIds.length > shown.length ? `, ... and ${result.skippedIds.length - shown.length} more` : ""}`);
+  }
+  if (result.repairedIds.length > 0) {
+    const shown = result.repairedIds.slice(0, 20).map((id) => oneLine(id, 80));
+    lines.push(`Repaired (the answer was missing from the journal and was added): ${shown.join(", ")}${result.repairedIds.length > shown.length ? `, ... and ${result.repairedIds.length - shown.length} more` : ""}`);
+  }
+  if (result.malformed.length > 0) {
+    lines.push("Malformed (skipped):");
+    for (const error of result.malformed.slice(0, 20)) lines.push(`  line ${error.line}: ${oneLine(error.message, 200)}`);
+    if (result.malformed.length > 20) lines.push(`  ... and ${result.malformed.length - 20} more`);
   }
   return lines.join("\n");
 }

@@ -58,12 +58,24 @@ export async function appendRecord(cwd: string, record: DecisionRecord): Promise
   await appendFile(journalFile(root), `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
+async function endsWithoutNewline(file: string): Promise<boolean> {
+  try {
+    const text = await readFile(file, "utf8");
+    return text.length > 0 && !text.endsWith("\n");
+  } catch {
+    return false;
+  }
+}
+
 /** Append several records in one write, so a batch (an import) is never interleaved with another writer's line. */
 export async function appendRecords(cwd: string, records: readonly DecisionRecord[]): Promise<void> {
   if (records.length === 0) return;
   const root = await journalRoot(cwd);
   await mkdir(decisionsDir(root), { recursive: true });
-  await appendFile(journalFile(root), records.map((record) => `${JSON.stringify(record)}\n`).join(""), { encoding: "utf8", mode: 0o600 });
+  const file = journalFile(root);
+  // a last line cut short by an earlier crash has no newline: end it, so the first record of this batch does not fuse with it
+  const lead = (await endsWithoutNewline(file)) ? "\n" : "";
+  await appendFile(file, lead + records.map((record) => `${JSON.stringify(record)}\n`).join(""), { encoding: "utf8", mode: 0o600 });
 }
 
 const isString = (value: unknown): value is string => typeof value === "string";

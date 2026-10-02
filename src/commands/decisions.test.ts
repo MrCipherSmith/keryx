@@ -136,3 +136,22 @@ test("open takes the flow and stage from the checkout when they are not given (F
   const opened = JSON.parse((await run([...args, "--json"])).out) as { flow: string | null };
   expect(opened.flow).toBe("007");
 });
+
+test("import: a bad line is skipped and counted, and with --json a failure is JSON", async () => {
+  const good = { id: "h1", at: "2026-08-14T09:30:00Z", flow: null, stage: "design", question: "Q?", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }], recommendation: { optionId: "a", reason: "r" }, source: "poll 1", answer: { choice: "a" } };
+  await writeFile(path.join(root, "in.jsonl"), `${JSON.stringify(good)}\n{broken\n`);
+  const done = await run(["import", "in.jsonl"]);
+  expect(done.exitCode).toBe(0);
+  expect(done.out.split("\n")[0]).toBe("Imported: 1, skipped: 0, with recommendation: 1, answered: 1, deviations: 0, malformed: 1");
+  expect(done.out).toContain("line 2: not valid JSON");
+
+  const missing = await run(["import", "nope.jsonl", "--json"]);
+  expect(missing.exitCode).toBe(1);
+  expect(JSON.parse(missing.out)).toEqual({ error: "cannot read nope.jsonl" });
+  expect(missing.err).toBe("");
+  const plain = await run(["import", "nope.jsonl"]);
+  expect(plain.err).toBe("cannot read nope.jsonl");
+
+  const json = await run(["import", "in.jsonl", "--json"]);
+  expect(JSON.parse(json.out)).toMatchObject({ imported: 0, skipped: 1, malformed: [{ line: 2, message: "not valid JSON" }] });
+});

@@ -199,7 +199,10 @@ export async function decisionsCommand(args: string[] = []): Promise<void> {
     if (command === "report") return await runReport(args.slice(1));
     if (command === "import") return await runImport(args.slice(1));
   } catch (cause) {
-    console.error(cause instanceof Error ? cause.message : String(cause));
+    const message = cause instanceof Error ? cause.message : String(cause);
+    // a caller that asked for JSON gets JSON on stdout for a failure too, not prose on stderr
+    if (command === "import" && args.includes("--json")) console.log(JSON.stringify({ error: message }, null, 2));
+    else console.error(message);
     process.exitCode = 1;
     return;
   }
@@ -265,11 +268,15 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            Every one is marked backfilled (its recommendation was written down
            after the fact), is never blind, and keeps the time it was asked in
            "at"; its time to answer is unknown and never used. The file is
-           checked whole: one bad line writes nothing. An id already in the
-           journal is skipped and reported, so the same file can be imported
-           twice. --dry-run checks and counts without writing. It prints:
+           read line by line: a line that is not a decision is skipped, named
+           (line number and why) and counted, and the rest is imported. An id
+           already in the journal is skipped and reported, so the same file can
+           be imported twice; a backfilled decision whose answer is missing from
+           the journal (an interrupted write) gets just that answer on the next
+           import. --dry-run checks and counts without writing. It prints:
            Imported: N, skipped: S, with recommendation: R, answered: A,
-           deviations: D. A bare /decisions change never touches a backfilled
+           deviations: D, plus ", repaired: R" and ", malformed: M" when
+           there are any. With --json a failure is {"error": "..."}. A bare /decisions change never touches a backfilled
            decision.
 
 The journal is one file per repository, .metaproject/data/decisions/journal.jsonl
