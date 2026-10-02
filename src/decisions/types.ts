@@ -42,6 +42,15 @@ export interface OpenRecord {
   blindRefused?: boolean;
   /** The session the question was asked in (what `/decisions change` without an id is checked against). */
   session?: string;
+  /**
+   * True for a decision imported after the fact (`keryx decisions import`): its
+   * recommendation was written down once the answer was known, so it is never blind,
+   * its time to answer is unknown, and every report and lookup keeps it apart from
+   * the live records.
+   */
+  backfilled?: true;
+  /** Where a backfilled decision came from (e.g. "poll 17"). */
+  source?: string;
 }
 
 export interface AnswerRecord {

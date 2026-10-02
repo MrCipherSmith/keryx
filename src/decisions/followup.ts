@@ -9,13 +9,16 @@ import { readRecords } from "./store";
 import { oneLine } from "./text";
 import type { AnswerRecord, AnswerResult, OpenRecord } from "./types";
 
-/** The id of the latest decision that has an answer on record, optionally only one that belongs to `flow`. */
+/**
+ * The id of the latest LIVE decision that has an answer on record, optionally only one that belongs to `flow`.
+ * A backfilled (imported, historical) decision is never "the latest": a bare `/decisions change` must not reach it.
+ */
 export async function latestAnsweredDecision(cwd: string, flow?: string): Promise<string | undefined> {
   const records = await readRecords(cwd);
   const answered = new Set(records.filter((r) => r.kind === "answer").map((r) => r.id));
   for (let i = records.length - 1; i >= 0; i -= 1) {
     const record = records[i];
-    if (record !== undefined && record.kind === "open" && answered.has(record.id) && (flow === undefined || record.flow === flow)) return record.id;
+    if (record !== undefined && record.kind === "open" && record.backfilled !== true && answered.has(record.id) && (flow === undefined || record.flow === flow)) return record.id;
   }
   return undefined;
 }
@@ -111,6 +114,7 @@ export interface ChangeAnswerResult extends AnswerResult {
  */
 export async function changeAnswer(input: { cwd: string; choice: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; session?: string | undefined; now?: (() => Date) | undefined }): Promise<ChangeAnswerResult> {
   const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow, input.session, "keryx decisions answer <id> --choice <option>");
+  if (open.backfilled === true) throw new Error(`decision ${open.id} is a backfilled historical record; its answer is not changed`);
   const choice = resolveOptionId(open, input.choice);
   const answers = (await readRecords(input.cwd)).filter((r): r is AnswerRecord => r.kind === "answer" && r.id === open.id);
   const first = [...answers].sort((x, y) => x.seq - y.seq)[0];

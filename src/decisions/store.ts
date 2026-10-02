@@ -58,6 +58,14 @@ export async function appendRecord(cwd: string, record: DecisionRecord): Promise
   await appendFile(journalFile(root), `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
 }
 
+/** Append several records in one write, so a batch (an import) is never interleaved with another writer's line. */
+export async function appendRecords(cwd: string, records: readonly DecisionRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  const root = await journalRoot(cwd);
+  await mkdir(decisionsDir(root), { recursive: true });
+  await appendFile(journalFile(root), records.map((record) => `${JSON.stringify(record)}\n`).join(""), { encoding: "utf8", mode: 0o600 });
+}
+
 const isString = (value: unknown): value is string => typeof value === "string";
 
 function isOption(value: unknown): boolean {
