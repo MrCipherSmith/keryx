@@ -63,7 +63,17 @@ export type RemoteClientLike = Pick<
   RemoteClient,
   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
 > &
-  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals">>;
+  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
+
+/** What the topic answered to one approval (flow 396). */
+export interface RemoteApprovalAnswer {
+  decision: "allow" | "deny";
+  /** "Always" was pressed: the shell saves the rule it offered, then calls {@link RemoteBridge.reportRemembered}. */
+  always: boolean;
+  approvalId?: string;
+  /** The Telegram user who pressed; absent when nobody did (timeout, no stream). */
+  fromId?: number;
+}
 
 export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn">> {
   sessionId(): string;
@@ -168,7 +178,7 @@ export class RemoteBridge {
   private readonly events: RemoteEvent[] = [];
   private readonly host: RemoteBridgeHost;
   private readonly now: () => number;
-  private readonly approvalTimeoutMs: number;
+  private readonly approvalOverrideMs: number | undefined;
   private connectedOnce = false;
   private clientConnected = false;
   private tgTurn = false;
@@ -182,14 +192,16 @@ export class RemoteBridge {
   private keepTopic = false;
   private switched = false;
   /** Plain lines taken from the topic whose turn has not started yet, oldest first (flow 387, AC18). */
-  private readonly waiting: Array<{ updateId: number; line: string }> = [];
+  private readonly waiting: Array<{ updateId: number; line: string; fromId?: number }> = [];
   /** The Telegram message the running turn belongs to. */
   private currentUpdate: number | undefined;
+  /** The Telegram user whose line started the running turn (flow 396): who an auto-approval is recorded against. */
+  private currentFromId: number | undefined;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
     this.now = options.now ?? Date.now;
-    this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    this.approvalOverrideMs = options.approvalTimeoutMs;
     this.router = new RemoteCommandRouter({
       host: {
         isBusy: () => this.host.isBusy(),
@@ -245,6 +257,29 @@ export class RemoteBridge {
   /** The running turn came from Telegram. */
   get telegramTurnActive(): boolean {
     return this.tgTurn;
+  }
+
+  /** The Telegram user who started the running turn, when known (flow 396). */
+  get telegramTurnUserId(): number | undefined {
+    return this.tgTurn ? this.currentFromId : undefined;
+  }
+
+  /**
+   * The mode serve says a Telegram-started turn starts under. A serve that did not say (older than this
+   * shell) is read as `ask`: today's behaviour, never a silent widening.
+   */
+  get configuredPermissionMode(): "ask" | "trust" {
+    return this.client?.permissionMode ?? "ask";
+  }
+
+  /** How long an approval waits in the topic: a test override, then what serve delivered, then the old five minutes. */
+  get approvalTimeoutMs(): number {
+    return this.approvalOverrideMs ?? this.client?.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+  }
+
+  /** Put a line in the remote event ring from the host (an auto-approval, a saved rule): redacted and capped. */
+  recordApproval(text: string): void {
+    this.push("approval", preview(text));
   }
 
   status(): RemoteStatus {
@@ -396,7 +431,7 @@ export class RemoteBridge {
       return;
     }
     this.push("line", `Telegram: ${preview(line)}`);
-    this.waiting.push({ updateId: meta.updateId, line });
+    this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
     if (this.host.isBusy()) {
       // Queued: the message keeps its "received" reaction until its own turn starts.
       this.host.enqueue(line);
@@ -472,6 +507,7 @@ export class RemoteBridge {
     if (source !== TG_SOURCE || this.client === undefined) return;
     const next = this.waiting.shift();
     this.currentUpdate = next?.updateId;
+    this.currentFromId = next?.fromId;
     if (next !== undefined) this.report(next.updateId, "working");
     this.tgTurn = true;
     this.lastAssistantText = "";
@@ -548,6 +584,7 @@ export class RemoteBridge {
   private endTurnState(): void {
     this.tgTurn = false;
     this.currentUpdate = undefined;
+    this.currentFromId = undefined;
     this.lastAssistantText = "";
     this.timedOut = false;
     if (this.runTimer !== undefined) {
@@ -563,19 +600,50 @@ export class RemoteBridge {
    * error the answer is `deny`.
    */
   async requestApproval(prompt: string): Promise<"allow" | "deny"> {
+    return (await this.askApproval(prompt)).decision;
+  }
+
+  /**
+   * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
+   * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
+   */
+  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
-      return "deny";
+      return { decision: "deny", always: false };
     }
     this.push("approval", "asked in the topic");
-    let decision: "allow" | "deny";
+    let answer: RemoteApprovalAnswer;
     try {
-      decision = await client.requestApproval(composeApprovalPrompt(prompt), this.approvalTimeoutMs);
+      const text = composeApprovalPrompt(prompt);
+      const timeoutMs = this.approvalTimeoutMs;
+      if (client.askApproval !== undefined) {
+        const got = await client.askApproval(text, timeoutMs, options.remember === undefined ? {} : { remember: options.remember });
+        answer = {
+          decision: got.decision === "deny" ? "deny" : "allow",
+          always: got.decision === "always" && options.remember !== undefined,
+          ...(got.approvalId === undefined ? {} : { approvalId: got.approvalId }),
+          ...(got.fromId === undefined ? {} : { fromId: got.fromId }),
+        };
+      } else {
+        const decision = await client.requestApproval(text, timeoutMs);
+        answer = { decision: decision === "deny" ? "deny" : "allow", always: false };
+      }
     } catch {
-      decision = "deny";
+      answer = { decision: "deny", always: false };
     }
-    this.push("approval", decision === "allow" ? "allowed in the topic" : "denied (or no answer)");
-    return decision;
+    const by = answer.fromId === undefined ? "" : ` by user ${answer.fromId}`;
+    this.push(
+      "approval",
+      answer.decision === "allow" ? `${answer.always ? "allowed (always)" : "allowed"} in the topic${by}` : `denied${by === "" ? " (or no answer)" : by}`,
+    );
+    return answer;
+  }
+
+  /** Tell the topic whether an "Always" press became a saved rule (flow 396). Best effort. */
+  async reportRemembered(approvalId: string | undefined, remembered: boolean): Promise<void> {
+    if (approvalId === undefined) return;
+    await this.client?.reportApprovalResult?.(approvalId, remembered);
   }
 }

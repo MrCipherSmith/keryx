@@ -7,8 +7,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { createHttpBotApi } from "./bot-api-http";
 import {
+  DEFAULT_APPROVAL_WAIT_MS,
   DEFAULT_ORPHAN_MS,
+  DEFAULT_REMOTE_PERMISSION_MODE,
   DEFAULT_RUN_TIMEOUT_MS,
+  LEGACY_RUN_TIMEOUT_MS,
   loadRemoteConfig,
   parseRemoteConfig,
   saveRemoteConfig,
@@ -257,10 +260,21 @@ describe("config", () => {
     const parsed = parseRemoteConfig({ schemaVersion: 1, chatId: -1001, allowedUserIds: [1] });
     expect(parsed).toEqual({
       ok: true,
-      value: { schemaVersion: 1, chatId: -1001, allowedUserIds: [1], orphanMs: DEFAULT_ORPHAN_MS, runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS },
+      value: {
+        schemaVersion: 1,
+        chatId: -1001,
+        allowedUserIds: [1],
+        orphanMs: DEFAULT_ORPHAN_MS,
+        runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
+        permissionMode: DEFAULT_REMOTE_PERMISSION_MODE,
+        approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS,
+      },
     });
     expect(DEFAULT_ORPHAN_MS).toBe(10 * 60_000);
-    expect(DEFAULT_RUN_TIMEOUT_MS).toBe(30 * 60_000);
+    // Flow 396: no run limit by default (the old 30 minutes is LEGACY_RUN_TIMEOUT_MS, an explicit opt-in).
+    expect(DEFAULT_RUN_TIMEOUT_MS).toBe(0);
+    expect(LEGACY_RUN_TIMEOUT_MS).toBe(30 * 60_000);
+    expect(DEFAULT_APPROVAL_WAIT_MS).toBe(15 * 60_000);
   });
 
   test("the schema is closed and strict", () => {
@@ -293,7 +307,15 @@ describe("config", () => {
     const loaded = loadRemoteConfig(dir);
     expect(loaded).toEqual({
       ok: true,
-      value: { schemaVersion: 1, chatId: -1001, allowedUserIds: [1, 2], orphanMs: 5_000, runTimeoutMs: 9_000 },
+      value: {
+        schemaVersion: 1,
+        chatId: -1001,
+        allowedUserIds: [1, 2],
+        orphanMs: 5_000,
+        runTimeoutMs: 9_000,
+        permissionMode: DEFAULT_REMOTE_PERMISSION_MODE,
+        approvalTimeoutMs: DEFAULT_APPROVAL_WAIT_MS,
+      },
     });
   });
 

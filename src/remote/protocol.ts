@@ -11,7 +11,18 @@
 export const REMOTE_API_PREFIX = "/v1/remote";
 export const REMOTE_SCHEMA_VERSION = "1.0.0";
 
-export type RemoteRoute = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "prompt" | "state" | "ack" | "approval-ack" | "stream";
+export type RemoteRoute =
+  | "register"
+  | "deregister"
+  | "heartbeat"
+  | "reply"
+  | "approval"
+  | "approval-result"
+  | "approval-ack"
+  | "prompt"
+  | "state"
+  | "ack"
+  | "stream";
 
 export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">> = {
   register: "POST",
@@ -19,6 +30,7 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   heartbeat: "POST",
   reply: "POST",
   approval: "POST",
+  "approval-result": "POST",
   prompt: "POST",
   state: "POST",
   ack: "POST",
@@ -184,8 +196,8 @@ export function isApprovalId(value: unknown): value is string {
   return typeof value === "string" && APPROVAL_ID_PATTERN.test(value);
 }
 
-/** `ap:<id>:allow` / `ap:<id>:deny`: 20 bytes at most, inside Telegram's 64. */
-const APPROVAL_CALLBACK_PATTERN = /^ap:(ap[0-9a-f]{12}):(allow|deny)$/;
+/** `ap:<id>:allow` / `ap:<id>:deny` / `ap:<id>:always`: 21 bytes at most, inside Telegram's 64. */
+const APPROVAL_CALLBACK_PATTERN = /^ap:(ap[0-9a-f]{12}):(allow|deny|always)$/;
 
 export function approvalCallbackData(approvalId: string, decision: ApprovalDecision): string {
   return `ap:${approvalId}:${decision}`;
@@ -236,7 +248,14 @@ export const RESERVED_CHOICE_PREFIX = "pk:";
 /** The most buttons one prompt may carry in total. */
 export const MAX_PROMPT_BUTTONS = 24;
 
-export type ApprovalDecision = "allow" | "deny";
+/**
+ * `always` (flow 396) is "allow this call and remember the offered pattern". It can only be the
+ * answer to an approval that carried a `remember` offer; serve ignores it otherwise.
+ */
+export type ApprovalDecision = "allow" | "deny" | "always";
+
+/** The longest pattern a `remember` offer may carry. */
+export const MAX_REMEMBER_PATTERN_CHARS = 300;
 
 // ---- request bodies -----------------------------------------------------------
 
@@ -265,6 +284,18 @@ export interface ApprovalBody {
   sessionId: string;
   prompt: string;
   timeoutMs?: number;
+  /**
+   * The shell pattern the shell is willing to store if the operator presses "Always" (flow 396).
+   * Chosen by the shell from its own classification of the command, never from model text.
+   */
+  remember?: string;
+}
+
+/** The shell's report of what became of an "Always" press (flow 396): serve edits the message once. */
+export interface ApprovalResultBody {
+  sessionId: string;
+  approvalId: string;
+  remembered: boolean;
 }
 
 export interface PromptBody {
@@ -318,8 +349,12 @@ export interface RegisterResponse {
   name: string;
   threadId: number;
   reused: boolean;
-  /** How long a run started from Telegram may take before the shell interrupts it. */
+  /** How long a run started from Telegram may take before the shell interrupts it; 0 means no limit. */
   runTimeoutMs: number;
+  /** The mode a Telegram-started turn starts with until `/mode` changes the shell's (flow 396). Absent from an older serve. */
+  permissionMode?: "ask" | "trust";
+  /** How long an approval prompt waits for a tap before it is denied (flow 396). Absent from an older serve. */
+  approvalTimeoutMs?: number;
 }
 
 export interface HeartbeatResponse {
@@ -368,6 +403,8 @@ export interface ApprovalEvent {
   updateId: number;
   approvalId: string;
   decision: ApprovalDecision;
+  /** The Telegram user who pressed the button (flow 396), for the shell's audit line. */
+  fromId?: number;
 }
 
 /** A press on a choice prompt: the position of the button, in reading order across the rows. */

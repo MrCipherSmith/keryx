@@ -364,8 +364,13 @@ export class RemoteHub {
   }
 
   /** What a shell needs to know about this hub's limits (the run guard reads `runTimeoutMs`). */
-  limits(): { runTimeoutMs: number; orphanMs: number } {
-    return { runTimeoutMs: this.config.runTimeoutMs, orphanMs: this.config.orphanMs };
+  limits(): { runTimeoutMs: number; orphanMs: number; permissionMode: RemoteConfig["permissionMode"]; approvalTimeoutMs: number } {
+    return {
+      runTimeoutMs: this.config.runTimeoutMs,
+      orphanMs: this.config.orphanMs,
+      permissionMode: this.config.permissionMode,
+      approvalTimeoutMs: this.config.approvalTimeoutMs,
+    };
   }
 
   hasSession(sessionId: string): boolean {
