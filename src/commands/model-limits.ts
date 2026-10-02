@@ -8,6 +8,7 @@
 
 import { isLoopbackHost, isPrivateEgressHost } from "../harness/mutation/guard";
 import { envWithSavedApiKeys } from "../lib/shell-config";
+import { fetchOpenAiCodexCatalog } from "./subscription-models";
 import {
   DEFAULT_MODELS_PATH,
   balanceCapableProvider,
@@ -241,6 +242,8 @@ export interface LoadSessionLimitsInput {
   fetch?: typeof fetch;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
+  /** Config dir holding the `openai-codex` OAuth grant (tests); default = the real one. */
+  configDir?: string;
 }
 
 async function timedFetch(
@@ -350,6 +353,28 @@ async function fetchOllamaLimits(
 }
 
 /**
+ * Flow 387 T6: `openai-codex` is a native-Responses subscription provider (not a
+ * `providerByName` compat entry), so it had no window and the auto-compaction
+ * guard never armed. Its `/models` response carries `context_window` per slug —
+ * the same field codex CLI reads — so reuse the picker's authenticated fetch.
+ * Unknown slug / field absent / any failure → `{}` (never a guessed window).
+ */
+async function fetchCodexLimits(
+  fetchFn: typeof fetch,
+  model: string,
+  configDir: string | undefined,
+  timeoutMs: number,
+): Promise<Pick<ModelLimits, "contextWindow" | "contextSource">> {
+  try {
+    const catalog = await fetchOpenAiCodexCatalog(fetchFn, { timeoutMs, ...(configDir !== undefined ? { configDir } : {}) });
+    const contextWindow = Object.hasOwn(catalog.contextWindows, model) ? catalog.contextWindows[model] : undefined;
+    return contextWindow === undefined ? {} : { contextWindow, contextSource: "live-models" };
+  } catch {
+    return {};
+  }
+}
+
+/**
  * Live limits for the active selection. Never throws. Missing fields stay
  * absent — `/status` renders them as "—" rather than a guessed window.
  */
@@ -363,6 +388,8 @@ export async function loadSessionLimits(input: LoadSessionLimitsInput): Promise<
   const limitsPromise: Promise<Pick<ModelLimits, "contextWindow" | "contextSource" | "rateLimit">> =
     provider === "ollama"
       ? fetchOllamaLimits(fetchFn, model, input.baseUrl, timeoutMs)
+      : provider === "openai-codex"
+        ? fetchCodexLimits(fetchFn, model, input.configDir, timeoutMs)
       : providerByName(provider) !== undefined
         ? fetchCompatLimits(fetchFn, provider, model, input.baseUrl, env, timeoutMs)
         : Promise.resolve({});

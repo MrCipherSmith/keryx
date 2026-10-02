@@ -75,3 +75,31 @@ export function needsCompaction(estimate: number, window: number | undefined): b
   }
   return estimate >= 0.85 * window;
 }
+
+/**
+ * Flow 387 T6: did the provider reject a request because it outgrew the model's
+ * context window? The adapters already normalize the documented
+ * `context_length_exceeded` code to `kind: "context_overflow"`; the Codex /
+ * ChatGPT backend can instead answer a bare HTTP 400 whose only signal is the
+ * message ("... your prompt contains at least N input tokens"), which lands as
+ * `invalid_request`/`unknown`. Message matching is therefore a fallback for
+ * those two generic kinds only — never for auth, rate-limit or 5xx errors.
+ */
+export function isContextOverflowError(error: { kind: string; message?: string } | undefined): boolean {
+  if (error === undefined) {
+    return false;
+  }
+  if (error.kind === "context_overflow") {
+    return true;
+  }
+  if (error.kind !== "invalid_request" && error.kind !== "unknown") {
+    return false;
+  }
+  const message = error.message ?? "";
+  return (
+    /context_length_exceeded/i.test(message) ||
+    /prompt contains at least \d+ input tokens/i.test(message) ||
+    /maximum context length/i.test(message) ||
+    /exceeds? the context window/i.test(message)
+  );
+}
