@@ -23,6 +23,9 @@
 //     a horizontal rule (`---` becomes a line of RULE_LENGTH glyphs) and a table
 //     (cells are padded into columns). The splitter charges both at their rendered
 //     length (format.ts), so a part from `formatReply` still fits after parsing.
+//   - A link whose label reads as a web address for ANOTHER host gets that host written after it,
+//     ` (→ evil.example)`, so the label cannot pass for the target (format-link.ts). Every other
+//     link is exactly `<a href>label</a>`. Rich messages are built from this output, so they agree.
 //   - A Markdown table becomes an aligned `<pre>` block (format-table.ts): HTML has
 //     no table tag, so a monospace block is the only way the columns line up.
 //     Task items (`- [ ]`, `- [x]`) show a box and a ticked box; a rule shows as a line.
@@ -33,6 +36,7 @@
 
 import { closesFence, fenceOpening } from "./format";
 import { BULLET, CHECKED_BOX, HEADING, QUOTE, RULE, RULE_GLYPH, RULE_LENGTH, TASK, UNCHECKED_BOX } from "./format-blocks";
+import { hostMarker } from "./format-link";
 import { renderPlainText } from "./format-plain";
 import { renderTableLines, tableAt, tableLayout } from "./format-table";
 import { type BotApi, type InlineKeyboard, isBotApiError, type SendMessageParams } from "./types";
@@ -208,7 +212,9 @@ function link(text: string, index: number, context: Context): { html: string; en
   if (!HTTP_URL.test(url)) {
     return undefined;
   }
-  return { html: `<a href="${escapeAttribute(url)}">${renderInline(label, { ...context, link: true })}</a>`, end };
+  // A label that reads as an address for a different host shows that host after the link (format-link.ts).
+  const marker = escapeHtml(hostMarker(label, url));
+  return { html: `<a href="${escapeAttribute(url)}">${renderInline(label, { ...context, link: true })}</a>${marker}`, end };
 }
 
 /** One line (or quote line) of running text. */

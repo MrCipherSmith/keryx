@@ -297,6 +297,9 @@ next message part picks it up, with no restart.
 
 What each construct becomes:
 
+- **Links** whose visible text reads as a web address for another host than the target show
+  that host after the link, for example `https://mybank.example (→ evil.example)`, in HTML and
+  in a rich message, so a label cannot pass for a different site. Any other link is unchanged.
 - **Tables** are never sent as raw pipes. In HTML a table is an aligned `<pre>` block with the
   separator row dropped; in a rich message it is a native table block with a header row.
 - **Ordered lists** keep their numbers, **nested bullets** keep their indentation, **task items**
