@@ -15,7 +15,7 @@
 // `changes` and `quiet: true`; the standing sections still appear, because a
 // review waiting for the operator is not news but is still theirs to act on.
 
-import type { OpenEntry } from "../product/service";
+import type { DigestChain } from "./digest-board";
 import type { DigestDiff, DigestItem, DigestSnapshot } from "./digest-snapshot";
 
 /** Days an open PR or issue may sit without an update before the digest calls it stuck. */
@@ -53,8 +53,8 @@ export interface DigestContentInput {
   readonly diff: DigestDiff;
   readonly previous: DigestSnapshot | undefined;
   readonly failures: readonly DigestFailure[];
-  /** The board's "closed, effect not checked" entries (`buildOpenReport(index).entries`). */
-  readonly chains: readonly OpenEntry[];
+  /** The board's "closed, effect not checked" entries. */
+  readonly chains: readonly DigestChain[];
   readonly now: Date;
   readonly stuckDays?: number;
 }

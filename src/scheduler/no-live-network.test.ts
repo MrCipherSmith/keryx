@@ -152,6 +152,8 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
     expect(production.map((entry) => path.basename(entry.name))).toEqual(expect.arrayContaining(["digest-run.ts", "digest-delivery.ts", "digest-gh.ts", "digest-summary.ts", "digest-ticker.ts", "serve-digest.ts"]));
     expect(testFiles.map((entry) => path.basename(entry.name)).sort()).toEqual(
       [
+        "digest-board-project.test.ts",
+        "digest-board.test.ts",
         "digest-content.test.ts",
         "digest-delivery.test.ts",
         "digest-diff.test.ts",
@@ -160,6 +162,7 @@ describe("the digest tests cannot reach GitHub, Telegram or a model", () => {
         "digest-schedule.test.ts",
         "digest-surface.test.ts",
         "digest-tools-readonly.test.ts",
+        "scheduled-digest-docs.test.ts",
       ].sort(),
     );
     expect(helpers.map((entry) => path.basename(entry.name))).toContain("digest.test-helpers.ts");

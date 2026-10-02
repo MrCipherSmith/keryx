@@ -439,7 +439,7 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     kind: "cli",
     name: "schedule",
     group: "Automation",
-    summary: "Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove.",
+    summary: "Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram.",
   },
   {
     kind: "cli",

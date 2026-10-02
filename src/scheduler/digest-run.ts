@@ -33,19 +33,19 @@ import {
 import { dispatchLockPath } from "../commands/trigger-dispatch";
 import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
-import { buildOpenReport, checkStaleness, readIntentIndex, type OpenEntry } from "../product/service";
 import type { AgentTaskAction, TriggerEntry } from "../trigger/config";
 import { DIGEST_DEFAULT_TOPIC } from "../trigger/digest-config";
 import { DIGEST_TOOL_IDS } from "../trigger/granted-tools";
 import type { TriggerRunCost, TriggerRunOutcomeKind } from "../trigger/record";
 import { confirmedContentProblem, verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
+import { readBoard, type BoardRead } from "./digest-board";
 import { collectFromGithub, truncationNote, type CollectResult } from "./digest-collect";
 import { buildDigestContent, renderDigestText, type DigestContent, type DigestFailure } from "./digest-content";
 import { appendDeliveryLine, enqueueDelivery, flushDeliveries, type DigestSink } from "./digest-delivery";
 import { defaultGhRunner, ghEnvForProject, type GhRunner } from "./digest-gh";
 import { startLimits, type DigestLimitDeps } from "./digest-limits";
-import { diffSnapshot, nextSnapshot, readSnapshot, writeSnapshot, type DigestItem } from "./digest-snapshot";
+import { diffSnapshot, nextSnapshot, readSnapshot, writeSnapshot } from "./digest-snapshot";
 import { defaultSummarize, type DigestSummarizer } from "./digest-summary";
 
 /** Injectable seams. Production passes none (serve passes `sink`). */
@@ -62,43 +62,6 @@ export interface DigestDeps extends AgentTaskDeps {
 
 /** A Telegram message is at most 4096 characters; leave room for the pointer. */
 export const DELIVERY_TEXT_MAX = 3800;
-
-function boardItems(entries: readonly { id: string; status: string; closedAt: string | null; verdict: string; title: string }[]): DigestItem[] {
-  return entries.map((e) => ({ key: `board:${e.id}`, kind: "board" as const, id: e.id, title: e.title, stamp: `${e.status}|${e.closedAt ?? ""}|${e.verdict}` }));
-}
-
-interface BoardRead {
-  readonly items: readonly DigestItem[];
-  readonly chains: readonly OpenEntry[];
-  readonly failure?: DigestFailure;
-  readonly note?: string;
-}
-
-/** The flow board comes from the product index in `.metaproject/data/product/`, never from HTML. */
-async function readBoard(projectRoot: string): Promise<BoardRead> {
-  const read = await readIntentIndex(projectRoot);
-  if (read.state === "absent") {
-    return { items: [], chains: [], failure: { source: "board", detail: "no product index — run `keryx product index` to build it" } };
-  }
-  if (read.state === "malformed") {
-    return { items: [], chains: [], failure: { source: "board", detail: `the product index is unreadable: ${read.reason}` } };
-  }
-  const stale = await checkStaleness(projectRoot, read.index);
-  const items = boardItems(
-    read.index.intents.map((i) => ({
-      id: i.id,
-      title: i.title,
-      status: i.status,
-      closedAt: i.closedAt,
-      verdict: i.outcome?.verdict ?? "",
-    })),
-  );
-  return {
-    items,
-    chains: buildOpenReport(read.index).entries,
-    ...(stale.stale ? { note: `the product index is stale (${stale.reason})` } : {}),
-  };
-}
 
 function capForDelivery(text: string, reportPath: string | undefined): string {
   if (text.length <= DELIVERY_TEXT_MAX) return text;
