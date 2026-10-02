@@ -37,8 +37,10 @@ describe("flow 387 T10 spillLargeToolOutput (AC7)", () => {
     expect(visible).toContain("1500 lines");
     expect(visible).toContain(`${Buffer.byteLength(original)} bytes`);
     expect(visible).toContain(file);
-    expect(visible).toContain("offset/limit");
-    expect(visible.length).toBeLessThan(TOOL_OUTPUT_PREVIEW_CHARS + 400);
+    // Flow 387 T14: the hint names the real tools and their real input fields.
+    expect(visible).toContain(`read_file {"path": ${JSON.stringify(file)}, "start_line": <line>}`);
+    expect(visible).toContain(`search_code {"pattern": "<regex>", "path": ${JSON.stringify(file)}}`);
+    expect(visible.length).toBeLessThan(TOOL_OUTPUT_PREVIEW_CHARS + 900);
   });
 
   test("over the line threshold with short lines also spills", async () => {

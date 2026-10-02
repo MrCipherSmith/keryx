@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -78,9 +79,55 @@ export function renderSpillPreview(text: string, filePath: string): string {
   const bytes = Buffer.byteLength(text, "utf8");
   return [
     head,
-    `[output truncated: ${lines} lines, ${bytes} bytes in total; full output saved to ${filePath} — read it with an offset/limit or search it]`,
+    // Flow 387 T14: name the exact tools and arguments. `read_file` and `search_code`
+    // accept this one absolute path (see `resolveSpillReadable`); the inputs below
+    // are their real schemas ({ path, start_line } and { pattern, path }).
+    `[output truncated: ${lines} lines, ${bytes} bytes in total; full output saved to ${filePath} — ` +
+      `read it with read_file {"path": ${JSON.stringify(filePath)}, "start_line": <line>} ` +
+      `(each call returns up to 20000 characters and names the next start_line), ` +
+      `or search it with search_code {"pattern": "<regex>", "path": ${JSON.stringify(filePath)}}]`,
     tail,
   ].join("\n");
+}
+
+/**
+ * Flow 387 T14 (SECURITY BOUNDARY): the ONE place outside the project root that
+ * `read_file` / `search_code` may read.
+ *
+ * `read_file`, `list_dir` and `search_code` confine every path to the project root,
+ * so a spill file under the user data dir was a path the model was told about and
+ * could not open. This resolves `candidate` to its REAL path and returns it only
+ * when that path is `<sessionDir>/tool-output` itself or something inside it:
+ *
+ * - the path must be ABSOLUTE (a relative path keeps meaning "relative to the
+ *   project root", exactly as before);
+ * - it is realpath'd, so a symlink inside `tool-output` that points elsewhere, and
+ *   a `..` that climbs out of it, both resolve outside and are refused;
+ * - it must already exist (no nearest-ancestor guessing — nothing here ever writes);
+ * - the check is segment-wise (`relative`), so a sibling `tool-output-evil` is not
+ *   mistaken for the directory.
+ *
+ * Nothing else under the data dir (other sessions, config, credentials) becomes
+ * readable. Read-only callers only: no write tool may use this.
+ */
+export function resolveSpillReadable(sessionDir: string | undefined, candidate: string): string | null {
+  if (sessionDir === undefined || !path.isAbsolute(candidate)) {
+    return null;
+  }
+  try {
+    const dirReal = realpathSync(path.join(sessionDir, TOOL_OUTPUT_DIRNAME));
+    const real = realpathSync(path.resolve(candidate));
+    if (real === dirReal) {
+      return real;
+    }
+    const rel = path.relative(dirReal, real);
+    if (rel === "" || path.isAbsolute(rel) || rel === ".." || rel.startsWith(`..${path.sep}`)) {
+      return null;
+    }
+    return real;
+  } catch {
+    return null; // missing dir/file, dangling link, or unreadable: refuse
+  }
 }
 
 function safeFileStem(toolCallId: string): string {
