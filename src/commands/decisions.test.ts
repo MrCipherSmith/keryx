@@ -108,3 +108,31 @@ test("bad input is an error line and exit code 1, not a stack trace", async () =
   expect((await run(["open", "--question", "q", "--option", "a=A", "--option", "b=B", "--bogus", "x"])).err).toContain("Unknown option");
   expect((await run(["frobnicate"])).exitCode).toBe(1);
 });
+
+test("answer refuses a choice that is no option, and --other records a free-form answer (F-005)", async () => {
+  const opened = JSON.parse((await run(OPEN)).out) as { id: string };
+  const refused = await run(["answer", opened.id, "--choice", "zzz"]);
+  expect(refused.exitCode).toBe(1);
+  expect(refused.err).toContain("not one of the options");
+  const other = JSON.parse((await run(["answer", opened.id, "--choice", "my own idea", "--other", "--json"])).out) as { choice: string; matched: boolean };
+  expect(other).toMatchObject({ choice: "my own idea", matched: false });
+});
+
+test("answer says the reason may be added later, and never says it must be asked now (F-001)", async () => {
+  const opened = JSON.parse((await run(OPEN)).out) as { id: string };
+  const answered = await run(["answer", opened.id, "--choice", "c"]);
+  expect(answered.out).not.toContain("ask the human ONCE");
+});
+
+test("open takes the flow and stage from the checkout when they are not given (F-003)", async () => {
+  await Bun.spawn(["git", "init", "-q", "-b", "flow-7-work"], { cwd: root }).exited;
+  await mkdir(path.join(root, ".metaproject", "flows", "007-2026-10-02-work"), { recursive: true });
+  await writeFile(
+    path.join(root, ".metaproject", "flows", "007-2026-10-02-work", "flow.json"),
+    JSON.stringify({ schemaVersion: 2, id: "007", slug: "work", title: "Work", status: "in-progress", tasks: [{ id: "T1", kind: "test", status: "in-progress" }] }),
+    "utf8",
+  );
+  const args = OPEN.filter((a, i) => a !== "--stage" && OPEN[i - 1] !== "--stage");
+  const opened = JSON.parse((await run([...args, "--json"])).out) as { flow: string | null };
+  expect(opened.flow).toBe("007");
+});

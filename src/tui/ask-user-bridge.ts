@@ -4,7 +4,7 @@
 // real interactive host here, and the tool invokes through this bridge.
 
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
-import { journalAsk } from "../decisions/service";
+import { journalAsk, resolveFlowContext } from "../decisions/service";
 
 let host: AskUserFn | undefined;
 
@@ -25,6 +25,14 @@ export async function invokeAskUserHost(
 // transcript; without one the reveal is simply not shown (the journal has it).
 let notice: ((text: string) => void) | undefined;
 
+// The latest question answered through the journal: what `/decisions reason` and
+// `/decisions change` act on when no id is given.
+let lastDecisionId: string | undefined;
+
+export function lastAskUserDecisionId(): string | undefined {
+  return lastDecisionId;
+}
+
 export function setAskUserNotice(fn: ((text: string) => void) | undefined): void {
   notice = fn;
 }
@@ -39,8 +47,14 @@ export function setAskUserNotice(fn: ((text: string) => void) | undefined): void
 export function journaledAskUser(cwd: string): AskUserFn {
   const journaled = journalAsk(invokeAskUserHost, {
     cwd,
-    flow: process.env["KERYX_FLOW"] !== undefined && process.env["KERYX_FLOW"].length > 0 ? process.env["KERYX_FLOW"] : undefined,
+    // the flow and its stage come from the checkout (env, branch, the one flow in progress), not only from KERYX_FLOW
+    context: () => resolveFlowContext(cwd),
     notify: (text) => notice?.(text),
+    // a journaling failure is shown as a note in the transcript; the question itself is never stopped by it
+    onNote: (text) => notice?.(text),
+    onDecision: (id) => {
+      lastDecisionId = id;
+    },
   });
   return (request) => (host === undefined ? invokeAskUserHost(request) : journaled(request));
 }

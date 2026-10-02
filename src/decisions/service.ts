@@ -3,7 +3,7 @@
 // import-zone ratchet counts any other reach as an avoidable bypass).
 
 import { buildReport, renderReport, type DecisionsReport } from "./report";
-import { readRecords } from "./store";
+import { readJournal } from "./store";
 
 export { journalAsk } from "./ask";
 export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
@@ -11,7 +11,11 @@ export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport } from "./report";
 export type { DecisionsReport, DeviationRow, Tally } from "./report";
-export { journalFile } from "./store";
+export { journalFile, resolveJournalFile } from "./store";
+export { resolveFlowContext } from "./context";
+export type { FlowContext } from "./context";
+export { changeAnswer, giveReason, latestAnsweredDecision, resolveOptionId } from "./followup";
+export type { GiveReasonResult } from "./followup";
 export type {
   AnswerInput,
   AnswerResult,
@@ -24,7 +28,8 @@ export type {
 
 /** Read the journal and fold it into the report. Never throws: a missing file is an empty report. */
 export async function loadReport(cwd: string): Promise<DecisionsReport> {
-  return buildReport(await readRecords(cwd));
+  const { records, skipped } = await readJournal(cwd);
+  return buildReport(records, skipped);
 }
 
 /** The report as text, the same lines `keryx decisions report` prints. */

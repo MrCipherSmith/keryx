@@ -35,13 +35,15 @@ export interface DecisionsReport {
   byMode: Record<DecisionMode, Tally>;
   byStage: Array<{ stage: string; ordinary: Tally; blind: Tally }>;
   deviations: DeviationRow[];
+  /** Journal lines that were unreadable or malformed and left out of every number above. */
+  skipped: number;
 }
 
 function emptyTally(): Tally {
   return { answered: 0, matched: 0 };
 }
 
-export function buildReport(records: readonly DecisionRecord[]): DecisionsReport {
+export function buildReport(records: readonly DecisionRecord[], skipped = 0): DecisionsReport {
   const opens: OpenRecord[] = [];
   const answers = new Map<string, AnswerRecord[]>();
   const reasons = new Map<string, ReasonRecord>();
@@ -69,6 +71,7 @@ export function buildReport(records: readonly DecisionRecord[]): DecisionsReport
     byMode: { ordinary: emptyTally(), blind: emptyTally() },
     byStage: [],
     deviations: [],
+    skipped,
   };
   const stages = new Map<string, { ordinary: Tally; blind: Tally }>();
 
@@ -119,7 +122,8 @@ function share(tally: Tally): string {
 }
 
 export function renderReport(report: DecisionsReport): string {
-  if (report.total === 0) return "No decisions recorded yet.";
+  const skippedLine = report.skipped > 0 ? `Skipped ${report.skipped} unreadable journal record${report.skipped === 1 ? "" : "s"}.` : undefined;
+  if (report.total === 0) return skippedLine === undefined ? "No decisions recorded yet." : `No decisions recorded yet.\n${skippedLine}`;
   const lines = [
     `Decisions: ${report.total} recorded, ${report.answered} answered, ${report.unanswered} not answered yet`,
     `Changed after the reveal: ${report.changed}. Without a recommendation: ${report.withoutRecommendation}.`,
@@ -143,5 +147,6 @@ export function renderReport(report: DecisionsReport): string {
     lines.push(`    recommended ${dev.recommended}, chose ${dev.chose}`);
     lines.push(`    reason: ${dev.reason ?? "(none given)"}`);
   }
+  if (skippedLine !== undefined) lines.push("", skippedLine);
   return lines.join("\n");
 }

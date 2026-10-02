@@ -6,10 +6,10 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { answerDecision, openDecision, reportText } from "../decisions/service";
+import { answerDecision, loadReport, openDecision, reportText } from "../decisions/service";
 import { findAgentCommand } from "../commands/agent-commands";
 import { classifyBusyDispatch } from "./busy-dispatch";
-import { formatDecisionsLines, isDecisionsCommand, mountDecisionsSidebar, presentDecisions, projectDecisionsPanel, routeDecisionsCommand } from "./decisions-surface";
+import { formatDecisionsLines, isDecisionsCommand, mountDecisionsSidebar, parseDecisionsCommand, presentDecisions, projectDecisionsPanel, routeDecisionsCommand, runDecisionsFollowup } from "./decisions-surface";
 import type { OpenModalFn } from "./flow-inspector";
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { clickNode, findById, keypressSource, loadOpenTui, manualInterval, mountChrome, settle, textOf } from "./ops-sidebar.test-helpers";
@@ -160,4 +160,27 @@ otuiTest("the row appears with the count once the journal holds a decision, and 
     sidebar.dispose();
     h.destroy();
   }
+});
+
+test("parseDecisionsCommand: the report, the reason and the change (F-002, F-011)", () => {
+  expect(parseDecisionsCommand("/decisions")).toEqual({ kind: "show" });
+  expect(parseDecisionsCommand("/decisions reason B is quicker for us")).toEqual({ kind: "reason", text: "B is quicker for us" });
+  expect(parseDecisionsCommand("/decisions change  Option A ")).toEqual({ kind: "change", choice: "Option A" });
+});
+
+test("/decisions reason and /decisions change work from the TUI path and tell the outcome (F-002, F-011)", async () => {
+  await openDecision({ cwd: root, question: "Pick", options: [{ id: "a", label: "Option A" }, { id: "b", label: "Option B" }], recommendation: { optionId: "a", reason: "" }, random: () => 0.9, id: "d-9" });
+  await answerDecision({ cwd: root, id: "d-9", choice: "b" });
+  const said: string[] = [];
+  const deps = { cwd: root, lastDecisionId: () => "d-9", notice: (text: string) => said.push(text) };
+
+  await runDecisionsFollowup({ kind: "reason", text: "B fits the deadline" }, deps);
+  expect(said.at(-1)).toContain("d-9");
+  expect((await loadReport(root)).deviations[0]?.reason).toBe("B fits the deadline");
+
+  await runDecisionsFollowup({ kind: "change", choice: "Option A" }, deps);
+  expect((await loadReport(root)).changed).toBe(1);
+
+  await runDecisionsFollowup({ kind: "change", choice: "nope" }, deps);
+  expect(said.at(-1)).toContain("not one of the options");
 });

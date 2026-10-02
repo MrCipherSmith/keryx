@@ -6,7 +6,7 @@
 // Opening it never writes: it reads the journal and refuses nothing.
 
 import { findAgentCommand } from "../commands/agent-commands";
-import { decisionCount, reportText } from "../decisions/service";
+import { changeAnswer, decisionCount, giveReason, reportText } from "../decisions/service";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize, type ModalChrome, type ModalHandle as HostModalHandle } from "./modal-host";
 import { onThemeChange } from "./theme";
@@ -27,6 +27,56 @@ export const DECISIONS_FOOTER = [
 export function isDecisionsCommand(line: string): boolean {
   const token = line.trim().split(/\s+/)[0] ?? "";
   return token === DECISIONS_COMMAND;
+}
+
+export type DecisionsCommand =
+  | { kind: "show" }
+  | { kind: "reason"; text: string }
+  | { kind: "change"; choice: string };
+
+/**
+ * `/decisions` opens the report; `/decisions reason <why>` adds the one optional
+ * reason to the latest answered question, and `/decisions change <option>` changes
+ * its answer (after a blind reveal, say). Neither follow-up ever holds a question.
+ */
+export function parseDecisionsCommand(line: string): DecisionsCommand {
+  const [, sub, ...rest] = line.trim().split(/\s+/);
+  const tail = rest.join(" ").trim();
+  if (sub === "reason") return { kind: "reason", text: tail };
+  if (sub === "change") return { kind: "change", choice: tail };
+  return { kind: "show" };
+}
+
+export interface DecisionsFollowupDeps {
+  cwd: string;
+  /** The latest question answered through the journal in this session. */
+  lastDecisionId?: (() => string | undefined) | undefined;
+  /** Where the outcome is told (the transcript). */
+  notice?: ((text: string) => void) | undefined;
+}
+
+/** Run a `reason` or `change` command and say what happened. Never throws. */
+export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { kind: "show" }>, deps: DecisionsFollowupDeps): Promise<void> {
+  const say = (text: string): void => {
+    try {
+      deps.notice?.(text);
+    } catch {
+      // a failing transcript is not the journal's problem
+    }
+  };
+  const lastId = deps.lastDecisionId?.();
+  try {
+    if (command.kind === "reason") {
+      const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId });
+      say(done.recorded ? `Reason recorded for decision ${done.id}.` : `Decision ${done.id} already has a reason on record.`);
+      return;
+    }
+    if (command.choice.length === 0) throw new Error("name the option: /decisions change <option id or label>");
+    const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId });
+    say(`Answer for decision ${result.id} changed to ${result.choice}. Both answers stay on record; the report counts the first one.`);
+  } catch (cause) {
+    say(`/decisions ${command.kind}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
 }
 
 const UNREADABLE = "The recommendation journal could not be read.";
@@ -138,6 +188,10 @@ export interface DecisionsSidebarOptions {
   width: number;
   cwd: string;
   onKeypress: OpenDecisionsOptions["onKeypress"];
+  /** Where `/decisions reason|change` tell the outcome (the transcript). */
+  notice?: ((text: string) => void) | undefined;
+  /** The latest question answered through the journal in this session. */
+  lastDecisionId?: (() => string | undefined) | undefined;
   /** Test seam: how many decisions the journal holds. */
   count?: () => Promise<number>;
   interval?: (tick: () => Promise<void>, ms: number) => () => void;
@@ -237,7 +291,12 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
     show,
     handleCommand(line) {
       if (!isDecisionsCommand(line)) return false;
-      void show();
+      const command = parseDecisionsCommand(line);
+      if (command.kind === "show") {
+        void show();
+      } else {
+        void runDecisionsFollowup(command, { cwd: options.cwd, lastDecisionId: options.lastDecisionId, notice: options.notice }).then(() => refresh());
+      }
       return true;
     },
     refresh,

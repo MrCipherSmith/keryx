@@ -347,7 +347,7 @@ import {
   toLeasedChoice,
   withLeaseMarker,
 } from "./tui-session-lease";
-import { setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
+import { lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -4401,6 +4401,9 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       cwd: opts.session?.cwd ?? process.cwd(),
       onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+      // `/decisions reason <why>` and `/decisions change <option>` tell their outcome in the transcript
+      notice: (text) => io.onSystem?.(`◇ ${text}\n`),
+      lastDecisionId: lastAskUserDecisionId,
     });
     liveDecisions = decisionsPanel;
     // Flow 370 (AC6): one row, only while a write run awaits review.

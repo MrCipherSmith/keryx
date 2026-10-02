@@ -134,7 +134,9 @@ describe("AC3: blind mode", () => {
     expect(request?.options.map((o) => o.id)).not.toEqual(["a", "b", "c"]);
     expect(notes).toHaveLength(1);
     expect(notes[0]).toContain("Option A");
-    expect(notes[0]).toContain("the safe one");
+    // ask_user options carry a description of the option, not a reason for recommending it (F-007)
+    expect(notes[0]).not.toContain("the safe one");
+    expect((await readRecords(root))[0]).toMatchObject({ recommendation: { optionId: "a", reason: "" } });
     expect((await readRecords(root))[0]).toMatchObject({ mode: "blind", showMark: false });
   });
 
@@ -239,34 +241,29 @@ describe("AC6: the reason for a deviation, asked once", () => {
     expect((await loadReport(root)).deviations[0]).not.toHaveProperty("reason");
   });
 
-  test("through ask_user: a deviation asks once, a followed recommendation asks nothing", async () => {
+  test("through ask_user: the answer returns at once and nothing else is asked (F-001)", async () => {
     const questions: string[] = [];
-    const answers = ["b", "because B is quicker", "a"];
+    const notes: string[] = [];
     const ask = journalAsk(
       async (request) => {
         questions.push(request.question);
-        return answers.shift() as string;
+        return "b";
       },
-      { cwd: root, random: () => 0.9 },
+      { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) },
     );
     const options = OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) }));
     expect(await ask({ question: "First?", options })).toBe("b");
-    expect(questions).toHaveLength(2);
-    expect(questions[1]).toContain("Why?");
-    expect(await ask({ question: "Second?", options })).toBe("a");
-    expect(questions).toHaveLength(3);
-    const reasons = (await readRecords(root)).filter((r) => r.kind === "reason");
-    expect(reasons).toHaveLength(1);
-    expect(reasons[0]).toMatchObject({ reason: "because B is quicker" });
+    expect(questions).toEqual(["First?"]);
+    expect((await readRecords(root)).filter((r) => r.kind === "reason")).toHaveLength(0);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("/decisions reason");
   });
 
-  test("through ask_user: an empty or skipped reason is absent, and the human is not pressed", async () => {
-    const answers = ["b", "skip"];
-    const ask = journalAsk(async () => answers.shift() as string, { cwd: root, random: () => 0.9 });
+  test("through ask_user: a followed recommendation says nothing about a reason", async () => {
+    const notes: string[] = [];
+    const ask = journalAsk(async () => "a", { cwd: root, random: () => 0.9, notify: (text) => notes.push(text) });
     await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
-    const reason = (await readRecords(root)).find((r) => r.kind === "reason");
-    expect(reason).toBeDefined();
-    expect(reason && "reason" in reason).toBe(false);
+    expect(notes).toEqual([]);
   });
 });
 
@@ -324,7 +321,10 @@ describe("AC7: the report is deterministic and has the pieces", () => {
   test("a damaged line is skipped, not fatal", async () => {
     await seed();
     await writeFile(journalFile(root), `not json\n${await readFile(journalFile(root), "utf8")}{"half":\n`, "utf8");
-    expect((await loadReport(root)).total).toBe(5);
+    const report = await loadReport(root);
+    expect(report.total).toBe(5);
+    expect(report.skipped).toBe(2);
+    expect(renderReport(report)).toContain("Skipped 2 unreadable journal records.");
   });
 });
 
@@ -358,7 +358,6 @@ describe("AC9: never blocks the question; project journal and flow journal", () 
     const created = await flows.init({ cwd: root, title: "Journaled" });
     const ask = journalAsk(async () => "b", { cwd: root, flow: created.flow.id, stage: "design", random: () => 0.9 });
     await ask({ question: "Pick", options: OPTIONS.map((o, i) => ({ ...o, ...(i === 0 ? { recommended: true } : {}) })) });
-    // The deviation reason question also went through the stub, which answered "b" as the reason text.
     const journal = await readFile(path.join(root, created.dir, "journal.md"), "utf8");
     expect(journal).toContain("decision d-");
     expect(journal).toContain("[design, ordinary]: chose b; recommended a");

@@ -48,6 +48,8 @@ export interface AnswerRecord {
   timeToAnswerMs: number;
   /** True when this answer replaces an earlier one for the same decision. */
   changed: boolean;
+  /** True when the answer is the human's own words, not one of the options (a free-form answer). */
+  other?: boolean;
 }
 
 export interface ReasonRecord {
@@ -89,7 +91,9 @@ export interface OpenResult {
 export interface AnswerInput {
   cwd: string;
   id: string;
+  /** An option id. A free-form answer needs `other: true`; anything else must be one of the options. */
   choice: string;
+  other?: boolean | undefined;
   now?: (() => Date) | undefined;
 }
 
@@ -105,7 +109,11 @@ export interface AnswerResult {
   matched: boolean | null;
   deviation: boolean;
   timeToAnswerMs: number;
-  /** True when the human should now be asked ONCE for an optional reason. */
+  /**
+   * True when the human may now be offered, ONCE, to give an optional reason: a
+   * deviation, no reason on file, and no earlier answer already offered it. The
+   * answer itself is never held back for it.
+   */
   askReason: boolean;
   flow: string | null;
 }

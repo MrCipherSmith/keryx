@@ -48,7 +48,7 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
   }
 
   const config = await loadDecisionsConfig(input.cwd);
-  const irreversible = isIrreversible(config.irreversible, question, input.action);
+  const irreversible = isIrreversible(config.irreversible, question, input.action, input.options);
   // Blind needs a recommendation to hide, and is never applied to an irreversible action (AC4).
   const wantsBlind = recommendation !== null && random() < BLIND_PROBABILITY;
   const mode: DecisionMode = wantsBlind && !irreversible ? "blind" : "ordinary";
@@ -94,9 +94,17 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
   if (open === undefined) throw new Error(`no open decision with id ${input.id}`);
   const choice = input.choice.trim();
   if (choice.length === 0) throw new Error("decisions answer needs a choice");
+  const other = input.other === true;
+  if (!other && !open.options.some((option) => option.id === choice)) {
+    throw new Error(`"${choice}" is not one of the options of decision ${input.id}. Choose one of: ${open.options.map((option) => option.id).join(", ")}`);
+  }
 
-  const prior = records.filter((r) => r.kind === "answer" && r.id === input.id).length;
+  const priorAnswers = records.filter((r): r is AnswerRecord => r.kind === "answer" && r.id === input.id);
+  const prior = priorAnswers.length;
   const hasReason = records.some((r) => r.kind === "reason" && r.id === input.id);
+  const recommendedId = open.recommendation?.optionId;
+  // The reason is offered once per decision: an earlier deviation already offered it.
+  const alreadyOffered = priorAnswers.some((r) => recommendedId !== undefined && r.choice !== recommendedId);
   const timeToAnswerMs = Math.max(0, now.getTime() - Date.parse(open.at));
   const record: AnswerRecord = {
     kind: "answer",
@@ -106,6 +114,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
     choice,
     timeToAnswerMs: Number.isFinite(timeToAnswerMs) ? timeToAnswerMs : 0,
     changed: prior > 0,
+    ...(other ? { other: true } : {}),
   };
   await appendRecord(input.cwd, record);
 
@@ -123,7 +132,7 @@ export async function answerDecision(input: AnswerInput): Promise<AnswerResult> 
     matched,
     deviation,
     timeToAnswerMs: record.timeToAnswerMs,
-    askReason: deviation && !hasReason,
+    askReason: deviation && !hasReason && !alreadyOffered,
     flow: open.flow,
   };
 }

@@ -2004,21 +2004,24 @@ with options, how it was shown, what you chose and how long you took. See
 
 ```
 keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
-keryx decisions answer <id> --choice <id> [--reason "<why>"] [--json]
+keryx decisions answer <id> --choice <id> [--other] [--reason "<why>"] [--json]
 keryx decisions reason <id> --text "<why>" [--json]
 keryx decisions report [--json]
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
-| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list (release, delete, push, publish, deploy, plus `.metaproject/decisions.config.json`) is never blind. |
-| `answer <id>` | `--choice`, `--reason`, `--json` | Records the choice and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says to ask once for an optional reason. |
+| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list (release, delete, push, publish, merge, drop, force and the Russian equivalents, matched on the question, the options and `--action`, plus `.metaproject/decisions.config.json`) is never blind. |
+| `answer <id>` | `--choice`, `--other`, `--reason`, `--json` | Records the choice (it must be one of the options; `--other` marks a free-form answer) and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says the human may add a reason, once; the answer is never held back for it. |
 | `reason <id>` | `--text`, `--json` | Records the reason for a deviation; an empty text is recorded as absent. |
 | `report` | `--json` | Deterministic, no model: match share by mode and by stage, and every deviation with its reason. |
 
-`--flow` defaults to `KERYX_FLOW`. The journal is
-`.metaproject/data/decisions/journal.jsonl`; inside a flow the answer also adds a
-line to that flow's `journal.md`. In the TUI the report is `/decisions`.
+`--flow` and `--stage` default to what the checkout says: `KERYX_FLOW`, else the
+flow named by the git branch, else the only flow in progress. The journal is
+`.metaproject/data/decisions/journal.jsonl` under the main checkout, shared by every
+worktree; inside a flow the answer also adds a line to that flow's `journal.md`.
+In the TUI the report is `/decisions`, `/decisions reason <why>` adds the optional
+reason and `/decisions change <option>` changes the latest answer.
 
 ---
 

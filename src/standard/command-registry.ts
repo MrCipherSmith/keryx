@@ -1269,7 +1269,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions open",
     summary:
       "Record an agent question with options and its recommendation BEFORE showing it. Decides blind (a third of the questions: " +
-      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete or push is never blind.",
+      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete, push, merge or drop is never blind.",
     intent: ["decisions open", "record a question with options", "журнал рекомендаций", "recommendation journal", "blind question"],
     args: [
       { name: "question", type: "string", required: true, desc: "the question as the human will read it" },
@@ -1289,12 +1289,13 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     module: "decisions",
     command: "decisions answer",
     summary:
-      "Record the human's choice for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether to ask " +
-      "once for an optional reason. A second answer for the same id is kept as a changed answer.",
+      "Record the human's choice (one of the options) for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether " +
+      "the human may add an optional reason (once; never hold the answer for it). A second answer for the same id is kept as a changed answer.",
     intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },
       { name: "choice", type: "string", required: true, desc: "the option id the human chose" },
+      { name: "other", type: "bool", required: false, desc: "the choice is the human's own words, not an option (a free-form answer)" },
       { name: "reason", type: "string", required: false, desc: "the human's reason for deviating, if given with the answer" },
       { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
     ],
@@ -1305,7 +1306,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "decisions",
     command: "decisions reason",
-    summary: "Record the one optional reason for a deviation; an empty text is recorded as no reason. Refused when the human was already asked.",
+    summary: "Record the one optional reason for a deviation, whenever the human gives it; an empty text is recorded as no reason. Nothing is written when a reason is already on record.",
     intent: ["decisions reason", "why did the human deviate", "причина отклонения"],
     args: [
       { name: "<id>", type: "string", required: true, desc: "the decision id" },

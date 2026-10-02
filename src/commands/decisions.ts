@@ -3,9 +3,10 @@
 //
 //   open    record the question, the options and the recommendation BEFORE showing
 //           it; it says blind or ordinary, the order to show and whether to mark
-//   answer  record the human's choice; it returns the reveal and whether to ask
-//           for a reason (once, optional)
-//   reason  record that one optional reason
+//   answer  record the human's choice; it returns the reveal and whether the
+//           human may be offered to add a reason (once, optional, never holding
+//           the answer back). A second answer is a changed answer.
+//   reason  record that one optional reason, whenever the human gives it
 //   report  deterministic summary, no model: match share by mode and stage,
 //           deviations with their reasons
 //
@@ -19,11 +20,13 @@ import {
   recordReason,
   reportText,
   loadReport,
+  resolveFlowContext,
   type DecisionOption,
+  type FlowContext,
 } from "../decisions/service";
 
 const OPEN_FLAGS = ["--question", "--option", "--options-json", "--recommend", "--reason", "--stage", "--flow", "--action", "--json"] as const;
-const ANSWER_FLAGS = ["--choice", "--reason", "--json"] as const;
+const ANSWER_FLAGS = ["--choice", "--other", "--reason", "--json"] as const;
 const REASON_FLAGS = ["--text", "--json"] as const;
 const REPORT_FLAGS = ["--json"] as const;
 
@@ -76,13 +79,16 @@ async function runOpen(args: string[]): Promise<void> {
   if (question === undefined || question.trim().length === 0) throw new Error("keryx decisions open needs --question \"<text>\"");
   const options = parseOptions(args);
   const recommend = optionValue(args, "--recommend");
-  const flow = optionValue(args, "--flow") ?? (process.env["KERYX_FLOW"] !== undefined && process.env["KERYX_FLOW"].length > 0 ? process.env["KERYX_FLOW"] : undefined);
+  // --flow / --stage win; otherwise the flow and stage are derived from KERYX_FLOW, the branch or the one flow in progress
+  const given = { flow: optionValue(args, "--flow"), stage: optionValue(args, "--stage") };
+  const context: FlowContext = given.flow !== undefined && given.stage !== undefined ? {} : await resolveFlowContext(process.cwd());
+  const flow = given.flow ?? context.flow;
   const result = await openDecision({
     cwd: process.cwd(),
     question,
     options,
     recommendation: recommend === undefined ? undefined : { optionId: recommend, reason: optionValue(args, "--reason") ?? "" },
-    stage: optionValue(args, "--stage"),
+    stage: given.stage ?? context.stage,
     flow,
     action: optionValue(args, "--action"),
   });
@@ -107,7 +113,7 @@ async function runAnswer(args: string[]): Promise<void> {
   rejectUnknownFlags("answer", rest, ANSWER_FLAGS);
   const choice = optionValue(rest, "--choice");
   if (choice === undefined) throw new Error("keryx decisions answer needs --choice <option id>");
-  const result = await answerDecision({ cwd: process.cwd(), id, choice });
+  const result = await answerDecision({ cwd: process.cwd(), id, choice, other: rest.includes("--other") });
   const given = optionValue(rest, "--reason");
   let reasonRecorded = false;
   if (given !== undefined && result.askReason) reasonRecorded = await recordReason(process.cwd(), id, given);
@@ -123,7 +129,7 @@ async function runAnswer(args: string[]): Promise<void> {
     console.log(result.matched ? "the human followed the recommendation" : "the human chose differently");
   }
   console.log(`time to answer: ${(result.timeToAnswerMs / 1000).toFixed(1)}s`);
-  if (askReason) console.log(`ask the human ONCE for an optional reason, then: keryx decisions reason ${result.id} --text "<reason>" (empty is fine)`);
+  if (askReason) console.log(`the human may add an optional reason (offer it once, and do not hold the answer for it): keryx decisions reason ${result.id} --text "<reason>"`);
 }
 
 async function runReason(args: string[]): Promise<void> {
@@ -178,7 +184,7 @@ function printHelp(): void {
 
 Usage:
   keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
-  keryx decisions answer <id> --choice <id> [--reason "<why>"] [--json]
+  keryx decisions answer <id> --choice <id> [--other] [--reason "<why>"] [--json]
   keryx decisions reason <id> --text "<why>" [--json]
   keryx decisions report [--json]
 
@@ -189,16 +195,22 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
   open     decides blind (a third of the questions: no "recommended" mark,
            random order) or ordinary, and prints the order to show and whether
            to mark the recommendation. A question about a release, a delete or
-           a push (the irreversible list, .metaproject/decisions.config.json)
-           is never blind.
-  answer   records the choice, prints the recommendation (the reveal) and the
+           a push, a merge, a drop (the irreversible list, English and Russian,
+           matched on the question, the options and --action, plus
+           .metaproject/decisions.config.json) is never blind.
+  answer   records the choice (it must be one of the options; --other marks a
+           free-form answer), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
-           both are kept. After a deviation it says to ask the human once for
-           an optional reason; an empty reason is recorded as absent.
+           both are kept. After a deviation it says the human may add a reason,
+           once: it never holds the answer back, and the reason can come later
+           through \`reason\`. In the TUI the same two follow-ups are
+           /decisions reason <why> and /decisions change <option>.
   report   no model: match share by mode and by stage, and every deviation with
            its reason.
 
-Outside a flow the record goes to .metaproject/data/decisions/journal.jsonl;
-inside a flow (--flow <id> or KERYX_FLOW) the answer also adds a line to that
-flow's journal.md. A failure here never stops the question.`);
+The journal is one file per repository, .metaproject/data/decisions/journal.jsonl
+under the main checkout (every worktree shares it; it is git-ignored). Inside a
+flow (--flow <id>, KERYX_FLOW, the flow's branch, or the only flow in progress)
+the answer also adds a line to that flow's journal.md. A failure here never
+stops the question.`);
 }

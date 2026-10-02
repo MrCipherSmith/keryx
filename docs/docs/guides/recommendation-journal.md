@@ -17,9 +17,13 @@ Every question with options writes one record:
 - a reason for deviating, when you give one.
 
 The journal is `.metaproject/data/decisions/journal.jsonl` (append-only, mode
-0600, git-ignored in this repository). Inside a flow, the answer also adds one
-line to that flow's `journal.md`; outside a flow only the project-wide journal is
-written.
+0600, git-ignored in this repository). There is one journal per repository, under
+the main checkout: every git worktree reads and writes the same file. Inside a
+flow, the answer also adds one line to that flow's `journal.md`; outside a flow
+only the project-wide journal is written. The flow is `KERYX_FLOW` when it is set,
+else the flow named by the git branch (`flow-392`, or the flow's slug), else the
+only flow in progress; the stage is the kind of the task in progress, or the
+flow's status.
 
 ## Blind questions
 
@@ -30,7 +34,11 @@ something: if you only ever saw the recommendation marked, you would match it
 because it was marked.
 
 A question about something on the **irreversible list** is never blind. The built-in
-list is `release`, `delete`, `push`, `publish` and `deploy`; add your own words in
+list is `release`, `delete`, `remove`, `push`, `publish`, `unpublish`, `deploy`,
+`merge`, `drop`, `force`, `destroy`, `wipe` and `purge`, with Russian roots
+(`релиз`, `удал`, `пуш`, `отправ`, `опублик`, `слить`, `слив`, `мерж`, `деплой`,
+`выкат`, `сброс`; a Russian root matches inside a word, so `запушить` and
+`смержить` count); add your own words in
 `.metaproject/decisions.config.json`, which extends the built-in list and cannot
 shorten it:
 
@@ -38,15 +46,29 @@ shorten it:
 { "irreversible": ["migrate", "drop"] }
 ```
 
-A word matches at the start of a word in the question text or in the `--action`
-tag the agent passes, case-insensitively. When in doubt, keryx treats the question
-as irreversible. A question with no recommendation is never blind.
+A word matches at the start of a word in the question text, in the `--action`
+tag the agent passes, or in any option's id, label or description,
+case-insensitively. When in doubt, keryx treats the question
+as irreversible. A question with no recommendation is never blind. In a blind question a mark
+written into a label, such as `(Recommended)`, `[recommended]`, `- recommended`,
+`Recommended:` or a star, is removed from what is shown.
 
 ## Changing your mind, and giving a reason
 
-If you change your answer after the reveal, both answers are kept and the record
-says it was changed. When your answer differs from the recommendation you are
-asked **once** for an optional reason; an empty reply is recorded as no reason.
+Your answer is never held back. After you answer, the transcript shows the reveal
+and tells you what you can still do:
+
+- `/decisions change <option id or label>` changes the answer of the latest
+  question (or name another with the id from `keryx decisions report`). Both
+  answers are kept and the record says it was changed.
+- `/decisions reason <why>` adds an optional reason when your answer differed from
+  the recommendation. It is offered **once**; nothing asks you for it, and leaving
+  it out costs nothing (the report shows `(none given)`).
+
+The same two steps from a shell are `keryx decisions answer <id> --choice <id>`
+again and `keryx decisions reason <id> --text "<why>"`. An answer must be one of
+the options (a free-form `ask_user` answer is recorded as such). Journal lines
+that cannot be read are skipped and the report says how many.
 
 ## The report
 
@@ -83,17 +105,20 @@ keryx decisions reason <id> --text "<why>" [--json]
    mode, the order to show and whether to mark the recommendation.
 2. Show the question as told, and take the answer.
 3. Call `answer`. It prints the reveal (the recommendation) and the time taken,
-   and says whether to ask for a reason.
-4. If it did, ask once and call `reason`.
+   and says whether the human may add a reason.
+4. If it did, offer it once, without holding the answer back, and call `reason`
+   whenever it arrives.
 
-`--flow` defaults to the `KERYX_FLOW` environment variable. A failure here is
+`--flow` and `--stage` default to what the checkout says (`KERYX_FLOW`, the
+branch, the only flow in progress). A failure here is
 reported on one line and never has to stop the question.
 
 keryx's own `ask_user` tool does all of this for you.
 
 ## What it does not do
 
-- It never blocks or delays a question: a journaling failure is swallowed.
+- It never blocks or delays a question: a journaling failure is shown as a
+  one-line note in the transcript and the question goes on.
 - The tool-permission picker (allow / deny a tool call) is not journaled; it is
   an approval, not a question with a recommendation.
 - It judges nothing and gates nothing; the report is a mirror.

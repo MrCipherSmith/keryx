@@ -707,8 +707,10 @@ Grouped by what you are trying to do, not by internal module layout.
   writes one record under `.metaproject/data/decisions/`: the recommendation and
   its reason (written before the question is shown), the display mode, the option
   order, your choice, the time you took and, after a deviation, an optional
-  reason. One question in three is asked blind (no "recommended" mark, random
-  order, revealed after the answer), never for release, delete or push.
+  reason (offered once, never holding the answer back: `/decisions reason`).
+  One question in three is asked blind (no "recommended" mark, random order,
+  revealed after the answer, changeable with `/decisions change`), never for
+  release, delete, push, merge or drop.
   `keryx decisions report` prints the match share by mode and stage and the
   deviations, with no model; `keryx decisions open|answer|reason` lets any agent
   or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the
