@@ -5,7 +5,8 @@ import { describe, expect, test } from "bun:test";
 import { formatReply, renderedLength } from "./format";
 import { checkTelegramHtml, renderTelegramHtml } from "./format-html";
 import { renderPlainText } from "./format-plain";
-import { columnWidths, MAX_TABLE_COLUMNS, plainCell, renderedRowCost, renderTableText, splitRow, tableAt } from "./format-table";
+import { containsTable, renderRichMessage } from "./format-rich";
+import { columnWidths, MAX_TABLE_COLUMNS, MAX_TABLE_ROW_COST, plainCell, renderedRowCost, renderTableText, splitRow, tableAt, tableLayout } from "./format-table";
 import { visualWidth } from "../lib/md-blocks";
 
 const TABLE = ["| Name | Result | N |", "|:-----|:------:|--:|", "| a | ok | 1 |", "| long name | **failed** | 22 |"].join("\n");
@@ -68,8 +69,11 @@ describe("tableAt", () => {
     expect(tableAt([header, separator, header], 0)).toBeUndefined();
   });
 
-  test("a row too long to render beside a repeated header stays text", () => {
-    expect(tableAt(["| a |", "|---|", `| ${"x".repeat(2000)} |`], 0)).toBeUndefined();
+  test("a row too long to pad into aligned columns is still a table, laid out stacked", () => {
+    const found = tableAt(["| a |", "|---|", `| ${"x".repeat(2000)} |`], 0);
+    expect(found).toBeDefined();
+    expect(tableLayout((found as NonNullable<typeof found>).table)).toBe("stacked");
+    expect(tableLayout(parse(TABLE).table)).toBe("aligned");
   });
 });
 
@@ -100,6 +104,13 @@ describe("aligned layout", () => {
     const gap = (line: string): number => visualWidth(line.slice(0, line.indexOf("│")));
     expect(gap(lines[0] as string)).toBe(gap(lines[1] as string));
     expect(gap(lines[0] as string)).toBe(5);
+  });
+
+  test("emoji of the transport, symbol and skin-tone kinds are two columns, so the gap stays aligned", () => {
+    const html = renderTelegramHtml("| s | n |\n|---|---|\n| 🚀 | 1 |\n| ✅ | 2 |\n| ❌ | 3 |\n| 👍🏽 | 4 |\n| ok | 5 |");
+    const lines = html.replace(/^<pre>|<\/pre>$/g, "").split("\n");
+    // Exact text, not a comparison through visualWidth: each of these is two columns on screen.
+    expect(lines).toEqual(["s  │ n", "🚀 │ 1", "✅ │ 2", "❌ │ 3", "👍🏽 │ 4", "ok │ 5"]);
   });
 
   test("a link cell shows its address so it is not lost", () => {
@@ -205,5 +216,66 @@ describe("renderedRowCost", () => {
     const cost = renderedRowCost(table.rows[1] as string[], widths);
     const rendered = renderTableText(table).split("\n")[2] as string;
     expect(cost).toBeGreaterThanOrEqual(rendered.length + 1);
+  });
+});
+
+// A wide table: two 800-character cells in a 3-column table, and a 1-column table of one
+// 1600-character cell. Padded to its column width every row would pass MAX_TABLE_ROW_COST.
+const WIDE_3 = ["| a | b | c |", "|---|---|---|", `| ${"x".repeat(800)} | ${"y".repeat(800)} | z |`, "| 1 | 2 | 3 |"].join("\n");
+const WIDE_1 = ["| note |", "|---|", `| ${"w".repeat(1600)} |`, "| short |"].join("\n");
+
+describe("a wide table is never sent as raw pipes", () => {
+  for (const [name, source] of [
+    ["3 columns, two 800-character cells", WIDE_3],
+    ["1 column, a 1600-character cell", WIDE_1],
+  ] as const) {
+    describe(name, () => {
+      test("it is recognised as a table, and a stacked one", () => {
+        const found = tableAt(source.split("\n"), 0);
+        expect(found).toBeDefined();
+        expect(renderedRowCost((found?.table.rows[0] ?? []) as string[], columnWidths((found as NonNullable<typeof found>).table))).toBeGreaterThan(MAX_TABLE_ROW_COST);
+        expect(tableLayout((found as NonNullable<typeof found>).table)).toBe("stacked");
+        expect(containsTable(source)).toBe(true);
+      });
+
+      test("auto mode would send it rich, as a native table block with every cell whole", () => {
+        const [table] = renderRichMessage(source).blocks;
+        expect(table?.type).toBe("table");
+        expect(JSON.stringify(table)).toContain(source.includes("y".repeat(800)) ? "y".repeat(800) : "w".repeat(1600));
+      });
+
+      test("HTML mode: stacked key/value text with no pipes, no separator row and valid markup", () => {
+        const html = renderTelegramHtml(source);
+        expect(html).not.toContain("|");
+        expect(html).not.toContain("---");
+        expect(html).not.toContain("<pre>");
+        expect(html).toMatch(/^(a|note): /);
+        expect(html).toContain("\n\n");
+        expect(checkTelegramHtml(html).ok).toBe(true);
+      });
+
+      test("plain mode: the same stacked lines", () => {
+        const plain = renderPlainText(source);
+        expect(plain).not.toContain("|");
+        expect(plain).toMatch(/^(a|note): /);
+      });
+
+      test("splitting charges for the stacked layout, and every part renders with no raw pipes", () => {
+        const many = [source, ...source.split("\n").slice(2)].join("\n");
+        const parts = formatReply(many, 4096);
+        expect(parts.length).toBeGreaterThan(1);
+        for (const part of parts) {
+          expect(renderedLength(part)).toBeLessThanOrEqual(4096);
+          const html = renderTelegramHtml(part);
+          expect(html).not.toContain("|");
+          expect(html.length).toBeLessThanOrEqual(4096 + 200);
+        }
+      });
+    });
+  }
+
+  test("a stacked row with empty cells leaves them out", () => {
+    const html = renderTelegramHtml(["| a | b |", "|---|---|", `| ${"x".repeat(2000)} |  |`].join("\n"));
+    expect(html).toBe(`a: ${"x".repeat(2000)}`);
   });
 });

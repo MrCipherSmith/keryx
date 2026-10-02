@@ -469,6 +469,16 @@ describe("visualWidth", () => {
     expect(visualWidth("a日")).toBe(3);
     expect(visualWidth("✓")).toBe(1); // narrow symbol stays 1
     expect(visualWidth("🙂")).toBe(2); // one wide glyph, not two UTF-16 units
+    expect(visualWidth("🚀")).toBe(2); // transport block U+1F680
+    expect(visualWidth("🩺")).toBe(2); // extended pictographs U+1FA7A
+    expect(visualWidth("✅")).toBe(2); // U+2705
+    expect(visualWidth("❌")).toBe(2); // U+274C
+    expect(visualWidth("⭐")).toBe(2);
+    expect(visualWidth("✔")).toBe(1); // text-presentation check stays narrow
+    expect(visualWidth("a🚀b")).toBe(4);
+    expect(visualWidth("👍🏽")).toBe(2); // skin tone adds no column
+    expect(visualWidth("👨‍👩‍👧")).toBe(2); // a joiner sequence is one glyph
+    expect(visualWidth("🇩🇪")).toBe(2); // a flag is two indicators
   });
 
   test("zero-width marks add nothing", () => {

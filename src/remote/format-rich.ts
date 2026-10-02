@@ -233,7 +233,8 @@ export function containsTable(part: string): boolean {
 
 function tableBlock(table: { header: string[]; align: ("left" | "center" | "right")[]; rows: string[][] }): InputRichBlock {
   const cell = (text: string, column: number, header: boolean): RichBlockTableCell => {
-    const content = inline(text);
+    // A line break in a cell is a space, as in the HTML and plain layouts.
+    const content = inline(text.replace(/<br\s*\/?>/gi, " ").trim());
     return {
       ...(isEmpty(content) ? {} : { text: content }),
       ...(header ? { is_header: true as const } : {}),

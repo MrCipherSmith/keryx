@@ -11,6 +11,18 @@ function blocks(text: string): InputRichBlock[] {
 }
 
 describe("renderRichMessage: tables (AC2)", () => {
+  test("a <br> inside a cell is a space, as in the HTML and plain layouts", () => {
+    const table = blocks("| h<br/>1 | h2 |\n|---|---|\n| x<br>y | a<BR />b |")[0];
+    if (table?.type !== "table") {
+      throw new Error("not a table");
+    }
+    const text = (row: number, column: number): string => JSON.stringify(table.cells[row]?.[column]?.text);
+    expect(text(1, 0)).toBe('"x y"');
+    expect(text(1, 1)).toBe('"a b"');
+    expect(text(0, 0)).toBe('"h 1"');
+    expect(JSON.stringify(table)).not.toMatch(/<br/i);
+  });
+
   const TABLE = "| Name | Result | N |\n|:--|:-:|--:|\n| a | `ok` | 1 |\n| **b** | fail | 22 |";
 
   test("a table is one native table block, never raw pipes", () => {

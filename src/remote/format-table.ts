@@ -35,7 +35,11 @@ export interface TableMatch {
 
 /** A table of more columns than this is left as text: the rich renderer takes at most 20. */
 export const MAX_TABLE_COLUMNS = 20;
-/** A table with a row longer than this (rendered, in UTF-16 units) is not treated as a table. */
+/**
+ * A table with a row longer than this (rendered aligned, in UTF-16 units) is not laid out as padded
+ * columns: every cell is padded to its column's widest, so one long cell makes every row that long.
+ * It is still a table (rich mode draws it natively) and the text modes lay it out stacked.
+ */
 export const MAX_TABLE_ROW_COST = 1500;
 
 const SEPARATOR_CELL = /^\s*(:)?-+(:)?\s*$/;
@@ -129,14 +133,7 @@ export function tableAt(lines: readonly string[], start: number): TableMatch | u
     rows.push(fitRow(cells, header.length));
     end += 1;
   }
-  const table: MarkdownTable = { header, align, rows };
-  // A table whose rows cannot fit a message beside a repeated header stays text: the splitter could
-  // not keep a row whole, and rendered it could outgrow the limit.
-  const widths = columnWidths(table);
-  if ([header, ...rows].some((cells) => renderedRowCost(cells, widths) > MAX_TABLE_ROW_COST)) {
-    return undefined;
-  }
-  return { table, end };
+  return { table: { header, align, rows }, end };
 }
 
 /** Visible text of one cell: emphasis markers, code ticks and link syntax removed. */
@@ -182,12 +179,53 @@ export function renderTableRow(cells: readonly string[], widths: readonly number
     .trimEnd();
 }
 
+/** How the text modes lay a table out. Rich mode always draws a native table instead. */
+export type TableLayout = "aligned" | "stacked";
+
+function alignedCosts(table: MarkdownTable): { header: number; rows: number[] } {
+  const widths = columnWidths(table);
+  return { header: renderedRowCost(table.header, widths), rows: table.rows.map((row) => renderedRowCost(row, widths)) };
+}
+
+/** Aligned columns while every row stays within `MAX_TABLE_ROW_COST`, stacked rows otherwise. */
+export function tableLayout(table: MarkdownTable): TableLayout {
+  const costs = alignedCosts(table);
+  return [costs.header, ...costs.rows].some((cost) => cost > MAX_TABLE_ROW_COST) ? "stacked" : "aligned";
+}
+
+/** The "Header: value" lines of one body row, empty cells left out. */
+function stackedRowLines(table: MarkdownTable, row: readonly string[]): string[] {
+  const lines: string[] = [];
+  row.forEach((cell, column) => {
+    const text = plainCell(cell);
+    if (text.length > 0) {
+      lines.push(`${plainCell(table.header[column] as string)}: ${text}`);
+    }
+  });
+  return lines.length > 0 ? lines : ["(empty)"];
+}
+
 /**
- * The table as aligned monospace lines: header row, then body rows, columns separated by ` │ `.
- * `widths` defaults to the table's own.
+ * The stacked layout: each body row is a block of "Header: value" lines, blocks separated by a blank
+ * line. A table with no body rows is its header cells on one line.
  */
-export function renderTableLines(table: MarkdownTable, widths: readonly number[] = columnWidths(table)): string[] {
-  return [table.header, ...table.rows].map((row) => renderTableRow(row, widths, table.align));
+export function renderStackedLines(table: MarkdownTable): string[] {
+  if (table.rows.length === 0) {
+    return [table.header.map(plainCell).join(COLUMN_GAP).trim()];
+  }
+  return table.rows.flatMap((row, index) => (index === 0 ? stackedRowLines(table, row) : ["", ...stackedRowLines(table, row)]));
+}
+
+/**
+ * The table as monospace lines for the text modes: aligned columns, or stacked rows when a row would
+ * be too long aligned. Passing `widths` forces the aligned layout.
+ */
+export function renderTableLines(table: MarkdownTable, widths?: readonly number[]): string[] {
+  if (widths === undefined && tableLayout(table) === "stacked") {
+    return renderStackedLines(table);
+  }
+  const use = widths ?? columnWidths(table);
+  return [table.header, ...table.rows].map((row) => renderTableRow(row, use, table.align));
 }
 
 export function renderTableText(table: MarkdownTable, widths?: readonly number[]): string {
@@ -209,4 +247,28 @@ export function renderedRowCost(cells: readonly string[], widths: readonly numbe
     }
   });
   return cost;
+}
+
+/**
+ * What the splitter charges for the header row and for each body row. The parts are Markdown, and
+ * each part is laid out again on its own, so a part of a stacked table whose rows are short may come
+ * out aligned: the charge for a row of a stacked table is the larger of its stacked cost and its
+ * aligned cost capped at `MAX_TABLE_ROW_COST` (an aligned part never holds a longer row), which holds
+ * for either layout.
+ */
+export function tableCosts(table: MarkdownTable): { header: number; rows: number[] } {
+  const aligned = alignedCosts(table);
+  if (tableLayout(table) === "aligned") {
+    return aligned;
+  }
+  return {
+    header: Math.min(aligned.header, MAX_TABLE_ROW_COST),
+    rows: table.rows.map((row, index) => {
+      let stacked = 1;
+      stackedRowLines(table, row).forEach((line) => {
+        stacked += line.length + 1;
+      });
+      return Math.max(stacked, Math.min(aligned.rows[index] as number, MAX_TABLE_ROW_COST));
+    }),
+  };
 }

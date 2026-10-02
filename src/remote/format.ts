@@ -34,7 +34,7 @@
 //     parts serve every rendering mode (the rich table block is never longer than the padded one).
 
 import { RULE, RULE_LENGTH } from "./format-blocks";
-import { columnWidths, renderedRowCost, tableAt } from "./format-table";
+import { tableAt, tableCosts } from "./format-table";
 import { TELEGRAM_MAX_TEXT } from "./types";
 
 /** Smallest limit the splitter accepts: room for a label, a fence and some text. */
@@ -139,9 +139,9 @@ function toPieces(text: string, capacity: number): Piece[] {
       if (fence === undefined) {
         const found = tableAt(bare, at);
         if (found !== undefined) {
-          const widths = columnWidths(found.table);
-          const headerCost = renderedRowCost(found.table.header, widths);
-          const widest = Math.max(...found.table.rows.map((row) => renderedRowCost(row, widths)), 0);
+          const costs = tableCosts(found.table);
+          const headerCost = costs.header;
+          const widest = Math.max(...costs.rows, 0);
           if (headerCost + widest <= capacity) {
             const run: TableRun = { headerSource: `${raw}${raws[at + 1] as string}`, headerCost };
             // The header, the separator and the first row go together: a part is never only a header.
@@ -150,11 +150,11 @@ function toPieces(text: string, capacity: number): Piece[] {
             pieces.push({
               text: raws.slice(at, leadEnd).join(""),
               fence: undefined,
-              cost: headerCost + (rows[0] === undefined ? 0 : renderedRowCost(rows[0], widths)),
+              cost: headerCost + (costs.rows[0] ?? 0),
               table: run,
             });
             for (let row = leadEnd; row < found.end; row += 1) {
-              pieces.push({ text: raws[row] as string, fence: undefined, cost: renderedRowCost(rows[row - at - 2] as string[], widths), table: run });
+              pieces.push({ text: raws[row] as string, fence: undefined, cost: costs.rows[row - at - 2] as number, table: run });
             }
             at = found.end - 1;
             continue;

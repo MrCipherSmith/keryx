@@ -34,7 +34,7 @@
 import { closesFence, fenceOpening } from "./format";
 import { BULLET, CHECKED_BOX, HEADING, QUOTE, RULE, RULE_GLYPH, RULE_LENGTH, TASK, UNCHECKED_BOX } from "./format-blocks";
 import { renderPlainText } from "./format-plain";
-import { renderTableText, tableAt } from "./format-table";
+import { renderTableLines, tableAt, tableLayout } from "./format-table";
 import { type BotApi, type InlineKeyboard, isBotApiError, type SendMessageParams } from "./types";
 
 export function escapeHtml(text: string): string {
@@ -330,7 +330,9 @@ export function renderTelegramHtml(part: string): string {
 
     const found = tableAt(lines, index);
     if (found !== undefined) {
-      push(`<pre>${escapeHtml(renderTableText(found.table))}</pre>`, true);
+      // Aligned columns need a monospace block; a stacked table is running text and wraps as such.
+      const text = escapeHtml(renderTableLines(found.table).join("\n"));
+      push(tableLayout(found.table) === "aligned" ? `<pre>${text}</pre>` : text, true);
       index = found.end;
       continue;
     }
