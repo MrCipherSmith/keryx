@@ -1,0 +1,340 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "387",
+  "slug": "shell-token-economy",
+  "title": "keryx shell spends fewer tokens than competing harnesses without losing quality",
+  "status": "in-progress",
+  "createdAt": "2026-10-02T06:02:04.112Z",
+  "updatedAt": "2026-10-02T06:14:26.415Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:812719ec7ef7651e635e66a2dffb9b251bb0bb80d75fa866346a0f9edb042ada",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "Aleksandr Tsaitler",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context.md holds code sites and the 15-harness competitor study"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into specific tasks T5-T11 per plan.md"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Codex prompt_cache_key = session id + live probe (AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Codex context window from /models + overflow compact-and-retry (AC1, AC2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Usage-anchored request estimate incl. reasoning bytes (AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Operator-turn accounting + merged summary in compaction (AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Single Anchors block with delta updates (AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Spill large tool output to session file (AC7)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Prune old tool outputs behind protected window, prune before compact (AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Synthetic session-shape replay fixture and before/after numbers (AC9)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T06:02:04.112Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T06:07:05.603Z",
+      "event": "task-added",
+      "detail": "T5: Codex prompt_cache_key = session id + live probe (AC8)"
+    },
+    {
+      "at": "2026-10-02T06:07:09.973Z",
+      "event": "task-added",
+      "detail": "T6: Codex context window from /models + overflow compact-and-retry (AC1, AC2)"
+    },
+    {
+      "at": "2026-10-02T06:07:10.730Z",
+      "event": "task-added",
+      "detail": "T7: Usage-anchored request estimate incl. reasoning bytes (AC3)"
+    },
+    {
+      "at": "2026-10-02T06:07:11.484Z",
+      "event": "task-added",
+      "detail": "T8: Operator-turn accounting + merged summary in compaction (AC5)"
+    },
+    {
+      "at": "2026-10-02T06:07:12.257Z",
+      "event": "task-added",
+      "detail": "T9: Single Anchors block with delta updates (AC4)"
+    },
+    {
+      "at": "2026-10-02T06:07:13.013Z",
+      "event": "task-added",
+      "detail": "T10: Spill large tool output to session file (AC7)"
+    },
+    {
+      "at": "2026-10-02T06:07:13.803Z",
+      "event": "task-added",
+      "detail": "T11: Prune old tool outputs behind protected window, prune before compact (AC6)"
+    },
+    {
+      "at": "2026-10-02T06:07:14.561Z",
+      "event": "task-added",
+      "detail": "T12: Synthetic session-shape replay fixture and before/after numbers (AC9)"
+    },
+    {
+      "at": "2026-10-02T06:07:15.422Z",
+      "event": "task-added",
+      "detail": "T13: Comparative benchmark: cached/uncached tokens + success rate vs codex CLI and opencode (AC10, AC11)"
+    },
+    {
+      "at": "2026-10-02T06:07:21.143Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T06:07:21.934Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T06:14:21.698Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T06:14:26.415Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    }
+  }
+}
