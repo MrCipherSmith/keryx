@@ -24,7 +24,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadTriggersConfig, triggerEntryProblems, type AgentTaskAction, type ConfirmedRunner, type TriggerEntry } from "./config";
 import { nextCronRuns, parseCadence } from "./cron";
-import { grantedToolSpec } from "./granted-tools";
+import { DIGEST_DEFAULT_REPOS, DIGEST_DEFAULT_TOPIC, DIGEST_DEFAULT_MEMORY_MB } from "./digest-config";
+import { DIGEST_TOOL_IDS, grantedToolSpec } from "./granted-tools";
 import {
   currentRunner,
   installSchedule,
@@ -80,6 +81,12 @@ export interface ScheduleRequest {
   readonly ports?: readonly number[];
   readonly tools?: readonly string[];
   readonly repos?: readonly string[];
+  /**
+   * Flow 389: make this schedule a GitHub and board digest. The entry then carries
+   * `action.digest`, grants only the read-only digest tools, and is fired by `keryx serve`
+   * (no OS timer). `prompt` is unused by a digest and may be empty.
+   */
+  readonly digest?: { readonly topic?: string; readonly memoryLimitMb?: number };
 }
 
 export interface DraftContext {
@@ -179,7 +186,9 @@ function defaultAccountOf(): (program: string, bin: string) => Promise<string | 
 export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext): Promise<DraftResult> {
   const cadence = parseCadence(request.cadence);
   if (!cadence.ok) return { ok: false, problems: [`cadence: ${cadence.reason}`] };
-  const tools = [...(request.tools ?? [])];
+  const isDigest = request.digest !== undefined;
+  const tools = isDigest && (request.tools ?? []).length === 0 ? [...DIGEST_TOOL_IDS] : [...(request.tools ?? [])];
+  const repos = isDigest && (request.repos ?? []).length === 0 ? [...DIGEST_DEFAULT_REPOS] : [...(request.repos ?? [])];
   const programs = [...new Set(tools.map((id) => grantedToolSpec(id)?.program).filter((p): p is string => p !== undefined))];
   const resolve = ctx.resolveProgram ?? ((p: string) => resolveOnPath(p));
   const bins: Record<string, string> = {};
@@ -238,7 +247,7 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
   }
   const action: Record<string, unknown> = {
     kind: "agent-task",
-    prompt: request.prompt,
+    prompt: request.prompt.trim().length > 0 ? request.prompt : isDigest ? "Scheduled GitHub and board digest" : request.prompt,
     dispatch: {
       provider: request.provider,
       model: request.model,
@@ -252,11 +261,19 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
       domains: [...(request.domains ?? [])],
       ...(request.ports !== undefined ? { ports: [...request.ports] } : {}),
       tools,
-      repos: [...(request.repos ?? [])],
+      repos,
       bins,
       binDigests,
       ...(accounts.length > 0 ? { account: accounts.join("; ") } : {}),
     },
+    ...(request.digest !== undefined
+      ? {
+          digest: {
+            topic: request.digest.topic ?? DIGEST_DEFAULT_TOPIC,
+            memoryLimitMb: request.digest.memoryLimitMb ?? DIGEST_DEFAULT_MEMORY_MB,
+          },
+        }
+      : {}),
   };
   const entry: Record<string, unknown> = {
     name: request.name,
@@ -281,13 +298,15 @@ export async function draftSchedule(request: ScheduleRequest, ctx: DraftContext)
     nextRuns,
     plan,
     linger,
-    card: renderCard({ request, cron: cadence.cron, phrase: cadence.phrase, nextRuns, bins, wrappers, accounts, plan, linger }),
+    card: renderCard({ request, tools, repos, cron: cadence.cron, phrase: cadence.phrase, nextRuns, bins, wrappers, accounts, plan, linger }),
   };
   return { ok: true, draft };
 }
 
 function renderCard(input: {
   request: ScheduleRequest;
+  tools: readonly string[];
+  repos: readonly string[];
   cron: string;
   phrase: string;
   nextRuns: readonly Date[];
@@ -302,7 +321,8 @@ function renderCard(input: {
   const network = request.network ?? "off";
   const domains = request.domains ?? [];
   const ports = request.ports;
-  const tools = request.tools ?? [];
+  const tools = input.tools;
+  const digest = request.digest;
   const lingerLine =
     plan.backend === "systemd"
       ? input.linger === "yes"
@@ -317,7 +337,9 @@ function renderCard(input: {
     `Schedule "${request.name}" — confirm to store it and install a background timer`,
     `cadence: ${input.cron}${input.phrase !== input.cron ? ` (${input.phrase})` : ""}`,
     `next runs: ${input.nextRuns.map((d) => d.toISOString()).join(", ") || "none within a year"}`,
-    `prompt: ${request.prompt}`,
+    digest !== undefined
+      ? `digest: GitHub (read-only) and the product board for ${input.repos.join(", ")}; delivered to this project's remote session topic, or the "${digest.topic ?? DIGEST_DEFAULT_TOPIC}" topic when it has none; memory limit ${digest.memoryLimitMb ?? DIGEST_DEFAULT_MEMORY_MB} MiB`
+      : `prompt: ${request.prompt}`,
     `runner: ${request.provider}/${request.model}, mode ${request.permissionMode ?? "ask"}${(request.permissionMode ?? "ask") === "trust" ? " (the agent can run shell commands in the sandbox)" : " (read-only: every command is denied)"}`,
     `budget: ceiling $${request.ceilingUsd} for this schedule (the project-wide ceiling also applies), max ${request.maxSeconds ?? 600}s per run, rates $${request.rates.inputUsdPerMTok}/$${request.rates.outputUsdPerMTok} per M tokens in/out`,
     `network: ${
@@ -338,10 +360,10 @@ function renderCard(input: {
       ([program, interpreter]) =>
         `  ${program}: script wrapper ${input.bins[program]} (interpreter ${interpreter}) — pinned; it runs from an empty directory, so it cannot see the project`,
     ),
-    ...(tools.length > 0 ? [`  repositories: ${(request.repos ?? []).join(", ")}`, `  account: ${input.accounts.join("; ") || "unknown"}`] : []),
-    `install: ${plan.backend} — ${plan.location}`,
-    `runs: ${plan.execStart}`,
-    lingerLine,
+    ...(tools.length > 0 ? [`  repositories: ${input.repos.join(", ")}`, `  account: ${input.accounts.join("; ") || "unknown"}`] : []),
+    ...(digest !== undefined
+      ? ["install: none — `keryx serve` runs this schedule (there is no OS timer); keep `keryx serve` running"]
+      : [`install: ${plan.backend} — ${plan.location}`, `runs: ${plan.execStart}`, lingerLine]),
     `signing key: ${scheduleKeyPath()} (outside the project; the installed timer is pinned to it)`,
     "the machine must be on; a missed run is caught up once at the next boot/wake (systemd Persistent=true, launchd) — never by cron",
   ].map(cardSafe);
@@ -378,6 +400,10 @@ export interface CreateResult {
  */
 export async function confirmSchedule(projectRoot: string, draft: ScheduleDraft, host: ScheduleHost = {}): Promise<CreateResult> {
   const stored = await addConfirmedSchedule(projectRoot, draft.entry);
+  // Flow 389: a digest is fired by `keryx serve`, so no OS timer is installed for it.
+  if ((draft.entry["action"] as { digest?: unknown } | undefined)?.digest !== undefined) {
+    return { name: stored.name, backend: "serve", unit: "keryx serve", confirmedHash: stored.confirmedHash };
+  }
   try {
     const installed = await installSchedule(projectRoot, stored.name, draft.cron, host, draft.entry["install"] as ConfirmedRunner);
     return { name: stored.name, backend: installed.backend, unit: installed.unit, confirmedHash: stored.confirmedHash };
@@ -431,7 +457,10 @@ export async function listSchedules(projectRoot: string, options: { host?: Sched
   const out: ScheduleSummary[] = [];
   for (const entry of scheduleEntries(projectRoot)) {
     const record = outcomes.get(entry.name);
-    const installed = await isScheduleInstalled(projectRoot, entry.name, entry.fire.cron, options.host ?? {}, entry.install).catch(() => false);
+    // A digest has no OS timer: `keryx serve` fires it, so "installed" is always true for it.
+    const installed =
+      entry.action.digest !== undefined ||
+      (await isScheduleInstalled(projectRoot, entry.name, entry.fire.cron, options.host ?? {}, entry.install).catch(() => false));
     out.push({
       name: entry.name,
       cron: entry.fire.cron,
@@ -465,6 +494,7 @@ function findSchedule(projectRoot: string, name: string): TriggerEntry & { actio
 export async function pauseStoredSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<void> {
   const entry = findSchedule(projectRoot, name);
   await setScheduleEnabled(projectRoot, name, false);
+  if (entry.action.digest !== undefined) return;
   await pauseSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
 }
 
@@ -480,7 +510,7 @@ export async function resumeStoredSchedule(projectRoot: string, name: string, ho
   if (entry.install === undefined) {
     throw new Error(`resume refused: schedule "${name}" has no confirmed runner recorded — remove it and create it again`);
   }
-  await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  if (entry.action.digest === undefined) await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
   await setScheduleEnabled(projectRoot, name, true);
 }
 
@@ -495,7 +525,7 @@ export async function scheduleVerification(projectRoot: string, name: string): P
 /** Remove: uninstall the timer (only our own files) and delete the entry. Callers confirm first. */
 export async function removeSchedule(projectRoot: string, name: string, host: ScheduleHost = {}): Promise<{ removed: readonly string[]; skipped: readonly string[] }> {
   const entry = findSchedule(projectRoot, name);
-  const result = await uninstallSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  const result = entry.action.digest !== undefined ? { removed: [], skipped: [] } : await uninstallSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
   await removeStoredSchedule(projectRoot, name);
   return result;
 }

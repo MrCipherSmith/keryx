@@ -241,8 +241,14 @@ const AVOIDABLE_SLACK = 15;
  * into the new `cli-registry.ts` when the route table split out of `cli.ts`
  * to break its cycle with `commands/help.ts`. Same one edge, same count —
  * `cli.ts` itself now imports nothing from core at all.
+ *
+ * `scheduler` joined in flow 389 with only unavoidable edges: the digest reads the
+ * schedule's grants, config, store and cron from `src/trigger/`, which has no
+ * `service.ts`. Its one door into the product module is closed on purpose — the
+ * digest asks a reader that `commands/product.ts` registers, because only that file
+ * may read the product index.
  */
-const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "mcp", "session", "tui"];
+const BYPASSING_ZONES = ["bus", "cli-registry.ts", "commands", "harness", "mcp", "scheduler", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {

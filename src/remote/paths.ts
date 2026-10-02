@@ -16,6 +16,7 @@ export const REMOTE_DIRNAME = "remote";
 export const BOT_TOKEN_FILE = "bot-token";
 export const REMOTE_CONFIG_FILE = "config.json";
 export const REGISTRY_FILE = "sessions.json";
+export const SERVICE_TOPICS_FILE = "service-topics.json";
 export const POLLER_STATE_FILE = "poller-state.json";
 export const OUTBOUND_FILE = "outbound.jsonl";
 export const REJECTED_JOURNAL_FILE = "rejected.jsonl";

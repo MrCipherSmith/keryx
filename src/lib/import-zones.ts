@@ -248,6 +248,12 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `lib/config-dir` and the network only through its single HTTP client file,
   // and only the shell (`tui/`, `commands/`) imports it, so it is a client-zone leaf.
   { segment: "remote", zone: "client" },
+  // The scheduled digest (flow 389): the serve-side ticker that fires the
+  // stored digest schedule, builds its read-only GitHub + product-index report
+  // and hands it to the remote hub. It builds ON the flow 295 agent-task and
+  // owns no project state of its own beyond its snapshot and delivery files,
+  // and only `commands/` and `tui/` import it, so it is a client-zone leaf.
+  { segment: "scheduler", zone: "client" },
   // Flow 387: tests that keep the docs in step with the code (the Telegram command lists against
   // `src/remote/command-gateway.ts`). It holds only tests, reads the markdown files, and imports a
   // client-zone module, so it is a client-zone leaf; nothing imports it.
