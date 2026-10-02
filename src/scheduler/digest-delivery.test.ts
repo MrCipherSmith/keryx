@@ -9,8 +9,11 @@
 // the fake Bot API, so the topic really is created, remembered and written to by serve's own path.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { readFile, rm } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { dispatchLockPath } from "../commands/trigger-dispatch";
+import { withFileLock } from "../lib/fs";
+import { ensureLocksDir } from "../lib/maintenance-lock";
 import { indexPath } from "../product/store";
 import { BotApiError } from "../remote/types";
 import { makeHarness, ManualClock, type Harness } from "../remote/remote.test-helpers";
@@ -273,6 +276,75 @@ describe("AC6: a gh or model failure is a report entry and a status line in the 
     clock.advance(backoffMs(1) + 1000);
     await flushDeliveries(env.root, name, sink, clock.now);
     expect(sink.sent[0]?.text).toContain("stopped — no source could be read");
+  });
+});
+
+describe("AC6: a refusal is a status line in the topic too", () => {
+  async function expectOneStatusLine(fragment: string): Promise<string> {
+    expect(sink.sent).toHaveLength(1);
+    const text = sink.sent[0]?.text ?? "";
+    expect(text.startsWith(`Digest ${name} stopped — `)).toBe(true);
+    expect(text).toContain(fragment);
+    expect(text.length).toBeLessThan(800);
+    expect(sink.sent[0]).toMatchObject({ via: "topic", to: "Digest" });
+    return text;
+  }
+
+  test("the pinned gh binary changed: the run is refused, nothing is read, and the topic is told", async () => {
+    await writeFile(env.ghBin, "#!/bin/sh\necho 'a different program'\n", "utf8");
+    await chmod(env.ghBin, 0o755);
+    const gh = quietGh();
+    await run(gh);
+
+    const record = await lastRecord();
+    expect(record.outcome).toBe("dispatch-refused");
+    expect(record.agentTask?.refusal).toBe("grants-changed");
+    expect(gh.calls).toHaveLength(0);
+    await expectOneStatusLine("refusing to run");
+    expect((await readDeliveryState(env.root, name)).last?.status).toBe("sent");
+  });
+
+  test("a second concurrent run is refused with a status line, and the first run is not disturbed", async () => {
+    await ensureLocksDir(env.root);
+    const gh = quietGh();
+    await withFileLock(dispatchLockPath(env.root, `schedule-${name}`), () => run(gh), { timeoutMs: 1000 });
+
+    const record = await lastRecord();
+    expect(record.agentTask?.refusal).toBe("dispatch-locked");
+    expect(gh.calls).toHaveLength(0);
+    await expectOneStatusLine("already running");
+  });
+
+  test("an unsafe scratch directory fails the run with a status line", async () => {
+    const saved = process.env["XDG_RUNTIME_DIR"];
+    const runtime = path.join(env.aside, "runtime");
+    await mkdir(path.join(runtime, "keryx-agent-tasks"), { recursive: true });
+    await chmod(path.join(runtime, "keryx-agent-tasks"), 0o755);
+    process.env["XDG_RUNTIME_DIR"] = runtime;
+    try {
+      const gh = quietGh();
+      await run(gh);
+      expect((await lastRecord()).outcome).toBe("failed");
+      expect(gh.calls).toHaveLength(0);
+      await expectOneStatusLine("not started");
+    } finally {
+      if (saved === undefined) delete process.env["XDG_RUNTIME_DIR"];
+      else process.env["XDG_RUNTIME_DIR"] = saved;
+    }
+  });
+
+  test("a refusal with no serve connected queues the line instead of losing it, and serve sends it on its next tick", async () => {
+    await writeFile(env.ghBin, "#!/bin/sh\necho 'a different program'\n", "utf8");
+    await chmod(env.ghBin, 0o755);
+    await run(quietGh(), { sink: null });
+
+    const state = await readDeliveryState(env.root, name);
+    expect(state.pending).toHaveLength(1);
+    expect(state.pending[0]?.text).toContain(`Digest ${name} stopped — refusing to run`);
+    expect(state.pending[0]?.topic).toBe("Digest");
+
+    await flushDeliveries(env.root, name, sink, clock.now);
+    expect(sink.sent[0]?.text).toContain("stopped — refusing to run");
   });
 });
 

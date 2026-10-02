@@ -2421,7 +2421,8 @@ closed, effect not checked" chain, in Telegram. See the guide
   `gh auth switch` or `gh auth login`. `gh` runs as the account the project path selects
   (`~/work/**` the work account, everything else the personal one).
 - **Limits.** `--ceiling` (dollars, for the optional model summary), `--max-seconds` (timeout)
-  and `--memory-mb` (memory, default 512). A run over a limit is stopped and reported.
+  and `--memory-mb` (memory growth during the run, default 512). A run over a limit is stopped
+  and reported.
 - **Baseline.** The first run only records a snapshot and is marked `baseline`; a later run with
   no changes has no items.
 - **Seeing it.** `list` and `show` print the digest, its next run, the last run's status and

@@ -35,11 +35,12 @@ import { withFileLock } from "../lib/fs";
 import { ensureLocksDir } from "../lib/maintenance-lock";
 import { buildOpenReport, checkStaleness, readIntentIndex, type OpenEntry } from "../product/service";
 import type { AgentTaskAction, TriggerEntry } from "../trigger/config";
+import { DIGEST_DEFAULT_TOPIC } from "../trigger/digest-config";
 import { DIGEST_TOOL_IDS } from "../trigger/granted-tools";
 import type { TriggerRunCost, TriggerRunOutcomeKind } from "../trigger/record";
 import { confirmedContentProblem, verifyGrantedBinaries } from "../trigger/schedule-verify";
 import { ensureTriggerDataIgnored, triggerReportsDir } from "../trigger/store";
-import { collectFromGithub, type CollectResult } from "./digest-collect";
+import { collectFromGithub, truncationNote, type CollectResult } from "./digest-collect";
 import { buildDigestContent, renderDigestText, type DigestContent, type DigestFailure } from "./digest-content";
 import { appendDeliveryLine, enqueueDelivery, flushDeliveries, type DigestSink } from "./digest-delivery";
 import { defaultGhRunner, ghEnvForProject, type GhRunner } from "./digest-gh";
@@ -105,6 +106,35 @@ function capForDelivery(text: string, reportPath: string | undefined): string {
   return `${text.slice(0, DELIVERY_TEXT_MAX - pointer.length)}${pointer}`;
 }
 
+/** A status line is short: a refusal reason can carry a long path list. */
+const REFUSAL_LINE_MAX = 600;
+
+/**
+ * A refusal (grants changed, a second concurrent run, an unsafe scratch directory) ends the run
+ * before there is any digest, but the slot is spent and the next fire is a whole cadence away. So
+ * the operator gets a short status line in the topic, the same way a stopped run does. Delivery
+ * never turns a refusal into an exception: the refusal itself is the result either way.
+ */
+async function announceRefusal(
+  projectRoot: string,
+  name: string,
+  topic: string | undefined,
+  runId: string,
+  reason: string,
+  result: AgentTaskResult,
+  deps: DigestDeps,
+  now: () => Date,
+): Promise<AgentTaskResult> {
+  try {
+    const line = `Digest ${name} stopped — ${reason.length > REFUSAL_LINE_MAX ? `${reason.slice(0, REFUSAL_LINE_MAX)}…` : reason}`;
+    await enqueueDelivery(projectRoot, name, { runId, text: line, topic: topic ?? DIGEST_DEFAULT_TOPIC }, now());
+    if (deps.sink !== undefined) await flushDeliveries(projectRoot, name, deps.sink, now);
+  } catch {
+    // the refusal is already the run's result; a status line that could not be queued is not a second failure
+  }
+  return result;
+}
+
 /** Run one digest. Same result shape as every other scheduled run, so `recordRun` and the history need nothing new. */
 export async function runDigestDispatch(
   projectRoot: string,
@@ -121,7 +151,8 @@ export async function runDigestDispatch(
     });
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("Timed out waiting for lock:")) {
-      return refusal(runId, "dispatch-locked", `digest "${entry.name}" is already running — refusing a second concurrent run. It runs again on the next fire.`, action);
+      const reason = `digest "${entry.name}" is already running — refusing a second concurrent run. It runs again on the next fire.`;
+      return announceRefusal(projectRoot, entry.name, action.digest?.topic, runId, reason, refusal(runId, "dispatch-locked", reason, action), deps, now);
     }
     throw error;
   }
@@ -136,25 +167,42 @@ async function runLocked(
   now: () => Date,
 ): Promise<AgentTaskResult> {
   const digest = action.digest;
-  if (digest === undefined) return refusal(runId, "grants-changed", `schedule "${entry.name}" has no digest block`, action);
+  if (digest === undefined) {
+    const reason = `schedule "${entry.name}" has no digest block`;
+    return announceRefusal(projectRoot, entry.name, undefined, runId, reason, refusal(runId, "grants-changed", reason, action), deps, now);
+  }
   const dispatch = action.dispatch;
   const env = deps.grantedEnv ?? process.env;
 
   // --- 1. refusals before anything runs -------------------------------------
   const changed = await confirmedContentProblem(projectRoot, entry);
-  if (changed !== undefined) return refusal(runId, changed.code, changed.reason, action);
+  if (changed !== undefined) {
+    return announceRefusal(projectRoot, entry.name, digest.topic, runId, changed.reason, refusal(runId, changed.code, changed.reason, action), deps, now);
+  }
   const binaries = await verifyGrantedBinaries(projectRoot, action, env["PATH"]);
-  if (!binaries.ok) return refusal(runId, "grants-changed", `refusing to run: ${binaries.reason}`, action);
+  if (!binaries.ok) {
+    const reason = `refusing to run: ${binaries.reason}`;
+    return announceRefusal(projectRoot, entry.name, digest.topic, runId, reason, refusal(runId, "grants-changed", reason, action), deps, now);
+  }
 
   const parent = await ensureScratchParent(agentTaskScratchParent());
   if (!parent.ok) {
-    return {
-      outcome: "failed",
-      detail: `digest "${entry.name}" not started: ${parent.reason}`,
-      cost: { recorded: false, reason: "no model was called — the scratch directory was not safe" },
-      agentTask: { runId, permissionMode: dispatch.permissionMode, network: action.grants.network },
-      exitCode: 1,
-    };
+    return announceRefusal(
+      projectRoot,
+      entry.name,
+      digest.topic,
+      runId,
+      `not started: ${parent.reason}`,
+      {
+        outcome: "failed",
+        detail: `digest "${entry.name}" not started: ${parent.reason}`,
+        cost: { recorded: false, reason: "no model was called — the scratch directory was not safe" },
+        agentTask: { runId, permissionMode: dispatch.permissionMode, network: action.grants.network },
+        exitCode: 1,
+      },
+      deps,
+      now,
+    );
   }
   const scratch = await mkdtemp(path.join(parent.dir, `${entry.name.replace(/[^A-Za-z0-9._-]/g, "-")}-`));
   // gh runs from this empty, keryx-owned directory (flow 295 N2), never from the project.
@@ -165,7 +213,7 @@ async function runLocked(
   const limits = startLimits({ maxSeconds: dispatch.maxSeconds, memoryLimitMb: digest.memoryLimitMb }, { ...(deps.armTimeout !== undefined ? { armTimeout: deps.armTimeout } : {}), ...(deps.limits ?? {}) });
 
   let crashed: string | undefined;
-  let collected: CollectResult = { items: [], failures: [], failedSources: new Set(), raw: [], calls: [], stopped: false };
+  let collected: CollectResult = { items: [], failures: [], failedSources: new Set(), truncatedSources: new Set(), raw: [], calls: [], stopped: false };
   let board: BoardRead = { items: [], chains: [] };
   let content: DigestContent | undefined;
   let text = "";
@@ -191,12 +239,21 @@ async function runLocked(
     if (!limits.checkpoint()) board = await readBoard(projectRoot);
 
     // --- 5. diff and content ------------------------------------------------------
-    const failures: DigestFailure[] = [...collected.failures, ...(board.failure !== undefined ? [board.failure] : []), ...(board.note !== undefined ? [{ source: "board", detail: board.note }] : [])];
+    const failures: DigestFailure[] = [
+      ...collected.failures,
+      ...[...collected.truncatedSources].map(truncationNote),
+      ...(board.failure !== undefined ? [board.failure] : []),
+      ...(board.note !== undefined ? [{ source: "board", detail: board.note }] : []),
+    ];
     const failedSources = new Set(collected.failedSources);
     if (board.failure !== undefined) failedSources.add("board");
+    // A source that answered with a full window (100 rows) is only partly seen: like a failed source it
+    // reports nothing as "gone" and keeps its previous entries, so an item that merely fell off the window
+    // is neither called closed now nor called new when it comes back.
+    const heldSources = new Set([...failedSources, ...collected.truncatedSources]);
     const items = [...collected.items, ...board.items];
     const previous = await readSnapshot(projectRoot, entry.name);
-    const diff = diffSnapshot(previous, items, failedSources);
+    const diff = diffSnapshot(previous, items, heldSources);
     baseline = diff.baseline;
     content = buildDigestContent({ items, diff, previous, failures, chains: board.chains, now: startedAt });
     text = renderDigestText(content, { name: entry.name, at: startedAt.toISOString() });
@@ -230,7 +287,7 @@ async function runLocked(
     // a source would call all of it "new" next time; neither is stored.
     const partialBaseline = diff.baseline && failedSources.size > 0;
     if (!limits.signal.aborted && !partialBaseline) {
-      await writeSnapshot(projectRoot, entry.name, nextSnapshot(previous, items, failedSources, startedAt.toISOString()));
+      await writeSnapshot(projectRoot, entry.name, nextSnapshot(previous, items, heldSources, startedAt.toISOString()));
     }
   } catch (error) {
     crashed = error instanceof Error ? error.message : String(error);

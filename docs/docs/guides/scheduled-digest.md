@@ -59,6 +59,11 @@ The digest names:
 - **every "PR merged, flow closed, effect not checked" chain** in the product index. These are
   listed on every run until the effect is checked, even when nothing else changed.
 
+Each list call reads at most 100 rows. A repository that answers with a full 100 rows may have
+more, so the digest says "truncated at 100", keeps what it knew about the older entries from the
+last digest, and reports none of them as closed or merged until a shorter answer shows the whole
+list.
+
 ### The first run is a baseline
 
 The first run has nothing to compare with, so it is marked `baseline`: it records the snapshot
@@ -76,6 +81,10 @@ bot client.
 - When the project has a live remote session, the digest goes into **that session's topic**.
 - Otherwise it goes into the service topic **Digest** (or the name you gave with `--topic`),
   which serve creates the first time it is needed.
+
+A run that is refused (the `gh` binary or the confirmed schedule changed, a second run of the same
+digest is already going, the scratch directory is not safe) also sends a short status line, so a
+missed digest is never silent.
 
 A delivery that fails is written in the report and retried with a growing delay, up to twelve
 attempts. A failure to read GitHub, or a model failure, writes an entry in the report and a
@@ -109,8 +118,10 @@ A run that goes over a limit is stopped and reported, in the report and in the t
   nothing, so a digest with no changes, or with no model, costs nothing.
 - **Time.** `--max-seconds` is the wall-clock timeout for the whole run, including `gh`.
   Each `gh` call also has a 30-second timeout and a 64 KB output cap.
-- **Memory.** `--memory-mb` is the resident memory the process running the digest (serve) may
-  use. keryx checks it after each step and every second while a call is in flight.
+- **Memory.** `--memory-mb` is how much the resident memory of the process running the digest
+  (serve) may **grow** during the run. keryx reads the size when the run starts, so a serve that
+  is already large does not trip every digest. It checks the growth after each step and every
+  second while a call is in flight.
 
 ## See it, pause it, run it now
 

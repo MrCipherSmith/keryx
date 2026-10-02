@@ -139,17 +139,43 @@ describe("AC7: the time limit", () => {
 });
 
 describe("AC7: the memory limit", () => {
-  test("a run over its memory limit at a checkpoint is stopped and reported with the numbers", async () => {
+  test("a run whose memory grew over its limit at a checkpoint is stopped and reported with the growth", async () => {
     name = await addDigestSchedule(env, { memoryLimitMb: 256 });
+    // serve is already 800 MiB when the run starts; the first gh call takes it to 1100 MiB: +300
+    let rss = 800;
     const fake = gh();
-    await runDigest(env, name, { runGh: fake.run, summarize: fakeSummary().summarize, now: clock.now, sink, limits: { rssMb: () => 900, armWatch: () => () => {} } });
+    fake.onCall = () => {
+      rss = 1100;
+    };
+    await runDigest(env, name, { runGh: fake.run, summarize: fakeSummary().summarize, now: clock.now, sink, limits: { rssMb: () => rss, armWatch: () => () => {} } });
 
     expect(fake.calls).toHaveLength(1);
     const record = await lastRecord();
     expect(record.outcome).toBe("failed");
-    expect(record.detail).toContain("memory limit exceeded (900 MiB used, limit 256 MiB)");
-    expect(await reportText()).toContain("memory limit exceeded (900 MiB used, limit 256 MiB)");
-    expect(sink.sent[0]?.text.split("\n")[0]).toBe("Digest morning stopped — memory limit exceeded (900 MiB used, limit 256 MiB)");
+    expect(record.detail).toContain("memory limit exceeded (the run grew by 300 MiB, limit 256 MiB)");
+    expect(await reportText()).toContain("memory limit exceeded (the run grew by 300 MiB, limit 256 MiB)");
+    expect(sink.sent[0]?.text.split("\n")[0]).toBe("Digest morning stopped — memory limit exceeded (the run grew by 300 MiB, limit 256 MiB)");
+  });
+
+  test("a host process that is already larger than the limit does not trip the run: only growth counts", async () => {
+    name = await addDigestSchedule(env, { memoryLimitMb: 256 });
+    const fake = gh();
+    // 4 GiB resident, flat for the whole run
+    await runDigest(env, name, { runGh: fake.run, summarize: fakeSummary().summarize, now: clock.now, sink, limits: { rssMb: () => 4096, armWatch: () => () => {} } });
+    expect(fake.calls).toHaveLength(4);
+    expect((await lastRecord()).outcome).toBe("ok");
+  });
+
+  test("the baseline is read once, when the limits start, and the limit is relative to it", () => {
+    let rss = 5000;
+    const limits = startLimits({ maxSeconds: 60, memoryLimitMb: 100 }, { armTimeout: () => () => {}, rssMb: () => rss, armWatch: () => () => {} });
+    rss = 5090;
+    expect(limits.checkpoint()).toBe(false);
+    rss = 5101;
+    expect(limits.checkpoint()).toBe(true);
+    expect(limits.tripped()).toBe("memory");
+    expect(limits.reason()).toBe("memory limit exceeded (the run grew by 101 MiB, limit 100 MiB)");
+    limits.dispose();
   });
 
   test("memory is also watched while a call is in flight: the watch fires, the run stops at the next step", async () => {
@@ -184,7 +210,7 @@ describe("AC7: the memory limit", () => {
     expect(watchEvery).toBe(1000);
     expect(watchStopped).toBe(1);
     expect(fake.calls).toHaveLength(1);
-    expect((await lastRecord()).detail).toContain("memory limit exceeded (700 MiB used, limit 256 MiB)");
+    expect((await lastRecord()).detail).toContain("memory limit exceeded (the run grew by 600 MiB, limit 256 MiB)");
   });
 
   test("a run within its limit is not stopped, and checks the number at every step without tripping", async () => {
@@ -199,7 +225,13 @@ describe("AC7: the memory limit", () => {
 
   test("the limit comes from the schedule's own memory limit, not a fixed number", async () => {
     name = await addDigestSchedule(env, { memoryLimitMb: 1000 });
-    await runDigest(env, name, { runGh: gh().run, summarize: fakeSummary().summarize, now: clock.now, sink, limits: { rssMb: () => 900, armWatch: () => () => {} } });
+    // 100 MiB at the start, 1000 MiB after the first call: +900, under 1000
+    let rss = 100;
+    const fake = gh();
+    fake.onCall = () => {
+      rss = 1000;
+    };
+    await runDigest(env, name, { runGh: fake.run, summarize: fakeSummary().summarize, now: clock.now, sink, limits: { rssMb: () => rss, armWatch: () => () => {} } });
     expect((await lastRecord()).outcome).toBe("ok");
   });
 });

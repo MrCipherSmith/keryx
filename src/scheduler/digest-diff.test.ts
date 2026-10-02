@@ -22,6 +22,7 @@ import {
   TestClock,
   type DigestTestEnv,
 } from "./digest.test-helpers";
+import { rowCount } from "./digest-collect";
 import { diffSnapshot, nextSnapshot, readSnapshot, snapshotPath, type DigestItem, type DigestSnapshot } from "./digest-snapshot";
 
 let env: DigestTestEnv;
@@ -181,6 +182,67 @@ describe("AC4: a source that could not be read is not mistaken for 'everything c
     expect(await readSnapshot(env.root, name)).toBeUndefined();
     const { text } = await run(ghWith([PR12]));
     expect(text).toContain("first run: baseline taken");
+  });
+});
+
+describe("AC4: a source that answers with a full window is only partly seen", () => {
+  const STAMP = "2026-10-01T09:00:00Z";
+  const window = (from: number, to: number): { number: number; title: string; updatedAt: string }[] =>
+    Array.from({ length: to - from + 1 }, (_, i) => ({ number: from + i, title: `PR ${from + i}`, updatedAt: STAMP }));
+
+  test("101 open PRs: one falls off the 100-row window, it is not reported as gone and not as new when it returns", async () => {
+    // baseline: the window holds PRs 1..100 (PR 101 exists but is not in it yet)
+    await run(ghWith(window(1, 100)));
+
+    // PR 1 falls off, PR 101 enters; the answer is a full window again
+    const second = await run(ghWith(window(2, 101)));
+    expect(second.text).toContain("truncated at 100");
+    expect(second.text).not.toContain("— closed or merged");
+    expect(second.text).not.toContain(`PR ${REPO}#1 `);
+    expect(second.text).toContain(`PR ${REPO}#101 "PR 101" by alice — new`);
+    expect(await lastDetail()).toContain("1 change(s)");
+
+    // PR 1 is back in the window with the same stamp: it is neither new nor updated
+    const third = await run(ghWith(window(1, 100)));
+    expect(third.text).toContain("truncated at 100");
+    expect(third.text).not.toContain(`PR ${REPO}#1 "PR 1"`);
+    expect(third.text).not.toContain("— new");
+    expect(third.text).not.toContain("— closed or merged");
+    const snapshot = await readSnapshot(env.root, name);
+    // the entries the window did not show are carried; nothing the digest knew was lost
+    expect(snapshot?.entries[`pr:${REPO}#101`]).toBe(STAMP);
+    expect(snapshot?.entries[`pr:${REPO}#1`]).toBe(STAMP);
+  });
+
+  test("a short answer is complete: PRs that left the list are reported as gone again, and no truncation note is shown", async () => {
+    await run(ghWith(window(1, 100)));
+    const { text } = await run(ghWith(window(1, 3)));
+    expect(text).not.toContain("truncated at 100");
+    expect(text).toContain(`PR ${REPO}#50 — closed or merged`);
+  });
+
+  test("only the truncated source is held back: a PR on another source is still reported as gone", async () => {
+    await run(ghWith(window(1, 100)));
+    // the issue list is short and complete, so its issue leaving is a real change
+    const { text } = await run(ghWith(window(1, 100), []));
+    expect(text).toContain("truncated at 100");
+    expect(text).toContain(`issue ${REPO}#40 — closed or merged`);
+    expect(text).not.toContain(`PR ${REPO}#`);
+  });
+
+  test("the diff and the snapshot treat a held source like a failed one", () => {
+    const item = (id: string): DigestItem => ({ key: `pr:${REPO}#${id}`, kind: "pr", repo: REPO, id, title: `PR ${id}`, stamp: "a" });
+    const previous = nextSnapshot(undefined, [item("1"), item("2")], new Set(), "t0");
+    const held = new Set([`pr:${REPO}`]);
+    expect(diffSnapshot(previous, [item("2"), item("3")], held).gone).toEqual([]);
+    expect(Object.keys(nextSnapshot(previous, [item("2"), item("3")], held, "t1").entries).sort()).toEqual([`pr:${REPO}#1`, `pr:${REPO}#2`, `pr:${REPO}#3`]);
+  });
+
+  test("rowCount counts the rows of a JSON list and is 0 for anything else", () => {
+    expect(rowCount("[]")).toBe(0);
+    expect(rowCount(JSON.stringify([{}, 1, null]))).toBe(3);
+    expect(rowCount("not json")).toBe(0);
+    expect(rowCount("{}")).toBe(0);
   });
 });
 

@@ -23,7 +23,7 @@ import { DIGEST_TOOL_IDS } from "./granted-tools";
 export const DIGEST_DEFAULT_TOPIC = "Digest";
 /** The repository a first-version digest watches. More are config (`grants.repos`). */
 export const DIGEST_DEFAULT_REPOS: readonly string[] = ["MrCipherSmith/keryx"];
-/** Default resident-memory ceiling of one run, in MiB. */
+/** Default ceiling of one run's resident-memory growth, in MiB. */
 export const DIGEST_DEFAULT_MEMORY_MB = 512;
 
 const TOPIC_MAX = 128;
@@ -33,7 +33,7 @@ const MEMORY_MAX_MB = 16_384;
 export interface DigestConfig {
   /** Name of the service topic used when the project has no remote session. */
   readonly topic: string;
-  /** A run whose resident memory passes this is stopped and reported. */
+  /** A run whose resident memory grows by more than this since it started is stopped and reported. */
   readonly memoryLimitMb: number;
 }
 

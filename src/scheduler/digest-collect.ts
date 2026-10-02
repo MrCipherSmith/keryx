@@ -28,7 +28,8 @@ const KIND_OF_TOOL: Readonly<Record<string, DigestSourceKind>> = {
 };
 
 /** Rows asked of each list call. The catalogue caps it at 999. */
-const ROWS = "100";
+export const DIGEST_ROWS = 100;
+const ROWS = String(DIGEST_ROWS);
 /** Raw answers kept in the report, per call. */
 export const RAW_REPORT_CHARS = 20_000;
 
@@ -45,6 +46,12 @@ export interface CollectResult {
   readonly failures: readonly DigestFailure[];
   /** `pr:<repo>`, ... — sources that could not be read, so the diff does not mistake them for "gone". */
   readonly failedSources: ReadonlySet<string>;
+  /**
+   * Sources that answered with as many rows as were asked for (`DIGEST_ROWS`): the answer may be
+   * only the newest part of a longer list. The snapshot keeps their previous entries and the diff
+   * reports none of them as "gone", exactly like a failed source, but this run's items still count.
+   */
+  readonly truncatedSources: ReadonlySet<string>;
   readonly raw: readonly RawAnswer[];
   readonly calls: readonly GrantedCallRecord[];
   /** True when a limit stopped the collection before every source was read. */
@@ -71,6 +78,24 @@ function str(value: unknown): string | undefined {
 
 function login(value: unknown): string | undefined {
   return str(record(value)?.["login"]);
+}
+
+/** How many rows the answer held, counting rows `parseDigestItems` skips. 0 for an answer that is not a JSON list. */
+export function rowCount(stdout: string): number {
+  try {
+    const data: unknown = JSON.parse(stdout);
+    return Array.isArray(data) ? data.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The note a truncated source puts in the digest. */
+export function truncationNote(source: string): DigestFailure {
+  return {
+    source,
+    detail: `truncated at ${DIGEST_ROWS} — only ${DIGEST_ROWS} rows were read, so older entries are kept from the last digest and none is reported as closed or merged`,
+  };
 }
 
 /** Parse one tool's JSON answer. Returns the items, or the reason the answer is unusable. */
@@ -122,6 +147,7 @@ export async function collectFromGithub(input: CollectInput): Promise<CollectRes
   const items: DigestItem[] = [];
   const failures: DigestFailure[] = [];
   const failedSources = new Set<string>();
+  const truncatedSources = new Set<string>();
   const raw: RawAnswer[] = [];
   const calls: GrantedCallRecord[] = [];
   const tools = DIGEST_TOOL_IDS.filter((id) => action.grants.tools.includes(id));
@@ -175,8 +201,9 @@ export async function collectFromGithub(input: CollectInput): Promise<CollectRes
         failedSources.add(source);
         continue;
       }
+      if (rowCount(result.stdout) >= DIGEST_ROWS) truncatedSources.add(source);
       items.push(...parsed);
     }
   }
-  return { items, failures, failedSources, raw, calls, stopped };
+  return { items, failures, failedSources, truncatedSources, raw, calls, stopped };
 }

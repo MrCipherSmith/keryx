@@ -63,7 +63,8 @@ export function kindOfKey(key: string): DigestSourceKind {
 
 /**
  * Compare this run's items with the previous snapshot.
- * `failedSources` names the sources (`pr:<repo>`, `board`, ...) that could not be read this run.
+ * `failedSources` names the sources (`pr:<repo>`, `board`, ...) that could not be read this run, or
+ * that were read only in part (an answer of a full 100-row window): none of their previous entries is "gone".
  */
 export function diffSnapshot(previous: DigestSnapshot | undefined, items: readonly DigestItem[], failedSources: ReadonlySet<string>): DigestDiff {
   if (previous === undefined) return { baseline: true, added: [], updated: [], gone: [] };
@@ -84,7 +85,7 @@ export function diffSnapshot(previous: DigestSnapshot | undefined, items: readon
   return { baseline: false, added, updated, gone };
 }
 
-/** The snapshot to store after this run: this run's items, plus the previous entries of every source that failed. */
+/** The snapshot to store after this run: this run's items, plus the previous entries of every source that failed or was read only in part. */
 export function nextSnapshot(
   previous: DigestSnapshot | undefined,
   items: readonly DigestItem[],

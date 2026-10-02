@@ -4,9 +4,10 @@
 //           summary; it is reserved under the project-wide spend lock and metered
 //           (flow 295's `reserveTriggerSpend` and `createSpendMeter`). Reaching the
 //           reservation stops the call. The tool calls cost nothing.
-//   memory  `action.digest.memoryLimitMb`, checked against this process's resident
-//           set at every checkpoint (after each repository and each step) and on an
-//           interval while a call is in flight.
+//   memory  `action.digest.memoryLimitMb`, checked against how much this process's
+//           resident set has GROWN since the run started (so the size of the host
+//           serve does not matter), at every checkpoint (after each repository and
+//           each step) and on an interval while a call is in flight.
 //   time    the dispatch `maxSeconds`, through the same `armTimeout` seam the
 //           other scheduled runs use.
 //
@@ -21,7 +22,7 @@ export type LimitKind = "timeout" | "memory" | "spend";
 
 export interface DigestLimitDeps {
   readonly armTimeout?: (ms: number, fire: () => void) => () => void;
-  /** Resident memory of this process in MiB. */
+  /** Resident memory of this process in MiB. The limit applies to its growth since `startLimits` read it. */
   readonly rssMb?: () => number;
   /** Start a repeating memory check; returns the stop function. Default: `setInterval`, unref'd. */
   readonly armWatch?: (fire: () => void, everyMs: number) => () => void;
@@ -58,6 +59,10 @@ export function startLimits(
   let tripped: LimitKind | undefined;
   let detail = "";
   const rss = deps.rssMb ?? ((): number => process.memoryUsage().rss / (1024 * 1024));
+  // The limit is on GROWTH since the run started, not on the whole process: a serve that is
+  // already large (it holds the Telegram connection, every project's state) must not trip
+  // every digest, and a digest must not get a bigger allowance just because serve is small.
+  const startMb = rss();
 
   const trip = (kind: LimitKind, why: string): void => {
     if (tripped !== undefined) return;
@@ -67,8 +72,8 @@ export function startLimits(
   };
   const checkMemory = (): void => {
     if (tripped !== undefined) return;
-    const used = rss();
-    if (used > limits.memoryLimitMb) trip("memory", `memory limit exceeded (${Math.round(used)} MiB used, limit ${limits.memoryLimitMb} MiB)`);
+    const grown = rss() - startMb;
+    if (grown > limits.memoryLimitMb) trip("memory", `memory limit exceeded (the run grew by ${Math.round(grown)} MiB, limit ${limits.memoryLimitMb} MiB)`);
   };
 
   const disarmTimeout = (deps.armTimeout ?? defaultArmTimeout)(limits.maxSeconds * 1000, () => trip("timeout", `timed out after ${limits.maxSeconds}s`));
