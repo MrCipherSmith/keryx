@@ -710,9 +710,10 @@ Grouped by what you are trying to do, not by internal module layout.
   reason (offered once, never holding the answer back: `/decisions reason`).
   One question in three is asked blind (no "recommended" mark, random order,
   revealed after the answer, changeable with `/decisions change`), never for
-  release, publish, deploy, delete or push, nor for merge, drop, remove or force
-  next to main, production, a branch or a table (agents pass `--action` for the
-  irreversible ones).
+  release, ship, publish, deploy, delete or push, nor for merge, drop, remove or
+  force next to main, production, a branch or a table, or with no real object
+  ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for
+  the irreversible ones, and the report counts how often blind was refused.
   `keryx decisions report` prints the match share by mode and stage and the
   deviations, with no model; `keryx decisions open|answer|reason` lets any agent
   or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the

@@ -39,10 +39,15 @@ A question about something on the **irreversible list** is never blind. The list
 two tiers, so that ordinary coding questions ("merge these two helpers", "drop an
 unused import", "remove dead code", "force a type") are not mistaken for a release:
 
-- **Strong terms always count**: `release`, `publish`, `unpublish`, `deploy`,
-  `delete`, `push`, `destroy`, `wipe`, `purge`, with the Russian roots `релиз`,
-  `удал`, `пуш`, `опублик`, `деплой`, `выкат` (a Russian root matches inside a
-  word, so `запушить` counts). Add your own words in
+- **Strong terms always count**: `release`, `ship`, `publish`, `unpublish`,
+  `deploy`, `rollout` / `roll out`, `promote`, `go live`, `delete`, `push`,
+  `destroy`, `wipe`, `purge`, with the Russian roots `релиз`, `выпуск` / `выпуст`,
+  `залить` / `залей`, `накат`, `удал`, `пуш`, `опублик`, `деплой`, `выкат` (a
+  Russian root matches inside a word, so `запушить` counts). Strong patterns
+  count too: `git reset --hard`, `clean -f`, `checkout --`, `rm -rf`,
+  `branch -D`, `--force`, tagging a version (`tag v1.4.0`, `тег версии`),
+  publishing to a registry (`to npm`, `в npm`) and going to production (`в прод`,
+  `на продакшн`). Add your own words in
   `.metaproject/decisions.config.json`; they are strong too, and the file extends
   the built-in list and cannot shorten it:
 
@@ -54,13 +59,26 @@ unused import", "remove dead code", "force a type") are not mistaken for a relea
   `force`, `reset`, `overwrite`, `truncate`, `send` (and `слить`, `мерж`, `сброс`,
   `отправ`, ...) make a question irreversible only when the same question, or the
   same option, also names `main`, `master`, `prod`/`production`, `remote`,
-  `origin`, a `database`, `table`, `branch`, `tag`, `repository`, a PR or a
-  release, or when the `--action` tag itself is one of them.
+  `origin`, a `database`, `table`, `branch`, `tag`, `repository`, a pull request,
+  a commit or a release, or when the `--action` tag itself is one of them. A weak
+  term whose object is only a pronoun, or nothing ("Merge it now?", "Drop it?",
+  "Слить это?"), counts as irreversible too: when the question is ambiguous it
+  fails towards the ordinary way of asking, because a false positive only costs
+  one measurement and a false negative could cost a release.
 
-**Agents should pass `--action` for anything irreversible** (`--action merge`,
-`--action drop-table`, `--action force-push`). That is the reliable path: the text
-match is only a safety net, and it looks at the question, the options and the tag,
-case-insensitively. A weak term with no risk target, such as "Merge the two date
+An identifier in a question about code is not read as an action: "Rename
+`deleteUser` to `removeUser`?" and "Extract `publishEvent` into a function?" can
+be blind, while "Delete the user?" and "Run `deployToProd` now?" cannot.
+
+**Agents should pass `--action` for anything irreversible** (`--action release`,
+`--action merge`, `--action drop-table`, `--action force-push`); any non-empty tag
+makes the question non-blind. Through the `ask_user` tool the same is the optional
+`action` string and the optional `irreversible: true` flag, and the tool
+description tells the agent it **must** set one of them for a release, publish,
+deploy, delete, push, merge into a shared branch, drop, force, reset or version
+tag. That is the reliable path: the text match is only a safety net, and it looks
+at the question, the options and the tag, case-insensitively. A weak term with no
+risk target and a real object, such as "Merge the two date
 helpers?", is asked normally and can be blind. A question with no recommendation
 is never blind. In a blind question a mark written into a label, such as
 `(Recommended)`, `[recommended]`, `- recommended`, `Recommended:` or a star, is
@@ -72,9 +90,12 @@ Your answer is never held back. After you answer, the transcript shows the revea
 and tells you what you can still do:
 
 - `/decisions change <option id or label>` changes the answer of the latest
-  question **asked in this session** (with no session question, the latest one of
-  the current flow; never the latest of the whole repository, which may belong to
-  another session). It prints which decision it changed. Both answers are kept and
+  question **asked in this session**. The journal records the session on every
+  question, and with no id the command only ever touches a decision of this
+  session. If the only candidate is another session's (found through the current
+  flow), it changes nothing and names the decision it would have changed, with
+  the `keryx decisions answer <id> --choice <option>` command to do it on purpose.
+  It prints which decision it changed. Both answers are kept and
   the record says it was changed. The agent already received your first answer,
   so the change is recorded in the journal but may not reach the agent.
 - `/decisions reason <why>` adds an optional reason when your answer differed from
@@ -101,7 +122,11 @@ It prints, from the journal alone:
 
 - the match share overall and by mode (`ordinary`, `blind`);
 - the match share by stage;
-- every deviation with its reason (`(none given)` when you gave none).
+- every deviation with its reason (`(none given)` when you gave none);
+- how many questions **looked irreversible** and how many of those would have been
+  blind but were asked the ordinary way because of it (`blind refused`), overall
+  and per stage. A high count on questions that were really ordinary means the
+  irreversible list over-matches and is eating the measurement.
 
 The first answer is the one counted for the match share. A changed answer is
 counted separately, because it was given after the reveal.

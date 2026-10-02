@@ -38,6 +38,10 @@ export interface OpenRecord {
   irreversible: boolean;
   /** The free tag the caller gave for the action (e.g. "release"), when any. */
   action?: string;
+  /** True when the question would have been blind but looked irreversible, so it was asked the ordinary way. */
+  blindRefused?: boolean;
+  /** The session the question was asked in (what `/decisions change` without an id is checked against). */
+  session?: string;
 }
 
 export interface AnswerRecord {
@@ -72,7 +76,12 @@ export interface OpenInput {
   stage?: string | undefined;
   flow?: string | undefined;
   flowSource?: "env" | "branch" | "inferred" | undefined;
+  /** Any non-empty tag marks the question as deciding an irreversible action: it is never blind. */
   action?: string | undefined;
+  /** The caller says the question is about an irreversible action: never blind. */
+  irreversible?: boolean | undefined;
+  /** The session asking, recorded so a follow-up without an id can be held to its own session's decisions. */
+  session?: string | undefined;
   /** Test seam: a random source in [0, 1). */
   random?: (() => number) | undefined;
   now?: (() => Date) | undefined;

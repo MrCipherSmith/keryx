@@ -6,6 +6,7 @@
 
 import { answerDecision, recordReason } from "./journal";
 import { readRecords } from "./store";
+import { oneLine } from "./text";
 import type { AnswerRecord, AnswerResult, OpenRecord } from "./types";
 
 /** The id of the latest decision that has an answer on record, optionally only one that belongs to `flow`. */
@@ -20,17 +21,44 @@ export async function latestAnsweredDecision(cwd: string, flow?: string): Promis
 }
 
 /**
- * The decision a follow-up acts on: the id given, else the latest one answered in
- * THIS session (`lastId`), else the latest one of THIS flow. Never the repo-wide
- * latest: with several agents and sessions writing one journal that would change
- * somebody else's decision.
+ * The decision a follow-up acts on. With an id, that decision: the human named it.
+ * Without one it must be a decision of THIS session: the latest one answered here
+ * (`lastId`), else the latest one of this flow, and in either case only if its open
+ * record carries this session's id. A decision of another session, found through
+ * the flow, is named in the refusal and left alone: with several agents and
+ * sessions writing one journal, a bare `/decisions change` must not rewrite
+ * somebody else's answer.
  */
-async function resolveOpen(cwd: string, id: string | undefined, lastId: string | undefined, flow: string | undefined): Promise<OpenRecord> {
-  let wanted = id ?? lastId;
+async function resolveOpen(
+  cwd: string,
+  id: string | undefined,
+  lastId: string | undefined,
+  flow: string | undefined,
+  session: string | undefined,
+  command: string,
+): Promise<OpenRecord> {
+  const records = await readRecords(cwd);
+  const find = (wanted: string): OpenRecord | undefined => records.find((r): r is OpenRecord => r.kind === "open" && r.id === wanted);
+  if (id !== undefined) {
+    const named = find(id);
+    if (named === undefined) throw new Error(`no decision with id ${id}`);
+    return named;
+  }
+  let wanted = lastId;
   if (wanted === undefined && flow !== undefined) wanted = await latestAnsweredDecision(cwd, flow);
-  if (wanted === undefined) throw new Error("no decision from this session or this flow to act on; nothing was changed");
-  const open = (await readRecords(cwd)).find((r): r is OpenRecord => r.kind === "open" && r.id === wanted);
+  if (wanted === undefined) throw new Error("no decision from this session to act on; nothing was changed");
+  const open = find(wanted);
   if (open === undefined) throw new Error(`no decision with id ${wanted}`);
+  // The caller's own `lastId` is this session's by construction; when the session is also known it is checked anyway.
+  // A decision found through the flow is only ever acted on when it carries this session's id.
+  const foreign = session !== undefined ? open.session !== session : wanted !== lastId;
+  if (foreign) {
+    const shown = oneLine(open.question, 60);
+    throw new Error(
+      `the latest decision I can find, ${open.id} ("${shown}"), was not asked in this session, so nothing was changed. ` +
+        `To act on it on purpose: ${command.replace("<id>", open.id)}`,
+    );
+  }
   return open;
 }
 
@@ -42,10 +70,10 @@ export interface GiveReasonResult {
 }
 
 /** Add the one optional reason for a deviation. Only a deviation takes one. */
-export async function giveReason(input: { cwd: string; text: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; now?: (() => Date) | undefined }): Promise<GiveReasonResult> {
+export async function giveReason(input: { cwd: string; text: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; session?: string | undefined; now?: (() => Date) | undefined }): Promise<GiveReasonResult> {
   const text = input.text.trim();
   if (text.length === 0) throw new Error("a reason needs some text: /decisions reason <why>");
-  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow);
+  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow, input.session, 'keryx decisions reason <id> --text "<why>"');
   const answers = (await readRecords(input.cwd)).filter((r): r is AnswerRecord => r.kind === "answer" && r.id === open.id);
   const first = [...answers].sort((x, y) => x.seq - y.seq)[0];
   if (first === undefined) throw new Error(`decision ${open.id} has no answer yet`);
@@ -77,8 +105,8 @@ export interface ChangeAnswerResult extends AnswerResult {
  * first for the match share. The agent got the first answer when the question was
  * answered; the change is a record for the journal and may not reach it.
  */
-export async function changeAnswer(input: { cwd: string; choice: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; now?: (() => Date) | undefined }): Promise<ChangeAnswerResult> {
-  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow);
+export async function changeAnswer(input: { cwd: string; choice: string; id?: string | undefined; lastId?: string | undefined; flow?: string | undefined; session?: string | undefined; now?: (() => Date) | undefined }): Promise<ChangeAnswerResult> {
+  const open = await resolveOpen(input.cwd, input.id, input.lastId, input.flow, input.session, "keryx decisions answer <id> --choice <option>");
   const choice = resolveOptionId(open, input.choice);
   const answers = (await readRecords(input.cwd)).filter((r): r is AnswerRecord => r.kind === "answer" && r.id === open.id);
   const first = [...answers].sort((x, y) => x.seq - y.seq)[0];

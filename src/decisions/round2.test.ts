@@ -236,14 +236,14 @@ describe("AC6: the reason is offered once, never blocks, and is its own transcri
 });
 
 describe("follow-ups never fall back to the repo-wide latest decision", () => {
-  async function answered(flow: string | undefined, id: string): Promise<void> {
-    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow, id, random: () => 0.9 });
+  async function answered(flow: string | undefined, id: string, session = "s-mine"): Promise<void> {
+    await openDecision({ cwd: root, question: `Question ${id}`, options: OPTIONS, recommendation: { optionId: "a", reason: "" }, flow, id, session, random: () => 0.9 });
     await answerDecision({ cwd: root, id, choice: "b" });
   }
 
   test("with no id and no session decision, nothing is touched and it says so", async () => {
     await answered(undefined, "d-other");
-    await expect(giveReason({ cwd: root, text: "why" })).rejects.toThrow(/no decision from this session or this flow/);
+    await expect(giveReason({ cwd: root, text: "why" })).rejects.toThrow(/no decision from this session to act on/);
     await expect(changeAnswer({ cwd: root, choice: "a" })).rejects.toThrow(/nothing was changed/);
     expect((await readRecords(root)).filter((r) => r.kind === "answer")).toHaveLength(1);
   });
@@ -251,9 +251,9 @@ describe("follow-ups never fall back to the repo-wide latest decision", () => {
   test("with a flow, it targets the latest decision of that flow, not the latest overall", async () => {
     await answered("007", "d-mine");
     await answered("008", "d-theirs");
-    const given = await giveReason({ cwd: root, text: "mine", flow: "007" });
+    const given = await giveReason({ cwd: root, text: "mine", flow: "007", session: "s-mine" });
     expect(given).toMatchObject({ id: "d-mine", question: "Question d-mine", recorded: true });
-    const changed = await changeAnswer({ cwd: root, choice: "a", flow: "007" });
+    const changed = await changeAnswer({ cwd: root, choice: "a", flow: "007", session: "s-mine" });
     expect(changed).toMatchObject({ id: "d-mine", previous: "b", choice: "a" });
     expect((await readRecords(root)).filter((r) => r.kind === "answer" && r.id === "d-theirs")).toHaveLength(1);
   });

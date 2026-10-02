@@ -36,8 +36,12 @@ export interface DecisionsReport {
   withoutRecommendation: number;
   changed: number;
   byMode: Record<DecisionMode, Tally>;
-  byStage: Array<{ stage: string; ordinary: Tally; blind: Tally }>;
+  byStage: Array<{ stage: string; ordinary: Tally; blind: Tally; blindRefused: number }>;
   deviations: DeviationRow[];
+  /** Questions that looked irreversible (matched the list, carried an action tag, or were flagged by the caller). */
+  irreversible: number;
+  /** Questions that would have been blind but were asked the ordinary way because they looked irreversible. */
+  blindRefused: number;
   /** Decisions whose flow was only inferred (the single in-progress flow), not named by env or branch. */
   inferredFlow: number;
   /** Journal lines that were unreadable or malformed and left out of every number above. */
@@ -76,12 +80,21 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     byMode: { ordinary: emptyTally(), blind: emptyTally() },
     byStage: [],
     deviations: [],
+    irreversible: opens.filter((open) => open.irreversible).length,
+    blindRefused: opens.filter((open) => open.blindRefused === true).length,
     inferredFlow: opens.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
     skipped,
   };
-  const stages = new Map<string, { ordinary: Tally; blind: Tally }>();
+  const stages = new Map<string, { ordinary: Tally; blind: Tally; blindRefused: number }>();
+  const stageOf = (name: string): { ordinary: Tally; blind: Tally; blindRefused: number } => {
+    const found = stages.get(name) ?? { ordinary: emptyTally(), blind: emptyTally(), blindRefused: 0 };
+    stages.set(name, found);
+    return found;
+  };
 
   for (const open of opens) {
+    // counted whether or not it was answered: it is about how the question was asked
+    if (open.blindRefused === true) stageOf(open.stage).blindRefused += 1;
     const list = (answers.get(open.id) ?? []).sort((a, b) => a.seq - b.seq);
     const first = list[0];
     if (first === undefined) {
@@ -95,8 +108,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
       continue;
     }
     const matched = first.choice === open.recommendation.optionId;
-    const stage = stages.get(open.stage) ?? { ordinary: emptyTally(), blind: emptyTally() };
-    stages.set(open.stage, stage);
+    const stage = stageOf(open.stage);
     for (const tally of [report.byMode[open.mode], stage[open.mode]]) {
       tally.answered += 1;
       if (matched) tally.matched += 1;
@@ -143,8 +155,13 @@ export function renderReport(report: DecisionsReport): string {
   ];
   if (report.byStage.length === 0) lines.push("  (no answered decision had a recommendation)");
   for (const row of report.byStage) {
-    lines.push(`  ${row.stage}: ordinary ${share(row.ordinary)}, blind ${share(row.blind)}`);
+    const refused = row.blindRefused > 0 ? `, blind refused ${row.blindRefused}` : "";
+    lines.push(`  ${oneLine(row.stage)}: ordinary ${share(row.ordinary)}, blind ${share(row.blind)}${refused}`);
   }
+  lines.push(
+    "",
+    `Looked irreversible: ${report.irreversible}. Blind refused because of it: ${report.blindRefused} (a high number on ordinary questions means the irreversible list over-matches).`,
+  );
   lines.push("", `Deviations: ${report.deviations.length}`);
   for (const dev of report.deviations) {
     const where = dev.flow === null ? "project" : `flow ${oneLine(dev.flow)}${dev.flowSource === "inferred" ? " (inferred)" : ""}`;

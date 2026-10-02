@@ -196,12 +196,17 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
   open     decides blind (a third of the questions: no "recommended" mark,
            random order) or ordinary, and prints the order to show and whether
            to mark the recommendation. A question about a release, a delete or
-           a push (the strong irreversible terms, English and Russian, plus
-           .metaproject/decisions.config.json) is never blind. Merge, drop,
-           remove, force and the like count only next to main, production, a
-           branch, a table, ... in the same question or option, or in --action.
-           PASS --action FOR ANYTHING IRREVERSIBLE: that is the reliable path,
-           the text match is only a safety net.
+           a push (the strong irreversible terms, English and Russian, such as
+           release, ship, rollout, promote, publish to npm, tag a version,
+           выпустить, залить, отправить в прод, накатить, git reset --hard,
+           rm -rf, plus .metaproject/decisions.config.json) is never blind.
+           Merge, drop, remove, force and the like count next to main,
+           production, a branch, a PR, a table, ... or with no real object
+           ("Merge it now?"); an identifier in a question about code
+           (rename deleteUser to removeUser) is not read as an action.
+           PASS --action FOR ANYTHING IRREVERSIBLE: any non-empty tag makes
+           the question non-blind, and that is the reliable path; the text
+           match is only a safety net.
   answer   records the choice (it must be one of the options; --other marks a
            free-form answer), prints the recommendation (the reveal) and the
            time to answer. A second answer for the same id is a changed answer:
@@ -210,7 +215,9 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            through \`reason\`. In the TUI the same two follow-ups are
            /decisions reason <why> and /decisions change <option>.
   report   no model: match share by mode and by stage, and every deviation with
-           its reason.
+           its reason. It also counts the questions that looked irreversible
+           and the ones where blind was refused because of it, per stage: a
+           high number on ordinary questions means the list over-matches.
 
 The journal is one file per repository, .metaproject/data/decisions/journal.jsonl
 under the main checkout (every worktree shares it; it is git-ignored). Inside a

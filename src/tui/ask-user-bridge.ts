@@ -3,6 +3,7 @@
 // makeAgentDeps builds tools before the TUI dock exists; the TUI registers the
 // real interactive host here, and the tool invokes through this bridge.
 
+import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import { journalAsk, resolveFlowContext } from "../decisions/service";
 
@@ -29,6 +30,14 @@ let notice: ((text: string) => void) | undefined;
 // `/decisions change` act on when no id is given.
 let lastDecisionId: string | undefined;
 
+// One id per running shell, recorded on every question it journals: `/decisions change`
+// without an id may only touch a decision that carries this id, never another session's.
+const sessionId = `s-${randomUUID()}`;
+
+export function askUserSessionId(): string {
+  return sessionId;
+}
+
 export function lastAskUserDecisionId(): string | undefined {
   return lastDecisionId;
 }
@@ -48,6 +57,7 @@ export function journaledAskUser(cwd: string): AskUserFn {
   const journaled = journalAsk(invokeAskUserHost, {
     cwd,
     // the flow and its stage come from the checkout (env, branch, the one flow in progress), not only from KERYX_FLOW
+    session: sessionId,
     context: () => resolveFlowContext(cwd),
     notify: (text) => notice?.(text),
     // a journaling failure is shown as a note in the transcript; the question itself is never stopped by it

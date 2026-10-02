@@ -19,6 +19,10 @@ export interface AskUserRequest {
   options: AskUserOption[];
   /** When true, the host may also accept free text (Enter with empty selection path). */
   allowFreeform?: boolean;
+  /** The irreversible action this question decides (release, delete, push, publish, deploy, ...). */
+  action?: string;
+  /** True when the question decides an irreversible action. */
+  irreversible?: boolean;
 }
 
 export type AskUserFn = (request: AskUserRequest) => Promise<string>;
@@ -35,8 +39,10 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
         "Ask the user an interactive multiple-choice question (Claude-style interview). " +
         "Use when requirements are unclear, for interview steps, or to confirm a plan. " +
         "Provide 2–6 options with short descriptions; mark one recommended when sensible. " +
-        "Input: { question: string, options: [{ id, label, description, recommended? }], allow_freeform?: boolean }. " +
-        "Returns the chosen option id (or freeform text if allow_freeform).",
+        "Input: { question: string, options: [{ id, label, description, recommended? }], allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
+        "Returns the chosen option id (or freeform text if allow_freeform). " +
+        "If the question decides anything irreversible (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version), " +
+        "you MUST set irreversible: true, or name it in action (e.g. action: \"release\"): a question without either may be shown blind, with the recommendation hidden.",
       inputSchema: {
         type: "object",
         properties: {
@@ -58,6 +64,8 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
             maxItems: 8,
           },
           allow_freeform: { type: "boolean" },
+          action: { type: "string" },
+          irreversible: { type: "boolean" },
         },
         required: ["question", "options"],
         additionalProperties: false,
@@ -100,6 +108,8 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           question,
           options,
           ...(input.allow_freeform === true ? { allowFreeform: true } : {}),
+          ...(typeof input.action === "string" && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
+          ...(input.irreversible === true ? { irreversible: true } : {}),
         });
         const match = options.find((o) => o.id === chosen);
         if (match !== undefined) {

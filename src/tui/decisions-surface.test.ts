@@ -204,7 +204,7 @@ test("/decisions reason|change with no session decision and no flow touches noth
   await runDecisionsFollowup({ kind: "reason", text: "because" }, deps);
   await runDecisionsFollowup({ kind: "change", choice: "a" }, deps);
   expect(said).toHaveLength(2);
-  for (const text of said) expect(text).toContain("no decision from this session or this flow");
+  for (const text of said) expect(text).toContain("no decision from this session to act on");
   const report = await loadReport(root);
   expect(report.changed).toBe(0);
   expect(report.deviations[0]).not.toHaveProperty("reason");

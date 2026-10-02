@@ -45,7 +45,9 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
   }
 
   const config = await loadDecisionsConfig(input.cwd);
-  const irreversible = isIrreversible(config.irreversible, question, input.action, input.options);
+  const tagged = input.action !== undefined && input.action.trim().length > 0;
+  // A caller that tags the action, or says so outright, has declared it irreversible; the text match is the safety net.
+  const irreversible = input.irreversible === true || tagged || isIrreversible(config.irreversible, question, input.action, input.options);
   // Blind needs a recommendation to hide, and is never applied to an irreversible action (AC4).
   const wantsBlind = recommendation !== null && random() < BLIND_PROBABILITY;
   const mode: DecisionMode = wantsBlind && !irreversible ? "blind" : "ordinary";
@@ -71,7 +73,9 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     order,
     showMark,
     irreversible,
-    ...(input.action !== undefined && input.action.trim().length > 0 ? { action: input.action.trim() } : {}),
+    ...(tagged ? { action: input.action?.trim() ?? "" } : {}),
+    ...(wantsBlind && irreversible ? { blindRefused: true } : {}),
+    ...(input.session !== undefined && input.session.length > 0 ? { session: input.session } : {}),
   };
   await appendRecord(input.cwd, record);
   return {

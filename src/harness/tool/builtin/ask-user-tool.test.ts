@@ -44,3 +44,31 @@ test("ask_user surfaces cancel", async () => {
   expect(result.isError).toBe(true);
   expect(result.output).toMatch(/cancel/i);
 });
+
+test("ask_user passes the irreversible flag and the action tag to the host (flow 392, round 3)", async () => {
+  const seen: Array<{ action?: string; irreversible?: boolean }> = [];
+  const tool = createAskUserTool(async (req) => {
+    seen.push({
+      ...(req.action === undefined ? {} : { action: req.action }),
+      ...(req.irreversible === undefined ? {} : { irreversible: req.irreversible }),
+    });
+    return req.options[0]!.id;
+  });
+  const options = [
+    { id: "a", label: "Yes", description: "" },
+    { id: "b", label: "No", description: "" },
+  ];
+  await tool.invoke({ question: "Go?", options, action: "  release  ", irreversible: true });
+  await tool.invoke({ question: "Go?", options });
+  await tool.invoke({ question: "Go?", options, action: "   ", irreversible: false });
+  expect(seen).toEqual([{ action: "release", irreversible: true }, {}, {}]);
+});
+
+test("the ask_user definition tells the agent it must set irreversible or action", () => {
+  const { definition } = createAskUserTool(async () => "x");
+  expect(definition.description).toMatch(/MUST set irreversible: true, or name it in action/);
+  for (const word of ["release", "publish", "deploy", "delete", "push"]) expect(definition.description).toContain(word);
+  const properties = (definition.inputSchema as { properties: Record<string, { type: string }> }).properties;
+  expect(properties["action"]?.type).toBe("string");
+  expect(properties["irreversible"]?.type).toBe("boolean");
+});

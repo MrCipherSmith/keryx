@@ -31,6 +31,10 @@ export interface AskRequest {
   question: string;
   options: AskOption[];
   allowFreeform?: boolean;
+  /** The irreversible action this question decides (release, delete, push, publish, deploy, ...). Any tag keeps the question out of blind mode. */
+  action?: string;
+  /** True when the question decides an irreversible action. Keeps it out of blind mode. */
+  irreversible?: boolean;
 }
 
 export type AskFn = (request: AskRequest) => Promise<string>;
@@ -48,6 +52,8 @@ export interface JournalAskDeps {
   onNote?: ((text: string) => void) | undefined;
   /** Called with the decision id once an answer is on record (what `/decisions reason|change` default to). */
   onDecision?: ((id: string) => void) | undefined;
+  /** The session asking: recorded on every record, so `/decisions change` can be held to this session's own decisions. */
+  session?: string | undefined;
   random?: (() => number) | undefined;
   now?: (() => Date) | undefined;
 }
@@ -121,6 +127,9 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         stage: deps.stage ?? context.stage ?? "ask_user",
         flow: deps.flow ?? context.flow,
         flowSource: deps.flow === undefined ? context.flowSource : undefined,
+        action: request.action,
+        irreversible: request.irreversible,
+        session: deps.session,
         random: deps.random,
         now: deps.now,
       });

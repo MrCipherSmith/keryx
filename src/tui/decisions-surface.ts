@@ -55,6 +55,8 @@ export interface DecisionsFollowupDeps {
   cwd: string;
   /** The latest question answered through the journal in this session. */
   lastDecisionId?: (() => string | undefined) | undefined;
+  /** This session's id: a follow-up without a decision id only touches a decision asked under it. */
+  session?: string | undefined;
   /** Where the outcome is told (the transcript). */
   notice?: ((text: string) => void) | undefined;
 }
@@ -70,15 +72,16 @@ export async function runDecisionsFollowup(command: Exclude<DecisionsCommand, { 
   };
   const lastId = deps.lastDecisionId?.();
   try {
-    // no decision from this session: fall back to the latest one of this flow, never the repo-wide latest
+    // no decision from this session: look at the latest one of this flow (to name it), never the repo-wide latest;
+    // it is acted on only when it was asked in this session
     const flow = lastId === undefined ? (await resolveFlowContext(deps.cwd)).flow : undefined;
     if (command.kind === "reason") {
-      const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId, flow });
+      const done = await giveReason({ cwd: deps.cwd, text: command.text, lastId, flow, session: deps.session });
       say(done.recorded ? `Reason recorded for decision ${done.id} ("${shortQuestion(done.question)}").` : `Decision ${done.id} ("${shortQuestion(done.question)}") already has a reason on record.`);
       return;
     }
     if (command.choice.length === 0) throw new Error("name the option: /decisions change <option id or label>");
-    const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId, flow });
+    const result = await changeAnswer({ cwd: deps.cwd, choice: command.choice, lastId, flow, session: deps.session });
     say(
       `Decision ${result.id} ("${shortQuestion(result.question)}"): answer changed from ${result.previous} to ${result.choice}. ` +
         `The agent already received the first answer (${result.previous}), so the change is recorded in the journal but may not reach the agent. The report counts the first answer.`,
@@ -201,6 +204,8 @@ export interface DecisionsSidebarOptions {
   notice?: ((text: string) => void) | undefined;
   /** The latest question answered through the journal in this session. */
   lastDecisionId?: (() => string | undefined) | undefined;
+  /** This session's id, so `/decisions reason|change` without an id stays inside this session's decisions. */
+  session?: string | undefined;
   /** Test seam: how many decisions the journal holds. */
   count?: () => Promise<number>;
   interval?: (tick: () => Promise<void>, ms: number) => () => void;
@@ -304,7 +309,7 @@ export function mountDecisionsSidebar(options: DecisionsSidebarOptions): Decisio
       if (command.kind === "show") {
         void show();
       } else {
-        void runDecisionsFollowup(command, { cwd: options.cwd, lastDecisionId: options.lastDecisionId, notice: options.notice }).then(() => refresh());
+        void runDecisionsFollowup(command, { cwd: options.cwd, lastDecisionId: options.lastDecisionId, session: options.session, notice: options.notice }).then(() => refresh());
       }
       return true;
     },
