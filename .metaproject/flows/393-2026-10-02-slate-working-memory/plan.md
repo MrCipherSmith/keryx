@@ -24,7 +24,12 @@ two invariants (Course/Seeds never auto-injected; Seeds are review-bound drafts 
 4. **Note-taking is prompted, not hoped for**: the system instruction states the contract (older rounds
    leave the request; keep what you will need in Notes), and the harness warns once before a batch of
    rounds leaves the window, naming the steps about to go.
-5. Fold in the two flow-394 gaps: `shell_exec` saves the full output via spill instead of truncating, and
+5. Two improvements taken from NVIDIA's SoL-Pi harness study (habr.com/ru/articles/1089370, owner
+   decision 2026-10-02): **ObservationPack** — big tool results (> 10 KiB) are replaced by a size/head/tail/
+   reference pack after 2 requests (the one SoL-Pi change that cut tokens AND raised quality, 47.2 vs 44.8),
+   and **cache-cost-aware rewrites** — rewrite sent history only when the saving beats the cost of
+   re-billing the invalidated prefix, preferably at plan-step boundaries.
+6. Fold in the two flow-394 gaps: `shell_exec` saves the full output via spill instead of truncating, and
    prune thresholds scale with the window so pruning fires before compaction on small windows.
 
 Measured against flow 394's baseline (context.md): replay, comparative benchmark and — the real quality
@@ -47,7 +52,10 @@ test — `registry-recall`.
    tool-call/result pairing valid; prefix-cache stable; replaces prune/collapse as the primary mechanism
    on those hosts, with compaction as the overflow fallback.
 7. **Note-taking prompt + pre-eviction warning**.
-8. **shell_exec spill-instead-of-truncate** and **window-relative prune thresholds**.
+8. **shell_exec spill-instead-of-truncate** (today it keeps the first 20 KB and cuts stderr first — the
+   error is usually what is lost) and **window-relative prune thresholds**.
+8a. **ObservationPack** (> 10 KiB, 2-request grace, pack with `recall_step` reference) and the
+   **cache-cost gate** for every history rewrite, preferring plan-step boundaries.
 9. **Measurement**: replay numbers, comparative benchmark (keryx vs codex CLI, same model), `registry-recall`
    at 128K on 3 seeds branch vs flow-394 main; short benchmark success.
 10. **Review** rounds and completion as in flow 394.

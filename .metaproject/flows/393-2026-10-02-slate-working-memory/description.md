@@ -42,3 +42,15 @@ Concretely, judged by:
 - Sharing slate between clients or sessions (slate stays task-local; workspace/SAC unchanged).
 - Changing flow 394's mechanisms other than to route their output into the Trail.
 - An LLM-written summary (separate follow-up noted in flow 394).
+
+## Follow-ups (owner decisions 2026-10-02, from NVIDIA's SoL-Pi study, habr.com/ru/articles/1089370)
+
+- **Evidence-Preserving Reducer — follow-up flow.** A cheaper model (routing tier) extracts the
+  decision-relevant part of a long tool output with exact quotes; the harness verifies every quote against
+  the original and falls back to the original when any quote does not match. SoL-Pi used it on build/test
+  logs. Not in this flow; open as its own flow after 393.
+- **Action Fusion — deferred, needs thought.** SoL-Pi fuses "edit" and "run tests" into one request.
+  Owner's caveat: tests are often better run on CI than locally (this repo's own practice: open a draft PR
+  and read CI), so a fused local test run may cost more than it saves. Revisit only with a design that
+  respects CI-first testing (e.g. fuse edit + a cheap targeted check such as typecheck or `keryx test
+  related` on the touched file, never the full suite).

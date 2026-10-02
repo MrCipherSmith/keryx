@@ -11,12 +11,12 @@
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
   "status": "ready",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T15:25:04.433Z",
+  "updatedAt": "2026-10-02T15:37:56.493Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:1da3791540ebc973733fb2784d59e9f5ed519fba765f612064a1be078bbf6cf8",
+  "acChecksum": "sha256:419086076d5d368a3891a9c6678efadd0af8a433fc88ed7a06e2fbabb9d21b45",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -241,7 +241,24 @@
         "T10",
         "T11",
         "T12",
-        "T13"
+        "T13",
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
       ],
       "attempts": {
         "count": 0,
@@ -331,6 +348,21 @@
       "at": "2026-10-02T15:25:04.433Z",
       "event": "ac-updated",
       "detail": "flow references only: the shell-token-economy flow was renumbered 392 -> 394 after a second id collision on main; criteria text otherwise unchanged; no confirmations existed"
+    },
+    {
+      "at": "2026-10-02T15:37:53.322Z",
+      "event": "ac-updated",
+      "detail": "Owner decision 2026-10-02 after reviewing NVIDIA's SoL-Pi harness study: add AC13 (age-based ObservationPack, >10 KiB after 2 requests) and AC14 (cache-cost-aware history rewrites, preferring plan-step boundaries); tighten AC11 because shell_exec keeps only the first 20 KB and cuts stderr first. No confirmations existed."
+    },
+    {
+      "at": "2026-10-02T15:37:54.956Z",
+      "event": "task-added",
+      "detail": "T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)"
+    },
+    {
+      "at": "2026-10-02T15:37:56.493Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)"
     }
   ],
   "acKinds": {
@@ -368,6 +400,12 @@
       "kind": "unclassified"
     },
     "AC12": {
+      "kind": "unclassified"
+    },
+    "AC13": {
+      "kind": "unclassified"
+    },
+    "AC14": {
       "kind": "unclassified"
     }
   }
