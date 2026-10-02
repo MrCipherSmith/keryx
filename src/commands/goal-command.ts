@@ -22,7 +22,9 @@ import {
   writeSlateSession,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
-import { readSlate, renderAnchorsBlock, type Slate, type SlateSeed } from "../session/slate";
+import { anchorsAnnouncement } from "../session/anchors-announce";
+import { parseCollapsedRecord } from "../session/prune";
+import { readSlate, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
@@ -59,11 +61,11 @@ const POSITIVE_INTEGER = /^[1-9][0-9]*$/;
  *
  * # Why this is 8 and not 3 (flow 203, AC8)
  *
- * Three other bounds in this repository disagreed with each other and have been
- * unified to **3**: `task-implementer`'s self-fix attempts, `job-orchestrator`'s
- * `max_review_iterations`, and `flow-orchestrator`'s PR review/fix attempts,
- * which was 6. This one is deliberately NOT 3, and the reason is that it bounds
- * a different thing.
+ * Two repair bounds in this repository were unified to **3**:
+ * `task-implementer`'s self-fix attempts and `job-orchestrator`'s
+ * `max_review_iterations`. `flow-orchestrator`'s PR review/fix attempts was 6 and
+ * is 5 by operator decision (flow 391). This one is deliberately NOT 3, and the
+ * reason is that it bounds a different thing.
  *
  * Those three are **repair** loops: the same artifact revised again against the
  * same failing signal. That is the shape the evidence is about, and the evidence
@@ -482,10 +484,10 @@ function summarizeRecentSeeds(seeds: readonly SlateSeed[]): string[] {
 function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): string[] {
   const lines: string[] = [];
   for (const message of history) {
-    if (message.role !== "assistant" || message.toolCalls === undefined) {
+    if (message.role !== "assistant") {
       continue;
     }
-    for (const call of message.toolCalls) {
+    for (const call of message.toolCalls ?? []) {
       if (call.name !== "workspace_propose") {
         continue;
       }
@@ -501,6 +503,16 @@ function summarizeWorkspaceProposals(history: readonly NormalizedMessage[]): str
       }
       const outcome = resultMessage !== undefined ? resultMessage.content : "(no result recorded this run)";
       lines.push(`- workspace_propose: ${argSummary} -> ${outcome}`);
+    }
+    // Flow 387 review r1 F-003: prune collapses old exchanges into one text record, so the
+    // live call/result pair above is gone. Read those records' digest lines too
+    // (`workspace_propose(<digest>) → ok|error`), or the verifier would see no proposal.
+    // Flow 387 review r2 F-025: only harness-marked records count (`collapsed`), read through
+    // the shared parser rather than a private copy of its regex.
+    for (const entry of parseCollapsedRecord(message)) {
+      if (entry.name === "workspace_propose") {
+        lines.push(`- workspace_propose: ${entry.digest} -> ${entry.outcome} (collapsed earlier in the run)`);
+      }
     }
   }
   return lines;
@@ -741,8 +753,12 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       if (!wasOpened && slateSession.opened) {
         const freshSlate = await readSlateSession(slateSession);
         if (freshSlate !== undefined) {
-          history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
-          io.onHistoryChange?.("tool");
+          // Flow 387 T9: full block only when history holds none, else a delta.
+          const announcement = anchorsAnnouncement(history, freshSlate.anchors);
+          if (announcement !== undefined) {
+            history.push(announcement);
+            io.onHistoryChange?.("tool");
+          }
         }
       }
       if (parsed.workspaceId !== undefined) {
@@ -810,7 +826,8 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
   // check must not re-examine the same `parsed.text` and immediately undo
   // that open/bind whenever the goal text happens to contain a close-phrase
   // substring (e.g. "wrap up documentation").
-  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true } : {};
+  // Flow 387 review r1 F-001: `/goal` runs inside the shells, which sync their archives.
+  const turnOptions = slateSession !== undefined ? { slateSession, skipCloseTrigger: true, pruneArchive: true } : {};
   await runAgentTurn(io, deps, history, parsed.text, turnOptions);
 
   // SLATE-27 (flow 186, T9): bounded continuation loop, armed only when T8
@@ -927,8 +944,11 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
             await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
             const reopened = await readSlateSession(slateSession);
             if (reopened !== undefined) {
-              history.push({ role: "user", content: renderAnchorsBlock(reopened.anchors), provenance: "project" });
-              io.onHistoryChange?.("tool");
+              const announcement = anchorsAnnouncement(history, reopened.anchors);
+              if (announcement !== undefined) {
+                history.push(announcement);
+                io.onHistoryChange?.("tool");
+              }
             }
             await writeSlateSession(slateSession, (prev) => {
               if (!prev) throw new Error(`SLATE-27 verifier-reopen: no open slate in ${slateSession.dir}`);

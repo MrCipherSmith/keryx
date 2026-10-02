@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-09-29T08:17:00.108Z - flow created
+- 2026-09-29T08:17:39.654Z - frozen: 8 criteria; checksum recorded
+- 2026-09-29T08:17:39.973Z - started
+- 2026-09-29T09:08:04.000Z - STOP (AC8). Released as 0.3.32 (PR #795, 8746bf64). The closing-state hole is reported, not gated: flow complete and flow status print an informational note for a tracked flow directory with uncommitted changes; flow 359 state is committed. Authorship split for G1a is by hand in this release, as written. The operator then confirmed on the operator chat channel (message 171919, Да) a follow-up flow 365 that replaces the hand split with an outcomeAuthor flag in flow.json (agent|human, default agent, never inferred human), a setter flow outcome author, and G1a in four cells; it supersedes the by-hand text of this flow. P0 W1 (external agents live) waits for the operator's word.
+- 2026-09-29T09:08:05.139Z - ac-confirmed: AC1: uncommitted-state-note.test.ts: note under tracked dirty dir, silent when clean, untracked or no repo; exit code unchanged (complete-uncommitted test) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:05.294Z - ac-confirmed: AC2: flow-status-uncommitted.test.ts: note for done flows only; live smoke on 0.3.32 printed it for a dirty tracked flow 359 and stayed silent once clean (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:05.451Z - ac-confirmed: AC3: never-gates, no-model, bulk-budget green; flow complete exit code unchanged with the note (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:05.610Z - ac-confirmed: AC4: judged: the TUI flow inspector reaches the note through uncommittedFlowStateNotes in inspector-sources and formatFlowDetailLines; flow-inspector-uncommitted.test.ts (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:05.765Z - ac-confirmed: AC5: judged: PR #795 first commit holds only flow 359 flow.json, journal.md and reviews/; no other flow dir, no .metaproject/data, no untracked flow 352-364; after the pull flow 359 is clean in the working copy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:05.922Z - ac-confirmed: AC6: grep checks pass: compliance check in both documents, created by an agent in implementation-plan.md (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:06.076Z - ac-confirmed: AC7: typecheck clean, flow and product suites green, CI 18/18 on c5098d11, cli-reference and CHANGELOG 0.3.32, version bumped (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:06.227Z - ac-confirmed: AC8: journal entry STOP written; the operator told on the operator chat channel; W1 waits for his word (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-29T09:08:06.380Z - task-done: T1: Collect remaining context
+- 2026-09-29T09:08:06.533Z - task-done: T2: Implement per plan
+- 2026-09-29T09:08:06.688Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-29T09:08:06.841Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-29T09:08:09.097Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/795 (warning: PR is not a draft) (base: main)
+- 2026-09-29T09:08:14.505Z - completing
+- 2026-09-29T09:08:18.657Z - completion-attempt-recorded: attempt 1: passed
+- 2026-09-29T09:08:18.657Z - done: all gates passed
+- 2026-10-01T12:22:20.060Z - renumbered: 364 -> 382: duplicate id with a flow from another clone (main holds 360-365); housekeeping

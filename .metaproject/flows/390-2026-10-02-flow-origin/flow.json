@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "390",
+  "slug": "flow-origin",
+  "title": "Flow origin: where a flow came from and the human's original request in the effects",
+  "status": "done",
+  "createdAt": "2026-10-02T10:13:01.326Z",
+  "updatedAt": "2026-10-02T15:21:22.414Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-02T11:16:18.645Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-init.test.ts."
+    },
+    "AC2": {
+      "at": "2026-10-02T11:16:19.024Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-evidence.test.ts."
+    },
+    "AC3": {
+      "at": "2026-10-02T11:16:19.407Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-status.test.ts and src/product/origin-open.test.ts."
+    },
+    "AC4": {
+      "at": "2026-10-02T11:16:19.798Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-template.test.ts."
+    },
+    "AC5": {
+      "at": "2026-10-02T11:16:20.160Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-outcome-author.test.ts."
+    },
+    "AC6": {
+      "at": "2026-10-02T11:16:20.551Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/product/origin-g1a.test.ts."
+    },
+    "AC7": {
+      "at": "2026-10-02T11:16:20.933Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-never-gates.test.ts, including origin set with an invalid kind (added after review)."
+    },
+    "AC8": {
+      "at": "2026-10-02T11:16:21.312Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/tui/origin-surface.test.ts."
+    },
+    "AC9": {
+      "at": "2026-10-02T11:16:21.690Z",
+      "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts."
+    },
+    "AC10": {
+      "at": "2026-10-02T15:19:06.252Z",
+      "note": "Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe)."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/852"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context gathered before the PRD; round-cap sites located (391) / origin spec taken from the operator's request (390)."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Implemented and merged: PR #852."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "AC tests added or adjusted; CI typecheck-and-tests green on the merged PR."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent review done before merge; see the review round in the flow folder."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T10:13:01.326Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T10:13:29.892Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T10:13:30.315Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T11:16:03.855Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/852 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-10-02T11:16:15.326Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T11:16:15.679Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T11:16:16.063Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T11:16:16.415Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-02T11:16:18.645Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #852 CI green on the final head (all legs pass); src/flow/origin-init.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:19.025Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: PR #852 CI green on the final head (all legs pass); src/flow/origin-evidence.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:19.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: PR #852 CI green on the final head (all legs pass); src/flow/origin-status.test.ts and src/product/origin-open.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:19.798Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: PR #852 CI green on the final head (all legs pass); src/flow/origin-template.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:20.160Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: PR #852 CI green on the final head (all legs pass); src/flow/origin-outcome-author.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:20.551Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR #852 CI green on the final head (all legs pass); src/product/origin-g1a.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:20.933Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: PR #852 CI green on the final head (all legs pass); src/flow/origin-never-gates.test.ts, including origin set with an invalid kind (added after review). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:21.312Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: PR #852 CI green on the final head (all legs pass); src/tui/origin-surface.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:16:21.690Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:19:06.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, operator chat channel 178131) [stated])"
+    },
+    {
+      "at": "2026-10-02T15:21:17.968Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T15:21:22.413Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T15:21:22.414Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-init.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-evidence.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-status.test.ts src/product/origin-open.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-template.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-outcome-author.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/product/origin-g1a.test.ts"
+    },
+    "AC7": {
+      "kind": "invariant",
+      "check": "bun test src/flow/origin-never-gates.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/tui/origin-surface.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/flow/origin-docs.test.ts"
+    },
+    "AC10": {
+      "kind": "judged"
+    }
+  },
+  "baseBranch": "main",
+  "signatures": [
+    {
+      "at": "2026-10-02T11:16:18.645Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:19.024Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:19.407Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:19.798Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:20.160Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:20.551Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:20.933Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:21.312Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T11:16:21.690Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T15:19:06.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay (operator, operator chat channel 178131)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T15:21:22.414Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b",
+      "headCommit": "7d306103307fa0df8863c637406fd5e0180be34e"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T15:21:22.413Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7d306103307fa0df8863c637406fd5e0180be34e is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "7d306103307fa0df8863c637406fd5e0180be34e is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "390-2026-10-02-flow-origin is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    }
+  ],
+  "merged": {
+    "commit": "7d306103307fa0df8863c637406fd5e0180be34e",
+    "ref": "origin/main",
+    "at": "2026-10-02T15:21:22.414Z"
+  }
+}

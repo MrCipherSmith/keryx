@@ -1,0 +1,37 @@
+# Flow Journal
+
+- 2026-09-27T18:31:16.163Z - flow created
+- 2026-09-27T18:31:48.642Z - frozen: 8 criteria; checksum recorded
+- 2026-09-27T18:31:49.009Z - started
+- 2026-09-27T18:31:49.329Z - task-added: T5: keryx doctor + /doctor (AC1, AC2)
+- 2026-09-27T18:31:49.667Z - task-added: T6: did-you-mean and mcp list exit codes (AC3, AC4)
+- 2026-09-27T18:31:50.022Z - task-added: T7: memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)
+- 2026-09-27T18:31:50.347Z - task-added: T8: verify, docs, changelog, bump (AC8)
+- 2026-09-27T18:31:50.664Z - task-done: T1: Collect remaining context
+- 2026-09-27T18:31:51.014Z - task-done: T2: Implement per plan
+- 2026-09-27T18:31:51.339Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-27T18:31:51.731Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-27T18:31:52.063Z - task-attempt: T5: started (attempt 1) — Sonnet implementer in ~/keryx-w5
+- 2026-09-27T19:59:56.148Z - task-done: T5: keryx doctor + /doctor (AC1, AC2)
+- 2026-09-27T19:59:56.303Z - task-done: T6: did-you-mean and mcp list exit codes (AC3, AC4)
+- 2026-09-27T19:59:56.455Z - task-done: T7: memory search stemming/hint, health tests detection, bare providers (AC5, AC6, AC7)
+- 2026-09-27T19:59:56.608Z - task-attempt: T8: started (attempt 1) — verify/docs/changelog done; PR #773 open, review round dispatched
+- 2026-09-27T22:47:07.166Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/773 (warning: PR is not a draft)
+- 2026-09-27T22:47:07.322Z - ac-confirmed: AC1: keryx doctor [--json]: 11 checks, exit codes, <3 s (0.36 s); doctor.test.ts incl. real exit-1 path. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:07.479Z - ac-confirmed: AC2: /doctor in readline chat/agent and TUI; help-groups + command registry; smoke-checked in chat mode. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:07.633Z - ac-confirmed: AC3: cli.ts central guard + lib/suggest.ts, 40 groups (group-subcommands.ts), integrate excluded; cli.test.ts table test; flat usage unchanged. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:07.788Z - ac-confirmed: AC4: mcp list: foreign problems under warnings:, exit 0; own config exit 1; mcp-servers.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:07.941Z - ac-confirmed: AC5: memory/text.ts stem(), search.ts; zero-hit hint both variants; memory.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:08.093Z - ac-confirmed: AC6: root cause: health/run.ts runAdapter auto-mode fallback forced tests=missing; fixed; health run on keryx tree shows tests available; CHANGELOG names it. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:08.244Z - ac-confirmed: AC7: bare keryx providers = status; --help still usage; providers.status.test.ts. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:08.399Z - ac-confirmed: AC8: typecheck, lint, touched tests green; CI green on cbbbe29f; cli-reference + commands-by-task updated; CHANGELOG 0.3.17, package.json bumped. PR #773 merged as 503c20c6, released 0.3.17 and installed; review rounds 1-5 closed, last round on the PR head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-27T22:47:08.548Z - task-done: T8: verify, docs, changelog, bump (AC8)
+- 2026-09-27T22:47:08.697Z - completing
+- 2026-09-27T22:47:14.193Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-27T22:47:14.194Z - completion-failed: review: 2 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#L3 (blocker, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42#T3 (minor, round 2026-09-27-ingest-e0be2cfd6640612e5b65f3f557fce9ab41e69f42): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#773 was last collected against 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd (round 1), but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. Everything anyone said after 9a2bbf622058f83a34345c5ff5726c3fa7ba42fd is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 773 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.
+- 2026-09-27T23:02:01.851Z - completing: merged commit: 503c20c60ceb7755c389a6ce0ed7756b0537037a
+- 2026-09-27T23:02:05.593Z - completion-attempt-recorded: attempt 2: failed
+- 2026-09-27T23:02:05.594Z - completion-failed: review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 503c20c60ceb7755c389a6ce0ed7756b0537037a, but the PR head is cbbbe29f36fac4a3305ce1b5548bfa8ce3063079. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.
+- 2026-09-27T23:03:11.904Z - completing: merged commit: 503c20c60ceb7755c389a6ce0ed7756b0537037a
+- 2026-09-27T23:03:15.646Z - completion-attempt-recorded: attempt 3: passed
+- 2026-09-27T23:03:15.647Z - done: all gates passed

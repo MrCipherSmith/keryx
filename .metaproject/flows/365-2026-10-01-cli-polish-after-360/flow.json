@@ -1,0 +1,594 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "365",
+  "slug": "cli-polish-after-360",
+  "title": "Import and installer CLI polish from flow 360: neutral trigger, skills install --with validation, skills update output, comments reply help parity",
+  "status": "done",
+  "createdAt": "2026-10-01T07:39:31.834Z",
+  "updatedAt": "2026-10-01T12:20:23.135Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T12:19:02.690Z",
+      "note": "c3883345: trigger 'import acme reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e"
+    },
+    "AC2": {
+      "at": "2026-10-01T12:19:04.807Z",
+      "note": "13208b3a + review fix f365b889: unknown or no-op --with/--without ids exit 1 listing the ids that would change the plan (plan.test.ts; verifier: 0 no-op ids over 25 profiles); dry-run hint repeats every plan-shaping flag, pinned through skills install in skills-install-route.test.ts (fails when the call site drops flags); hint round-trips in 248 probed cases. Fully true only after review fix f365b889 (J-001/J-002)."
+    },
+    "AC3": {
+      "at": "2026-10-01T12:19:07.173Z",
+      "note": "14267427: skills update prints '# skills update' / 'would update' and the import's paths-none, flag and family-flag warnings (import-skills-update.test.ts); review and review comments help share COMMENTS_USAGE, pinned by review-help.test.ts; CI green at c81af15e"
+    },
+    "AC4": {
+      "at": "2026-10-01T12:19:09.362Z",
+      "note": "14267427, 3766d5aa, c81af15e: import and reviewers text qualify the rules/core overwrite (legacy profile route; the manifest form skips unrecorded files — broadened from 'with --target' per review J-007); parseSkillModelTier and bundled-eval read via skill-frontmatter.ts, header exceptions removed; 0 diffs over 374 real SKILL files (J-005/J-006)"
+    },
+    "AC5": {
+      "at": "2026-10-01T12:19:12.593Z",
+      "note": "CI green on PR #829 at head c81af15ece28980974208558bfc8b04f669be785 (typecheck-and-tests and all jobs pass); keryx health run PASS, no gate conditions"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/829"
+  },
+  "baseBranch": "main",
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "context is in description.md (items found and reproduced during flow 360/362); each worker reads its own code"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written test-first in T5-T8; the suite runs in CI"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "AC1: neutral trigger in reviewer-skill-creator",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:46:28.941Z",
+            "outcome": "started",
+            "detail": "365-T5 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "AC2: skills install --with/--without validation and full dry-run hint",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:46:29.106Z",
+            "outcome": "started",
+            "detail": "365-T6 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "AC3 (+AC4 import text): skills update output and warnings, comments reply help parity",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:46:29.264Z",
+            "outcome": "started",
+            "detail": "365-T7 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "AC4: reviewers.ts rules/core wording; model-tier and bundled-eval through the shared frontmatter reader",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:46:29.419Z",
+            "outcome": "started",
+            "detail": "365-T8 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: reviewer-skill-creator transcript and rules/core wording after T7",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:54:42.207Z",
+            "outcome": "started",
+            "detail": "365-T9 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-01T07:39:31.834Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-01T10:45:59.120Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T10:46:00.877Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T10:46:02.712Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T10:46:09.994Z",
+      "event": "task-added",
+      "detail": "T5: AC1: neutral trigger in reviewer-skill-creator"
+    },
+    {
+      "at": "2026-10-01T10:46:11.820Z",
+      "event": "task-added",
+      "detail": "T6: AC2: skills install --with/--without validation and full dry-run hint"
+    },
+    {
+      "at": "2026-10-01T10:46:13.639Z",
+      "event": "task-added",
+      "detail": "T7: AC3 (+AC4 import text): skills update output and warnings, comments reply help parity"
+    },
+    {
+      "at": "2026-10-01T10:46:15.562Z",
+      "event": "task-added",
+      "detail": "T8: AC4: reviewers.ts rules/core wording; model-tier and bundled-eval through the shared frontmatter reader"
+    },
+    {
+      "at": "2026-10-01T10:46:17.289Z",
+      "event": "frozen",
+      "detail": "5 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T10:46:19.095Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T10:46:28.941Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 365-T5 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:46:29.106Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 365-T6 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:46:29.264Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 365-T7 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:46:29.419Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 365-T8 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:48:46.071Z",
+      "event": "task-done",
+      "detail": "T5: AC1: neutral trigger in reviewer-skill-creator"
+    },
+    {
+      "at": "2026-10-01T10:52:27.804Z",
+      "event": "task-done",
+      "detail": "T6: AC2: skills install --with/--without validation and full dry-run hint"
+    },
+    {
+      "at": "2026-10-01T10:54:38.685Z",
+      "event": "task-done",
+      "detail": "T7: AC3 (+AC4 import text): skills update output and warnings, comments reply help parity"
+    },
+    {
+      "at": "2026-10-01T10:54:40.457Z",
+      "event": "task-added",
+      "detail": "T9: Docs: reviewer-skill-creator transcript and rules/core wording after T7"
+    },
+    {
+      "at": "2026-10-01T10:54:42.207Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 365-T9 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:55:51.220Z",
+      "event": "task-done",
+      "detail": "T8: AC4: reviewers.ts rules/core wording; model-tier and bundled-eval through the shared frontmatter reader"
+    },
+    {
+      "at": "2026-10-01T10:58:13.771Z",
+      "event": "task-done",
+      "detail": "T9: Docs: reviewer-skill-creator transcript and rules/core wording after T7"
+    },
+    {
+      "at": "2026-10-01T12:19:02.690Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: c3883345: trigger 'import acme reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T12:19:04.807Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: 13208b3a + review fix f365b889: unknown or no-op --with/--without ids exit 1 listing the ids that would change the plan (plan.test.ts; verifier: 0 no-op ids over 25 profiles); dry-run hint repeats every plan-shaping flag, pinned through skills install in skills-install-route.test.ts (fails when the call site drops flags); hint round-trips in 248 probed cases. Fully true only after review fix f365b889 (J-001/J-002). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T12:19:07.173Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 14267427: skills update prints '# skills update' / 'would update' and the import's paths-none, flag and family-flag warnings (import-skills-update.test.ts); review and review comments help share COMMENTS_USAGE, pinned by review-help.test.ts; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T12:19:09.362Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: 14267427, 3766d5aa, c81af15e: import and reviewers text qualify the rules/core overwrite (legacy profile route; the manifest form skips unrecorded files — broadened from 'with --target' per review J-007); parseSkillModelTier and bundled-eval read via skill-frontmatter.ts, header exceptions removed; 0 diffs over 374 real SKILL files (J-005/J-006) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T12:19:12.594Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: CI green on PR #829 at head c81af15ece28980974208558bfc8b04f669be785 (typecheck-and-tests and all jobs pass); keryx health run PASS, no gate conditions (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T12:19:18.786Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T12:19:25.092Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/829"
+    },
+    {
+      "at": "2026-10-01T12:19:52.890Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T12:19:57.988Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-10-01T12:19:57.990Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main | base-branch: violated: this flow recorded base main, but 26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main. The merge landed somewhere else."
+    },
+    {
+      "at": "2026-10-01T12:20:16.092Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/829 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T12:20:17.957Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T12:20:23.133Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-10-01T12:20:23.135Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T12:19:02.690Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:19:04.807Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:19:07.173Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:19:09.362Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:19:12.593Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:20:23.135Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63",
+      "headCommit": "26a102b18383fc331033f0239c1401393e70a48d"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T12:19:57.988Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "fail",
+          "detail": "26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "fail",
+          "detail": "violated: this flow recorded base main, but 26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main. The merge landed somewhere else."
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    },
+    {
+      "at": "2026-10-01T12:20:23.133Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "26a102b18383fc331033f0239c1401393e70a48d is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "26a102b18383fc331033f0239c1401393e70a48d is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "9 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:2343bbf9f164ba6b72fed9cef3fe8c7606f1597744ad21e290c7a3540c891b63"
+    }
+  ],
+  "merged": {
+    "commit": "26a102b18383fc331033f0239c1401393e70a48d",
+    "ref": "origin/main",
+    "at": "2026-10-01T12:20:23.135Z"
+  }
+}

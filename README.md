@@ -703,6 +703,23 @@ Grouped by what you are trying to do, not by internal module layout.
   automatically and no flow transition waits on it. In the TUI, `/product`
   shows the same header and rows. See the
   [CLI reference](docs/docs/cli-reference.md#product).
+- **decisions** — the recommendation journal. Every agent question with options
+  writes one record under `.metaproject/data/decisions/`: the recommendation and
+  its reason (written before the question is shown), the display mode, the option
+  order, your choice, the time you took and, after a deviation, an optional
+  reason (asked once, and the tool result waits for it; an empty answer releases
+  the wait; add or change it later with `/decisions reason`).
+  One question in three is asked blind (no "recommended" mark, random order,
+  revealed after the answer, changeable with `/decisions change`), never for
+  release, ship, publish, deploy, delete or push, nor for merge, drop, remove or
+  force next to main, production, a branch or a table, or with no real object
+  ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for
+  the irreversible ones, and the report counts how often blind was refused.
+  `keryx decisions report` prints the match share by mode and stage and the
+  deviations, with no model; `keryx decisions open|answer|reason` lets any agent
+  or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the
+  same report. See the
+  [Recommendation journal guide](docs/docs/guides/recommendation-journal.md).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
   evaluation corpus.
@@ -1019,7 +1036,13 @@ talk to `serve` over loopback with a local shell token (new on every `serve`
 start, and never sent to an endpoint whose `serve` is gone), they never poll
 Telegram themselves, and a second `keryx serve` does not poll while the first one
 runs. At most 500 lines wait per topic, and turning it off tells the topic which
-queued lines will not run.
+queued lines will not run. From the topic you can also run a fixed list of slash
+commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
+in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
+after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
+`/schedule`, `/rewind`, `/conform` and `/ci` stay local. Each message shows its state as a reaction and the topic shows typing
+while a turn runs; see
+[commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
 Without a connection `serve` starts as before, with remote control off, and only
 offers the local `/channels` routes. This
 has been verified against a fake Bot API only; no run against real Telegram has

@@ -59,6 +59,7 @@ import { countPending } from "../lib/serve-approvals-store";
 import { assembleSubmitTurn } from "../lib/serve-runner";
 import { localMachineName } from "../remote/naming";
 import { openRemoteService } from "../remote/service";
+import { createServeDigestTicker } from "./serve-digest";
 import { helpOptions, helpTitle, helpUsage, note, style, symbols } from "../lib/ui";
 
 // ---------------------------------------------------------------------------
@@ -282,6 +283,14 @@ async function runServe(args: string[]): Promise<void> {
     console.log(`    ${style.dim("channels ready: connect Telegram from the shell with /channels")}`);
   }
 
+  // Flow 389: scheduled digests fire from here, not from an OS timer. The first tick is
+  // immediate, so a slot missed while serve was down is caught up once.
+  const digestTicker = createServeDigestTicker({
+    hub: () => remoteService.hub(),
+    onNotice: (message) => console.log(`  ${style.yellow(symbols.bullet)} ${sanitizeForDisplay(message)}`),
+  });
+  digestTicker.start();
+
   await new Promise<void>((resolve) => {
     let draining = false;
     const finish = (): void => {
@@ -290,8 +299,9 @@ async function runServe(args: string[]): Promise<void> {
       }
       draining = true;
       console.log(`  ${style.dim("draining…")}`);
-      void listener
-        .drain()
+      void digestTicker
+        .stop()
+        .then(() => listener.drain())
         .then(() => remoteService.stop())
         .then(() => {
         console.log(`  ${style.green(symbols.ok)} stopped`);

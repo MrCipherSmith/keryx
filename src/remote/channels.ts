@@ -29,6 +29,8 @@ export interface ChannelsHost {
   /** (Re)start the hub from the files on disk. */
   startHub(): Promise<{ ok: true } | { ok: false; reason: string }>;
   stopHub(reason: string): Promise<void>;
+  /** Resolves once every hub start or stop already in flight has finished. */
+  settle(): Promise<void>;
   openApi(): OpenBotApiResult;
 }
 
@@ -46,6 +48,8 @@ export class ChannelsController {
   private pairing: Pairing | undefined;
   // pair, reload and disconnect run one at a time; any call that changes what the channel is bumps the generation, so work queued or in flight for an older one gives up.
   private generation = 0;
+  private pairTickets = 0;
+  private latestPair = 0;
   private chain: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly options: ChannelsOptions) {}
@@ -75,6 +79,7 @@ export class ChannelsController {
 
   /** Serve is stopping: nothing may keep polling. */
   async stop(): Promise<void> {
+    this.generation += 1;
     await this.dropPairing();
   }
 
@@ -93,7 +98,8 @@ export class ChannelsController {
     if (this.host.hub() !== undefined) {
       return { state: "connected" };
     }
-    if (this.pairing !== undefined && !this.pairing.isFinal()) {
+    // A pairing that reached `ready` is final but not used up: nothing connected it yet (only an open modal does), so the modal must offer Resume. `reload` consumes it.
+    if (this.pairing !== undefined && (!this.pairing.isFinal() || this.pairing.isReady())) {
       return { state: "pairing" };
     }
     if (this.configured()) {
@@ -117,33 +123,46 @@ export class ChannelsController {
     await running?.cancel();
   }
 
-  private pair(): Promise<Response> {
-    const mine = ++this.generation;
+  private async pair(): Promise<Response> {
+    // The generation moves only for a token Telegram accepted: a rejected one must not end a valid start still in flight. Of two valid starts the later one wins.
+    const seen = this.generation;
+    const ticket = ++this.pairTickets;
+    const stale = (): boolean => seen !== this.generation || ticket < this.latestPair;
     const superseded = (): Response => fail(409, "superseded", "Another change to this channel came in while the pairing was starting; start again.");
+    const connected = (): Response => fail(409, "already-connected", "Telegram is already connected on this machine; disconnect it first.");
+    if (this.host.hub() !== undefined) {
+      return connected();
+    }
+    // Validate the new token before touching the pairing that exists: a mistyped token, or a second shell, must not kill a pairing in progress.
+    const api = this.host.openApi();
+    if (!api.ok) {
+      return fail(422, "no-token", api.reason);
+    }
+    const opened: OpenPairingResult = await Pairing.prepare({
+      api: api.api,
+      ...(this.options.now === undefined ? {} : { now: this.options.now }),
+      ...this.options.pairing,
+    });
+    if (!opened.ok) {
+      return fail(opened.kind === "rejected" ? 422 : 502, opened.kind === "rejected" ? "token-rejected" : "telegram-unreachable", opened.reason);
+    }
+    if (stale()) {
+      return superseded();
+    }
+    this.latestPair = ticket;
     return this.exclusive(async () => {
-      if (mine !== this.generation) {
+      if (stale()) {
         return superseded();
       }
       if (this.host.hub() !== undefined) {
-        return fail(409, "already-connected", "Telegram is already connected on this machine; disconnect it first.");
+        return connected();
       }
+      // Replace the old one only now, and end its poller before the new one starts (one poller per token).
       await this.dropPairing();
-      const api = this.host.openApi();
-      if (!api.ok) {
-        return fail(422, "no-token", api.reason);
-      }
-      const opened: OpenPairingResult = await Pairing.open({
-        api: api.api,
-        ...(this.options.now === undefined ? {} : { now: this.options.now }),
-        ...this.options.pairing,
-      });
-      if (!opened.ok) {
-        return fail(opened.kind === "rejected" ? 422 : 502, opened.kind === "rejected" ? "token-rejected" : "telegram-unreachable", opened.reason);
-      }
-      if (mine !== this.generation) {
-        await opened.pairing.cancel();
+      if (stale()) {
         return superseded();
       }
+      opened.pairing.begin();
       this.pairing = opened.pairing;
       return ok({ ...opened.pairing.snapshot() });
     });
@@ -155,6 +174,9 @@ export class ChannelsController {
       return fail(404, "no-pairing", "No pairing is open; start one first.");
     }
     await current.recheck();
+    if (this.pairing !== current) {
+      return fail(404, "no-pairing", "The pairing was closed while it was being checked; start one again.");
+    }
     return ok({ ...current.snapshot() });
   }
 
@@ -168,14 +190,16 @@ export class ChannelsController {
   private reload(): Promise<Response> {
     this.generation += 1;
     return this.exclusive(async () => {
-      await this.dropPairing();
       // Check the files first: a running hub is only stopped when the new ones can start, so a bad reload leaves the old channel working.
       const config = loadRemoteConfig(this.host.dir);
       const token = loadBotToken(this.host.dir);
       if (!config.ok || !token.ok) {
+        // The pairing is left alone too: a second shell holding a stale snapshot must not kill a live pairing with a reload that cannot succeed.
         const reason = !config.ok ? config.reason : !token.ok ? token.reason : "";
         return fail(422, "cannot-connect", this.host.hub() === undefined ? reason : `${reason} The running channel was left as it was.`);
       }
+      // Only now is the pairing consumed (connectFinish writes the files first, then reloads), and its poller ends before the hub starts.
+      await this.dropPairing();
       if (this.host.hub() !== undefined) {
         await this.host.stopHub("reloading remote control");
       }
@@ -188,6 +212,7 @@ export class ChannelsController {
   }
 
   private async test(): Promise<Response> {
+    await this.host.settle();
     const hub = this.host.hub();
     if (hub === undefined) {
       const reason = this.host.hubReason();
@@ -205,6 +230,8 @@ export class ChannelsController {
     this.generation += 1;
     return this.exclusive(async () => {
       await this.dropPairing();
+      // A start still in flight would otherwise finish after this and leave a running hub with nothing on disk.
+      await this.host.settle();
       const hub = this.host.hub();
       if (hub === undefined) {
         return ok({ deleted: 0, remaining: 0, hubWasRunning: false });

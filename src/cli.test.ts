@@ -204,6 +204,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx approvals list [--all] [--json] | allow <id> | deny <id>\n",
     "                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)\n",
     "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
+    // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
+    // over three lines) and a Commands: summary row.
+    "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
+    "                                               recommendation before showing it, the human's choice after;\n",
+    "                                               report = match share by mode and stage, deviations (no model)\n",
+    "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed
@@ -249,6 +255,8 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     ],
     governance: [
       "\nEach flow also shows its acceptance coverage: how many criteria are runnable\n(exec or invariant) of all of them. A flow frozen before verification kinds\nexisted reads as fully unclassified, not as zero criteria.\n",
+      // Flow 364: the summary and stated effect per flow.
+      "\nEach flow also shows a summary (its expected outcome, tasks done, tasks still\nopen) and its stated effect (the Outcome criteria in description.md), or says\nthe effect is not stated. In keryx shell, /governance lists the flows and can\ncheck and complete an open one.\n",
     ],
     flow: [
       "  keryx flow ac kinds <id> [--json]   (verification kind per criterion; read-only, never gates)\n",
@@ -257,6 +265,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
       // also documents `flow init --outcome-author`.
       '  keryx flow outcome author <id> agent|human --reason "<why>"   (who wrote the outcome criterion; journaled, gates nothing)\n',
       "  `flow init --outcome-author agent|human` records who wrote the outcome criterion: `agent` (the default when the flag is absent) or `human`, and `human` only when the flag says so — never inferred from a git identity, an owner or the environment. A flow without the field reads `unknown`. The flag labels a sample and gates nothing.\n",
+      // Flow 390: where a flow came from — the setter's usage line and the note that also
+      // documents `flow init --origin`.
+      '  keryx flow origin set <id> human-request|agent-finding|agent-proposal|unknown --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]   (where the flow came from; journaled, gates nothing)\n',
+      "  `flow init --origin human-request|agent-finding|agent-proposal --quote \"<verbatim>\" --source \"<ref>\"` records where the flow came from. Evidence, not assertion: `human-request` is recorded only with a verbatim `--quote` of the human's first message with the idea AND a `--source` (channel, message id or time); `agent-finding` and `agent-proposal` need a `--source`. Without the evidence, or with an invalid kind, the origin stays `unknown`, the command still succeeds and says why. The Outcome criteria template then holds the request (or the source), the agent's formalization and how to observe it. `flow origin set` changes it later, with a reason. The origin labels a sample and gates nothing.\n",
+      // Flow 364: the read-only completion check.
+      "  keryx flow check-complete <id> [--merged <commit>] [--confirm-token <token>] [--json]   (every completion gate plus the PR's merge state; writes nothing)\n",
     ],
   };
 

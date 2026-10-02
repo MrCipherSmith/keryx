@@ -6,7 +6,9 @@
 
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, test } from "bun:test";
+import { saveBotToken } from "./config";
 import { botTokenPath, remoteConfigPath } from "./paths";
+import { derivedBearerNonce, readShellToken, SERVE_PROOF_HEADER, serveResponseProof } from "./shell-token";
 import { BOT_TOKEN, connectFully, makeChannelsRig, pairFully, type ChannelsRig } from "./channels.test-helpers";
 import { ChannelsClient } from "./channels-client";
 import { OWNER_ID, until } from "./remote.test-helpers";
@@ -221,5 +223,67 @@ describe("invalid data leaves nothing on disk and says why", () => {
       expect(result.reason).toContain("keryx serve");
     }
     expect(r.client.localFiles()).toEqual({ tokenFile: false, configFile: false });
+  });
+});
+
+const PREVIOUS_TOKEN = "123456789:AAHunit_previous_token_0123456789";
+const OTHER_TOKEN = "555555555:AAHunit_other_shell_token_0123456789";
+
+/** A serve that answers `channels-pair` with a fixed refusal (properly proven), after running `before`. */
+function refusingServe(dir: string, status: number, code: string, before: () => void = () => undefined): typeof fetch {
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    before();
+    const request = new Request(input, init);
+    const nonce = derivedBearerNonce((request.headers.get("authorization") ?? "").replace(/^Bearer /, "")) ?? "";
+    const token = readShellToken(dir);
+    const body = `${JSON.stringify({ error: { code, message: `refused: ${code}` } })}\n`;
+    const proof = token.ok ? serveResponseProof(token.value, nonce, "channels-pair", status, body) : "";
+    return new Response(body, { status, headers: { "content-type": "application/json", [SERVE_PROOF_HEADER]: proof } });
+  }) as unknown as typeof fetch;
+}
+
+describe("a token written for a pairing is put back only when serve definitely refused it", () => {
+  const tokenText = (dir: string): string => readFileSync(botTokenPath(dir), "utf8").trim();
+
+  test("a definitive refusal puts the previous token back", async () => {
+    r = await makeChannelsRig();
+    saveBotToken(PREVIOUS_TOKEN, r.rig.dir);
+    const client = new ChannelsClient({ dir: r.rig.dir, fetchImpl: refusingServe(r.rig.dir, 422, "token-rejected") });
+    const result = await client.startPairing(BOT_TOKEN);
+    expect(!result.ok && result.code).toBe("token-rejected");
+    expect(tokenText(r.rig.dir)).toBe(PREVIOUS_TOKEN);
+  });
+
+  test("no answer leaves the new token on disk: serve may have taken it", async () => {
+    r = await makeChannelsRig();
+    saveBotToken(PREVIOUS_TOKEN, r.rig.dir);
+    const timedOut = new ChannelsClient({
+      dir: r.rig.dir,
+      fetchImpl: (async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      }) as unknown as typeof fetch,
+    });
+    const result = await timedOut.startPairing(BOT_TOKEN);
+    expect(!result.ok && result.code).toBe("no-answer");
+    expect(tokenText(r.rig.dir)).toBe(BOT_TOKEN);
+  });
+
+  test("superseded leaves the file alone: a newer start owns it", async () => {
+    r = await makeChannelsRig();
+    saveBotToken(PREVIOUS_TOKEN, r.rig.dir);
+    const client = new ChannelsClient({ dir: r.rig.dir, fetchImpl: refusingServe(r.rig.dir, 409, "superseded") });
+    const result = await client.startPairing(BOT_TOKEN);
+    expect(!result.ok && result.code).toBe("superseded");
+    expect(tokenText(r.rig.dir)).toBe(BOT_TOKEN);
+  });
+
+  test("a refusal does not touch a token another shell wrote in between", async () => {
+    r = await makeChannelsRig();
+    const dir = r.rig.dir;
+    saveBotToken(PREVIOUS_TOKEN, dir);
+    const client = new ChannelsClient({ dir, fetchImpl: refusingServe(dir, 422, "token-rejected", () => void saveBotToken(OTHER_TOKEN, dir)) });
+    const result = await client.startPairing(BOT_TOKEN);
+    expect(!result.ok && result.code).toBe("token-rejected");
+    expect(tokenText(dir)).toBe(OTHER_TOKEN);
   });
 });

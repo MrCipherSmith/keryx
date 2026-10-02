@@ -79,6 +79,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "enrich",
       "context",
       "backlinks",
+      "history",
+      "restore",
     ],
   ],
   // commands/stack.ts:18
@@ -106,8 +108,10 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
       "check-ac",
       "owner",
       "outcome",
+      "origin",
       "implemented",
       "complete",
+      "check-complete",
       "confirm",
       "recover",
       "block",
@@ -223,6 +227,8 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   ["schedule", ["add", "list", "show", "pause", "resume", "run", "remove"]],
   // commands/governance.ts:86-90
   ["governance", ["report", "show"]],
+  // commands/decisions.ts (decisionsCommand dispatch)
+  ["decisions", ["open", "answer", "reason", "report"]],
   // commands/product.ts (productCommand dispatch)
   ["product", ["index", "open"]],
   // commands/hooks.ts:1247-1271 (excludes the unrelated hook-event-name switch earlier in the same file)

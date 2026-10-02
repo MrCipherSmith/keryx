@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "380",
+  "slug": "product-module-p1",
+  "title": "Product module P1: intent index and the open queue",
+  "status": "done",
+  "createdAt": "2026-09-28T23:11:49.372Z",
+  "updatedAt": "2026-10-01T12:22:19.211Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T00:57:03.569Z",
+      "note": "index.test.ts: fixture set always, real corpus when present; live run 423 intents, 0 failures, 130 without a statement, second run byte-identical"
+    },
+    "AC2": {
+      "at": "2026-09-29T00:57:03.865Z",
+      "note": "open.test.ts; live run lists 309 closed unobserved intents with flow and outcome text"
+    },
+    "AC3": {
+      "at": "2026-09-29T00:57:04.021Z",
+      "note": "staleness.test.ts: content fingerprint; older-mtime edit, rename, missing and malformed index all fail naming keryx product index; touch alone is not stale"
+    },
+    "AC4": {
+      "at": "2026-09-29T00:57:04.177Z",
+      "note": "disposable.test.ts: delete and rebuild gives an equivalent index; live run deleted the data dir afterwards"
+    },
+    "AC5": {
+      "at": "2026-09-29T00:57:04.330Z",
+      "note": "never-gates.test.ts: lifecycle with an empty index, import scanner over src/flow and governance with self-tests"
+    },
+    "AC6": {
+      "at": "2026-09-29T00:57:04.483Z",
+      "note": "no-model.test.ts: static audit of src/product non-test files"
+    },
+    "AC7": {
+      "at": "2026-09-29T00:57:04.635Z",
+      "note": "observation.test.ts: outcome-observed line at column 0 removes a flow from the open list"
+    },
+    "AC8": {
+      "at": "2026-09-29T00:57:04.789Z",
+      "note": "bulk-budget.test.ts: one module, only index and open registered, no skill or subagent added"
+    },
+    "AC9": {
+      "at": "2026-09-29T00:57:04.946Z",
+      "note": "product-open-surface.test.ts asserts the painted rows and the never-checked header; /product wired for idle and busy"
+    },
+    "AC10": {
+      "at": "2026-09-29T00:57:05.101Z",
+      "note": "gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the operator chat channel before anything beyond P1; honest kind none"
+    },
+    "AC11": {
+      "at": "2026-09-29T00:57:05.264Z",
+      "note": "typecheck clean, src/product suite green, CI 18/18 on d2c60a8c, README, docs cli-reference, module page, CHANGELOG 0.3.30 and version bump present"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/793"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T23:11:49.372Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-28T23:55:16.280Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-28T23:55:20.261Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T00:57:03.570Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: index.test.ts: fixture set always, real corpus when present; live run 423 intents, 0 failures, 130 without a statement, second run byte-identical (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:03.865Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: open.test.ts; live run lists 309 closed unobserved intents with flow and outcome text (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.021Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: staleness.test.ts: content fingerprint; older-mtime edit, rename, missing and malformed index all fail naming keryx product index; touch alone is not stale (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.177Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: disposable.test.ts: delete and rebuild gives an equivalent index; live run deleted the data dir afterwards (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.330Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: never-gates.test.ts: lifecycle with an empty index, import scanner over src/flow and governance with self-tests (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.483Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: no-model.test.ts: static audit of src/product non-test files (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.635Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: observation.test.ts: outcome-observed line at column 0 removes a flow from the open list (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.789Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bulk-budget.test.ts: one module, only index and open registered, no skill or subagent added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:04.946Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: product-open-surface.test.ts asserts the painted rows and the never-checked header; /product wired for idle and busy (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:05.101Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: gate G1: the journal entry holds the number 309 of 309 (0 criterion stated, 0 observed) and the operator was told on the operator chat channel before anything beyond P1; honest kind none (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:05.265Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: typecheck clean, src/product suite green, CI 18/18 on d2c60a8c, README, docs cli-reference, module page, CHANGELOG 0.3.30 and version bump present (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T00:57:05.418Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T00:57:05.574Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T00:57:05.726Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T00:57:05.881Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T00:57:08.282Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/793 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-29T00:57:09.777Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-29T00:57:13.687Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-29T00:57:13.688Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-01T12:22:19.211Z",
+      "event": "renumbered",
+      "detail": "362 -> 380: duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+    }
+  ],
+  "signatures": [
+    {
+      "at": "2026-09-29T00:57:03.569Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:03.865Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.021Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.177Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.330Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.483Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.635Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.789Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:04.946Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:05.101Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:05.264Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    },
+    {
+      "at": "2026-09-29T00:57:13.688Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0",
+      "headCommit": "d38649b8292f291e0d504ed3cb4f36cd71028836"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T00:57:13.687Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "11 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "d38649b8292f291e0d504ed3cb4f36cd71028836 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "d38649b8292f291e0d504ed3cb4f36cd71028836 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:0a074c604e935438a1f50e482d74a7a22ce619b5181482eb5ea604316159f5b0"
+    }
+  ],
+  "merged": {
+    "commit": "d38649b8292f291e0d504ed3cb4f36cd71028836",
+    "ref": "origin/main",
+    "at": "2026-09-29T00:57:13.688Z"
+  }
+}

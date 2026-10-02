@@ -119,8 +119,34 @@ just been done.
 | `keryx wiki verify` | Stamps provenance | page frontmatter |
 | `keryx wiki migrate-markers` | One-off: wraps existing Reference sections | marker lines |
 | `keryx wiki validate` | Structural checks | nothing |
+| `keryx wiki history` | A page's versions, or the runs that changed pages | nothing |
+| `keryx wiki restore` | Puts a page, or everything one run changed, back | the restored pages |
 
 None of them calls a model.
+
+### Undo, and what no writer may break
+
+Every page write goes through the page's history first
+(`.metaproject/data/gdwiki/history/<page>/`, one plain `.md` per version plus an
+`index.md`), and each command prints the run id to undo it with:
+
+```bash
+keryx wiki history components/src-auth.md   # the page's versions
+keryx wiki history --runs                   # which runs changed what
+keryx wiki restore --run <run-id>           # undo one run, every page it touched
+keryx wiki restore components/src-auth.md   # undo one page's last change
+```
+
+Writers also keep a page's history intact rather than relying on the undo:
+`enrich` changes prose only — front matter, the changelog and a managed block come
+back from the original, plus one changelog entry and a Version bump — and
+`collect --force` regenerates only the generator's sections of an existing page.
+`wiki validate` reports `Version` behind the changelog, and — for a change keryx
+recorded — a changelog section, entry, front-matter key or managed block that the
+page's previous version had. A hand edit is not judged: it may be deliberate.
+This came out of a measured incident: one `enrich --all --force` run on a 504-page
+wiki dropped the changelog of 6 pages, reworded tool-written attestation entries on
+5 and left Version behind on 2, with nothing to roll back to and `validate` silent.
 
 ### `wiki freshness`
 

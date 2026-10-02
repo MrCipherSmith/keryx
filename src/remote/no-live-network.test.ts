@@ -174,7 +174,10 @@ describe("src/remote cannot reach the network except through its one client", ()
       expect(importedSpecifiers(code).filter(isNetworkSpecifier)).toEqual([]);
       // The one place a URL is built is `target`, and the check sits in it.
       expect(code.match(/`http:\/\//g)?.length).toBe(1);
-      const target = code.slice(code.indexOf("private target("), code.indexOf("private async post("));
+      const start = code.indexOf("private target(");
+      expect(start).toBeGreaterThanOrEqual(0);
+      // Up to the next member: the body of `target` and nothing else.
+      const target = code.slice(start, code.indexOf("\n  private ", start + 1));
       expect(target).toContain("isLoopbackAddress(");
       expect(target.indexOf("isLoopbackAddress(")).toBeLessThan(target.indexOf("`http://"));
       // No other network primitive, and no other host.
@@ -204,6 +207,82 @@ describe("src/remote cannot reach the network except through its one client", ()
   test("the shared serve listener does not import src/remote (the surface is injected by the composition root)", () => {
     const serveServer = readFileSync(path.join(REMOTE_DIR, "..", "lib", "serve-server.ts"), "utf8");
     expect(importedSpecifiers(stripComments(serveServer)).filter((specifier) => /(^|\/)remote(\/|$)/.test(specifier))).toEqual([]);
+  });
+});
+
+// Flow 387 (AC14): the command, picker, reaction and typing files are inside the same scan, and
+// their tests run on the fake Bot API only.
+const FLOW_387_SOURCES = [
+  "command-gateway.ts",
+  "command-router.ts",
+  "message-state.ts",
+  "format-html.ts",
+  "outbound-queue.ts",
+  "hub.ts",
+  "http-surface.ts",
+  "shell-bridge.ts",
+];
+const FLOW_387_TESTS = [
+  "command-gateway.test.ts",
+  "command-output.test.ts",
+  "command-busy.test.ts",
+  "command-menu.test.ts",
+  "command-secrets.test.ts",
+  "command-model.test.ts",
+  "command-connect.test.ts",
+  "command-confirm.test.ts",
+  "command-session.test.ts",
+  "command-panel.test.ts",
+  "picker-callbacks.test.ts",
+  "approval-edit.test.ts",
+  "bot-api-edit.test.ts",
+  "bot-api-reaction.test.ts",
+  "message-state.test.ts",
+  "typing-indicator.test.ts",
+  "command.test-helpers.ts",
+];
+const BOT_API_CALLS = ["editMessageText", "editMessageReplyMarkup", "setMessageReaction", "sendChatAction", "setMyCommands"];
+
+describe("flow 387: commands, pickers, reactions and typing stay off the live network", () => {
+  const files = listSources().map((file) => ({ name: path.basename(file), text: readFileSync(file, "utf8") }));
+  const named = (name: string) => files.find((entry) => entry.name === name);
+
+  test("every command source is in the scan and is not a network client", () => {
+    for (const name of FLOW_387_SOURCES) {
+      const entry = named(name);
+      expect(entry, `${name} is in src/remote`).toBeDefined();
+      expect(isTestFile(name)).toBe(false);
+      expect(productionViolations(entry?.text ?? ""), name).toEqual([]);
+    }
+  });
+
+  test("every command test and helper is in the scan, uses no socket and calls no global fetch", () => {
+    for (const name of FLOW_387_TESTS) {
+      const entry = named(name);
+      expect(entry, `${name} is in src/remote`).toBeDefined();
+      expect(isTestFile(name)).toBe(true);
+      expect(testViolations(entry?.text ?? ""), name).toEqual([]);
+      expect(entry?.text.includes(TELEGRAM_HOST), name).toBe(false);
+    }
+  });
+
+  test("the new Bot API methods are sent only by the one client; the rest of the sources go through the interface", () => {
+    const outside = files
+      .filter((entry) => !isTestFile(entry.name) && entry.name !== THE_CLIENT)
+      .filter((entry) => /\bapi\.[a-zA-Z]+\b/.test(entry.text) || entry.name === "hub.ts")
+      .filter((entry) => /https?:\/\//.test(stripComments(entry.text)));
+    expect(outside.map((entry) => entry.name)).toEqual([]);
+    const client = named(THE_CLIENT);
+    for (const call of BOT_API_CALLS) {
+      expect(client?.text.includes(call), `${THE_CLIENT} implements ${call}`).toBe(true);
+    }
+  });
+
+  test("the fake Bot API stands in for all of them", () => {
+    const fake = named("fake-bot-api.ts");
+    for (const call of BOT_API_CALLS) {
+      expect(fake?.text.includes(call), `fake-bot-api.ts implements ${call}`).toBe(true);
+    }
   });
 });
 

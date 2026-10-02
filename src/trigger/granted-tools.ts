@@ -141,7 +141,130 @@ export const GRANTED_TOOL_CATALOGUE: readonly GrantedToolSpec[] = [
       "databaseId,displayTitle,status,conclusion,headBranch,event,createdAt,url",
     ],
   },
+  // Flow 389: two read-only views the scheduled digest needs. Both stay inside
+  // `gh pr list` / `gh run list`, so they are covered by the same allowlist.
+  {
+    id: "gh.pr.review-requested",
+    tool: "gh_pr_review_requested",
+    program: "gh",
+    description: "List open pull requests of a granted repository whose review is requested from the operator (read-only, `gh pr list --search`).",
+    params: { repo: repoParam, limit: limitParam },
+    argv: (v) => [
+      "pr",
+      "list",
+      "--repo",
+      v["repo"]!,
+      "--state",
+      "open",
+      "--limit",
+      v["limit"]!,
+      "--search",
+      "review-requested:@me",
+      "--json",
+      PR_FIELDS,
+    ],
+  },
+  {
+    id: "gh.run.failed",
+    tool: "gh_run_failed",
+    program: "gh",
+    description: "List recent FAILED GitHub Actions runs of a granted repository (read-only, `gh run list --status failure`).",
+    params: { repo: repoParam, limit: limitParam },
+    argv: (v) => [
+      "run",
+      "list",
+      "--repo",
+      v["repo"]!,
+      "--status",
+      "failure",
+      "--limit",
+      v["limit"]!,
+      "--json",
+      "databaseId,displayTitle,status,conclusion,headBranch,event,createdAt,url",
+    ],
+  },
 ];
+
+/**
+ * Flow 389 (AC3): the READ-ONLY allowlist of `gh` command groups and verbs. A
+ * catalogue entry is read-only only if its `<group> <verb>` is on this list.
+ * The list is code, not config; widening it is a reviewed change. It lists the
+ * verbs that only read — never `merge`, `close`, `comment`, `edit`, `create`,
+ * `review`, `ready`, `rerun`, `cancel`, or anything under `api`/`auth`.
+ */
+export const GH_READONLY_ALLOWLIST: Readonly<Record<string, readonly string[]>> = {
+  pr: ["list", "view", "checks"],
+  issue: ["list", "view"],
+  run: ["list"],
+};
+
+/** Verbs and groups that write, or change which account `gh` is. Their appearance anywhere in an argv is refused. */
+const GH_MUTATING_WORDS: readonly string[] = [
+  "merge",
+  "close",
+  "reopen",
+  "comment",
+  "edit",
+  "create",
+  "delete",
+  "review",
+  "ready",
+  "lock",
+  "unlock",
+  "transfer",
+  "pin",
+  "unpin",
+  "cancel",
+  "rerun",
+  "api",
+  "auth",
+  "login",
+  "logout",
+  "switch",
+  "checkout",
+  "revert",
+  "set-default",
+  "--body",
+  "--body-file",
+  "--add-label",
+  "--remove-label",
+  "--add-assignee",
+  "--method",
+  "-X",
+  "-f",
+  "-F",
+];
+
+/** The catalogue ids the scheduled digest may be granted. */
+export const DIGEST_TOOL_IDS: readonly string[] = ["gh.pr.list", "gh.issue.list", "gh.pr.review-requested", "gh.run.failed"];
+
+/**
+ * Flow 389 (AC3): every reason a catalogue entry is NOT a read-only, repo-bound,
+ * fixed-argv `gh` command; empty means it is. Checked against the argv rendered
+ * from sample values, so a mutating verb cannot hide behind a parameter.
+ */
+export function ghReadOnlyProblem(spec: GrantedToolSpec): string[] {
+  const problems: string[] = [];
+  if (spec.program !== "gh") {
+    problems.push(`${spec.id}: program "${spec.program}" is not gh`);
+    return problems;
+  }
+  const argv = spec.argv(sampleValues(spec));
+  const [group, verb] = argv;
+  const allowed = group === undefined ? undefined : GH_READONLY_ALLOWLIST[group];
+  if (group === undefined || allowed === undefined || verb === undefined || !allowed.includes(verb)) {
+    problems.push(`${spec.id}: \`gh ${group ?? ""} ${verb ?? ""}\` is not on the read-only allowlist`);
+  }
+  for (const word of argv) {
+    if (GH_MUTATING_WORDS.includes(word)) problems.push(`${spec.id}: argv contains the mutating word "${word}"`);
+  }
+  const repoIndex = argv.indexOf("--repo");
+  const repoParamName = Object.entries(spec.params).find(([, p]) => p.repoScoped === true)?.[0];
+  if (repoIndex < 0 || repoParamName === undefined || argv[repoIndex + 1] !== sampleValues(spec)[repoParamName]) {
+    problems.push(`${spec.id}: argv does not pass \`--repo\` bound to a repository-scoped parameter`);
+  }
+  return problems;
+}
 
 /** Look a catalogue id up. */
 export function grantedToolSpec(id: string, catalogue: readonly GrantedToolSpec[] = GRANTED_TOOL_CATALOGUE): GrantedToolSpec | undefined {
@@ -192,6 +315,8 @@ export function grantedToolProblems(
     if (refusal !== undefined) {
       problems.push(`action.grants.tools: "${id}" runs \`${command}\`, which the unattended floor refuses: ${refusal}`);
     }
+    // Flow 389: a granted gh tool must also be on the read-only allowlist.
+    for (const problem of ghReadOnlyProblem(spec)) problems.push(`action.grants.tools: ${problem}`);
   }
   return problems;
 }

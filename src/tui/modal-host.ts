@@ -43,6 +43,13 @@ export type OpenModalInput = {
   /** Claim left/right arrows before modal-host's tab switch. */
   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
   /**
+   * Claim any key but Escape before the host's own handling (`x` close, tab
+   * switches, digit jumps). Return true when the body consumed it; the host
+   * then stops it there. For typed input the host would otherwise read as
+   * navigation.
+   */
+  claimKey?: (key: { name: string; sequence: string }) => boolean | undefined;
+  /**
    * True while the tab body takes every key itself (a hand-built secret field): the host then
    * neither closes on `x`/Esc nor switches tabs, whatever the focus and whichever handler is
    * registered first.
@@ -518,6 +525,14 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     const inBody = focused !== null && containsNode(state.scroll, focused);
     if (key.name === "escape") {
       closeHost(state, { restoreFocus: true, runOnClose: true });
+      key.preventDefault();
+      key.stopPropagation();
+      return;
+    }
+    // Flow 364: a tab body in the middle of typed input (the governance
+    // modal's flow-id confirmation) takes every key but Escape, so `x`, the
+    // arrows, Tab and the digit tab-jumps below never reach the host.
+    if (state.input.claimKey?.(key) === true) {
       key.preventDefault();
       key.stopPropagation();
       return;

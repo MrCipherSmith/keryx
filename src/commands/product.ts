@@ -6,12 +6,32 @@
 
 import {
   buildIntentIndex,
+  buildOpenReport,
+  checkStaleness,
   loadOpenReport,
+  readIntentIndex,
   renderIndexSummary,
   renderOpen,
   serializeIndex,
   writeIntentIndex,
 } from "../product/service";
+
+/**
+ * The flow board for the scheduled digest (flow 389), as plain fields. This file is the only reader of
+ * the index, so the digest gets the board through here instead of importing the product module; the CLI
+ * registry hands this function to the digest.
+ */
+export async function readDigestBoard(projectRoot: string) {
+  const read = await readIntentIndex(projectRoot);
+  if (read.state !== "present") return read;
+  const stale = await checkStaleness(projectRoot, read.index);
+  return {
+    state: "present" as const,
+    entries: read.index.intents.map((i) => ({ id: i.id, title: i.title, status: i.status, closedAt: i.closedAt, verdict: i.outcome?.verdict ?? "" })),
+    chains: buildOpenReport(read.index).entries,
+    ...(stale.stale ? { staleReason: stale.reason } : {}),
+  };
+}
 
 const FLAGS = ["--json"] as const;
 

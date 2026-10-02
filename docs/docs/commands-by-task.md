@@ -105,6 +105,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/scenarios` | Which user scenarios the working diff likely changes — deterministic scenario/code links plus Jev, ranked. |
 | `/jevrules` | Check the working diff's hunks against every applicable project rule clause, with Jev, grouped by rule. |
 | `/staledocs` | List doc sections that likely went stale because of the working diff, with Jev. |
+| `/flow` | Show a flow's origin, or set it with a reason — /flow origin [<id>] \| /flow origin <id> <kind> --reason "...". |
 | `/opencomments` | List open PR review comments with a Jev resolved/still-open/escalation label — /opencomments <owner/repo> <pr>. |
 | `/contract` | Check PR-description claims and a linked flow's frozen acceptance criteria against the working diff, with Jev. |
 | `/triage` | Advisory annotations — severity calibration, duplicate-merge candidates, verifier queue order — over the latest review package, with Jev. |
@@ -120,9 +121,10 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | CLI command | Summary |
 |---|---|
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
-| `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove. |
+| `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram. |
 | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
+| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |
@@ -134,7 +136,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
 | `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
-| `/governance` | Show the last governance report, or run one in the background. |
+| `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
+| `/decisions` | Recommendation journal report: match share by mode and stage, and the deviations with their reasons. |
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |

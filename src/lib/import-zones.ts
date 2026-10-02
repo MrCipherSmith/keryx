@@ -138,6 +138,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "review", zone: "core" },
   { segment: "capability", zone: "core" },
   { segment: "job", zone: "core" },
+  // The recommendation journal (flow 392): a deterministic, append-only record of
+  // every agent question with options, what the agent recommended, what the human
+  // chose. No model, no provider, no TUI: any agent drives it through the CLI or
+  // `src/decisions/service.ts`, and the TUI/commands reach it only by that facade.
+  { segment: "decisions", zone: "core" },
   // Added after the original table was written, and unclassified until now —
   // the gap `unclassifiedSegments()` below exists to make impossible to repeat.
   // All three are deterministic project-state bookkeeping with no provider
@@ -248,6 +253,16 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // `lib/config-dir` and the network only through its single HTTP client file,
   // and only the shell (`tui/`, `commands/`) imports it, so it is a client-zone leaf.
   { segment: "remote", zone: "client" },
+  // The scheduled digest (flow 389): the serve-side ticker that fires the
+  // stored digest schedule, builds its read-only GitHub + product-index report
+  // and hands it to the remote hub. It builds ON the flow 295 agent-task and
+  // owns no project state of its own beyond its snapshot and delivery files,
+  // and only `commands/` and `tui/` import it, so it is a client-zone leaf.
+  { segment: "scheduler", zone: "client" },
+  // Flow 387: tests that keep the docs in step with the code (the Telegram command lists against
+  // `src/remote/command-gateway.ts`). It holds only tests, reads the markdown files, and imports a
+  // client-zone module, so it is a client-zone leaf; nothing imports it.
+  { segment: "docs", zone: "client" },
 ];
 
 const ZONE_BY_SEGMENT: ReadonlyMap<string, ImportZone> = new Map(

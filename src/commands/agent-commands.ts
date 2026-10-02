@@ -204,7 +204,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Flow 300: TUI-only, same reasoning as /review — the sidebar section, the
     // background run and the report modal all need the OpenTUI surface.
     name: "/governance",
-    description: "Show the last governance report, or run one in the background",
+    description: "Flows with summary and effect — check and complete them; the governance report",
     modes: AGENT_ONLY,
   },
   {
@@ -241,6 +241,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // is one call, once; the local answer path of the serve approval broker.
     name: "/approvals",
     description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
+    name: "/decisions",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions reason <why> and /decisions change <option> follow up on the last answer",
     modes: AGENT_ONLY,
   },
   {
@@ -296,6 +302,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // now inaccurate. TUI-only, same reasoning as `/conform`.
     name: "/staledocs",
     description: "List doc sections that likely went stale because of the working diff, with Jev",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 390 (AC8): shows where a flow came from and sets it with a reason.
+    // TUI-only, a one-shot text surface like `/staledocs`; never a gate.
+    name: "/flow",
+    description: "Show a flow's origin, or set it — /flow origin [<id>] | /flow origin <id> <kind> --reason \"...\"",
     modes: AGENT_ONLY,
   },
   {

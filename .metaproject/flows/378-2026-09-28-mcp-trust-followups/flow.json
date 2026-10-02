@@ -1,0 +1,441 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "378",
+  "slug": "mcp-trust-followups",
+  "title": "MCP trust follow-ups: destructiveHint tools never offer trust; /mcp trust list and revoke",
+  "status": "done",
+  "createdAt": "2026-09-28T22:13:49.999Z",
+  "updatedAt": "2026-10-01T12:22:18.456Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-29T10:43:27.927Z",
+      "note": "approval-render.trust.test.ts and agent-permission-mode.test.ts (drives runAgentTurn) green in CI on beea5d48: destructiveHint true is never offered, absent/false keeps T"
+    },
+    "AC2": {
+      "at": "2026-09-29T10:43:28.084Z",
+      "note": "agent-permission-mode.test.ts: a grant held while harmless is dropped once the live catalog says destructive or the fingerprint differs; green in CI"
+    },
+    "AC3": {
+      "at": "2026-09-29T10:43:28.243Z",
+      "note": "approval-render.trust.test.ts: list, revoke, revoke all, hostile targets, stale-grant reasons; readline path in shell-agent-repl.test.ts; green in CI"
+    },
+    "AC4": {
+      "at": "2026-09-29T10:43:28.403Z",
+      "note": "registry, help-groups, cli-reference and commands-by-task pins green in CI; docs regenerated"
+    },
+    "AC5": {
+      "at": "2026-09-29T10:43:28.564Z",
+      "note": "trusted marker on approval lines, auto-approve line and /mcp per-server count covered by unit tests; site-check only, no live TUI render (no headless seam for launchTuiAgentShell)"
+    },
+    "AC6": {
+      "at": "2026-09-29T10:43:28.719Z",
+      "note": "mcp-trust-shell-wiring.test.ts source-text audit pins io.trustedMcpTools.clear() in startNewSession; written failing first; not run against a live TUI"
+    },
+    "AC7": {
+      "at": "2026-09-29T10:43:28.875Z",
+      "note": "0.3.27 behaviour unchanged: existing trust tests stay green in CI; annotations stay out of the fingerprint"
+    },
+    "AC8": {
+      "at": "2026-09-29T10:43:29.031Z",
+      "note": "docs (permission-modes, cli-reference, README, module page) and CHANGELOG in the release; shipped as 0.3.35 not 0.3.34 because the hotfix took 0.3.34; 18/18 CI on the head"
+    },
+    "AC9": {
+      "at": "2026-09-29T11:04:15.296Z",
+      "note": "stop recorded: W1 (external agents live) waits for the operator. Smoke on installed 0.3.35: --version, review tier, mcp list show no leak; /mcp trust could not be driven through piped stdin, TUI not driven headless (stated)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/798"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-28T22:13:49.999Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-29T10:00:12.056Z",
+      "event": "owner-set",
+      "detail": "not set -> altsay (operator confirmed flow 360 as release 0.3.34)"
+    },
+    {
+      "at": "2026-09-29T10:00:12.208Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-29T10:00:12.362Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-29T10:43:27.928Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: approval-render.trust.test.ts and agent-permission-mode.test.ts (drives runAgentTurn) green in CI on beea5d48: destructiveHint true is never offered, absent/false keeps T (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.084Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: agent-permission-mode.test.ts: a grant held while harmless is dropped once the live catalog says destructive or the fingerprint differs; green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.243Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: approval-render.trust.test.ts: list, revoke, revoke all, hostile targets, stale-grant reasons; readline path in shell-agent-repl.test.ts; green in CI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.403Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: registry, help-groups, cli-reference and commands-by-task pins green in CI; docs regenerated (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.564Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: trusted marker on approval lines, auto-approve line and /mcp per-server count covered by unit tests; site-check only, no live TUI render (no headless seam for launchTuiAgentShell) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.719Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: mcp-trust-shell-wiring.test.ts source-text audit pins io.trustedMcpTools.clear() in startNewSession; written failing first; not run against a live TUI (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:28.876Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: 0.3.27 behaviour unchanged: existing trust tests stay green in CI; annotations stay out of the fingerprint (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T10:43:29.031Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: docs (permission-modes, cli-reference, README, module page) and CHANGELOG in the release; shipped as 0.3.35 not 0.3.34 because the hotfix took 0.3.34; 18/18 CI on the head (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T11:04:15.296Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: stop recorded: W1 (external agents live) waits for the operator. Smoke on installed 0.3.35: --version, review tier, mcp list show no leak; /mcp trust could not be driven through piped stdin, TUI not driven headless (stated) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-29T11:04:15.451Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-29T11:04:15.603Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-29T11:04:15.759Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-29T11:04:15.916Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-29T11:04:18.033Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/798 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-29T11:04:23.000Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-29T11:04:27.024Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-09-29T11:04:27.024Z",
+      "event": "done",
+      "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-01T12:22:18.456Z",
+      "event": "renumbered",
+      "detail": "360 -> 378: duplicate id with a flow from another clone (main holds 360-365); housekeeping"
+    }
+  ],
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow owner set`"
+  },
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-29T10:43:27.927Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.084Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.243Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.403Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.564Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.719Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:28.875Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T10:43:29.031Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T11:04:15.296Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    },
+    {
+      "at": "2026-09-29T11:04:27.024Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f",
+      "headCommit": "06935dec71ae55815a7c411dc7182ead13c3edf4"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-29T11:04:27.023Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "9 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "06935dec71ae55815a7c411dc7182ead13c3edf4 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "06935dec71ae55815a7c411dc7182ead13c3edf4 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:947d5a0386838549f37ef51c76fd0178940d45694771c27076915ce0e3b3b63f"
+    }
+  ],
+  "merged": {
+    "commit": "06935dec71ae55815a7c411dc7182ead13c3edf4",
+    "ref": "origin/main",
+    "at": "2026-09-29T11:04:27.024Z"
+  }
+}

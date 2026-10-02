@@ -21,7 +21,8 @@
 
 import { redactSensitiveText } from "../security/service";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
-import { DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS } from "./protocol";
+import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
+import { DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
 
 /** The label a Telegram line carries in the queue and the transcript. */
 export const TG_SOURCE = "tg" as const;
@@ -34,7 +35,7 @@ export const REMOTE_REPLY_MAX_CHARS = 16_000;
 const EVENT_PREVIEW_CHARS = 80;
 
 export type RemoteState = "off" | "on" | "offline";
-export type RemoteEventKind = "line" | "reply" | "approval" | "status" | "error";
+export type RemoteEventKind = "line" | "reply" | "approval" | "status" | "error" | "command";
 
 export interface RemoteEvent {
   at: number;
@@ -55,10 +56,11 @@ export interface RemoteStatus {
 /** The part of {@link RemoteClient} the bridge uses; tests pass a fake. */
 export type RemoteClientLike = Pick<
   RemoteClient,
-  "start" | "close" | "reply" | "requestApproval" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
->;
+  "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
+> &
+  Partial<Pick<RemoteClient, "reportState">>;
 
-export interface RemoteBridgeHost {
+export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn">> {
   sessionId(): string;
   project(): string;
   /** A turn is running, or something the user typed is waiting to run. */
@@ -91,6 +93,12 @@ export interface RemoteBridgeOptions {
   dir?: string | undefined;
   now?: () => number;
   approvalTimeoutMs?: number;
+  /** A command still running after this long says so in the topic (flow 387). */
+  commandRunningNoticeMs?: number;
+  /** A command still running after this long is stopped and reported. */
+  commandLimitMs?: number;
+  /** How long a picker or a Yes/No waits for a press. */
+  choiceTimeoutMs?: number;
 }
 
 export type EnableResult = StartResult | { ok: false; code: "already-on"; message: string; retrying: false };
@@ -164,11 +172,62 @@ export class RemoteBridge {
   private timedOut = false;
   /** The close of the client being turned off, while it runs. */
   private closing: Promise<void> | undefined;
+  private readonly router: RemoteCommandRouter;
+  /** A remote `/new`, `/clear` or `/resume` is running: the topic follows the session instead of closing. */
+  private keepTopic = false;
+  private switched = false;
+  /** Plain lines taken from the topic whose turn has not started yet, oldest first (flow 387, AC18). */
+  private readonly waiting: Array<{ updateId: number; line: string }> = [];
+  /** The Telegram message the running turn belongs to. */
+  private currentUpdate: number | undefined;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
     this.now = options.now ?? Date.now;
     this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    this.router = new RemoteCommandRouter({
+      host: {
+        isBusy: () => this.host.isBusy(),
+        cancelTurn: () => this.host.cancelTurn(),
+        ...(this.host.runCommand !== undefined ? { runCommand: (line: string) => this.host.runCommand!(line) } : {}),
+        ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
+        ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
+        ...(this.host.listProviders !== undefined ? { listProviders: () => this.host.listProviders!() } : {}),
+        ...(this.host.switchModel !== undefined ? { switchModel: (model: string, provider?: string) => this.host.switchModel!(model, provider) } : {}),
+        ...(this.host.listSessions !== undefined ? { listSessions: () => this.host.listSessions!() } : {}),
+        ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
+      },
+      reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
+      record: (text) => this.push("command", text),
+      compose: composeReply,
+      choose: async (text, rows, timeoutMs, forUserId) => {
+        const client = this.client;
+        if (client === undefined || !client.connected) {
+          return undefined;
+        }
+        try {
+          return await client.requestChoice(text, rows, timeoutMs, forUserId);
+        } catch {
+          return undefined;
+        }
+      },
+      holdTopic: (on) => {
+        this.keepTopic = on;
+        if (on) {
+          this.switched = false;
+        }
+      },
+      takeSwitched: () => {
+        const was = this.switched;
+        this.switched = false;
+        return was;
+      },
+      limits: {
+        runningNoticeMs: options.commandRunningNoticeMs ?? DEFAULT_ROUTER_LIMITS.runningNoticeMs,
+        commandLimitMs: options.commandLimitMs ?? DEFAULT_ROUTER_LIMITS.commandLimitMs,
+        choiceTimeoutMs: options.choiceTimeoutMs ?? DEFAULT_ROUTER_LIMITS.choiceTimeoutMs,
+      },
+    });
   }
 
   // ---- state -----------------------------------------------------------------
@@ -260,6 +319,7 @@ export class RemoteBridge {
     this.client = undefined;
     this.clientConnected = false;
     this.endTurnState();
+    this.waiting.length = 0;
     // History first, before anything awaits: a host that is about to swap its session
     // (`/new`, `/resume`) calls this and must close the interval on the session it opened.
     this.host.recordOff();
@@ -309,23 +369,83 @@ export class RemoteBridge {
   // ---- a line from Telegram -------------------------------------------------------
 
   /** Resolves as soon as the line is in the session or its queue, never after the turn: serve is told it arrived then. */
-  private accept(text: string, _meta: InboundMeta): void {
+  private accept(text: string, meta: InboundMeta): void {
     const line = text.trim();
     if (line.length === 0 || this.client === undefined) return;
-    // A slash command is the operator's own control surface (`/exit`, `/bash`,
-    // `/remote-control off`...). Someone typing in a topic gets plain prompts to
-    // the model only, so the shell cannot be steered around its approvals.
+    // A slash command goes to the gateway (flow 387): an allowlist of commands that print text,
+    // the rest refused with the reason. A refusal is answered before this returns.
     if (line.startsWith("/")) {
-      this.push("line", `Telegram: slash command refused (${preview(line.split(/\s+/)[0] ?? "")})`);
-      void this.client.reply("Slash commands are not run from Telegram. Send plain text.").catch(() => false);
+      this.push("line", `Telegram: ${preview(line)}`);
+      this.router.handle(line, meta.fromId, (result) => this.report(meta.updateId, result));
       return;
     }
     this.push("line", `Telegram: ${preview(line)}`);
+    this.waiting.push({ updateId: meta.updateId, line });
     if (this.host.isBusy()) {
+      // Queued: the message keeps its "received" reaction until its own turn starts.
       this.host.enqueue(line);
     } else {
+      this.report(meta.updateId, "reading");
       this.host.runLine(line);
     }
+  }
+
+  /** Where a message from the topic is. Best effort and never awaited: it cannot hold the line. */
+  private report(updateId: number, state: MessageState): void {
+    const client = this.client;
+    if (client?.reportState === undefined) return;
+    // Posts for one message go out one after the other, in the order they were reported: a
+    // slow "working" must not land after "done" and leave the typing indicator running.
+    const previous = this.reportTails.get(updateId);
+    const post = client.reportState.bind(client);
+    // With nothing in flight for this message the post starts at once, as before.
+    const started: Promise<unknown> = previous === undefined ? post(updateId, state) : previous.then(() => post(updateId, state));
+    const tail: Promise<void> = started
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .then(() => {
+        if (this.reportTails.get(updateId) === tail) this.reportTails.delete(updateId);
+      });
+    this.reportTails.set(updateId, tail);
+  }
+
+  /** The last state post of each message still in flight; keeps the posts of one message in order. */
+  private readonly reportTails = new Map<number, Promise<void>>();
+
+  /** Resolves when every command taken from the topic, and every question asked in it, has finished. */
+  idle(): Promise<void> {
+    return this.router.idle();
+  }
+
+  // ---- the session under the topic (flow 387, AC17) -----------------------------------
+
+  /**
+   * The shell is about to swap its session. True when a command from this topic asked for it:
+   * the topic stays bound, and the host must call {@link sessionLeaving} and later
+   * {@link sessionEntered} instead of turning remote control off.
+   */
+  get keepingTopic(): boolean {
+    return this.keepTopic && this.client !== undefined;
+  }
+
+  /** The old session is closing and the topic stays: close its history interval. */
+  sessionLeaving(): void {
+    if (this.client === undefined) return;
+    this.endTurnState();
+    this.host.recordOff();
+    this.push("status", "session changing; this topic stays bound");
+  }
+
+  /** The new session is live: open its history interval and put one separator line in the topic. */
+  sessionEntered(kind: "new" | "resumed" = "new"): void {
+    const client = this.client;
+    if (client === undefined) return;
+    this.switched = true;
+    if (client.name !== undefined) this.host.recordOn(client.name);
+    this.push("status", kind === "new" ? "new session; same topic" : "resumed session; same topic");
+    void client.reply(kind === "new" ? "--- new session ---" : "--- resumed session ---").catch(() => false);
   }
 
   // ---- hooks the host calls around a turn ------------------------------------------
@@ -334,6 +454,9 @@ export class RemoteBridge {
   turnStarted(source: RemoteLineSource | undefined): void {
     this.endTurnState();
     if (source !== TG_SOURCE || this.client === undefined) return;
+    const next = this.waiting.shift();
+    this.currentUpdate = next?.updateId;
+    if (next !== undefined) this.report(next.updateId, "working");
     this.tgTurn = true;
     this.lastAssistantText = "";
     this.timedOut = false;
@@ -372,6 +495,11 @@ export class RemoteBridge {
     const client = this.client;
     if (client === undefined) return;
     this.push("line", `Telegram line removed from the queue: ${preview(line)}`);
+    const index = this.waiting.findIndex((entry) => entry.line === line.trim());
+    if (index >= 0) {
+      const [gone] = this.waiting.splice(index, 1);
+      if (gone !== undefined) this.report(gone.updateId, "failed");
+    }
     void client
       .reply(`Your message "${preview(line)}" was removed from the queue in the shell, so it will not run.`)
       .catch(() => false);
@@ -383,8 +511,10 @@ export class RemoteBridge {
     const client = this.client;
     const text = this.lastAssistantText;
     const timedOut = this.timedOut;
+    const updateId = this.currentUpdate;
     this.endTurnState();
     if (client === undefined) return;
+    if (updateId !== undefined) this.report(updateId, outcome.failed || timedOut ? "failed" : "done");
     let body: string;
     if (timedOut) {
       body = "Stopped: this run went over the time limit for runs started from Telegram.";
@@ -401,6 +531,7 @@ export class RemoteBridge {
 
   private endTurnState(): void {
     this.tgTurn = false;
+    this.currentUpdate = undefined;
     this.lastAssistantText = "";
     this.timedOut = false;
     if (this.runTimer !== undefined) {

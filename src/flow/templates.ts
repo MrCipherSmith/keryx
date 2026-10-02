@@ -1,7 +1,14 @@
 import { DEFAULT_TASKS } from "./default-tasks";
 import { OUTCOME_HINT } from "./description-intent";
+import { renderOriginBullets, type FlowOrigin } from "./origin";
 
-export function renderDescription(title: string, source: string): string {
+/**
+ * `origin` is the requested origin, accepted or not: the template keeps the
+ * human's words even when the evidence rule leaves the recorded origin
+ * `unknown`. Without it the Outcome criteria section holds the plain hint.
+ */
+export function renderDescription(title: string, source: string, origin?: FlowOrigin | undefined): string {
+  const outcome = origin === undefined ? OUTCOME_HINT : renderOriginBullets(origin).join("\n");
   return `# ${title}
 
 Status: draft (flow-init skill formalizes this)
@@ -17,7 +24,7 @@ What must be true when this flow is done.
 
 ## Outcome criteria
 
-${OUTCOME_HINT}
+${outcome}
 
 ## Out of Scope
 
@@ -139,7 +146,15 @@ tracker reporting.
   true\`)
 - \`keryx flow recover <id> --reason "<why>"\` (moves a flow stuck in
   \`completing\` back to \`in-progress\`)
-- \`keryx flow block|unblock <id>\` / \`flow check\`
+- \`keryx flow block|unblock <id>\` / \`flow check\` (duplicate ids, including a
+  number the default branch holds, warns about a number another remote branch holds and about a flow folder that is not
+  committed) / \`flow renumber <dir> --to <id> --reason "<why>"\` (refuses an id a
+  known remote branch uses)
+
+The flow folder is committed in the same PR as the code; the commit at closing is
+a rule to follow, not one the gate checks. \`flow complete\` fails the
+\`folder-committed\` gate only when the folder's \`flow.json\` is not in \`HEAD\`
+(flows created from 0.3.53 on).
 
 Spend, confirmations, signatures and gate outcomes across flows:
 \`keryx governance report\`. Recurring or one-off unattended agent turns:
@@ -294,7 +309,8 @@ line is \`STATUS:\` (\`.metaproject/rules/core/subagent-status-protocol.md\`). S
    Add \`--require-confirmation\` when completion should need a terminal
    confirmation token (\`flow confirm\`), not only the CLI gates. The CLI
    scaffolds the package and collects deterministic context (issue body,
-   memory search, gdgraph artifacts, health).
+   memory search, gdgraph artifacts, health). The new id skips numbers used on
+   known remote branches; commit the flow folder in the same PR as the code.
 2. Enrich context - dispatch \`context-collector\` with \`context_refs\` to the
    flow package; it writes compact findings, not raw dumps. For an issue also
    dispatch \`issue-analyzer\`; for a described feature, \`feature-analyzer\`.
@@ -379,7 +395,12 @@ whose status is \`implemented\`.
    confirmed + checksum intact; merged PR exists with green checks; code-health
    gate passes; and, for a flow that opted in (\`flow init --owner\` set the
    flag), an owner recorded - fails naming
-   \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not. A
+   \`keryx flow owner set <id> --owner "<name>" --reason "<why>"\` if not; and,
+   for a flow created from 0.3.53 on, the flow folder committed (the
+   \`folder-committed\` gate fails until \`git add .metaproject/flows/<dir> &&
+   git commit\` has run; the gate checks only that \`flow.json\` is in \`HEAD\`). The
+   flow folder is committed in the same PR as the code; the commit at closing
+   is a rule to follow, not one the gate checks. A
    flow created with \`--require-confirmation\` needs one more gate: run
    \`keryx flow confirm <id>\` in your own terminal first (a typed challenge
    mints a short-lived, single-use token - it proves an interactive step ran

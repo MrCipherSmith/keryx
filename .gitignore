@@ -84,6 +84,10 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 # `keryx:end` managed block above, for the same reason as the conform cache
 # above: a hand edit inside that block is regenerated away by `keryx update`.
 .metaproject/data/ac-check/
+# `keryx decisions` (flow 392): the recommendation journal records what the operator
+# chose and why they deviated — personal runtime state, not something to commit.
+# Written 0o600. Same placement and reasoning as the entries above.
+.metaproject/data/decisions/
 # Flow 331's review-conform adapter runs `keryx review conform` with its cwd
 # set to bench/jev-review/fixtures/conform-project/ (its own scratch
 # .metaproject/tasks.config.json), so that command writes the same
@@ -110,6 +114,10 @@ opencode.json
 .metaproject/data/gdctx/artifacts/
 .metaproject/data/gdwiki/artifacts/
 .metaproject/data/gdwiki/link-check/
+# Per-page wiki version history (flow 367): every enrich/collect run stores the
+# pages it replaced. Local undo state; committing it would put that churn into
+# every branch that runs a wiki command.
+.metaproject/data/gdwiki/history/
 .metaproject/data/health/history/
 .metaproject/data/health/artifacts/latest.md
 .metaproject/data/health/artifacts/latest.json
@@ -153,4 +161,7 @@ opencode.json
 # entries rather than inheriting coverage that does not exist.
 .metaproject/data/learning/observations/
 .metaproject/data/learning/candidates/
+# Recommendation journal (flow 392): what the human chose and why they deviated.
+# Personal runtime state, written 0o600.
+.metaproject/data/decisions/
 # keryx:end

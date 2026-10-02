@@ -1,0 +1,23 @@
+# Flow Journal
+
+- 2026-10-02T10:13:01.326Z - flow created
+- 2026-10-02T10:13:29.892Z - frozen: 10 criteria; checksum recorded
+- 2026-10-02T10:13:30.315Z - started
+- 2026-10-02T11:16:03.855Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/852 (warning: PR is not a draft) (base: main)
+- 2026-10-02T11:16:15.326Z - task-done: T1: Collect remaining context
+- 2026-10-02T11:16:15.679Z - task-done: T2: Implement per plan
+- 2026-10-02T11:16:16.063Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-02T11:16:16.415Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-02T11:16:18.645Z - ac-confirmed: AC1: PR #852 CI green on the final head (all legs pass); src/flow/origin-init.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:19.025Z - ac-confirmed: AC2: PR #852 CI green on the final head (all legs pass); src/flow/origin-evidence.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:19.407Z - ac-confirmed: AC3: PR #852 CI green on the final head (all legs pass); src/flow/origin-status.test.ts and src/product/origin-open.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:19.798Z - ac-confirmed: AC4: PR #852 CI green on the final head (all legs pass); src/flow/origin-template.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:20.160Z - ac-confirmed: AC5: PR #852 CI green on the final head (all legs pass); src/flow/origin-outcome-author.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:20.551Z - ac-confirmed: AC6: PR #852 CI green on the final head (all legs pass); src/product/origin-g1a.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:20.933Z - ac-confirmed: AC7: PR #852 CI green on the final head (all legs pass); src/flow/origin-never-gates.test.ts, including origin set with an invalid kind (added after review). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:21.312Z - ac-confirmed: AC8: PR #852 CI green on the final head (all legs pass); src/tui/origin-surface.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T11:16:21.690Z - ac-confirmed: AC9: PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-02T15:19:06.252Z - ac-confirmed: AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, operator chat channel 178131) [stated])
+- 2026-10-02T15:21:17.968Z - completing
+- 2026-10-02T15:21:22.413Z - completion-attempt-recorded: attempt 1: passed
+- 2026-10-02T15:21:22.414Z - done: all gates passed

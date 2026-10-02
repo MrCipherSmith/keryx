@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true,
@@ -8,17 +8,34 @@
   "id": "362",
   "slug": "import-installer-followups",
   "title": "Import and installer follow-ups from flow 360: neutral trigger, security-gate reporting, --with validation, skills update output",
-  "status": "initializing",
+  "status": "done",
   "createdAt": "2026-09-30T17:46:53.626Z",
-  "updatedAt": "2026-09-30T17:46:53.626Z",
+  "updatedAt": "2026-10-01T10:44:25.545Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-01T10:43:01.986Z",
+      "note": "src/gdskills/import-skills-gate.test.ts (refused/would-refuse for injection in advisory, enforced and with the security module disabled; secret redacted and reported; dry run equals real run for import and update; no scaffold on refusal; --json security object; --allow-flagged). Independently re-run against the source CLI at 967e7020 (K-001..K-004, K-006 refuted) and the update dry-run parity checked at 42201489. CI green on PR #822 head 42201489."
+    },
+    "AC2": {
+      "at": "2026-10-01T10:43:02.155Z",
+      "note": "src/gdskills/remove-skill.test.ts: a registry entry named '..' or '.' is refused (F-010/R02) and a registered path with a trailing slash is the entry's own package (R06); each test went red with its clause removed (2072edf4). CI green."
+    },
+    "AC3": {
+      "at": "2026-10-01T10:43:02.327Z",
+      "note": "reviewer-skill-creator SKILL.detail.md 'The security gate on import' and docs/docs/cli-reference.md (skills import, skills update, review import rows) describe the rows, --allow-flagged, the --json security object, the disabled-module check and exit 1 (c8ef114e, 967e7020, f5b69c80); skills verify --bundled 0 findings; the own-repo round-trip audit passes."
+    },
+    "AC4": {
+      "at": "2026-10-01T10:43:02.480Z",
+      "note": "CI on PR #822 head 42201489: every check green, including typecheck-and-tests (lint, typecheck, full suite) and the bundled-skill checks. keryx health run is evaluated by flow complete's health gate."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/822"
   },
   "baseBranch": "main",
   "owner": {
@@ -33,34 +50,699 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5 (context: gate behaviour reproduced on main)"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T7 (implement D1-D3)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are written test-first inside T6 and T7; the suite runs in CI"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T10 (review round on PR #822)"
+    },
+    {
+      "id": "T5",
+      "title": "Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:40:22.316Z",
+            "outcome": "started",
+            "detail": "362-T5 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:40:27.781Z",
+            "outcome": "started",
+            "detail": "362-T6 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:54:31.168Z",
+            "outcome": "started",
+            "detail": "362-T7 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T07:54:33.780Z",
+            "outcome": "started",
+            "detail": "362-T8 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T08:08:18.858Z",
+            "outcome": "started",
+            "detail": "362-T9 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Review round on PR #822, fixes, targeted re-verification",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-10-01T08:14:35.064Z",
+            "outcome": "started",
+            "detail": "362-T10 review round 1 over origin/main..c8ef114e"
+          },
+          {
+            "at": "2026-10-01T08:25:36.172Z",
+            "outcome": "failed",
+            "detail": "round 1 at c8ef114e: 1 major (K-001 disabled module), 4 minor (K-002..K-005), 2 info; fix task T11"
+          },
+          {
+            "at": "2026-10-01T09:58:44.333Z",
+            "outcome": "started",
+            "detail": "independent re-verification of K-001..K-006 at 967e7020 (sonnet verifier)"
+          },
+          {
+            "at": "2026-10-01T10:38:11.957Z",
+            "outcome": "started",
+            "detail": "closing review record at PR head (sonnet bookkeeping)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Round 1 fixes: injection check without the security module, no rules from refused packages, non-zero exit on refusal, gate before scaffold, hint only for injection (K-001..K-004, K-006)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T08:26:08.212Z",
+            "outcome": "started",
+            "detail": "362-T11 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Fix CI: the bundled reviewer-skill-creator example must not quote injection text (own-repo round-trip audit refuses it)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:11:48.855Z",
+            "outcome": "started",
+            "detail": "362-T12 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "skills update --dry-run gates the refreshed source so it reports would-refuse like the real run",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-10-01T10:12:28.677Z",
+            "outcome": "started",
+            "detail": "362-T13 sonnet"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-30T17:46:53.626Z",
       "event": "created"
+    },
+    {
+      "at": "2026-10-01T07:40:14.322Z",
+      "event": "task-added",
+      "detail": "T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)"
+    },
+    {
+      "at": "2026-10-01T07:40:20.147Z",
+      "event": "task-added",
+      "detail": "T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)"
+    },
+    {
+      "at": "2026-10-01T07:40:22.316Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 362-T5 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:40:27.781Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 362-T6 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:51:48.712Z",
+      "event": "task-done",
+      "detail": "T6: Tests for skills remove: name segment check (F-010/R02) and trailing-slash registry path (R06)"
+    },
+    {
+      "at": "2026-10-01T07:53:45.360Z",
+      "event": "task-done",
+      "detail": "T5: Context: reproduce the gate behaviour on main and map guardOutput/prepareOutputForPersistence for import (rules and SKILL.md)"
+    },
+    {
+      "at": "2026-10-01T07:54:08.918Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-01T07:54:10.661Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-01T07:54:12.579Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-01T07:54:14.443Z",
+      "event": "task-added",
+      "detail": "T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged"
+    },
+    {
+      "at": "2026-10-01T07:54:16.443Z",
+      "event": "task-added",
+      "detail": "T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)"
+    },
+    {
+      "at": "2026-10-01T07:54:18.278Z",
+      "event": "task-added",
+      "detail": "T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts"
+    },
+    {
+      "at": "2026-10-01T07:54:26.143Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-01T07:54:28.567Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-01T07:54:31.168Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 362-T7 sonnet"
+    },
+    {
+      "at": "2026-10-01T07:54:33.780Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 362-T8 sonnet"
+    },
+    {
+      "at": "2026-10-01T08:05:05.841Z",
+      "event": "task-done",
+      "detail": "T8: D4: measure gate refusals over bundled skills, bundled rules and the real overlay (read-only)"
+    },
+    {
+      "at": "2026-10-01T08:08:16.952Z",
+      "event": "task-done",
+      "detail": "T7: Implement D1-D3: refuse injection-flagged import content, report redaction, gate before writing and in dry runs, --allow-flagged"
+    },
+    {
+      "at": "2026-10-01T08:08:18.858Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 362-T9 sonnet"
+    },
+    {
+      "at": "2026-10-01T08:13:49.615Z",
+      "event": "task-done",
+      "detail": "T9: Docs: gate rows and --allow-flagged in reviewer-skill-creator detail, cli-reference and help texts"
+    },
+    {
+      "at": "2026-10-01T08:14:27.430Z",
+      "event": "task-added",
+      "detail": "T10: Review round on PR #822, fixes, targeted re-verification"
+    },
+    {
+      "at": "2026-10-01T08:14:29.362Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-10-01T08:14:35.064Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 362-T10 review round 1 over origin/main..c8ef114e"
+    },
+    {
+      "at": "2026-10-01T08:25:36.172Z",
+      "event": "task-attempt",
+      "detail": "T10: failed (attempt 2) — round 1 at c8ef114e: 1 major (K-001 disabled module), 4 minor (K-002..K-005), 2 info; fix task T11"
+    },
+    {
+      "at": "2026-10-01T08:25:38.049Z",
+      "event": "task-added",
+      "detail": "T11: Round 1 fixes: injection check without the security module, no rules from refused packages, non-zero exit on refusal, gate before scaffold, hint only for injection (K-001..K-004, K-006)"
+    },
+    {
+      "at": "2026-10-01T08:26:08.212Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 362-T11 sonnet"
+    },
+    {
+      "at": "2026-10-01T09:58:19.297Z",
+      "event": "task-done",
+      "detail": "T11: Round 1 fixes: injection check without the security module, no rules from refused packages, non-zero exit on refusal, gate before scaffold, hint only for injection (K-001..K-004, K-006)"
+    },
+    {
+      "at": "2026-10-01T09:58:44.333Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 3) — independent re-verification of K-001..K-006 at 967e7020 (sonnet verifier)"
+    },
+    {
+      "at": "2026-10-01T10:11:41.918Z",
+      "event": "task-added",
+      "detail": "T12: Fix CI: the bundled reviewer-skill-creator example must not quote injection text (own-repo round-trip audit refuses it)"
+    },
+    {
+      "at": "2026-10-01T10:11:48.855Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 362-T12 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:12:27.016Z",
+      "event": "task-added",
+      "detail": "T13: skills update --dry-run gates the refreshed source so it reports would-refuse like the real run"
+    },
+    {
+      "at": "2026-10-01T10:12:28.678Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 362-T13 sonnet"
+    },
+    {
+      "at": "2026-10-01T10:13:15.857Z",
+      "event": "task-done",
+      "detail": "T12: Fix CI: the bundled reviewer-skill-creator example must not quote injection text (own-repo round-trip audit refuses it)"
+    },
+    {
+      "at": "2026-10-01T10:15:12.722Z",
+      "event": "task-done",
+      "detail": "T13: skills update --dry-run gates the refreshed source so it reports would-refuse like the real run"
+    },
+    {
+      "at": "2026-10-01T10:38:11.957Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 4) — closing review record at PR head (sonnet bookkeeping)"
+    },
+    {
+      "at": "2026-10-01T10:42:33.477Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/822 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T10:43:01.986Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/gdskills/import-skills-gate.test.ts (refused/would-refuse for injection in advisory, enforced and with the security module disabled; secret redacted and reported; dry run equals real run for import and update; no scaffold on refusal; --json security object; --allow-flagged). Independently re-run against the source CLI at 967e7020 (K-001..K-004, K-006 refuted) and the update dry-run parity checked at 42201489. CI green on PR #822 head 42201489. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:43:02.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: src/gdskills/remove-skill.test.ts: a registry entry named '..' or '.' is refused (F-010/R02) and a registered path with a trailing slash is the entry's own package (R06); each test went red with its clause removed (2072edf4). CI green. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:43:02.327Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: reviewer-skill-creator SKILL.detail.md 'The security gate on import' and docs/docs/cli-reference.md (skills import, skills update, review import rows) describe the rows, --allow-flagged, the --json security object, the disabled-module check and exit 1 (c8ef114e, 967e7020, f5b69c80); skills verify --bundled 0 findings; the own-repo round-trip audit passes. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:43:02.480Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: CI on PR #822 head 42201489: every check green, including typecheck-and-tests (lint, typecheck, full suite) and the bundled-skill checks. keryx health run is evaluated by flow complete's health gate. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-01T10:43:02.665Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T10:43:07.745Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-10-01T10:43:07.751Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T10 | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-10-01T10:43:14.885Z",
+      "event": "task-done",
+      "detail": "T10: Review round on PR #822, fixes, targeted re-verification"
+    },
+    {
+      "at": "2026-10-01T10:44:16.132Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/822 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-10-01T10:44:19.679Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-01T10:44:25.543Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-10-01T10:44:25.545Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-01T10:43:01.986Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    },
+    {
+      "at": "2026-10-01T10:43:02.155Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    },
+    {
+      "at": "2026-10-01T10:43:02.327Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    },
+    {
+      "at": "2026-10-01T10:43:02.480Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    },
+    {
+      "at": "2026-10-01T10:44:25.545Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12",
+      "headCommit": "9c7183b556f50e32368eb0dad8900b36170aa616"
+    }
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-01T10:43:07.745Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "4 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "9c7183b556f50e32368eb0dad8900b36170aa616 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "9c7183b556f50e32368eb0dad8900b36170aa616 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "fail",
+          "detail": "not done: T10"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "fail",
+          "detail": "no report; run `keryx health run` first"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    },
+    {
+      "at": "2026-10-01T10:44:25.542Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "4 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "9c7183b556f50e32368eb0dad8900b36170aa616 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "9c7183b556f50e32368eb0dad8900b36170aa616 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "13 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:d5d7683753ebac872e96b278f691f6fd0d3c42c4ceb571890066aa7b88397f12"
+    }
+  ],
+  "merged": {
+    "commit": "9c7183b556f50e32368eb0dad8900b36170aa616",
+    "ref": "origin/main",
+    "at": "2026-10-01T10:44:25.545Z"
+  }
 }

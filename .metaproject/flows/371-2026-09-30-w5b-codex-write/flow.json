@@ -1,0 +1,544 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true
+  },
+  "id": "371",
+  "slug": "w5b-codex-write",
+  "title": "W5b codex external write mode",
+  "status": "done",
+  "createdAt": "2026-09-30T17:49:34.646Z",
+  "updatedAt": "2026-09-30T19:38:38.052Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-30T18:23:15.073Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC2": {
+      "at": "2026-09-30T18:23:15.234Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC3": {
+      "at": "2026-09-30T18:23:15.395Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC4": {
+      "at": "2026-09-30T18:23:15.557Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC5": {
+      "at": "2026-09-30T18:23:15.719Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC6": {
+      "at": "2026-09-30T18:23:15.879Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC7": {
+      "at": "2026-09-30T18:23:16.039Z",
+      "note": "verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass"
+    },
+    "AC8": {
+      "at": "2026-09-30T18:23:16.199Z",
+      "note": "live probe on codex 0.159.2 recorded in the journal"
+    },
+    "AC9": {
+      "at": "2026-09-30T19:38:08.859Z",
+      "note": "0.3.42 live smoke failed (invalid_json_schema, fixed in flow 372); on the installed 0.3.43 with codex 0.159.2: --write Completed, review shows the diff, discard deletes the patch, apply with typed hash 05e249da024d landed external/bde06625-..., main tree untouched"
+    },
+    "AC10": {
+      "at": "2026-09-30T19:38:21.310Z",
+      "note": "operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28)"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/808"
+  },
+  "owner": {
+    "value": "altsay",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR 808; review gate closed at a7b86fc2"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR 808; review gate closed at a7b86fc2"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR 808; review gate closed at a7b86fc2"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "done in PR 808; review gate closed at a7b86fc2"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-30T17:49:34.646Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-30T17:50:42.305Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-30T17:50:42.661Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-30T18:22:25.916Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"A codex write run is refused before any spawn when the installed codex is older than the verified version (0.159.0) or its version cannot be read, with a message naming the found and the required version; a codex write run under the verified version captures the diff through the same pipeline as claude (record, redacted patch, hash, worktree removed on every exit path). [verify: exec `bun test src/harness/external/write-run.test.ts src/harness/external/runtime.test.ts`]\" -> \"A codex write run is refused before any spawn unless the installed codex is in the measured window (0.159.2 up to, not including, 0.160.0): older, newer, pre-release and unreadable versions are refused, with a message naming the found version and the required range; a codex write run inside the window captures the diff through the same pipeline as claude (record, redacted patch, hash, worktree removed on every exit path). [verify: exec `bun test src/harness/external/write-run.test.ts src/harness/external/runtime.test.ts`]\" (review of PR 808 (F-001..F-003): the floor alone let a newer codex that renamed a confinement key run unconfined; measured version is 0.159.2)"
+    },
+    {
+      "at": "2026-09-30T18:22:26.285Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"A resumed or follow-up codex turn of a worktree-write run re-asserts the same confinement flags or is refused; it can never run under a weaker sandbox than the first turn. [verify: exec `bun test src/harness/external/codec/codex-cli.test.ts`]\" -> \"A resumed or follow-up codex turn of a worktree-write run re-asserts the same confinement flags in its argv (unit-tested; keryx itself starts no write-run resume). [verify: exec `bun test src/harness/external/codec/codex-cli.test.ts`]\" (review of PR 808 (F-004): 'can never run weaker' was stronger than the evidence)"
+    },
+    {
+      "at": "2026-09-30T18:23:15.073Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:15.234Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:15.396Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:15.557Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:15.719Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:15.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:16.039Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:16.199Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: live probe on codex 0.159.2 recorded in the journal (signed: altsay [stated])"
+    },
+    {
+      "at": "2026-09-30T18:23:16.359Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-30T18:23:16.522Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-30T18:23:16.686Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-30T18:23:16.845Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-30T18:23:19.079Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/808 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-30T19:38:08.859Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 0.3.42 live smoke failed (invalid_json_schema, fixed in flow 372); on the installed 0.3.43 with codex 0.159.2: --write Completed, review shows the diff, discard deletes the patch, apply with typed hash 05e249da024d landed external/bde06625-..., main tree untouched (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:38:21.311Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-09-30T19:38:23.191Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-30T19:38:27.648Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: failed"
+    },
+    {
+      "at": "2026-09-30T19:38:27.650Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#808 was last collected against d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 (round 1), but the PR head is a7b86fc2ae9e9460ec49de1f7a6e0e2670d1146c. Everything anyone said after d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 808 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-09-30T19:38:33.915Z",
+      "event": "completing",
+      "detail": "merged commit: d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560"
+    },
+    {
+      "at": "2026-09-30T19:38:38.050Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 2: passed"
+    },
+    {
+      "at": "2026-09-30T19:38:38.052Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/codec/codex-cli.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/dispatch.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/write-run.test.ts src/harness/external/runtime.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/harness/external/codec/codex-cli.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/agents-external-write.test.ts src/cli-reference-coverage.test.ts src/commands/agent-commands.confusable.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/tui/external-diff-modal.test.ts src/tui/external-operator.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun run check:doc-links"
+    },
+    "AC8": {
+      "kind": "judged"
+    },
+    "AC9": {
+      "kind": "judged"
+    },
+    "AC10": {
+      "kind": "none",
+      "reason": "a stop is an absence of work; the operator report is the evidence"
+    }
+  },
+  "signatures": [
+    {
+      "at": "2026-09-30T18:23:15.073Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:15.234Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:15.395Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:15.557Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:15.719Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:15.879Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:16.039Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T18:23:16.199Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T19:38:08.859Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T19:38:21.310Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T19:38:38.051Z",
+      "kind": "complete",
+      "identity": {
+        "value": "altsay",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597",
+      "headCommit": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560"
+    }
+  ],
+  "baseBranch": "main",
+  "completionAttempts": [
+    {
+      "at": "2026-09-30T19:38:27.648Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "fail",
+          "detail": "1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#808 was last collected against d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 (round 1), but the PR head is a7b86fc2ae9e9460ec49de1f7a6e0e2670d1146c. Everything anyone said after d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 808 --sha <pr-head>`."
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": false,
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    },
+    {
+      "at": "2026-09-30T19:38:38.050Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: altsay"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 2 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:1470f7c510191db9bbc3dddccd3db95f7d25d2a2dffd9c4341456e1e8b30b597"
+    }
+  ],
+  "merged": {
+    "commit": "d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560",
+    "ref": "origin/main",
+    "at": "2026-09-30T19:38:38.051Z"
+  }
+}

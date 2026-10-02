@@ -1,0 +1,348 @@
+[
+  {
+    "id": "SEC-F1",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "S-8's outbound-secret check (containsOutboundSecret) is trivially bypassed: detectSecrets' URL-aware rule only fires when the query-param/path-segment name is on a small closed label list (api_key/access_token/auth_token/token/password/secret), and detectEntropy additionally requires a SENSITIVE_LABEL word within 40 chars on the same line. A secret placed under a generic param name, split across two generic params, or with the label word percent-encoded (t%6fken=) defeats both detectors.",
+    "impact": "web_fetch/web_search send a real secret to an attacker-controlled host before any network call is blocked. Reviewer constructed and ran live probes against the worktree: containsOutboundSecret returned false for a 43-char secret under '?d=', for the same secret split across '?a='/'?b=', for a 40-hex secret under a generic param, and for a percent-encoded label ('t%6fken='). web_fetch reaches the real HTTP GET whenever this returns false.",
+    "suggested_fix": "Drop the SENSITIVE_LABEL/label-list requirement for URL/query egress checks; route through looksSecretShaped per path-segment and per query-VALUE (unlabelled), and decode the URL/query keys before matching the label list.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): containsOutboundSecret now returns true for a generic-param secret, a secret split across two generic params, and a percent-encoded token label; bun test src/harness/web/outbound-secret.test.ts -t \"anonymous query param|percent-encoded PARAM NAME\" -> 2 pass, 0 fail. The bare-40-hex sub-case remains an intentional, pinned allow-shape (git-commit-SHA shape) per outbound-secret.test.ts:35.",
+    "confidence": "high",
+    "file": "src/harness/web/outbound-secret.ts",
+    "line": null,
+    "quote": "export function containsOutboundSecret(text: string): boolean {\n  return detectSecrets(text).length > 0 || detectEntropy(text).length > 0;\n}",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/web/outbound-secret.ts:14-16 containsOutboundSecret",
+        "src/harness/tool/builtin/web-fetch-tool.ts:53 (gate before the real network fetch)",
+        "src/harness/tool/builtin/web-search-tool.ts:58 (gate before the real search call)",
+        "src/security/detect/entropy.ts SENSITIVE_LABEL / detectEntropy",
+        "src/security/detect/secrets.ts secrets.url-sensitive-query / secrets.url-sensitive-path (closed label list)"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: containsOutboundSecret on a secret under a generic '?d=' query param -> true (was false); the same secret split across '?a='/'?b=' -> true (was false); a percent-encoded 't%6fken=' label -> true (was false). bun test src/harness/web/outbound-secret.test.ts -t \"anonymous query param|percent-encoded PARAM NAME\" -> 2 pass, 0 fail. The finding's fourth construction (a bare 40-hex value under a generic param) still returns false, but that value is indistinguishable from a real git commit SHA, which is the intentional, pinned allow-shape design (outbound-secret.test.ts:35 'BOUNDARY — a commit SHA in the path is allow-shaped and does not refuse') — not a gap the fix left open; three of the finding's four constructions are closed."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: containsOutboundSecret on a secret under a generic '?d=' query param -> true (was false); the same secret split across '?a='/'?b=' -> true (was false); a percent-encoded 't%6fken=' label -> true (was false). bun test src/harness/web/outbound-secret.test.ts -t \"anonymous query param|percent-encoded PARAM NAME\" -> 2 pass, 0 fail. The finding's fourth construction (a bare 40-hex value under a generic param) still returns false, but that value is indistinguishable from a real git commit SHA, which is the intentional, pinned allow-shape design (outbound-secret.test.ts:35 'BOUNDARY — a commit SHA in the path is allow-shaped and does not refuse') — not a gap the fix left open; three of the finding's four constructions are closed.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "SEC-F2",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The S-6/S-9 allow-shapes are checked by shape alone with no provenance signal, applied even when an explicit sensitive label sits directly next to the value. A real secret that happens to be 40/7-12 hex chars, a UUID, or an npm/yarn integrity-shaped string is unconditionally exempted from redaction and from displayUrl masking.",
+    "impact": "redactSensitiveText leaves labeled real secrets in these four shapes completely unredacted; displayUrl prints the same shapes verbatim in mcp list / mcp doctor --json / the trust prompt. Reviewer verified live: redactSensitiveText('leaked token: deadbeef...deadbeef') (40-hex), '...UUID...', '...sha512-...', and a short-hex case were all returned byte-for-byte unchanged despite the explicit label.",
+    "suggested_fix": "Do not let the allow-shape check override an explicit sensitive-label match; when a label is present nearby, prefer treating the value as a candidate secret over the shape coincidence, or require the short/full-SHA shapes to also carry a 'commit'/'sha'/'rev' provenance word.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): a labelled 40-hex full-SHA-shaped value and a labelled npm sha512- integrity value both now redact (were unchanged). The finding's UUID sub-case was carved out as a separate finding (round 2's own SEC-F2, global_id 2026-09-28-pr-776-round2-2a2db6b7#SEC-F2), already closed in round 5 of this flow. The finding's short-SHA sub-case is unreachable independent of any fix here (see LOG-F2, this same round).",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": null,
+    "quote": "function isAllowShapedValue(value: string): boolean {\n  return (\n    FULL_GIT_SHA_RE.test(value) ||\n    SHORT_GIT_SHA_RE.test(value) ||\n    UUID_RE.test(value) ||\n    INTEGRITY_RE.test(value)\n  );\n}",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 38
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts isAllowShapedValue / shapeQualifiesAsSecret (shared root cause)",
+        "src/security/redact.ts:141-155 redactSensitiveText -> detectEntropy (S-6)",
+        "src/mcp-servers/http-headers.ts:346-354 maskSecretShapedPathSegments -> looksSecretShaped (S-9)"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F2",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: redactSensitiveText('leaked token: ' + <40-hex full SHA>) -> [REDACTED:entropy] (was unchanged); redactSensitiveText('leaked token: ' + <npm sha512- integrity string>) -> [REDACTED:entropy] (was unchanged). The finding's own recorded disposition already notes its UUID sub-case is a SEPARATE finding (round 2's own SEC-F2, global_id 2026-09-28-pr-776-round2-2a2db6b7#SEC-F2), verified and closed separately in round 5 of this flow. The finding's short-SHA (7-char) sub-case is unreachable regardless of this fix, per LOG-F2 (same round, same package): SHORT_GIT_SHA_RE was always dead code below the entropy/length floors, confirmed by keryx ctx rg finding no remaining definition, only explanatory comments."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: redactSensitiveText('leaked token: ' + <40-hex full SHA>) -> [REDACTED:entropy] (was unchanged); redactSensitiveText('leaked token: ' + <npm sha512- integrity string>) -> [REDACTED:entropy] (was unchanged). The finding's own recorded disposition already notes its UUID sub-case is a SEPARATE finding (round 2's own SEC-F2, global_id 2026-09-28-pr-776-round2-2a2db6b7#SEC-F2), verified and closed separately in round 5 of this flow. The finding's short-SHA (7-char) sub-case is unreachable regardless of this fix, per LOG-F2 (same round, same package): SHORT_GIT_SHA_RE was always dead code below the entropy/length floors, confirmed by keryx ctx rg finding no remaining definition, only explanatory comments.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "SEC-F3",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "R-I2's anchoring fix (added this PR to stop GLUED_SECRET_RE over-matching APITOKENIZER) requires the (^|_) boundary immediately before the glued prefix. This stops the false positive but also means the check only protects the five compounds at the very start of a name or right after an underscore; gluing any other word in front with no underscore (a common naming convention) makes the whole check stop matching for KEY/TOKEN/SECRET/PASS(WD) compounds (SECRET_SUBSTRING_RE still catches the PASSWORD family unaffected).",
+    "impact": "A real credential named PRODDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN or SNOWFLAKEDBPASS is copied into a spawned MCP server's environment and an external agent CLI's environment unfiltered. Reviewer verified live: isDeniedForMcpChild returns false for all of the above (credential-shaped values), true for the unprefixed forms, and false for APITOKENIZER (intended). No existing test exercises a prefixed variant.",
+    "suggested_fix": "Anchor on the compound itself (keep the trailing ($|_) which is what stops APITOKENIZER) without requiring the leading (^|_); if that reopens a different false positive, add a short explicit denylist of the handful of colliding words instead, table-tested the way spawn-env.table.test.ts already does for the KEY/TOKEN/PASS boundary cases.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): isDeniedForMcpChild now returns true for all eight prefixed constructions from the finding's own repro (PRODDBPASS, STAGEDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN, SNOWFLAKEDBPASS); unprefixed forms remain true; APITOKENIZER remains false (intended, unchanged).",
+    "confidence": "high",
+    "file": "src/security/credential-shape.ts",
+    "line": null,
+    "quote": "const GLUED_SECRET_RE =\n  /(^|_)(PRIVATE|SECRET|ACCESS|REFRESH|SESSION|CLIENT|API|APP)(KEY|TOKEN|SECRET)($|_)|(^|_)DB(PASS|PWD)($|_)/;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/credential-shape.ts GLUED_SECRET_RE (sole definition)",
+        "src/mcp-servers/spawn-env.ts buildMcpChildEnv -> isDeniedForMcpChild",
+        "src/harness/external/env.ts buildExternalChildEnv -> isDeniedForMcpChild"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#SEC-F3",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: isDeniedForMcpChild returns true (was false) for all eight of the finding's own prefixed constructions (PRODDBPASS, STAGEDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN, SNOWFLAKEDBPASS); the five unprefixed forms (PRIVATEKEY, REFRESHTOKEN, ACCESSTOKEN, APITOKEN, DBPASS) remain true; APITOKENIZER remains false, matching the finding's own stated 'intended' expectation."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: isDeniedForMcpChild returns true (was false) for all eight of the finding's own prefixed constructions (PRODDBPASS, STAGEDBPASS, MYPRIVATEKEY, USERREFRESHTOKEN, LEGACYACCESSTOKEN, V2APITOKEN, OAUTHACCESSTOKEN, SNOWFLAKEDBPASS); the five unprefixed forms (PRIVATEKEY, REFRESHTOKEN, ACCESSTOKEN, APITOKEN, DBPASS) remain true; APITOKENIZER remains false, matching the finding's own stated 'intended' expectation.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "LOG-F1",
+    "reviewer": "review-logic",
+    "severity": "blocker",
+    "problem": "The entropy detector's TOKEN regex includes '/' in its character class, so applied to a URL it does not stop at path separators: an entire host/path/segments/<hex> run becomes one compound candidate. This defeats the git-SHA/UUID/integrity allow-shapes (which only match an isolated value, not a compound blob containing it) and makes SENSITIVE_LABEL's bare substring match fire on ordinary text like the hostname 'api.github.com'. Independently confirmed by review-regression (RG-1) from the outbound-refusal angle.",
+    "impact": "redactSensitiveText mangles an ordinary https://api.github.com/repos/x/y/commits/<40-hex-sha> into '.../api.github.[REDACTED:entropy]' (silent corruption of tool-output transcripts). containsOutboundSecret refuses that same ordinary URL and an ordinary https://api.example.com/v1/webhooks/subscribe?... before any network call -- contradicting AC2's zero-false-positive claim and AC4's 'an ordinary URL with a commit SHA still fetches' guarantee for any api.*-hosted URL. Reproduced end-to-end against the real webFetchTool: api.github.com commit URL and api.stripe.com charge URL both hard-refused with zero network calls attempted; the PR's own boundary test uses a non-'api'-hosted host and dodges the bug.",
+    "suggested_fix": "Exclude '/' from the TOKEN character class, or split candidates on '/' before applying the head/slug/entropy gates the way displayUrl's maskSecretShapedPathSegments already does per-segment; require a word boundary around SENSITIVE_LABEL rather than a bare substring match. Add a false-positive fixture case and an AC4 boundary test using an api.*-hosted URL with a hex id or auth-shaped path segment.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): redactSensitiveText no longer mangles the finding's own GitHub commit URL; containsOutboundSecret on that URL and on an ordinary secret-free webhook URL both now return false. bun test src/security/detect/entropy.test.ts -t \"F-LOG-F1\" -> 5 pass, 0 fail.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 359,
+    "quote": "const TOKEN = /[A-Za-z0-9+/=_-]{20,}(?:\\.[A-Za-z0-9+/=_-]{6,})*/g;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 15
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts (TOKEN regex / shapeQualifiesAsSecret / SENSITIVE_LABEL -- root mechanism)",
+        "src/security/redact.ts (redactSensitiveText -- S-6/AC2 call site)",
+        "src/harness/web/outbound-secret.ts (containsOutboundSecret -- S-8/AC4 call site, consumed by web-fetch-tool.ts and web-search-tool.ts)",
+        "src/harness/tool/builtin/web-fetch-tool.ts:53",
+        "src/harness/tool/builtin/web-search-tool.ts:58"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: redactSensitiveText on the finding's own GitHub commit URL (https://api.github.com/repos/foo/bar/commits/<40-hex>) no longer mangles it (returns the URL unchanged, was '.../api.github.[REDACTED:entropy]'); containsOutboundSecret on the same URL and on the finding's ordinary secret-free webhook URL both now return false (were true/refused). bun test src/security/detect/entropy.test.ts -t \"F-LOG-F1\" -> 5 pass, 0 fail."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: redactSensitiveText on the finding's own GitHub commit URL (https://api.github.com/repos/foo/bar/commits/<40-hex>) no longer mangles it (returns the URL unchanged, was '.../api.github.[REDACTED:entropy]'); containsOutboundSecret on the same URL and on the finding's ordinary secret-free webhook URL both now return false (were true/refused). bun test src/security/detect/entropy.test.ts -t \"F-LOG-F1\" -> 5 pass, 0 fail.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "LOG-F2",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "AC2 and the CHANGELOG/findings.md narrative claim a '7-12-hex short SHA' allow-shape, but it is unreachable in both callers: detectEntropy's TOKEN regex requires a 20+ char head before any candidate is considered, and looksSecretShaped is only invoked on segments of 16+ chars -- both above the 7-12 range.",
+    "impact": "No behavioural defect today (the outcome AC2 asks for holds), but it is dead code presented as the mechanism that achieves it; a future refactor that changes the length floors could silently break the (currently accidental) short-SHA safety with no test catching it.",
+    "suggested_fix": "Either add a genuine call path that can reach a 7-12 char candidate plus a direct unit test through the real caller, or remove the branch/claim and document the length floors as the actual reason short SHAs are safe.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct site-check against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): keryx ctx rg \"SHORT_GIT_SHA_RE\" src/security/detect/entropy.ts -> 2 matches, both explanatory comments naming F-LOG-F2, no remaining definition or reachable branch.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": null,
+    "quote": "const SHORT_GIT_SHA_RE = /^[0-9a-f]{7,12}$/i;",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 34
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#LOG-F2",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (site-check): keryx ctx rg \"SHORT_GIT_SHA_RE\" src/security/detect/entropy.ts at 536a6971 -> 2 matches, both explanatory comments (lines 49, 381) naming F-LOG-F2, no remaining regex definition or reachable code path — matches the finding's own recorded disposition that the branch was removed."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "keryx ctx rg \"SHORT_GIT_SHA_RE\" src/security/detect/entropy.ts at 536a6971 -> 2 matches, both explanatory comments (lines 49, 381) naming F-LOG-F2, no remaining regex definition or reachable code path — matches the finding's own recorded disposition that the branch was removed.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "REG-F2",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "displayUrl's new per-path-segment masking calls looksSecretShaped with no label requirement, which falls back to HEX_BLOB = /^[0-9a-f]{24,}$/i whenever the entropy floor isn't met on its own. Decimal digits are a strict subset of the hex alphabet, so any purely-numeric string of 24+ characters satisfies HEX_BLOB regardless of actual entropy or credential likelihood.",
+    "impact": "A legitimate, non-credential, purely-numeric resource id (order/invoice/charge id) of 24+ digits anywhere in an MCP server's URL path is silently replaced with '…' in mcp list, mcp doctor --json, and the trust-authorisation prompt -- exactly the surfaces this feature exists to make debuggable. Verified: https://api.example.com/v1/invoices/123456789012345678901234/lines -> '.../invoices/.../lines'; a 23-digit id of the same shape is left untouched, so the boundary is arbitrary. None of the existing displayUrl masking tests exercise a purely-numeric segment.",
+    "suggested_fix": "Require at least one actual hex letter (a-f) before treating a candidate as a HEX_BLOB, or require the entropy floor unconditionally for all-decimal values. Add a boundary test for a long purely-numeric segment asserting it is left untouched.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): looksSecretShaped('123456789012345678901234') (24 digits) now returns false (was true); a 30-digit variant also returns false. bun test src/mcp-servers/http-headers.table.test.ts -t \"BOUNDARY\" -> 23 pass, 0 fail.",
+    "confidence": "high",
+    "file": "src/mcp-servers/http-headers.ts",
+    "line": 351,
+    "quote": "return detectSecrets(segment).length > 0 || looksSecretShaped(segment) ? \"…\" : segment;",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 351
+    },
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/http-headers.ts:384 (displayUrl)",
+        "src/commands/mcp-servers.ts:285",
+        "src/commands/mcp-servers.ts:537",
+        "src/mcp-servers/doctor.ts:317",
+        "src/mcp-servers/doctor.ts:416",
+        "src/mcp-servers/trust.ts:215",
+        "src/tui/mcp-consumer.ts:138 (not in the computed 40-file blast-radius set, despite calling the identical masked function)"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F2",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: looksSecretShaped('123456789012345678901234') (24 digits, the finding's own repro value) -> false (was true); a 30-digit variant -> false. bun test src/mcp-servers/http-headers.table.test.ts -t \"BOUNDARY\" -> 23 pass, 0 fail, including the finding's own named boundary rows."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: looksSecretShaped('123456789012345678901234') (24 digits, the finding's own repro value) -> false (was true); a 30-digit variant -> false. bun test src/mcp-servers/http-headers.table.test.ts -t \"BOUNDARY\" -> 23 pass, 0 fail, including the finding's own named boundary rows.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "REG-F3",
+    "reviewer": "review-regression",
+    "severity": "major",
+    "problem": "This diff wires detectEntropy into redactSensitiveText (S-6) and into the new containsOutboundSecret (S-8) unconditionally -- neither threads a config/cwd parameter, so neither can consult SecurityConfig.backends.entropy.enabled. The only existing gate for detectEntropy is runDetectors (src/security/detect/index.ts:36), which keryx security scan/report/gate go through.",
+    "impact": "An operator who has explicitly set backends.entropy.enabled: false (a real, documented, default-true toggle) still gets every tool output/session transcript entropy-redacted and every web_fetch/web_search call entropy-checked/potentially refused, with no way to turn either off -- silently breaking the previously-consistent meaning of that flag.",
+    "suggested_fix": "Thread the security config (or a resolved enabled boolean) into redactSensitiveText/containsOutboundSecret and skip detectEntropy when backends.entropy.enabled === false, or explicitly document and rename this as a separate, non-configurable safety floor distinct from the scan/report/gate pipeline's opt-in backend.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): bun test src/harness/web/outbound-secret.test.ts -t \"F-REG-F3\" -> 2 pass, 0 fail; bun test src/security/redact.test.ts -t \"F-REG-F3\" -> 3 pass, 0 fail. Both describe blocks directly exercise backends.entropy.enabled gating containsOutboundSecret/redactSensitiveText via src/security/entropy-gate.ts's setEntropyBackendEnabledForTests.",
+    "confidence": "high",
+    "file": "src/security/redact.ts",
+    "line": null,
+    "quote": "const matches = [\n    ...detectSecrets(text),\n    ...detectPii(text),\n    ...detectExfil(text),\n    ...detectEntropy(text),\n  ];",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 145
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/redact.ts:149 (redactSensitiveText)",
+        "src/harness/web/outbound-secret.ts:15 (containsOutboundSecret)",
+        "src/commands/agent.ts:3196",
+        "src/session/store.ts:404",
+        "src/session/store.ts:410",
+        "src/session/slate.ts:346",
+        "src/review/conform-state.ts:113",
+        "src/review/conform-state.ts:114",
+        "src/review/conform-state.ts:206",
+        "src/harness/tool/builtin/slate-tool.ts:189",
+        "src/sac/workspace-resolve.ts:150",
+        "src/session/slate-terminal-state.ts:84",
+        "src/security/output-validation.ts:210"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#REG-F3",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun test src/harness/web/outbound-secret.test.ts -t \"F-REG-F3\" at 536a6971 -> 2 pass, 0 fail; bun test src/security/redact.test.ts -t \"F-REG-F3\" -> 3 pass, 0 fail. Both describe blocks directly exercise backends.entropy.enabled gating containsOutboundSecret/redactSensitiveText via src/security/entropy-gate.ts's setEntropyBackendEnabledForTests, matching the finding's own recorded disposition."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun test src/harness/web/outbound-secret.test.ts -t \"F-REG-F3\" at 536a6971 -> 2 pass, 0 fail; bun test src/security/redact.test.ts -t \"F-REG-F3\" -> 3 pass, 0 fail. Both describe blocks directly exercise backends.entropy.enabled gating containsOutboundSecret/redactSensitiveText via src/security/entropy-gate.ts's setEntropyBackendEnabledForTests, matching the finding's own recorded disposition.",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "ARCH-F1",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "This diff adds a new client-zone-imports-core-internal edge (harness/external/env-deny.ts -> security/credential-shape.ts), bypassing the security/service.ts facade, and permanently raises AVOIDABLE_BYPASS_CEILING from 150 to 151. The PR justifies this as 'structurally unavoidable' because credential-shape.ts (core) cannot import env-deny.ts (client) back -- true but irrelevant, since the actual bypass exists only because security/service.ts re-exports isDeniedForMcpChild from credential-shape.ts (added in this same diff) but was not also extended to re-export EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS.",
+    "impact": "The ratchet in import-policy.live.test.ts only ever fails on growth and does not self-correct once raised, baking in one avoidable bypass as permanent tracked debt when the fix was a two-line change to a file this diff was already editing for the identical purpose.",
+    "suggested_fix": "Add `export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from \"./credential-shape\";` to src/security/service.ts alongside the existing isDeniedForMcpChild re-export; change env-deny.ts's re-export to pull from \"../../security/service\" instead; revert AVOIDABLE_BYPASS_CEILING to 150.",
+    "evidence": "Original finding, round 1 (2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02). Re-verified this round by direct site-check and execution against current main (536a6971, content-identical to PR #781 head 22478bc0a9970324373cbe38fb5fd7e34568f64c): src/security/service.ts:97 now re-exports EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS alongside isDeniedForMcpChild; src/harness/external/env-deny.ts:14 re-exports both via the facade. bun test src/lib/import-policy.live.test.ts -> 13 pass, 0 fail, confirming AVOIDABLE_BYPASS_CEILING = 150.",
+    "confidence": "high",
+    "file": "src/harness/external/env-deny.ts",
+    "line": null,
+    "quote": "export { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from \"../../security/credential-shape\";",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 11
+    },
+    "class_scope": {
+      "sites": [
+        "src/harness/external/env-deny.ts:11"
+      ],
+      "enumeration_method": "Round-1 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-origin-main-dc63b9bc0469580d726379f9a030-r02#ARCH-F1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): Direct read of src/security/service.ts:97 at 536a6971: now re-exports EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS alongside isDeniedForMcpChild; src/harness/external/env-deny.ts:14 re-exports both via that facade, not a direct core-internal import. bun test src/lib/import-policy.live.test.ts -> 13 pass, 0 fail, confirming AVOIDABLE_BYPASS_CEILING = 150 (the finding's own baseline; was raised to 151 pre-fix)."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Direct read of src/security/service.ts:97 at 536a6971: now re-exports EXTERNAL_ENV_DENY/EXTERNAL_ENV_PREFIX_SWEEPS alongside isDeniedForMcpChild; src/harness/external/env-deny.ts:14 re-exports both via that facade, not a direct core-internal import. bun test src/lib/import-policy.live.test.ts -> 13 pass, 0 fail, confirming AVOIDABLE_BYPASS_CEILING = 150 (the finding's own baseline; was raised to 151 pre-fix).",
+      "verifier": "review-verifier"
+    }
+  },
+  {
+    "id": "SEC-F1",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "isWordSlug exempts a hyphen/underscore-segmented run from the entropy/hex-blob gate whenever every segment is pure-alpha, pure-digit, or a single-transition tag, with no check on the RECONSTITUTED value's own entropy. Re-segmenting any real secret into single-character-class chunks joined by '-' defeats looksSecretShaped/secretShapedCandidatesIn entirely.",
+    "impact": "Complete bypass of S-6 (redactSensitiveText) and S-8 (containsOutboundSecret) for a re-segmented secret, and of S-9 (displayUrl masking). Reproduced: a real 32-char alphanumeric secret, re-segmented into letter-run/digit-run chunks ('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8'), passes looksSecretShaped as false, containsOutboundSecret as false when placed in a URL path, and redactSensitiveText leaves it byte-for-byte unredacted even when explicitly labelled 'leaked api_key:'. A simpler variant using real dictionary words on either side of the secret ('log-<secret>-id') reproduces the same bypass.",
+    "suggested_fix": "Do not let isWordSlug's exemption apply to the reconstituted (hyphen-stripped) value's own entropy; require the check to fail when the joined alnum content is itself high-entropy, or cap the exemption to segments short enough that a real version/platform tag would still qualify (a handful of characters) while a secret forced into many short single-class chunks would not.",
+    "evidence": "Original finding, round 2 (2026-09-28-pr-776-round2-2a2db6b7). Re-verified this round by direct execution against current main (536a6971, content-identical to PR #776 head ed1c3ba6cb224bac4bed982a56b5da73585913d5 merge): the finding's own segmented-secret repro and its minimal-wrap variant both now return true/redacted (were false/unchanged); bun test src/security/detect/entropy.test.ts -t \"SEC-F1\" -> 3 pass, 0 fail.",
+    "confidence": "high",
+    "file": "src/security/detect/entropy.ts",
+    "line": 462,
+    "quote": "function isWordSlug(value: string): boolean {\n  const segments = value.split(/[-_]/);\n  if (segments.length < 3) {\n    return false;\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 235
+    },
+    "class_scope": {
+      "sites": [
+        "src/security/detect/entropy.ts:235 isWordSlug",
+        "src/security/detect/entropy.ts:274 bareShapeQualifies",
+        "src/security/detect/entropy.ts:319 looksSecretShaped",
+        "src/security/detect/entropy.ts:464 secretShapedCandidatesIn",
+        "src/security/redact.ts:153 redactSensitiveText (S-6)",
+        "src/harness/web/outbound-secret.ts:108,122 containsOutboundSecret (S-8)",
+        "src/mcp-servers/http-headers.ts:351 displayUrl (S-9)",
+        "src/security/detect/index.ts:37 runDetectors (keryx security scan/report/gate)"
+      ],
+      "enumeration_method": "Round-2 enumeration, carried forward unchanged; re-verified this round by direct execution at 536a6971 (see verifications)."
+    },
+    "global_id": "2026-09-28-pr-776-round2-2a2db6b7#SEC-F1",
+    "disposition": {
+      "state": "dismissed-incorrect",
+      "evidence": "refuted by review-verifier (execution): bun -e against 536a6971: the finding's own segmented-secret repro — looksSecretShaped('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8') -> true (was false); containsOutboundSecret on the same value in a URL path -> true (was false/not refused); redactSensitiveText('leaked api_key: ' + same value) -> [REDACTED:entropy] (was unchanged). The minimal-wrap variant containsOutboundSecret('https://x.example/log-abcdefghijklmnopqrstuvwxyzAB1234-id') -> true (was false); detectEntropy on the same URL -> 1 match (was []). bun test src/security/detect/entropy.test.ts -t \"SEC-F1\" -> 3 pass, 0 fail."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun -e against 536a6971: the finding's own segmented-secret repro — looksSecretShaped('aK-9-dQ-2-rN-7-zVbT-4-pXeYfWmC-1-oLaHsJtU-8') -> true (was false); containsOutboundSecret on the same value in a URL path -> true (was false/not refused); redactSensitiveText('leaked api_key: ' + same value) -> [REDACTED:entropy] (was unchanged). The minimal-wrap variant containsOutboundSecret('https://x.example/log-abcdefghijklmnopqrstuvwxyzAB1234-id') -> true (was false); detectEntropy on the same URL -> 1 match (was []). bun test src/security/detect/entropy.test.ts -t \"SEC-F1\" -> 3 pass, 0 fail.",
+      "verifier": "review-verifier"
+    }
+  }
+]

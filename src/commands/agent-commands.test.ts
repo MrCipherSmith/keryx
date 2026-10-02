@@ -53,6 +53,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -60,6 +61,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -183,6 +185,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -190,6 +193,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -336,6 +340,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/decisions",
     "/integrate",
     "/ci",
     "/conform",
@@ -343,6 +348,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/scenarios",
     "/jevrules",
     "/staledocs",
+    "/flow",
     "/opencomments",
     "/contract",
     "/triage",
@@ -436,7 +442,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/integrate",
     "/interrupt",
   ]);
-  expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows"]);
+  expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows", "/flow"]);
   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);
 });

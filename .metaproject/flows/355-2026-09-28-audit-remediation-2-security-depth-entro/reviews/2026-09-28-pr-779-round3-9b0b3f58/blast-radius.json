@@ -1,0 +1,866 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "CHANGELOG.md",
+    "docs/requirements/keryx-audit-remediation/findings.md",
+    "package.json",
+    "src/harness/web/outbound-secret.ordinary-fixture.test.ts",
+    "src/harness/web/outbound-secret.test.ts",
+    "src/security/detect/entropy.test.ts",
+    "src/security/detect/entropy.ts",
+    "src/security/redact.test.ts"
+  ],
+  "files": [
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 18,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 16,
+      "via": "package.json",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/detect/index.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/security/detect/entropy.ts",
+      "path": [
+        "src/security/detect/index.ts",
+        "src/security/detect/entropy.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 10,
+      "via": "package.json",
+      "path": [
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/install-plan.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "package.json",
+      "path": [
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/doctor.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "package.json",
+      "path": [
+        "src/commands/doctor.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/acp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/acp.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/bundle.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/bundle.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/hooks.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/hooks.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/version.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/version.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/tui/tui-shell.test.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/service.ts",
+      "hop": 2,
+      "fanIn": 43,
+      "via": "src/security/detect/entropy.ts",
+      "path": [
+        "src/security/service.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/entropy.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/bus/client.ts",
+      "hop": 2,
+      "fanIn": 26,
+      "via": "package.json",
+      "path": [
+        "src/bus/client.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 2,
+      "fanIn": 17,
+      "via": "package.json",
+      "path": [
+        "src/commands/init.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/integrations/install-state.ts",
+      "hop": 2,
+      "fanIn": 7,
+      "via": "package.json",
+      "path": [
+        "src/integrations/install-state.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/security.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/security/detect/entropy.ts",
+      "path": [
+        "src/commands/security.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/entropy.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "package.json",
+      "path": [
+        "src/commands/update.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/routing-entrypoint.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "package.json",
+      "path": [
+        "src/lib/routing-entrypoint.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/eval/harness.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/security/detect/entropy.ts",
+      "path": [
+        "src/security/eval/harness.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/entropy.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/rules.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "package.json",
+      "path": [
+        "src/commands/rules.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/help.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/help.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/harness-scan.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/security/detect/entropy.ts",
+      "path": [
+        "src/security/harness-scan.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/entropy.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-docs-structure.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/cli-docs-structure.test.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/cli-reference-coverage.test.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/cli.test.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/acp.test.ts",
+        "src/commands/acp.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/agent-permission-mode.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/bundle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/bundle.test.ts",
+        "src/commands/bundle.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/doctor.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/doctor.test.ts",
+        "src/commands/doctor.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/help-grouped.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/help-grouped.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/hooks.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/hooks.test.ts",
+        "src/commands/hooks.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/install-lifecycle.test.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/mcp-naming.test.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/providers.cross-family.test.ts",
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.subscription.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/providers.subscription.test.ts",
+        "src/tui/tui-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/select.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-agent-repl.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell-agent-repl.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-bus.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell-bus.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell-cli-validation.test.ts",
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-starting-line.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-subscription-selection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-task-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/integrations/registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/install-plan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/routing-entrypoint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/detect/exfil.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/detect/injection/adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/detect/pii/ner-adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/eval/harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/golden-rule-e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/security.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/security/structural-detection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/entropy.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 73 at hop 2, fan-in 0, reached via src/security/detect/entropy.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/help-groups.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/boot-animation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/connect-provider-buttons.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/custom-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/model-picker-notice.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/model-session-picker-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/picker-theme.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/provider-endpoint-retry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/session-picker-acp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subscription-provider-wizard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-session-lease.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/wizard-modal.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 73 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/core-package.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 73 at hop 3, fan-in 0, reached via package.json. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": "CHANGELOG.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-audit-remediation/findings.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/harness/web/outbound-secret.ordinary-fixture.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "src/harness/web/outbound-secret.test.ts",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 8,
+    "changedFilesResolved": 4,
+    "changedFilesUnresolved": 4,
+    "candidates": 73,
+    "retained": 40,
+    "droppedByCap": 33,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 1,
+    "testsRetained": 18,
+    "hopHistogram": {
+      "1": 12,
+      "2": 28
+    }
+  },
+  "graph": {
+    "nodes": 2329,
+    "edges": 7606
+  }
+}

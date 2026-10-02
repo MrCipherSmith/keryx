@@ -1,0 +1,37 @@
+# Flow Journal
+
+- 2026-10-01T07:39:31.834Z - flow created
+- 2026-10-01T10:45:59.120Z - task-done: T1: Collect remaining context
+- 2026-10-01T10:46:00.877Z - task-done: T2: Implement per plan
+- 2026-10-01T10:46:02.712Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-01T10:46:09.994Z - task-added: T5: AC1: neutral trigger in reviewer-skill-creator
+- 2026-10-01T10:46:11.820Z - task-added: T6: AC2: skills install --with/--without validation and full dry-run hint
+- 2026-10-01T10:46:13.639Z - task-added: T7: AC3 (+AC4 import text): skills update output and warnings, comments reply help parity
+- 2026-10-01T10:46:15.562Z - task-added: T8: AC4: reviewers.ts rules/core wording; model-tier and bundled-eval through the shared frontmatter reader
+- 2026-10-01T10:46:17.289Z - frozen: 5 criteria; checksum recorded
+- 2026-10-01T10:46:19.095Z - started
+- 2026-10-01T10:46:28.941Z - task-attempt: T5: started (attempt 1) — 365-T5 sonnet
+- 2026-10-01T10:46:29.106Z - task-attempt: T6: started (attempt 1) — 365-T6 sonnet
+- 2026-10-01T10:46:29.264Z - task-attempt: T7: started (attempt 1) — 365-T7 sonnet
+- 2026-10-01T10:46:29.419Z - task-attempt: T8: started (attempt 1) — 365-T8 sonnet
+- 2026-10-01T10:48:46.071Z - task-done: T5: AC1: neutral trigger in reviewer-skill-creator
+- 2026-10-01T10:52:27.804Z - task-done: T6: AC2: skills install --with/--without validation and full dry-run hint
+- 2026-10-01T10:54:38.685Z - task-done: T7: AC3 (+AC4 import text): skills update output and warnings, comments reply help parity
+- 2026-10-01T10:54:40.457Z - task-added: T9: Docs: reviewer-skill-creator transcript and rules/core wording after T7
+- 2026-10-01T10:54:42.207Z - task-attempt: T9: started (attempt 1) — 365-T9 sonnet
+- 2026-10-01T10:55:51.220Z - task-done: T8: AC4: reviewers.ts rules/core wording; model-tier and bundled-eval through the shared frontmatter reader
+- 2026-10-01T10:58:13.771Z - task-done: T9: Docs: reviewer-skill-creator transcript and rules/core wording after T7
+- 2026-10-01T12:19:02.690Z - ac-confirmed: AC1: c3883345: trigger 'import acme reviewers' removed; 'import overlay reviewers' routes to reviewer-skill-creator at 85 (review J-009 probe); skills verify --bundled 0 findings; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T12:19:04.807Z - ac-confirmed: AC2: 13208b3a + review fix f365b889: unknown or no-op --with/--without ids exit 1 listing the ids that would change the plan (plan.test.ts; verifier: 0 no-op ids over 25 profiles); dry-run hint repeats every plan-shaping flag, pinned through skills install in skills-install-route.test.ts (fails when the call site drops flags); hint round-trips in 248 probed cases. Fully true only after review fix f365b889 (J-001/J-002). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T12:19:07.173Z - ac-confirmed: AC3: 14267427: skills update prints '# skills update' / 'would update' and the import's paths-none, flag and family-flag warnings (import-skills-update.test.ts); review and review comments help share COMMENTS_USAGE, pinned by review-help.test.ts; CI green at c81af15e (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T12:19:09.362Z - ac-confirmed: AC4: 14267427, 3766d5aa, c81af15e: import and reviewers text qualify the rules/core overwrite (legacy profile route; the manifest form skips unrecorded files — broadened from 'with --target' per review J-007); parseSkillModelTier and bundled-eval read via skill-frontmatter.ts, header exceptions removed; 0 diffs over 374 real SKILL files (J-005/J-006) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T12:19:12.594Z - ac-confirmed: AC5: CI green on PR #829 at head c81af15ece28980974208558bfc8b04f669be785 (typecheck-and-tests and all jobs pass); keryx health run PASS, no gate conditions (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-01T12:19:18.786Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-01T12:19:25.092Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/829
+- 2026-10-01T12:19:52.890Z - completing
+- 2026-10-01T12:19:57.988Z - completion-attempt-recorded: attempt 1: failed
+- 2026-10-01T12:19:57.990Z - completion-failed: main-merge: 26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main | base-branch: violated: this flow recorded base main, but 26a102b18383fc331033f0239c1401393e70a48d is not contained in origin/main. The merge landed somewhere else.
+- 2026-10-01T12:20:16.092Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/829 (warning: PR is not a draft)
+- 2026-10-01T12:20:17.957Z - completing
+- 2026-10-01T12:20:23.133Z - completion-attempt-recorded: attempt 2: passed
+- 2026-10-01T12:20:23.135Z - done: all gates passed

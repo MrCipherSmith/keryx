@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "reviewId": "2026-10-01-ingest-821",
+  "mode": "ingest",
+  "status": "draft",
+  "target": {
+    "kind": "report",
+    "ref": "821",
+    "head": "c9f31fd9c23fff590257e1712f956f0a6aa1228e"
+  },
+  "artifacts": {
+    "scope": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/scope.md",
+    "coverage": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/coverage.md",
+    "report": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/report.md",
+    "findings": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/findings.json",
+    "learning": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/learning.md",
+    "decisions": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar/reviews/2026-10-01-ingest-821/decisions.md"
+  },
+  "coverage": [
+    {
+      "reviewer": "review-orchestrator",
+      "status": "run",
+      "reason": "selected for managed review package"
+    }
+  ],
+  "filter_stats": {
+    "schema_version": 1,
+    "total": 15,
+    "dropped_prefilter": 0,
+    "dropped_low_confidence": null,
+    "dropped_refuted": 0,
+    "dropped_scope_b": 0,
+    "dropped_findings_cap": 0,
+    "retained": 15,
+    "dismissed_by_round": null,
+    "by_reason": {},
+    "not_measured": [
+      {
+        "stage": "low_confidence",
+        "reason": "this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing."
+      },
+      {
+        "stage": "round_dismissed",
+        "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
+      }
+    ]
+  },
+  "createdAt": "2026-10-01T08:28:54.257Z",
+  "updatedAt": "2026-10-01T08:28:54.257Z",
+  "flow": {
+    "id": "364",
+    "path": ".metaproject/flows/364-2026-10-01-governance-modal-a-flow-list-with-summar"
+  }
+}

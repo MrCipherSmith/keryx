@@ -23,8 +23,11 @@
 // every attempt, so a tampered endpoint file cannot send the shell token anywhere
 // else. The serve named by the file must also be a running process of this user:
 // a serve that was killed leaves its `endpoint.json` behind, and the port may by
-// then belong to someone else, who must not be handed the token. It never logs
-// or returns the token.
+// then belong to someone else, who must not be handed the token. A reused pid can
+// still pass that check, so the raw token is never sent at all (each request
+// carries a bearer derived from it and a fresh nonce) and every answer, the event
+// stream included, must carry serve's proof for that nonce before it is used
+// (F-002). It never logs or returns the token.
 
 import { isLoopbackAddress } from "../lib/serve-config";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
@@ -33,9 +36,13 @@ import {
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalEvent,
+  type ChoiceEvent,
+  type PromptBody,
+  type PromptResponse,
   type ApprovalResponse,
   type CallbackEvent,
   type InboundEvent,
+  type MessageState,
   type RegisterBody,
   type RegisterResponse,
   type ReplyBody,
@@ -43,10 +50,14 @@ import {
   remoteRoutePath,
   type RemoteRoute,
   SseParser,
+  type StateBody,
   type StatusEvent,
 } from "./protocol";
 import { readEndpoint } from "./endpoint";
-import { readShellToken } from "./shell-token";
+import { readShellToken, SERVE_PROOF_HEADER, shellRequestCredential, verifyServeResponseProof } from "./shell-token";
+
+const UNVERIFIED_SERVE_MESSAGE =
+  "the program answering on keryx serve's port did not prove it is the keryx serve this shell trusts; its answer was ignored. Restart `keryx serve` (an older serve cannot prove itself; update keryx on both sides)";
 
 export interface InboundMeta {
   updateId: number;
@@ -173,6 +184,8 @@ export class RemoteClient {
   private inboundChain: Promise<void> = Promise.resolve();
   private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly earlyDecisions = new Map<string, ApprovalDecision>();
+  private readonly choiceWaiters = new Map<string, { resolve: (index: number | undefined) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyChoices = new Map<string, number>();
   private firstResult: ((result: StartResult) => void) | undefined;
 
   /** The topic name and thread, once registered. */
@@ -315,10 +328,65 @@ export class RemoteClient {
     });
   }
 
+  /**
+   * Ask the topic with buttons (flow 387). Resolves with the position of the pressed button,
+   * counting across the rows, or undefined: no press in time, a refusal, no stream, a dropped
+   * stream. Nothing here ever turns an absent answer into a yes.
+   */
+  async requestChoice(text: string, rows: string[][], timeoutMs: number, forUserId?: number): Promise<number | undefined> {
+    if (!this.connected) {
+      return undefined;
+    }
+    const body: PromptBody = { sessionId: this.options.sessionId, text, rows, timeoutMs, ...(forUserId === undefined ? {} : { forUserId }) };
+    let promptId: string;
+    try {
+      const response = await this.post("prompt", body);
+      if (!response.ok) {
+        return undefined;
+      }
+      promptId = ((await response.json()) as PromptResponse).promptId;
+    } catch {
+      return undefined;
+    }
+    const early = this.earlyChoices.get(promptId);
+    if (early !== undefined) {
+      this.earlyChoices.delete(promptId);
+      return early;
+    }
+    if (!this.connected) {
+      return undefined;
+    }
+    return new Promise<number | undefined>((resolve) => {
+      const timer = setTimeout(() => {
+        this.choiceWaiters.delete(promptId);
+        resolve(undefined);
+      }, timeoutMs);
+      this.choiceWaiters.set(promptId, { resolve, timer });
+    });
+  }
+
+  /**
+   * Tell serve where a message from the topic is (flow 387, AC18): it shows the state as a
+   * reaction and the typing indicator. Best effort: a failure here never touches the message.
+   */
+  async reportState(updateId: number, state: MessageState): Promise<void> {
+    if (!this.connected) {
+      return;
+    }
+    try {
+      await this.post("state", { sessionId: this.options.sessionId, updateId, state });
+    } catch {
+      // The state is a courtesy; the message itself is unaffected.
+    }
+  }
+
   // ---- requests --------------------------------------------------------------
 
   /** The one place a URL is built, and the one place the loopback rule is enforced. */
   private target(route: RemoteRoute, query = ""): { url: string; token: string } {
+    // The token is read before the endpoint: serve removes the old endpoint before it mints a token, so a
+    // new token can never be paired with an endpoint left over from an earlier serve.
+    const token = readShellToken(this.options.dir);
     const endpoint = readEndpoint(this.options.dir);
     if (!endpoint.ok) {
       throw new TransientClientError(endpoint.reason);
@@ -332,21 +400,34 @@ export class RemoteClient {
         `the serve named in the endpoint file (pid ${endpoint.value.pid}) is not running as this user; refusing to send the shell token to whatever listens on that port`,
       );
     }
-    const token = readShellToken(this.options.dir);
     if (!token.ok) {
       throw new TransientClientError(token.reason);
     }
     return { url: `http://${authority(endpoint.value.address, endpoint.value.port)}${remoteRoutePath(route)}${query}`, token: token.value };
   }
 
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | AckBody | { sessionId: string }): Promise<Response> {
+  /**
+   * A non-stream request. The bearer is derived from the token and a fresh nonce (the raw
+   * token never leaves the shell), and the answer is returned only once serve's proof for
+   * that nonce, route, status and body checks out: a listener that is not this serve
+   * (another program on a freed port, or a serve too old to prove itself) gets nothing
+   * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
+   */
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
-    return this.fetchImpl(url, {
+    const { nonce, bearer } = shellRequestCredential(token);
+    const response = await this.fetchImpl(url, {
       method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      redirect: "manual",
+      headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json" },
       body: JSON.stringify(body),
       signal: AbortSignal.any([AbortSignal.timeout(this.requestTimeoutMs), this.lifetime.signal]),
     });
+    const text = await response.text();
+    if (!verifyServeResponseProof(token, nonce, route, response.status, text, response.headers.get(SERVE_PROOF_HEADER))) {
+      throw new TransientClientError(UNVERIFIED_SERVE_MESSAGE);
+    }
+    return new Response(text, { status: response.status, headers: response.headers });
   }
 
   private async heartbeat(): Promise<void> {
@@ -418,12 +499,19 @@ export class RemoteClient {
     const abort = new AbortController();
     this.streamAbort = abort;
     const { url, token } = this.target("stream", `?sessionId=${encodeURIComponent(this.options.sessionId)}`);
-    const headers: Record<string, string> = { authorization: `Bearer ${token}`, accept: "text/event-stream" };
+    const { nonce, bearer } = shellRequestCredential(token);
+    const headers: Record<string, string> = { authorization: `Bearer ${bearer}`, accept: "text/event-stream" };
     if (this.lastCompleted > 0) {
       // "The last line I completed was this one": serve settles that exact id if it is still waiting for it.
       headers["last-event-id"] = String(this.lastCompleted);
     }
-    const response = await this.fetchImpl(url, { method: "GET", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
+    const response = await this.fetchImpl(url, { method: "GET", redirect: "manual", headers, signal: AbortSignal.any([abort.signal, this.lifetime.signal]) });
+    // The stream is proven by its headers: every frame after them comes over this same loopback connection.
+    // Unproven, not one frame is read: a forged stream could otherwise feed lines to run and approvals to allow.
+    if (!verifyServeResponseProof(token, nonce, "stream", response.status, "", response.headers.get(SERVE_PROOF_HEADER))) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new TransientClientError(UNVERIFIED_SERVE_MESSAGE);
+    }
     if (!response.ok || response.body === null) {
       await response.text().catch(() => "");
       if (response.status === 404) {
@@ -520,6 +608,9 @@ export class RemoteClient {
     } else if (event === "approval") {
       const approval = parsed as ApprovalEvent;
       this.resolveApproval(approval.approvalId, approval.decision);
+    } else if (event === "choice") {
+      const choice = parsed as ChoiceEvent;
+      this.resolveChoice(choice.promptId, choice.index);
     } else if (event === "callback") {
       const callback = parsed as CallbackEvent;
       if (this.options.onCallback !== undefined) {
@@ -585,6 +676,33 @@ export class RemoteClient {
     waiter.resolve(decision);
   }
 
+  private resolveChoice(promptId: string, index: number): void {
+    const waiter = this.choiceWaiters.get(promptId);
+    if (waiter === undefined) {
+      // The press beat the response that names its id; park it briefly.
+      if (this.earlyChoices.size >= MAX_EARLY_DECISIONS) {
+        const oldest = this.earlyChoices.keys().next().value;
+        if (oldest !== undefined) {
+          this.earlyChoices.delete(oldest);
+        }
+      }
+      this.earlyChoices.set(promptId, index);
+      return;
+    }
+    clearTimeout(waiter.timer);
+    this.choiceWaiters.delete(promptId);
+    waiter.resolve(index);
+  }
+
+  private failChoices(): void {
+    for (const [id, waiter] of [...this.choiceWaiters.entries()]) {
+      clearTimeout(waiter.timer);
+      this.choiceWaiters.delete(id);
+      waiter.resolve(undefined);
+    }
+    this.earlyChoices.clear();
+  }
+
   private failApprovals(): void {
     for (const [id, waiter] of [...this.waiters.entries()]) {
       clearTimeout(waiter.timer);
@@ -592,5 +710,6 @@ export class RemoteClient {
       waiter.resolve("deny");
     }
     this.earlyDecisions.clear();
+    this.failChoices();
   }
 }

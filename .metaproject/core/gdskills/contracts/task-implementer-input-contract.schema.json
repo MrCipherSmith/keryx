@@ -188,7 +188,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 3,
-          "description": "Fix iteration number. Three, the same bound `flow-orchestrator`, `job-orchestrator` and SKILL.md Phase 5.4 carry and `src/gdskills/round-bound.test.ts` pins; it was 2 here, a fourth disagreeing repair bound."
+          "description": "Fix iteration number. Three, the same bound `job-orchestrator` and SKILL.md Phase 5.4 carry and `src/gdskills/round-bound.test.ts` pins (`flow-orchestrator`'s review bound is five); it was 2 here, a fourth disagreeing repair bound."
         }
       }
     },

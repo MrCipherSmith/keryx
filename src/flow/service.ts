@@ -4,6 +4,7 @@ import { DEFAULT_LOCK_STALE_MS, isLockHeld, pathExists, writeFileAtomic, withFil
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import {
   assertTransition,
+  canTransition,
   dependencyIssues,
   evaluateTaskGate,
   isUntouchedScaffold,
@@ -11,6 +12,7 @@ import {
 } from "./machine";
 import { reviewGate } from "./review-gate";
 import { DEFAULT_OUTCOME_AUTHOR, parseOutcomeAuthor, readOutcomeAuthor, type OutcomeAuthorReading } from "./outcome-author";
+import { isOriginKind, originSummary, readOrigin, resolveOrigin, type FlowOrigin, type OriginReading } from "./origin";
 // The outcome-author vocabulary, re-exported so the CLI, the product module and the
 // TUI read it through this facade (import policy, rule 2).
 export {
@@ -22,6 +24,21 @@ export {
   type OutcomeAuthor,
   type OutcomeAuthorReading,
 } from "./outcome-author";
+// The origin vocabulary, re-exported for the same reason.
+export {
+  ORIGIN_KINDS,
+  ORIGIN_READINGS,
+  effectiveOutcomeAuthor,
+  isOriginKind,
+  originDetailLines,
+  originSummary,
+  readOrigin,
+  readOriginKind,
+  resolveOrigin,
+  type FlowOrigin,
+  type OriginKind,
+  type OriginReading,
+} from "./origin";
 import { describeIdentity, ownerIdentity, resolveSignerIdentity } from "./identity";
 import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
@@ -76,8 +93,10 @@ export { REVIEW_GATE_CONFIG_PATH } from "./review-gate";
 export {
   OUTCOME_HINT,
   fencedLines,
+  flowDeliveryStatementFrom,
   flowStatementFrom,
   intentNoteForNewFlow,
+  outcomeBulletsFrom,
   proseOutsideFences,
   sectionOf,
   statementFrom,
@@ -139,6 +158,8 @@ import {
   reservedIds,
   resolveAllocationScope,
 } from "./allocation";
+import { flowFoldersInHead } from "./folder-committed";
+import { flowNumberOfDir, knownRemoteFlowDirs, remoteFlowNumbers, safeDirName } from "./remote-flows";
 import {
   renderAcceptanceCriteria,
   renderDescription,
@@ -150,6 +171,8 @@ import type { NextTaskDecision } from "./machine";
 import type {
   FlowCheckResult,
   FlowCompleteResult,
+  FlowCompletionCheck,
+  PrMergeReading,
   FlowConfirmMintResult,
   FlowIdMapEntry,
   FlowInitInput,
@@ -165,6 +188,7 @@ import type {
   AttemptOutcome,
   TaskAttempts,
   OutcomeAuthorSetResult,
+  OriginSetResult,
 } from "./types";
 
 /**
@@ -175,6 +199,109 @@ import type {
 async function deriveAcKinds(cwd: string, dir: string, flowId: string): Promise<Record<string, AcKindRecord>> {
   const { report } = buildAcKindReport(flowId, await readFile(acPath(cwd, dir), "utf8"));
   return { ...report.criteria };
+}
+
+/** What the pull-request gate saw of the flow's PR (flow 364, AC4). */
+type PrObservation =
+  | { kind: "no-pr" }
+  | { kind: "merged-commit" }
+  | { kind: "tracker-unavailable" }
+  | { kind: "unevaluable" }
+  | { kind: "observed"; exists: boolean; state: string | null };
+
+type CompletionGateEvaluation = {
+  gates: GateOutcome[];
+  confirmationToken: StoredConfirmationToken | undefined;
+  evaluatedHeadCommit: string | undefined;
+  pr: PrObservation;
+};
+
+/**
+ * The merge state a completion check reports (flow 364, AC4). `merged`
+ * requires the tracker to have said so, or a direct-merge commit the
+ * `main-merge` gate passed; anything the tracker did not say is `unknown`.
+ */
+function prMergeState(pr: PrObservation, gates: readonly GateOutcome[]): PrMergeReading {
+  switch (pr.kind) {
+    case "no-pr":
+      return { state: "no-pr", detail: "no PR recorded on the flow" };
+    case "merged-commit": {
+      const merge = gates.find((gate) => gate.name === "main-merge");
+      return merge?.status === "pass"
+        ? { state: "merged", detail: `direct merge: ${merge.detail}` }
+        : { state: "unknown", detail: `direct merge not verified: ${merge?.detail ?? "main-merge gate missing"}` };
+    }
+    case "tracker-unavailable":
+      return { state: "unknown", detail: "tracker unavailable (is `gh` installed and authenticated?)" };
+    case "unevaluable":
+      return { state: "unknown", detail: "the tracker call failed" };
+    case "observed": {
+      if (!pr.exists) return { state: "not-found", detail: "the tracker found no such PR" };
+      const state = pr.state?.toUpperCase();
+      if (state === "MERGED") return { state: "merged", detail: "PR merged" };
+      if (state === "OPEN") return { state: "open", detail: "PR open, not merged" };
+      if (state === "CLOSED") return { state: "closed", detail: "PR closed without merging" };
+      return { state: "unknown", detail: pr.state === null ? "the tracker did not report a PR state" : `unrecognised PR state: ${pr.state}` };
+    }
+  }
+}
+
+/** The acceptance-criteria gate's failing detail starts with this, then the ids joined by ", ". */
+const UNCONFIRMED_PREFIX = "unconfirmed: ";
+/** The pull-request gate's detail when the flow recorded no PR. */
+const NO_PR_DETAIL = "no PR recorded";
+/** Start of the folder-committed gate's failure detail; `completionFixHint` reads the folder name back through it. */
+const FOLDER_UNCOMMITTED_PREFIX = "flow folder ";
+
+/**
+ * Whether `complete` can start from this status (flow 364, review A-001): the
+ * state machine's own `→ completing` edge, or the direct-merge path from
+ * `in-progress`. `complete()` acts on it and `checkComplete()` reports it, so
+ * the two cannot disagree.
+ */
+function completionAdmitted(status: FlowStatus, merged: boolean): boolean {
+  return canTransition(status, "completing") || (merged && status === "in-progress");
+}
+
+/**
+ * The command that would fix a failing completion gate, where one is known
+ * (flow 364, AC5); `undefined` for a passing or skipped gate and for a gate
+ * whose remedy is not one command. Shared by `flow check-complete` and the
+ * governance modal so both name the same fix.
+ */
+export function completionFixHint(gate: GateOutcome, flowId: string): string | undefined {
+  if (gate.status !== "fail") return undefined;
+  switch (gate.name) {
+    case "acceptance-criteria": {
+      // Read back through the same prefix the gate writes (review A-002), so a
+      // reworded detail cannot silently drop the hint.
+      const unconfirmed = gate.detail.startsWith(UNCONFIRMED_PREFIX) ? gate.detail.slice(UNCONFIRMED_PREFIX.length).split(", ") : [];
+      const first = unconfirmed[0];
+      if (first === undefined) return undefined;
+      const more = unconfirmed.length > 1 ? ` (then ${unconfirmed.slice(1).join(", ")})` : "";
+      return `keryx flow ac confirm ${flowId} ${first} --note "<evidence>"${more}`;
+    }
+    case "pull-request":
+      return gate.detail === NO_PR_DETAIL ? `keryx flow implemented ${flowId} --pr <url>` : undefined;
+    case "tasks":
+      return `keryx flow next ${flowId}`;
+    case "owner":
+      return `keryx flow owner set ${flowId} --owner "<name>" --reason "<why>"`;
+    case "health":
+      return "keryx health run";
+    case "confirmation":
+      return `keryx flow confirm ${flowId} (in a terminal)`;
+    case "folder-committed": {
+      // The gate's own detail names the folder; a gate that could not be
+      // evaluated says something else and has no one-command fix.
+      const dir = gate.detail.startsWith(FOLDER_UNCOMMITTED_PREFIX)
+        ? gate.detail.slice(FOLDER_UNCOMMITTED_PREFIX.length).split(" ")[0]
+        : undefined;
+      return dir ? `git add .metaproject/flows/${dir} && git commit` : undefined;
+    }
+    default:
+      return undefined;
+  }
 }
 
 /**
@@ -321,6 +448,230 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
     return save(cwd, dir, flow, event, detail);
   }
 
+  /**
+   * Every completion gate, in the order `complete()` records them (flow 364,
+   * AC4). `complete()` and `checkComplete()` both call this, so a check can
+   * never drift from what a completion would decide. Writes nothing: every
+   * gate only reads (`flow.json`, the criteria file, review records, the
+   * latest health and security reports, the tracker), and the confirmation
+   * token is only checked here — `complete()` spends it on its passing path.
+   */
+  async function evaluateCompletionGates(
+    cwd: string,
+    dir: string,
+    flow: FlowState,
+    mergedCommit: string | undefined,
+    confirmToken: string | undefined,
+  ): Promise<CompletionGateEvaluation> {
+    const gates: GateOutcome[] = [];
+
+    // Gate 1: acceptance criteria (checksum + confirmations).
+    try {
+      await assertAcIntact(cwd, dir, flow);
+      const criteria = await readAcCriteria(cwd, dir);
+      const missing = criteria.filter((criterion) => !flow.acConfirmed[criterion]);
+      gates.push(
+        missing.length === 0 && criteria.length > 0
+          ? { name: "acceptance-criteria", status: "pass", detail: `${criteria.length} confirmed` }
+          : {
+              name: "acceptance-criteria",
+              status: "fail",
+              detail: criteria.length === 0 ? "no criteria found" : `${UNCONFIRMED_PREFIX}${missing.join(", ")}`,
+            },
+      );
+    } catch {
+      // T45 already made this arm block (`status: "fail"`); T47 closes the
+      // remaining leak-safety gap by routing it through the same
+      // caught-value-free helper the health/security arms use below,
+      // instead of interpolating the caught error's message verbatim
+      // (which can carry a filesystem path or file content).
+      gates.push(unevaluableGate("acceptance-criteria"));
+    }
+
+    // Confirmation token (flow 299, AC2). Opt-in per flow, like `owner`.
+    // EVALUATED here, when the attempt starts, so a slow health gate cannot
+    // expire a token that was valid when completion began; REPORTED last,
+    // after every gate the specification already orders. The token is spent
+    // only on `complete()`'s passing path.
+    let confirmationToken: StoredConfirmationToken | undefined;
+    let confirmationOutcome: GateOutcome;
+    try {
+      const confirmation = await confirmationGate(
+        cwd,
+        dir,
+        flow,
+        confirmToken,
+        completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
+        deps.now(),
+      );
+      confirmationOutcome = confirmation.outcome;
+      confirmationToken = confirmation.stored;
+    } catch {
+      confirmationOutcome = unevaluableGate("confirmation");
+    }
+
+    // The commit the PULL-REQUEST GATE observed, when one is known —
+    // captured here from that gate's own `prStatus()` call (not re-fetched)
+    // so a completion signature can name it (AC4) without an extra tracker
+    // call. `mergedCommit` is the direct-merge case; otherwise it is filled
+    // in below from the PR's own head SHA, if the pull-request gate
+    // observes one.
+    //
+    // This is NOT a claim that every gate below saw the same head: the
+    // base-branch gate and the review gate each read the PR head (or the
+    // round's recorded head) independently, via their own calls. A push
+    // landing mid-`complete()` can make them observe a different commit
+    // than the one recorded here. `headCommit` on the signature names only
+    // what the pull-request gate saw.
+    let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
+    // Flow 364 (AC4): what the pull-request gate saw of the PR, for the merge
+    // state a check reports. Read from the same call, never a second one.
+    let pr: PrObservation;
+
+    // Gate 2: pull request, or an explicit proof that the implementation
+    // commit is already contained in origin/main (direct-merge handoff).
+    // Flow 299 (AC5): caught. A throw here used to escape with the flow
+    // saved as `completing` and no attempt on the record.
+    if (mergedCommit) {
+      pr = { kind: "merged-commit" };
+      try {
+        const merge = deps.mainMergeGate
+          ? await deps.mainMergeGate(cwd, mergedCommit)
+          : await verifyCommitOnMain(cwd, mergedCommit);
+        gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
+      } catch {
+        gates.push(unevaluableGate("main-merge"));
+      }
+    } else if (!flow.pr.url) {
+      pr = { kind: "no-pr" };
+      gates.push({ name: "pull-request", status: "fail", detail: NO_PR_DETAIL });
+    } else {
+      pr = { kind: "unevaluable" };
+      try {
+        if (deps.tracker && (await deps.tracker.detect())) {
+          const status = await deps.tracker.prStatus(flow.pr.url);
+          pr = { kind: "observed", exists: status.exists, state: status.state ?? null };
+          if (typeof status.headSha === "string" && status.headSha !== "") {
+            evaluatedHeadCommit ??= status.headSha;
+          }
+          gates.push(
+            status.exists && status.checksGreen === true
+              ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
+              : {
+                  name: "pull-request",
+                  status: "fail",
+                  detail: !status.exists ? "PR not found" : "PR checks not green",
+                },
+          );
+        } else {
+          pr = { kind: "tracker-unavailable" };
+          gates.push({
+            name: "pull-request",
+            status: "skipped",
+            detail: "tracker unavailable; verify PR checks manually",
+          });
+        }
+      } catch {
+        gates.push(unevaluableGate("pull-request"));
+      }
+    }
+
+    // Gate 2b: base branch. Asks the one question the others do not — where
+    // was this SUPPOSED to land — against the base the flow recorded rather
+    // than wherever the pull request points now.
+    //
+    // Placed after the merge evidence because it consumes it, and reported
+    // even when the flow named no base, as `not recorded`. Silence there
+    // would be indistinguishable from a pass. Caught for the same reason as
+    // gate 2 (flow 299, AC5).
+    try {
+      gates.push(
+        await baseBranchCondition(
+          cwd,
+          flow,
+          mergedCommit ?? undefined,
+          flow.pr.url && deps.tracker && (await deps.tracker.detect())
+            ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
+            : undefined,
+          commitContainedIn,
+        ),
+      );
+    } catch {
+      gates.push(unevaluableGate("base-branch"));
+    }
+
+    // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
+    // 24 packages completed before this gate existed while carrying an open
+    // task, and turning it on retroactively would invalidate them. They lack
+    // the flag, so the gate reports `skipped` and never fails them.
+    gates.push(taskGate(flow));
+
+    // Gate 3b: owner (flow 289, AC5). Same opt-in shape as `tasks`/`review`:
+    // `gates.owner`, set by `flow init`. A package without the flag reports
+    // `skipped`, never `fail` — no pre-existing package is retroactively
+    // blocked by a concept it predates.
+    gates.push(ownerGate(flow));
+
+    // Gate 3c: folder-committed (flow 384). Same opt-in shape: `gates.folderCommitted`,
+    // set by `flow init`. The folder travels in the pull request that carries the
+    // code; one that never reached a commit leaves its number free for every other
+    // clone to take. Caught like every gate that reads the outside world.
+    try {
+      gates.push(await folderCommittedGate(cwd, dir, flow));
+    } catch {
+      gates.push(unevaluableGate("folder-committed"));
+    }
+
+    // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
+    // basis, and never allowed to pass on absence: a condition that could not
+    // be observed fails, because a gate that passes because nothing was
+    // recorded is the exact failure this gate was added to remove.
+    try {
+      gates.push(
+        await reviewGate({
+          cwd,
+          flowDir: dir,
+          flow,
+          tracker: deps.tracker,
+          ...(deps.externalCommentsGate ? { externalCommentsGate: deps.externalCommentsGate } : {}),
+          ...(mergedCommit ? { mergedCommit } : {}),
+        }),
+      );
+    } catch {
+      // A gate that cannot run has not passed. `skipped` is reserved for "this
+      // package did not opt in" and for an explicit configuration opt-out; an
+      // unexpected error is a failure — recorded via the same caught-value-free
+      // helper the health/security arms use, not by interpolating the caught
+      // error's message (which can carry a filesystem path or file content).
+      gates.push(unevaluableGate("review"));
+    }
+
+    // Gate 5: code health.
+    try {
+      const health = await deps.healthGate(cwd);
+      gates.push(healthGateOutcome(health));
+    } catch {
+      gates.push(unevaluableGate("health"));
+    }
+
+    // Gate 6: security (§11). Omitted entirely when the module is disabled
+    // (dep returns null), so advisory `flow complete` is never regressed.
+    // Advisory -> pass (informational); enforced/ci -> may fail.
+    if (deps.securityGate) {
+      try {
+        const security = await deps.securityGate(cwd);
+        if (security) {
+          gates.push({ name: "security", status: security.status, detail: security.detail });
+        }
+      } catch {
+        gates.push(unevaluableGate("security"));
+      }
+    }
+
+    gates.push(confirmationOutcome);
+    return { gates, confirmationToken, evaluatedHeadCommit, pr };
+  }
+
   // Serialize load-mutate-save on one flow so concurrent agents cannot lose
   // updates (F-100). Keyed per-flow (by dir) — different flows never block each
   // other. `transition` runs WITHOUT its own lock so callers already holding the
@@ -369,7 +720,28 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // behind. Only an OMITTED flag takes the default; `human` is never chosen
       // for the caller.
       const outcomeAuthor =
-        input.outcomeAuthor === undefined ? DEFAULT_OUTCOME_AUTHOR : parseOutcomeAuthor(input.outcomeAuthor);
+        input.outcomeAuthor === undefined ? undefined : parseOutcomeAuthor(input.outcomeAuthor);
+
+      // The origin never refuses: the evidence rule (`resolveOrigin`) either
+      // yields an origin to record or a note saying why not, and an invalid kind
+      // is only a note. The template keeps the requested words either way.
+      let originNote: string | undefined;
+      let origin: FlowOrigin | undefined;
+      let originDraft: FlowOrigin | undefined;
+      if (input.origin !== undefined) {
+        const resolution = resolveOrigin({ kind: input.origin, quote: input.originQuote, source: input.originSource });
+        origin = resolution.origin;
+        originNote = resolution.note;
+        if (isOriginKind(input.origin)) {
+          originDraft = {
+            kind: input.origin,
+            ...(input.originQuote?.trim() ? { quote: input.originQuote } : {}),
+            ...(input.originSource?.trim() ? { source: input.originSource } : {}),
+          };
+        }
+      } else if (input.originQuote !== undefined || input.originSource !== undefined) {
+        originNote = "--quote/--source were given without --origin; origin stays unknown.";
+      }
 
       const trackerReady = deps.tracker ? await deps.tracker.detect() : false;
       const tracker = trackerReady ? deps.tracker : null;
@@ -394,7 +766,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // scope, so a sibling worktree cannot mint the same id (flow 116).
       const scope = await resolveAllocationScope(input.cwd);
       return withFileLock(scope.lockPath, async () => {
-        const id = await nextFlowId(input.cwd, await reservedIds(scope));
+        // Flow 384: the ledger only knows what THIS clone handed out. A number
+        // already spent by a flow folder on a known remote branch is reserved
+        // too, so a second clone or an unfetched-branch gap cannot reuse it.
+        const id = await nextFlowId(input.cwd, [
+          ...(await reservedIds(scope)),
+          ...(await remoteFlowNumbers(input.cwd)),
+        ]);
         const date = now().slice(0, 10);
         const slug = slugify(input.slug ?? title);
         const dir = `${id}-${date}-${slug}`;
@@ -420,6 +798,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             tasks: true,
             review: true,
             owner: true,
+            folderCommitted: true,
             ...(input.requireConfirmation === true || (await readRequireConfirmationDefault(input.cwd))
               ? { confirmation: true }
               : {}),
@@ -448,13 +827,25 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           ...(input.owner?.trim()
             ? { owner: ownerIdentity(input.owner.trim(), "`--owner` flag on `flow init`") }
             : {}),
-          outcomeAuthor,
+          // Derived from the origin when not named (`effectiveOutcomeAuthor`): a
+          // recorded origin leaves the key absent, no origin keeps the default.
+          ...(outcomeAuthor !== undefined
+            ? { outcomeAuthor }
+            : origin === undefined
+              ? { outcomeAuthor: DEFAULT_OUTCOME_AUTHOR }
+              : {}),
+          ...(origin === undefined ? {} : { origin }),
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
 
         const sourceLabel = input.issue ?? "user description";
-        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(title, sourceLabel));
+        await writeFileAtomic(path.join(absolute, "description.md"), renderDescription(
+            title,
+            originDraft === undefined ? sourceLabel : `${sourceLabel} (origin: ${originDraft.kind})`,
+            originDraft,
+          ),
+        );
         await writeFileAtomic(path.join(absolute, "context.md"), context.markdown);
         await writeFileAtomic(path.join(absolute, "plan.md"), renderPlan());
         await writeFileAtomic(path.join(absolute, "tasks.md"), renderTasksDoc());
@@ -463,7 +854,12 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         await writeFlow(input.cwd, dir, flow);
         await recordAllocation(scope, { id, dir, at: createdAt, project: scope.project });
 
-        return { flow, dir: path.relative(input.cwd, absolute), contextNotes: context.notes };
+        return {
+          flow,
+          dir: path.relative(input.cwd, absolute),
+          contextNotes: context.notes,
+          ...(originNote === undefined ? {} : { originNote }),
+        };
       });
     },
 
@@ -575,6 +971,62 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         return save(cwd, dir, current, "outcome-author-set", `${previous} -> ${next} (${reason.trim()})`);
       });
       return { flow, previous, changed };
+    },
+
+    /**
+     * Change where the flow came from. `reason` is required and single-line; the
+     * field and its journal line are written together by `save()`. The evidence
+     * rule applies to the quote and source already on the flow or given here: if
+     * it is not met, nothing is written and the result carries the reason (the
+     * origin never refuses; the stored quote and source are inherited only when the kind
+     * does not change). `unknown` clears the origin. Works on any flow and
+     * gates nothing, like `outcomeAuthorSet`; it never touches `outcomeAuthor`. An invalid kind is a note, not an error.
+     */
+    async originSet({ cwd, id, kind, reason, quote, source }): Promise<OriginSetResult> {
+      if (!reason?.trim()) {
+        throw new Error('flow origin set requires --reason "<why>"');
+      }
+      validateSingleLineReason(reason);
+      let previous: OriginReading = "unknown";
+      let next: OriginReading = "unknown";
+      let changed = false;
+      let note: string | undefined;
+      const flow = await mutate(cwd, id, async ({ dir, flow: current }) => {
+        const before = readOrigin(current.origin);
+        previous = before?.kind ?? "unknown";
+        let after: FlowOrigin | undefined;
+        if (kind !== "unknown" && !isOriginKind(kind)) {
+          note = `origin kind must be one of: human-request, agent-finding, agent-proposal, unknown (got "${kind}"); the origin is unchanged.`;
+          next = previous;
+          return current;
+        }
+        if (kind !== "unknown") {
+          // The stored quote and source are evidence for the kind they were recorded
+          // under. Keep them only while the kind stays the same; a switch to another
+          // kind needs its own evidence, so nothing is carried over.
+          const carried = before?.kind === kind ? before : undefined;
+          const resolution = resolveOrigin({
+            kind,
+            quote: quote !== undefined && quote.length > 0 ? quote : carried?.quote,
+            source: source !== undefined && source.length > 0 ? source : carried?.source,
+          });
+          if (resolution.origin === undefined) {
+            note = resolution.note;
+            next = previous;
+            return current;
+          }
+          after = resolution.origin;
+        }
+        next = after?.kind ?? "unknown";
+        if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) {
+          return current;
+        }
+        changed = true;
+        if (after === undefined) delete current.origin;
+        else current.origin = after;
+        return save(cwd, dir, current, "origin-set", `${originSummary(before)} -> ${originSummary(after)} (${reason.trim()})`);
+      });
+      return { flow, previous, next, changed, ...(note === undefined ? {} : { note }) };
     },
 
     async freeze({ cwd, id }): Promise<FlowState> {
@@ -957,6 +1409,38 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
+    async checkComplete({ cwd, id, mergedCommit, confirmToken }): Promise<FlowCompletionCheck> {
+      // No lock: the lock is a file, and a check writes nothing. A completion
+      // running at the same moment can make this read stale, which is what
+      // `updatedAt` on the result is for.
+      const { dir, flow } = await load(cwd, id);
+      const merged = Boolean(mergedCommit);
+      const allowed = completionAdmitted(flow.status, merged);
+      const transition = allowed
+        ? { allowed, detail: `${flow.status} → completing` }
+        : {
+            allowed,
+            detail:
+              flow.status === "done"
+                ? "already done"
+                : flow.status === "in-progress"
+                  ? `in-progress: record the PR first (\`keryx flow implemented ${flow.id} --pr <url>\`), or pass a merged commit`
+                  : `"${flow.status}" cannot move to completing; complete runs from "implemented" (or "in-progress" with a merged commit)`,
+          };
+      const evaluation = await evaluateCompletionGates(cwd, dir, flow, mergedCommit ?? undefined, confirmToken);
+      return {
+        id: flow.id,
+        status: flow.status,
+        updatedAt: flow.updatedAt,
+        checkedAt: now(),
+        transition,
+        merge: prMergeState(evaluation.pr, evaluation.gates),
+        gates: evaluation.gates,
+        passed: allowed && evaluation.gates.every((gate) => gate.status !== "fail"),
+        confirmationRequired: flow.gates?.confirmation === true,
+      };
+    },
+
     async complete({
       cwd,
       id,
@@ -970,6 +1454,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       const dir = await resolveFlowDir(cwd, id);
       return withFileLock(flowLockPath(cwd, dir), async () => {
       let flow = await readFlow(cwd, dir);
+      // The direct-merge arm of `completionAdmitted`; every other status goes
+      // through the state machine's own `→ completing` edge in `transition`.
       if (mergedCommit && flow.status === "in-progress") {
         await assertAcIntact(cwd, dir, flow);
         flow.status = "completing";
@@ -985,194 +1471,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // without re-checking the criteria (`returnToInProgress`), because a
       // tamper is exactly what it is recording. A dead process is what
       // `flow recover` is for.
-      const gates: GateOutcome[] = [];
-
-      // Gate 1: acceptance criteria (checksum + confirmations).
-      try {
-        await assertAcIntact(cwd, dir, flow);
-        const criteria = await readAcCriteria(cwd, dir);
-        const missing = criteria.filter((criterion) => !flow.acConfirmed[criterion]);
-        gates.push(
-          missing.length === 0 && criteria.length > 0
-            ? { name: "acceptance-criteria", status: "pass", detail: `${criteria.length} confirmed` }
-            : {
-                name: "acceptance-criteria",
-                status: "fail",
-                detail: criteria.length === 0 ? "no criteria found" : `unconfirmed: ${missing.join(", ")}`,
-              },
-        );
-      } catch {
-        // T45 already made this arm block (`status: "fail"`); T47 closes the
-        // remaining leak-safety gap by routing it through the same
-        // caught-value-free helper the health/security arms use below,
-        // instead of interpolating the caught error's message verbatim
-        // (which can carry a filesystem path or file content).
-        gates.push(unevaluableGate("acceptance-criteria"));
-      }
-
-      // Confirmation token (flow 299, AC2). Opt-in per flow, like `owner`.
-      // EVALUATED here, when the attempt starts, so a slow health gate cannot
-      // expire a token that was valid when completion began; REPORTED last,
-      // after every gate the specification already orders. The token is spent
-      // only on the passing path below.
-      let confirmationToken: StoredConfirmationToken | undefined;
-      let confirmationOutcome: GateOutcome;
-      try {
-        const confirmation = await confirmationGate(
-          cwd,
-          dir,
-          flow,
-          confirmToken,
-          completionTarget({ merged: Boolean(mergedCommit), prUrl: flow.pr.url }),
-          deps.now(),
-        );
-        confirmationOutcome = confirmation.outcome;
-        confirmationToken = confirmation.stored;
-      } catch {
-        confirmationOutcome = unevaluableGate("confirmation");
-      }
-
-      // The commit the PULL-REQUEST GATE observed, when one is known —
-      // captured here from that gate's own `prStatus()` call (not re-fetched)
-      // so a completion signature can name it (AC4) without an extra tracker
-      // call. `mergedCommit` is the direct-merge case; otherwise it is filled
-      // in below from the PR's own head SHA, if the pull-request gate
-      // observes one.
       //
-      // This is NOT a claim that every gate below saw the same head: the
-      // base-branch gate and the review gate each read the PR head (or the
-      // round's recorded head) independently, via their own calls. A push
-      // landing mid-`complete()` can make them observe a different commit
-      // than the one recorded here. `headCommit` on the signature names only
-      // what the pull-request gate saw.
-      let evaluatedHeadCommit: string | undefined = mergedCommit ?? undefined;
-
-      // Gate 2: pull request, or an explicit proof that the implementation
-      // commit is already contained in origin/main (direct-merge handoff).
-      // Flow 299 (AC5): caught. A throw here used to escape with the flow
-      // saved as `completing` and no attempt on the record.
-      if (mergedCommit) {
-        try {
-          const merge = deps.mainMergeGate
-            ? await deps.mainMergeGate(cwd, mergedCommit)
-            : await verifyCommitOnMain(cwd, mergedCommit);
-          gates.push({ name: "main-merge", status: merge.status, detail: merge.detail });
-        } catch {
-          gates.push(unevaluableGate("main-merge"));
-        }
-      } else if (!flow.pr.url) {
-        gates.push({ name: "pull-request", status: "fail", detail: "no PR recorded" });
-      } else {
-        try {
-          if (deps.tracker && (await deps.tracker.detect())) {
-            const pr = await deps.tracker.prStatus(flow.pr.url);
-            if (typeof pr.headSha === "string" && pr.headSha !== "") {
-              evaluatedHeadCommit ??= pr.headSha;
-            }
-            gates.push(
-              pr.exists && pr.checksGreen === true
-                ? { name: "pull-request", status: "pass", detail: "PR exists, checks green" }
-                : {
-                    name: "pull-request",
-                    status: "fail",
-                    detail: !pr.exists ? "PR not found" : "PR checks not green",
-                  },
-            );
-          } else {
-            gates.push({
-              name: "pull-request",
-              status: "skipped",
-              detail: "tracker unavailable; verify PR checks manually",
-            });
-          }
-        } catch {
-          gates.push(unevaluableGate("pull-request"));
-        }
-      }
-
-      // Gate 2b: base branch. Asks the one question the others do not — where
-      // was this SUPPOSED to land — against the base the flow recorded rather
-      // than wherever the pull request points now.
-      //
-      // Placed after the merge evidence because it consumes it, and reported
-      // even when the flow named no base, as `not recorded`. Silence there
-      // would be indistinguishable from a pass. Caught for the same reason as
-      // gate 2 (flow 299, AC5).
-      try {
-        gates.push(
-          await baseBranchCondition(
-            cwd,
-            flow,
-            mergedCommit ?? undefined,
-            flow.pr.url && deps.tracker && (await deps.tracker.detect())
-              ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
-              : undefined,
-            commitContainedIn,
-          ),
-        );
-      } catch {
-        gates.push(unevaluableGate("base-branch"));
-      }
-
-      // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
-      // 24 packages completed before this gate existed while carrying an open
-      // task, and turning it on retroactively would invalidate them. They lack
-      // the flag, so the gate reports `skipped` and never fails them.
-      gates.push(taskGate(flow));
-
-      // Gate 3b: owner (flow 289, AC5). Same opt-in shape as `tasks`/`review`:
-      // `gates.owner`, set by `flow init`. A package without the flag reports
-      // `skipped`, never `fail` — no pre-existing package is retroactively
-      // blocked by a concept it predates.
-      gates.push(ownerGate(flow));
-
-      // Gate 4: review (flow 204, AC5-AC7). Opt-in per package on the same
-      // basis, and never allowed to pass on absence: a condition that could not
-      // be observed fails, because a gate that passes because nothing was
-      // recorded is the exact failure this gate was added to remove.
-      try {
-        gates.push(
-          await reviewGate({
-            cwd,
-            flowDir: dir,
-            flow,
-            tracker: deps.tracker,
-            ...(deps.externalCommentsGate ? { externalCommentsGate: deps.externalCommentsGate } : {}),
-            ...(mergedCommit ? { mergedCommit } : {}),
-          }),
-        );
-      } catch {
-        // A gate that cannot run has not passed. `skipped` is reserved for "this
-        // package did not opt in" and for an explicit configuration opt-out; an
-        // unexpected error is a failure — recorded via the same caught-value-free
-        // helper the health/security arms use, not by interpolating the caught
-        // error's message (which can carry a filesystem path or file content).
-        gates.push(unevaluableGate("review"));
-      }
-
-      // Gate 5: code health.
-      try {
-        const health = await deps.healthGate(cwd);
-        gates.push(healthGateOutcome(health));
-      } catch {
-        gates.push(unevaluableGate("health"));
-      }
-
-      // Gate 6: security (§11). Omitted entirely when the module is disabled
-      // (dep returns null), so advisory `flow complete` is never regressed.
-      // Advisory -> pass (informational); enforced/ci -> may fail.
-      if (deps.securityGate) {
-        try {
-          const security = await deps.securityGate(cwd);
-          if (security) {
-            gates.push({ name: "security", status: security.status, detail: security.detail });
-          }
-        } catch {
-          gates.push(unevaluableGate("security"));
-        }
-      }
-
-      gates.push(confirmationOutcome);
+      // Flow 364 (AC4): the gates are evaluated by the same function `checkComplete()` calls.
+      const { gates, confirmationToken, evaluatedHeadCommit } = await evaluateCompletionGates(
+        cwd,
+        dir,
+        flow,
+        mergedCommit ?? undefined,
+        confirmToken,
+      );
 
       const passed = gates.every((gate) => gate.status !== "fail");
 
@@ -1453,6 +1760,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               "Pick a fresh number (see .metaproject/flows/id-map.json).",
           );
         }
+        // Flow 384: a number another branch already uses would only move the
+        // collision to the next merge.
+        const remoteUse = (await knownRemoteFlowDirs(cwd)).find(
+          (entry) => flowNumberOfDir(entry.dir) === Number(to),
+        );
+        if (remoteUse) {
+          throw new Error(
+            `Flow id ${to} is already used on ${remoteUse.ref} (${safeDirName(remoteUse.dir)}) and cannot be reused. ` +
+              "Pick a fresh number.",
+          );
+        }
 
         const toDir = `${to}${fromDir.slice(3)}`;
         // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
@@ -1497,6 +1815,60 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
               `duplicate flow id ${id}, shared with ${group.filter((other) => other !== dir).join(", ")}` +
               ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
           });
+        }
+      }
+      // Flow 384: the same rule across clones. A local folder whose number a
+      // known remote branch holds under a DIFFERENT folder name is a different
+      // flow with the same id; the same name on every ref is just the one flow.
+      // Each ref is judged on its own: a branch holding this very folder does not
+      // hide another branch that holds the same number under another name.
+      // Only a clash with the default branch (main, master, what <remote>/HEAD
+      // points at) fails the check: any other remote branch may be stale, cut
+      // before a renumbering, and would make every real clone report dozens of
+      // false duplicates. Those are warnings; `flow init` still skips their numbers.
+      const warnings: FlowCheckResult["warnings"] = [];
+      const remoteDirs = await knownRemoteFlowDirs(cwd);
+      if (remoteDirs.length > 0) {
+        for (const dir of allDirs) {
+          const clashes = remoteDirs.filter(
+            (entry) => entry.dir !== dir && flowNumberOfDir(entry.dir) === Number(flowIdOf(dir)),
+          );
+          const primary = clashes.find((entry) => entry.primary);
+          const other = clashes[0];
+          if (primary) {
+            issues.push({
+              flow: dir,
+              kind: "duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${primary.ref} by a different flow (${safeDirName(primary.dir)})` +
+                ` — repair with: keryx flow renumber ${dir} --to <free id> --reason "<why>"`,
+            });
+          } else if (other) {
+            warnings.push({
+              flow: dir,
+              kind: "branch-duplicate-id",
+              message:
+                `flow id ${flowIdOf(dir)} is also used on ${other.ref} by a different flow (${safeDirName(other.dir)});` +
+                ` ignore it if that branch is stale, otherwise renumber one of them before it merges`,
+            });
+          }
+        }
+      }
+      // Flow 384: a folder that is not in HEAD is a warning, never a failure: it
+      // is the state every flow is in between `flow init` and its first commit.
+      const inHead = await flowFoldersInHead(cwd, allDirs).catch(() => {
+        // HEAD could not be read: say nothing rather than call every folder untracked.
+        return null;
+      });
+      if (inHead !== null) {
+        for (const dir of allDirs) {
+          if (!inHead.has(dir)) {
+            warnings.push({
+              flow: dir,
+              kind: "untracked",
+              message: `flow folder ${dir} is not committed: commit it in the same PR as the code`,
+            });
+          }
         }
       }
       for (const dir of allDirs) {
@@ -1587,7 +1959,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           });
         }
       }
-      return { ok: issues.length === 0, issues };
+      return { ok: issues.length === 0, issues, warnings };
     },
   };
 }
@@ -1657,7 +2029,8 @@ function unevaluableGate(
     | "confirmation"
     | "main-merge"
     | "pull-request"
-    | "base-branch",
+    | "base-branch"
+    | "folder-committed",
 ): GateOutcome {
   return {
     name,
@@ -1869,6 +2242,40 @@ function ownerGate(flow: FlowState): GateOutcome {
     };
   }
   return { name: "owner", status: "pass", detail: `owner: ${flow.owner.value}` };
+}
+
+/**
+ * The folder-committed gate (flow 384). Opt-in per package: `gates.folderCommitted`
+ * is written by `flow init`, so flows created from 0.3.53 on are covered and no
+ * earlier package is retroactively failed (it reports `skipped`). Passes when the
+ * flow folder's `flow.json` is in `HEAD`; fails with the command that fixes it
+ * when it is not; `skipped` outside a git repository, where there is no HEAD to
+ * read.
+ */
+async function folderCommittedGate(cwd: string, dir: string, flow: FlowState): Promise<GateOutcome> {
+  if (!flow.gates?.folderCommitted) {
+    return {
+      name: "folder-committed",
+      status: "skipped",
+      detail:
+        "folder-committed gate not enabled for this package (created before the gate); " +
+        "flows created by this keryx version opt in automatically",
+    };
+  }
+  const committed = await flowFoldersInHead(cwd, [dir]);
+  if (committed === null) {
+    return { name: "folder-committed", status: "skipped", detail: "not a git repository; nothing to compare the flow folder with" };
+  }
+  if (!committed.has(dir)) {
+    return {
+      name: "folder-committed",
+      status: "fail",
+      detail:
+        `${FOLDER_UNCOMMITTED_PREFIX}${dir} is not committed. Commit it (git add .metaproject/flows/${dir} && git commit) ` +
+        "in the PR that carries the code, then run flow complete again",
+    };
+  }
+  return { name: "folder-committed", status: "pass", detail: `${dir} is committed in HEAD` };
 }
 
 /**

@@ -1,0 +1,29 @@
+# Flow Journal
+
+- 2026-09-30T17:49:34.646Z - flow created
+- 2026-09-30T17:50:42.305Z - frozen: 10 criteria; checksum recorded
+- 2026-09-30T17:50:42.661Z - started
+- 2026-09-30T18:22:25.916Z - ac-updated: AC3: "A codex write run is refused before any spawn when the installed codex is older than the verified version (0.159.0) or its version cannot be read, with a message naming the found and the required version; a codex write run under the verified version captures the diff through the same pipeline as claude (record, redacted patch, hash, worktree removed on every exit path). [verify: exec `bun test src/harness/external/write-run.test.ts src/harness/external/runtime.test.ts`]" -> "A codex write run is refused before any spawn unless the installed codex is in the measured window (0.159.2 up to, not including, 0.160.0): older, newer, pre-release and unreadable versions are refused, with a message naming the found version and the required range; a codex write run inside the window captures the diff through the same pipeline as claude (record, redacted patch, hash, worktree removed on every exit path). [verify: exec `bun test src/harness/external/write-run.test.ts src/harness/external/runtime.test.ts`]" (review of PR 808 (F-001..F-003): the floor alone let a newer codex that renamed a confinement key run unconfined; measured version is 0.159.2)
+- 2026-09-30T18:25:00Z - AC8 live probe (script: codex-confine-probe.sh in the session scratchpad; reads no credential store). codex-cli 0.159.2, scratch git repo, argv = keryx's write argv (`-s workspace-write`, the two exclude_* keys, network_access=false, `--ignore-user-config --ignore-rules --skip-git-repo-check`). Result: `echo x > b.txt` (inside the worktree) EXISTS; /tmp/codex-probe-tmp.txt, /var/tmp/codex-probe-vartmp.txt, $HOME/codex-probe-home.txt and the sibling-directory file are all ABSENT; commits: 1 (git commit failed). Earlier bisect: without `--ignore-rules` the user's exec-policy rules let writes to /tmp and $HOME succeed.
+- 2026-09-30T18:22:26.285Z - ac-updated: AC4: "A resumed or follow-up codex turn of a worktree-write run re-asserts the same confinement flags or is refused; it can never run under a weaker sandbox than the first turn. [verify: exec `bun test src/harness/external/codec/codex-cli.test.ts`]" -> "A resumed or follow-up codex turn of a worktree-write run re-asserts the same confinement flags in its argv (unit-tested; keryx itself starts no write-run resume). [verify: exec `bun test src/harness/external/codec/codex-cli.test.ts`]" (review of PR 808 (F-004): 'can never run weaker' was stronger than the evidence)
+- 2026-09-30T18:23:15.073Z - ac-confirmed: AC1: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:15.234Z - ac-confirmed: AC2: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:15.396Z - ac-confirmed: AC3: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:15.557Z - ac-confirmed: AC4: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:15.719Z - ac-confirmed: AC5: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:15.880Z - ac-confirmed: AC6: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:16.039Z - ac-confirmed: AC7: verified at a7b86fc2: CI green on PR 808 (18/18), the named tests pass (signed: altsay [stated])
+- 2026-09-30T18:23:16.199Z - ac-confirmed: AC8: live probe on codex 0.159.2 recorded in the journal (signed: altsay [stated])
+- 2026-09-30T18:23:16.359Z - task-done: T1: Collect remaining context
+- 2026-09-30T18:23:16.522Z - task-done: T2: Implement per plan
+- 2026-09-30T18:23:16.686Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-30T18:23:16.845Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-30T18:23:19.079Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/808 (warning: PR is not a draft) (base: main)
+- 2026-09-30T19:38:08.859Z - ac-confirmed: AC9: 0.3.42 live smoke failed (invalid_json_schema, fixed in flow 372); on the installed 0.3.43 with codex 0.159.2: --write Completed, review shows the diff, discard deletes the patch, apply with typed hash 05e249da024d landed external/bde06625-..., main tree untouched (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:38:21.311Z - ac-confirmed: AC10: operator report sent via the operator chat channel with live results and what remains (agy refused, codex read exposure, read-only without --ignore-rules, version window, G1 on 2026-10-28) (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-09-30T19:38:23.191Z - completing
+- 2026-09-30T19:38:27.648Z - completion-attempt-recorded: attempt 1: failed
+- 2026-09-30T19:38:27.650Z - completion-failed: review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#808 was last collected against d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 (round 1), but the PR head is a7b86fc2ae9e9460ec49de1f7a6e0e2670d1146c. Everything anyone said after d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560 is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 808 --sha <pr-head>`.
+- 2026-09-30T19:38:33.915Z - completing: merged commit: d63dd89cfdd1ec7d6417817de5bfbec0fcbcd560
+- 2026-09-30T19:38:38.050Z - completion-attempt-recorded: attempt 2: passed
+- 2026-09-30T19:38:38.052Z - done: all gates passed

@@ -1,0 +1,264 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "flow369-pr804-review",
+    "severity": "major",
+    "problem": "Startup reconciliation runs before the bind, so a second listener that fails to bind still resolves the records of the running one.",
+    "impact": "A second start expires-denies pending approvals and abandons allowed ones of a live listener.",
+    "suggested_fix": "Reconcile only after a successful bind.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/serve-server.ts",
+    "line": 1092,
+    "quote": "reconcileApprovals(input.dir, { isTurnLive: () => false });",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": 1030
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/serve-server.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 191b3472 serve-server.test.ts 'a start that fails to bind does not settle the approvals of the listener that is running' passes; reconcile now runs after the bind",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 191b3472: serve-server.ts reconciles after the bind; test 'a start that fails to bind does not settle the approvals of the listener that is running' passes."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "The guide promises that pending approvals survive a restart and that an allow does not override the hook-ask floor; startup expires them and the floors are labels.",
+    "impact": "The guide states more than the code does.",
+    "suggested_fix": "Reword the guide and the CLI help.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "docs/docs/guides/answer-remote-approvals.md",
+    "line": null,
+    "quote": "Pending approvals survive a listener restart.",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 40
+    },
+    "class_scope": {
+      "sites": [
+        "docs/docs/guides/answer-remote-approvals.md"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 191b3472 the guide and the approvals help now describe expiry at restart and floors as ask-again labels",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 191b3472: the guide and the approvals help describe expiry at restart and floors as ask-again labels."
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "When the ledger append fails after the request file was written, the record stays pending while the turn is already denied.",
+    "impact": "An answer can be given for a call that was already denied, and the record counts against the pending limit.",
+    "suggested_fix": "Resolve the record as undeliverable before returning.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/serve-approvals-broker.ts",
+    "line": null,
+    "quote": "record-unwritable",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 75
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/serve-approvals-broker.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 191b3472 the broker's record-unwritable path resolves the record before the turn is denied",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 191b3472: the broker resolves the record as undeliverable before denying the turn on an unwritable record."
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "The resolution file is created before the ledger append, so a failed append throws with the state already applied.",
+    "impact": "A route can answer 500 with the allow applied and no ledger event.",
+    "suggested_fix": "Report the ledger failure without failing the transition.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/serve-approvals-store.ts",
+    "line": null,
+    "quote": "resolveApproval",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 300
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/serve-approvals-store.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-004",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: altsay-flow-agent. The resolution file is the source of truth and the ledger is a mirror; a ledger failure surfacing as an error is the fail-loud choice. Follow-up, not blocking."
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "The resolution is written in place after an exclusive create, so a concurrent reader can see a partial file.",
+    "impact": "It fails closed as a denial; a crash in the window leaves a permanent denial.",
+    "suggested_fix": "Write a temp file and link it exclusively.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/config-dir.ts",
+    "line": null,
+    "quote": "createOwnerOnlyFileExclusive",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 1
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/config-dir.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-005",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: altsay-flow-agent. The window fails closed (a denial), never open; a crash inside it denies an approval that was allowed, which is safe. Follow-up."
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "Reconciliation resolves the approval but not the stranded turn record.",
+    "impact": "The turn reports running and answers 409 to later submissions.",
+    "suggested_fix": "Finish the orphaned turn when its approval is expired at startup.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/serve-approvals-store.ts",
+    "line": null,
+    "quote": "reconcileApprovals",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 428
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/serve-approvals-store.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 191b3472 serve-approvals-durability.test.ts 'the turn stranded on that approval is finished' passes",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 191b3472: reconcile finishes the stranded turn as expired; test 'the turn stranded on that approval is finished' passes."
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "The guide states the self-grant rule as stronger than it is; the local CLI and the store need no token.",
+    "impact": "A reader assumes the store's directory is not a way to answer.",
+    "suggested_fix": "State that the local path answers without a token.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "docs/docs/guides/answer-remote-approvals.md",
+    "line": null,
+    "quote": "a turn's own tools hold no serve token",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 132
+    },
+    "class_scope": {
+      "sites": [
+        "docs/docs/guides/answer-remote-approvals.md"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At 191b3472 the guide now states that the local path answers without a token",
+      "verifier": "orchestrator-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 191b3472: the guide states that the local CLI and the store answer without a token."
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "flow369-pr804-review",
+    "severity": "minor",
+    "problem": "listApprovals and countPending scan every approval ever written, on each status call and each TUI poll.",
+    "impact": "Latency grows with the number of approvals and nothing prunes.",
+    "suggested_fix": "Bound the scan and prune old resolved records.",
+    "evidence": "the reviewer read the changed files; static review, not run",
+    "confidence": "high",
+    "file": "src/lib/serve-approvals-store.ts",
+    "line": null,
+    "quote": "listApprovals",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": 398
+    },
+    "class_scope": {
+      "sites": [
+        "src/lib/serve-approvals-store.ts"
+      ],
+      "enumeration_method": "the reviewer read the changed files; static review, tests not run by the reviewer"
+    },
+    "global_id": "flow369-pr804-r1#F-008",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "decided-by: altsay-flow-agent. The store holds a handful of records per install today and stock serve raises none; pruning and indexing wait for a real volume."
+    }
+  }
+]

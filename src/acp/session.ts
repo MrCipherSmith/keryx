@@ -20,6 +20,29 @@ import {
 } from "../session";
 import type { AcpClientCapabilities } from "./protocol";
 
+/**
+ * Flow 387 review r2 F-021: the append-only archive of a session's original messages and
+ * the cursor into the live history that has been copied so far. A shared object (not two
+ * fields) because `updateHandle` copies the state with a spread; the cursor must survive it.
+ * The cursor is re-pointed at the end of the history whenever the history is shortened in
+ * place (overflow compaction), so a shrink never makes later messages look already copied.
+ */
+export interface AcpArchiveCursor {
+  readonly messages: NormalizedMessage[];
+  next: number;
+}
+
+/** Copies every history message past the cursor into the archive and advances the cursor. */
+export function syncAcpArchive(cursor: AcpArchiveCursor, history: readonly NormalizedMessage[]): void {
+  while (cursor.next < history.length) {
+    const message = history[cursor.next];
+    if (message !== undefined) {
+      cursor.messages.push(message);
+    }
+    cursor.next += 1;
+  }
+}
+
 export interface AcpSessionState {
   /** The ACP `sessionId` — identical to `handle.summary.id` (keryx's own session id). */
   readonly sessionId: string;
@@ -34,6 +57,8 @@ export interface AcpSessionState {
    * `commands/shell.ts` threads its own `history` across turns.
    */
   readonly history: NormalizedMessage[];
+  /** Flow 387 review r2 F-021: the originals, kept next to `history` (see {@link AcpArchiveCursor}). */
+  readonly archive: AcpArchiveCursor;
   /**
    * The capabilities the client advertised on `initialize`, snapshotted at
    * session-creation time. T9-T13 branch on `fs`/`terminal` here (AC6): "with
@@ -104,6 +129,7 @@ export class AcpSessionRegistry {
       resolvedRoot,
       handle,
       history: [],
+      archive: { messages: [], next: 0 },
       clientCapabilities,
     };
     this.sessions.set(state.sessionId, state);
@@ -167,6 +193,13 @@ export class AcpSessionRegistry {
       // `create()` — a loaded session's later `session/prompt` calls continue
       // this exact array, not a fresh empty one.
       history: opened.history,
+      // Flow 387 review r2 F-021: seed from the stored archive, like shell.ts and tui-shell.ts.
+      // Seeding from the context would rewrite archive.jsonl with a compacted/pruned history on
+      // the first prompt. Only an empty archive (pre-archive session) falls back to the context.
+      archive: {
+        messages: opened.archive.length > 0 ? [...opened.archive] : [...opened.history],
+        next: opened.history.length,
+      },
       clientCapabilities,
       ...(recordedModel !== undefined ? { recordedModel } : {}),
     };

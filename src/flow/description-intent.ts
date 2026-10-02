@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { ORIGIN_PLACEHOLDER_BULLETS, REQUEST_LABEL, SOURCE_LABEL } from "./origin";
 
 // The intent a flow's description.md states, read as text. Kept in the flow
 // module, not the product module, so `flow init` can say when a fresh
@@ -100,7 +101,58 @@ export function flowStatementFrom(description: string): string | null {
   return statementFrom(description, FLOW_STATEMENT_HEADINGS);
 }
 
-export const INIT_INTENT_NOTE = "note: no intent statement extractable from description.md — the product index will hold no statement for this flow";
+/** What the flow delivers, for a one-line summary: Expected outcome first, then Problem. */
+export function flowDeliveryStatementFrom(description: string): string | null {
+  return statementFrom(description, [/^expected outcome$/i, /^problem$/i]);
+}
+
+/**
+ * The bullets of an `Outcome criteria` section, each continuation line folded
+ * into its bullet; `null` when there is no such section. The untouched
+ * `OUTCOME_HINT` is skipped, so a section holding only the hint yields `[]`.
+ * The product index and the governance report read bullets through this one
+ * function; the governance report alone also reads a section written as prose
+ * or a numbered list, which the product index does not count as a criterion.
+ */
+export function outcomeBulletsFrom(markdown: string): string[] | null {
+  const body = sectionOf(markdown, /^outcome criteri(?:a|on)$/i);
+  if (body === null) return null;
+  const bullets: string[] = [];
+  // True while inside a request/source bullet (or a placeholder one) and its continuation lines.
+  let skipping = false;
+  for (const line of body.split(/\r?\n/)) {
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+    // Only the exact template line is skipped: a real bullet that starts with the same words is a criterion.
+    if ((bullet?.[1] ?? line).trim() === OUTCOME_HINT) continue;
+    if (bullet !== null) {
+      skipping = isOriginTemplateBullet(bullet[1] ?? "");
+      if (!skipping) bullets.push((bullet[1] ?? "").trim());
+    } else if (line.trim().length > 0 && !skipping && bullets.length > 0) bullets[bullets.length - 1] += ` ${line.trim()}`;
+  }
+  return bullets.filter((bullet) => bullet.length > 0);
+}
+
+/**
+ * The bullets the origin template writes that are not an outcome criterion: the
+ * verbatim request and the source say where the flow came from, and an
+ * untouched placeholder declares nothing.
+ */
+export function isOriginTemplateBullet(text: string): boolean {
+  const trimmed = text.trim();
+  return (
+    trimmed.startsWith(`${REQUEST_LABEL}:`) ||
+    trimmed.startsWith(`${SOURCE_LABEL}:`) ||
+    ORIGIN_PLACEHOLDER_BULLETS.some((placeholder) => placeholder.slice(2) === trimmed)
+  );
+}
+
+/** True for an untouched origin placeholder bullet (an unfilled formalization or observation line). */
+export function isOriginPlaceholderBullet(text: string): boolean {
+  const trimmed = text.trim();
+  return ORIGIN_PLACEHOLDER_BULLETS.some((placeholder) => placeholder.slice(2) === trimmed);
+}
+
+export const INIT_INTENT_NOTE ="note: no intent statement extractable from description.md — the product index will hold no statement for this flow";
 
 /** The one informational line `flow init` prints when the new description states no intent; `null` when it does. */
 export function initIntentNote(description: string): string | null {

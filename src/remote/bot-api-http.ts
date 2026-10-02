@@ -147,10 +147,53 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       if (params.messageThreadId !== undefined) {
         body.message_thread_id = params.messageThreadId;
       }
+      if (params.parseMode !== undefined) {
+        body.parse_mode = params.parseMode;
+      }
       if (params.inlineKeyboard !== undefined) {
         body.reply_markup = { inline_keyboard: params.inlineKeyboard };
       }
       return call<{ message_id: number }>("sendMessage", body);
+    },
+    async editMessageReplyMarkup(params) {
+      await call<unknown>("editMessageReplyMarkup", {
+        chat_id: params.chatId,
+        message_id: params.messageId,
+        reply_markup: { inline_keyboard: params.inlineKeyboard ?? [] },
+      });
+    },
+    async editMessageText(params) {
+      const body: Record<string, unknown> = {
+        chat_id: params.chatId,
+        message_id: params.messageId,
+        text: params.text,
+        reply_markup: { inline_keyboard: params.inlineKeyboard ?? [] },
+      };
+      if (params.parseMode !== undefined) {
+        body.parse_mode = params.parseMode;
+      }
+      await call<unknown>("editMessageText", body);
+    },
+    async setMyCommands(params) {
+      const body: Record<string, unknown> = { commands: params.commands };
+      if (params.chatId !== undefined) {
+        body.scope = { type: "chat", chat_id: params.chatId };
+      }
+      await call<boolean>("setMyCommands", body);
+    },
+    async setMessageReaction(params) {
+      await call<boolean>("setMessageReaction", {
+        chat_id: params.chatId,
+        message_id: params.messageId,
+        reaction: params.emoji === undefined ? [] : [{ type: "emoji", emoji: params.emoji }],
+      });
+    },
+    async sendChatAction(params) {
+      const body: Record<string, unknown> = { chat_id: params.chatId, action: params.action };
+      if (params.messageThreadId !== undefined) {
+        body.message_thread_id = params.messageThreadId;
+      }
+      await call<boolean>("sendChatAction", body);
     },
     async createForumTopic(params) {
       return call<{ message_thread_id: number }>("createForumTopic", { chat_id: params.chatId, name: params.name });

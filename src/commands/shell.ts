@@ -2226,7 +2226,18 @@ export async function runAgentRepl(
     // `live === undefined` (sessions off) just skips persistence; `history`
     // was already spliced in place by the guard regardless.
     onContextCompaction: (r) => {
+      // Flow 387 review r2 F-024: `history` was already shortened in place, so the archive
+      // cursor is re-pointed FIRST — before the early return below — or a later sync would
+      // copy from a stale index and skip messages even when nothing is persisted.
+      nextArchiveIndex = history.length;
       if (live === undefined || !leaseWatch.canPersist()) {
+        return;
+      }
+      if (r.kind === "prune") {
+        // Flow 387 T18: old tool exchanges were collapsed — not a compaction.
+        // The archive already holds the originals (synced before the change);
+        // persist the shorter context (the cursor was re-pointed above).
+        live = persistHistory(live, history, { archive, provider: deps.providerId, model: deps.modelId });
         return;
       }
       const persisted = persistCompacted(live, r.context, archive, {
@@ -2234,7 +2245,6 @@ export async function runAgentRepl(
         model: deps.modelId,
       });
       live = persisted.handle;
-      nextArchiveIndex = history.length;
       agentIo.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
     },
   };
@@ -2518,7 +2528,7 @@ export async function runAgentRepl(
     startSpinner();
     busWorking = true;
     try {
-      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession } : {});
+      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});
     } catch (error) {
       // Recorded before it is rethrown. A turn that threw and a turn that
       // answered nothing produce the same empty text in the transcript, and a
@@ -2613,7 +2623,7 @@ export async function runAgentRepl(
       try {
         await runAgentTurn(agentIo, deps, history, "", {
           origin: "task-notification",
-          ...(slateSession !== undefined ? { slateSession } : {}),
+          ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
         });
       } finally {
         busWorking = false;

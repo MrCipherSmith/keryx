@@ -151,6 +151,8 @@ export interface SchedulesPanelOptions {
 async function defaultIsInstalled(cwd: string, item: TriggerEntryView): Promise<boolean> {
   const { entry } = item;
   if (entry.source !== "store" || entry.fire.kind !== "schedule") return true;
+  // Flow 389: a digest has no OS timer; `keryx serve` runs it, so a missing timer is not a fault.
+  if (entry.action.kind === "agent-task" && entry.action.digest !== undefined) return true;
   return isScheduleInstalled(cwd, entry.name, entry.fire.cron, {}, entry.install).catch(() => true);
 }
 

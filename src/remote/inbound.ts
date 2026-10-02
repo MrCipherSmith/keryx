@@ -40,6 +40,8 @@ export interface InboundEntry {
   receivedAt: number;
   /** The user's line, for `kind: "text"`. */
   text?: string;
+  /** The Telegram message the line came in, for `kind: "text"`: what a state reaction goes on. */
+  messageId?: number;
   /** The pressed button, for `kind: "callback"`. */
   callback?: { id: string; data: string; messageId?: number };
 }

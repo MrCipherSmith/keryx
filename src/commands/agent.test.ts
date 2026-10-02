@@ -33,6 +33,7 @@ import {
   toolCallHash,
 } from "./agent";
 import type { AgentDeps, AgentIO } from "./agent";
+import { scriptedProvider as sharedScriptedProvider } from "./agent.test-helpers";
 import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type {
@@ -207,43 +208,13 @@ test("resolveAgentMaxAttemptsPerHash: valid env override clamped to ceiling", ()
 
 // A minimal scripted ProviderPort: each `stream()` call replays the next scripted
 // event list and records the request it received (for feed-back assertions).
+// Flow 387 review r3 F-029: the provider contract lives in agent.test-helpers.ts; this file's
+// historic behaviour is an empty stream once the scripts run out.
 function scriptedProvider(scripts: Partial<NormalizedEvent>[][]): {
   provider: AgentDeps["provider"];
   requests: NormalizedRequest[];
 } {
-  const requests: NormalizedRequest[] = [];
-  let call = 0;
-  const description: ProviderDescription = {
-    capabilities: {
-      streaming: true,
-      toolCalls: true,
-      parallelToolCalls: false,
-      structuredOutput: false,
-      reasoningMetadata: false,
-      promptCaching: false,
-      vision: false,
-      tokenCounting: false,
-      modelListing: false,
-    },
-    descriptor: { providerId: "scripted" },
-  };
-  return {
-    requests,
-    provider: {
-      describe: () => description,
-      stream: (request, opts) => {
-        requests.push(request);
-        const events = scripts[call] ?? [];
-        call += 1;
-        return (async function* (): AsyncGenerator<NormalizedEvent> {
-          let sequence = 0;
-          for (const partial of events) {
-            yield { sequence: sequence++, attemptId: opts.attemptId, kind: "model_end", ...partial } as NormalizedEvent;
-          }
-        })();
-      },
-    },
-  };
+  return sharedScriptedProvider(scripts, { exhausted: "empty" });
 }
 
 let idCounter = 0;
@@ -4535,6 +4506,33 @@ test("REGRESSION: a plan published FOR APPROVAL ends the turn — the continuati
   const said = system.join("");
   expect(said).toContain("Published for your approval");
   expect(said).not.toContain("still has actionable items");
+});
+
+// Flow 387 T5: every request of a live session carries the session id as the
+// provider prompt-cache key (stable across rounds); no session -> no key.
+test("flow 387 T5: requests carry promptCacheKey = the session id, and none without a session", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  const deps = (provider: AgentDeps["provider"]): AgentDeps => ({
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  });
+  const withSession = scriptedProvider([[{ kind: "text_delta", text: "one" }, { kind: "model_end" }]]);
+  await runAgentTurn(collectingIo().io, deps(withSession.provider), [], "hello", { slateSession: { dir, cwd, opened: true } });
+  await runAgentTurn(collectingIo().io, deps(withSession.provider), [], "again", { slateSession: { dir, cwd, opened: true } });
+  expect(withSession.requests.map((r) => r.promptCacheKey)).toEqual([path.basename(dir), path.basename(dir)]);
+
+  const without = scriptedProvider([[{ kind: "text_delta", text: "one" }, { kind: "model_end" }]]);
+  await runAgentTurn(collectingIo().io, deps(without.provider), [], "hello");
+  // Flow 387 review r1 F-020: no session no longer means no key — the run mints one (see
+  // agent.review-r1.test.ts for stability across rounds and uniqueness across runs).
+  expect(without.requests).toHaveLength(1);
+  expect(without.requests[0]!.promptCacheKey).toMatch(/^keryx-run-/);
 });
 
 test("the control: with planFollowThrough opted in, a plan with real work left still gets the single follow-through round", async () => {

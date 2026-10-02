@@ -15,6 +15,7 @@ import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { lstatSync, realpathSync } from "node:fs";
 import type { NormalizedToolDefinition } from "../../provider/types";
+import { resolveSpillReadable } from "../output-spill";
 
 /** The content-returning result of an interactive tool invocation. */
 export interface InteractiveToolResult {
@@ -215,8 +216,18 @@ function realpathThroughAncestors(absolute: string): string | undefined {
   }
 }
 
-/** The three read-only builtin tools, bound to `root` (the project root). */
-export function builtinReadOnlyTools(root: string): InteractiveTool[] {
+/**
+ * The three read-only builtin tools, bound to `root` (the project root).
+ *
+ * `options.getSessionDir` (flow 387 T14) is a LAZY getter for the live session dir:
+ * `read_file` may additionally read `<sessionDir>/tool-output/**` by absolute path,
+ * so the spilled output the model is told about is openable. Omitted (subagents,
+ * trigger/ACP rosters — none of which spill) → project root only, as before.
+ */
+export function builtinReadOnlyTools(
+  root: string,
+  options: { getSessionDir?: () => string | undefined } = {},
+): InteractiveTool[] {
   const getCwd: InteractiveTool = {
     definition: {
       name: "get_cwd",
@@ -284,7 +295,10 @@ export function builtinReadOnlyTools(root: string): InteractiveTool[] {
       if (typeof startLine !== "number" || !Number.isInteger(startLine) || startLine < 1) {
         return { output: "read_file: start_line must be a positive integer", isError: true };
       }
-      const target = confineToRoot(root, requested);
+      // Flow 387 T14: the project root first; failing that, ONLY the live session's
+      // spilled-output directory (read-only, realpath-confined, absolute paths).
+      const target =
+        confineToRoot(root, requested) ?? resolveSpillReadable(options.getSessionDir?.(), requested);
       if (target === null) {
         return { output: `path escapes the project root: ${requested}`, isError: true };
       }

@@ -45,7 +45,7 @@ export function parseChannelsArgs(line: string): ChannelsRequest {
 
 export type ChannelsApi = Pick<
   ChannelsClient,
-  "localFiles" | "status" | "startPairing" | "pairingStatus" | "cancelPairing" | "connectFinish" | "test" | "disconnect"
+  "localFiles" | "status" | "startPairing" | "pairingStatus" | "cancelPairing" | "connectFinish" | "reload" | "test" | "disconnect"
 >;
 
 export type ChannelsSnapshotState = "not-connected" | "pairing" | "connected" | "off" | "serve-down" | "error";
@@ -131,7 +131,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
       return [
         "Telegram: pairing in progress",
         ...machine,
-        "Resume shows the one-time code again; Cancel pairing abandons it and erases the token.",
+        "Resume shows the one-time code again, or connects a pairing that already finished; Cancel pairing abandons it and erases the token.",
       ];
     case "connected":
       return [
@@ -146,7 +146,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
         "Telegram: configured, but not running",
         ...machine,
         ...(snapshot.reason === undefined ? [] : [`Why: ${snapshot.reason}`]),
-        "Disconnect erases the token and config. Test works once Telegram is running again.",
+        "Retry starts it again from the saved token and config. Disconnect erases them. Test works once Telegram is running.",
       ];
     case "serve-down":
       return [
@@ -258,7 +258,7 @@ export function channelsViewLines(
         { text: `Add ${bot} to your Telegram group as an administrator with the "Manage topics" right. The group must have topics turned on.`, tone: "text" },
         ...(pairing.chatTitle === undefined ? [] : [{ text: `Group: ${pairing.chatTitle}`, tone: "text" as const }]),
         ...(pairing.problems.length === 0
-          ? [{ text: "Waiting for the group…", tone: "muted" as const }]
+          ? [{ text: `Waiting for the group… ${codeLifetime(pairing.expiresAt, ctx.now)} left. A bot that is already in the group is picked up too.`, tone: "muted" as const }]
           : [{ text: "Still missing:", tone: "attention" as const }, ...pairing.problems.map((text): ViewLine => ({ text: `  - ${text}`, tone: "attention" }))]),
       ];
     }
@@ -390,8 +390,10 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
           case "not-connected":
             // Leftover files (a crash between the two writes) can only be erased by Disconnect.
             return [{ id: "connect", label: "Connect", tone: "primary", run: () => void beginConnect() }, ...(snapshot.configured ? [disconnectButton] : [])];
+          case "off":
+            return [{ id: "retry-start", label: "Retry", tone: "primary", run: () => void retryStart() }, disconnectButton];
           default:
-            // off, serve down, error: Connect and Test cannot work, but what is on disk can still be erased.
+            // serve down, error: Connect and Test cannot work, but what is on disk can still be erased.
             return snapshot.configured ? [disconnectButton] : [];
         }
       }
@@ -702,6 +704,25 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     }
   }
 
+  async function retryStart(): Promise<void> {
+    if (busy) return;
+    busy = true;
+    go({ kind: "working", text: "Starting Telegram again…" });
+    const mine = epoch;
+    try {
+      const result = await client.reload();
+      await reload();
+      if (closed || epoch !== mine) return;
+      backToList(
+        result.ok
+          ? { tone: "ok", text: "Telegram is running again." }
+          : { tone: "error", text: `Telegram did not start: ${result.reason}` },
+      );
+    } finally {
+      busy = false;
+    }
+  }
+
   async function cancelPairing(): Promise<void> {
     if (busy) return;
     busy = true;
@@ -779,7 +800,12 @@ export function openChannels(otui: unknown, chrome: unknown, options: OpenChanne
     const isEnter = name === "return" || name === "linefeed" || name === "kpenter";
     if (name === "escape") {
       // From the list Esc falls through and closes the modal; from any other view it steps back.
-      if (view.kind === "list" || view.kind === "working") return;
+      // While work is running the modal stays: the work cannot be cancelled and its outcome must be seen.
+      if (view.kind === "working") {
+        swallow(key);
+        return;
+      }
+      if (view.kind === "list") return;
       backToList();
       swallow(key);
       return;

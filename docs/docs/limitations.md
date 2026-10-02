@@ -98,7 +98,7 @@ for what has been verified on a real host.
 
 ## Scheduled agent tasks need the machine on
 
-`keryx schedule` hands a confirmed task to the OS scheduler. keryx itself runs no daemon.
+`keryx schedule` hands a confirmed task to the OS scheduler. keryx itself runs no daemon. The one exception is a digest (`keryx schedule add --digest`), which has no OS timer and is run by `keryx serve`, so it does nothing while serve is stopped.
 
 - **Missed runs:** a machine that is off or asleep misses runs. systemd
   (`Persistent=true`) and launchd run one catch-up run at the next boot or wake;

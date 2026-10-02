@@ -169,7 +169,7 @@ export function scrubThenCap(raw: string, env: Record<string, string | undefined
 }
 
 /** Run one granted command with `execFile` — no shell — and return scrubbed, capped output. */
-async function runGrantedCommand(
+export async function runGrantedCommand(
   bin: string,
   argv: readonly string[],
   cwd: string,
@@ -239,7 +239,7 @@ export function grantedTool(
 }
 
 /** `gh auth token`, run by the dispatcher, for scrubbing only. Never logged; empty on any failure. */
-function ghAuthToken(bin: string | undefined, cwd: string, env: Record<string, string | undefined>): Promise<string[]> {
+export function ghAuthToken(bin: string | undefined, cwd: string, env: Record<string, string | undefined>): Promise<string[]> {
   if (bin === undefined) return Promise.resolve([]);
   return new Promise((resolve) => {
     execFile(bin, ["auth", "token"], { cwd, env: env as NodeJS.ProcessEnv, timeout: 10_000 }, (error, stdout) => {
@@ -276,7 +276,7 @@ export function buildAgentTaskPrompt(entry: TriggerEntry, action: AgentTaskActio
   ].join("\n");
 }
 
-function refusal(runId: string, code: DispatchRefusalCode, detail: string, action: AgentTaskAction): AgentTaskResult {
+export function refusal(runId: string, code: DispatchRefusalCode, detail: string, action: AgentTaskAction): AgentTaskResult {
   return {
     outcome: "dispatch-refused",
     detail,
@@ -317,7 +317,7 @@ function lastAssistantText(history: readonly NormalizedMessage[]): string {
 }
 
 /** Keep the newest `keep` reports of one schedule. Report names start with an ISO-ish stamp, so name order is time order. */
-async function pruneReports(dir: string, keep: number): Promise<void> {
+export async function pruneReports(dir: string, keep: number): Promise<void> {
   const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith(".md")).sort();
   for (const old of names.slice(0, Math.max(0, names.length - keep))) {
     await rm(path.join(dir, old), { force: true }).catch(() => {});
@@ -722,7 +722,7 @@ function renderReport(input: {
   return lines.join("\n");
 }
 
-function defaultArmTimeout(ms: number, fire: () => void): () => void {
+export function defaultArmTimeout(ms: number, fire: () => void): () => void {
   const timer = setTimeout(fire, ms);
   timer.unref?.();
   return () => clearTimeout(timer);
