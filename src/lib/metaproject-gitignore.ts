@@ -410,6 +410,9 @@ export function renderMetaprojectGitignoreBlock(): string {
 # entries rather than inheriting coverage that does not exist.
 .metaproject/data/learning/observations/
 .metaproject/data/learning/candidates/
+# Recommendation journal (flow 392): what the human chose and why they deviated.
+# Personal runtime state, written 0o600.
+.metaproject/data/decisions/
 `;
 }
 
