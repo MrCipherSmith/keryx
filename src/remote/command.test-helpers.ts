@@ -2,6 +2,7 @@
 
 import type { InboundMeta, RemoteClientOptions, StartResult } from "./client";
 import type { CommandOutcome } from "./command-router";
+import type { MessageState } from "./protocol";
 import { RemoteBridge, type RemoteBridgeHost, type RemoteClientLike } from "./shell-bridge";
 
 export const META: InboundMeta = { updateId: 1, threadId: 7, fromId: 9, receivedAt: 0 };
@@ -20,6 +21,8 @@ export interface CommandClient extends RemoteClientLike {
   options: RemoteClientOptions;
   replies: string[];
   choices: ChoiceCall[];
+  /** Every state the shell reported, as [update id, state], in order. */
+  reported: Array<[number, MessageState]>;
 }
 
 export interface CommandHarnessOptions {
@@ -81,6 +84,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
         options,
         replies: [] as string[],
         choices: [] as ChoiceCall[],
+        reported: [] as Array<[number, MessageState]>,
         get connected() {
           return true;
         },
@@ -100,6 +104,10 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
           return true;
         },
         requestApproval: async () => "deny" as const,
+        reportState: async (updateId: number, state: MessageState) => {
+          fake.reported.push([updateId, state]);
+          return true;
+        },
         requestChoice: (text: string, rows: string[][], timeoutMs: number) =>
           new Promise<number | undefined>((resolve) => {
             fake.choices.push({ text, rows, timeoutMs, answer: resolve });

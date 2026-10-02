@@ -5,13 +5,21 @@ import { describe, expect, it } from "bun:test";
 import { commandHarness, waitFor } from "./command.test-helpers";
 import type { RemoteBridge } from "./shell-bridge";
 
+/** The bridge under test, set once the harness has built it; the shell fakes reach it through this. */
+interface BridgeRef {
+  bridge?: RemoteBridge;
+}
+
 /**
  * A shell that swaps its session the way tui-shell does: leaving first, entering once the new
  * session is live, and only keeping the topic when a command from the topic asked for it.
  */
-function swapping(bridge: () => RemoteBridge, kind: "new" | "resumed", seen: { kept: boolean[] }) {
+function swapping(ref: BridgeRef, kind: "new" | "resumed", seen: { kept: boolean[] }) {
   return async () => {
-    const b = bridge();
+    const b = ref.bridge;
+    if (b === undefined) {
+      throw new Error("the bridge was not set");
+    }
     seen.kept.push(b.keepingTopic);
     if (b.keepingTopic) {
       b.sessionLeaving();
@@ -27,9 +35,9 @@ describe("/new and /clear keep the topic (AC17)", () => {
   for (const line of ["/new", "/clear"]) {
     it(`${line} puts one separator line in the same topic and nothing else`, async () => {
       const seen = { kept: [] as boolean[] };
-      let bridge!: RemoteBridge;
-      const h = commandHarness({ runCommand: swapping(() => bridge, "new", seen) });
-      bridge = h.bridge;
+      const ref: BridgeRef = {};
+      const h = commandHarness({ runCommand: swapping(ref, "new", seen) });
+      ref.bridge = h.bridge;
       await h.bridge.enable();
       const topic = h.client();
       await h.say(line);
@@ -43,9 +51,9 @@ describe("/new and /clear keep the topic (AC17)", () => {
 
     it(`${line} closes the old history interval and opens the new one on the same topic`, async () => {
       const seen = { kept: [] as boolean[] };
-      let bridge!: RemoteBridge;
-      const h = commandHarness({ runCommand: swapping(() => bridge, "new", seen) });
-      bridge = h.bridge;
+      const ref: BridgeRef = {};
+      const h = commandHarness({ runCommand: swapping(ref, "new", seen) });
+      ref.bridge = h.bridge;
       await h.bridge.enable();
       h.calls.length = 0;
       await h.say(line);
@@ -57,9 +65,9 @@ describe("/new and /clear keep the topic (AC17)", () => {
   it("does not delete or recreate the topic: the client stays open and is the same one", async () => {
     let closed = 0;
     const seen = { kept: [] as boolean[] };
-    let bridge!: RemoteBridge;
-    const h = commandHarness({ runCommand: swapping(() => bridge, "new", seen) });
-    bridge = h.bridge;
+    const ref: BridgeRef = {};
+    const h = commandHarness({ runCommand: swapping(ref, "new", seen) });
+    ref.bridge = h.bridge;
     await h.bridge.enable();
     const topic = h.client();
     const originalClose = topic.close.bind(topic);
@@ -76,9 +84,9 @@ describe("/new and /clear keep the topic (AC17)", () => {
 
   it("records the change in the shell's remote status", async () => {
     const seen = { kept: [] as boolean[] };
-    let bridge!: RemoteBridge;
-    const h = commandHarness({ runCommand: swapping(() => bridge, "new", seen) });
-    bridge = h.bridge;
+    const ref: BridgeRef = {};
+    const h = commandHarness({ runCommand: swapping(ref, "new", seen) });
+    ref.bridge = h.bridge;
     await h.bridge.enable();
     await h.say("/new");
     await h.bridge.idle();
@@ -95,9 +103,9 @@ describe("/new and /clear keep the topic (AC17)", () => {
 
   it("stops holding the topic once the command is over", async () => {
     const seen = { kept: [] as boolean[] };
-    let bridge!: RemoteBridge;
-    const h = commandHarness({ runCommand: swapping(() => bridge, "new", seen) });
-    bridge = h.bridge;
+    const ref: BridgeRef = {};
+    const h = commandHarness({ runCommand: swapping(ref, "new", seen) });
+    ref.bridge = h.bridge;
     await h.bridge.enable();
     await h.say("/new");
     await h.bridge.idle();
@@ -144,17 +152,17 @@ describe("/resume from the topic can return to an earlier session (AC17)", () =>
 
   it("offers the earlier sessions, not the current one, and returns to the one pressed", async () => {
     const resumed: string[] = [];
-    let bridge!: RemoteBridge;
+    const ref: BridgeRef = {};
     const h = commandHarness({
       listSessions: async () => SESSIONS,
       resumeSession: async (id) => {
         resumed.push(id);
-        bridge.sessionLeaving();
-        bridge.sessionEntered("resumed");
+        ref.bridge?.sessionLeaving();
+        ref.bridge?.sessionEntered("resumed");
         return { output: "Resumed bbbb2222", ok: true };
       },
     });
-    bridge = h.bridge;
+    ref.bridge = h.bridge;
     await h.bridge.enable();
     h.calls.length = 0;
     await h.say("/resume");

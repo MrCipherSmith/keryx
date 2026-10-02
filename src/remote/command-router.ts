@@ -54,7 +54,7 @@ export interface SessionChoice {
 /** What the router needs from the shell. Every member but the first two is optional. */
 export interface RemoteCommandHost {
   isBusy(): boolean;
-  /** Stop the running turn or command. */
+  /** Stop the running turn. The router never calls it: a command from the topic must not stop a turn. The bridge uses it for a Telegram turn's own run limit. */
   cancelTurn(): void;
   /** Run a slash line as the operator would type it and collect what it printed. */
   runCommand?(line: string): Promise<CommandOutcome>;
@@ -78,7 +78,7 @@ export interface RemoteCommandHost {
 export interface RouterLimits {
   /** After this long a command that is still running says so in the topic. */
   runningNoticeMs: number;
-  /** A command still running after this long is stopped and reported. */
+  /** After this long the topic stops waiting for a command and is told it is still running. Nothing is cancelled. */
   commandLimitMs: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs: number;
@@ -117,6 +117,9 @@ interface PickOption {
 
 /** Commands that swap the live session; the topic follows them. */
 const SESSION_COMMANDS: readonly string[] = ["new", "clear", "resume"];
+
+/** How a question to the topic ended: a result, or "deferred" when a run took over the reaction. */
+type AskResult = "done" | "failed" | "deferred";
 
 /** How a command line ended, for the reaction on the message that carried it. */
 export type CommandEnd = (result: "done" | "failed") => void;
@@ -160,15 +163,20 @@ export class RemoteCommandRouter {
         this.enqueue(decision.line, decision.command, end);
         return;
       case "picker":
+        // The reaction stays "working" until the operator answers or the question expires.
         this.detach(async () => {
-          await this.picker(decision.command, fromId);
-          ended(end, "done");
+          const result = await this.picker(decision.command, fromId, end);
+          if (result !== "deferred") {
+            ended(end, result);
+          }
         });
         return;
       case "confirm":
         this.detach(async () => {
-          await this.confirm(decision, fromId);
-          ended(end, "done");
+          const result = await this.confirm(decision, fromId, end);
+          if (result !== "deferred") {
+            ended(end, result);
+          }
         });
         return;
     }
@@ -224,7 +232,7 @@ export class RemoteCommandRouter {
 
   /** Run `work` under the busy check, the running notice and the time limit; the output goes to the topic. */
   private async execute(command: string, line: string, work: () => Promise<CommandOutcome | undefined>, end?: CommandEnd): Promise<void> {
-    const { host, limits } = this.ctx;
+    const { limits } = this.ctx;
     const busy = this.busyReason(line, command);
     if (busy !== undefined) {
       this.ctx.record(`/${command} not run: ${busy}`);
@@ -263,14 +271,13 @@ export class RemoteCommandRouter {
       }
     }
     if (outcome === "limit") {
-      try {
-        host.cancelTurn();
-      } catch {
-        // Nothing left to stop.
-      }
-      this.ctx.record(`/${command} stopped: over the time limit`);
+      // Never cancel anything here. The shell may be running the operator's own turn, which a
+      // command from the topic has no right to stop; the command's own work is left to finish.
+      this.ctx.record(`/${command} still running: stopped waiting after the time limit`);
       ended(end, "failed");
-      await this.ctx.reply(`Stopped /${command}: it ran for more than ${Math.max(1, Math.round(limits.commandLimitMs / 1000))} seconds.`).catch(() => false);
+      await this.ctx
+        .reply(`/${command} is still running in the shell. Stopped waiting for it after ${Math.max(1, Math.round(limits.commandLimitMs / 1000))} seconds.`)
+        .catch(() => false);
       return;
     }
     if (outcome === undefined) {
@@ -295,18 +302,20 @@ export class RemoteCommandRouter {
 
   // ---- Yes/No ------------------------------------------------------------------------
 
-  private async confirm(decision: Extract<GatewayDecision, { kind: "confirm" }>, fromId: number | undefined): Promise<void> {
+  private async confirm(decision: Extract<GatewayDecision, { kind: "confirm" }>, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const yes = decision.agent !== undefined ? `Yes, send to ${decision.agent} (paid)` : "Yes";
     // Shown in the shell's remote panel for as long as the question stays unanswered.
     this.ctx.record(`/${decision.command} waiting for a press in the topic`);
     const index = await this.ctx.choose(this.ctx.compose(decision.summary), [[this.label(yes), "No"]], this.ctx.limits.choiceTimeoutMs, fromId);
     if (index === 0) {
       this.ctx.record(`/${decision.command} confirmed in the topic`);
-      this.enqueue(decision.line, decision.command);
-      return;
+      // The reaction follows the run itself, not the question.
+      this.enqueue(decision.line, decision.command, end);
+      return "deferred";
     }
     // No, or no press in time: nothing runs, the mode and the settings stay as they were.
     this.ctx.record(index === 1 ? `/${decision.command} declined in the topic; nothing changed` : `/${decision.command} not confirmed in time; nothing changed`);
+    return index === 1 ? "done" : "failed";
   }
 
   // ---- pickers -----------------------------------------------------------------------
@@ -350,40 +359,38 @@ export class RemoteCommandRouter {
     }
   }
 
-  private async picker(command: string, fromId: number | undefined): Promise<void> {
+  private async picker(command: string, fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const line = `/${command}`;
     const busy = this.busyReason(line, command);
     if (busy !== undefined) {
       this.ctx.record(`${line} not run: ${busy}`);
       await this.ctx.reply(`${line} was not run: ${busy}.`).catch(() => false);
-      return;
+      return "failed";
     }
     this.ctx.record(line);
     switch (command) {
       case "model":
-        await this.pickModel(undefined, fromId);
-        return;
+        return await this.pickModel(undefined, fromId);
       case "connect":
-        await this.pickProvider(fromId);
-        return;
+        return await this.pickProvider(fromId);
       case "resume":
-        await this.pickSession(fromId);
-        return;
+        return await this.pickSession(fromId, end);
       default:
         await this.ctx.reply(`${line} is not available from this shell.`).catch(() => false);
+        return "failed";
     }
   }
 
-  private async pickModel(providerId: string | undefined, fromId: number | undefined): Promise<void> {
+  private async pickModel(providerId: string | undefined, fromId: number | undefined): Promise<AskResult> {
     const host = this.ctx.host;
     if (host.listModels === undefined || host.switchModel === undefined) {
       await this.ctx.reply("/model is not available from this shell.").catch(() => false);
-      return;
+      return "failed";
     }
     const listing = await host.listModels(providerId);
     if (listing === undefined || listing.models.length === 0) {
       await this.ctx.reply(this.ctx.compose(`There are no models to pick from${providerId !== undefined ? ` for ${providerId}` : ""}. Use the shell to connect a provider.`)).catch(() => false);
-      return;
+      return "failed";
     }
     const current = listing.models.find((model) => model.current === true);
     const title = `Pick a model (${listing.provider})${current !== undefined ? `\nNow: ${current.label}` : ""}`;
@@ -391,58 +398,61 @@ export class RemoteCommandRouter {
     const chosen = await this.pick(title, options, fromId);
     if (chosen === undefined) {
       this.ctx.record("/model not answered in time; nothing changed");
-      return;
+      return "failed";
     }
     const line = "/model";
     const busy = this.busyReason(line, "model");
     if (busy !== undefined) {
       await this.ctx.reply(`/model was not run: ${busy}.`).catch(() => false);
-      return;
+      return "failed";
     }
     const outcome = await host.switchModel(chosen.id, providerId);
     this.ctx.record(`/model ${outcome.ok ? "switched" : "failed"}`);
     const text = outcome.output.trim();
     await this.ctx.reply(this.ctx.compose(text.length > 0 ? text : outcome.ok ? `Model: ${chosen.label.replace(/^\* /, "")}.` : "The model was not changed.")).catch(() => false);
+    return outcome.ok ? "done" : "failed";
   }
 
-  private async pickProvider(fromId: number | undefined): Promise<void> {
+  private async pickProvider(fromId: number | undefined): Promise<AskResult> {
     const host = this.ctx.host;
     if (host.listProviders === undefined || host.listModels === undefined || host.switchModel === undefined) {
       await this.ctx.reply("/connect is not available from this shell.").catch(() => false);
-      return;
+      return "failed";
     }
     const providers = await host.listProviders();
     if (providers.length === 0) {
       await this.ctx.reply("No provider is connected yet. Connecting one needs a key, which is never typed into a chat; use the shell.").catch(() => false);
-      return;
+      return "failed";
     }
     const options = providers.map((provider) => ({ id: provider.id, label: provider.current === true ? `* ${provider.label}` : provider.label }));
     const chosen = await this.pick("Connected providers. Pick one to switch to:", options, fromId);
     if (chosen === undefined) {
       this.ctx.record("/connect not answered in time; nothing changed");
-      return;
+      return "failed";
     }
-    await this.pickModel(chosen.id, fromId);
+    return await this.pickModel(chosen.id, fromId);
   }
 
-  private async pickSession(fromId: number | undefined): Promise<void> {
+  private async pickSession(fromId: number | undefined, end: CommandEnd | undefined): Promise<AskResult> {
     const host = this.ctx.host;
     if (host.listSessions === undefined || host.resumeSession === undefined) {
       await this.ctx.reply("/resume is not available from this shell.").catch(() => false);
-      return;
+      return "failed";
     }
     const sessions = (await host.listSessions()).filter((session) => session.current !== true);
     if (sessions.length === 0) {
       await this.ctx.reply("There is no earlier session to return to.").catch(() => false);
-      return;
+      return "done";
     }
     const chosen = await this.pick("Return to an earlier session:", sessions.map((s) => ({ id: s.id, label: s.label })), fromId);
     if (chosen === undefined) {
       this.ctx.record("/resume not answered in time; nothing changed");
-      return;
+      return "failed";
     }
     const resume = host.resumeSession.bind(host);
-    this.chain = this.chain.then(() => this.execute("resume", "/resume", () => resume(chosen.id))).catch(() => undefined);
+    // The reaction follows the switch itself, not the question.
+    this.chain = this.chain.then(() => this.execute("resume", "/resume", () => resume(chosen.id), end)).catch(() => undefined);
+    return "deferred";
   }
 
   private async listSessionsText(): Promise<void> {

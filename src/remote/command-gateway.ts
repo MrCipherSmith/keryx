@@ -45,15 +45,13 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "new", kind: "text", description: "Start a new session; this topic stays bound to it" },
   { name: "clear", kind: "text", description: "Same as /new" },
   { name: "compact", kind: "text", description: "Compact the conversation: /compact [focus]" },
-  { name: "think", kind: "text", description: "Expand or hide reasoning: /think [auto|expand|hide|collapse]" },
+  { name: "think", kind: "text", description: "Set how reasoning shows: /think <auto|expand|hide>" },
   { name: "goal", kind: "text", description: "Show or set the session goal" },
   { name: "queue", kind: "text", description: "Manage the queue: /queue <remove|edit|force> [N]" },
   { name: "mode", kind: "confirm", description: "Show or set the permission mode; trust and auto ask for a button press" },
-  { name: "plan", kind: "confirm", description: "Read-only mode: /plan [on|off]; off asks for a button press" },
+  { name: "plan", kind: "confirm", description: "Read-only mode: /plan [on|off]; bare shows it, off asks for a button press" },
   { name: "reasoning", kind: "text", description: "Show or set reasoning effort" },
   { name: "theme", kind: "text", description: "Set the theme: /theme <name>" },
-  { name: "schedule", kind: "text", description: "Schedule a prompt" },
-  { name: "rewind", kind: "text", description: "Rewind the session to an earlier point" },
   { name: "jevrules", kind: "text", description: "Show the Jev rules" },
   { name: "staledocs", kind: "text", description: "Show stale documents" },
   { name: "opencomments", kind: "text", description: "Show open review comments" },
@@ -61,8 +59,6 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "triage", kind: "text", description: "Advisory triage of the latest review package" },
   { name: "risk", kind: "text", description: "Risk map of the working diff" },
   { name: "scenarios", kind: "text", description: "User scenarios the working diff likely changes" },
-  { name: "conform", kind: "text", description: "Check a diff against a reference document" },
-  { name: "ci", kind: "text", description: "Failed CI runs of the current branch with a triage" },
   { name: "delegate", kind: "confirm", description: "Hand a paid task to an external agent: /delegate <agent> <task>; asks first" },
   { name: "external", kind: "confirm", description: "Show or switch sending work to external providers; on and off ask first" },
   { name: "external-agents", kind: "confirm", description: "Show or switch the external agent runtime; on and off ask first" },
@@ -102,7 +98,11 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   approvals: "it opens a panel in the shell",
   triggers: "it opens a panel in the shell",
   routing: "it opens a panel in the shell",
-  schedules: "it opens a panel in the shell; /schedule works here",
+  schedules: "it opens a panel in the shell",
+  schedule: "it opens a form in the shell",
+  rewind: "it opens a picker of earlier points in the shell",
+  conform: "it opens a picker in the shell",
+  ci: "it opens a panel in the shell",
   jevprofile: "it opens a panel with toggles in the shell",
 };
 
@@ -193,10 +193,16 @@ export function classifyRemoteCommand(line: string): GatewayDecision {
         return { kind: "confirm", command: name, line: "/plan off", summary: "Turn read-only mode off?" };
       }
       if (first === "") {
-        // Bare `/plan` toggles, and a toggle can turn read-only mode off.
-        return { kind: "confirm", command: name, line: "/plan", summary: "Toggle read-only mode? If it is on now, this turns it off." };
+        // Bare `/plan` only shows the state in the shell, so it needs no confirmation.
+        return { kind: "run", command: name, line: "/plan" };
       }
       return first === "on" ? { kind: "run", command: name, line: "/plan on" } : refuse(name, "use /plan on or /plan off", true);
+    case "theme":
+      return first === "" ? refuse(name, "bare /theme opens a picker in the shell; use /theme <name>", true) : { kind: "run", command: name, line: asTyped };
+    case "think":
+      return first === "auto" || first === "expand" || first === "hide"
+        ? { kind: "run", command: name, line: `/think ${first}` }
+        : refuse(name, "bare /think and /think collapse only flip the view in the shell; use /think auto, expand or hide", true);
     case "delegate":
       // The agent and the task are shown as the shell would read them; a line the shell would
       // refuse as malformed is refused here too, so nobody confirms something that cannot run.
@@ -242,7 +248,7 @@ function confirmDelegate(rest: string): GatewayDecision {
   }
   const agent = (match[1] ?? "").toLowerCase();
   const task = (match[2] ?? "").trim();
-  const shown = task.length > 200 ? `${task.slice(0, 199)}...` : task;
+  const shown = task.length > 200 ? `${task.slice(0, 200)}... [shortened for this question: the full task is ${task.length} characters and runs as typed]` : task;
   return {
     kind: "confirm",
     command: "delegate",

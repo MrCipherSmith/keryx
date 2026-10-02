@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { TYPING_REFRESH_MS } from "./message-state";
-import { type Harness, makeHarness, OWNER_ID, until } from "./remote.test-helpers";
+import { type Harness, makeHarness, OWNER_ID, STALE_MS, until } from "./remote.test-helpers";
 import { BotApiError } from "./types";
 
 let h: Harness;
@@ -54,7 +54,11 @@ describe("the typing indicator (AC19)", () => {
     expect(h.api.chatActions.length).toBe(1);
     await h.clock.advance(1);
     expect(h.api.chatActions.length).toBe(2);
-    await h.clock.advance(TYPING_REFRESH_MS * 3);
+    // The shell is alive: it keeps heartbeating while the turn runs.
+    for (let step = 0; step < 3; step += 1) {
+      await h.clock.advance(TYPING_REFRESH_MS);
+      await hub.heartbeat(sessionId);
+    }
     expect(h.api.chatActions.length).toBe(5);
   });
 
@@ -89,6 +93,18 @@ describe("the typing indicator (AC19)", () => {
     hub.endActivity(sessionId);
     await h.clock.advance(TYPING_REFRESH_MS * 3);
     expect(h.api.chatActions.length).toBe(1);
+  });
+
+  test("stops when the shell stops answering and the hub marks the session unavailable", async () => {
+    const { hub, sessionId, threadId } = await topic();
+    const updateId = await received(threadId);
+    hub.messageState(sessionId, updateId, "working");
+    await until(() => h.api.chatActions.length === 1, "typing");
+    await h.clock.advance(STALE_MS);
+    await until(() => hub.list()[0]?.status === "unavailable", "marked unavailable");
+    const seen = h.api.chatActions.length;
+    await h.clock.advance(TYPING_REFRESH_MS * 3);
+    expect(h.api.chatActions.length).toBe(seen);
   });
 
   test("a message that is only queued (received, reading) does not show typing", async () => {

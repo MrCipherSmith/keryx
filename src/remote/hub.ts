@@ -429,6 +429,8 @@ export class RemoteHub {
           record.unavailableSince = Math.min(now, record.lastHeartbeat + SESSION_LEASE_STALE_MS);
           this.registry.save();
           this.event("session-unavailable", record.name);
+          // The shell is not coming back on its own: stop typing and fail what it was working on.
+          this.endActivity(record.sessionId);
           if (now - record.unavailableSince < this.config.orphanMs) {
             this.queueStatus(
               record,

@@ -13,7 +13,7 @@ async function ask(line: string, options: Parameters<typeof commandHarness>[0] =
 }
 
 describe("mode and plan need a Yes press (AC6)", () => {
-  for (const line of ["/mode trust", "/mode auto", "/plan off", "/plan"]) {
+  for (const line of ["/mode trust", "/mode auto", "/plan off"]) {
     it(`${line} asks first and runs nothing until Yes`, async () => {
       const h = await ask(line);
       const choice = h.client().choices[0];
@@ -59,7 +59,7 @@ describe("mode and plan need a Yes press (AC6)", () => {
   });
 
   it("runs the lower-risk forms without a question", async () => {
-    for (const line of ["/mode", "/mode ask", "/plan on"]) {
+    for (const line of ["/mode", "/mode ask", "/plan on", "/plan"]) {
       const h = commandHarness();
       await h.bridge.enable();
       await h.say(line);
@@ -113,6 +113,24 @@ describe("delegate and external need a Yes press that names the agent (AC7)", ()
     h.client().choices[0]?.answer(0);
     await h.bridge.idle();
     expect(h.ran).toEqual(["/delegate Codex review the diff"]);
+  });
+
+  it("/delegate marks a long task as shortened in the question and says how long it is", async () => {
+    const task = "x".repeat(450);
+    const h = await ask(`/delegate claude ${task}`);
+    const text = h.client().choices[0]?.text ?? "";
+    expect(text).toContain("shortened");
+    expect(text).toContain("450 characters");
+    h.client().choices[0]?.answer(0);
+    await h.bridge.idle();
+    expect(h.ran).toEqual([`/delegate claude ${task}`]);
+  });
+
+  it("/delegate shows a short task whole, with no truncation mark", async () => {
+    const h = await ask("/delegate claude fix it");
+    expect(h.client().choices[0]?.text).not.toContain("shortened");
+    h.client().choices[0]?.answer(undefined);
+    await h.bridge.idle();
   });
 
   it("/delegate does nothing on No or on silence", async () => {
@@ -183,5 +201,54 @@ describe("delegate and external need a Yes press that names the agent (AC7)", ()
       expect(h.ran).toEqual([]);
       expect(h.client().replies[0]).toContain("Not available remotely");
     }
+  });
+});
+
+describe("a question keeps its command pending until it is answered (reaction)", () => {
+  const states = (h: Awaited<ReturnType<typeof ask>>): string[] => h.client().reported.map(([, state]) => state);
+
+  it("reports nothing while the question is open, then done once the confirmed command ran", async () => {
+    const h = await ask("/mode trust");
+    expect(states(h)).toEqual([]);
+    h.client().choices[0]?.answer(0);
+    await h.bridge.idle();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(states(h)).toEqual(["done"]);
+  });
+
+  it("reports failed when the confirmed command failed", async () => {
+    const h = await ask("/mode trust", { runCommand: async () => ({ output: "no", ok: false }) });
+    h.client().choices[0]?.answer(0);
+    await h.bridge.idle();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(states(h)).toEqual(["failed"]);
+  });
+
+  it("reports done on No, and failed when the question expires", async () => {
+    const no = await ask("/mode trust");
+    no.client().choices[0]?.answer(1);
+    await no.bridge.idle();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(states(no)).toEqual(["done"]);
+    const late = await ask("/mode trust");
+    late.client().choices[0]?.answer(undefined);
+    await late.bridge.idle();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(states(late)).toEqual(["failed"]);
+  });
+
+  it("a picker stays pending until a session is chosen and resumed", async () => {
+    const h = commandHarness({
+      listSessions: async () => [{ id: "s-old", label: "old" }],
+      resumeSession: async () => ({ output: "Resumed", ok: true }),
+    });
+    await h.bridge.enable();
+    await h.say("/resume");
+    await waitFor(() => h.client().choices.length === 1, "the picker");
+    expect(h.client().reported).toEqual([]);
+    h.client().choices[0]?.answer(0);
+    await h.bridge.idle();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(h.client().reported.map(([, state]) => state)).toEqual(["done"]);
   });
 });

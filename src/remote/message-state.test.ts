@@ -247,6 +247,9 @@ function bridgeRig(options: { rejectReports?: boolean } = {}): Rig {
   };
 }
 
+/** Let the serialized state posts of a message drain. */
+const drained = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe("the shell reports each state in order (AC18)", () => {
   test("an idle line is reading, then working when its turn starts, then done", async () => {
     const rig = bridgeRig();
@@ -255,6 +258,7 @@ describe("the shell reports each state in order (AC18)", () => {
     expect(rig.ran).toEqual(["fix the test"]);
     rig.bridge.turnStarted(TG_SOURCE);
     await rig.bridge.turnSettled({ failed: false });
+    await drained();
     expect(rig.reported).toEqual([[11, "reading"], [11, "working"], [11, "done"]]);
   });
 
@@ -264,6 +268,7 @@ describe("the shell reports each state in order (AC18)", () => {
     rig.send("fix the test", 12);
     rig.bridge.turnStarted(TG_SOURCE);
     await rig.bridge.turnSettled({ failed: true });
+    await drained();
     expect(rig.reported.map(([, state]) => state)).toEqual(["reading", "working", "failed"]);
   });
 
@@ -278,6 +283,7 @@ describe("the shell reports each state in order (AC18)", () => {
     rig.bridge.turnStarted(TG_SOURCE);
     expect(rig.reported).toEqual([[21, "working"]]);
     await rig.bridge.turnSettled({ failed: false });
+    await drained();
     expect(rig.reported.at(-1)).toEqual([21, "done"]);
   });
 
@@ -291,6 +297,7 @@ describe("the shell reports each state in order (AC18)", () => {
     await rig.bridge.turnSettled({ failed: false });
     rig.bridge.turnStarted(TG_SOURCE);
     await rig.bridge.turnSettled({ failed: false });
+    await drained();
     expect(rig.reported).toEqual([[31, "working"], [31, "done"], [32, "working"], [32, "done"]]);
   });
 
@@ -317,6 +324,7 @@ describe("the shell reports each state in order (AC18)", () => {
     rig.send("/status", 51);
     rig.send("/bad", 52);
     await rig.bridge.idle();
+    await drained();
     expect(rig.reported).toContainEqual([51, "done"]);
     expect(rig.reported.filter(([id]) => id === 52).map(([, state]) => state).at(-1)).toBe("failed");
   });
@@ -328,6 +336,71 @@ describe("the shell reports each state in order (AC18)", () => {
     expect(rig.ran).toEqual(["go"]);
     rig.bridge.turnStarted(TG_SOURCE);
     await rig.bridge.turnSettled({ failed: false });
+    await drained();
     expect(rig.reported.map(([, state]) => state)).toEqual(["reading", "working", "done"]);
+  });
+
+  test("a slow post of one state never lands after the next state of the same message", async () => {
+    const posted: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const host: RemoteBridgeHost = {
+      sessionId: () => "sess-1",
+      project: () => "/proj",
+      isBusy: () => false,
+      runLine: () => undefined,
+      enqueue: () => undefined,
+      notice: () => undefined,
+      cancelTurn: () => undefined,
+      recordOn: () => undefined,
+      recordOff: () => undefined,
+    };
+    let onLine!: RemoteClientOptions["onLine"];
+    const bridge = new RemoteBridge({
+      host,
+      approvalTimeoutMs: 50,
+      makeClient: (clientOptions: RemoteClientOptions) => {
+        onLine = clientOptions.onLine;
+        const result: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0 };
+        let first = true;
+        return {
+          get connected() {
+            return true;
+          },
+          get name() {
+            return "topic-a";
+          },
+          get runTimeoutMs() {
+            return 0;
+          },
+          get lastHeartbeatAt() {
+            return undefined;
+          },
+          start: async () => result,
+          close: async () => undefined,
+          reply: async () => true,
+          requestApproval: async () => "deny" as const,
+          requestChoice: async () => undefined,
+          reportState: async (_updateId: number, state: MessageState) => {
+            if (first) {
+              first = false;
+              await new Promise<void>((resolve) => {
+                releaseFirst = resolve;
+              });
+            }
+            posted.push(state);
+            return true;
+          },
+        };
+      },
+    });
+    await bridge.enable();
+    onLine("go", { updateId: 71, threadId: 7, fromId: 9, receivedAt: 0 });
+    bridge.turnStarted(TG_SOURCE);
+    await bridge.turnSettled({ failed: false });
+    expect(posted).toEqual([]);
+    releaseFirst?.();
+    await drained();
+    await drained();
+    expect(posted).toEqual(["reading", "working", "done"]);
   });
 });

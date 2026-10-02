@@ -167,6 +167,8 @@ function parseLastEventId(request: Request): number | undefined {
 class ShellStream {
   controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   closed = false;
+  /** Why the stream was closed on purpose; undefined for a dropped connection. */
+  endedBecause: "superseded" | "closing" | undefined;
   keepalive: unknown;
   private readonly encoder = new TextEncoder();
 
@@ -194,6 +196,7 @@ class ShellStream {
     if (this.closed) {
       return;
     }
+    this.endedBecause = kind;
     if (kind !== undefined) {
       this.write(encodeSseEvent("status", { kind } satisfies StatusEvent));
     }
@@ -1183,8 +1186,13 @@ export class RemoteHttpSurface {
         }
       }
     }
-    // Typing stops and a message the shell was working on is marked failed.
-    this.hub?.endActivity(stream.sessionId);
+    // Typing stops and a message the shell was working on is marked failed only when the shell really
+    // left (it said it is closing). A dropped connection or a newer stream for the same session is
+    // not an exit: the shell reconnects and goes on, and the hub's own sweep ends the activity if
+    // it never does.
+    if (stream.endedBecause === "closing") {
+      this.hub?.endActivity(stream.sessionId);
+    }
   }
 }
 

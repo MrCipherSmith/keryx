@@ -5,7 +5,7 @@ import { describe, expect, it } from "bun:test";
 import { classifyRemoteCommand, menuNamesAreValid, REMOTE_COMMANDS, REMOTE_REFUSED, remoteMenu } from "./command-gateway";
 import { commandHarness, waitFor } from "./command.test-helpers";
 
-const ALLOWED_TEXT = ["/help", "/status", "/doctor", "/new", "/compact", "/think", "/goal", "/queue", "/reasoning", "/theme dark", "/schedule", "/rewind"];
+const ALLOWED_TEXT = ["/help", "/status", "/doctor", "/new", "/compact", "/think expand", "/goal", "/queue", "/reasoning", "/theme dark", "/plan"];
 
 /** AC8: each of these is refused remotely, and each has its own test below. */
 const REFUSED_LINES: Array<[string, string]> = [
@@ -24,6 +24,13 @@ const REFUSED_LINES: Array<[string, string]> = [
   ["/guard", "guard"],
   ["/route", "route"],
   ["/editguard", "editguard"],
+  ["/schedule", "schedule"],
+  ["/rewind", "rewind"],
+  ["/conform", "conform"],
+  ["/ci", "ci"],
+  ["/theme", "theme"],
+  ["/think", "think"],
+  ["/think collapse", "think"],
 ];
 
 describe("the allowlist (AC1)", () => {

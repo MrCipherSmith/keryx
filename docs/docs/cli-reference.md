@@ -959,10 +959,13 @@ Refusals print their code and exit non-zero (except where noted):
   (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
   and `/clear` (same topic, one separator line), button pickers (`/model`,
   `/connect`, `/resume`), and commands that ask first with a Yes/No button
-  (`/mode trust|auto`, `/plan off`, and `/delegate`, `/external` and
-  `/external-agents`, which name the agent and say it is external and paid). The
-  rest, for example `/mcp`, `/guard`, `/route`, `/editguard`, `/provider` and
-  `/channels`, stay local and are refused in the topic with the reason. The modal
+  (`/mode trust|auto`, `/plan off` (bare `/plan` shows the mode and does not ask),
+  and `/delegate`, `/external` and `/external-agents`, which name the agent and say
+  it is external and paid). The rest, for example `/mcp`, `/guard`, `/route`,
+  `/editguard`, `/provider`, `/channels`, `/schedule`, `/rewind`, `/conform`, `/ci`,
+  bare `/theme` and bare `/think`, stay local (they open a panel, form or picker in
+  the shell) and are refused in the topic with the reason. A command from the topic
+  never cancels the turn running in the shell. The modal
   has a Commands tab with the recent ones. Full list and rules:
   [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal

@@ -292,7 +292,7 @@ Telegram menu names cannot contain a hyphen, so `/external-agents` shows as
 
 | Kind | Commands | What happens |
 |---|---|---|
-| Text | `/status`, `/doctor`, `/new`, `/clear`, `/compact`, `/think`, `/goal`, `/queue`, `/reasoning`, `/theme`, `/schedule`, `/rewind`, `/jevrules`, `/staledocs`, `/opencomments`, `/contract`, `/triage`, `/risk`, `/scenarios`, `/conform`, `/ci` | Runs in the shell as typed; the output comes back as a reply. |
+| Text | `/status`, `/doctor`, `/new`, `/clear`, `/compact`, `/think auto\|expand\|hide`, `/goal`, `/queue`, `/reasoning`, `/theme <name>`, `/jevrules`, `/staledocs`, `/opencomments`, `/contract`, `/triage`, `/risk`, `/scenarios` | Runs in the shell as typed; the output comes back as a reply. Whether it worked is taken from the command itself, not from its wording. |
 | Buttons | `/model`, `/connect`, `/resume` | Replies with a picker; the press does the switch. `/connect` shows providers that are already connected, then their models. No key or address is shown. |
 | Built in | `/help`, `/sessions` | Answered without running anything in the shell. |
 | Asks first | `/mode`, `/plan`, `/delegate`, `/external`, `/external-agents` | See the confirmation rule below. |
@@ -300,8 +300,8 @@ Telegram menu names cannot contain a hyphen, so `/external-agents` shows as
 **The confirmation rule.** A command that raises trust or sends work outside the
 machine runs only after a Yes press in the topic:
 
-- `/mode trust`, `/mode auto` and `/plan` (off) ask **Yes / No**. Reading the mode,
-  `/mode ask` and `/plan on` do not ask.
+- `/mode trust`, `/mode auto` and `/plan off` ask **Yes / No**. Reading the mode,
+  `/mode ask`, bare `/plan` (it shows the mode) and `/plan on` do not ask.
 - `/delegate <agent> <task>`, `/external on|off` and `/external-agents on|off` ask a
   question that names the agent, says it is an **external** agent and that the work
   is **paid**. The button reads `Yes, send to <agent> (paid)`. The step that applies
@@ -309,6 +309,9 @@ machine runs only after a Yes press in the topic:
   typed in the shell.
 - **No**, or no press before the question expires, changes nothing. The shell's
   `/remote-control` panel (Commands tab) lists a question that is still waiting.
+- The message you typed keeps its "running" reaction until the question is answered
+  or has expired. If the delegated task is longer than 200 characters the question
+  shows it shortened and says so, with the full length; the full task is what runs.
 
 **Pickers and buttons.** A button carries a short single-use token, never a command
 or a name, so it cannot be forged or replayed. It is bound to the session, the
@@ -321,17 +324,21 @@ chosen and the buttons go away; approval messages are edited the same way.
 `/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
 `/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt`,
 `/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
-`/approvals`, `/triggers`, `/routing`, `/schedules` and `/jevprofile`. They ask for
-a key, change a safety guard or where work is routed, edit another tool's
-configuration, open a panel, or would close the shell. `/mcp trust`, `/guard`,
+`/approvals`, `/triggers`, `/routing`, `/schedules`, `/jevprofile`, `/schedule`,
+`/rewind`, `/conform` and `/ci`. Bare `/theme` and bare `/think` (and `/think
+collapse`) are refused too; use `/theme <name>` or `/think auto|expand|hide`. They
+ask for a key, change a safety guard or where work is routed, edit another tool's
+configuration, open a panel, a form or a picker that exists only in the shell, or
+would close the shell. `/mcp trust`, `/guard`,
 `/route` and `/editguard` are deliberately local. The topic is told which command
 was refused and why.
 
 **While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,
 `/compact`, `/model` and `/connect`, and the topic says
 `main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
-short notice if it takes a while, and one that outlasts the limit is stopped and
-the topic is told.
+short notice if it takes a while. A command from the topic never cancels the turn
+you are running in the shell: one that outlasts the limit is only no longer waited
+for, the topic is told it is still running in the shell, and it is left alone.
 
 **`/new` and `/clear` keep the topic.** The topic stays bound to the running shell,
 gets one separator line (`--- new session ---`), and the session history records

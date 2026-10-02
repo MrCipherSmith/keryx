@@ -1,6 +1,6 @@
 // Flow 387, AC9: the commands the shell refuses while it is busy are refused from the topic with the
-// same reason; a command that runs long shows a running status; a command over its limit is
-// stopped and reported.
+// same reason; a command that runs long shows a running status; a command over its limit is no longer
+// waited for and is reported as still running. A command from the topic never cancels a turn.
 
 import { describe, expect, it } from "bun:test";
 import { BUSY_DEFERRED_COMMANDS, BUSY_REASON } from "./command-gateway";
@@ -85,7 +85,7 @@ describe("a command that runs long (AC9)", () => {
     expect(h.client().replies.filter((reply) => reply.includes("Still running"))).toEqual([]);
   });
 
-  it("stops a command that passes its limit and reports it", async () => {
+  it("stops waiting for a command that passes its limit, says it is still running, and cancels nothing", async () => {
     const h = commandHarness({
       runningNoticeMs: 1_000,
       commandLimitMs: 15,
@@ -94,10 +94,34 @@ describe("a command that runs long (AC9)", () => {
     await h.bridge.enable();
     await h.say("/doctor");
     await h.bridge.idle();
-    expect(h.calls).toContain("cancel");
+    expect(h.calls).not.toContain("cancel");
     const reply = h.client().replies.at(-1) ?? "";
-    expect(reply).toContain("Stopped /doctor");
+    expect(reply).toContain("/doctor is still running in the shell");
+    expect(reply).toContain("Stopped waiting");
     expect(reply).toContain("seconds");
+  });
+
+  it("never cancels the operator's own turn when a command passes its limit while a turn runs", async () => {
+    const h = commandHarness({
+      busy: true,
+      commandLimitMs: 15,
+      runCommand: () => new Promise(() => undefined),
+    });
+    await h.bridge.enable();
+    await h.say("/status");
+    await h.bridge.idle();
+    expect(h.ran).toEqual(["/status"]);
+    expect(h.calls.filter((call) => call === "cancel")).toEqual([]);
+    expect(h.client().replies.at(-1) ?? "").toContain("Stopped waiting");
+  });
+
+  it("a long picker answer or a refused command while busy never cancels a turn either", async () => {
+    const h = commandHarness({ busy: true, commandLimitMs: 15 });
+    await h.bridge.enable();
+    await h.say("/compact");
+    await h.say("/definitely-not-a-command");
+    await h.bridge.idle();
+    expect(h.calls.filter((call) => call === "cancel")).toEqual([]);
   });
 
   it("goes on to the next command after one was stopped", async () => {

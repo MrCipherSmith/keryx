@@ -9,14 +9,13 @@ const TEXT_COMMANDS = [
   "/status",
   "/doctor",
   "/compact",
-  "/think high",
+  "/think hide",
   "/goal ship the release",
   "/queue",
   "/plan on",
+  "/plan",
   "/reasoning",
   "/theme dark",
-  "/schedule",
-  "/rewind",
   "/jevrules",
   "/staledocs",
   "/opencomments",
@@ -24,8 +23,6 @@ const TEXT_COMMANDS = [
   "/triage",
   "/risk",
   "/scenarios",
-  "/conform",
-  "/ci",
 ];
 
 describe("text commands return their output to the topic (AC2)", () => {
@@ -74,10 +71,10 @@ describe("text commands return their output to the topic (AC2)", () => {
   it("reports a failed command with its message", async () => {
     const h = commandHarness({ runCommand: async () => ({ output: "no such mode", ok: false }) });
     await h.bridge.enable();
-    await h.say("/think sideways");
+    await h.say("/theme dark");
     await h.bridge.idle();
     const reply = h.client().replies[0] ?? "";
-    expect(reply).toContain("/think failed");
+    expect(reply).toContain("/theme failed");
     expect(reply).toContain("no such mode");
   });
 

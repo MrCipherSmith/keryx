@@ -52,8 +52,11 @@ describe("the command menu (AC12)", () => {
   it("lists only commands the gateway knows, and the gateway does not call them unknown", () => {
     for (const entry of remoteMenu()) {
       const decision = classifyRemoteCommand(`/${entry.command}`);
-      // A bare /delegate is refused for its missing arguments, not for being off the list.
-      expect(decision.kind !== "refuse" || decision.command === "delegate").toBe(true);
+      // These need an argument: bare, they are refused for it, not for being off the list.
+      expect(decision.kind !== "refuse" || ["delegate", "theme", "think"].includes(decision.command)).toBe(true);
+      if (decision.kind === "refuse") {
+        expect(decision.known).toBe(true);
+      }
     }
   });
 

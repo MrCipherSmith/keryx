@@ -394,8 +394,25 @@ export class RemoteBridge {
   private report(updateId: number, state: MessageState): void {
     const client = this.client;
     if (client?.reportState === undefined) return;
-    void client.reportState(updateId, state).catch(() => undefined);
+    // Posts for one message go out one after the other, in the order they were reported: a
+    // slow "working" must not land after "done" and leave the typing indicator running.
+    const previous = this.reportTails.get(updateId);
+    const post = client.reportState.bind(client);
+    // With nothing in flight for this message the post starts at once, as before.
+    const started: Promise<unknown> = previous === undefined ? post(updateId, state) : previous.then(() => post(updateId, state));
+    const tail: Promise<void> = started
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .then(() => {
+        if (this.reportTails.get(updateId) === tail) this.reportTails.delete(updateId);
+      });
+    this.reportTails.set(updateId, tail);
   }
+
+  /** The last state post of each message still in flight; keeps the posts of one message in order. */
+  private readonly reportTails = new Map<number, Promise<void>>();
 
   /** Resolves when every command taken from the topic, and every question asked in it, has finished. */
   idle(): Promise<void> {
