@@ -39,7 +39,7 @@ function proseWords(source: string): number {
     .replace(/<[^>]+>/g, " ")
     .replace(/\]\([^)]*\)/g, "]")
     .replace(/\|/g, " ")
-    .replace(/[#*>`\[\]]/g, " ");
+    .replace(/[#*>`[\]]/g, " ");
   return prose.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
 }
 
