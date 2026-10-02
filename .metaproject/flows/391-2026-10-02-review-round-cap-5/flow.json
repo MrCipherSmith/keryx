@@ -9,9 +9,9 @@
   "id": "391",
   "slug": "review-round-cap-5",
   "title": "Review round cap 5",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T10:43:23.674Z",
-  "updatedAt": "2026-10-02T11:16:18.304Z",
+  "updatedAt": "2026-10-02T11:36:16.099Z",
   "source": {
     "type": "description",
     "ref": null
@@ -181,6 +181,20 @@
       "at": "2026-10-02T11:16:18.304Z",
       "event": "ac-confirmed",
       "detail": "AC5: PR #853 CI green (typecheck-and-tests after the length-ceiling fix); review-gate.test.ts unchanged behaviour: the cap only adds a note, only a human dismisses a finding. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T11:36:12.157Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T11:36:16.099Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T11:36:16.099Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -261,6 +275,81 @@
       },
       "criterion": "AC5",
       "acChecksum": "sha256:8f6c5e71ec16469fc599f0ace9ec5f6740103c430f00fa33f55bfd223495c5a7"
+    },
+    {
+      "at": "2026-10-02T11:36:16.099Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:8f6c5e71ec16469fc599f0ace9ec5f6740103c430f00fa33f55bfd223495c5a7",
+      "headCommit": "938ee7446e57afbb643ec1c1fd3ab584bdd36d3f"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T11:36:16.099Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "5 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "938ee7446e57afbb643ec1c1fd3ab584bdd36d3f is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "938ee7446e57afbb643ec1c1fd3ab584bdd36d3f is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "391-2026-10-02-review-round-cap-5 is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:8f6c5e71ec16469fc599f0ace9ec5f6740103c430f00fa33f55bfd223495c5a7"
+    }
+  ],
+  "merged": {
+    "commit": "938ee7446e57afbb643ec1c1fd3ab584bdd36d3f",
+    "ref": "origin/main",
+    "at": "2026-10-02T11:36:16.099Z"
+  }
 }
