@@ -117,3 +117,26 @@ test("fallback cuts inside the turn when one turn alone is over the limit", () =
 test("in-turn cut is a noop when the turn is already within the tail budget", () => {
   expect(compactInTurn(oneLongTurn(3, 400), { tailTokens: 20_000 }).noop).toBe(true);
 });
+
+test("F-012: the in-turn cut counts replayed reasoning when sizing its tail", () => {
+  // Ten rounds, each with a tiny result but 16K chars (4K tokens) of replayed reasoning.
+  const h: NormalizedMessage[] = [user("go")];
+  for (let i = 0; i < 10; i++) {
+    const [assistant, tool] = pair(`r${i}`, 100);
+    h.push(
+      {
+        ...(assistant as NormalizedMessage),
+        reasoning: { replay: [{ providerId: "openai-codex", kind: "encrypted_content", data: "Z".repeat(16_000) }] },
+      },
+      tool as NormalizedMessage,
+    );
+  }
+  const r = compactInTurn(h, { tailTokens: 9_000 });
+  expect(r.noop).toBe(false);
+  const kept = r.context.filter((m) => m.role === "assistant" || m.role === "tool");
+  // Content alone would let all ten rounds fit (~600 tokens); with reasoning counted
+  // only about two rounds fit a 9K-token tail.
+  expect(kept.filter((m) => m.role === "assistant").length).toBeLessThanOrEqual(3);
+  expect(estimateRequestTokens(kept, "", [])).toBeLessThan(13_000);
+  expectBalanced(r.context);
+});

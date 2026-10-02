@@ -13,6 +13,7 @@
 // messages in the removed prefix are dropped (never summarised as requests),
 // and every earlier operator request survives in the summary.
 
+import { estimateMessageTokens } from "../harness/provider/context-guard";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { consolidateAnchors, isAnchorsContent, isFullAnchorsContent } from "./anchors-announce";
 import { parseCollapsedRecord, patchPaths } from "./prune";
@@ -320,15 +321,6 @@ function toolCallCounts(messages: readonly NormalizedMessage[]): string[] {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name, n]) => `${name} ×${n}`);
 }
 
-/** Chars/4 estimate of one message (content + tool-call arguments), as the context guard counts it. */
-function messageTokens(m: NormalizedMessage): number {
-  let chars = m.content.length;
-  for (const call of m.toolCalls ?? []) {
-    chars += call.arguments.length;
-  }
-  return Math.ceil(chars / 4);
-}
-
 /** Verbatim tail kept by an in-turn cut (codex / pi / opencode all keep ~20K tokens). */
 export const IN_TURN_TAIL_TOKENS = 20_000;
 
@@ -364,7 +356,9 @@ export function compactInTurn(
   let tokens = 0;
   while (cut > turnStart + 1) {
     const m = history[cut - 1];
-    const t = m === undefined ? 0 : messageTokens(m);
+    // Flow 387 review r1 F-012: the shared estimator, so replayed reasoning is counted
+    // (the old local one sized only content + tool-call arguments).
+    const t = m === undefined ? 0 : estimateMessageTokens(m);
     if (tokens + t > tailTokens && cut < history.length) {
       break;
     }

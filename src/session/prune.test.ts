@@ -124,8 +124,10 @@ test("archive keeps the original text and a readable file holds it", async () =>
 
   expect(toolsOf(archive).map((m) => m.content)).toEqual(original);
   const first = toolsOf(history)[0] as NormalizedMessage;
-  expect(first.content).toBe(`${CLEARED_PREFIX} — full text: ${path.join(sessionDir, "tool-output", "c0.txt")}]`);
-  expect(readFileSync(path.join(sessionDir, "tool-output", "c0.txt"), "utf8")).toBe(original[0] as string);
+  // Flow 387 review r1 F-004: the name is unique per message, not just the tool-call id.
+  expect(first.spillPath).toMatch(/[\\/]tool-output[\\/]\d+-[0-9a-f]{8}-c0\.txt$/);
+  expect(first.content).toBe(`${CLEARED_PREFIX} — full text: ${first.spillPath}]`);
+  expect(readFileSync(first.spillPath as string, "utf8")).toBe(original[0] as string);
 });
 
 test("is idempotent: already-cleared results are untouched and do not count as savings", async () => {
@@ -144,10 +146,11 @@ test("a result the spill already saved keeps its spill path and writes nothing n
   const spillPath = path.join(sessionDir, "tool-output", "spilled.txt");
   const preview = renderSpillPreview("y".repeat(300_000), spillPath);
   const target = history.findIndex((m) => m.role === "tool");
-  history[target] = { ...(history[target] as NormalizedMessage), content: preview };
+  history[target] = { ...(history[target] as NormalizedMessage), content: preview, spillPath };
   await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   expect((history[target] as NormalizedMessage).content).toBe(`${CLEARED_PREFIX} — full text: ${spillPath}]`);
   expect(readdirSync(path.join(sessionDir, "tool-output")).includes("spilled.txt")).toBe(false);
+  expect(readdirSync(path.join(sessionDir, "tool-output")).some((f) => f.endsWith("-c0.txt"))).toBe(false);
 });
 
 test("without a session dir the placeholder carries no path", async () => {

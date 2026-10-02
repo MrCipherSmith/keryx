@@ -7,7 +7,7 @@
 //
 // Two modes:
 //  - "branch": composes the REAL code paths of this branch in the order the agent
-//    round loop uses them: `spillLargeToolOutput` on every tool result,
+//    round loop uses them: `spillToolOutput` on every tool result,
 //    `anchorsAnnouncement` for anchors changes, `pruneToolOutputs`, the
 //    `estimateWithUsageAnchor` guard + `needsCompaction`, `compactWithFallback`
 //    spliced into history, and a usage anchor recorded as the full estimate of the
@@ -33,7 +33,7 @@ import {
   toUsageAnchor,
   type UsageAnchor,
 } from "../../src/harness/provider/context-guard";
-import { spillLargeToolOutput } from "../../src/harness/tool/output-spill";
+import { spillToolOutput } from "../../src/harness/tool/output-spill";
 import { anchorsAnnouncement } from "../../src/session/anchors-announce";
 import { compactWithFallback } from "../../src/session/compact";
 import { pruneToolOutputs } from "../../src/session/prune";
@@ -435,14 +435,15 @@ export async function replayBranch(session: SyntheticSession, sessionDir?: strin
         anchor = toUsageAnchor(snapshot, sent); // simulated provider usage = what was sent
         history.push(step.assistant);
         for (const tool of step.tools) {
-          const content = await spillLargeToolOutput(tool.content, {
+          const spill = await spillToolOutput(tool.content, {
             sessionDir: dir,
             toolCallId: tool.toolCallId ?? "call",
           });
-          if (content !== tool.content) {
+          if (spill.text !== tool.content) {
             spilled += 1;
           }
-          history.push({ ...tool, content });
+          // Flow 387 review r1 F-002: the agent loop records the spill path as data.
+          history.push({ ...tool, content: spill.text, ...(spill.spillPath !== undefined ? { spillPath: spill.spillPath } : {}) });
         }
       }
     }

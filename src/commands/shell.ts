@@ -2526,7 +2526,7 @@ export async function runAgentRepl(
     startSpinner();
     busWorking = true;
     try {
-      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession } : {});
+      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession, pruneArchive: true } : {});
     } catch (error) {
       // Recorded before it is rethrown. A turn that threw and a turn that
       // answered nothing produce the same empty text in the transcript, and a
@@ -2621,7 +2621,7 @@ export async function runAgentRepl(
       try {
         await runAgentTurn(agentIo, deps, history, "", {
           origin: "task-notification",
-          ...(slateSession !== undefined ? { slateSession } : {}),
+          ...(slateSession !== undefined ? { slateSession, pruneArchive: true } : {}),
         });
       } finally {
         busWorking = false;
