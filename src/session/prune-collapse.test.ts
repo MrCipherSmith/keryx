@@ -108,7 +108,11 @@ test("the assistant's own text stays first; reasoning and arguments are dropped"
       reasoning: { replay: [{ providerId: "openai-codex", kind: "encrypted_content", data: "Z".repeat(50_000) }] },
     }),
   );
-  for (let i = 0; i < 5; i++) history.push(...exchange([call(`n${i}`)], 40_000));
+  // The newest 3 reasoning-bearing assistant messages are kept (and never collapsed).
+  const replay = { replay: [{ providerId: "openai-codex", kind: "encrypted_content", data: "Z".repeat(100) }] };
+  for (let i = 0; i < 5; i++) {
+    history.push(...exchange([call(`n${i}`)], 40_000, i >= 2 ? { reasoning: replay } : {}));
+  }
   await pruneToolOutputs(history, { sessionDir: undefined });
   const record = history[1] as NormalizedMessage;
   expect(record.content).toBe(`Reading the file first.\n${COLLAPSED_HEADER}\nread_file(src/a.ts) → ok`);
@@ -150,6 +154,7 @@ test("is idempotent and never re-collapses a record", async () => {
   expect(await pruneToolOutputs(history, { sessionDir: undefined })).toEqual({
     pruned: 0,
     collapsed: 0,
+    reasoningStripped: 0,
     savedTokens: 0,
   });
   expect(history.map((m) => m.content)).toEqual(snapshot);

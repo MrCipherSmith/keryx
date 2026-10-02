@@ -11,6 +11,14 @@
 //    call (`name(digest) → ok|error, full output: <path>`). Old exchanges are not
 //    re-sent as structured function calls at all.
 //
+//  - T19: the encrypted reasoning replay (`reasoning.replay`, echoed to the provider
+//    on every later request) is kept only on the newest 3 assistant messages that
+//    carry it; older ones lose it, protected window or not. Live-probed against
+//    Codex: a structured function_call whose reasoning item was stripped is accepted.
+//    It joins the same batch and the same >= 20K saving threshold as the other two,
+//    so earlier messages are not rewritten round by round (the prefix cache only
+//    breaks once per batch); the newest rounds always keep theirs.
+//
 // Patterns: opencode `session/compaction.ts` prune (protect the newest 40K tokens,
 // only act past a 20K saving), gemini-cli `toolOutputMasking`. Unlike opencode there
 // is no protected-turns rule: the context of a real session sat inside one or two
@@ -40,6 +48,8 @@ export const PRUNE_MIN_SAVING_TOKENS = 20_000;
 export const CLEARED_PREFIX = "[Old tool result cleared";
 /** First line of a collapsed record's call list (the text before it is the assistant's own). */
 export const COLLAPSED_HEADER = "[Earlier tool calls, collapsed — each full output is saved to the file named]";
+/** Assistant messages (newest first) that keep their reasoning replay. */
+export const REASONING_KEEP_ROUNDS = 3;
 /** Most characters of an argument digest. */
 const DIGEST_CHARS = 80;
 /** Rough path length used to size a record line before its file is known. */
@@ -157,11 +167,28 @@ export interface CollapseGroup {
   saving: number;
 }
 
+/** An assistant message carrying opaque reasoning replay items. */
+function hasReplay(m: NormalizedMessage): boolean {
+  return m.role === "assistant" && (m.reasoning?.replay?.length ?? 0) > 0;
+}
+
+/** `m` without its reasoning replay (the visible reasoning text and flags stay). */
+function withoutReplay(m: NormalizedMessage): NormalizedMessage {
+  const { reasoning, ...rest } = m;
+  if (reasoning === undefined) {
+    return m;
+  }
+  const { replay: _replay, ...kept } = reasoning;
+  return Object.keys(kept).length > 0 ? { ...rest, reasoning: kept } : rest;
+}
+
 export interface PrunePlan {
   /** Results to clear on their own (their group is not collapsed). */
   entries: PrunePlanEntry[];
   /** Whole exchanges to collapse into one text record. */
   groups: CollapseGroup[];
+  /** Assistant messages that lose their reasoning replay (all but the newest 3 carrying it). */
+  strips: PrunePlanEntry[];
   /** Total estimated saving of `entries` and `groups`. */
   savedTokens: number;
 }
@@ -205,12 +232,33 @@ export function planPrune(
     }
   }
 
+  // The newest REASONING_KEEP_ROUNDS assistant messages carrying replay keep it, and
+  // are never collapsed (a collapse would drop it too); every older one is a strip.
+  const keepReasoning = new Set<number>();
+  const stripCandidates: number[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m !== undefined && hasReplay(m)) {
+      if (keepReasoning.size < REASONING_KEEP_ROUNDS) {
+        keepReasoning.add(i);
+      } else {
+        stripCandidates.push(i);
+      }
+    }
+  }
+
   const groups: CollapseGroup[] = [];
   const grouped = new Set<number>();
   if (opts.collapseGroups !== false) {
     for (let i = 0; i < protectedFrom; i++) {
       const a = history[i];
-      if (a === undefined || a.role !== "assistant" || a.toolCalls === undefined || a.toolCalls.length === 0) {
+      if (
+        a === undefined ||
+        a.role !== "assistant" ||
+        a.toolCalls === undefined ||
+        a.toolCalls.length === 0 ||
+        keepReasoning.has(i)
+      ) {
         continue;
       }
       let end = i;
@@ -250,8 +298,20 @@ export function planPrune(
       entries.push({ index: i, saving });
     }
   }
-  const savedTokens = entries.reduce((a, e) => a + e.saving, 0) + groups.reduce((a, g) => a + g.saving, 0);
-  return { entries, groups, savedTokens };
+  // A group collapses its assistant message anyway, so a strip there would double count.
+  const collapsedStarts = new Set(groups.map((g) => g.start));
+  const strips: PrunePlanEntry[] = [];
+  for (const i of stripCandidates) {
+    const m = history[i];
+    if (m !== undefined && !collapsedStarts.has(i)) {
+      strips.push({ index: i, saving: estimateMessageTokens(m) - estimateMessageTokens(withoutReplay(m)) });
+    }
+  }
+  const savedTokens =
+    entries.reduce((a, e) => a + e.saving, 0) +
+    groups.reduce((a, g) => a + g.saving, 0) +
+    strips.reduce((a, e) => a + e.saving, 0);
+  return { entries, groups, strips, savedTokens };
 }
 
 export interface PruneOptions {
@@ -271,6 +331,8 @@ export interface PruneResult {
   pruned: number;
   /** Exchanges collapsed; `history` is shorter by the results and calls they replaced. */
   collapsed: number;
+  /** Assistant messages whose reasoning replay was dropped (length unchanged). */
+  reasoningStripped: number;
   /** Estimated tokens saved. */
   savedTokens: number;
 }
@@ -301,10 +363,10 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
     ...(opts.collapseGroups !== undefined ? { collapseGroups: opts.collapseGroups } : {}),
   });
   if (
-    plan.entries.length + plan.groups.length === 0 ||
+    plan.entries.length + plan.groups.length + plan.strips.length === 0 ||
     plan.savedTokens < (opts.minSavingTokens ?? PRUNE_MIN_SAVING_TOKENS)
   ) {
-    return { pruned: 0, collapsed: 0, savedTokens: 0 };
+    return { pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 };
   }
   opts.beforeApply?.();
   let pruned = 0;
@@ -318,6 +380,15 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
     history[entry.index] = { ...m, content: clearedPlaceholder(filePath) };
     pruned += 1;
     savedTokens += tokens(m.content) - tokens(clearedPlaceholder(filePath));
+  }
+  let reasoningStripped = 0;
+  for (const strip of plan.strips) {
+    const m = history[strip.index];
+    if (m !== undefined && hasReplay(m)) {
+      history[strip.index] = withoutReplay(m);
+      reasoningStripped += 1;
+      savedTokens += strip.saving;
+    }
   }
   // Back to front: a splice only shifts indices after it.
   let collapsed = 0;
@@ -346,5 +417,5 @@ export async function pruneToolOutputs(history: NormalizedMessage[], opts: Prune
     pruned += results.length;
     collapsed += 1;
   }
-  return { pruned, collapsed, savedTokens };
+  return { pruned, collapsed, reasoningStripped, savedTokens };
 }

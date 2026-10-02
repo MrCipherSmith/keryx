@@ -2323,7 +2323,7 @@ async function pruneHistory(
     beforeApply: () => io.onHistoryChange?.("tool"),
     ...(minSavingTokens !== undefined ? { minSavingTokens } : {}),
   });
-  if (result.pruned > 0) {
+  if (result.pruned + result.reasoningStripped > 0) {
     if (result.collapsed > 0 && deps.onContextCompaction !== undefined) {
       deps.onContextCompaction({
         kind: "prune",
@@ -2835,14 +2835,14 @@ async function runAgentTurnCore(
     // Flow 387 T18: old exchanges whose results are all outside the window are
     // collapsed into one text record, not only cleared.
     const pruneResult = await pruneHistory(io, deps, history, liveSessionDir(options));
-    if (pruneResult.pruned > 0) {
+    if (pruneResult.pruned + pruneResult.reasoningStripped > 0) {
       usageAnchors.delete(history); // the anchored prefix just shrank
       system(
-        `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ~${pruneResult.savedTokens} tokens) in the request.\n`,
+        `\n[prune] Shrank ${pruneResult.pruned} old tool results (${pruneResult.collapsed} exchanges collapsed, ${pruneResult.reasoningStripped} old reasoning replays dropped, ~${pruneResult.savedTokens} tokens) in the request.\n`,
       );
     }
     const preRequestEstimate =
-      pruneResult.pruned > 0
+      pruneResult.pruned + pruneResult.reasoningStripped > 0
         ? estimateRequestTokens(history, roundSystemInstruction, toolDefs)
         : estimateWithUsageAnchor(history, roundSystemInstruction, toolDefs, liveAnchor);
     if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
@@ -3080,7 +3080,7 @@ async function runAgentTurnCore(
           // Flow 387 T11: prune first (any saving counts now), then compact with
           // the same fallback as the pre-request guard.
           const overflowPrune = await pruneHistory(io, deps, history, liveSessionDir(options), 1);
-          if (overflowPrune.pruned > 0) {
+          if (overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             usageAnchors.delete(history);
           }
           const compacted = compactWithFallback(history, {
@@ -3088,7 +3088,7 @@ async function runAgentTurnCore(
             fits: (ctx) =>
               !needsCompaction(estimateRequestTokens(ctx, roundSystemInstruction, toolDefs), deps.contextWindow),
           });
-          if (compacted.noop && overflowPrune.pruned > 0) {
+          if (compacted.noop && overflowPrune.pruned + overflowPrune.reasoningStripped > 0) {
             overflowRetried = true;
             roundState.round -= 1;
             system("\n[prune] Provider rejected the request as too large; cleared old tool results, retrying once.\n");

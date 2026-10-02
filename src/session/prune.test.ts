@@ -134,7 +134,7 @@ test("is idempotent: already-cleared results are untouched and do not count as s
   await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
   const after = history.map((m) => m.content);
   const again = await pruneToolOutputs(history, { collapseGroups: false, sessionDir });
-  expect(again).toEqual({ pruned: 0, collapsed: 0, savedTokens: 0 });
+  expect(again).toEqual({ pruned: 0, collapsed: 0, reasoningStripped: 0, savedTokens: 0 });
   expect(history.map((m) => m.content)).toEqual(after);
 });
 
