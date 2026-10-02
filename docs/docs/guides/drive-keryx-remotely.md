@@ -277,6 +277,87 @@ that it is off.
   it, `--json` carries a `remote` field, and the `keryx shell -r` picker marks it
 `⇄ remote`.
 
+### Commands from the topic
+
+A line that starts with `/` in the topic is not sent to the model. It goes through a
+gateway that knows exactly which commands a topic may run; everything else is
+refused with the reason, in the topic. Only an allowed sender can use any of it (see
+the allowlist above), and the commands run in the shell, so they obey the same
+policy as when typed there. The output that comes back is redacted the same way as a
+reply, and a command never takes a secret as an argument or prints one.
+
+Type `/` in the topic and Telegram's menu lists the same set (`/help` lists it too).
+Telegram menu names cannot contain a hyphen, so `/external-agents` shows as
+`/external_agents`; both are accepted.
+
+| Kind | Commands | What happens |
+|---|---|---|
+| Text | `/status`, `/doctor`, `/new`, `/clear`, `/compact`, `/think`, `/goal`, `/queue`, `/reasoning`, `/theme`, `/schedule`, `/rewind`, `/jevrules`, `/staledocs`, `/opencomments`, `/contract`, `/triage`, `/risk`, `/scenarios`, `/conform`, `/ci` | Runs in the shell as typed; the output comes back as a reply. |
+| Buttons | `/model`, `/connect`, `/resume` | Replies with a picker; the press does the switch. `/connect` shows providers that are already connected, then their models. No key or address is shown. |
+| Built in | `/help`, `/sessions` | Answered without running anything in the shell. |
+| Asks first | `/mode`, `/plan`, `/delegate`, `/external`, `/external-agents` | See the confirmation rule below. |
+
+**The confirmation rule.** A command that raises trust or sends work outside the
+machine runs only after a Yes press in the topic:
+
+- `/mode trust`, `/mode auto` and `/plan` (off) ask **Yes / No**. Reading the mode,
+  `/mode ask` and `/plan on` do not ask.
+- `/delegate <agent> <task>`, `/external on|off` and `/external-agents on|off` ask a
+  question that names the agent, says it is an **external** agent and that the work
+  is **paid**. The button reads `Yes, send to <agent> (paid)`. The step that applies
+  an external patch, `/external apply <hash>`, is not available here: the hash is
+  typed in the shell.
+- **No**, or no press before the question expires, changes nothing. The shell's
+  `/remote-control` panel (Commands tab) lists a question that is still waiting.
+
+**Pickers and buttons.** A button carries a short single-use token, never a command
+or a name, so it cannot be forged or replayed. It is bound to the session, the
+message and the person it was sent to, expires, and is never mixed up with an
+approval button. After a press, the message is edited in place to show what was
+chosen and the buttons go away; approval messages are edited the same way.
+
+**These commands stay in the shell.** `/exit`, `/quit`, `/channels`, `/provider`,
+`/search-provider`, `/search-connect`, `/remote-control`, `/integrate`, `/copy`,
+`/game`, `/setup`, `/mcp`, `/guard`, `/route`, `/editguard`, `/settings`, `/bus`,
+`/review`, `/reviews`, `/product`, `/governance`, `/expand`, `/interrupt`,
+`/demote`, `/models`, `/external-diff`, `/flows`, `/ac`, `/workspace`,
+`/approvals`, `/triggers`, `/routing`, `/schedules` and `/jevprofile`. They ask for
+a key, change a safety guard or where work is routed, edit another tool's
+configuration, open a panel, or would close the shell. `/mcp trust`, `/guard`,
+`/route` and `/editguard` are deliberately local. The topic is told which command
+was refused and why.
+
+**While a turn runs.** The shell refuses `/new`, `/clear`, `/resume`, `/sessions`,
+`/compact`, `/model` and `/connect`, and the topic says
+`main is busy: command deferred`; nothing is queued behind it. A command that runs is answered with a
+short notice if it takes a while, and one that outlasts the limit is stopped and
+the topic is told.
+
+**`/new` and `/clear` keep the topic.** The topic stays bound to the running shell,
+gets one separator line (`--- new session ---`), and the session history records
+the change. No second topic is created and none is deleted. `/resume` offers the
+earlier sessions as buttons and returns to the one you press
+(`--- resumed session ---`). Typing `/new` in the shell still ends remote control
+as before.
+
+**Message state.** Each message you send shows its state as a reaction on the
+message: received (eyes), accepted into the session (thinking), running
+(lightning), finished (thumbs up), refused or failed (thumbs down; Telegram does
+not allow a cross mark as a reaction). A new state replaces the old one. While a
+turn runs the topic also shows "typing", refreshed about every 4 seconds, and it
+stops when the turn ends. If the bot is not allowed to react in the group, the
+reactions turn off for good with one `reactions-unavailable` event in `serve`, and
+the typing indicator still works. A failed reaction call never delays or blocks a
+message.
+
+In the full-screen shell, the `/remote-control` modal has a **Commands** tab with
+the recent commands from the topic, including refused ones and confirmations nobody
+has answered yet. A command that came from Telegram is echoed in the transcript as
+`tg ❯ /model`.
+
+Out of scope for now: voice, files and photos, entering credentials, several shells
+in one topic, and the shell's games and editors.
+
 ### What is not verified
 
 This was built and tested against a fake Bot API, in process. It has not been run

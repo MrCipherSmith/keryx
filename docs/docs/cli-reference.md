@@ -955,6 +955,16 @@ Refusals print their code and exit non-zero (except where noted):
   readline shell (`--no-tui`) can only print that it is off. Each time it is
   turned on or off is recorded in the session's history (see
   [sessions](#sessions)).
+  Slash commands typed in the topic run only if they are on a fixed list
+  (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
+  and `/clear` (same topic, one separator line), button pickers (`/model`,
+  `/connect`, `/resume`), and commands that ask first with a Yes/No button
+  (`/mode trust|auto`, `/plan off`, and `/delegate`, `/external` and
+  `/external-agents`, which name the agent and say it is external and paid). The
+  rest, for example `/mcp`, `/guard`, `/route`, `/editguard`, `/provider` and
+  `/channels`, stay local and are refused in the topic with the reason. The modal
+  has a Commands tab with the recent ones. Full list and rules:
+  [Drive keryx remotely](guides/drive-keryx-remotely.md#commands-from-the-topic).
 - `/channels [status]` connects Telegram to this machine, from any shell. The modal
   lists Telegram: when it is not connected there is one button, Connect; when it is,
   Test and Disconnect. Connect asks for the bot token (hidden, paste works, never in

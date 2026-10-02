@@ -70,7 +70,10 @@ describe("approval through the topic", () => {
 
     press(threadId, buttons.allow, OWNER_ID, buttons.message.messageId);
     expect(await decision).toBe("allow");
-    await until(() => textsIn(threadId).includes("Approval granted."), "the follow-up in the topic");
+    // The question itself is edited into its result; there is no separate follow-up message.
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Allowed by user"), "the question edited");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    expect(textsIn(threadId)).not.toContain("Approval granted.");
     // The press was answered to Telegram, so the button stops spinning.
     await until(() => rig.api.answeredCallbacks.length >= 1, "answerCallbackQuery");
   });
@@ -141,24 +144,32 @@ describe("approval through the topic", () => {
     const buttons = await untilButtons(threadId);
     press(threadId, buttons.deny);
     expect(await decision).toBe("deny");
-    await until(() => textsIn(threadId).includes("Approval denied."), "the follow-up in the topic");
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Denied by user"), "the question edited");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    expect(textsIn(threadId)).not.toContain("Approval denied.");
   });
 
   test("no press: deny at the timeout, and the topic is told", async () => {
     rig = makeRig();
     await rig.startServe();
     const { client, threadId } = await session("sess-ap-0003", "release");
-    const started = Date.now();
-    const decision = await client.requestApproval("Push to origin?", 400);
-    expect(decision).toBe("deny");
-    expect(Date.now() - started).toBeGreaterThanOrEqual(350);
-    await until(() => textsIn(threadId).some((text) => text.startsWith("Approval request expired")), "the expiry notice");
-    // A late press after the expiry grants nothing.
+    const pending = client.requestApproval("Push to origin?", 400);
     const buttons = await untilButtons(threadId);
-    press(threadId, buttons.allow);
+    const started = Date.now();
+    const decision = await pending;
+    expect(decision).toBe("deny");
+    expect(Date.now() - started).toBeLessThan(2_000);
+    // The question is edited into the expiry notice and loses its buttons.
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Expired at"), "the expiry notice");
+    expect(rig.api.message(buttons.message.messageId)?.inlineKeyboard).toBeUndefined();
+    const before = textsIn(threadId).length;
+    // A late press after the expiry grants nothing and adds no message.
+    press(threadId, buttons.allow, OWNER_ID, buttons.message.messageId);
     await settle();
     await settle();
     expect(textsIn(threadId)).not.toContain("Approval granted.");
+    expect(textsIn(threadId)).toHaveLength(before);
+    expect(rig.api.message(buttons.message.messageId)?.text).toContain("Expired at");
   });
 
   test("a press by a sender who is not allowed changes nothing", async () => {
@@ -202,13 +213,16 @@ describe("approval through the topic", () => {
     const buttons = await untilButtons(threadId);
     press(threadId, buttons.allow);
     expect(await decision).toBe("allow");
-    await until(() => textsIn(threadId).includes("Approval granted."), "first follow-up");
+    await until(() => (rig.api.message(buttons.message.messageId)?.text ?? "").includes("Allowed by user"), "first edit");
+    const after = textsIn(threadId).length;
     press(threadId, buttons.allow);
     press(threadId, buttons.deny);
     await settle();
     await settle();
-    expect(textsIn(threadId).filter((text) => text === "Approval granted.")).toHaveLength(1);
-    expect(textsIn(threadId)).not.toContain("Approval denied.");
+    // Nothing new is sent, and the message still shows the first answer.
+    expect(textsIn(threadId)).toHaveLength(after);
+    expect(rig.api.message(buttons.message.messageId)?.text).toContain("Allowed by user");
+    expect(rig.api.message(buttons.message.messageId)?.text).not.toContain("Denied by user");
   });
 
   test("a button for an id the server never issued is dropped", async () => {

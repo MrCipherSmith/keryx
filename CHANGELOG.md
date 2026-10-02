@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.57] — 2026-10-02
+### Added
+- **Slash commands and button pickers from the Telegram topic.** A line that starts with `/` in a paired topic now runs through a command gateway with an explicit allowlist instead of being refused. Text commands (`/help`, `/status`, `/doctor`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, ...) answer in the topic, redacted. `/model` and `/connect` arrive as inline-keyboard pickers (provider, then model); picker buttons are single-use, expire, and are bound to the session and message. `/mode trust|auto`, `/plan off`, `/delegate` and `/external*` run only after a Yes/No button press. `/new` and `/clear` start a fresh conversation in the same topic with a separator line. Commands that handle credentials or end the shell (`/exit`, `/channels`, `/provider`, `/setup`, `/mcp trust`, `/guard`, `/route`, `/editguard`, ...) stay local and the topic says so. The bot's command menu lists exactly the allowed commands. The `/remote-control` modal lists recent remote commands.
+- **Message state in the topic.** Each operator message shows its state through a Telegram reaction (received, accepted, working, done, failed) and the topic shows the "typing" action while a turn runs.
+### Changed
+- **Approval and picker prompts are edited in place.** After a press the buttons are removed and the message shows the result instead of a separate "Approval granted." message.
+
+[Changes since 0.3.56](https://github.com/MrCipherSmith/keryx/compare/v0.3.56...v0.3.57)
+
 ## [0.3.56] — 2026-10-01
 ### Changed
 - **Telegram replies are rendered as HTML.** Replies and status texts that `keryx serve` sends to Telegram were plain text, with literal `**` and backticks. They now go out with `parse_mode` `HTML`: bold, italic, strike, inline code, fenced code blocks (with their language), headings, quotes, bullets and `http(s)` links are rendered; text outside those constructs is escaped (`&`, `<`, `>`), unclosed or ambiguous markup (`snake_case_name`, `a*b*c`, a lone `**`) stays literal, and a fenced block that crosses a split is two valid `<pre>` blocks. Telegram counts the 4096-character limit after parsing, so a rendered part is never longer than the plain one. If Telegram answers 400 "can't parse entities", that one message is sent again as plain text and a `format-fallback` event is recorded. Approval prompts are sent as a code block so the operator sees exactly what they approve.

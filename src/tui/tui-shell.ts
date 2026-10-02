@@ -71,6 +71,8 @@ import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
+import { BUSY_REASON } from "../remote/command-gateway";
+import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
   type ChannelsPanelHandle,
@@ -82,6 +84,7 @@ import {
 } from "./channels-surface";
 import {
   isRemoteControlCommand,
+  commandEchoText,
   labelTelegramLine,
   mountRemotePanel,
   openRemoteControl,
@@ -5839,6 +5842,13 @@ export async function launchTuiAgentShell(opts: {
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
     const stopRemoteForSessionSwitch = (): void => {
+      // Flow 387 (AC17): a `/new`, `/clear` or `/resume` typed in the Telegram topic keeps the
+      // topic. The history interval closes on the session being left; `sessionEntered` opens
+      // the next one right after the live session is replaced.
+      if (remoteBridge?.keepingTopic === true) {
+        remoteBridge.sessionLeaving();
+        return;
+      }
       if (remoteBridge?.active !== true) return;
       // The close is asynchronous (it deregisters, which deletes the topic): say it is
       // being turned off now, and that the topic is gone only once it really is.
@@ -5861,6 +5871,7 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -6383,6 +6394,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -6398,11 +6410,9 @@ export async function launchTuiAgentShell(opts: {
       return true;
     };
 
-    const resumeSessionInteractive = async (): Promise<void> => {
-      const found = await pickRecentSession();
-      if (found === undefined) {
-        return;
-      }
+    // The body of `/resume` once a session is chosen: the interactive picker and the Telegram
+    // topic's picker (flow 387, AC17) both end here. Returns whether the switch happened.
+    const resumeFoundSession = (found: SessionSummary): boolean => {
       // Guarded, and deliberately NOT by falling back to a new session the way
       // the startup path does. The operator asked to resume a specific session;
       // losing the live one as a side effect of that request would be a second
@@ -6426,7 +6436,7 @@ export async function launchTuiAgentShell(opts: {
             hint +
             `Staying in the current session.\n`,
         );
-        return;
+        return false;
       }
       applyOpened(opened, true);
       // The previous session's slate is left as it is, not closed: this
@@ -6442,6 +6452,15 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(
         `Resumed ${shortSessionId(liveSession.summary.id)} · ${liveSession.summary.title} (ctx ${history.length} · archive ${archive.length})\n`,
       );
+      return true;
+    };
+
+    const resumeSessionInteractive = async (): Promise<void> => {
+      const found = await pickRecentSession();
+      if (found === undefined) {
+        return;
+      }
+      resumeFoundSession(found);
     };
 
     paintSessionHeader();
@@ -8067,7 +8086,8 @@ export async function launchTuiAgentShell(opts: {
         transcript.add(
           new otui.TextRenderable(r, {
             id: `c${uid++}`,
-            content: otui.t`${roleChunk(otui, "accent", `❯ ${line}`)}`,
+            // Flow 387: a command from the Telegram topic says so (`tg ❯ /model`).
+            content: otui.t`${roleChunk(otui, "accent", commandEchoText(line, source))}`,
             marginTop: 1,
           }),
         );
@@ -9343,6 +9363,41 @@ export async function launchTuiAgentShell(opts: {
       },
     });
 
+    // --- flow 387: run a command for the Telegram topic and collect what it printed -------------
+    //
+    // A slash command prints through `io.onSystem`; some finish later (they are async). The
+    // helper wraps `io.onSystem` for the duration, then waits until the output has been quiet for
+    // two beats and no turn is running. The router puts its own time limit around the whole call.
+    const captureShellOutput = async (run: () => void | Promise<void>): Promise<CommandOutcome> => {
+      const chunks: string[] = [];
+      let active = true;
+      const previous = io.onSystem;
+      const capture = (text: string): void => {
+        if (active) chunks.push(text);
+        previous?.(text);
+      };
+      io.onSystem = capture;
+      try {
+        await run();
+        let seen = chunks.length;
+        let quiet = 0;
+        while (quiet < 2 || chrome.isBusy()) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 150));
+          if (chunks.length !== seen) {
+            seen = chunks.length;
+            quiet = 0;
+          } else {
+            quiet += 1;
+          }
+        }
+      } finally {
+        active = false;
+        if (io.onSystem === capture) io.onSystem = previous;
+      }
+      const output = chunks.join("").trim();
+      return { output, ok: !/\[error\]|could not|not found/i.test(output) };
+    };
+
     // --- flow 376: remote control (the Telegram topic) -----------------------
     //
     // Created here, like `busWakeController`, because the host closes over `runLine` and
@@ -9393,6 +9448,82 @@ export async function launchTuiAgentShell(opts: {
           mainQueue = kept;
           paintMainQueue();
           return dropped.map((item) => item.question);
+        },
+        // Flow 387: slash commands and button pickers from the topic. Each member is a thin
+        // call into code the shell already has; none of them shows or accepts a credential.
+        runCommand: (line) => captureShellOutput(() => runLine(line, "operator", TG_SOURCE)),
+        busyRefusal: (line) => {
+          const command = findAgentCommand(line, "agent");
+          const decision = classifyBusyDispatch({
+            line,
+            commandName: command?.name,
+            isSessionInfo: isSessionInfoCommand(line),
+            isFlows: isFlowsCommand(line),
+            isWorkspace: isWorkspaceCommand(line),
+            isReview: isReviewCommand(line),
+            isMcp: isMcpToolsCommand(line),
+            isMcpConsumer: isMcpConsumerCommand(line),
+          });
+          // A slash line is never queued as chat from the topic, so "not a command" is a refusal too.
+          return decision === "deferred" || decision === "not-a-command" ? BUSY_REASON : undefined;
+        },
+        listProviders: async () => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const connected = await filterConnectedDetectedProviders(detected, {});
+          return connected.map((prov) => ({
+            id: prov.name,
+            label: prov.label ?? prov.name,
+            ...(prov.name === currentSel.provider ? { current: true } : {}),
+          }));
+        },
+        listModels: async (providerId) => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const name = providerId ?? currentSel.provider;
+          const prov = detected.find((d) => d.name === name);
+          if (prov === undefined) return undefined;
+          const resolved = await modelsForPicker(prov);
+          return {
+            provider: prov.label ?? prov.name,
+            models: resolved.models.map((id) => ({
+              id,
+              label: id,
+              ...(name === currentSel.provider && id === currentSel.model ? { current: true } : {}),
+            })),
+          };
+        },
+        switchModel: async (modelId, providerId) => {
+          const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
+          const name = providerId ?? currentSel.provider;
+          const prov = detected.find((d) => d.name === name);
+          if (prov === undefined) return { output: "That provider is not connected here.", ok: false };
+          const baseUrl = name === currentSel.provider ? currentSel.baseUrl : prov.baseUrl;
+          await switchTo(
+            baseUrl === undefined ? { provider: name, model: modelId } : { provider: name, model: modelId, baseUrl },
+          );
+          try {
+            await applyRuntimeSwitchToSlate({
+              slateSession,
+              runtime: { provider: currentSel.provider, model: currentSel.model },
+              history,
+              onHistoryChange: io.onHistoryChange,
+            });
+          } catch {
+            // best-effort bookkeeping around a switch that already happened, as `/model` does
+          }
+          return { output: `Model: ${currentSel.provider}/${currentSel.model}`, ok: true };
+        },
+        listSessions: async () =>
+          listSessions(sessionCwd).map((row) => ({
+            id: row.id,
+            label: `${shortSessionId(row.id)} · ${row.title}`,
+            ...(row.id === liveSession.summary.id ? { current: true } : {}),
+          })),
+        resumeSession: async (id) => {
+          const found = findSession(sessionCwd, id);
+          if (found === undefined) return { output: "Session not found in this project.", ok: false };
+          return await captureShellOutput(() => {
+            resumeFoundSession(found);
+          });
         },
         onChange: () => liveRemotePanel?.refresh(),
       },

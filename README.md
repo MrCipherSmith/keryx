@@ -1019,7 +1019,13 @@ talk to `serve` over loopback with a local shell token (new on every `serve`
 start, and never sent to an endpoint whose `serve` is gone), they never poll
 Telegram themselves, and a second `keryx serve` does not poll while the first one
 runs. At most 500 lines wait per topic, and turning it off tells the topic which
-queued lines will not run.
+queued lines will not run. From the topic you can also run a fixed list of slash
+commands (`/status`, `/model` and `/connect` as buttons, `/new`, `/clear`, `/resume`
+in the same topic); `/mode trust`, `/plan off`, `/delegate` and `/external*` run only
+after a Yes press, and commands such as `/mcp`, `/guard`, `/route` and `/provider`
+stay local. Each message shows its state as a reaction and the topic shows typing
+while a turn runs; see
+[commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
 Without a connection `serve` starts as before, with remote control off, and only
 offers the local `/channels` routes. This
 has been verified against a fake Bot API only; no run against real Telegram has
