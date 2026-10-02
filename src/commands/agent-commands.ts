@@ -194,6 +194,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 395: how replies are written for Telegram (tables, lists, the fallback chain). Also a
+    // row of /settings and a line of /channels; works in the readline REPL as text.
+    name: "/rendering",
+    description: "How Telegram replies are written: /rendering [auto|rich|html|plain]",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",

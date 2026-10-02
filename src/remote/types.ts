@@ -1,7 +1,9 @@
 // Shared types for the remote-control serve side (flow 376, block 1).
 //
 // A leaf module: nothing in `src/remote` is imported from here, so every other
-// file may depend on it without creating a cycle.
+// file may depend on it without creating a cycle. (`rich-types.ts` is a leaf too: types only.)
+
+import type { InputRichMessage } from "./rich-types";
 
 /** A Telegram user as far as this package cares: only the numeric id is read. */
 export interface BotUser {
@@ -93,6 +95,22 @@ export interface SendMessageParams {
   parseMode?: "HTML";
 }
 
+/** `sendRichMessage` (Bot API 10.3): a message made of rich blocks instead of text. */
+export interface SendRichMessageParams {
+  chatId: number;
+  richMessage: InputRichMessage;
+  messageThreadId?: number;
+  inlineKeyboard?: InlineKeyboard;
+}
+
+/** `editMessageText` with `rich_message` in place of `text` (Bot API 10.3). */
+export interface EditRichMessageParams {
+  chatId: number;
+  messageId: number;
+  richMessage: InputRichMessage;
+  inlineKeyboard?: InlineKeyboard;
+}
+
 /** One entry of the bot's command menu (`setMyCommands`). Telegram: 1-32 chars of a-z, 0-9, `_`; description 1-256. */
 export interface BotCommandMenuEntry {
   command: string;
@@ -108,6 +126,13 @@ export type BotChatAction = "typing";
 export interface BotApi {
   getUpdates(params: GetUpdatesParams): Promise<BotUpdate[]>;
   sendMessage(params: SendMessageParams): Promise<{ message_id: number }>;
+  /**
+   * Send a rich message (flow 395). Optional: a client that lacks it counts as "unsupported
+   * method", and the caller falls back to `sendMessage` with HTML.
+   */
+  sendRichMessage?(params: SendRichMessageParams): Promise<{ message_id: number }>;
+  /** Edit a message into a rich message (`editMessageText` with `rich_message`). Optional, like `sendRichMessage`. */
+  editRichMessage?(params: EditRichMessageParams): Promise<void>;
   /**
    * Replace the inline keyboard of a message the bot sent. An empty or missing `inlineKeyboard`
    * removes the buttons. Telegram answers 400 "message is not modified" when nothing changes.

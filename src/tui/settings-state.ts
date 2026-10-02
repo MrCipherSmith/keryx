@@ -13,6 +13,8 @@ import { readJevProfileForShell } from "../commands/review-jev-profile";
 import { resolveExternalSetting } from "../lib/external-switch";
 import { getProjectPermissionMode } from "../lib/permission-mode-config";
 import { loadShellConfig } from "../lib/shell-config";
+import { readRenderingSetting } from "../remote/rendering-config";
+import { DEFAULT_RENDER_MODE } from "../remote/rendering-mode";
 import { readJevEditGuardConfig } from "../review/jev-edit-guard-config";
 import { RECOMMENDED_JEV_PROFILE } from "../review/jev-profile";
 import { resolveThinkDisplayMode, type ThinkDisplayMode } from "./reasoning-display";
@@ -34,6 +36,15 @@ function readReasoning(sessionOverride: string | undefined, globalEffort: string
   // Without the session override, who wins next start: the variable, or the saved value?
   const afterRestart = describeReasoningEffortSource({ globalEffort });
   return resolved.source === "session" && afterRestart.source === "env" ? { ...resolved, envWinsOnRestart: true } : resolved;
+}
+
+function readRendering(dir: string | undefined): SettingsSnapshot["rendering"] {
+  try {
+    const { mode, saveable } = readRenderingSetting(dir);
+    return { mode, saveable };
+  } catch {
+    return { mode: DEFAULT_RENDER_MODE, saveable: false };
+  }
 }
 
 async function orElse<T>(read: () => Promise<T>, fallback: T): Promise<T> {
@@ -69,5 +80,6 @@ export async function loadSettingsSnapshot(cwd: string, live: LiveSettings, conf
       total: RECOMMENDED_JEV_PROFILE.length,
     },
     externalAgents: agents.ok ? { on: true } : { on: false, reason: agents.reason },
+    rendering: readRendering(configDir),
   };
 }

@@ -171,6 +171,7 @@ import {
   renderExternalStatusLines,
   runExternalAgentsCommand,
 } from "./external-command";
+import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
 import { loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveJevApiKey } from "../harness/decision/jev-client";
@@ -7303,6 +7304,7 @@ export async function launchTuiAgentShell(opts: {
         route: setRoutingEnabled,
         external: setExternalEnabled,
         externalAgents: (arg) => runExternalAgentsCommand(arg, sessionCwd),
+        rendering: (arg) => runRenderingCommand(arg),
         reasoning: runReasoningCommand,
         think: runThinkCommand,
         theme: runThemeCommand,
@@ -8649,6 +8651,13 @@ export async function launchTuiAgentShell(opts: {
             return;
           }
           showEditGuard();
+          return;
+        }
+        if (isRenderingCommand(command.name)) {
+          // flow 395: how Telegram replies are written. Bare prints the mode and what each does;
+          // with a mode it saves it, and serve reads it before the next message part.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ");
+          io.onSystem?.(runRenderingCommand(arg));
           return;
         }
         if (isExternalAgentsCommand(command.name)) {

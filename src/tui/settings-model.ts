@@ -9,6 +9,7 @@
 
 import { REASONING_EFFORT_LEVELS, type ReasoningEffortLevel, type ReasoningEffortSource } from "../commands/agent";
 import { PERMISSION_MODES, type PermissionMode } from "../commands/permission-mode";
+import { RENDER_MODES, type RenderMode } from "../remote/rendering-mode";
 import { THINK_DISPLAY_MODES, type ThinkDisplayMode } from "./reasoning-display";
 import { THEME_IDS, type ThemeId } from "./theme";
 
@@ -66,6 +67,8 @@ export interface SettingsSnapshot {
   jevProfile: { on: number; total: number };
   /** `reason` is why the runtime is off, when it is. */
   externalAgents: { on: boolean; reason?: string };
+  /** How Telegram replies are written (flow 395). `saveable`: a remote config exists to hold a change. */
+  rendering: { mode: RenderMode; saveable: boolean };
 }
 
 const onOff = (value: boolean): string => (value ? "on" : "off");
@@ -223,6 +226,17 @@ export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
       command: "/external-agents",
       usage: "/external-agents [on|off]",
       actions: toggleActions("/external-agents", state.externalAgents.on),
+    },
+    {
+      id: "rendering",
+      group: "External",
+      label: "Telegram rendering",
+      value: state.rendering.mode,
+      scope: "saved",
+      ...(state.rendering.saveable ? {} : { detail: "remote control is not set up yet" }),
+      command: "/rendering",
+      usage: `/rendering [${RENDER_MODES.join("|")}]`,
+      actions: RENDER_MODES.map((mode) => action(mode, `/rendering ${mode}`, mode === state.rendering.mode)),
     },
     {
       id: "jevprofile",

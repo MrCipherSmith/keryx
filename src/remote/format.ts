@@ -26,7 +26,15 @@
 //     codepoint emoji sequence inside one 4000-character unbroken run can still
 //     be cut between its codepoints; ordinary text does not reach that path.
 //   - Empty or whitespace-only input produces no message at all.
+//   - A Markdown table is kept whole (flow 395): a split falls between rows, never inside
+//     one, and the header and separator rows are repeated at the top of the next part. Length
+//     is counted as the text will be RENDERED, not as written: the aligned `<pre>` layout pads
+//     every cell and a horizontal rule is drawn longer than `---`, so those are charged at their
+//     rendered length and a part still fits the limit once Telegram has parsed it. The same
+//     parts serve every rendering mode (the rich table block is never longer than the padded one).
 
+import { RULE, RULE_LENGTH } from "./format-blocks";
+import { tableAt, tableCosts } from "./format-table";
 import { TELEGRAM_MAX_TEXT } from "./types";
 
 /** Smallest limit the splitter accepts: room for a label, a fence and some text. */
@@ -43,10 +51,22 @@ interface Fence {
   header: string;
 }
 
+/** A table that is split across parts: what is repeated at the top of each continuation. */
+interface TableRun {
+  /** The header and separator source lines, newline kept. */
+  headerSource: string;
+  /** Rendered length of the header row. */
+  headerCost: number;
+}
+
 interface Piece {
   text: string;
   /** The fence in force after this piece, if a block is open. */
   fence: Fence | undefined;
+  /** Length once rendered; the text's own length unless it is a table row or a rule. */
+  cost: number;
+  /** Set on every piece of a table. */
+  table?: TableRun;
 }
 
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -107,12 +127,40 @@ function cutAt(text: string, max: number): number {
 /** Break the text into lines (newline kept) and break any line that cannot fit in one part. */
 function toPieces(text: string, capacity: number): Piece[] {
   const pieces: Piece[] = [];
+  const raws = text.split(/(?<=\n)/);
+  const bare = raws.map((raw) => (raw.endsWith("\n") ? raw.slice(0, -1) : raw));
   let fence: Fence | undefined;
-  for (const raw of text.split(/(?<=\n)/)) {
-    const line = raw.endsWith("\n") ? raw.slice(0, -1) : raw;
+  for (let at = 0; at < raws.length; at += 1) {
+    const raw = raws[at] as string;
+    const line = bare[at] as string;
     const before = fence;
     if (fence === undefined) {
       fence = openingFence(line);
+      if (fence === undefined) {
+        const found = tableAt(bare, at);
+        if (found !== undefined) {
+          const costs = tableCosts(found.table);
+          const headerCost = costs.header;
+          const widest = Math.max(...costs.rows, 0);
+          if (headerCost + widest <= capacity) {
+            const run: TableRun = { headerSource: `${raw}${raws[at + 1] as string}`, headerCost };
+            // The header, the separator and the first row go together: a part is never only a header.
+            const rows = found.table.rows;
+            const leadEnd = at + 2 + (rows.length > 0 ? 1 : 0);
+            pieces.push({
+              text: raws.slice(at, leadEnd).join(""),
+              fence: undefined,
+              cost: headerCost + (costs.rows[0] ?? 0),
+              table: run,
+            });
+            for (let row = leadEnd; row < found.end; row += 1) {
+              pieces.push({ text: raws[row] as string, fence: undefined, cost: costs.rows[row - at - 2] as number, table: run });
+            }
+            at = found.end - 1;
+            continue;
+          }
+        }
+      }
     } else if (closesFence(line, fence)) {
       fence = undefined;
     }
@@ -121,26 +169,38 @@ function toPieces(text: string, capacity: number): Piece[] {
     let rest = raw;
     while (rest.length > room) {
       const cut = cutAt(rest, room);
-      pieces.push({ text: rest.slice(0, cut), fence: before ?? fence });
+      pieces.push({ text: rest.slice(0, cut), fence: before ?? fence, cost: cut });
       rest = rest.slice(cut);
     }
     if (rest.length > 0) {
-      pieces.push({ text: rest, fence });
+      const rule = before === undefined && fence === undefined && RULE.test(line);
+      pieces.push({ text: rest, fence, cost: rule ? Math.max(rest.length, RULE_LENGTH + (rest.endsWith("\n") ? 1 : 0)) : rest.length });
     }
   }
   return pieces;
 }
 
+/**
+ * The length of `text` as it will be rendered, counting a table row at its padded width and a
+ * rule at its drawn width. Equal to `text.length` when the text has neither.
+ */
+export function renderedLength(text: string): number {
+  return toPieces(text.replace(/\r\n?/g, "\n"), Number.POSITIVE_INFINITY).reduce((sum, piece) => sum + piece.cost, 0);
+}
+
 function pack(text: string, capacity: number): string[] {
   const parts: string[] = [];
   let current = "";
+  let used = 0;
   let hasContent = false;
   let open: Fence | undefined;
+  let lastTable: TableRun | undefined;
 
-  const finish = (): void => {
+  const finish = (next?: Piece): void => {
     let body = current.trimEnd();
     if (!hasContent || body.length === 0) {
       current = "";
+      used = 0;
       hasContent = false;
       return;
     }
@@ -149,6 +209,12 @@ function pack(text: string, capacity: number): string[] {
     }
     parts.push(body);
     current = open === undefined ? "" : `${open.header}\n`;
+    used = open === undefined ? 0 : open.header.length + 1;
+    // A table that goes on in the next part starts it with its header again.
+    if (open === undefined && next?.table !== undefined && next.table === lastTable) {
+      current = next.table.headerSource;
+      used = next.table.headerCost;
+    }
     hasContent = false;
   };
 
@@ -157,15 +223,17 @@ function pack(text: string, capacity: number): string[] {
       continue;
     }
     const closing = piece.fence === undefined ? 0 : piece.fence.marker.length + 1;
-    if (hasContent && current.length + piece.text.length + closing > capacity) {
-      finish();
+    if (hasContent && used + piece.cost + closing > capacity) {
+      finish(piece);
       if (piece.text.trim().length === 0) {
         continue;
       }
     }
     current += piece.text;
+    used += piece.cost;
     hasContent = true;
     open = piece.fence;
+    lastTable = piece.table;
   }
   finish();
   return parts;
@@ -184,7 +252,7 @@ export function formatReply(text: string, limit: number = TELEGRAM_MAX_TEXT): st
   if (text.trim().length === 0) {
     return [];
   }
-  if (text.length <= limit) {
+  if (renderedLength(text) <= limit) {
     return [text];
   }
   // The label "(i/n)\n" takes 2d+4 units for d-digit numbers; try d = 1, 2, 3 until the count fits.

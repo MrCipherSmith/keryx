@@ -1044,8 +1044,16 @@ after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
 while a turn runs; see
 [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
 Without a connection `serve` starts as before, with remote control off, and only
-offers the local `/channels` routes. This
-has been verified against a fake Bot API only; no run against real Telegram has
+offers the local `/channels` routes. Replies are rendered in one of four modes,
+`remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
+`/settings` row **Telegram rendering**: a table goes out as a native Telegram rich
+message in `auto` and `rich` (an aligned `<pre>` block in HTML), ordered and nested
+lists, task items and rules keep their shape, and a refused rich message falls back
+once to HTML and once to plain text, so a reply is never dropped. `keryx remote
+format-sample` prints the sample in every mode with no network, and `/channels`
+shows the mode and the last fallback; see
+[how replies look in Telegram](docs/docs/guides/drive-keryx-remotely.md#how-replies-look-in-telegram).
+This has been verified against a fake Bot API only; no run against real Telegram has
 been done yet. Setup and limits:
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram).
 

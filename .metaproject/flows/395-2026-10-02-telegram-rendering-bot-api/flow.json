@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "395",
+  "slug": "telegram-rendering-bot-api",
+  "title": "Telegram rendering via the current Bot API",
+  "status": "implemented",
+  "createdAt": "2026-10-02T15:39:32.323Z",
+  "updatedAt": "2026-10-02T19:06:15.258Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:64668d3deef0a41ff68a151d69823856342dd6d0d61ded08a5d06de35c02391b",
+  "acConfirmed": {},
+  "pr": {
+    "url": "863"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Ответ на АС13 : читаемы, есть разбиение Ок. Но создан отдельно или добавлено во фло сделать рендеринг красивым на основании свежего апи телеграмма",
+    "source": "operator message 177577, 2026-10-02 06:08 UTC"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T15:39:32.323Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T15:53:46.345Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T15:53:46.835Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T16:44:42.659Z",
+      "event": "implemented",
+      "detail": "draft PR: 863 (base: main)"
+    },
+    {
+      "at": "2026-10-02T19:06:15.258Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"Text without a table, a numbered or nested list, a task item or a rule renders byte-for-byte as it does in 0.3.63, and the existing format, HTML and outbound tests pass unchanged. [verify: invariant `bun test src/remote/format.test.ts src/remote/format-html.test.ts src/remote/outbound-html.test.ts`]\" -> \"Text without a table, a numbered or nested list, a task item or a rule renders byte-for-byte as it does in 0.3.63, except one case: a link whose visible label reads as a web address (starts with http:// or https://, or www., or is a host with a dot) for a different host than its target gets the target host written after it, as ' (→ host)'; every other link is unchanged. The existing format, HTML and outbound tests pass unchanged. [verify: invariant `bun test src/remote/format.test.ts src/remote/format-html.test.ts src/remote/outbound-html.test.ts`]\" (Operator poll 46: S-002 is fixed in this PR, so a link with a URL-like label for another host deliberately renders differently from 0.3.63; carve out exactly that case)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/remote/rendering-spike.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/remote/format-table.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/remote/format-html.test.ts src/remote/format-rich.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/remote/format-html.test.ts src/remote/format-property.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/remote/outbound-rich.test.ts src/remote/outbound-html.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/remote/format.test.ts src/remote/format-table.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/remote/config.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/tui src/remote/format-sample.test.ts"
+    },
+    "AC9": {
+      "kind": "invariant",
+      "check": "bun test src/remote/format.test.ts src/remote/format-html.test.ts src/remote/outbound-html.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/remote/rendering-docs.test.ts"
+    },
+    "AC11": {
+      "kind": "judged"
+    }
+  },
+  "baseBranch": "main"
+}

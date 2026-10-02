@@ -9,6 +9,8 @@ import { join } from "node:path";
 import { writeProjectExternalSetting } from "../lib/external-switch";
 import { setProjectPermissionMode } from "../lib/permission-mode-config";
 import { saveShellConfig } from "../lib/shell-config";
+import { saveRemoteConfig } from "../remote/config";
+import { testConfig } from "../remote/remote.test-helpers";
 import { writeJevEditGuardEnabled } from "../review/jev-edit-guard-config";
 import { loadSettingsSnapshot } from "./settings-state";
 
@@ -99,4 +101,23 @@ test("a session choice with the variable set is flagged: the variable wins again
   delete process.env.KERYX_REASONING_EFFORT;
   const saved = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false, reasoningOverride: "low" }, configDir);
   expect(saved.reasoning).toEqual({ effort: "low", source: "session" });
+});
+
+// ---- flow 395: the Telegram rendering row reads the remote config ---------------------------
+
+test("no remote config: rendering reads as auto and cannot be saved yet", async () => {
+  const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(snapshot.rendering).toEqual({ mode: "auto", saveable: false });
+});
+
+test("a remote config without the key: auto, and saveable", async () => {
+  saveRemoteConfig(testConfig(), configDir);
+  const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(snapshot.rendering).toEqual({ mode: "auto", saveable: true });
+});
+
+test("a saved mode is what the row shows", async () => {
+  saveRemoteConfig(testConfig({ rendering: "html" }), configDir);
+  const snapshot = await loadSettingsSnapshot(cwd, { permissionMode: "ask", plan: false }, configDir);
+  expect(snapshot.rendering).toEqual({ mode: "html", saveable: true });
 });

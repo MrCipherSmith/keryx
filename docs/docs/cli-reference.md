@@ -6848,6 +6848,27 @@ size, it does not implement AC-29's tombstone/forget semantics.
 
 ---
 
+## remote
+
+Previews how a reply is written for the Telegram remote control, without
+sending anything. It needs no bot token, no network and no running session.
+
+```
+keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `format-sample` | `--mode <mode>`, `--full`, `--json` | Prints one fixed reply (a heading, a table, a numbered list with a nested bullet, task items, a rule and a quote) the way each rendering mode would send it. `--mode` limits it to one mode, `--full` prints the whole rich message as JSON instead of a count of its blocks, `--json` is machine-readable. An unknown `--mode` exits `1` and names the valid ones. |
+
+The mode a running session uses is the `remote.rendering` setting (`auto`,
+`rich`, `html` or `plain`; default `auto`). Change it with `/rendering <mode>`
+in the shell or the "Telegram rendering" row of `/settings`; `/channels` shows
+the mode in effect and the last fallback. See
+[Drive keryx remotely](./guides/drive-keryx-remotely.md#how-replies-look-in-telegram).
+
+---
+
 ## forgetting
 
 Read the deletion trail at `.metaproject/data/forgetting/journal.jsonl` — what

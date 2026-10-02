@@ -97,6 +97,7 @@ import { exportCallerSession } from "../lib/caller-session";
 import { collapseHome } from "../lib/statusbar";
 import { metaprojectIncompleteNotice } from "../lib/metaproject-state";
 import { LiveMarkdownBlock } from "../lib/live-render";
+import { isRenderingCommand, runRenderingCommand } from "../tui/rendering-command";
 import { buildSettingsRows, formatSettingsTable } from "../tui/settings-model";
 import { loadSettingsSnapshot } from "../tui/settings-state";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -269,6 +270,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/reviews",
   "/remote-control",
   "/channels",
+  "/rendering",
   "/theme",
   "/settings",
   "/mode",
@@ -2688,6 +2690,9 @@ export async function runAgentRepl(
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));
+      } else if (isRenderingCommand(command)) {
+        // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
+        agentIo.onSystem?.(runRenderingCommand(rest));
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([

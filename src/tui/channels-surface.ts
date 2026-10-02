@@ -11,7 +11,7 @@
 // never put in a notice, a status line or an error.
 
 import type { ChannelsClient, ChannelsLocalFiles } from "../remote/channels-client";
-import type { PairingResponse } from "../remote/protocol";
+import type { ChannelsRendering, PairingResponse } from "../remote/protocol";
 import { smallActionButton } from "./action-button";
 import { openModal, type ModalHandle } from "./modal-host";
 import { CONFIRM_MIN_GAP_MS } from "./settings-modal";
@@ -56,6 +56,8 @@ export interface ChannelsSnapshot {
   configured: boolean;
   machine?: string;
   sessions?: number;
+  /** Flow 395: the rendering mode in effect and the last fallback, when serve reported them. */
+  rendering?: ChannelsRendering;
   /** Serve's or the client's own plain-language reason. */
   reason?: string;
 }
@@ -71,6 +73,7 @@ export async function loadChannelsSnapshot(client: Pick<ChannelsApi, "status" | 
       configured: telegram.state !== "not-connected" || local.tokenFile || local.configFile,
       machine,
       sessions: telegram.sessions,
+      ...(telegram.rendering !== undefined ? { rendering: telegram.rendering } : {}),
       ...(telegram.reason !== undefined ? { reason: telegram.reason } : {}),
     };
   }
@@ -112,6 +115,32 @@ export function projectChannelsRow(snapshot: ChannelsSnapshot | undefined, width
   }
 }
 
+/** What each mode does, in the words the operator sees next to it. */
+const RENDERING_MEANING: Record<ChannelsRendering["mode"], string> = {
+  auto: "rich for a reply with a table, HTML otherwise",
+  rich: "every reply as a rich message",
+  html: "every reply as Telegram HTML",
+  plain: "every reply as plain text",
+};
+
+/** `HH:MM:SS` UTC of an epoch, the one clock a fallback line needs. */
+function clock(at: number): string {
+  return `${new Date(at).toISOString().slice(11, 19)} UTC`;
+}
+
+/** Flow 395: the rendering mode in effect and the last fallback (step, reason, time). */
+export function renderingLines(rendering: ChannelsRendering | undefined): string[] {
+  if (rendering === undefined) return [];
+  const last = rendering.lastFallback;
+  const step = last?.step === "rich-to-html" ? "rich to HTML" : "HTML to plain text";
+  return [
+    `Rendering: ${rendering.mode} (${RENDERING_MEANING[rendering.mode]}). Change it in /settings.`,
+    last === undefined
+      ? "Last fallback: none since keryx serve started."
+      : `Last fallback: ${step} at ${clock(last.at)}: ${last.reason}`,
+  ];
+}
+
 /** The status block shared by the modal's list view and the readline text. */
 export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
   const machine = snapshot.machine === undefined ? [] : [`Machine: ${snapshot.machine}`];
@@ -138,6 +167,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
         "Telegram: connected",
         ...machine,
         `Sessions in Telegram: ${snapshot.sessions ?? 0}`,
+        ...renderingLines(snapshot.rendering),
         "Test sends one message to the General topic. Disconnect deletes the topics and erases the token.",
         "Sessions join through /remote-control in each shell.",
       ];
@@ -146,6 +176,7 @@ export function channelsStatusLines(snapshot: ChannelsSnapshot): string[] {
         "Telegram: configured, but not running",
         ...machine,
         ...(snapshot.reason === undefined ? [] : [`Why: ${snapshot.reason}`]),
+        ...renderingLines(snapshot.rendering),
         "Retry starts it again from the saved token and config. Disconnect erases them. Test works once Telegram is running.",
       ];
     case "serve-down":

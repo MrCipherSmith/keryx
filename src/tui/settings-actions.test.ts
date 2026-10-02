@@ -27,6 +27,7 @@ const STATE: SettingsSnapshot = {
   theme: "auto",
   jevProfile: { on: 0, total: 9 },
   externalAgents: { on: false, reason: "not enabled" },
+  rendering: { mode: "auto", saveable: true },
 };
 
 function recorder(overrides: Partial<SettingsActionHandlers> = {}) {
@@ -43,6 +44,10 @@ function recorder(overrides: Partial<SettingsActionHandlers> = {}) {
     externalAgents: async (arg) => {
       calls.push(`external-agents:${arg}`);
       return "External agents: enabled\n";
+    },
+    rendering: (arg) => {
+      calls.push(`rendering:${arg}`);
+      return "Telegram rendering: ok\n";
     },
     reasoning: (arg) => void calls.push(`reasoning:${arg}`),
     think: (arg) => void calls.push(`think:${arg}`),
@@ -67,6 +72,7 @@ test("every line the rows can produce reaches exactly one handler", async () => 
   expect(r.calls).toContain("external:on");
   expect(r.calls).toContain("external-agents:on");
   expect(r.calls).toContain("reasoning:high");
+  for (const mode of ["auto", "rich", "html", "plain"]) expect(r.calls).toContain(`rendering:${mode}`);
   expect(r.calls).toContain("think:hide");
   expect(r.calls).toContain("theme:auto");
   // One handler per line: nothing ran twice.
@@ -126,6 +132,13 @@ test("/external-agents prints the command's own text", async () => {
   const r = recorder();
   await runSettingsCommand("/external-agents on", r.handlers);
   expect(r.system).toEqual(["External agents: enabled\n"]);
+});
+
+test("/rendering prints the command's own text (flow 395)", async () => {
+  const r = recorder();
+  await runSettingsCommand("/rendering rich", r.handlers);
+  expect(r.calls).toEqual(["rendering:rich"]);
+  expect(r.system).toEqual(["Telegram rendering: ok\n"]);
 });
 
 test("a rejecting handler is reported through onSystem and never escapes", async () => {

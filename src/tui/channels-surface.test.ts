@@ -21,6 +21,7 @@ import {
   parseChannelsArgs,
   projectChannelsRow,
   readlineChannelsText,
+  renderingLines,
   type ChannelsApi,
   type ChannelsSnapshot,
 } from "./channels-surface";
@@ -747,4 +748,58 @@ otuiTest("working: Esc is swallowed, the modal stays until the call finishes", a
     modal?.close();
     h.destroy();
   }
+});
+
+// ---- flow 395 (AC8): the rendering mode and the last fallback -----------------------------
+
+test("renderingLines: nothing when serve did not report a mode", () => {
+  expect(renderingLines(undefined)).toEqual([]);
+});
+
+test("renderingLines: the mode in effect with what it means, and no fallback yet", () => {
+  const lines = renderingLines({ mode: "auto" });
+  expect(lines[0]).toBe("Rendering: auto (rich for a reply with a table, HTML otherwise). Change it in /settings.");
+  expect(lines[1]).toBe("Last fallback: none since keryx serve started.");
+});
+
+test("renderingLines: the last fallback names its step, its time and its reason", () => {
+  const rich = renderingLines({ mode: "rich", lastFallback: { step: "rich-to-html", reason: "Bad Request: rich_message is invalid", at: T0 } });
+  expect(rich[1]).toBe("Last fallback: rich to HTML at 12:00:00 UTC: Bad Request: rich_message is invalid");
+  const plain = renderingLines({ mode: "html", lastFallback: { step: "html-to-plain", reason: "can't parse entities", at: T0 + 61_000 } });
+  expect(plain[1]).toBe("Last fallback: HTML to plain text at 12:01:01 UTC: can't parse entities");
+});
+
+test("every mode has a meaning line", () => {
+  for (const mode of ["auto", "rich", "html", "plain"] as const) {
+    expect(renderingLines({ mode })[0]).toContain(`Rendering: ${mode} (`);
+  }
+});
+
+test("the status block of a connected or stopped Telegram carries the rendering lines; not-connected does not", () => {
+  const rendering = { mode: "plain" as const, lastFallback: { step: "html-to-plain" as const, reason: "x", at: T0 } };
+  for (const state of ["connected", "off"] as const) {
+    const text = channelsStatusLines({ state, configured: true, rendering }).join("\n");
+    expect(text).toContain("Rendering: plain");
+    expect(text).toContain("Last fallback: HTML to plain text");
+  }
+  expect(channelsStatusLines({ state: "not-connected", configured: false, rendering }).join("\n")).not.toContain("Rendering:");
+});
+
+test("loadChannelsSnapshot carries what serve reported, and the readline text shows it", async () => {
+  const reported = ok<ChannelsStatusResponse>({
+    schemaVersion: "1",
+    machine: "devbox",
+    telegram: { state: "connected", sessions: 1, rendering: { mode: "rich", lastFallback: { step: "rich-to-html", reason: "unsupported", at: T0 } } },
+  });
+  const snapshot = await loadChannelsSnapshot({ status: async () => reported, localFiles: () => ({ tokenFile: true, configFile: true }) });
+  expect(snapshot.rendering).toEqual({ mode: "rich", lastFallback: { step: "rich-to-html", reason: "unsupported", at: T0 } });
+  const text = readlineChannelsText("/channels", snapshot);
+  expect(text).toContain("Rendering: rich");
+  expect(text).toContain("Last fallback: rich to HTML at 12:00:00 UTC: unsupported");
+});
+
+test("loadChannelsSnapshot without a reported mode has none, and the lines stay silent", async () => {
+  const snapshot = await loadChannelsSnapshot({ status: async () => ok(status("connected")), localFiles: () => ({ tokenFile: true, configFile: true }) });
+  expect(snapshot.rendering).toBeUndefined();
+  expect(readlineChannelsText("/channels", snapshot)).not.toContain("Rendering:");
 });

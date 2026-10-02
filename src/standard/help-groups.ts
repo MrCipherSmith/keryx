@@ -550,6 +550,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     group: "Automation",
     summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",
   },
+  {
+    kind: "slash",
+    name: "/rendering",
+    group: "Automation",
+    summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",
+  },
 
   // ---- External agents, ACP and MCP ----------------------------------------
   {
@@ -745,6 +751,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "retention",
     group: "Maintenance and diagnostics",
     summary: "Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars).",
+  },
+  {
+    kind: "cli",
+    name: "remote",
+    group: "Automation",
+    summary: "Preview how Telegram replies are rendered (tables, lists, rules) in every mode, with no network: format-sample.",
   },
   {
     kind: "cli",
