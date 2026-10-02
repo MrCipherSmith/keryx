@@ -7,7 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import { FakeBotApi } from "./fake-bot-api";
 import { OutboundQueue, type OutboundEntry } from "./outbound-queue";
-import { editRendered, type RenderFallback, RenderingState, RICH_PAUSE_MS, sendRendered } from "./rendering";
+import { editRendered, MAX_REASON_LENGTH, type RenderFallback, RenderingState, RICH_PAUSE_MS, RICH_SERVER_ATTEMPTS, sendRendered } from "./rendering";
 import { makeRemoteDir } from "./remote.test-helpers";
 import { type RenderMode } from "./rendering-mode";
 import { type BotApi, BotApiError } from "./types";
@@ -112,6 +112,14 @@ describe("explicit modes", () => {
     expect(api.callCount("sendRichMessage")).toBe(1);
   });
 });
+
+function queueOver(api: FakeBotApi, state: RenderingState): OutboundQueue {
+  const dir = makeRemoteDir();
+  dirs.push(dir);
+  const queue = new OutboundQueue({ api, dir, now: () => 1, rendering: state });
+  queue.load();
+  return queue;
+}
 
 describe("a refusal falls to HTML, once, with the same text (AC5)", () => {
   test("a 400 on the blocks resends the part as HTML and records why", async () => {
@@ -383,5 +391,88 @@ describe("the durable queue", () => {
         expect(table.cells[0]?.[0]?.text).toBe("id");
       }
     }
+  });
+});
+
+describe("an error of one chat or topic is not a refusal of rich (R-4)", () => {
+  const A = 11;
+
+  for (const [name, status, text] of [
+    ["403 bot kicked", 403, "Forbidden: bot was kicked from the supergroup chat"],
+    ["403 bot blocked", 403, "Forbidden: bot was blocked by the user"],
+    ["404 chat not found", 404, "Not Found: chat not found"],
+    ["400 thread not found", 400, "Bad Request: message thread not found"],
+  ] as const) {
+    test(`${name} for topic A leaves topic B on rich, with nothing paused or recorded`, async () => {
+      const { api, hooks, seen, state } = setup();
+      api.failNext("sendRichMessage", rejected("sendRichMessage", status, text));
+      api.failNext("sendMessage", rejected("sendMessage", status, text));
+      await expect(sendRendered(api, { ...CHAT, messageThreadId: A, text: TABLE }, hooks)).rejects.toBeInstanceOf(BotApiError);
+      expect(state.richPausedReason()).toBeUndefined();
+      expect(state.lastFallback()).toBeUndefined();
+      expect(seen).toEqual([]);
+
+      const topicB = await api.createForumTopic({ chatId: 1, name: "B" });
+      await sendRendered(api, { ...CHAT, messageThreadId: topicB.message_thread_id, text: TABLE }, hooks);
+      expect(api.callCount("sendRichMessage")).toBe(2);
+      expect(api.sent.at(-1)?.richMessage).toBeDefined();
+      expect(seen).toEqual([]);
+    });
+  }
+
+  test("a bare 404 is the method missing: rich is paused for every chat", async () => {
+    const { api, hooks, state } = setup();
+    api.setRichSupport("unsupported");
+    await sendRendered(api, { ...CHAT, text: TABLE }, hooks);
+    expect(state.richPausedReason()).toBeDefined();
+  });
+});
+
+describe("a rich gateway that stays down does not stall the queue (R-5)", () => {
+  test(`a 502 on the rich method is retried ${RICH_SERVER_ATTEMPTS - 1} times by the queue, then the part goes as HTML and the head is acked`, async () => {
+    const { api, state } = setup();
+    const queue = queueOver(api, state);
+    queue.enqueue({ chatId: 1, text: TABLE });
+    api.failNext("sendRichMessage", new BotApiError("server", "sendRichMessage: 502 Bad Gateway", { status: 502 }), 99);
+    for (let attempt = 1; attempt < RICH_SERVER_ATTEMPTS; attempt += 1) {
+      expect(await queue.flush()).toMatchObject({ sent: 0, remaining: 1 });
+    }
+    expect(await queue.flush()).toMatchObject({ sent: 1, remaining: 0 });
+    expect(api.callCount("sendRichMessage")).toBe(RICH_SERVER_ATTEMPTS);
+    expect(api.sent).toHaveLength(1);
+    expect(api.sent[0]?.parseMode).toBe("HTML");
+    expect(state.lastFallback()?.step).toBe("rich-to-html");
+  });
+
+  test("a different message starts its own count", async () => {
+    const { api, hooks } = setup();
+    const gateway = new BotApiError("server", "sendRichMessage: 502 Bad Gateway", { status: 502 });
+    api.failNext("sendRichMessage", gateway, 99);
+    for (let attempt = 1; attempt < RICH_SERVER_ATTEMPTS; attempt += 1) {
+      await expect(sendRendered(api, { ...CHAT, text: TABLE }, hooks)).rejects.toBe(gateway);
+    }
+    await expect(sendRendered(api, { ...CHAT, text: `${TABLE}\n| more | row |` }, hooks)).rejects.toBe(gateway);
+    expect(api.sent).toHaveLength(0);
+  });
+});
+
+describe("the stored reason is short and never echoes the message (S-001)", () => {
+  test("only the status and the text before the first quotation mark are kept, at most 200 characters", async () => {
+    const { api, hooks, seen } = setup();
+    const echoed = `Bad Request: can't parse entities: Can't find end tag corresponding to start tag "${"secret text ".repeat(60)}"`;
+    api.failNext("sendRichMessage", rejected("sendRichMessage", 400, "Bad Request: rich_message is invalid"));
+    api.failNext("sendMessage", rejected("sendMessage", 400, echoed));
+    await sendRendered(api, { ...CHAT, text: TABLE }, hooks);
+    expect(seen.map((fallback) => fallback.step)).toEqual(["rich-to-html", "html-to-plain"]);
+    const reason = seen[1]?.reason ?? "";
+    expect(reason).toBe("400 Bad Request: can't parse entities: Can't find end tag corresponding to start tag");
+    expect(reason).not.toContain("secret");
+  });
+
+  test("a description without a quote is capped at 200 characters", async () => {
+    const { api, hooks, seen } = setup();
+    api.failNext("sendRichMessage", rejected("sendRichMessage", 400, `Bad Request: ${"x".repeat(900)}`));
+    await sendRendered(api, { ...CHAT, text: TABLE }, hooks);
+    expect(seen[0]?.reason.length).toBeLessThanOrEqual(MAX_REASON_LENGTH);
   });
 });
