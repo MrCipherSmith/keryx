@@ -94,6 +94,9 @@ async function run(shell: InteractiveTool): Promise<{ history: NormalizedMessage
     tools: [shell, bulkTool],
     systemInstruction: "sys",
     idSeq: () => `id-${n++}`,
+    // Flow 387 review r3 F-024: pruneArchive only prunes when the host handles
+    // onContextCompaction, exactly as run-ablation-long.ts's real deps do.
+    onContextCompaction: () => {},
   };
   const history: NormalizedMessage[] = [];
   await runAgentTurn(io, deps, history, "go", longTurnOptions(sessionDir, root) as Parameters<typeof runAgentTurn>[4]);
