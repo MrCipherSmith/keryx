@@ -142,11 +142,18 @@ export interface NormalizedUsage {
    * OpenAI documents as a SUBSET of `inputTokens` (never additional to it —
    * a cache hit is still an input token, just billed at a discount).
    * Absent when the provider did not report it. Anthropic's own cache-read
-   * count (`cache_read_input_tokens`) is ADDITIONAL to its `input_tokens`,
-   * not a subset — a different accounting shape this field does not (yet)
-   * carry; out of scope for L-11, which names only the OpenAI adapter.
+   * count (`cache_read_input_tokens`) is ADDITIONAL to its `input_tokens` on
+   * the wire; the Anthropic adapter folds it into `inputTokens` (flow 387 T15)
+   * so this field is a subset there too.
    */
   cacheReadTokens?: number;
+  /**
+   * Cache-write (prompt-cache creation) input tokens (flow 387 T15). Filled by
+   * the Anthropic adapter from `cache_creation_input_tokens`; like
+   * `cacheReadTokens` it is a SUBSET of `inputTokens` (the adapter folds
+   * Anthropic's additional counts into `inputTokens`).
+   */
+  cacheWriteTokens?: number;
   /** True only when the counts above are provider-reported exact values. */
   exact?: boolean;
 }

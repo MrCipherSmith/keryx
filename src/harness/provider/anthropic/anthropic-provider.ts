@@ -341,9 +341,95 @@ function parseToolInput(rawArguments: string): Record<string, unknown> {
   }
 }
 
-/** Merge Anthropic's split token counts into a single exact {@link NormalizedUsage}. */
-function mergeUsage(inputTokens: number | undefined, outputTokens: number | undefined): NormalizedUsage {
+/** Anthropic allows at most 4 `cache_control` breakpoints per request. */
+const MAX_CACHE_BREAKPOINTS = 4;
+const CACHE_CONTROL = { type: "ephemeral" } as const;
+
+/** Block types Anthropic refuses `cache_control` on (or ignores as empty). */
+function isCacheableBlock(block: Record<string, unknown>): boolean {
+  const type = block.type;
+  if (type === "thinking" || type === "redacted_thinking") {
+    return false;
+  }
+  return !(type === "text" && (typeof block.text !== "string" || block.text.length === 0));
+}
+
+/**
+ * Place ephemeral `cache_control` breakpoints (flow 387 T15): the system
+ * prompt, the last tool definition, and the last two messages' final block —
+ * 4 breakpoints at most, so each round reads the previous round's prefix from
+ * cache. Placement is a pure function of the inputs (no counters, no clocks), so
+ * the prefix stays byte-stable across rounds. Returns new objects; the inputs
+ * are never mutated.
+ */
+export function withCacheBreakpoints(
+  system: string,
+  messages: readonly Record<string, unknown>[],
+  tools: readonly Record<string, unknown>[] | undefined,
+): {
+  system: string | Record<string, unknown>[];
+  messages: Record<string, unknown>[];
+  tools: Record<string, unknown>[] | undefined;
+} {
+  let budget = MAX_CACHE_BREAKPOINTS;
+  const cachedTools = tools === undefined ? undefined : [...tools];
+  if (cachedTools !== undefined && cachedTools.length > 0 && budget > 0) {
+    const lastIndex = cachedTools.length - 1;
+    cachedTools[lastIndex] = { ...cachedTools[lastIndex], cache_control: CACHE_CONTROL };
+    budget -= 1;
+  }
+  let cachedSystem: string | Record<string, unknown>[] = system;
+  if (system.length > 0 && budget > 0) {
+    cachedSystem = [{ type: "text", text: system, cache_control: CACHE_CONTROL }];
+    budget -= 1;
+  }
+  const out = [...messages];
+  let placed = 0;
+  for (let i = out.length - 1; i >= 0 && placed < 2 && budget > 0; i -= 1) {
+    const message = out[i] as Record<string, unknown>;
+    const content = message.content;
+    const blocks: Record<string, unknown>[] =
+      typeof content === "string"
+        ? [{ type: "text", text: content }]
+        : Array.isArray(content)
+          ? (content as Record<string, unknown>[]).map((block) => ({ ...block }))
+          : [];
+    const last = blocks[blocks.length - 1];
+    if (last === undefined || !isCacheableBlock(last)) {
+      continue;
+    }
+    last.cache_control = CACHE_CONTROL;
+    out[i] = { ...message, content: blocks };
+    placed += 1;
+    budget -= 1;
+  }
+  return { system: cachedSystem, messages: out, tools: cachedTools };
+}
+
+/**
+ * Merge Anthropic's split token counts into a single exact {@link NormalizedUsage}.
+ * Anthropic's `input_tokens` EXCLUDES cache reads/writes, so `inputTokens` here is
+ * the full context size (`input + cache_read + cache_creation`, flow 387 T15) and
+ * `cacheReadTokens` / `cacheWriteTokens` are SUBSETS of it — the same shape the
+ * OpenAI adapter reports, so cost/usage consumers never double-count.
+ */
+function mergeUsage(
+  rawInputTokens: number | undefined,
+  outputTokens: number | undefined,
+  cacheReadTokens?: number,
+  cacheWriteTokens?: number,
+): NormalizedUsage {
   const usage: NormalizedUsage = { exact: true };
+  const inputTokens =
+    rawInputTokens === undefined && cacheReadTokens === undefined && cacheWriteTokens === undefined
+      ? undefined
+      : (rawInputTokens ?? 0) + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0);
+  if (cacheReadTokens !== undefined) {
+    usage.cacheReadTokens = cacheReadTokens;
+  }
+  if (cacheWriteTokens !== undefined) {
+    usage.cacheWriteTokens = cacheWriteTokens;
+  }
   if (inputTokens !== undefined) {
     usage.inputTokens = inputTokens;
   }
@@ -573,23 +659,25 @@ export class AnthropicProvider implements ProviderPort {
       request.options?.reasoning,
       request.budget.maxOutputTokens,
     );
+    // Prompt caching (flow 387 T15): breakpoints on tools / system / last messages.
+    const cached = withCacheBreakpoints(
+      request.systemInstruction,
+      toAnthropicMessages(request.messages),
+      request.tools?.map((tool) => ({
+        name: tool.name,
+        ...(tool.description !== undefined ? { description: tool.description } : {}),
+        input_schema: tool.inputSchema,
+      })),
+    );
     const payload: Record<string, unknown> = {
       model: request.modelId,
       max_tokens: thinkingParams.maxTokens,
-      system: request.systemInstruction,
-      messages: toAnthropicMessages(request.messages),
+      system: cached.system,
+      messages: cached.messages,
       stream: true,
       ...(thinkingParams.thinking !== undefined ? { thinking: thinkingParams.thinking } : {}),
       ...(thinkingParams.outputConfig !== undefined ? { output_config: thinkingParams.outputConfig } : {}),
-      ...(request.tools !== undefined
-        ? {
-            tools: request.tools.map((tool) => ({
-              name: tool.name,
-              ...(tool.description !== undefined ? { description: tool.description } : {}),
-              input_schema: tool.inputSchema,
-            })),
-          }
-        : {}),
+      ...(cached.tools !== undefined ? { tools: cached.tools } : {}),
     };
     const init: RequestInit = {
       method: "POST",
@@ -673,6 +761,8 @@ export class AnthropicProvider implements ProviderPort {
     const bodies: EventBody[] = [];
     const blocks = new Map<number, BlockState>();
     let inputTokens: number | undefined;
+    let cacheReadTokens: number | undefined;
+    let cacheWriteTokens: number | undefined;
     let sawStart = false;
     let sawStop = false;
     let receivedAnyChunk = false;
@@ -742,7 +832,10 @@ export class AnthropicProvider implements ProviderPort {
         switch (asString(data.type)) {
           case "message_start": {
             sawStart = true;
-            inputTokens = asNumber(asRecord(asRecord(data.message).usage).input_tokens);
+            const startUsage = asRecord(asRecord(data.message).usage);
+            inputTokens = asNumber(startUsage.input_tokens);
+            cacheReadTokens = asNumber(startUsage.cache_read_input_tokens);
+            cacheWriteTokens = asNumber(startUsage.cache_creation_input_tokens);
             bodies.push({ kind: "model_start" });
             break;
           }
@@ -856,8 +949,16 @@ export class AnthropicProvider implements ProviderPort {
             break;
           }
           case "message_delta": {
-            const outputTokens = asNumber(asRecord(data.usage).output_tokens);
-            bodies.push({ kind: "usage_update", usage: mergeUsage(inputTokens, outputTokens) });
+            const deltaUsage = asRecord(data.usage);
+            const outputTokens = asNumber(deltaUsage.output_tokens);
+            // message_delta may restate the cumulative input/cache counts; prefer them when present.
+            inputTokens = asNumber(deltaUsage.input_tokens) ?? inputTokens;
+            cacheReadTokens = asNumber(deltaUsage.cache_read_input_tokens) ?? cacheReadTokens;
+            cacheWriteTokens = asNumber(deltaUsage.cache_creation_input_tokens) ?? cacheWriteTokens;
+            bodies.push({
+              kind: "usage_update",
+              usage: mergeUsage(inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens),
+            });
             break;
           }
           case "message_stop": {
