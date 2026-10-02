@@ -366,9 +366,9 @@ feeling.
 keryx review loop --flow 203 --task T4
 ```
 
-The round bound is three attempts. But a bound that fires on count alone lets an
-agent emit the identical failing output three times and spend the whole budget
-before anything notices. This escalates — exit 1 — when the same finding recurs
+The round bound is five attempts. But a bound that fires on count alone lets an
+agent emit the identical failing output again and again and spend the whole
+budget before anything notices. This escalates — exit 1 — when the same finding recurs
 in two rounds or two consecutive rounds produce identical output, **regardless of
 the remaining budget**, which it deliberately never reads.
 

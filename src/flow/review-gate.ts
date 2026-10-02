@@ -75,15 +75,17 @@ export const REVIEW_GATE_SEVERITY_FLOOR_DEFAULT: BlockingSeverityFloor = "minor"
 /**
  * The round bound (flow 203 / roadmap §2.5), as this gate needs to READ it.
  *
- * It is a number here and a sentence in the three orchestrator skills
- * (`Allow at most **three** review/fix attempts`, pinned by
- * `src/gdskills/round-bound.test.ts`). This constant does not enforce the bound
+ * It is a number here and a sentence in the `flow-orchestrator` skill
+ * (`Allow at most **five** review/fix attempts`, pinned by
+ * `src/gdskills/round-bound.test.ts`). It is five by operator decision, while
+ * the self-fix bounds in `job-orchestrator` and `task-implementer` stay at
+ * three. This constant does not enforce the bound
  * — nothing in `flow complete` dispatches a round — it only lets the gate say
  * "the cap is reached AND the gate is unsatisfied", which is the conflict AC7
  * resolves. Duplicating the number is the lesser evil against editing a skill
  * file this flow does not own.
  */
-export const REVIEW_ROUND_CAP = 3;
+export const REVIEW_ROUND_CAP = 5;
 
 /** Where a per-project override lives. Absent is normal; absence is not an error. */
 export const REVIEW_GATE_CONFIG_PATH = ".metaproject/tasks.config.json";
