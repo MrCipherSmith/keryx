@@ -9,9 +9,9 @@
   "id": "390",
   "slug": "flow-origin",
   "title": "Flow origin: where a flow came from and the human's original request in the effects",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-10-02T10:13:01.326Z",
-  "updatedAt": "2026-10-02T11:16:21.690Z",
+  "updatedAt": "2026-10-02T15:21:22.414Z",
   "source": {
     "type": "description",
     "ref": null
@@ -53,6 +53,10 @@
     "AC9": {
       "at": "2026-10-02T11:16:21.690Z",
       "note": "PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts."
+    },
+    "AC10": {
+      "at": "2026-10-02T15:19:06.252Z",
+      "note": "Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe)."
     }
   },
   "pr": {
@@ -217,6 +221,25 @@
       "at": "2026-10-02T11:16:21.690Z",
       "event": "ac-confirmed",
       "detail": "AC9: PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-02T15:19:06.252Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, helyx-channel 178131) [stated])"
+    },
+    {
+      "at": "2026-10-02T15:21:17.968Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-10-02T15:21:22.413Z",
+      "event": "completion-attempt-recorded",
+      "detail": "attempt 1: passed"
+    },
+    {
+      "at": "2026-10-02T15:21:22.414Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "acKinds": {
@@ -360,6 +383,92 @@
       },
       "criterion": "AC9",
       "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T15:19:06.252Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "altsay (operator, helyx-channel 178131)",
+        "basis": "stated",
+        "source": "`--signed-by` flag"
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    },
+    {
+      "at": "2026-10-02T15:21:22.414Z",
+      "kind": "complete",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b",
+      "headCommit": "7d306103307fa0df8863c637406fd5e0180be34e"
     }
-  ]
+  ],
+  "completionAttempts": [
+    {
+      "at": "2026-10-02T15:21:22.413Z",
+      "gates": [
+        {
+          "name": "acceptance-criteria",
+          "status": "pass",
+          "detail": "10 confirmed"
+        },
+        {
+          "name": "main-merge",
+          "status": "pass",
+          "detail": "7d306103307fa0df8863c637406fd5e0180be34e is contained in origin/main"
+        },
+        {
+          "name": "base-branch",
+          "status": "pass",
+          "detail": "7d306103307fa0df8863c637406fd5e0180be34e is contained in origin/main, the base this flow recorded"
+        },
+        {
+          "name": "tasks",
+          "status": "pass",
+          "detail": "4 task(s) terminal"
+        },
+        {
+          "name": "owner",
+          "status": "pass",
+          "detail": "owner: MrCipherSmith"
+        },
+        {
+          "name": "folder-committed",
+          "status": "pass",
+          "detail": "390-2026-10-02-flow-origin is committed in HEAD"
+        },
+        {
+          "name": "review",
+          "status": "pass",
+          "detail": "all 5 conditions hold across 1 ingested round(s)"
+        },
+        {
+          "name": "health",
+          "status": "pass",
+          "detail": "health gate: pass"
+        },
+        {
+          "name": "security",
+          "status": "pass",
+          "detail": "security advisory: informational (advisory does not block)"
+        },
+        {
+          "name": "confirmation",
+          "status": "skipped",
+          "detail": "confirmation gate not enabled for this flow; a flow opts in at creation with `flow init --require-confirmation` or `completion.require_confirmation: true`"
+        }
+      ],
+      "passed": true,
+      "acChecksum": "sha256:9063d77aec95edb8922766bc20bf5efe6bfd866e109f781c97ae83f78754640b"
+    }
+  ],
+  "merged": {
+    "commit": "7d306103307fa0df8863c637406fd5e0180be34e",
+    "ref": "origin/main",
+    "at": "2026-10-02T15:21:22.414Z"
+  }
 }
