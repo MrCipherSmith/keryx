@@ -244,6 +244,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
+    name: "/decisions",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations",
+    modes: AGENT_ONLY,
+  },
+  {
     // The installer view under the name that says what it does: it wires this
     // project into an editor, the TUI half of `keryx integrate`. R700-09:
     // renamed from `/integrations` — that name sat one letter from the CLI

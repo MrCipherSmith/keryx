@@ -50,6 +50,7 @@ the one that describes shipped behaviour.
 - [Keep the wiki current](guides/keep-the-wiki-current.md)
 - [Run keryx in CI](guides/run-in-ci.md)
 - [Undo a turn with /rewind](guides/rewind.md)
+- [Keep a record of what an agent recommended and what you chose](guides/recommendation-journal.md)
 - [Move skills, rules, agents, and memory between projects and machines](guides/portability.md)
 - [Write a rubric (judge) eval scenario](guides/write-a-rubric-scenario.md)
 

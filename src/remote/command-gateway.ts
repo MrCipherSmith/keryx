@@ -87,6 +87,7 @@ export const REMOTE_REFUSED: Readonly<Record<string, string>> = {
   reviews: "it needs the shell's screen",
   product: "it needs the shell's screen",
   governance: "it needs the shell's screen",
+  decisions: "it opens a panel in the shell",
   expand: "it needs the shell's screen",
   interrupt: "use the Stop button on a message, or stop it in the shell",
   demote: "it works on the shell's own tasks",

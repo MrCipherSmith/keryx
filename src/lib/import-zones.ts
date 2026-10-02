@@ -138,6 +138,11 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "review", zone: "core" },
   { segment: "capability", zone: "core" },
   { segment: "job", zone: "core" },
+  // The recommendation journal (flow 392): a deterministic, append-only record of
+  // every agent question with options, what the agent recommended, what the human
+  // chose. No model, no provider, no TUI: any agent drives it through the CLI or
+  // `src/decisions/service.ts`, and the TUI/commands reach it only by that facade.
+  { segment: "decisions", zone: "core" },
   // Added after the original table was written, and unclassified until now —
   // the gap `unclassifiedSegments()` below exists to make impossible to repeat.
   // All three are deterministic project-state bookkeeping with no provider

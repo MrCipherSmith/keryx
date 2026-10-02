@@ -99,6 +99,7 @@ import { runCheckAc } from "../commands/flow-check-ac";
 import { mountOpsSidebar, routeOpsCommand, type OpsSidebar } from "./ops-sidebar";
 import { describeDetachedRuns } from "./trigger-run-now";
 import { mountApprovalsSidebar, routeApprovalsCommand, type ApprovalsSidebar } from "./approvals-sidebar";
+import { mountDecisionsSidebar, routeDecisionsCommand, type DecisionsSidebar } from "./decisions-surface";
 import { mountExternalDiffSidebar, routeExternalDiffCommand, type ExternalDiffSidebar } from "./external-diff-sidebar";
 import { mountSchedulesSidebar, routeSchedulesCommand, type SchedulesSidebar } from "./schedules-sidebar";
 import { classifyBusyDispatch } from "./busy-dispatch";
@@ -346,7 +347,7 @@ import {
   toLeasedChoice,
   withLeaseMarker,
 } from "./tui-session-lease";
-import { setAskUserHost } from "./ask-user-bridge";
+import { setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -3750,6 +3751,7 @@ export async function launchTuiAgentShell(opts: {
   let liveChannelsPanel: ChannelsPanelHandle | undefined;
   const channelsClient = new ChannelsClient();
   let liveApprovals: ApprovalsSidebar | undefined;
+  let liveDecisions: DecisionsSidebar | undefined;
   let liveExternalDiff: ExternalDiffSidebar | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
@@ -3852,6 +3854,7 @@ export async function launchTuiAgentShell(opts: {
         // (this callback is synchronous); the `finally` below awaits the same call.
         void remoteBridge?.disable();
         liveApprovals?.dispose();
+        liveDecisions?.dispose();
         liveExternalDiff?.dispose();
         liveOps?.dispose();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
@@ -3866,6 +3869,7 @@ export async function launchTuiAgentShell(opts: {
         });
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
+        setAskUserNotice(undefined);
         setSubagentFleetListener(undefined);
         setBackgroundJobListener(undefined);
         detachExternal?.(); // flow 176 T18: clears the run listener AND the approver
@@ -4389,6 +4393,16 @@ export async function launchTuiAgentShell(opts: {
       notice: (text) => io.onSystem?.(text),
     });
     liveApprovals = approvals;
+    // Flow 392 (AC8): one row, only once the recommendation journal holds a decision.
+    const decisionsPanel = mountDecisionsSidebar({
+      otui,
+      chrome,
+      parent: sidebar,
+      width: SIDEBAR_TEXT_WIDTH,
+      cwd: opts.session?.cwd ?? process.cwd(),
+      onKeypress: (handler) => onKeypress(r, (key) => handler(key)),
+    });
+    liveDecisions = decisionsPanel;
     // Flow 370 (AC6): one row, only while a write run awaits review.
     const externalDiff = mountExternalDiffSidebar({
       otui,
@@ -5672,6 +5686,8 @@ export async function launchTuiAgentShell(opts: {
       return chosen;
     };
     setAskUserHost(askUserInteractive);
+    // Flow 392: the blind-mode reveal lands in the transcript, right after the answer.
+    setAskUserNotice((text) => io.onSystem?.(`◇ ${text}\n`));
 
     // `/help` wraps to the transcript's text width (AC9): the main column (or,
     // before its first layout, the terminal less the sidebar) minus the
@@ -7974,6 +7990,10 @@ export async function launchTuiAgentShell(opts: {
             routeApprovalsCommand(line, true, approvals);
             return;
           }
+          case "decisions": {
+            routeDecisionsCommand(line, decisionsPanel);
+            return;
+          }
           case "external-diff": {
             routeExternalDiffCommand(line, externalDiff);
             return;
@@ -8372,6 +8392,9 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (routeDecisionsCommand(line, decisionsPanel)) {
           return;
         }
         if (routeExternalDiffCommand(line, externalDiff)) {
@@ -9689,6 +9712,7 @@ export async function launchTuiAgentShell(opts: {
     liveSchedules?.dispose();
     liveReviewsPanel?.dispose();
     liveApprovals?.dispose();
+    liveDecisions?.dispose();
     liveExternalDiff?.dispose();
     liveOps?.dispose();
     const detachedNote = describeDetachedRuns(liveOps?.inFlightRuns() ?? []);

@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "392",
+  "slug": "recommendation-journal",
+  "title": "Recommendation journal: что рекомендовал агент и что выбрал человек",
+  "status": "in-progress",
+  "createdAt": "2026-10-02T11:54:20.132Z",
+  "updatedAt": "2026-10-02T11:58:15.818Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:04148c1ca05bcda732f1f6154a2c33957f572491635d54b7ce4a1a808f668f89",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Мне нравится про потерю замысла и пункт про то что суждение превращается в выбор рекомендации. Тут можно глубже, поскольку рекомендация это как раз то что предлагает агент. И это сильнее размывает роль человека.",
+    "source": "operator 2026-10-02 07:24 UTC, confirmed 07:26 UTC"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T11:54:20.132Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T11:58:15.644Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T11:58:15.818Z",
+      "event": "started"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/tui"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/decisions"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/flow"
+    },
+    "AC11": {
+      "kind": "judged"
+    }
+  }
+}

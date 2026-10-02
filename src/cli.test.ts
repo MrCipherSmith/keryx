@@ -204,6 +204,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  keryx approvals list [--all] [--json] | allow <id> | deny <id>\n",
     "                                               Answer, from this machine, a call a remote turn is waiting on (once, that call only)\n",
     "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
+    // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
+    // over three lines) and a Commands: summary row.
+    "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
+    "                                               recommendation before showing it, the human's choice after;\n",
+    "                                               report = match share by mode and stage, deviations (no model)\n",
+    "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
   ];
 
   // R700-09: lines the pre-flow fixture already had, whose TEXT changed

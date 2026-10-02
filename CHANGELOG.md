@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.62] — 2026-10-02
+### Added
+- **Recommendation journal.** Every agent question with options now writes one record to `.metaproject/data/decisions/journal.jsonl`: the flow and stage, the question, the options, the recommendation and its reason, the display mode, the option order, the human's choice, the time to answer and an optional reason for deviating. The recommendation is written before the question is shown. One question in three is asked blind (no "recommended" mark, random order) and the recommendation is revealed right after the answer; a blind question is never used for anything on the irreversible list (release, delete, push, publish, deploy, extendable in `.metaproject/decisions.config.json`). A changed answer after the reveal keeps both entries; after a deviation the human is asked once for an optional reason. `keryx decisions report` prints the match share by mode and stage and the deviations with their reasons, with no model call. Any agent can drive the journal with `keryx decisions open|answer|reason`. The shell has a `/decisions` report modal and a sidebar row. Journaling never blocks or delays a question; inside a flow it also adds a line to that flow's `journal.md`.
+
+### Fixed
+- `keryx flow origin set` no longer carries the old quote and source over when the kind changes, and `/flow origin` with no id prints a bounded summary instead of every flow.
+
+[Changes since 0.3.61](https://github.com/MrCipherSmith/keryx/compare/v0.3.61...v0.3.62)
+
 ## [0.3.61] — 2026-10-02
 ### Fixed
 - The orchestrator skills, their input-contract schemas and the `/goal --auto` comment no longer say the three orchestrators share one round bound of three: the review/fix bound of `flow-orchestrator` is five, the self-fix bounds of `job-orchestrator` and `task-implementer` stay at three.

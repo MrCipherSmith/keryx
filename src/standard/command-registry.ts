@@ -1265,6 +1265,69 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: true,
   },
   {
+    module: "decisions",
+    command: "decisions open",
+    summary:
+      "Record an agent question with options and its recommendation BEFORE showing it. Decides blind (a third of the questions: " +
+      "no recommended mark, random order) or ordinary, and says the order to show; a release, delete or push is never blind.",
+    intent: ["decisions open", "record a question with options", "журнал рекомендаций", "recommendation journal", "blind question"],
+    args: [
+      { name: "question", type: "string", required: true, desc: "the question as the human will read it" },
+      { name: "option", type: "string", required: true, desc: "an option as <id>=<label>, repeated (or --options-json)" },
+      { name: "recommend", type: "string", required: false, desc: "the id of the option the agent recommends" },
+      { name: "reason", type: "string", required: false, desc: "why the agent recommends it" },
+      { name: "stage", type: "string", required: false, desc: "the stage of the work, e.g. design (the report groups by it)" },
+      { name: "flow", type: "string", required: false, desc: "the flow id when asked inside a flow (or KERYX_FLOW)" },
+      { name: "action", type: "string", required: false, desc: "a tag for the action, matched against the irreversible list" },
+      { name: "json", type: "bool", required: false, desc: "print the decision as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends an open record to .metaproject/data/decisions/journal.jsonl"],
+  },
+  {
+    module: "decisions",
+    command: "decisions answer",
+    summary:
+      "Record the human's choice for an opened decision. Prints the recommendation (the reveal), the time to answer, and whether to ask " +
+      "once for an optional reason. A second answer for the same id is kept as a changed answer.",
+    intent: ["decisions answer", "record the human's choice", "записать выбор человека"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the decision id printed by `decisions open`" },
+      { name: "choice", type: "string", required: true, desc: "the option id the human chose" },
+      { name: "reason", type: "string", required: false, desc: "the human's reason for deviating, if given with the answer" },
+      { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends an answer record to .metaproject/data/decisions/journal.jsonl", "adds a line to the flow's journal.md when the decision belongs to a flow"],
+  },
+  {
+    module: "decisions",
+    command: "decisions reason",
+    summary: "Record the one optional reason for a deviation; an empty text is recorded as no reason. Refused when the human was already asked.",
+    intent: ["decisions reason", "why did the human deviate", "причина отклонения"],
+    args: [
+      { name: "<id>", type: "string", required: true, desc: "the decision id" },
+      { name: "text", type: "string", required: false, desc: "the reason; empty or absent records no reason" },
+      { name: "json", type: "bool", required: false, desc: "print the result as JSON" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends a reason record to .metaproject/data/decisions/journal.jsonl"],
+  },
+  {
+    module: "decisions",
+    command: "decisions report",
+    summary:
+      "Match share between the human's choice and the agent's recommendation, by mode (ordinary, blind) and by stage, " +
+      "with every deviation and its reason. Deterministic, no model.",
+    intent: ["decisions report", "отчёт по рекомендациям", "how often does the human follow the recommendation", "blind mode results"],
+    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON" }],
+    json: true,
+    read: true,
+  },
+  {
     module: "product",
     command: "product index",
     summary:

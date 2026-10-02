@@ -4,7 +4,7 @@
 // evidence rule, the journal line and the lock are the ones `keryx flow origin
 // set` uses. Nothing here gates anything.
 //
-//   /flow origin [<id>]                                   show (no id: every flow's origin)
+//   /flow origin [<id>]                                   show (no id: a bounded summary, counts by kind and the newest few)
 //   /flow origin <id> <kind> --reason "<why>" [--quote "<verbatim>"] [--source "<ref>"]
 
 import { flowServiceDeps } from "../commands/flow";
@@ -75,6 +75,41 @@ export function renderFlowOrigin(id: string, origin: unknown): string {
   return [`${id}`, ...originDetailLines(readOrigin(origin), "  ")].join("\n");
 }
 
+/** How many of the newest flows `/flow origin` lists by name; the rest are only counted. */
+export const FLOW_ORIGIN_RECENT_LIMIT = 10;
+
+/**
+ * `/flow origin` with no id: how many flows came from each origin, and the newest
+ * few by name. Never one block per flow: a project with hundreds of flows would
+ * flood the transcript. The quote and source of one flow are `/flow origin <id>`.
+ */
+async function summarizeOrigins(cwd: string, service: FlowService): Promise<string> {
+  const flows = await service.list({ cwd });
+  if (flows.length === 0) return "No flows.";
+  const newestFirst = [...flows].sort((a, b) => Number(b.id) - Number(a.id) || b.id.localeCompare(a.id));
+  const kinds = await Promise.all(
+    newestFirst.map(async (summary) => {
+      try {
+        const flow = await service.get({ cwd, id: summary.id });
+        return readOrigin(flow.origin)?.kind ?? "unknown";
+      } catch {
+        return "unknown";
+      }
+    }),
+  );
+  const counts = new Map<string, number>();
+  for (const kind of kinds) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+  const countLine = [...counts.entries()].map(([kind, count]) => `${kind} ${count}`).join(", ");
+  const shown = Math.min(FLOW_ORIGIN_RECENT_LIMIT, newestFirst.length);
+  const lines = [`origins of ${flows.length} flows: ${countLine}`, `newest ${shown}:`];
+  for (let i = 0; i < shown; i += 1) {
+    lines.push(`  ${newestFirst[i]?.id ?? "?"}  ${kinds[i] ?? "unknown"}`);
+  }
+  if (flows.length > shown) lines.push(`  ... ${flows.length - shown} older not listed`);
+  lines.push("/flow origin <id> shows the quote and source of one flow.");
+  return lines.join("\n");
+}
+
 /**
  * The whole job of `/flow origin`: parse, show or set, one string back. A usage
  * error or a missing-evidence note is text, never a throw for an ordinary state.
@@ -95,14 +130,7 @@ export async function runFlowOriginForShell(
     return `Usage: ${FLOW_ORIGIN_USAGE}`;
   }
   if (id === undefined) {
-    const flows = await service.list({ cwd });
-    if (flows.length === 0) return "No flows.";
-    const blocks: string[] = [];
-    for (const summary of flows) {
-      const flow = await service.get({ cwd, id: summary.id });
-      blocks.push(renderFlowOrigin(flow.id, flow.origin));
-    }
-    return blocks.join("\n");
+    return summarizeOrigins(cwd, service);
   }
   if (kind === undefined) {
     const flow = await service.get({ cwd, id });

@@ -28,7 +28,7 @@ import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { ServerCatalog } from "../mcp-servers/catalog";
 import type { ServerState } from "../mcp-servers/manager";
 import { createMcpInteractiveTools } from "../mcp-servers/tools";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
+import { journaledAskUser } from "../tui/ask-user-bridge";
 import { buildProjectTools } from "./project-tools";
 
 export type InteractiveAgentToolsInput = {
@@ -231,7 +231,8 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     workspaceListTool(input.cwd),
     workspaceShowTool(input.cwd),
     workspaceProposeTool(input.cwd, getSessionDir),
-    createAskUserTool(invokeAskUserHost),
+    // Flow 392: the same picker, with the recommendation journal around it.
+    createAskUserTool(journaledAskUser(input.cwd)),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     ...executionPlanTools(getSessionDir),

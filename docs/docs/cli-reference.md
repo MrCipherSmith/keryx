@@ -1996,6 +1996,32 @@ same list is `/approvals`. The client contract for a chat bridge is
 
 ---
 
+## decisions
+
+The recommendation journal: what an agent recommended when it asked a question
+with options, how it was shown, what you chose and how long you took. See
+[Keep a record of what an agent recommended](guides/recommendation-journal.md).
+
+```
+keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
+keryx decisions answer <id> --choice <id> [--reason "<why>"] [--json]
+keryx decisions reason <id> --text "<why>" [--json]
+keryx decisions report [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list (release, delete, push, publish, deploy, plus `.metaproject/decisions.config.json`) is never blind. |
+| `answer <id>` | `--choice`, `--reason`, `--json` | Records the choice and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says to ask once for an optional reason. |
+| `reason <id>` | `--text`, `--json` | Records the reason for a deviation; an empty text is recorded as absent. |
+| `report` | `--json` | Deterministic, no model: match share by mode and by stage, and every deviation with its reason. |
+
+`--flow` defaults to `KERYX_FLOW`. The journal is
+`.metaproject/data/decisions/journal.jsonl`; inside a flow the answer also adds a
+line to that flow's `journal.md`. In the TUI the report is `/decisions`.
+
+---
+
 ## update
 
 Refresh managed "service" files (templates, manifests, skills, hooks, dashboard)
