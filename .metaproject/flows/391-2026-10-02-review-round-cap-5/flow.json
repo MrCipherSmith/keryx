@@ -11,7 +11,7 @@
   "title": "Review round cap 5",
   "status": "done",
   "createdAt": "2026-10-02T10:43:23.674Z",
-  "updatedAt": "2026-10-02T11:36:16.099Z",
+  "updatedAt": "2026-10-02T20:09:47.143Z",
   "source": {
     "type": "description",
     "ref": null
@@ -195,6 +195,11 @@
       "at": "2026-10-02T11:36:16.099Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-02T20:09:47.143Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Давай подними лимит раундов до 5\"; source: channel message 178020, 2026-10-02 (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
     }
   ],
   "acKinds": {
@@ -351,5 +356,10 @@
     "commit": "938ee7446e57afbb643ec1c1fd3ab584bdd36d3f",
     "ref": "origin/main",
     "at": "2026-10-02T11:36:16.099Z"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Давай подними лимит раундов до 5",
+    "source": "channel message 178020, 2026-10-02"
   }
 }

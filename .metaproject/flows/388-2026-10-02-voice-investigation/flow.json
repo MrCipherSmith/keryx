@@ -11,7 +11,7 @@
   "title": "Voice for Telegram and keryx: investigation",
   "status": "done",
   "createdAt": "2026-10-02T04:32:28.836Z",
-  "updatedAt": "2026-10-02T10:31:27.386Z",
+  "updatedAt": "2026-10-02T20:09:46.008Z",
   "source": {
     "type": "description",
     "ref": null
@@ -200,6 +200,11 @@
       "at": "2026-10-02T10:31:27.386Z",
       "event": "done",
       "detail": "all gates passed"
+    },
+    {
+      "at": "2026-10-02T20:09:46.008Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"И заведи фло на инвестигейшн, как научить телеграм и keryx общаться голосом как helyx с минимальными зависимостями и весом.\"; source: channel message 176715, 2026-10-01T20:42:47Z (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
     }
   ],
   "acKinds": {
@@ -352,5 +357,10 @@
     "commit": "b856f1d875f6a10649a311995db2434423900322",
     "ref": "origin/main",
     "at": "2026-10-02T10:31:27.386Z"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "И заведи фло на инвестигейшн, как научить телеграм и keryx общаться голосом как helyx с минимальными зависимостями и весом.",
+    "source": "channel message 176715, 2026-10-01T20:42:47Z"
   }
 }

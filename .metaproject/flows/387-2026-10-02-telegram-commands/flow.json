@@ -11,7 +11,7 @@
   "title": "Telegram commands: slash commands and button pickers from the topic",
   "status": "ready",
   "createdAt": "2026-10-02T04:20:33.712Z",
-  "updatedAt": "2026-10-02T05:35:01.307Z",
+  "updatedAt": "2026-10-02T20:09:38.994Z",
   "source": {
     "type": "description",
     "ref": null
@@ -113,6 +113,11 @@
       "at": "2026-10-02T05:35:01.307Z",
       "event": "ac-updated",
       "detail": "AC2: \"Text commands (`/help`, `/status`, `/doctor`, `/new`, `/compact`, `/think`, `/goal`, `/queue`, `/plan`, `/reasoning`, `/theme <name>`, `/schedule`, `/rewind`, the jev text commands) run from the topic and their output (today a local transcript line or a toast) comes back to the topic, redacted and rendered like any reply. [verify: exec `bun test src/remote/command-output.test.ts`]\" -> \"Text commands (`/help`, `/status`, `/doctor`, `/new`, `/compact`, `/think <level>`, `/goal`, `/queue`, `/plan`, `/reasoning`, `/theme <name>`, the jev text commands) run from the topic and their output (today a local transcript line or a toast) comes back to the topic, redacted and rendered like any reply. Commands that only open a local modal or panel (`/schedule`, `/rewind`, `/conform`, `/ci`, bare `/theme`, bare `/think`) are refused remotely with the reason. [verify: exec `bun test src/remote/command-output.test.ts`]\" (Implementation found these commands only open local modals, so nothing can come back to the topic; they are refused instead)"
+    },
+    {
+      "at": "2026-10-02T20:09:38.994Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"Еще одно фло, сейчас команды в топике не поддерживаются, проанализируй какие команды из keryx shell мы можем передавать и добавь их в бота. Идея что и keryx и телеграм наши и можем делать из общение максимально удобным . То есть часть функциональности можно вынести в телеграм как интерфейс, который будет выполнять функции на keryx, например /коннект, что бы менять провайдера и модель, то есть в телеграм должно прийти так же список и кнопки, потом выбор модели и так все какие можно. Эффект: я хочу иметь полноценную возможность работать в через телеграмм.\"; source: channel message 176710, 2026-10-01T20:42:01Z (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
     }
   ],
   "acKinds": {
@@ -199,5 +204,10 @@
     "AC16": {
       "kind": "judged"
     }
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "Еще одно фло, сейчас команды в топике не поддерживаются, проанализируй какие команды из keryx shell мы можем передавать и добавь их в бота. Идея что и keryx и телеграм наши и можем делать из общение максимально удобным . То есть часть функциональности можно вынести в телеграм как интерфейс, который будет выполнять функции на keryx, например /коннект, что бы менять провайдера и модель, то есть в телеграм должно прийти так же список и кнопки, потом выбор модели и так все какие можно. Эффект: я хочу иметь полноценную возможность работать в через телеграмм.",
+    "source": "channel message 176710, 2026-10-01T20:42:01Z"
   }
 }
