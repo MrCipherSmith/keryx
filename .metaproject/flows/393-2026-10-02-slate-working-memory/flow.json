@@ -9,14 +9,14 @@
   "id": "393",
   "slug": "slate-working-memory",
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
-  "status": "initializing",
+  "status": "ready",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T12:30:28.489Z",
+  "updatedAt": "2026-10-02T15:25:04.433Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:1da3791540ebc973733fb2784d59e9f5ed519fba765f612064a1be078bbf6cf8",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -34,7 +34,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -42,14 +42,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context.md holds the flow-392 baseline, slate invariants A/B and code sites"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -57,7 +59,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "split into specific tasks T5-T13 per plan.md"
     },
     {
       "id": "T3",
@@ -88,6 +92,164 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Recall tools slate_trail, recall_step, history_search with session confinement (AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Note-taking contract in the system instruction + pre-eviction notice (AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "shell_exec spill-instead-of-truncate (AC11)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Window-relative prune thresholds (AC12)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T10",
+        "T11",
+        "T12",
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -99,6 +261,114 @@
       "at": "2026-10-02T12:30:28.489Z",
       "event": "renumbered",
       "detail": "388 -> 393: duplicate id with 388-2026-10-02-voice-investigation on main (another clone); this flow was created later and had never reached main; 392 is taken by the renumbered shell-token-economy flow"
+    },
+    {
+      "at": "2026-10-02T15:23:09.585Z",
+      "event": "task-added",
+      "detail": "T5: Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)"
+    },
+    {
+      "at": "2026-10-02T15:23:10.653Z",
+      "event": "task-added",
+      "detail": "T6: Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)"
+    },
+    {
+      "at": "2026-10-02T15:23:11.946Z",
+      "event": "task-added",
+      "detail": "T7: slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)"
+    },
+    {
+      "at": "2026-10-02T15:23:13.058Z",
+      "event": "task-added",
+      "detail": "T8: Recall tools slate_trail, recall_step, history_search with session confinement (AC4)"
+    },
+    {
+      "at": "2026-10-02T15:23:14.268Z",
+      "event": "task-added",
+      "detail": "T9: Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)"
+    },
+    {
+      "at": "2026-10-02T15:23:15.539Z",
+      "event": "task-added",
+      "detail": "T10: Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)"
+    },
+    {
+      "at": "2026-10-02T15:23:16.953Z",
+      "event": "task-added",
+      "detail": "T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)"
+    },
+    {
+      "at": "2026-10-02T15:23:18.027Z",
+      "event": "task-added",
+      "detail": "T12: shell_exec spill-instead-of-truncate (AC11)"
+    },
+    {
+      "at": "2026-10-02T15:23:19.012Z",
+      "event": "task-added",
+      "detail": "T13: Window-relative prune thresholds (AC12)"
+    },
+    {
+      "at": "2026-10-02T15:23:20.747Z",
+      "event": "task-added",
+      "detail": "T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)"
+    },
+    {
+      "at": "2026-10-02T15:23:22.078Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T15:23:23.384Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T15:23:28.502Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T15:25:04.433Z",
+      "event": "ac-updated",
+      "detail": "flow references only: the shell-token-economy flow was renumbered 392 -> 394 after a second id collision on main; criteria text otherwise unchanged; no confirmations existed"
     }
-  ]
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    },
+    "AC7": {
+      "kind": "unclassified"
+    },
+    "AC8": {
+      "kind": "unclassified"
+    },
+    "AC9": {
+      "kind": "unclassified"
+    },
+    "AC10": {
+      "kind": "unclassified"
+    },
+    "AC11": {
+      "kind": "unclassified"
+    },
+    "AC12": {
+      "kind": "unclassified"
+    }
+  }
 }

@@ -55,4 +55,30 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+### Baseline from flow 394 (shell token economy, created as 387, renumbered 387→392→394 after id collisions; PR #849)
+
+- Replay (`scripts/benchmark/replay-session-shape.ts`, seed 0x20261001, gpt-6.1-sol, window 272000): main-before peak 241,577 / total 14,848,882; flow 394 peak 96,783 / total 7,374,769 (−50.3%).
+- Comparative (`comparative-report.md` of flow 394, same model): keryx 12,628 mean input per task (context-on) vs codex CLI 35,199 uncached + 139,079 cached; success 100% both.
+- Long-session (`registry-recall`, `scripts/benchmark/run-ablation-long.ts`, 128K, 1 seed): main 0/22 (stops after 10/22 files, 50 requests); flow 394 0/22 (reads 22/22, then 96 re-reads after prune, hits the 150-call cap, never writes the answer). The model keeps no notes across prune — this flow's central problem.
+- What flow 394 already provides: tool-output spill to `<session>/tool-output` with read-only `read_file`/`search_code` access; `src/session/prune.ts` clears/collapses old tool exchanges into harness-marked one-line records (`collapsed: true`) and keeps reasoning replay on the newest 3 rounds; pruning only on hosts with `pruneArchive` + `onContextCompaction`; repeat guard resets once per signature after prune; one Anchors block + deltas (`src/session/anchors-announce.ts`).
+
+### Slate today (verified 2026-10-02)
+
+- Storage `src/session/slate.ts`: `Slate = { workspaceId?, anchors, course: { flowRef? }, seeds: SlateSeed[], childDispatches? }` in `<session>/slate.json` under `withFileLock`.
+- Tools `src/harness/tool/builtin/slate-tool.ts`: `slate_read` (Course projection + Seeds, read-only) and `slate_write_seed` (append-only, ≤ 4000 chars, redacted, `risk: "read"`).
+- **Invariant A** (slate AC5, pinned in `slate.ts` `renderAnchorsBlock` doc): Course/Seeds are never auto-injected; only `slate_read` shows them; the anchors renderer must never read course/seeds.
+- **Invariant B** (`slate-tool.ts` risk note): Seeds are DRAFT hypotheses for the human-reviewed `workspace propose`/review path; the `risk: "read"` classification (no approval, read budget pool) holds only because Seeds influence nothing before that review. Surfacing Seeds back to the model would require revisiting it.
+- Consequence for this flow: working notes the model relies on must be a NEW shelf (task-local, model-facing, never promoted), not Seeds; Seeds and their review path stay unchanged.
+- Course already flows to the model as the execution-plan snapshot appended to the system instruction each round (`renderExecutionPlanSnapshot`, `plan.json`).
+
+### Competitor patterns relevant here (flow 394 study, `~/sandbox/forks`)
+
+- codex: `WorldState.render_diff` — environment context sent as diffs; compaction re-injects initial context.
+- opencode/pi: anchored incremental summary with a verbatim tail and read/modified file lists.
+- deepseek-harness: append-only log with `surfaceOp: replace` nodes; hash-dedup of injected context.
+- Anthropic memory tool / grok-build state reminder: one rebuilt, replaced block rather than accumulation.
+
+### Other gaps found in flow 394 that belong here
+
+- Builtin tools cap output below the spill threshold (`shell_exec` 20 KB `MAX_OUTPUT_BYTES`, `read_file` 20K chars), so spill only fires for uncapped (MCP) tools; truncated shell output is lost.
+- Prune thresholds are absolute (protect 40K, batch ≥ 20K); with compaction at 85% of the window, compaction always pre-empts pruning below a ~73K window (local models).
