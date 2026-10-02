@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "396",
+  "slug": "telegram-permissions-parity-with-shell",
+  "title": "Telegram permissions parity with shell",
+  "status": "initializing",
+  "createdAt": "2026-10-02T19:21:02.643Z",
+  "updatedAt": "2026-10-02T19:24:38.623Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "А зачем такие ограничения? Я говорил, что телеграм должен быть интерфейсом, по возможности предоставляя максимальную функциональность как keryx shell? Как в helyx реализованы пермиссии? Он почти меня не спрашивает.",
+    "source": "helyx-channel message 178829 (2026-10-02T19:14Z), decisions in poll 47"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T10 (split by area)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T11 (tests)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T11",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Always button on the Telegram prompt with remember offer (AC9,AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "/stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "keryx permissions list|remove and /permissions modal (AC11)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "/remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Docs (README + docs site pages) and version bump (AC16,AC17)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T19:21:02.643Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T19:24:34.414Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T19:24:34.850Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T19:24:35.232Z",
+      "event": "task-added",
+      "detail": "T5: Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)"
+    },
+    {
+      "at": "2026-10-02T19:24:35.650Z",
+      "event": "task-added",
+      "detail": "T6: Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)"
+    },
+    {
+      "at": "2026-10-02T19:24:36.107Z",
+      "event": "task-added",
+      "detail": "T7: Always button on the Telegram prompt with remember offer (AC9,AC10)"
+    },
+    {
+      "at": "2026-10-02T19:24:36.511Z",
+      "event": "task-added",
+      "detail": "T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)"
+    },
+    {
+      "at": "2026-10-02T19:24:36.931Z",
+      "event": "task-added",
+      "detail": "T9: keryx permissions list|remove and /permissions modal (AC11)"
+    },
+    {
+      "at": "2026-10-02T19:24:37.337Z",
+      "event": "task-added",
+      "detail": "T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)"
+    },
+    {
+      "at": "2026-10-02T19:24:37.785Z",
+      "event": "task-added",
+      "detail": "T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)"
+    },
+    {
+      "at": "2026-10-02T19:24:38.221Z",
+      "event": "task-added",
+      "detail": "T12: Docs (README + docs site pages) and version bump (AC16,AC17)"
+    },
+    {
+      "at": "2026-10-02T19:24:38.623Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T11, T12 (was empty) — review runs after implementation, tests and docs"
+    }
+  ]
+}
