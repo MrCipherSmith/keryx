@@ -8,16 +8,22 @@
 //           does not wait, the caller asks). A second answer is a changed answer.
 //   reason  record the optional reason (the latest one wins when it is changed)
 //   report  deterministic summary, no model: match share by mode and stage,
-//           deviations with their reasons
+//           deviations with their reasons; backfilled decisions in a block apart
+//   import  load historical decisions (backfilled), kept apart from the live ones
 //
 // keryx and a chat bridge know nothing of each other: the bridge calls this and
 // shows what it says.
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { optionValue, optionValues } from "../lib/args";
 import {
   answerDecision,
+  importBackfill,
   openDecision,
   recordReason,
+  renderImportResult,
+  reportLine,
   reportText,
   loadReport,
   resolveFlowContext,
@@ -28,7 +34,8 @@ import {
 const OPEN_FLAGS = ["--question", "--option", "--options-json", "--recommend", "--reason", "--stage", "--flow", "--action", "--json"] as const;
 const ANSWER_FLAGS = ["--choice", "--other", "--reason", "--json"] as const;
 const REASON_FLAGS = ["--text", "--json"] as const;
-const REPORT_FLAGS = ["--json"] as const;
+const REPORT_FLAGS = ["--json", "--line"] as const;
+const IMPORT_FLAGS = ["--dry-run", "--json"] as const;
 
 function rejectUnknownFlags(sub: string, args: readonly string[], accepted: readonly string[]): void {
   const unknown = args
@@ -146,8 +153,32 @@ async function runReason(args: string[]): Promise<void> {
   console.log(recorded ? `decision ${id}: reason recorded` : `decision ${id}: the human was already asked once; nothing written`);
 }
 
+async function runImport(args: string[]): Promise<void> {
+  const file = positionalId(args);
+  if (file === undefined) throw new Error("keryx decisions import needs the file: keryx decisions import <file.jsonl> [--dry-run] [--json]");
+  const rest = args.slice(1);
+  rejectUnknownFlags("import", rest, IMPORT_FLAGS);
+  let text: string;
+  try {
+    text = await readFile(path.resolve(process.cwd(), file), "utf8");
+  } catch {
+    throw new Error(`cannot read ${file}`);
+  }
+  const result = await importBackfill(process.cwd(), text, { dryRun: rest.includes("--dry-run") });
+  if (rest.includes("--json")) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+  console.log(renderImportResult(result));
+}
+
 async function runReport(args: string[]): Promise<void> {
   rejectUnknownFlags("report", args, REPORT_FLAGS);
+  if (args.includes("--line") && args.includes("--json")) throw new Error("keryx decisions report: --line and --json cannot be combined");
+  if (args.includes("--line")) {
+    console.log(await reportLine(process.cwd()));
+    return;
+  }
   if (args.includes("--json")) {
     console.log(JSON.stringify(await loadReport(process.cwd()), null, 2));
     return;
@@ -166,6 +197,7 @@ export async function decisionsCommand(args: string[] = []): Promise<void> {
     if (command === "answer") return await runAnswer(args.slice(1));
     if (command === "reason") return await runReason(args.slice(1));
     if (command === "report") return await runReport(args.slice(1));
+    if (command === "import") return await runImport(args.slice(1));
   } catch (cause) {
     console.error(cause instanceof Error ? cause.message : String(cause));
     process.exitCode = 1;
@@ -187,7 +219,8 @@ Usage:
   keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
   keryx decisions answer <id> --choice <id> [--other] [--reason "<why>"] [--json]
   keryx decisions reason <id> --text "<why>" [--json]
-  keryx decisions report [--json]
+  keryx decisions report [--json | --line]
+  keryx decisions import <file.jsonl> [--dry-run] [--json]
 
 Every agent question with options leaves one record: what was asked, what the
 agent recommended and why, how it was shown, what the human chose and how long
@@ -220,6 +253,24 @@ it took. Call \`open\` BEFORE showing the question and \`answer\` after.
            its reason. It also counts the questions that looked irreversible
            and the ones where blind was refused because of it, per stage: a
            high number on ordinary questions means the list over-matches.
+           Backfilled decisions (see import) are reported in a separate block
+           "до (историческое, дозаполнено задним числом)" and never counted in
+           the live shares or in the time to answer. --line prints ONE line in
+           Russian for the daily topic message: the total (before, after) and the
+           match share of the visible, the hidden and the historical decisions.
+  import   loads historical decisions from a JSON-lines file, one per line:
+             {"id","at","flow","stage","question","options":[{"id","label"}],
+              "recommendation":{"optionId","reason"}|null,"source",
+              "answer":{"choice","other"?}|null,"reason"?}
+           Every one is marked backfilled (its recommendation was written down
+           after the fact), is never blind, and keeps the time it was asked in
+           "at"; its time to answer is unknown and never used. The file is
+           checked whole: one bad line writes nothing. An id already in the
+           journal is skipped and reported, so the same file can be imported
+           twice. --dry-run checks and counts without writing. It prints:
+           Imported: N, skipped: S, with recommendation: R, answered: A,
+           deviations: D. A bare /decisions change never touches a backfilled
+           decision.
 
 The journal is one file per repository, .metaproject/data/decisions/journal.jsonl
 under the main checkout (every worktree shares it; it is git-ignored). Inside a
