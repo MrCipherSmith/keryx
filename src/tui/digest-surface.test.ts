@@ -116,7 +116,7 @@ describe("AC8: keryx schedule list and show name the digest", () => {
   test("unreadable sources and a refused delivery are what the surface says: the notes, the failure and the waiting message", async () => {
     const sink = new FakeSink();
     sink.script.push({ ok: false, reason: "Telegram is down" });
-    await runDigest(env, name, { runGh: new FakeGh().fail("pr", "HTTP 502").fail("issue", "HTTP 502").fail("review", "HTTP 502").fail("ci", "HTTP 502").run, summarize: failingSummary("x").summarize, now: clock.now, sink });
+    await runDigest(env, name, { runGh: new FakeGh().fail("pr", "HTTP 502").fail("issue", "HTTP 502").fail("review", "HTTP 502").fail("ci", "HTTP 502").run, summarize: failingSummary("x"), now: clock.now, sink });
     const text = await cli(["list"]);
     expect(text).toMatch(/last run: ok at \S+ — digest written \(baseline\).*4 source note\(s\)/);
     expect(text).toMatch(/last delivery: failed at 2026-10-02T12:00:30\.000Z — [^\n]*Telegram is down/);
