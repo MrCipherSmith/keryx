@@ -11,7 +11,7 @@
   "title": "Slate as the model's working memory: bounded request built from Anchors/Course/Trail/Seeds with point-recall tools",
   "status": "ready",
   "createdAt": "2026-10-02T07:47:58.219Z",
-  "updatedAt": "2026-10-02T15:37:56.493Z",
+  "updatedAt": "2026-10-02T16:26:30.802Z",
   "source": {
     "type": "description",
     "ref": null
@@ -23,9 +23,9 @@
   },
   "baseBranch": "main",
   "owner": {
-    "value": "Aleksandr Tsaitler",
+    "value": "MrCipherSmith",
     "basis": "stated",
-    "source": "`--owner` flag on `flow init`"
+    "source": "`--owner` flag on `flow owner set`"
   },
   "outcomeAuthor": "human",
   "tasks": [
@@ -363,6 +363,11 @@
       "at": "2026-10-02T15:37:56.493Z",
       "event": "task-depends-set",
       "detail": "T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)"
+    },
+    {
+      "at": "2026-10-02T16:26:30.802Z",
+      "event": "owner-changed",
+      "detail": "Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))"
     }
   ],
   "acKinds": {
