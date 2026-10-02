@@ -107,9 +107,12 @@ describe("the README remote section", () => {
 });
 
 describe("the CHANGELOG entry", () => {
-  test("it is the entry for the version in package.json", () => {
+  test("it is the entry for the version that introduced the feature, and package.json is at or past it", () => {
     const pkg = JSON.parse(read("package.json")) as { version: string };
-    expect(pkg.version).toBe("0.3.64");
+    // the version grows on every merge to main, so this entry stays at 0.3.64 and package.json moves on
+    const [major = 0, minor = 0, patch = 0] = pkg.version.split(".").map(Number);
+    expect([major, minor, patch].join(".")).toBe(pkg.version);
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThanOrEqual(3_064);
     expect(changelogEntry()).toContain("Telegram rendering");
   });
 

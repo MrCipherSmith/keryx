@@ -2006,7 +2006,8 @@ with options, how it was shown, what you chose and how long you took. See
 keryx decisions open --question "<text>" --option <id>=<label> [--option ...] [--recommend <id> --reason "<why>"] [--stage <name>] [--flow <id>] [--action <tag>] [--json]
 keryx decisions answer <id> --choice <id> [--other] [--reason "<why>"] [--json]
 keryx decisions reason <id> --text "<why>" [--json]
-keryx decisions report [--json]
+keryx decisions report [--json | --line]
+keryx decisions import <file.jsonl> [--dry-run] [--json]
 ```
 
 | Subcommand | Flags | Description |
@@ -2014,7 +2015,8 @@ keryx decisions report [--json]
 | `open` | `--question`, `--option` (repeatable), `--options-json`, `--recommend`, `--reason`, `--stage`, `--flow`, `--action`, `--json` | Writes the record BEFORE the question is shown and prints the mode (`ordinary` or `blind`, one in three), the order to show and whether to mark the recommendation. A question about something on the irreversible list is never blind: strong terms (release, ship, rollout, promote, publish, unpublish, deploy, delete, push, `git reset --hard`, `rm -rf`, tagging a version, publishing to npm, going to production, the Russian equivalents, plus `.metaproject/decisions.config.json`) always count; weak terms (merge, drop, remove, force and the like) count next to a risk target (main, production, a branch, a PR, a table, ...) in the same question or option, or in `--action`, or when their object is only a pronoun ("Merge it now?"). Pass `--action` for anything irreversible: any non-empty tag makes the question non-blind, and it is the reliable path. A flow found only as the single flow in progress is recorded as `inferred`. |
 | `answer <id>` | `--choice`, `--other`, `--reason`, `--json` | Records the choice (it must be one of the options; `--other` marks a free-form answer) and prints the reveal and the time taken. A second answer is a changed answer and both are kept. After a deviation it says the human should be asked for a reason, once; the command does not wait, the caller asks (the TUI `ask_user` path waits for it, and an empty answer releases the wait). |
 | `reason <id>` | `--text`, `--json` | Records the reason for a deviation; an empty text is recorded as absent. |
-| `report` | `--json` | Deterministic, no model: match share by mode and by stage, every deviation with its reason, and how many questions looked irreversible and had blind refused because of it, per stage. |
+| `report` | `--json`, `--line` | Deterministic, no model: match share by mode and by stage, every deviation with its reason, and how many questions looked irreversible and had blind refused because of it, per stage. Backfilled decisions are reported in a block of their own ("до (историческое, дозаполнено задним числом)": total, with a recommendation, matches and share, every deviation with its reason) and never counted in the live numbers or in the median time to answer; `--json` has a `backfilled` section. `--line` prints one line in Russian for a daily message: `Журнал решений: всего N (до: B, после: L). Совпадение с рекомендацией: видимая X% (a/b), скрытая Y% (c/d); до: Z% (e/f).` (`нет данных` when a share has nothing to count). |
+| `import <file.jsonl>` | `--dry-run`, `--json` | Loads historical decisions as backfilled records, one JSON object per line (`id`, `at`, `flow`, `stage`, `question`, `options`, `recommendation`, `source`, `answer`, `reason`). A backfilled decision is never blind, keeps the time it was asked in `at`, and its time to answer is unknown. The file is checked whole (one bad line writes nothing); an id already in the journal is skipped and reported, so importing the same file twice changes nothing. Prints `Imported: N, skipped: S, with recommendation: R, answered: A, deviations: D`; `--dry-run` counts without writing. |
 
 `--flow` and `--stage` default to what the checkout says: `KERYX_FLOW`, else the
 flow named by the git branch, else the only flow in progress (a guess, marked `inferred` in the record and the report). The journal is
@@ -2022,7 +2024,9 @@ flow named by the git branch, else the only flow in progress (a guess, marked `i
 worktree; inside a flow the answer also adds a line to that flow's `journal.md`.
 In the TUI the report is `/decisions`, `/decisions reason <why>` adds the optional
 reason and `/decisions change <option>` changes the latest answer asked in this
-session (a decision of another session is named and left alone).
+session (a decision of another session is named and left alone). Backfilled
+decisions are never "the latest": a bare `/decisions change` skips them, and the
+`/decisions` report and the sidebar row show them apart (`N decisions + B before`).
 
 ---
 
