@@ -23,3 +23,4 @@
 - 2026-10-02T20:19:50.776Z - task-done: T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)
 - 2026-10-02T20:25:30.451Z - task-done: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)
 - 2026-10-02T20:31:14.458Z - task-done: T12: Docs (README + docs site pages) and version bump (AC16,AC17)
+- 2026-10-02T20:33:53.079Z - task-done: T4: Self-review and prepare draft PR
