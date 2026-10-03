@@ -288,7 +288,7 @@ must read a multi-megabyte tool output.
 
 ## Evidence
 
-Every command run from `/Users/Goodea/goodea/keryx` on branch `codex/agent-first-core` (HEAD
+Every command run from `~/goodea/keryx` on branch `codex/agent-first-core` (HEAD
 `0bc6418`). No git state change, no flow state change, no dependency change, no network, no model
 call. Synthetic and reserved hosts only (`attacker.invalid`, `ok.example.org`, `example.org`,
 `h.invalid`, `cdn.example.org`). Production, test and documentation files were not modified —
@@ -306,7 +306,7 @@ of this review, unchanged throughout.
 
 ### Raw logs
 
-All under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 | Log | SHA-256 | What it shows |
 |---|---|---|

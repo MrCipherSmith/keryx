@@ -1,6 +1,6 @@
 # T65 implementation — align the command exit-code folds with the corrected `gateway` meaning
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/commands/security.ts`, `src/commands/security-gate-exit.test.ts`,
 `src/commands/security.check-input.test.ts`. Read only (confirmed unedited
 by this task): `src/security/guard.ts`, `src/security/self-protect.ts`,
@@ -8,7 +8,7 @@ by this task): `src/security/guard.ts`, `src/security/self-protect.ts`,
 `.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/acceptance-criteria.md`.
 Spec written before coding: `T65-spec.md` (same directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## The disagreement, and why the pure-function form of a probe was not trusted
 

@@ -13,7 +13,7 @@ and they are the reason this reply is not DONE.** Both are reproduced at all fou
 ## Scope
 
 - Branch `codex/agent-first-core`; base commit `0bc6418fa1a038f8ec909cf949fecba077acf9a4`. Every file
-  under review is **uncommitted** in the main checkout `/Users/Goodea/goodea/keryx`. No worktree was
+  under review is **uncommitted** in the main checkout `~/goodea/keryx`. No worktree was
   entered, no `cd` under `.claude/worktrees/`, no `git stash`, no git or flow state change of any kind.
 - Artifacts read in full: `RESIDUALS.md`, `T72-review.md`, `T77-spec.md`, `T77-implementation.md`,
   `T77-viability.ts`, `review-security-code/SKILL.md`, `review-logic/SKILL.md`,
@@ -394,8 +394,8 @@ same failure T72 named in T71 and is the substance of F-001, not of this audit.
 
 ## Evidence
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
-`/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`. Probes under
+`~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/`
 (`T78-perf.ts`, `T78-boundary.ts`, `T78-md.ts`, `T78-dup.ts`, `T78-corpus.ts`).
 
 | Log | SHA-256 |

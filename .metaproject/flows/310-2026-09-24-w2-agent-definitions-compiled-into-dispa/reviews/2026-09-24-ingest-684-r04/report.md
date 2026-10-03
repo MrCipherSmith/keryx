@@ -1,6 +1,6 @@
 # Review 310 R4: PR #684 (W2 agent-definition catalogue), final verification round
 
-Scope: fix commit 9e77c3d6 and merge commit 535f20af on flow/310-w2 (head bb521e75), in /Users/Goodea/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r4/: the round-3 probes re-run as e2e.sh → e2e.out and probe.ts → probe.out, plus r-dall (doctor across all runtimes) and r-dry (uninstall dry-run).
+Scope: fix commit 9e77c3d6 and merge commit 535f20af on flow/310-w2 (head bb521e75), in ~/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r4/: the round-3 probes re-run as e2e.sh → e2e.out and probe.ts → probe.out, plus r-dall (doctor across all runtimes) and r-dry (uninstall dry-run).
 
 R3 disposition:
 - **R3-F1: resolved.** The hash now covers the whole file. Only the structurally located `content-sha256` value is blanked (`sentinelHashFieldSpan` plus `spliceSentinelHashSpan`), and the kiro four-key projection is gone. probe.out results:

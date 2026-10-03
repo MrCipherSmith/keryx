@@ -1,6 +1,6 @@
 # T58 implementation — a forced-closed posture must not become the recorded `previous` state
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/security/service.ts` (the state-write region of `analyze()`,
 around line 95), `src/security/self-protect.ts` (a doc comment on `writeState`
 only — no behaviour change), `src/security/security.test.ts` (three new
@@ -11,7 +11,7 @@ regressions). `src/security/config.ts`, `src/security/guard.ts`,
 (confirmed: I never called Edit/Write on any of them; only `Read`). Spec
 written before coding: `T58-spec.md` (same directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## What T54 left open (T39 F-008)
 

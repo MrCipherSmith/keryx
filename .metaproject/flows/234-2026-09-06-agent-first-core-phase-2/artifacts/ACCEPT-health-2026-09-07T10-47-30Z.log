@@ -1,5 +1,5 @@
 # command: bun src/cli.ts health run
-# cwd: /Users/Goodea/goodea/keryx
+# cwd: ~/goodea/keryx
 # started: 2026-09-07T10:50:14Z
 # ---- output below, may legitimately be empty ----
 # Code Health: PASS

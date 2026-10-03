@@ -1,6 +1,6 @@
 # T54 implementation — close the mode axis, narrow the manifest widening, and say what is true about the persistence signal
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/security/config.ts`, `src/security/guard.ts`,
 `src/security/guard.test.ts` — nothing else. `src/security/service.ts`,
 `src/security/self-protect.ts`, `src/commands/security.ts`,
@@ -9,7 +9,7 @@ byte-unmodified. No `types.ts` / `schemas.ts` change was needed: `SecurityMode`
 and `configUnreadable` already exist and the schema already enumerates the four
 modes. Spec written before coding: `T54-spec.md` (same directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## Baseline (before any edit)
 

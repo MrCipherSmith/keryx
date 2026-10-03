@@ -3,7 +3,7 @@
   "intent": "analyze",
   "job_name": "audit-2026-09-06",
   "context": {
-    "project_dir": "/Users/Goodea/goodea/keryx"
+    "project_dir": "~/goodea/keryx"
   },
   "plan": {
     "steps": [

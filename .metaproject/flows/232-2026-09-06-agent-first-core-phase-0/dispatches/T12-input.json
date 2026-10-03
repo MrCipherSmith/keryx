@@ -12,7 +12,7 @@
     ]
   },
   "workspace": {
-    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "codebase_path": "~/goodea/keryx",
     "branch": "codex/agent-first-core"
   },
   "automation": {

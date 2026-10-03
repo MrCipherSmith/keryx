@@ -83,7 +83,7 @@ and the eleven resolved forks with reasoning.
 
 ### Reference implementation studied
 
-`/home/altsay/bots/helyx` — a production Telegram/Claude Code system on this
+`~/bots/helyx` — a production Telegram/Claude Code system on this
 machine. Two patterns: an inverted MCP channel (`channel/`), and a headless
 reviewer (`services/reviewer-service.ts`) whose `ReviewerKind` is
 `"codex" | "provider" | "claude"`. Twelve measured failures from the second are

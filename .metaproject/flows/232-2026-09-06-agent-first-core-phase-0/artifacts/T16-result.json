@@ -24,14 +24,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent Stage 1 M10 specification review with one blocker, exact source sites, focused evidence, unsupported-claim separation, and routing audit.",
       "hash": "791c696059d04fc985d0b14f4bcd136a61f89079613e3ab0fb04753e223b9326"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Exact offline reproduction showing spawn_subagent max_tool_calls=1 permits two child tool invocations and reports Completed.",

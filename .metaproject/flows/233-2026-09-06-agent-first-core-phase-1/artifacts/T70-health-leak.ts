@@ -21,7 +21,7 @@ import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const ROOT = "/Users/Goodea/goodea/keryx";
+const ROOT = "~/goodea/keryx";
 const SOURCES = path.join(ROOT, "src/health/sources/index.ts");
 
 const PLANTED_PATH = "/Users/attacker/.ssh/id_rsa";

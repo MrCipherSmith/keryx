@@ -17,3 +17,4 @@
 - 2026-09-26T13:23:42.253Z - ac-confirmed: AC8: docs/docs/guides/jev-in-the-delivery-loop.md created, linked from docs/docs/index.md, mkdocs.yml, and README.md; CHANGELOG.md Unreleased entry added (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:23:42.566Z - ac-confirmed: AC9: PR #755 open, base main, all 18 CI checks green after mkdocs nav fix (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-09-26T13:23:49.845Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/755 (warning: PR is not a draft)
+- 2026-10-01T06:50:36.404Z - owner-changed: operator@example.com -> MrCipherSmith (replace personal email with the public handle before publication)

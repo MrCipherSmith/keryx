@@ -99,7 +99,7 @@ is invalid for the same reason.
 Every batch runs from `harness/` with the shim first on `PATH`:
 
 ```bash
-cd /home/altsay/keryx/docs/requirements/keryx-shell-benchmark/harness
+cd ~/keryx/docs/requirements/keryx-shell-benchmark/harness
 PATH="$PWD/bin:$PATH" ./batch.sh <case> <legs...>
 ```
 

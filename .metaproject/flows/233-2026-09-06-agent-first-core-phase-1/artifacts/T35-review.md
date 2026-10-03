@@ -11,7 +11,7 @@ quality) was therefore not performed.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx`
+- Root: `~/goodea/keryx`
 - Branch: `codex/agent-first-core`
 - HEAD / merge-base with `main`: `0bc6418fa1a038f8ec909cf949fecba077acf9a4` (identical; the branch carries uncommitted work only)
 - Scope mode: default-with-uncommitted, restricted to the T33/T34 surface named in the dispatch
@@ -535,7 +535,7 @@ Checked, with no finding:
 
 ## Evidence
 
-All raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 | # | What ran | Raw log | SHA-256 |
 |---|---|---|---|

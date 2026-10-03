@@ -21,11 +21,11 @@
     {"path": ".metaproject/flows/202-2026-08-26-keryx-full-review-remediation/artifacts/pr421-fix-round-2-review.md", "kind": "review", "exists": true}
   ],
   "files_to_read": [
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
-    "/Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-verifier/SKILL.md"
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/index.md",
+    "~/goodea/keryx/.worktrees/full-review-remediation/.metaproject/skills/gdskills/review/review-verifier/SKILL.md"
   ],
   "constraints": [
-    "Use exact worktree root /Users/tsaitler.aleksandr/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, navigation, or command.",
+    "Use exact worktree root ~/goodea/keryx/.worktrees/full-review-remediation and read .metaproject/index.md before any search, read, navigation, or command.",
     "Read-only: do not modify files, flow state, commits, PR, or review package.",
     "Verify current production head dcf557a3fdf793fc53110ccfdf90113dd1c6497b; review artifacts created afterward are evidence only.",
     "Use gdctx for output and keryx ctx rg for text search."

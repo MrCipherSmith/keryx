@@ -19,14 +19,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T15-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent Stage 1 specification and Stage 2 logic review with exact source lines, bounded tests, probes, snapshot hashes, and routing audit.",
       "hash": "7c68ead98a6e64e865fe6dfbbc405fb9186b91469c9017f937b3b86f8ff767c7"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
       "kind": "report",
       "exists": true,
       "summary": "Preserved T8 evidence with appended correction that required ESLint was skipped and no complete quality PASS is claimed.",

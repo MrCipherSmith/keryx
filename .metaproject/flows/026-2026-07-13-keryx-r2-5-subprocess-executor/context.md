@@ -95,11 +95,11 @@ an unbounded context retry loop").
 - TDD: RED (Sonnet) → impl (Opus highload) → review (Opus highload/security).
 
 ## Operational
-- keryx = `bun ./src/cli.ts`. Root = `/Users/Goodea/goodea/keryx` (branch
+- keryx = `bun ./src/cli.ts`. Root = `~/goodea/keryx` (branch
   feature/keryx-release2-subprocess-executor). Never commit to main; PR at the end (no
   co-authorship). NOTE: R2-5 edits the runbook Release 2 Стейт → will conflict with R2-2
   (#27) + R2-3 (#28) at merge; resolve then (keep all ✅).
 - State only via `keryx flow` (flow 026); workers via subagent-dispatch/result (STATUS:
-  first line). WORKTREE-GUARD: every writing worker `cd /Users/Goodea/goodea/keryx && pwd`
+  first line). WORKTREE-GUARD: every writing worker `cd ~/goodea/keryx && pwd`
   first, write ONLY under it. Injected id/clock; NO real spawn/fs/network in the offline
   suite; `.toThrow()`/deep-equal for immutability. Order: T5 (RED) → T6 (impl) → T7 (review).

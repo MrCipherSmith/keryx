@@ -1,6 +1,6 @@
 # T79 spec — closing T76 F-001..F-004, and the class
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`, confirmed
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`, confirmed
 via `pwd`/`git rev-parse --abbrev-ref HEAD` before the first read). No
 `.claude/worktrees/**` entered. No `git stash`.
 

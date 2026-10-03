@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Gate enumeration, the scope decision (fix only the two skipped-on-throw catch arms, leave the two already-fail arms alone), the shared-helper design, and the verification plan, written before any code change."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full gate-by-gate enumeration table with producer/exception-path/skip-path columns, the conservatism argument for what was left untouched, the fix description, RED/GREEN transcripts, and every verification command with raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T45-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."
