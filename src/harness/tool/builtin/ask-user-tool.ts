@@ -34,6 +34,20 @@ export interface AskUserRequest {
 export type AskUserFn = (request: AskUserRequest) => Promise<string>;
 
 /**
+ * What the model is told about `ask_user`. It says what each field means and nothing about how the host presents a
+ * question: the model must not be able to steer, or guess, how its own question is shown (flow 400, review S-1).
+ */
+export const ASK_USER_DESCRIPTION =
+  "Ask the user an interactive multiple-choice question (Claude-style interview). " +
+  "Use when requirements are unclear, for interview steps, or to confirm a plan. " +
+  "Provide 2–6 options with short descriptions; mark at most ONE option recommended when sensible (more than one is rejected). " +
+  "Whenever you mark an option recommended, ALWAYS set recommendationReason: one sentence on why it is the better choice. " +
+  "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
+  "Returns the chosen option id (or freeform text if allow_freeform). " +
+  "irreversible: true means the question decides something that cannot be undone (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version). " +
+  "action names that irreversible action (e.g. action: \"release\").";
+
+/**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
  * composer-dock picker; tests inject a stub).
  */
@@ -41,15 +55,7 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
   return {
     definition: {
       name: "ask_user",
-      description:
-        "Ask the user an interactive multiple-choice question (Claude-style interview). " +
-        "Use when requirements are unclear, for interview steps, or to confirm a plan. " +
-        "Provide 2–6 options with short descriptions; mark at most ONE option recommended when sensible (more than one is rejected). " +
-        "Whenever you mark an option recommended, ALWAYS set recommendationReason: one sentence on why it is the better choice. " +
-        "Input: { question: string, options: [{ id, label, description, recommended? }], recommendationReason?: string, allow_freeform?: boolean, action?: string, irreversible?: boolean }. " +
-        "Returns the chosen option id (or freeform text if allow_freeform). " +
-        "If the question decides anything irreversible (release, publish, deploy, delete, push, merge to a shared branch, drop, force, reset, tag a version), " +
-        "you MUST set irreversible: true, or name it in action (e.g. action: \"release\"): a question without either may be shown blind, with the recommendation hidden.",
+      description: ASK_USER_DESCRIPTION,
       inputSchema: {
         type: "object",
         properties: {

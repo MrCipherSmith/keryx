@@ -12,13 +12,16 @@
 //
 // The arm is a pure function of (repoSalt, seq): the same repository and the same
 // position in the journal give the same arm on a repeated run, so an assignment can
-// be replayed and audited. The salt lives in `.metaproject/data/decisions/seed`
-// (mode 0600, git-ignored) and is created once; the record keeps only `seed`, a
-// 32-bit number derived from the salt, never the salt itself.
+// be replayed and audited. The salt lives outside the repository, in
+// `<XDG_CONFIG_HOME or ~/.config>/keryx/decisions/<repo hash>.seed` (mode 0600), and is
+// created once; the record keeps only `seed`, a 32-bit number derived from the salt,
+// never the salt itself.
 
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
+import { resolveGitCommonDir } from "../lib/git-worktrees";
 import { configFile, decisionsDir, journalRoot } from "./store";
 import type { DecisionMode } from "./types";
 
@@ -165,37 +168,81 @@ export async function loadArmWeights(cwd: string): Promise<ArmWeights> {
   }
 }
 
+/** The pre-0.3.72 salt file inside the repository: read only to migrate it, never written. */
 export function seedFile(root: string): string {
   return path.join(decisionsDir(root), "seed");
+}
+
+export interface SaltOptions {
+  /** Test seam: the keryx config directory to keep the salt under (else KERYX_CONFIG_DIR, else `<XDG_CONFIG_HOME or ~/.config>/keryx`). */
+  configDir?: string | undefined;
+}
+
+function keryxSaltDir(options: SaltOptions): string {
+  const given = options.configDir ?? process.env["KERYX_CONFIG_DIR"];
+  if (given !== undefined && given.length > 0) return path.join(given, "decisions");
+  const xdg = process.env["XDG_CONFIG_HOME"];
+  const base = xdg !== undefined && path.isAbsolute(xdg) ? xdg : path.join(homedir(), ".config");
+  return path.join(base, "keryx", "decisions");
+}
+
+const identityCache = new Map<string, string>();
+
+/** What one repository is called outside it: the real path of git's common dir (shared by every worktree), else of the project root. */
+async function repoIdentity(cwd: string): Promise<string> {
+  const cached = identityCache.get(cwd);
+  if (cached !== undefined) return cached;
+  const target = (await resolveGitCommonDir(cwd)) ?? cwd;
+  const identity = await realpath(target).catch(() => path.resolve(target));
+  identityCache.set(cwd, identity);
+  return identity;
+}
+
+/**
+ * Where the salt of the repository `cwd` belongs to lives: outside the repository, in the user's
+ * config directory, so the agent being measured cannot read it from the tree it works in.
+ */
+export async function saltFile(cwd: string, options: SaltOptions = {}): Promise<string> {
+  const key = createHash("sha256").update(await repoIdentity(cwd)).digest("hex").slice(0, 16);
+  return path.join(keryxSaltDir(options), `${key}.seed`);
 }
 
 /** A salt shorter than this is treated as absent: the generated one is 64 hex characters. */
 const MIN_SALT_LENGTH = 16;
 
 /**
- * The repository's salt, created once (mode 0600) and read back afterwards. Two
- * processes racing to create it agree: the loser of the exclusive create reads the winner's.
- * An empty, blank or too-short seed file is as good as none: it is replaced (atomically,
- * through a temp file and a rename) rather than failing every question after it. A seed
- * file readable by others is tightened to 0600.
+ * The repository's salt, created once (mode 0600, directory 0700) outside the repository and read
+ * back afterwards. Two processes racing to create it agree: the loser of the exclusive create reads
+ * the winner's. An empty, blank or too-short salt file is as good as none: it is replaced
+ * (atomically, through a temp file and a rename) rather than failing every question after it. A salt
+ * file readable by others is tightened to 0600. A salt still in the old in-repo place
+ * (`.metaproject/data/decisions/seed`) is moved to the new one when none exists yet, so earlier
+ * assignments stay reproducible, and the in-repo copy is then deleted.
  */
-export async function loadRepoSalt(cwd: string): Promise<string> {
-  const root = await journalRoot(cwd);
-  const file = seedFile(root);
+export async function loadRepoSalt(cwd: string, options: SaltOptions = {}): Promise<string> {
+  const file = await saltFile(cwd, options);
   const existing = await readSalt(file);
   if (existing.salt !== undefined) {
     await tightenMode(file);
+    await dropLegacySeed(cwd);
     return existing.salt;
   }
-  await mkdir(decisionsDir(root), { recursive: true });
-  const fresh = randomBytes(32).toString("hex");
+  const dir = path.dirname(file);
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700).catch(() => undefined);
+  const legacy = await readSalt(seedFile(await journalRoot(cwd)));
+  const fresh = legacy.salt ?? randomBytes(32).toString("hex");
   if (!existing.present) {
     try {
       await writeFile(file, `${fresh}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      await dropLegacySeed(cwd);
       return fresh;
     } catch {
       const winner = await readSalt(file);
-      if (winner.salt !== undefined) return winner.salt;
+      if (winner.salt !== undefined) {
+        await dropLegacySeed(cwd);
+        return winner.salt;
+      }
       // the winner's file is unusable too (empty): fall through and replace it
     }
   }
@@ -205,10 +252,21 @@ export async function loadRepoSalt(cwd: string): Promise<string> {
     await rename(temp, file);
   } catch (cause) {
     await rm(temp, { force: true }).catch(() => undefined);
-    throw new Error(`could not create the decisions seed file ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    throw new Error(`could not create the decisions salt file ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
   }
   // another process may have replaced it in the same instant: whatever is on disk now is the salt
-  return (await readSalt(file)).salt ?? fresh;
+  const settled = (await readSalt(file)).salt ?? fresh;
+  await dropLegacySeed(cwd);
+  return settled;
+}
+
+/** Delete the in-repo salt once the new one is in place (the agent can read the tree, so a copy there defeats the move). */
+async function dropLegacySeed(cwd: string): Promise<void> {
+  try {
+    await rm(seedFile(await journalRoot(cwd)), { force: true });
+  } catch {
+    // best effort: a read-only tree must not stop a question
+  }
 }
 
 async function readSalt(file: string): Promise<{ present: boolean; salt: string | undefined }> {

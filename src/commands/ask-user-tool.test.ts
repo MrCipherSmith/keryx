@@ -1,7 +1,7 @@
 // Flow 400 (AC5): the ask_user schema carries a top-level recommendationReason and
 // rejects a question that marks more than one option recommended.
 import { expect, test } from "bun:test";
-import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import { ASK_USER_DESCRIPTION, createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import type { AskUserRequest } from "../harness/tool/builtin/ask-user-tool";
 
 const REASON = "it is the reversible one";
@@ -61,4 +61,16 @@ test("AC5: a non-string recommendationReason is ignored, not an error", async ()
   const result = await tool.invoke({ question: "Which?", options: options(["b"]), recommendationReason: 42 });
   expect(result.isError).toBe(false);
   expect(seen[0]?.recommendationReason).toBeUndefined();
+});
+
+test("S-1: the tool description says what the fields mean and gives no guidance on how the question is presented", () => {
+  const { definition } = createAskUserTool(async () => "a");
+  expect(definition.description).toBe(ASK_USER_DESCRIPTION);
+  const text = ASK_USER_DESCRIPTION.toLowerCase();
+  expect(text).not.toContain("blind");
+  expect(text).not.toContain("arm");
+  expect(text).not.toContain("hidden");
+  // the fields stay documented
+  expect(text).toContain("irreversible");
+  expect(text).toContain("action");
 });

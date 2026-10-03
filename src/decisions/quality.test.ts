@@ -183,7 +183,7 @@ describe("AC12: rate --blind-model", () => {
   test("a decision the model already rated is skipped; backfilled, unanswered and recommendation-free ones are not rated", async () => {
     await decide("d-1", "keep");
     await openDecision({ cwd: root, id: "open-1", question: "Q?", options: OPTIONS, recommendation: { optionId: "keep", reason: "r" }, arm: "A", salt: "s", seq: 2 });
-    await openDecision({ cwd: root, id: "norec", question: "Q?", options: OPTIONS, arm: "A", salt: "s", seq: 3 });
+    await openDecision({ cwd: root, id: "norec", question: "Q without a recommendation?", options: OPTIONS, arm: "A", salt: "s", seq: 3 });
     await answerDecision({ cwd: root, id: "norec", choice: "keep" });
     const model = fakeModel("1");
     const first = await rateBlindModel({ cwd: root, model: "m", call: model.call });

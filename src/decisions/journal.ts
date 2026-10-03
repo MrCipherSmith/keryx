@@ -5,9 +5,9 @@
 // `answer` records the choice and returns the reveal. Nothing here talks to a
 // model, a TUI or a chat bridge; the caller asks the human.
 
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
-import { ARM_FACTORS, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm } from "./arms";
+import { ARM_FACTORS, armOfMode, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm } from "./arms";
 import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
 import { oneLine } from "./text";
@@ -15,6 +15,7 @@ import type {
   AnswerInput,
   AnswerRecord,
   AnswerResult,
+  DecisionRecord,
   OpenInput,
   OpenRecord,
   OpenResult,
@@ -26,6 +27,40 @@ export const DEFAULT_CHANNEL = "tui";
 
 function newId(now: Date): string {
   return `d-${now.getTime().toString(36)}-${randomBytes(3).toString("hex")}`;
+}
+
+/** What makes two questions the same question: the normalised text and the set of option ids, hashed. */
+function questionHash(question: string, optionIds: readonly string[]): string {
+  const text = oneLine(question).toLowerCase();
+  return createHash("sha256").update(JSON.stringify([text, [...optionIds].sort()])).digest("hex");
+}
+
+function resultOf(record: OpenRecord): OpenResult {
+  return {
+    id: record.id,
+    mode: record.mode,
+    arm: record.arm ?? armOfMode(record.mode),
+    seed: record.seed ?? 0,
+    preselected: record.preselected ?? false,
+    forced: record.forced ?? false,
+    channel: record.channel ?? DEFAULT_CHANNEL,
+    order: record.order,
+    showMark: record.showMark ?? record.mode === "ordinary",
+    irreversible: record.irreversible ?? false,
+    blindRefused: record.blindRefused ?? false,
+    flow: record.flow,
+  };
+}
+
+/** The still-unanswered open record of this repository that asks the same question, if any (one scan of the journal). */
+function findOpenTwin(records: readonly DecisionRecord[], hash: string): OpenRecord | undefined {
+  const answered = new Set<string>();
+  for (const r of records) if (r.kind === "answer") answered.add(r.id);
+  for (const r of records) {
+    if (r.kind !== "open" || r.backfilled === true || answered.has(r.id)) continue;
+    if (questionHash(r.question, r.options.map((option) => option.id)) === hash) return r;
+  }
+  return undefined;
 }
 
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
@@ -45,6 +80,12 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     throw new Error(`the recommended option "${recommendation.optionId}" is not one of the options`);
   }
 
+  // Idempotent per question: asking the same question again while it is still unanswered returns the arm already
+  // drawn for it, so repeating `open` cannot re-roll the arm. Once it is answered, the next open is a new decision.
+  const records = await readRecords(input.cwd);
+  const twin = findOpenTwin(records, questionHash(question, [...ids]));
+  if (twin !== undefined) return resultOf(twin);
+
   const config = await loadDecisionsConfig(input.cwd);
   const tagged = input.action !== undefined && input.action.trim().length > 0;
   // A caller that tags the action, or says so outright, has declared it irreversible; the text match is the safety net.
@@ -52,7 +93,7 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
   // The arm is a pure function of (repoSalt, seq), so a repeated run assigns it the same way. An irreversible
   // question is always arm A with forced: true, and never blind (AC4).
   const salt = input.salt ?? (await loadRepoSalt(input.cwd));
-  const seq = input.seq ?? (await readRecords(input.cwd)).filter((r) => r.kind === "open").length + 1;
+  const seq = input.seq ?? records.filter((r) => r.kind === "open").length + 1;
   const choice = chooseArm({
     salt,
     seq,

@@ -131,7 +131,7 @@ export interface OpenInput {
   arm?: Arm | undefined;
   /** Test seam: the position in the journal the seed is derived with (default: the number of open records + 1). */
   seq?: number | undefined;
-  /** Test seam: the repository salt (default: the one in .metaproject/data/decisions/seed). */
+  /** Test seam: the repository salt (default: the one under the user config directory, see loadRepoSalt). */
   salt?: string | undefined;
   now?: (() => Date) | undefined;
   id?: string | undefined;

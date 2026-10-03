@@ -16,6 +16,7 @@ import {
   modeOfArm,
   parseArmWeights,
   pickArm,
+  saltFile,
   seedFile,
   type Arm,
 } from "./arms";
@@ -147,46 +148,121 @@ describe("AC1: the weights come from decisions.config.json", () => {
 });
 
 describe("AC1: the repo salt", () => {
-  test("is created once with mode 0600, read back unchanged, and never written to a record", async () => {
-    const salt = await loadRepoSalt(root);
-    expect(salt).toMatch(/^[0-9a-f]{64}$/);
-    expect(await loadRepoSalt(root)).toBe(salt);
-    const file = seedFile(root);
-    expect(file).toBe(path.join(root, ".metaproject", "data", "decisions", "seed"));
-    expect((await stat(file)).mode & 0o777).toBe(0o600);
-    expect((await readFile(file, "utf8")).trim()).toBe(salt);
+  let config: string;
 
-    await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC });
+  beforeEach(async () => {
+    config = await mkdtemp(path.join(tmpdir(), "keryx-arms-config-"));
+  });
+
+  afterEach(async () => {
+    await rm(config, { recursive: true, force: true });
+  });
+
+  test("is created once outside the repository with mode 0600 (directory 0700), read back unchanged, and never written to a record", async () => {
+    const salt = await loadRepoSalt(root, { configDir: config });
+    expect(salt).toMatch(/^[0-9a-f]{64}$/);
+    expect(await loadRepoSalt(root, { configDir: config })).toBe(salt);
+    const file = await saltFile(root, { configDir: config });
+    expect(path.dirname(file)).toBe(path.join(config, "decisions"));
+    expect(path.basename(file)).toMatch(/^[0-9a-f]{16}\.seed$/);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    expect((await stat(path.dirname(file))).mode & 0o777).toBe(0o700);
+    expect((await readFile(file, "utf8")).trim()).toBe(salt);
+    // nothing of it is left in the repository
+    await expect(stat(seedFile(root))).rejects.toThrow();
+
+    await openDecision({ cwd: root, question: "Which colour?", options: OPTIONS, recommendation: REC, salt });
     const [open] = await readRecords(root);
     expect(open).toBeDefined();
     expect(JSON.stringify(open)).not.toContain(salt);
     expect(typeof (open as OpenRecord | undefined)?.seed).toBe("number");
   });
 
-  test("an empty, blank or too-short seed file is replaced, not an error forever", async () => {
-    const file = seedFile(root);
+  test("the default location is <XDG_CONFIG_HOME>/keryx/decisions, and KERYX_CONFIG_DIR replaces <XDG_CONFIG_HOME>/keryx", async () => {
+    const saved = { xdg: process.env["XDG_CONFIG_HOME"], dir: process.env["KERYX_CONFIG_DIR"] };
+    try {
+      delete process.env["KERYX_CONFIG_DIR"];
+      process.env["XDG_CONFIG_HOME"] = config;
+      expect(path.dirname(await saltFile(root))).toBe(path.join(config, "keryx", "decisions"));
+      process.env["KERYX_CONFIG_DIR"] = path.join(config, "other");
+      expect(path.dirname(await saltFile(root))).toBe(path.join(config, "other", "decisions"));
+    } finally {
+      for (const [key, value] of [["XDG_CONFIG_HOME", saved.xdg], ["KERYX_CONFIG_DIR", saved.dir]] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+
+  test("two repositories get two salt files, and every worktree of one repository shares one", async () => {
+    const other = await mkdtemp(path.join(tmpdir(), "keryx-arms-other-"));
+    try {
+      const run = (cwd: string, ...args: string[]): void => {
+        const done = Bun.spawnSync(["git", ...args], { cwd, stdout: "ignore", stderr: "ignore" });
+        if (done.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed`);
+      };
+      run(other, "init", "-q");
+      expect(await saltFile(root, { configDir: config })).not.toBe(await saltFile(other, { configDir: config }));
+      run(other, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init");
+      const linked = path.join(other, "..", `${path.basename(other)}-linked`);
+      run(other, "worktree", "add", "-q", linked, "-b", "linked");
+      try {
+        expect(await saltFile(linked, { configDir: config })).toBe(await saltFile(other, { configDir: config }));
+      } finally {
+        await rm(linked, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(other, { recursive: true, force: true });
+    }
+  });
+
+  test("an empty, blank or too-short salt file is replaced, not an error forever", async () => {
+    const file = await saltFile(root, { configDir: config });
     await mkdir(path.dirname(file), { recursive: true });
     for (const bad of ["", "  \n\t\n", "short\n"]) {
       await writeFile(file, bad, { encoding: "utf8", mode: 0o600 });
-      const salt = await loadRepoSalt(root);
+      const salt = await loadRepoSalt(root, { configDir: config });
       expect(salt).toMatch(/^[0-9a-f]{64}$/);
       expect((await readFile(file, "utf8")).trim()).toBe(salt);
       expect((await stat(file)).mode & 0o777).toBe(0o600);
-      expect(await loadRepoSalt(root)).toBe(salt);
+      expect(await loadRepoSalt(root, { configDir: config })).toBe(salt);
       // the temp file of the replacement is gone
       expect((await readdir(path.dirname(file))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
     }
   });
 
-  test("an existing seed file readable by others is tightened to 0600 and its salt kept", async () => {
-    const file = seedFile(root);
+  test("an existing salt file readable by others is tightened to 0600 and its salt kept", async () => {
+    const file = await saltFile(root, { configDir: config });
     await mkdir(path.dirname(file), { recursive: true });
     const given = "a".repeat(64);
     await writeFile(file, `${given}\n`, { encoding: "utf8", mode: 0o644 });
     await chmod(file, 0o644);
     expect((await stat(file)).mode & 0o777).toBe(0o644);
-    expect(await loadRepoSalt(root)).toBe(given);
+    expect(await loadRepoSalt(root, { configDir: config })).toBe(given);
     expect((await stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  test("migration: an in-repo seed is copied to the new place when none exists, then deleted; arms stay reproducible", async () => {
+    const old = seedFile(root);
+    const given = "b".repeat(64);
+    await mkdir(path.dirname(old), { recursive: true });
+    await writeFile(old, `${given}\n`, { encoding: "utf8", mode: 0o600 });
+    expect(await loadRepoSalt(root, { configDir: config })).toBe(given);
+    const file = await saltFile(root, { configDir: config });
+    expect((await readFile(file, "utf8")).trim()).toBe(given);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
+    await expect(stat(old)).rejects.toThrow();
+    expect(await loadRepoSalt(root, { configDir: config })).toBe(given);
+  });
+
+  test("migration: a salt already in the new place wins over a stale in-repo seed, which is still removed", async () => {
+    const given = "c".repeat(64);
+    const fresh = await loadRepoSalt(root, { configDir: config });
+    const old = seedFile(root);
+    await mkdir(path.dirname(old), { recursive: true });
+    await writeFile(old, `${given}\n`, { encoding: "utf8", mode: 0o600 });
+    expect(await loadRepoSalt(root, { configDir: config })).toBe(fresh);
+    await expect(stat(old)).rejects.toThrow();
   });
 
   test("two opens in one journal use seq 1 and 2 and the stored seed matches assignArm", async () => {
@@ -218,8 +294,8 @@ describe("AC4: forced A", () => {
 
   test("an action tag, the irreversible flag and a blind.ts match each give A forced, even when the draw is D", async () => {
     const base = { cwd: root, options: OPTIONS, recommendation: REC, arm: "D" as const };
-    const tagged = await openDecision({ ...base, question: "Which colour?", action: "release" });
-    const flagged = await openDecision({ ...base, question: "Which colour?", irreversible: true });
+    const tagged = await openDecision({ ...base, question: "Which colour, tagged?", action: "release" });
+    const flagged = await openDecision({ ...base, question: "Which colour, flagged?", irreversible: true });
     const matched = await openDecision({ ...base, question: "Delete the cache directory?" });
     for (const opened of [tagged, flagged, matched]) {
       expect(opened).toMatchObject({ arm: "A", forced: true, mode: "ordinary", showMark: true, blindRefused: true });

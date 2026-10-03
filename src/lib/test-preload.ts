@@ -44,6 +44,8 @@ try {
 const root = mkdtempSync(path.join(tmpdir(), "keryx-test-config-"));
 process.env.XDG_DATA_HOME = root;
 process.env.APPDATA = root;
+// The decisions journal keeps its arm salt under `$XDG_CONFIG_HOME/keryx` (flow 400): same temp root, so no test reads or writes ~/.config.
+process.env.XDG_CONFIG_HOME = root;
 // Published through the ENVIRONMENT, not as a module export, and that is
 // load-bearing. The guard in `test-preload.test.ts` originally imported this
 // module to read the root — which executed it, set the variables, and passed
