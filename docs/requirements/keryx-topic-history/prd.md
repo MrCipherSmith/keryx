@@ -41,7 +41,7 @@ Included: the operator's turns (`isOperatorMessage`) and the final text of each 
 
 ### 4.3 Order and labels
 
-Oldest first. Each item is its own message with a role label in text ("Вы" or "Агент"); no timestamps (D1). The default N is 10 and counts both roles together, not 10 of each.
+Oldest first. Each item is its own message with a role label in text ("You" or "Agent", English as the rest of the product text); no timestamps (D1). The default N is 10 and counts both roles together, not 10 of each.
 
 ### 4.4 Telegram limits
 

@@ -11,12 +11,12 @@
   "title": "Telegram topic history restore and wide tables",
   "status": "ready",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T06:48:25.525Z",
+  "updatedAt": "2026-10-03T07:10:02.642Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:d3aa62d86e90c2e57ac491de9ccaf7157c942a91362b509d90f8512037b19cc2",
+  "acChecksum": "sha256:cedacb837ef696b5f4fa00db0fe0a2fef8060b47a7cc92dce8f8cd6930e16d8a",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -103,6 +103,71 @@
       "at": "2026-10-03T06:48:25.525Z",
       "event": "frozen",
       "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-03T07:09:54.563Z",
+      "event": "ac-updated",
+      "detail": "AC6: \"When a session that was resumed (opened with `-r` or `-c`, or switched to with `/resume`) gets a NEW topic (`Hub.register` answers `reused: false`) and holds at least one qualifying message, the bridge posts the last 10 messages to the topic without a command, once. Nothing is posted automatically for a session that was not resumed, nor when `reused: true`; those cases are served by `/history N`. [verify: exec]\" -> \"When a session that was resumed (opened with -r or -c, or switched to with /resume) gets a NEW topic (Hub.register answers reused: false) and holds at least one qualifying message, the bridge posts the last 10 messages to the topic without a command, once. Nothing is posted automatically for a session that was not resumed, nor when reused is true; those cases are served by /history N. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:54.745Z",
+      "event": "ac-updated",
+      "detail": "AC7: \"A restored message is an operator turn (`isOperatorMessage`) or the final assistant text of a turn; tool calls, tool output, reasoning, injected or provenance-marked content, and intermediate narration between tool calls are never posted. [verify: exec]\" -> \"A restored message is an operator turn (isOperatorMessage) or the final assistant text of a turn; tool calls, tool output, reasoning, injected or provenance-marked content, and intermediate narration between tool calls are never posted. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:54.925Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Every restored message goes through the same redaction as a live reply (`composeReply`) and is cut at the per-item cap (D2) with an «…» marker; a session fixture holding a token-shaped string and a 40,000-character turn yields a topic payload with the token redacted and the turn cut. [verify: exec]\" -> \"Every restored message goes through the same redaction as a live reply (composeReply) and is cut at the per-item cap (D2) with an ellipsis marker; a session fixture holding a token-shaped string and a 40,000-character turn yields a topic payload with the token redacted and the turn cut. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:55.104Z",
+      "event": "ac-updated",
+      "detail": "AC9: \"Restored messages arrive oldest first, each as its own message carrying a role label (the operator's and the agent's differ by text, not only by colour); a fixture with 25 turns posts exactly turns 16 to 25, in that order, and no timestamps are shown (D1). [verify: exec]\" -> \"Restored messages arrive oldest first, each as its own message carrying a role label (the operator and the agent differ by text, not only by colour); a fixture with 25 turns posts exactly turns 16 to 25, in that order, and no timestamps are shown (D1). [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:55.285Z",
+      "event": "ac-updated",
+      "detail": "AC10: \"The restored messages are separate posts (10 by default, no digest) sent through the outbound queue with pacing: the queue spaces them, a 429 pauses it and the history resumes where it stopped, and no message is posted twice after the pause. [verify: exec]\" -> \"The restored messages are separate posts (10 by default, no digest) sent through the outbound queue; the bridge spaces the posts by a pace (the queue itself does no pacing), a 429 pauses the queue and the history resumes where it stopped, and no message is posted twice after the pause. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (the queue is a plain FIFO with no pacing; the implemented pacing lives in the bridge, so the criterion now says so)"
+    },
+    {
+      "at": "2026-10-03T07:09:55.465Z",
+      "event": "ac-updated",
+      "detail": "AC11: \"With an empty session, or one with no qualifying messages, nothing is posted automatically and `/history` answers with one short line that the history is empty, not with silence and not with an error. [verify: exec]\" -> \"With an empty session, or one with no qualifying messages, nothing is posted automatically and /history answers with one short line that the history is empty, not with silence and not with an error. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:55.646Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"A reconnect, a heartbeat, a bridge restart in the same topic, or an at-least-once outbound retry does not repost the history; a second `/history` repeats it on purpose. The automatic restore is remembered by a marker kept per topic in session state, and a test restarts the bridge three times and counts one automatic restore. [verify: exec]\" -> \"A reconnect, a heartbeat, a bridge restart that re-registers the same session in the same topic (reused: true), or an at-least-once outbound retry does not repost the history; a second /history repeats it on purpose. No persistent marker is kept: the automatic restore happens only on the registration of this enable() that created the topic, and only the first registration counts, so a test that reconnects the client and re-enables with a kept topic counts one automatic restore. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (the implementation takes reused from the first registration only, so no per-topic marker is needed; the criterion described a marker that does not exist)"
+    },
+    {
+      "at": "2026-10-03T07:09:55.834Z",
+      "event": "ac-updated",
+      "detail": "AC13: \"`/history [N]` works from the shell and from the topic: no argument means 10, both roles, oldest first; N is accepted from 1 to 20 (D2) and anything else, including a non-numeric argument, gets a one-line usage message and posts nothing. From the shell it needs remote control on; with it off the shell answers with one line saying so. [verify: exec]\" -> \"/history [N] works from the shell and from the topic: no argument means 10, both roles, oldest first; N is accepted from 1 to 20 (D2) and anything else, including a non-numeric argument, gets a one-line usage message and posts nothing. From the shell it needs remote control on; with it off the shell answers with one line saying so. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:56.014Z",
+      "event": "ac-updated",
+      "detail": "AC14: \"The command is visible in the shell: it is in the shell command registry (`AGENT_SLASH_COMMANDS`), in `/help` and `src/standard/help-groups.ts` (the cross-check test passes), and in `REMOTE_COMMANDS` and the bot menu, and a test fails if any of the three lacks it. [verify: exec]\" -> \"The command is visible in the shell: it is in the shell command registry (AGENT_SLASH_COMMANDS), in /help and src/standard/help-groups.ts (the cross-check test passes), and in REMOTE_COMMANDS and the bot menu, and a test fails if any of them lacks it. [verify: exec `bun test src/remote/topic-history.test.ts src/commands/agent-commands.test.ts src/standard src/docs`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:56.196Z",
+      "event": "ac-updated",
+      "detail": "AC15: \"The `/remote-control` panel has a key that posts the history, the sidebar remote line and the status show when the history was last posted and how many messages, a transcript notice appears on every automatic and manual restore, and a TUI test renders each of them. [verify: exec]\" -> \"The /remote-control panel has a key that posts the history, the sidebar remote line and the status show when the history was last posted and how many messages, a transcript notice appears on every automatic and manual restore, and a TUI test renders each of them. [verify: exec `bun test src/tui/remote-control-surface.test.ts bun test src/remote/topic-history.test.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:09:56.391Z",
+      "event": "ac-updated",
+      "detail": "AC16: \"README, `docs/docs/guides/drive-keryx-remotely.md`, the CLI and command reference, and `CHANGELOG.md` describe `/history` and the automatic restore, with a version bump, and `mkdocs build --strict` passes. [verify: exec]\" -> \"README, docs/docs/guides/drive-keryx-remotely.md, the CLI and command reference, and CHANGELOG.md describe /history and the automatic restore, with a version bump; the docs tests pass and the docs build in CI is green. [verify: exec `bun test src/docs`]\" (mkdocs is not installed on this machine and CI runs the strict build; the local command is the docs test)"
+    },
+    {
+      "at": "2026-10-03T07:09:56.571Z",
+      "event": "ac-updated",
+      "detail": "AC19: \"PR 1 does not touch the table code (`src/remote/format-rich.ts`, `src/remote/format-table.ts`), so the two PRs merge in any order. [verify: invariant]\" -> \"PR 1 does not touch the table code (src/remote/format-rich.ts, src/remote/format-table.ts), so the two PRs merge in any order. [verify: invariant `git diff --quiet origin/main...HEAD -- src/remote/format-rich.ts src/remote/format-table.ts`]\" (attach a runnable verification command to every history criterion; no criterion was confirmed yet)"
+    },
+    {
+      "at": "2026-10-03T07:10:02.642Z",
+      "event": "ac-updated",
+      "detail": "AC1: \"A probe sends the same wide 3-column table to the operator's keryx-shell topic in three forms (A: the current `table` block, B: rich `markdown` after helyx's separator rewrite, C: HTML `<pre>` aligned table) and records, for each, whether it is wide, whether it scrolls sideways, and its rendered height; only the three test tables are sent, with no secrets, and the message ids are recorded in the flow's spike notes (`.metaproject/flows/399-2026-10-03-topic-history-and-wide-tables/spike.md`) together with the chosen variant and why. [verify: judged]\" -> \"A probe sends the same wide table to the operator keryx-shell topic in three forms (A: the current table block, B: rich markdown sent as is, C: HTML pre aligned table) and records the message ids and, for each form, whether Telegram accepted it, and whether it is wide, scrolls sideways and how tall it renders; only the three test tables are sent, with no secrets, and the ids go to the flow spike notes (.metaproject/flows/399-2026-10-03-topic-history-and-wide-tables/spike.md) together with the chosen variant and why. [verify: judged]\" (the probe table has 6 columns to be wide enough to overflow, and helyx separator rewrite is not available to this repository, so B is rich markdown sent as is)"
     }
   ],
   "acKinds": {
@@ -122,37 +187,48 @@
       "kind": "unclassified"
     },
     "AC6": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC7": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC8": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC9": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC10": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC11": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC12": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC13": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts"
     },
     "AC14": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/topic-history.test.ts src/commands/agent-commands.test.ts src/standard src/docs"
     },
     "AC15": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/tui/remote-control-surface.test.ts bun test src/remote/topic-history.test.ts"
     },
     "AC16": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/docs"
     },
     "AC17": {
       "kind": "judged"
@@ -161,7 +237,8 @@
       "kind": "judged"
     },
     "AC19": {
-      "kind": "unclassified"
+      "kind": "invariant",
+      "check": "git diff --quiet origin/main...HEAD -- src/remote/format-rich.ts src/remote/format-table.ts"
     }
   }
 }
