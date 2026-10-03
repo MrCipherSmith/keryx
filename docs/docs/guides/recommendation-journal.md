@@ -31,8 +31,9 @@ flow's status.
 ## Blind questions
 
 A question with a recommendation is asked in one of four **arms**, drawn from a
-seeded generator on the repository's salt (`.metaproject/data/decisions/seed`, mode
-0600, git-ignored) and the position in the journal, so an assignment can be replayed:
+seeded generator on the repository's salt (kept outside the repository, in
+`~/.config/keryx/decisions`, mode 0600) and the position in the journal, so an
+assignment can be replayed:
 
 | Arm | Order | "Recommended" mark | Recommended option preselected | Default weight |
 | --- | --- | --- | --- | --- |
@@ -50,6 +51,17 @@ after any answer. The agent gives the reason as the top-level `recommendationRea
 of `ask_user`, and may mark at most one option recommended. This is what lets the match share mean
 something: if you only ever saw the recommendation marked, you would match it
 because it was marked. A question that carries no recommendation is always asked the ordinary way and is left out of every arm and channel cell of the report (it is still counted in the total and under "without a recommendation"), so it cannot skew the A count or its median time.
+
+### What the arm assignment protects against
+
+The salt is outside the repository (`$XDG_CONFIG_HOME/keryx/decisions`, or
+`~/.config/keryx/decisions`; one file per repository, shared by all its worktrees), so
+the agent cannot read it from the tree it works in, and asking the same unanswered
+question again returns the arm already drawn instead of drawing a new one. The
+`ask_user` description tells the agent what `irreversible` and `action` mean and
+nothing about how a question is shown. That protects against accident and casual
+steering. It does not protect against a hostile agent running as your own user: such
+an agent can read your config directory and the journal.
 
 A question about something on the **irreversible list** is never blind: it is always
 arm A, and the record says `forced: true` (every other A says `forced: false`). The list has
