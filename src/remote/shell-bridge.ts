@@ -49,6 +49,11 @@ export interface RemoteStatus {
   name?: string;
   /** Milliseconds since serve last answered; absent when off or never answered. */
   heartbeatAgeMs?: number;
+  /**
+   * Approval decisions that arrived from Telegram whose ack serve has not confirmed (flow 397).
+   * Absent while zero; the Telegram message for those reads "not confirmed" until it is.
+   */
+  unconfirmedApprovals?: number;
   /** Newest last, at most {@link REMOTE_EVENT_LIMIT}. */
   events: readonly RemoteEvent[];
 }
@@ -58,7 +63,7 @@ export type RemoteClientLike = Pick<
   RemoteClient,
   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
 > &
-  Partial<Pick<RemoteClient, "reportState">>;
+  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals">>;
 
 export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn">> {
   sessionId(): string;
@@ -249,10 +254,12 @@ export class RemoteBridge {
     }
     const online = this.clientConnected && client.connected;
     const heartbeat = client.lastHeartbeatAt;
+    const unconfirmed = client.unconfirmedApprovals ?? 0;
     return {
       state: online ? "on" : "offline",
       ...(client.name !== undefined ? { name: client.name } : {}),
       ...(heartbeat !== undefined ? { heartbeatAgeMs: Math.max(0, this.now() - heartbeat) } : {}),
+      ...(unconfirmed > 0 ? { unconfirmedApprovals: unconfirmed } : {}),
       events: [...this.events],
     };
   }
@@ -283,6 +290,15 @@ export class RemoteBridge {
       ...(this.options.dir !== undefined ? { dir: this.options.dir } : {}),
       onLine: (text, meta) => this.accept(text, meta),
       onStatus: (status) => this.onStatus(status),
+      // Said before the client acknowledges the frame, so the line is on screen when serve shows its ending.
+      // A decision that reached no live question is said as exactly that, never as allowed or denied here.
+      onApprovalFrame: (frame) =>
+        this.host.notice(
+          frame.applied
+            ? `◇ approval ${frame.approvalId} ${frame.decision === "allow" ? "allowed" : "denied"} from Telegram`
+            : `◇ approval ${frame.approvalId}: ${frame.decision === "allow" ? "an allow" : "a deny"} from Telegram arrived but nothing here was waiting for it; not applied`,
+        ),
+      onUnconfirmedChange: () => this.host.onChange?.(),
     };
     const client = this.options.makeClient !== undefined ? this.options.makeClient(clientOptions) : new RemoteClient(clientOptions);
     this.client = client;

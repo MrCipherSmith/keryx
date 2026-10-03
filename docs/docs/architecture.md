@@ -375,7 +375,7 @@ Two properties people get wrong when summarising this:
   context, and a remote turn is non-interactive by construction. The transport
   only *reports* it.
 - **Two secrets, two route tables.** When Telegram remote control is configured,
-  the same listener also serves seven `/v1/remote/*` routes. They accept only the
+  the same listener also serves eight `/v1/remote/*` routes. They accept only the
   local shell token, from loopback; the bearer token above does not reach them,
   and the shell token reaches nothing else. Which principal a caller is is decided
   by which token verified, still before the URL is read. The shell sends a

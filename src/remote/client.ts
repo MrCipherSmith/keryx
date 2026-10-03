@@ -33,9 +33,11 @@ import { isLoopbackAddress } from "../lib/serve-config";
 import { SESSION_LEASE_HEARTBEAT_MS } from "../session/lease";
 import {
   type AckBody,
+  type ApprovalAckBody,
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalEvent,
+  isApprovalId,
   type ChoiceEvent,
   type PromptBody,
   type PromptResponse,
@@ -83,6 +85,15 @@ export interface RemoteClientOptions {
   /** Buttons the shell attached to a reply itself (not approvals). */
   onCallback?: (data: string, meta: { updateId: number; threadId: number; fromId: number }) => void | Promise<void>;
   onStatus?: (status: ClientStatus) => void;
+  /**
+   * An approval decision frame arrived from the topic (flow 397, AC5). Called once per approval id,
+   * before the shell acknowledges it, so the operator sees the decision as it lands. `applied` is
+   * whether it reached a live question here: false for a stale id, one the shell already gave up on,
+   * or one that was never asked, and the shell must not say it acted on those.
+   */
+  onApprovalFrame?: (frame: { approvalId: string; decision: ApprovalDecision; applied: boolean }) => void;
+  /** {@link RemoteClient.unconfirmedApprovals} changed (a decision arrived, was confirmed, or aged out): repaint what shows it. */
+  onUnconfirmedChange?: () => void;
   /** User-global directory override (the test seam). */
   dir?: string | undefined;
   fetchImpl?: typeof fetch;
@@ -94,6 +105,8 @@ export interface RemoteClientOptions {
   requestTimeoutMs?: number;
   /** Test seam: is the serve process named in `endpoint.json` running, as this user? */
   isAlive?: (pid: number) => boolean;
+  /** How long a decision that beat the question it answers may wait for that question to register (default 2 s). */
+  earlyDecisionMs?: number;
 }
 
 export type StartResult =
@@ -115,6 +128,17 @@ const DEFAULT_BACKOFF_INITIAL_MS = 250;
 const DEFAULT_BACKOFF_MAX_MS = 15_000;
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_EARLY_DECISIONS = 32;
+/**
+ * A decision frame can beat the response that names its approval id by a few milliseconds. That is the
+ * only reason to park one; a frame no question claims within this long was for a question that is gone.
+ * Serve waits 5 s for the ack, so this must stay well under it.
+ */
+const DEFAULT_EARLY_DECISION_MS = 2_000;
+/** Approval ids already seen and how they ended, so a repeated frame is acknowledged again but never resolves a waiter twice. */
+const MAX_SEEN_APPROVALS = 256;
+/** How long a decision whose ack did not go through still counts as "not confirmed" in the status. */
+const UNCONFIRMED_APPROVAL_LINGER_MS = 60_000;
+const MAX_UNCONFIRMED_APPROVALS = 64;
 /** How many recently completed update ids the shell remembers, to drop a redelivery without running it again. */
 const MAX_COMPLETED_IDS = 256;
 
@@ -183,7 +207,13 @@ export class RemoteClient {
   private registering: Promise<void> | undefined;
   private inboundChain: Promise<void> = Promise.resolve();
   private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyDecisions = new Map<string, ApprovalDecision>();
+  private readonly earlyDecisions = new Map<string, { decision: ApprovalDecision; timer: ReturnType<typeof setTimeout> }>();
+  /** `pending` is a parked decision whose question has not claimed it yet; its ack goes out when it settles. */
+  private readonly seenApprovals = new Map<string, "applied" | "not-applied" | "pending">();
+  private readonly earlyDecisionMs: number;
+  /** Decision frames received whose ack has not gone through (approval id to when it arrived). Bounded and aged out. */
+  private readonly unackedApprovals = new Map<string, number>();
+  private readonly lingerTimers = new Set<ReturnType<typeof setTimeout>>();
   private readonly choiceWaiters = new Map<string, { resolve: (index: number | undefined) => void; timer: ReturnType<typeof setTimeout> }>();
   private readonly earlyChoices = new Map<string, number>();
   private firstResult: ((result: StartResult) => void) | undefined;
@@ -204,10 +234,22 @@ export class RemoteClient {
     this.sleep = options.sleep ?? abortableSleep;
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
     this.isAlive = options.isAlive ?? ownProcessIsAlive;
+    this.earlyDecisionMs = options.earlyDecisionMs ?? DEFAULT_EARLY_DECISION_MS;
   }
 
   get connected(): boolean {
     return this.streamOpen && !this.stopped;
+  }
+
+  /** How many approval decisions arrived whose ack serve has not confirmed (in flight, or failed within the last minute). */
+  get unconfirmedApprovals(): number {
+    const cutoff = Date.now() - UNCONFIRMED_APPROVAL_LINGER_MS;
+    for (const [id, at] of [...this.unackedApprovals.entries()]) {
+      if (at < cutoff) {
+        this.unackedApprovals.delete(id);
+      }
+    }
+    return this.unackedApprovals.size;
   }
 
   // ---- lifecycle -----------------------------------------------------------
@@ -270,6 +312,10 @@ export class RemoteClient {
     }
     this.lifetime.abort();
     this.streamAbort?.abort();
+    for (const timer of this.lingerTimers) {
+      clearTimeout(timer);
+    }
+    this.lingerTimers.clear();
     this.failApprovals();
     this.firstResult?.({ ok: false, code: "stopped", message: "the client was stopped before it connected", retrying: false });
     this.firstResult = undefined;
@@ -313,8 +359,11 @@ export class RemoteClient {
     }
     const early = this.earlyDecisions.get(approvalId);
     if (early !== undefined) {
+      // The frame beat this response: now it reaches a live question, so it is applied, and only now.
+      clearTimeout(early.timer);
       this.earlyDecisions.delete(approvalId);
-      return early;
+      this.settleApproval(approvalId, early.decision, true);
+      return early.decision;
     }
     if (!this.connected) {
       return "deny";
@@ -413,7 +462,7 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | ApprovalAckBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
@@ -606,8 +655,7 @@ export class RemoteClient {
       // callbacks are handled at once, below.
       this.inboundChain = this.inboundChain.then(() => this.handleInbound(inbound)).catch(() => undefined);
     } else if (event === "approval") {
-      const approval = parsed as ApprovalEvent;
-      this.resolveApproval(approval.approvalId, approval.decision);
+      this.handleApprovalFrame(parsed as ApprovalEvent);
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
       this.resolveChoice(choice.promptId, choice.index);
@@ -658,17 +706,148 @@ export class RemoteClient {
     }
   }
 
+  /**
+   * A decision frame. The ack says whether the decision was APPLIED to a live question here, not
+   * only that the frame arrived: serve shows "Allowed" only for an applied one, so what the operator
+   * reads in the topic is what the shell did. With a question waiting it is applied at once. With none
+   * it is parked for a moment (the frame can beat the response that names its id) and acked as applied
+   * only if a question claims it in time, otherwise as not applied (a stale id, a reconnect, a
+   * question already given up on). A repeat for an id already settled is acknowledged again with the
+   * same outcome (the first ack may have been lost) but is not said or resolved twice.
+   */
+  private handleApprovalFrame(approval: ApprovalEvent): void {
+    const approvalId = approval?.approvalId;
+    if (!isApprovalId(approvalId) || (approval.decision !== "allow" && approval.decision !== "deny")) {
+      return;
+    }
+    const decision = approval.decision;
+    const seen = this.seenApprovals.get(approvalId);
+    if (seen === "pending") {
+      // Parked and waiting: its own ack goes out when it settles.
+      return;
+    }
+    this.countUnconfirmed(approvalId);
+    if (seen !== undefined) {
+      void this.ackApproval(approvalId, seen === "applied");
+      return;
+    }
+    if (this.waiters.has(approvalId)) {
+      this.settleApproval(approvalId, decision, true, () => this.resolveApproval(approvalId, decision));
+      return;
+    }
+    this.rememberSeen(approvalId, "pending");
+    this.parkEarlyDecision(approvalId, decision);
+  }
+
+  private rememberSeen(approvalId: string, outcome: "applied" | "not-applied" | "pending"): void {
+    this.seenApprovals.delete(approvalId);
+    this.seenApprovals.set(approvalId, outcome);
+    if (this.seenApprovals.size > MAX_SEEN_APPROVALS) {
+      const oldest = this.seenApprovals.keys().next().value;
+      if (oldest !== undefined) {
+        this.seenApprovals.delete(oldest);
+      }
+    }
+  }
+
+  /** Count a decision as not confirmed until its ack goes through; the oldest drop past the bound. */
+  private countUnconfirmed(approvalId: string): void {
+    this.unackedApprovals.delete(approvalId);
+    this.unackedApprovals.set(approvalId, Date.now());
+    this.notifyUnconfirmed();
+    while (this.unackedApprovals.size > MAX_UNCONFIRMED_APPROVALS) {
+      const oldest = this.unackedApprovals.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.unackedApprovals.delete(oldest);
+    }
+  }
+
+  /** Say what happened on screen, then (optionally) hand the decision over, then acknowledge it to serve. */
+  private settleApproval(approvalId: string, decision: ApprovalDecision, applied: boolean, apply?: () => void): void {
+    this.rememberSeen(approvalId, applied ? "applied" : "not-applied");
+    try {
+      this.options.onApprovalFrame?.({ approvalId, decision, applied });
+    } catch {
+      // A failing display never costs the decision.
+    }
+    apply?.();
+    void this.ackApproval(approvalId, applied);
+  }
+
+  /** Park a decision no question has claimed yet, for a short bounded time. */
+  private parkEarlyDecision(approvalId: string, decision: ApprovalDecision): void {
+    while (this.earlyDecisions.size >= MAX_EARLY_DECISIONS) {
+      const oldest = this.earlyDecisions.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.dropEarlyDecision(oldest);
+    }
+    const timer = setTimeout(() => this.dropEarlyDecision(approvalId), this.earlyDecisionMs);
+    (timer as { unref?: () => void }).unref?.();
+    this.earlyDecisions.set(approvalId, { decision, timer });
+  }
+
+  /** Nobody claimed it: it was for a question that is gone, so it is acked as not applied. */
+  private dropEarlyDecision(approvalId: string): void {
+    const early = this.earlyDecisions.get(approvalId);
+    if (early === undefined) {
+      return;
+    }
+    clearTimeout(early.timer);
+    this.earlyDecisions.delete(approvalId);
+    if (!this.stopped) {
+      this.settleApproval(approvalId, early.decision, false);
+    }
+  }
+
+  private async ackApproval(approvalId: string, applied: boolean): Promise<void> {
+    let confirmed = false;
+    try {
+      const response = await this.post("approval-ack", { sessionId: this.options.sessionId, approvalId, applied });
+      confirmed = response.ok;
+    } catch {
+      // Stays counted as not confirmed for a minute; serve shows the approval as not confirmed after its own wait.
+    }
+    if (this.stopped) {
+      // The ack finished after stop(): no timer (teardown already cleared them all) and no repaint of a dead panel.
+      return;
+    }
+    if (confirmed) {
+      this.unackedApprovals.delete(approvalId);
+      this.notifyUnconfirmed();
+      return;
+    }
+    this.lingerTimers.add(
+      this.scheduleUnref(() => {
+        // Aged out: the display must not keep showing it after the count has dropped.
+        this.notifyUnconfirmed();
+      }, UNCONFIRMED_APPROVAL_LINGER_MS + 50),
+    );
+  }
+
+  private notifyUnconfirmed(): void {
+    try {
+      this.options.onUnconfirmedChange?.();
+    } catch {
+      // A failing repaint never costs an approval.
+    }
+  }
+
+  private scheduleUnref(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+    const timer = setTimeout(() => {
+      this.lingerTimers.delete(timer);
+      fn();
+    }, ms);
+    (timer as { unref?: () => void }).unref?.();
+    return timer;
+  }
+
   private resolveApproval(approvalId: string, decision: ApprovalDecision): void {
     const waiter = this.waiters.get(approvalId);
     if (waiter === undefined) {
-      // The decision beat the response that names its id; park it briefly.
-      if (this.earlyDecisions.size >= MAX_EARLY_DECISIONS) {
-        const oldest = this.earlyDecisions.keys().next().value;
-        if (oldest !== undefined) {
-          this.earlyDecisions.delete(oldest);
-        }
-      }
-      this.earlyDecisions.set(approvalId, decision);
       return;
     }
     clearTimeout(waiter.timer);
@@ -709,7 +888,10 @@ export class RemoteClient {
       this.waiters.delete(id);
       waiter.resolve("deny");
     }
-    this.earlyDecisions.clear();
+    for (const id of [...this.earlyDecisions.keys()]) {
+      // Nobody is coming for these: each is acked as not applied (and said so), unless the shell is gone.
+      this.dropEarlyDecision(id);
+    }
     this.failChoices();
   }
 }

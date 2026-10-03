@@ -1,0 +1,16 @@
+# Flow Journal
+
+- 2026-10-02T19:57:21.409Z - flow created
+- 2026-10-02T19:58:46.162Z - task-added: T5: Extract tui-shell queue/session/narration wiring into an injectable module and test the call sites (AC4, AC5 line)
+- 2026-10-02T19:58:46.349Z - task-added: T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)
+- 2026-10-02T20:03:55.015Z - ac-updated: AC4 wording was stale: a turn aborted after a tool call is a failed settle, which sends the failure reply; the no-text reply belongs to a non-failed settle. Reworded F-015 to name both cases.
+- 2026-10-02T20:03:55.444Z - frozen: 6 criteria; checksum recorded
+- 2026-10-02T20:03:55.941Z - started
+- 2026-10-02T20:03:59.330Z - task-done: T1: Collect remaining context
+- 2026-10-02T20:15:10.602Z - task-done: T2: Implement per plan
+- 2026-10-02T20:15:10.920Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-02 - note: AC4 mutation check by hand on src/tui/remote-queue-wiring.ts, each call deleted in turn, remote-queue-wiring.test.ts run: queuedLineRemoved (F-016) 1 red; runQueued without source (F-010) 1 red; edit forgetting its source (F-010) 2 red; disable() (F-014) 1 red; sessionLeaving() (F-014) 1 red; toolCall() (F-015) 3 red; aborted counted as failed (F-015) 1 red; wrapOnToolCall calling the base 1 red; dropQueuedTelegramLines setQueue 2 red; turnStarted 4 red; assistantText 1 red. File restored after each.
+- 2026-10-02T20:23:05.595Z - task-done: T5: Extract tui-shell queue/session/narration wiring into an injectable module and test the call sites (AC4, AC5 line)
+- 2026-10-02T20:24:19.726Z - task-done: T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)
+- 2026-10-02T20:43:48.851Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/867 (base: main)
+- 2026-10-02T20:43:49.039Z - task-done: T4: Self-review and prepare draft PR

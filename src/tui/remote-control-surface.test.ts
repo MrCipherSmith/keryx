@@ -432,3 +432,19 @@ test("the transcript echo of a slash command carries the tg label only when it c
   expect(commandEchoText("/model")).toBe("❯ /model");
   expect(commandEchoText("/model", undefined)).toBe("❯ /model");
 });
+
+// Flow 397 (AC5): a decision serve has not confirmed is visible in the status block and in the sidebar row, and is gone when it clears.
+test("AC5: the status block and the sidebar row show the unconfirmed-approvals count, and drop it at zero", () => {
+  const base: RemoteStatus = { state: "on", name: "release", heartbeatAgeMs: 1000, events: [] };
+  expect(formatRemoteStatusLines(base).join("\n")).not.toContain("not confirmed");
+  expect(projectRemoteRow(base, 40)).toMatchObject({ text: "release", role: "ok" });
+
+  const pending: RemoteStatus = { ...base, unconfirmedApprovals: 2 };
+  expect(formatRemoteStatusLines(pending).join("\n")).toContain("Approvals not confirmed: 2");
+  expect(projectRemoteRow(pending, 40)).toMatchObject({ text: "release · 2 unconfirmed", role: "attention" });
+  expect(projectRemoteRow(pending, 12).text.length).toBeLessThanOrEqual(12);
+
+  // Off says nothing about approvals, whatever a stale count was.
+  expect(formatRemoteStatusLines({ state: "off", unconfirmedApprovals: 3, events: [] }).join("\n")).not.toContain("not confirmed");
+  expect(projectRemoteRow({ state: "off", unconfirmedApprovals: 3, events: [] }, 40).text).toBe("off");
+});

@@ -46,7 +46,7 @@ export interface OpenRemoteServiceOptions
   machine?: string;
   /** Called with a line for the operator. Never carries a secret. */
   onNotice?: (message: string) => void;
-  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalIds">;
+  surface?: Pick<RemoteSurfaceOptions, "keepaliveMs" | "ackTimeoutMs" | "approvalAckMs" | "approvalIds">;
   lock?: Pick<AcquirePollLockOptions, "pid" | "isAlive"> & { disabled?: boolean };
   /** Test seams for a pairing (code, expiry, poll cadence). */
   pairing?: ChannelsOptions["pairing"];

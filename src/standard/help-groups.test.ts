@@ -324,6 +324,54 @@ describe("remote control is documented where operators look", () => {
   });
 });
 
+// Flow 397 (AC6): the approval ack and its "not confirmed" ending are told in the same four
+// places, and the version is above 0.3.64, the release before it.
+describe("the approval ack is documented where operators look", () => {
+  const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`AC6: ${file} names the approval ack and the "not confirmed" ending`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toContain("not confirmed");
+      expect(text).toMatch(/approval-ack|confirmed by the shell|confirm\w* (?:it )?received/);
+    });
+  }
+
+  test("AC6: the guide describes the ack, the wait and the counter", () => {
+    const text = read("docs/docs/guides/drive-keryx-remotely.md").replace(/\s+/g, " ");
+    expect(text).toContain("approval-ack");
+    expect(text).toContain("not confirmed");
+    expect(text).toContain("5 seconds");
+    expect(text).toContain("Approvals not confirmed");
+  });
+
+  for (const file of [
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "docs/docs/guides/drive-keryx-remotely.md",
+    ".metaproject/wiki/architecture/remote-control.md",
+    "CHANGELOG.md",
+  ]) {
+    test(`F2: ${file} says the ack carries whether the answer was applied, and the "Not applied" ending`, () => {
+      const text = read(file).replace(/\s+/g, " ");
+      expect(text).toMatch(/not applied|Not applied/);
+      expect(text).toMatch(/applied/);
+    });
+  }
+
+  test("AC6: package.json is above 0.3.64, the version before the approval ack", () => {
+    const [major = 0, minor = 0, patch = 0] = (JSON.parse(read("package.json")) as { version: string }).version
+      .split(".")
+      .map((part) => Number.parseInt(part, 10));
+    expect(major * 1_000_000 + minor * 1_000 + patch).toBeGreaterThan(3_064);
+  });
+});
+
 // Flow 377: `/channels` is told in the same places, and the version is above 0.3.48.
 describe("/channels is documented where operators look", () => {
   const read = (relative: string): string => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");

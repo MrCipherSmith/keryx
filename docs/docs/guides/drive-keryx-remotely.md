@@ -224,7 +224,7 @@ that it is off.
   same token meets a conflict from Telegram and stops polling for good instead of
   taking updates from the first.
 - **Two secrets, two route tables.** The `/v1/remote/*` routes (`register`,
-  `deregister`, `heartbeat`, `reply`, `approval`, `ack`, and `GET stream`) accept
+  `deregister`, `heartbeat`, `reply`, `approval`, `approval-ack`, `ack`, and `GET stream`) accept
   the shell token only, from a loopback connection. The serve bearer token does
   not reach them, and the shell token reaches nothing else. The shell token is
   new every time `serve` starts and the shell re-reads it on each request, so
@@ -369,6 +369,28 @@ or a name, so it cannot be forged or replayed. It is bound to the session, the
 message and the person it was sent to, expires, and is never mixed up with an
 approval button. After a press, the message is edited in place to show what was
 chosen and the buttons go away; approval messages are edited the same way.
+
+**Approval answers are confirmed by the shell.** When you press Allow or Deny,
+`serve` writes the answer to the shell's stream and waits 5 seconds for the shell
+to post `approval-ack`. The ack says whether the answer was applied to a question the
+shell was still waiting on. With an applied ack, the message ends "Allowed by user N at ..." or
+"Denied by user N at ..." and the short reply is "Approval granted." or "Approval
+denied.". If the shell had no question waiting for that id (it timed out, or the
+session reconnected), the ack says so and the message ends "Not applied at <time>: the
+shell was no longer waiting for this question, so the Allow from user N changed
+nothing."; the shell's transcript says the same and never says it allowed anything.
+A shell older than this field sends an ack without it, which means only that the frame
+was received, and the message ends "Allowed" as before. Without it the message ends "Sent to the shell at <time>, not confirmed;
+the shell denies by itself if it did not receive it." and the short reply says the
+answer was sent but not confirmed. That wording is about an answer the shell never
+received: its own approval question then times out as a denial. An Allow that the
+shell received after the 5 seconds is still applied there, and the topic keeps
+saying not confirmed, because a late ack changes nothing. Pressing again during the wait does nothing, a
+closed stream stops the wait at once, and an ack that arrives after the wait is
+accepted and changes nothing. The shell acks every approval frame, including a
+repeat of one it already handled, and does not apply a repeat twice. While an ack
+has not gone through, `/remote-control` shows "Approvals not confirmed: N" and the
+sidebar row reads "<topic> · N unconfirmed".
 
 **These commands stay in the shell.** `/exit`, `/quit`, `/channels`, `/provider`,
 `/search-provider`, `/search-connect`, `/remote-control`, `/integrate`, `/copy`,

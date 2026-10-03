@@ -1581,7 +1581,7 @@ denied at expiry rather than auto-approved; the stock listener registers no tool
 so it raises none.
 
 **Remote control (Telegram).** Also opt-in: when `remote/bot-token` and
-`remote/config.json` exist, `serve` hosts the one Telegram poller and the seven
+`remote/config.json` exist, `serve` hosts the one Telegram poller and the eight
 `/v1/remote/*` routes, which a `keryx shell` reaches with a nonce-bound HMAC of a
 local shell token (not the serve bearer; `serve` proves itself back with a signed
 answer, `src/remote/shell-token.ts`) to mirror a session into a topic via `/remote-control`.
