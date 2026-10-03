@@ -41,13 +41,6 @@ export const MAX_TABLE_COLUMNS = 20;
  * It is still a table (rich mode draws it natively) and the text modes lay it out stacked.
  */
 export const MAX_TABLE_ROW_COST = 1500;
-/**
- * Most table rows, the header row included, that one message part holds. A rich message takes 500
- * blocks and a table row is one block, so a part of a tall table must stay under that, or Telegram
- * refuses the native table and the part falls back to HTML. The rest of the 500 is for the part
- * label and the text around the table.
- */
-export const MAX_TABLE_ROWS_PER_PART = 400;
 
 const SEPARATOR_CELL = /^\s*(:)?-+(:)?\s*$/;
 
@@ -201,7 +194,7 @@ export function tableLayout(table: MarkdownTable): TableLayout {
 }
 
 /** The "Header: value" lines of one body row, empty cells left out. */
-function stackedRowLines(table: MarkdownTable, row: readonly string[]): string[] {
+export function stackedRowLines(table: MarkdownTable, row: readonly string[]): string[] {
   const lines: string[] = [];
   row.forEach((cell, column) => {
     const text = plainCell(cell);

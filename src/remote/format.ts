@@ -27,17 +27,24 @@
 //     be cut between its codepoints; ordinary text does not reach that path.
 //   - Empty or whitespace-only input produces no message at all.
 //   - A Markdown table is kept whole (flow 395): a split falls between rows, never inside
-//     one, and the header and separator rows are repeated at the top of the next part. Length
+//     one (except a single cell larger than a message, see below), and the header and separator
+//     rows are repeated at the top of the next part. Length
 //     is counted as the text will be RENDERED, not as written: the aligned `<pre>` layout pads
 //     every cell and a horizontal rule is drawn longer than `---`, so those are charged at their
 //     rendered length and a part still fits the limit once Telegram has parsed it. The same
 //     parts serve every rendering mode (the rich table block is never longer than the padded one).
-//     A part also holds at most `MAX_TABLE_ROWS_PER_PART` table rows: a rich message is limited to
-//     500 blocks and a table row is one, so a tall table would otherwise fit one 4096-character part
-//     and be refused as a native table.
+//     A part that holds a table also stays within the 500 blocks of a rich message, counted for the
+//     whole part (a table row is one block, a paragraph one, a list item two or three; see `Piece.blocks`),
+//     so a tall table, or a table with text around it, is never refused as a native table.
+//     A row that cannot share a part with the header (its rendered length, plus the header's, is over a
+//     part) is written as stacked "Header: value" lines, the same form the text modes use for a long row,
+//     and the header is not repeated for it; the next row that fits starts a table again. Only one
+//     cell, or one stacked line, longer than a whole part is cut: at a space in the second half of the
+//     part when there is one, at the limit otherwise.
 
-import { RULE, RULE_LENGTH } from "./format-blocks";
-import { MAX_TABLE_ROWS_PER_PART, tableAt, tableCosts } from "./format-table";
+import { BULLET, ORDERED, QUOTE, RULE, RULE_LENGTH } from "./format-blocks";
+import { stackedRowLines, type TableMatch, tableAt, tableCosts } from "./format-table";
+import { RICH_LIMITS } from "./rich-types";
 import { TELEGRAM_MAX_TEXT } from "./types";
 
 /** Smallest limit the splitter accepts: room for a label, a fence and some text. */
@@ -46,6 +53,11 @@ const MIN_LIMIT = 64;
 const MAX_FENCE_MARKER = 16;
 /** An info string longer than this is not repeated on the reopened fence. */
 const MAX_FENCE_INFO = 40;
+/**
+ * Blocks one part may hold when it carries a table: the rich limit, less the "(i/n)" label paragraph
+ * and the closing marker a split fence gets. Above it Telegram refuses the native table.
+ */
+const BLOCK_BUDGET = RICH_LIMITS.blocks - 2;
 
 interface Fence {
   /** The backtick or tilde run, e.g. "```". */
@@ -70,8 +82,12 @@ interface Piece {
   cost: number;
   /** Set on every piece of a table. */
   table?: TableRun;
-  /** Table rows the piece holds (the header row counts); 0 for anything else. */
-  rows: number;
+  /**
+   * Blocks of a rich message the piece adds, an upper bound (format-rich.ts counts them): a paragraph,
+   * heading or divider is 1, a quote line 2, a list line 2 (3 when it may open a list), a table row 1,
+   * the table with its header and first row 3, a fence 1 on its opening and closing lines, a blank line 0.
+   */
+  blocks: number;
 }
 
 const FENCE_LINE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
@@ -114,12 +130,16 @@ function fenceOverhead(fence: Fence | undefined): number {
   return fence === undefined ? 0 : fence.header.length + 1 + (fence.marker.length + 1);
 }
 
-/** Cut `text` to at most `max` units, preferring the last space, never inside a surrogate pair. */
-function cutAt(text: string, max: number): number {
+/**
+ * Cut `text` to at most `max` units, preferring the last space, never inside a surrogate pair. A space
+ * at or before `minCut` is ignored, so a line that starts with a short label ("a: ...") is not cut
+ * right after it.
+ */
+function cutAt(text: string, max: number, minCut = 0): number {
   if (text.length <= max) {
     return text.length;
   }
-  for (let index = max; index > 0; index -= 1) {
+  for (let index = max; index > minCut; index -= 1) {
     const ch = text[index - 1] as string;
     if (ch === " " || ch === "\t") {
       return index;
@@ -129,12 +149,114 @@ function cutAt(text: string, max: number): number {
   return code >= 0xd800 && code <= 0xdbff ? max - 1 : max;
 }
 
+/** Pieces of one line, cut so that each fits `capacity`; `blocks` is what the first piece adds. */
+function pushLine(
+  pieces: Piece[],
+  raw: string,
+  line: string,
+  before: Fence | undefined,
+  fence: Fence | undefined,
+  capacity: number,
+  blocks: number,
+  stacked = false,
+): void {
+  // The overhead of the fence the piece sits in (before) or opens (after).
+  const room = Math.max(8, capacity - Math.max(fenceOverhead(before), fenceOverhead(fence)));
+  const minCut = stacked ? Math.floor(room / 2) : 0;
+  const inFence = before !== undefined || fence !== undefined;
+  let weight = blocks;
+  let rest = raw;
+  while (rest.length > room) {
+    const cut = cutAt(rest, room, minCut);
+    pieces.push({ text: rest.slice(0, cut), fence: before ?? fence, cost: cut, blocks: weight });
+    // A later piece of the line opens a part of its own: a paragraph, outside a fence.
+    weight = inFence ? 0 : 1;
+    rest = rest.slice(cut);
+  }
+  if (rest.length > 0) {
+    const rule = before === undefined && fence === undefined && RULE.test(line);
+    pieces.push({ text: rest, fence, cost: rule ? Math.max(rest.length, RULE_LENGTH + (rest.endsWith("\n") ? 1 : 0)) : rest.length, blocks: weight });
+  }
+}
+
+const BLANK: Piece = { text: "\n", fence: undefined, cost: 1, blocks: 0 };
+
+/**
+ * The pieces of the table at `raws[at]`, or undefined when its header alone cannot fit a part (the
+ * lines are then cut as plain text). A row whose rendered length plus the header's is over a part is
+ * written as stacked "Header: value" lines instead: a table is never a header with a row cut in half.
+ */
+function tablePieces(found: TableMatch, raws: readonly string[], at: number, capacity: number): Piece[] | undefined {
+  const { table } = found;
+  const costs = tableCosts(table);
+  const headerCost = costs.header;
+  if (headerCost > capacity) {
+    return undefined;
+  }
+  const headerSource = `${raws[at] as string}${raws[at + 1] as string}`;
+  const run: TableRun = { headerSource, headerCost };
+  if (table.rows.length === 0) {
+    return [{ text: headerSource, fence: undefined, cost: headerCost, table: run, blocks: 2 }];
+  }
+  const pieces: Piece[] = [];
+  let last: "table" | "stacked" | undefined;
+  table.rows.forEach((cells, index) => {
+    const source = raws[at + 2 + index] as string;
+    const cost = costs.rows[index] as number;
+    if (headerCost + cost <= capacity) {
+      if (last === "table") {
+        pieces.push({ text: source, fence: undefined, cost, table: run, blocks: 1 });
+      } else {
+        // The header, the separator and the row go together: a part is never only a header.
+        if (last === "stacked") {
+          pieces.push(BLANK);
+        }
+        pieces.push({ text: `${headerSource}${source}`, fence: undefined, cost: headerCost + cost, table: run, blocks: 3 });
+      }
+      last = "table";
+      return;
+    }
+    if (last !== undefined) {
+      pieces.push(BLANK);
+    }
+    for (const line of stackedRowLines(table, cells)) {
+      pushLine(pieces, `${line}\n`, line, undefined, undefined, capacity, 1, true);
+    }
+    last = "stacked";
+  });
+  return pieces;
+}
+
+/** What a line outside a fence and a table adds to a rich message, and the list it belongs to. */
+function lineBlocks(line: string, list: { indent: number; ordered: boolean } | undefined): { blocks: number; list: { indent: number; ordered: boolean } | undefined } {
+  if (line.trim().length === 0) {
+    return { blocks: 0, list: undefined };
+  }
+  if (QUOTE.test(line)) {
+    return { blocks: 2, list: undefined };
+  }
+  if (!RULE.test(line)) {
+    const bullet = BULLET.exec(line);
+    const ordered = bullet === null ? ORDERED.exec(line) : null;
+    const lead = bullet ?? ordered;
+    if (lead !== null) {
+      const entry = { indent: (lead[1] as string).replace(/\t/g, "    ").length, ordered: ordered !== null };
+      // An item is 2 blocks (the item and its paragraph); the first of a run, or one that changes the
+      // indentation or the kind of list, may open a list block as well.
+      const same = list !== undefined && list.indent === entry.indent && list.ordered === entry.ordered;
+      return { blocks: same ? 2 : 3, list: entry };
+    }
+  }
+  return { blocks: 1, list: undefined };
+}
+
 /** Break the text into lines (newline kept) and break any line that cannot fit in one part. */
 function toPieces(text: string, capacity: number): Piece[] {
   const pieces: Piece[] = [];
   const raws = text.split(/(?<=\n)/);
   const bare = raws.map((raw) => (raw.endsWith("\n") ? raw.slice(0, -1) : raw));
   let fence: Fence | undefined;
+  let list: { indent: number; ordered: boolean } | undefined;
   for (let at = 0; at < raws.length; at += 1) {
     const raw = raws[at] as string;
     const line = bare[at] as string;
@@ -144,24 +266,10 @@ function toPieces(text: string, capacity: number): Piece[] {
       if (fence === undefined) {
         const found = tableAt(bare, at);
         if (found !== undefined) {
-          const costs = tableCosts(found.table);
-          const headerCost = costs.header;
-          const widest = Math.max(...costs.rows, 0);
-          if (headerCost + widest <= capacity) {
-            const run: TableRun = { headerSource: `${raw}${raws[at + 1] as string}`, headerCost };
-            // The header, the separator and the first row go together: a part is never only a header.
-            const rows = found.table.rows;
-            const leadEnd = at + 2 + (rows.length > 0 ? 1 : 0);
-            pieces.push({
-              text: raws.slice(at, leadEnd).join(""),
-              fence: undefined,
-              cost: headerCost + (costs.rows[0] ?? 0),
-              table: run,
-              rows: 1 + (rows.length > 0 ? 1 : 0),
-            });
-            for (let row = leadEnd; row < found.end; row += 1) {
-              pieces.push({ text: raws[row] as string, fence: undefined, cost: costs.rows[row - at - 2] as number, table: run, rows: 1 });
-            }
+          const tabled = tablePieces(found, raws, at, capacity);
+          if (tabled !== undefined) {
+            pieces.push(...tabled);
+            list = undefined;
             at = found.end - 1;
             continue;
           }
@@ -170,18 +278,15 @@ function toPieces(text: string, capacity: number): Piece[] {
     } else if (closesFence(line, fence)) {
       fence = undefined;
     }
-    // The overhead of the fence the piece sits in (before) or opens (after).
-    const room = Math.max(8, capacity - Math.max(fenceOverhead(before), fenceOverhead(fence)));
-    let rest = raw;
-    while (rest.length > room) {
-      const cut = cutAt(rest, room);
-      pieces.push({ text: rest.slice(0, cut), fence: before ?? fence, cost: cut, rows: 0 });
-      rest = rest.slice(cut);
+    let blocks: number;
+    if (before !== undefined || fence !== undefined) {
+      // A fence is one block; the lines of a fence with nothing in it are a paragraph each.
+      blocks = before === undefined || fence === undefined ? 1 : line.trim().length === 0 ? 1 : 0;
+      list = undefined;
+    } else {
+      ({ blocks, list } = lineBlocks(line, list));
     }
-    if (rest.length > 0) {
-      const rule = before === undefined && fence === undefined && RULE.test(line);
-      pieces.push({ text: rest, fence, cost: rule ? Math.max(rest.length, RULE_LENGTH + (rest.endsWith("\n") ? 1 : 0)) : rest.length, rows: 0 });
-    }
+    pushLine(pieces, raw, line, before, fence, capacity, blocks);
   }
   return pieces;
 }
@@ -194,15 +299,17 @@ export function renderedLength(text: string): number {
   return toPieces(text.replace(/\r\n?/g, "\n"), Number.POSITIVE_INFINITY).reduce((sum, piece) => sum + piece.cost, 0);
 }
 
-/** Whether `text` fits one part: short enough once rendered, and not more table rows than a rich message takes. */
+/** Whether `text` fits one part: short enough once rendered, and, with a table in it, few enough blocks for a rich message. */
 function fitsOnePart(text: string, limit: number): boolean {
   let length = 0;
-  let rows = 0;
+  let blocks = 0;
+  let tabled = false;
   for (const piece of toPieces(text, Number.POSITIVE_INFINITY)) {
     length += piece.cost;
-    rows += piece.rows;
+    blocks += piece.blocks;
+    tabled ||= piece.table !== undefined;
   }
-  return length <= limit && rows <= MAX_TABLE_ROWS_PER_PART;
+  return length <= limit && (!tabled || blocks <= BLOCK_BUDGET);
 }
 
 function pack(text: string, capacity: number): string[] {
@@ -212,15 +319,18 @@ function pack(text: string, capacity: number): string[] {
   let hasContent = false;
   let open: Fence | undefined;
   let lastTable: TableRun | undefined;
-  /** Table rows in the current part, the repeated header included. */
-  let tableRows = 0;
+  /** Blocks of a rich message in the current part (see `Piece.blocks`), the repeated header and fence included. */
+  let blocks = 0;
+  /** Whether the current part holds a table, so that it may go out as a rich message. */
+  let tabled = false;
 
   const finish = (next?: Piece): void => {
     let body = current.trimEnd();
     if (!hasContent || body.length === 0) {
       current = "";
       used = 0;
-      tableRows = 0;
+      blocks = 0;
+      tabled = false;
       hasContent = false;
       return;
     }
@@ -230,12 +340,15 @@ function pack(text: string, capacity: number): string[] {
     parts.push(body);
     current = open === undefined ? "" : `${open.header}\n`;
     used = open === undefined ? 0 : open.header.length + 1;
-    tableRows = 0;
+    // A reopened fence is a block of the next part.
+    blocks = open === undefined ? 0 : 1;
+    tabled = false;
     // A table that goes on in the next part starts it with its header again.
     if (open === undefined && next?.table !== undefined && next.table === lastTable) {
       current = next.table.headerSource;
       used = next.table.headerCost;
-      tableRows = 1;
+      blocks = 2;
+      tabled = true;
     }
     hasContent = false;
   };
@@ -245,7 +358,7 @@ function pack(text: string, capacity: number): string[] {
       continue;
     }
     const closing = piece.fence === undefined ? 0 : piece.fence.marker.length + 1;
-    if (hasContent && (used + piece.cost + closing > capacity || (piece.rows > 0 && tableRows + piece.rows > MAX_TABLE_ROWS_PER_PART))) {
+    if (hasContent && (used + piece.cost + closing > capacity || ((tabled || piece.table !== undefined) && blocks + piece.blocks > BLOCK_BUDGET))) {
       finish(piece);
       if (piece.text.trim().length === 0) {
         continue;
@@ -253,7 +366,8 @@ function pack(text: string, capacity: number): string[] {
     }
     current += piece.text;
     used += piece.cost;
-    tableRows += piece.rows;
+    blocks += piece.blocks;
+    tabled ||= piece.table !== undefined;
     hasContent = true;
     open = piece.fence;
     lastTable = piece.table;
