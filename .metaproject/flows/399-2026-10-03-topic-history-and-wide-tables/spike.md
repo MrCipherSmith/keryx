@@ -39,23 +39,36 @@ them back through `getUpdates` would fight the running poller. So "wide", "scrol
 and "rendered height" are NOT recorded as observed. The operator reads messages 61, 62 and 63
 in the topic and answers per variant: wide yes/no, scrolls sideways yes/no, how tall.
 
-## Choice (provisional, pending the operator's reading of 61 to 63)
+## Operator reading (2026-10-03, live, from their Telegram client)
 
-Variant C, the aligned `<pre>` block, under D4 and D5:
+| Variant | Message | Operator's answer |
+|:--------|:-------:|:------------------|
+| A | 61 | wide, scrolls sideways like helyx: chosen |
+| B | 62 | not chosen |
+| C | 63 | not chosen |
 
-- A `<pre>` block keeps every column on one line per row, which is the "wide, with a
-  horizontal scroll when it does not fit" the operator described for helyx; Telegram clients
-  scroll a code block sideways. It is also the form keryx already builds and already pins in
-  golden files (format-table.ts), so AC4 stays untouched.
-- Safety beats looks (D4): in C the model text is escaped HTML inside `<pre>`, so a cell cannot
-  add a tag, an attribute or a block. Variant B passes model text through a Markdown parser, and
-  the probe row with `<u>`, `**` and a link is exactly what that parser would act on; B would
-  need every cell escaped, with AC3 passing the whole property corpus, to be safe at all.
-- Variant A is safe (typed `blocks`, flow 395, spike S3) but is the layout the operator
-  reported as narrow and tall.
-- D5: one layout for every table; nothing in the probe argues for a special case, and the
-  probe did not include a short or 2-column table, so D5 stands unchanged.
+The operator's wording: variant A, the native `table` block, is today's behaviour and is the one
+that is wide and scrolls sideways like helyx. "How tall it renders" was not given per variant.
+The three variants are no longer a choice: A wins, so no new renderer is written.
 
-If the operator reads 62 (B) as clearly better looking and wide with scroll, the fallback is
-B with every cell escaped (D4), and PR 2 must then prove it on the property corpus. If 63 (C)
-is not wide or does not scroll on the operator's client, the choice reopens.
+## Choice
+
+Variant A, the native table block (`renderRichMessage`, `tableBlock` in format-rich.ts). This
+replaces the earlier provisional pick of C, which was made before the operator looked at 61 to
+63 and is withdrawn. The reasoning that stays true:
+
+- A is safe by construction (typed `blocks`, flow 395, spike S3): a cell is a cell, model text
+  never reaches a parser (D4).
+- The C and B arguments below are kept only as the record of why they were not needed.
+- D5: one layout for every table; the probe had no short or 2-column table, so D5 is unchanged.
+
+What PR 2 may still have to change, given A wins, is a code reading and not a rendering change:
+see the journal entry for 2026-10-03 (cell width, the HTML and plain fallbacks).
+
+### Provisional pick before the reading (superseded)
+
+Variant C, the aligned `<pre>` block, under D4 and D5. A `<pre>` block keeps every column on one
+line per row and Telegram clients scroll a code block sideways; it is the form already pinned in
+golden files (AC4). In C the model text is escaped HTML inside `<pre>`; B passes model text
+through a Markdown parser and would need every cell escaped (AC3). A was then thought to be the
+layout the operator had reported as narrow and tall; the operator's reading shows it is not.
