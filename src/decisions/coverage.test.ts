@@ -1,6 +1,7 @@
 // Flow 400 (AC8): the round-limit picker and the TUI work decisions are journaled with a `source`;
 // pure permissions (allow/deny) are not.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import ts from "typescript";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -159,25 +160,106 @@ describe("a TUI work picker", () => {
   });
 });
 
+const PERMISSION_IDS = new Set(["deny", "allow", "once", "always-exact", "always-prefix"]);
+
+interface PickerAudit {
+  /** One entry per `journaledPick(` call; `source` is the DECISION_SOURCES member it names, or undefined when it names anything else. */
+  journaled: Array<{ source: string | undefined }>;
+  /** `showComposerChoice(` calls that carry an allow/deny id or are the permission-mode picker. */
+  permissionPickers: number;
+  /** The titles (first 60 chars of the call text) of permission pickers that sit inside a `journaledPick(` call. */
+  wrappedPermissionPickers: string[];
+  /** Permission ids found as string literals anywhere inside a `journaledPick(` call. */
+  permissionIdsInsideJournaled: string[];
+}
+
+/** Parse the source and look at every journaledPick / showComposerChoice call, not at the text around them. */
+function auditPickers(source: string): PickerAudit {
+  const file = ts.createSourceFile("tui-shell.ts", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const audit: PickerAudit = { journaled: [], permissionPickers: 0, wrappedPermissionPickers: [], permissionIdsInsideJournaled: [] };
+  const calleeName = (node: ts.CallExpression): string | undefined => (ts.isIdentifier(node.expression) ? node.expression.text : undefined);
+  const literals = (node: ts.Node): string[] => {
+    const found: string[] = [];
+    const walk = (child: ts.Node): void => {
+      if (ts.isStringLiteralLike(child)) found.push(child.text);
+      if (ts.isIdentifier(child) && child.text === "permissionMode") found.push("permissionMode");
+      if (ts.isIdentifier(child) && child.text === "PERMISSION_MODES") found.push("permissionMode");
+      ts.forEachChild(child, walk);
+    };
+    walk(node);
+    return found;
+  };
+  const sourceOf = (call: ts.CallExpression): string | undefined => {
+    const spec = call.arguments[1];
+    if (spec === undefined || !ts.isObjectLiteralExpression(spec)) return undefined;
+    for (const property of spec.properties) {
+      if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name) || property.name.text !== "source") continue;
+      const value = property.initializer;
+      if (ts.isPropertyAccessExpression(value) && ts.isIdentifier(value.expression) && value.expression.text === "DECISION_SOURCES") {
+        return value.name.text in DECISION_SOURCES ? value.name.text : undefined;
+      }
+    }
+    return undefined;
+  };
+  const visit = (node: ts.Node, insideJournaled: boolean): void => {
+    let inside = insideJournaled;
+    if (ts.isCallExpression(node)) {
+      const name = calleeName(node);
+      if (name === "journaledPick") {
+        audit.journaled.push({ source: sourceOf(node) });
+        for (const id of literals(node)) if (PERMISSION_IDS.has(id)) audit.permissionIdsInsideJournaled.push(id);
+        inside = true;
+      } else if (name === "showComposerChoice") {
+        const ids = literals(node);
+        if (ids.some((id) => PERMISSION_IDS.has(id) || id === "permissionMode")) {
+          audit.permissionPickers += 1;
+          if (insideJournaled) audit.wrappedPermissionPickers.push(node.getText(file).slice(0, 60));
+        }
+      }
+    }
+    ts.forEachChild(node, (child) => visit(child, inside));
+  };
+  visit(file, false);
+  return audit;
+}
+
 describe("wiring: which pickers are journaled and which are not", () => {
   const read = (file: string): Promise<string> => readFile(path.join(import.meta.dir, "..", file), "utf8");
 
-  test("tui-shell journals exactly the work pickers (wiki enrich, queue routing, held session)", async () => {
-    const shell = await read("tui/tui-shell.ts");
-    const used = new Set([...shell.matchAll(/source: DECISION_SOURCES\.(\w+)/g)].map((m) => m[1]));
-    expect(used).toEqual(new Set(["wikiEnrich", "queueRoute", "sessionLease"]));
-    for (const name of used) expect(Object.keys(DECISION_SOURCES)).toContain(name as string);
+  test("tui-shell journals exactly the work pickers (wiki enrich, queue routing, held session), each with a known source", async () => {
+    const audit = auditPickers(await read("tui/tui-shell.ts"));
+    expect(audit.journaled).toHaveLength(3);
+    // every journaledPick call names its source as a DECISION_SOURCES member, never a free string or a variable
+    for (const call of audit.journaled) expect(call.source).toBeDefined();
+    expect(new Set(audit.journaled.map((call) => call.source))).toEqual(new Set(["wikiEnrich", "queueRoute", "sessionLease"]));
+    for (const call of audit.journaled) expect(Object.keys(DECISION_SOURCES)).toContain(call.source as string);
+    expect(new Set(audit.journaled.map((call) => call.source)).size).toBe(audit.journaled.length);
   });
 
-  test("the allow/deny pickers (shell command, patch, subagent, external agent, mode) stay out of the journal", async () => {
+  test("no allow/deny or permission-mode picker is wrapped in journaledPick, and none of their ids appear inside one", async () => {
+    const audit = auditPickers(await read("tui/tui-shell.ts"));
+    // the detector must not go blind: shell command, patch, subagent (x2 modes), external agent, ... and the mode picker
+    expect(audit.permissionPickers).toBeGreaterThanOrEqual(7);
+    expect(audit.wrappedPermissionPickers).toEqual([]);
+    expect(audit.permissionIdsInsideJournaled).toEqual([]);
+  });
+
+  test("the audit catches a permission picker wrapped in journaledPick (scratch-copy mutation of the real source)", async () => {
     const shell = await read("tui/tui-shell.ts");
-    for (const title of ["Allow shell command?", "Approve apply_patch?", "Spawn general subagent?", "Run the external agent", "Permission mode (current:"]) {
-      const at = shell.indexOf(title);
-      expect(at).toBeGreaterThan(0);
-      // the picker's own call is a bare showComposerChoice, never wrapped in journaledPick
-      const before = shell.slice(Math.max(0, at - 700), at);
-      expect(before.lastIndexOf("showComposerChoice(")).toBeGreaterThan(before.lastIndexOf("journaledPick("));
-    }
+    const needle = "const id = await showComposerChoice(otui, r, dock, {\n    title: credentials";
+    expect(shell).toContain(needle);
+    // wrap the shell-command allow/deny picker the way a careless change would
+    const mutated = shell.replace(
+      needle,
+      "const id = await journaledPick(sessionCwd, { source: DECISION_SOURCES.queueRoute, question: 'x', options: [], cancelId: 'deny' }, (_options, dismissId) => showComposerChoice(otui, r, dock, {\n    title: credentials",
+    );
+    expect(mutated).not.toBe(shell);
+    const audit = auditPickers(mutated);
+    expect(audit.wrappedPermissionPickers.length).toBeGreaterThan(0);
+    expect(audit.permissionIdsInsideJournaled.length).toBeGreaterThan(0);
+    // and a journaledPick with a source that is no DECISION_SOURCES member is seen
+    const loose = auditPickers(shell.replace("source: DECISION_SOURCES.wikiEnrich", "source: 'free-text'"));
+    expect(loose.journaled.some((call) => call.source === undefined)).toBe(true);
   });
 
   test("the shell hands the agent the journaled ask_user, so the round-limit picker is journaled", async () => {
