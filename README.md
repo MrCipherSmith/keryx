@@ -1056,7 +1056,8 @@ shows the mode and the last fallback; see
 A turn started from Telegram runs under `trust` by default, like a shell `trust`
 turn: ordinary commands in the project run without a question and are recorded with
 the Telegram user id, while destructive commands, privilege escalation, downloaders,
-agent credential files, publish leases, untrusted content and MCP tools still ask.
+agent credential files, publish leases, untrusted content and MCP tools still ask;
+`spawn_subagent` is auto-approved under `trust`, as in the shell.
 The question carries an `Always` button that saves a pattern (list and remove them
 with `keryx permissions` or `/permissions`), waits 15 minutes by default, and there
 is no run limit unless `runTimeoutMs` sets one; `/stop` in the topic ends a run.

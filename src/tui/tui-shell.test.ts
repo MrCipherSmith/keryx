@@ -2809,8 +2809,18 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 
   test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
     expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
-    // Flow 396: the getter goes through `modeNow()` (the shell's mode, or the Telegram default for a topic turn).
-    expect(fnBodyPlan).toContain("io.permissionMode = () => modeNow().mode;");
+    // Flow 396: the shell's own getter is the typed-turn mode; a Telegram turn's getter is handed to that turn alone.
+    expect(fnBodyPlan).toContain("io.permissionMode = () => modeForTurn(false).mode;");
+    expect(fnBodyPlan).toContain("permissionMode: () => modeForTurn(true).mode,");
+  });
+
+  test("flow 396: only the facade of a turn the bridge took as a Telegram turn carries the Telegram hooks", () => {
+    expect(fnBodyPlan).toContain("const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;");
+    expect(fnBodyPlan).toContain("createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {})");
+    // The shell's own io never reads the bridge-wide flag to decide trust, grants or the approval channel.
+    expect(fnBodyPlan).toContain("io.requestApproval = requestApprovalLocally;");
+    expect(fnBodyPlan).toContain("io.onAutoApproved = autoApprovedFor(false);");
+    expect(fnBodyPlan).not.toContain("io.mcpGrantsApply");
   });
 
   test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {

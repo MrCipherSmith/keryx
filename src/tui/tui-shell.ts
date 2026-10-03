@@ -337,6 +337,7 @@ import {
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  type TurnScopedIo,
 } from "./foreground-operation";
 import {
   compactSession,
@@ -5691,7 +5692,11 @@ export async function launchTuiAgentShell(opts: {
     // answer feeds the same approval flow (the fingerprint is echoed back, so a mismatch
     // is still a denial). Anything but an explicit allow - a timeout, a dropped stream, no
     // client - is a denial. Turns typed here keep the local dock above, untouched.
-    io.requestApproval = async (tool, inputJson, meta) => {
+    //
+    // Flow 396: this is the hook of a Telegram TURN, handed to that turn alone through the foreground
+    // facade (`telegramTurnIo`). The shell's own `io.requestApproval` is the dock, so work that runs beside a
+    // Telegram turn and is not part of it is never judged or asked as if it were.
+    const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
       const bridge = remoteBridge;
       if (bridge === undefined || !bridge.telegramTurnActive) {
         return requestApprovalLocally(tool, inputJson, meta);
@@ -5747,6 +5752,7 @@ export async function launchTuiAgentShell(opts: {
       if (decision !== "allow") return false;
       return approvedAnswer();
     };
+    io.requestApproval = requestApprovalLocally;
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
@@ -5889,12 +5895,13 @@ export async function launchTuiAgentShell(opts: {
         telegramTurn,
         telegramDefault: remoteBridge?.configuredPermissionMode ?? "ask",
       });
+    // The mode a RUNNING turn is shown in (the sidebar row, `/settings`): that of the Telegram turn while one runs.
+    // It is a display. What a call is judged by is chosen per turn: `io` below is the typed-turn behaviour, and
+    // a turn that came from Telegram gets `telegramTurnIo` through the foreground facade, so work that is not
+    // part of that turn never inherits its trust (flow 396 finding 9).
     const modeNow = (): ModeInForce => modeForTurn(remoteBridge?.telegramTurnActive === true);
-    io.permissionMode = () => modeNow().mode;
+    io.permissionMode = () => modeForTurn(false).mode;
     io.trustedMcpTools = new Map<string, string>();
-    // Flow 396: a trust grant made in the shell never lets an MCP `use_tool` skip the prompt in a turn
-    // that came from Telegram; there it always asks.
-    io.mcpGrantsApply = () => remoteBridge?.telegramTurnActive !== true;
     // Read fresh on every call: a grant holds only while the tool's definition
     // in the live catalog still matches the fingerprint stored with it.
     io.mcpToolFingerprint = (fqn) => catalogFingerprintResolver(deps.mcpRuntime?.()?.catalog())(fqn);
@@ -5919,7 +5926,7 @@ export async function launchTuiAgentShell(opts: {
           : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
-    io.onAutoApproved = (tool, input, meta) => {
+    const autoApprovedFor = (telegramTurn: boolean): NonNullable<TuiAgentIo["onAutoApproved"]> => (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
       // only the mode itself was chosen, once, so the transcript line is the
@@ -5932,14 +5939,14 @@ export async function launchTuiAgentShell(opts: {
             : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
-      const inForce = modeNow();
+      const inForce = modeForTurn(telegramTurn);
       const label =
         `◇ auto-approved (${inForce.mode})` +
         (meta.destructive ? " [destructive]" : "") +
         (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
       // Flow 396: a call that ran in a Telegram turn without a tap is also written to the remote
       // panel's event list, with the Telegram user who sent the line (redacted and capped there).
-      if (remoteBridge?.telegramTurnActive === true) {
+      if (telegramTurn && remoteBridge !== undefined) {
         remoteBridge.recordApproval(modeAutoApprovalAudit({ mode: inForce.mode, userId: remoteBridge.telegramTurnUserId, preview }));
       }
       transcript.add(
@@ -5948,6 +5955,17 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${roleChunk(otui, "attention", label)} ${dimChunk(otui, preview)}`,
         }),
       );
+    };
+    io.onAutoApproved = autoApprovedFor(false);
+    // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
+    // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
+    // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
+    // lets an MCP `use_tool` skip the question there.
+    const telegramTurnIo: TurnScopedIo = {
+      requestApproval: requestApprovalForTelegramTurn,
+      permissionMode: () => modeForTurn(true).mode,
+      onAutoApproved: autoApprovedFor(true),
+      mcpGrantsApply: () => false,
     };
 
     // Definite assignment: every control-flow path calls `applyOpened` before
@@ -9248,6 +9266,8 @@ export async function launchTuiAgentShell(opts: {
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
       remoteQueue.turnStarted(source);
+      // The bridge says whether it took the line as a Telegram turn (it does not when remote control is off).
+      const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
       // PRIOR turn (abort/error path; the root cause is fixed in
       // `commands/agent.ts`) must never leak stale live-preview text or
@@ -9412,7 +9432,7 @@ export async function launchTuiAgentShell(opts: {
         guardCollector.reset(line);
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
-        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {});
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
         // and by the time the guard's own deferred continuation (further down)

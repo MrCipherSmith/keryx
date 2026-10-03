@@ -341,7 +341,11 @@ a flow or acceptance confirmation, a git publish lease, a hook that asks, untrus
 content, a destructive `apply_patch`, and any MCP `use_tool` (a grant you made in the shell
 for an MCP tool does not apply to a Telegram turn). `/plan` still refuses
 mutations, and `apply_patch` outside the project root is refused in every mode. There
-is no extra Telegram-only floor for network or outside-project commands.
+is no extra Telegram-only floor for network or outside-project commands. A
+`spawn_subagent` call is auto-approved under `trust`, as in a shell `trust` turn: the
+subagent runs under the same mode and the same floors as the turn that started it.
+The trust belongs to the Telegram turn itself; other work running in the shell at the
+same time is judged by the shell's own mode and asked in the shell.
 
 When something asks, the question goes to the topic as `Allow | Always: <pattern> |
 Deny`. The **Always** button is offered only when the same rules as the shell dock
@@ -369,6 +373,8 @@ the shell (or the **Telegram** group of `/settings`) changes them:
 | `runTimeoutMs` | none | A positive number stops a run after that long. `0` or absent means no limit. |
 | `approvalTimeoutMs` | `900000` | How long a question waits, 30000 to 3600000. |
 
+There is no run limit by default, on purpose: a run ends when it finishes or when you
+send `/stop`. To get a limit, set `runTimeoutMs`, for example `1800000` for 30 minutes.
 To go back to the old behaviour set `"permissionMode": "ask"`, `"runTimeoutMs":
 1800000` and `"approvalTimeoutMs": 300000`.
 
