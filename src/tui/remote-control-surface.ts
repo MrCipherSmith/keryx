@@ -8,6 +8,7 @@
 // `onOpen`), and the host runs the same code the typed command runs.
 
 import { parseHistoryArgs } from "../remote/history";
+import { historyArgsOf } from "../remote/history-host";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
@@ -62,7 +63,7 @@ export function isHistoryCommand(line: string): boolean {
  * to. The usage error still reads the same as in the full-screen shell.
  */
 export function readlineHistoryText(line: string): string {
-  const parsed = parseHistoryArgs(line.trim().split(/\s+/).slice(1).join(" "));
+  const parsed = parseHistoryArgs(historyArgsOf(line));
   if (!parsed.ok) return `${parsed.message}\n`;
   return "/history posts to the Telegram topic of remote control, which starts only in the full-screen shell (run `keryx shell`, then /remote-control <name>). Here it is off.\n";
 }
