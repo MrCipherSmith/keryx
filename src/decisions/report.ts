@@ -9,6 +9,9 @@
 // the human changed after the reveal is contaminated by the reveal, so the
 // change is counted on its own line and never moves the share.
 
+import { ARMS, type Arm } from "./arms";
+import { effectiveArm, isLegacy } from "./legacy";
+import { buildQualityMatrix, renderQualityMatrix, type QualityMatrix, type QualityRecord } from "./quality";
 import { oneLine } from "./text";
 import type { AnswerRecord, DecisionMode, DecisionRecord, OpenRecord, ReasonRecord } from "./types";
 
@@ -48,6 +51,45 @@ export interface BackfilledReport {
   deviations: DeviationRow[];
 }
 
+/** One cell of an arm or channel table: how many decisions, how many were answered, and the match tally of the answered ones with a recommendation. */
+export interface ArmRow {
+  decisions: number;
+  answered: number;
+  tally: Tally;
+  medianMs: number | null;
+}
+
+/** One row of the by-channel table: a single arm, or arms A and B merged (Telegram cannot preselect, so they are one condition there). */
+export interface ChannelRow {
+  /** "A-free", "A-forced", "B", "C", "D", or "A+B" on telegram. */
+  key: string;
+  label: string;
+  row: ArmRow;
+}
+
+export interface ChannelReport {
+  channel: string;
+  rows: ChannelRow[];
+}
+
+/** Records from before the arms: shown on their own, never mixed into an arm table. */
+export interface LegacyReport {
+  total: number;
+  answered: number;
+  withoutRecommendation: number;
+  /** The match tally by the arm the old mode stands for (ordinary was A, blind was D). */
+  byArm: { A: Tally; D: Tally };
+  matchTally: Tally;
+  matchShare: number | null;
+}
+
+export interface ReportOptions {
+  /** Leave the legacy records (before the arms, and the imported historical ones) out of every number and block. */
+  excludeLegacy?: boolean;
+  /** Recommendation quality ratings (see quality.ts); absent means none. */
+  quality?: readonly QualityRecord[];
+}
+
 /** Time to answer of the live decisions only: a backfilled record stores 0 because the time is unknown. */
 export interface TimingStats {
   /** Live decisions whose first answer is counted. */
@@ -73,6 +115,16 @@ export interface DecisionsReport {
   inferredFlow: number;
   timing: TimingStats;
   backfilled: BackfilledReport;
+  /** Flow 400: the randomized records (legacy left out) by arm. A is the sum of the free and the forced rows below. */
+  byArm: Record<Arm, ArmRow>;
+  /** Arm A split by why it is A: drawn (free) or forced because the question is irreversible, an action or matched blind.ts. */
+  armA: { free: ArmRow; forced: ArmRow };
+  /** The randomized records cut by channel; on "telegram" arms A and B are one row. */
+  byChannel: ChannelReport[];
+  legacy: LegacyReport;
+  /** True when the report was built with the legacy records left out. */
+  excludeLegacy: boolean;
+  quality: QualityMatrix;
   /** Journal lines that were unreadable or malformed and left out of every number above. */
   skipped: number;
 }
@@ -134,7 +186,70 @@ function buildBackfilled(
   return out;
 }
 
-export function buildReport(records: readonly DecisionRecord[], skipped = 0): DecisionsReport {
+function armRow(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRecord | undefined): ArmRow {
+  const row: ArmRow = { decisions: opens.length, answered: 0, tally: emptyTally(), medianMs: null };
+  const times: number[] = [];
+  for (const open of opens) {
+    const first = firstOf(open.id);
+    if (first === undefined) continue;
+    row.answered += 1;
+    times.push(first.timeToAnswerMs);
+    if (open.recommendation === null) continue;
+    row.tally.answered += 1;
+    if (first.choice === open.recommendation.optionId) row.tally.matched += 1;
+  }
+  row.medianMs = median(times);
+  return row;
+}
+
+const channelOf = (open: OpenRecord): string => (open.channel === undefined || open.channel.trim().length === 0 ? "tui" : open.channel.trim().toLowerCase());
+
+/** Telegram polls cannot preselect an option, so arms A (preselected) and B (not) are the same condition there. */
+export const MERGES_A_AND_B = "telegram";
+
+function channelRows(opens: readonly OpenRecord[], channel: string, firstOf: (id: string) => AnswerRecord | undefined): ChannelRow[] {
+  const forced = (open: OpenRecord): boolean => effectiveArm(open) === "A" && open.forced === true;
+  const free = (open: OpenRecord): boolean => effectiveArm(open) === "A" && open.forced !== true;
+  const merged = channel === MERGES_A_AND_B;
+  const rows: ChannelRow[] = merged
+    ? [{ key: "A+B", label: "A+B (mark, no preselection)", row: armRow(opens.filter((o) => free(o) || effectiveArm(o) === "B"), firstOf) }]
+    : [
+        { key: "A-free", label: "A (free)", row: armRow(opens.filter(free), firstOf) },
+        { key: "B", label: "B", row: armRow(opens.filter((o) => effectiveArm(o) === "B"), firstOf) },
+      ];
+  rows.push({ key: "A-forced", label: "A (forced)", row: armRow(opens.filter(forced), firstOf) });
+  rows.push({ key: "C", label: "C", row: armRow(opens.filter((o) => effectiveArm(o) === "C"), firstOf) });
+  rows.push({ key: "D", label: "D", row: armRow(opens.filter((o) => effectiveArm(o) === "D"), firstOf) });
+  return rows.filter((row) => row.row.decisions > 0);
+}
+
+function buildLegacy(opens: readonly OpenRecord[], firstOf: (id: string) => AnswerRecord | undefined): LegacyReport {
+  const out: LegacyReport = {
+    total: opens.length,
+    answered: 0,
+    withoutRecommendation: 0,
+    byArm: { A: emptyTally(), D: emptyTally() },
+    matchTally: emptyTally(),
+    matchShare: null,
+  };
+  for (const open of opens) {
+    const first = firstOf(open.id);
+    if (open.recommendation === null) out.withoutRecommendation += 1;
+    if (first === undefined) continue;
+    out.answered += 1;
+    if (open.recommendation === null) continue;
+    const matched = first.choice === open.recommendation.optionId;
+    const arm = effectiveArm(open) === "D" ? out.byArm.D : out.byArm.A;
+    for (const tally of [out.matchTally, arm]) {
+      tally.answered += 1;
+      if (matched) tally.matched += 1;
+    }
+  }
+  out.matchShare = out.matchTally.answered === 0 ? null : out.matchTally.matched / out.matchTally.answered;
+  return out;
+}
+
+export function buildReport(records: readonly DecisionRecord[], skipped = 0, options: ReportOptions = {}): DecisionsReport {
   const opens: OpenRecord[] = [];
   const answers = new Map<string, AnswerRecord[]>();
   const reasons = new Map<string, ReasonRecord>();
@@ -154,9 +269,20 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     }
   }
 
-  const live = opens.filter((open) => open.backfilled !== true);
-  const history = opens.filter((open) => open.backfilled === true);
+  const excludeLegacy = options.excludeLegacy === true;
+  // a backfilled record is legacy by definition (imported after the fact, never drawn by the arms)
+  const kept = excludeLegacy ? opens.filter((open) => open.backfilled !== true && !isLegacy(open)) : opens;
+  const live = kept.filter((open) => open.backfilled !== true);
+  const history = kept.filter((open) => open.backfilled === true);
   const firstAnswer = (id: string): AnswerRecord | undefined => [...(answers.get(id) ?? [])].sort((a, b) => a.seq - b.seq)[0];
+  // the randomized records: every live one that carries its own arm
+  const randomized = live.filter((open) => !isLegacy(open));
+  const channels = [...new Set(randomized.map(channelOf))].sort();
+  const known = new Map<string, boolean | null>();
+  for (const open of kept) {
+    const first = firstAnswer(open.id);
+    known.set(open.id, first === undefined || open.recommendation === null ? null : first.choice === open.recommendation.optionId);
+  }
 
   const report: DecisionsReport = {
     total: live.length,
@@ -172,6 +298,15 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     inferredFlow: live.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
     timing: { answered: 0, medianMs: null },
     backfilled: buildBackfilled(history, firstAnswer, reasons),
+    byArm: Object.fromEntries(ARMS.map((arm) => [arm, armRow(randomized.filter((open) => effectiveArm(open) === arm), firstAnswer)])) as Record<Arm, ArmRow>,
+    armA: {
+      free: armRow(randomized.filter((open) => effectiveArm(open) === "A" && open.forced !== true), firstAnswer),
+      forced: armRow(randomized.filter((open) => effectiveArm(open) === "A" && open.forced === true), firstAnswer),
+    },
+    byChannel: channels.map((channel) => ({ channel, rows: channelRows(randomized.filter((open) => channelOf(open) === channel), channel, firstAnswer) })),
+    legacy: excludeLegacy ? buildLegacy([], firstAnswer) : buildLegacy(live.filter((open) => isLegacy(open)), firstAnswer),
+    excludeLegacy,
+    quality: buildQualityMatrix(options.quality ?? [], known),
     skipped,
   };
   const stages = new Map<string, { ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>();
@@ -253,6 +388,35 @@ function renderBackfilled(report: BackfilledReport): string[] {
   return lines;
 }
 
+function rowText(row: ArmRow): string {
+  const timing = row.medianMs === null ? "" : `, median ${seconds(row.medianMs)}`;
+  return `${row.decisions} decision${row.decisions === 1 ? "" : "s"}, ${row.answered} answered, match ${share(row.tally)}${timing}`;
+}
+
+function renderArms(report: DecisionsReport): string[] {
+  const randomized = ARMS.reduce((sum, arm) => sum + report.byArm[arm].decisions, 0);
+  const lines = [`By arm (${randomized} randomized decision${randomized === 1 ? "" : "s"}, first answer; legacy records are not in this table):`];
+  if (randomized === 0) return [...lines, "  (none yet)"];
+  lines.push(`  A free    ${rowText(report.armA.free)}`);
+  lines.push(`  A forced  ${rowText(report.armA.forced)}  (irreversible, an action or a blind.ts match: not randomized)`);
+  for (const arm of ["B", "C", "D"] as const) lines.push(`  ${arm}         ${rowText(report.byArm[arm])}`);
+  for (const channel of report.byChannel) {
+    lines.push("", `Channel ${oneLine(channel.channel, 40)}:`);
+    for (const row of channel.rows) lines.push(`  ${row.label.padEnd(30)} ${rowText(row.row)}`);
+    if (channel.channel === MERGES_A_AND_B) lines.push("  (Telegram polls cannot preselect an option, so arms A and B are one condition here)");
+  }
+  return lines;
+}
+
+function renderLegacy(report: LegacyReport): string[] {
+  if (report.total === 0) return [];
+  return [
+    `Legacy, before the arms (${report.total} decision${report.total === 1 ? "" : "s"}; not randomized, not comparable with the arms above):`,
+    `  answered ${report.answered}, match ${share(report.matchTally)}`,
+    `  placed by the old mode: A (was ordinary) ${share(report.byArm.A)}, D (was blind) ${share(report.byArm.D)}`,
+  ];
+}
+
 function seconds(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
@@ -297,6 +461,11 @@ export function renderReport(report: DecisionsReport): string {
     lines.push(`    recommended ${oneLine(dev.recommended)}, chose ${oneLine(dev.chose)}`);
     lines.push(`    reason: ${dev.reason === undefined ? "(none given)" : oneLine(dev.reason)}`);
   }
+  lines.push("", ...renderArms(report));
+  const legacyLines = renderLegacy(report.legacy);
+  if (legacyLines.length > 0) lines.push("", ...legacyLines);
+  if (report.excludeLegacy) lines.push("", "Legacy records (before the arms, and the imported historical ones) are left out of this report.");
+  lines.push("", ...renderQualityMatrix(report.quality));
   if (report.inferredFlow > 0) {
     lines.push("", `Flow attribution inferred (the one flow in progress, not named by KERYX_FLOW or the branch): ${report.inferredFlow} decision${report.inferredFlow === 1 ? "" : "s"}.`);
   }

@@ -127,7 +127,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
 | `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
-| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (one in five is asked blind, others with the mark but no preselection or in a shuffled order). |
+| `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (one in five is asked blind, others with the mark but no preselection or in a shuffled order). `report` cuts by arm and channel and keeps pre-arm records apart as legacy; `rate` records whether the recommendation was good (yours, or a model's self-assessment in a clean context); `export` writes the structure of each decision with no question or option text. |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
 | `keryx hooks` | Keryx shell lifecycle hooks: list/validate/test, trust project hooks, enable/disable a registration. |
 | `keryx learn` | Self-learning loop: observe, extract, review, accept/reject, apply, promote, graduate, prune. |

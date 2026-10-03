@@ -48,6 +48,12 @@ export interface OpenRecord {
   preselected?: boolean;
   /** True when the arm is A only because the question is irreversible, an action, or matched blind.ts. Every other A is false. */
   forced?: boolean;
+  /**
+   * Flow 400: true for a record from before the arms (no seeded assignment, so it is not part of the randomized
+   * comparison). `import` stamps it on the records it writes; a record already on disk without `arm` is read as
+   * legacy through `stampLegacy` (the journal file is append-only and is not rewritten).
+   */
+  legacy?: true;
   /** Where the question was asked: "tui" (the default, also for a record without the field), "telegram", ... */
   channel?: string;
   /** Option ids in the order they are shown to the human (shuffled in arms C and D). */

@@ -2,7 +2,8 @@
 // TUI and the shells import from here, never from the files behind it (the
 // import-zone ratchet counts any other reach as an avoidable bypass).
 
-import { buildReport, renderReport, renderReportLine, type DecisionsReport } from "./report";
+import { buildReport, renderReport, renderReportLine, type DecisionsReport, type ReportOptions } from "./report";
+import { readQuality } from "./quality";
 import { readJournal } from "./store";
 
 export { CANCEL_ANSWER, journalAsk } from "./ask";
@@ -15,7 +16,20 @@ export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";
-export type { BackfilledReport, DecisionsReport, DeviationRow, Tally, TimingStats } from "./report";
+export type { ArmRow, BackfilledReport, ChannelReport, ChannelRow, DecisionsReport, DeviationRow, LegacyReport, ReportOptions, Tally, TimingStats } from "./report";
+export { effectiveArm, isLegacy, stampLegacy } from "./legacy";
+export {
+  MODEL_LABEL,
+  commandModelCall,
+  isQuality,
+  rateBlindModel,
+  rateDecision,
+  readQuality,
+  renderQualityMatrix,
+} from "./quality";
+export type { BlindModelResult, ModelCallFn, ModelCallRequest, ModelCallResult, Quality, QualityMatrix, QualityRecord } from "./quality";
+export { buildExport, loadExport, renderExport } from "./export";
+export type { ExportFormat, ExportOptions, ExportRow } from "./export";
 export { importBackfill, renderImportResult } from "./import";
 export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
@@ -35,14 +49,14 @@ export type {
 } from "./types";
 
 /** Read the journal and fold it into the report. Never throws: a missing file is an empty report. */
-export async function loadReport(cwd: string): Promise<DecisionsReport> {
+export async function loadReport(cwd: string, options: Omit<ReportOptions, "quality"> = {}): Promise<DecisionsReport> {
   const { records, skipped } = await readJournal(cwd);
-  return buildReport(records, skipped);
+  return buildReport(records, skipped, { ...options, quality: await readQuality(cwd) });
 }
 
 /** The report as text, the same lines `keryx decisions report` prints. */
-export async function reportText(cwd: string): Promise<string> {
-  return renderReport(await loadReport(cwd));
+export async function reportText(cwd: string, options: Omit<ReportOptions, "quality"> = {}): Promise<string> {
+  return renderReport(await loadReport(cwd, options));
 }
 
 /** The report as ONE Russian line, for the daily topic message (`keryx decisions report --line`). */
