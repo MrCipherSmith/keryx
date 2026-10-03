@@ -62,8 +62,11 @@ replaces the earlier provisional pick of C, which was made before the operator l
 - The C and B arguments below are kept only as the record of why they were not needed.
 - D5: one layout for every table; the probe had no short or 2-column table, so D5 is unchanged.
 
-What PR 2 may still have to change, given A wins, is a code reading and not a rendering change:
-see the journal entry for 2026-10-03 (cell width, the HTML and plain fallbacks).
+Code reading after the choice (format-table.ts, format-rich.ts, rendering.ts): no cell is
+shortened anywhere on the table path, so the native block carries every cell in full and is
+exactly as wide as helyx's. The `20` column cap (`MAX_TABLE_COLUMNS`) and the `1500` row cost
+(`MAX_TABLE_ROW_COST`) only decide when the HTML and plain fallbacks stack a table instead of
+aligning it.
 
 ### Provisional pick before the reading (superseded)
 
