@@ -145,7 +145,10 @@ function present(request: AskRequest, opened: OpenResult): AskRequest {
   const { recommendationReason: reason, ...rest } = request;
   // the reason is for after the answer; in arm D the host gets it scrubbed of every recommend word
   const shownReason = opened.showMark ? reason : reason === undefined ? undefined : scrubRecommendWords(reason);
-  return { ...rest, ...(shownReason !== undefined && shownReason.length > 0 ? { recommendationReason: shownReason } : {}), options };
+  // arm D: a mark planted in the question itself is hidden too
+  const scrubbedQuestion = opened.showMark ? rest.question : scrubRecommendWords(rest.question);
+  const question = scrubbedQuestion.length > 0 ? scrubbedQuestion : rest.question;
+  return { ...rest, question, ...(shownReason !== undefined && shownReason.length > 0 ? { recommendationReason: shownReason } : {}), options };
 }
 
 export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {

@@ -1,11 +1,11 @@
 // Flow 400 (AC3, AC7): what the human is shown, and what the transcript says afterwards,
 // in each arm. The arm is pinned through the `arm` seam and the shuffle through `random`.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { journalAsk, scrubRecommendWords, type AskRequest } from "./ask";
-import type { Arm } from "./arms";
+import { assignArm, seedFile, type Arm } from "./arms";
 import { readRecords } from "./store";
 
 let root: string;
@@ -44,30 +44,47 @@ function host(choice: string, shown: AskRequest[] = []): (r: AskRequest) => Prom
 }
 
 describe("AC3: arm D strips every mark from what the host shows", () => {
+  // every kind of mark `stripRecommendedMarks` knows: words (English, Russian, preferred, suggested), a star, an emoji
+  const SYMBOLS = /[\u2B50\u2605\u2606\u2728\u{1F44D}]/u;
   const MARKED: AskRequest = {
-    question: "Which approach?",
-    recommendationReason: "Recommended: it is the preferred, suggested route",
+    question: "Which approach is the recommended one? (preferred) \u2B50",
+    recommendationReason: "Recommended: it is the preferred, suggested route \u2605",
     options: [
-      { id: "a", label: "Keep the table (Recommended)", description: "Recommended: the safe one", recommended: true },
-      { id: "b", label: "Split the table - recommended", description: "the suggested quick one" },
-      { id: "c", label: "Рекомендуемый вариант: both", description: "the preferred odd one" },
+      { id: "a", label: "Keep the table (Recommended)", description: "Recommended: the safe one \u2728", recommended: true },
+      { id: "b", label: "\u2B50 Split the table - recommended", description: "the suggested quick one \u{1F44D}" },
+      { id: "c", label: "\u2606 Рекомендуемый вариант: both", description: "the preferred odd one [рекомендуется]" },
     ],
   };
 
-  test("no label, description or reason carries a recommend, рекоменд, preferred or suggested word", async () => {
+  test("no question, label, description or reason carries a mark: a word, a star or an emoji", async () => {
     const shown: AskRequest[] = [];
-    await journalAsk(host("a", shown), { cwd: root, arm: "D", random: () => 0 })(MARKED);
+    await journalAsk(async (r) => {
+      shown.push(r);
+      return "a";
+    }, { cwd: root, arm: "D", random: () => 0 })(MARKED);
     const first = shown[0];
     expect(first).toBeDefined();
+    expect(first?.options).toHaveLength(3);
     for (const option of first?.options ?? []) {
       expect(option.recommended).toBeUndefined();
       expect(option.preselected).toBe(false);
-      expect(option.label).not.toMatch(FORBIDDEN);
-      expect(option.description).not.toMatch(FORBIDDEN);
+      for (const text of [option.label, option.description]) {
+        expect(text).not.toMatch(FORBIDDEN);
+        expect(text).not.toMatch(SYMBOLS);
+      }
       expect(option.label.length).toBeGreaterThan(0);
     }
-    expect(first?.recommendationReason ?? "").not.toMatch(FORBIDDEN);
-    expect(first?.question ?? "").not.toMatch(FORBIDDEN);
+    for (const text of [first?.question ?? "", first?.recommendationReason ?? ""]) {
+      expect(text).not.toMatch(FORBIDDEN);
+      expect(text).not.toMatch(SYMBOLS);
+    }
+    expect(first?.question.length).toBeGreaterThan(0);
+  });
+
+  test("the question keeps its meaning once the mark is gone", async () => {
+    const shown: AskRequest[] = [];
+    await journalAsk(host("a", shown), { cwd: root, arm: "D", random: () => 0 })({ ...MARKED, question: "Which approach? (recommended)" });
+    expect(shown[0]?.question).toBe("Which approach?");
   });
 
   test("the options are a permutation and the arm is on the record", async () => {
@@ -90,6 +107,45 @@ describe("AC3: arm D strips every mark from what the host shows", () => {
       expect(shown[0]?.options.find((o) => o.recommended === true)?.id).toBe("b");
       expect(shown[0]?.recommendationReason).toBe(REASON);
     }
+  });
+});
+
+describe("AC3: what the host is told to preselect, per arm, through the journal", () => {
+  /** A salt for which `assignArm(salt, 1)` is `arm` under the default weights: the first question of an empty journal gets it. */
+  function saltFor(arm: Arm): string {
+    for (let i = 0; i < 10_000; i += 1) {
+      const salt = `pinned-salt-for-arm-${arm}-${i}`;
+      if (assignArm(salt, 1).arm === arm) return salt;
+    }
+    throw new Error(`no salt found for arm ${arm}`);
+  }
+
+  async function pinSalt(salt: string): Promise<void> {
+    const file = seedFile(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, `${salt}\n`, { encoding: "utf8", mode: 0o600 });
+  }
+
+  for (const arm of ["A", "B", "C", "D"] as Arm[]) {
+    test(`arm ${arm}, reached through the repo seed (no arm seam): ${arm === "A" ? "only the recommended option starts highlighted" : "no option starts highlighted"}`, async () => {
+      await pinSalt(saltFor(arm));
+      const shown: AskRequest[] = [];
+      await journalAsk(host("b", shown), { cwd: root, random: () => 0 })(request());
+      expect((await readRecords(root)).find((r) => r.kind === "open")).toMatchObject({ arm, seq: 1 });
+      const options = shown[0]?.options ?? [];
+      expect(options).toHaveLength(3);
+      expect(options.filter((o) => o.preselected === true).map((o) => o.id)).toEqual(arm === "A" ? ["b"] : []);
+      // every option says so explicitly: a host must not fall back to preselecting the recommended one
+      expect(options.every((o) => typeof o.preselected === "boolean")).toBe(true);
+      expect(options.find((o) => o.id === "b")?.recommended === true).toBe(arm !== "D");
+    });
+  }
+
+  test("a question without a recommendation preselects nothing and sets no flag", async () => {
+    const shown: AskRequest[] = [];
+    const { recommendationReason: _reason, ...rest } = request();
+    await journalAsk(host("a", shown), { cwd: root, arm: "A" })({ ...rest, options: rest.options.map(({ recommended: _drop, ...o }) => o) });
+    expect((shown[0]?.options ?? []).some((o) => o.preselected === true)).toBe(false);
   });
 });
 
