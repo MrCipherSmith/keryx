@@ -69,7 +69,11 @@ export interface OpenRecord {
    * the live records.
    */
   backfilled?: true;
-  /** Where a backfilled decision came from (e.g. "poll 17"). */
+  /**
+   * Flow 400: where the decision came from. A live record carries the surface that asked it (one of
+   * `DECISION_SOURCES`: "ask_user", "round-limit", "tui-wiki-enrich", ...); a backfilled decision carries its
+   * origin (e.g. "poll 17"). Absent on a record from before the field.
+   */
   source?: string;
 }
 
@@ -113,6 +117,8 @@ export interface OpenInput {
   session?: string | undefined;
   /** Where the question is asked ("tui" by default). */
   channel?: string | undefined;
+  /** The surface that asked it (see `DECISION_SOURCES`); recorded as `source` on the open record. */
+  source?: string | undefined;
   /** Test seam: the shuffle's random source in [0, 1). The arm itself is seeded, never drawn from this. */
   random?: (() => number) | undefined;
   /** Test seam: take this arm as the draw. An irreversible question is still moved to A with `forced: true`. */

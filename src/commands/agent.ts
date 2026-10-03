@@ -4304,7 +4304,7 @@ async function runAgentTurnCore(
  * `finishWithBudgetSummary` is reached only from the no-progress branch
  * above, and only when a round remains.
  */
-async function offerRoundLimitReset(
+export async function offerRoundLimitReset(
   deps: AgentDeps,
   roundState: { round: number; maxRounds: number },
   system: (text: string) => void,
@@ -4316,6 +4316,9 @@ async function offerRoundLimitReset(
   try {
     chosen = await deps.askUser({
       question: `Tool-loop round limit reached this turn: ${roundState.round}/${roundState.maxRounds} rounds. What should I do?`,
+      // a work decision, not a permission: it goes through the recommendation journal (flow 400, AC8)
+      source: "round-limit",
+      recommendationReason: "The turn was making progress when it hit the ceiling, so resuming is cheaper than restarting it.",
       options: [
         {
           id: "reset",

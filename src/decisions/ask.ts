@@ -20,6 +20,7 @@
 import type { Arm } from "./arms";
 import { answerDecision, openDecision, recordReason } from "./journal";
 import type { FlowContext } from "./context";
+import { DECISION_SOURCES } from "./sources";
 import type { OpenResult } from "./types";
 
 export interface AskOption {
@@ -45,6 +46,8 @@ export interface AskRequest {
   action?: string;
   /** True when the question decides an irreversible action. Keeps it out of blind mode. */
   irreversible?: boolean;
+  /** The surface that asked (see `DECISION_SOURCES`); recorded as `source`. Wins over `JournalAskDeps.source`. */
+  source?: string;
 }
 
 export type AskFn = (request: AskRequest) => Promise<string>;
@@ -70,6 +73,10 @@ export interface JournalAskDeps {
   arm?: Arm | undefined;
   /** Where the question is asked: "tui" when absent. */
   channel?: string | undefined;
+  /** The surface that asked, when the request does not say ("ask_user" when absent). */
+  source?: string | undefined;
+  /** False for a picker that cannot take free text: the deviation reason is then not asked (add it with `/decisions reason`). */
+  askReason?: boolean | undefined;
   now?: (() => Date) | undefined;
 }
 
@@ -169,6 +176,7 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
         random: deps.random,
         arm: deps.arm,
         channel: deps.channel,
+        source: request.source ?? deps.source ?? DECISION_SOURCES.askUser,
         now: deps.now,
       });
     } catch (cause) {
@@ -201,7 +209,7 @@ export function journalAsk(ask: AskFn, deps: JournalAskDeps): AskFn {
       // The one deliberate wait (AC6, operator decision): after a deviation the human is asked ONCE for an
       // optional reason and the tool result waits for it. `askReason` is false for any later answer to the
       // same decision, so it is never asked twice. Everything else here stays non-blocking.
-      if (result.askReason) await askReasonOnce(ask, deps, opened.id);
+      if (result.askReason && deps.askReason !== false) await askReasonOnce(ask, deps, opened.id);
     } catch (cause) {
       note(deps, `decision journal: could not record the answer (${cause instanceof Error ? cause.message : String(cause)})`);
     }

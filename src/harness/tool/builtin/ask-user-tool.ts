@@ -27,6 +27,8 @@ export interface AskUserRequest {
   action?: string;
   /** True when the question decides an irreversible action. */
   irreversible?: boolean;
+  /** Which surface asked (journal `source`), set by the host code that asks, never by the model. */
+  source?: string;
 }
 
 export type AskUserFn = (request: AskUserRequest) => Promise<string>;

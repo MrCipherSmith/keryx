@@ -370,7 +370,8 @@ import {
   toLeasedChoice,
   withLeaseMarker,
 } from "./tui-session-lease";
-import { askUserSessionId, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
+import { DECISION_SOURCES } from "../decisions/service";
+import { askUserSessionId, journaledPick, lastAskUserDecisionId, setAskUserHost, setAskUserNotice } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
 import { mountFilterList } from "./filter-list";
@@ -1583,30 +1584,42 @@ async function pickWikiEnrichMode(
   r: Renderer,
   dock: Box,
   plan: { draftCount: number; acceptedCount: number; total: number },
+  cwd: string,
 ): Promise<WikiEnrichChoice> {
-  const id = await showComposerChoice(otui, r, dock, {
-    title: "Wiki enrich",
-    subtitle: `drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`,
-    cancelId: "cancel",
-    options: [
-      {
-        id: "drafts",
-        label: `Enrich ${plan.draftCount} draft page(s)`,
-        description: "Default batch — Status: draft only",
-        recommended: true,
-      },
-      {
-        id: "force",
-        label: `Force enrich all ${plan.total} page(s)`,
-        description: `Includes ${plan.acceptedCount} accepted (+ other statuses)`,
-      },
-      {
-        id: "cancel",
-        label: "Skip / cancel",
-        description: "Do not run enrich",
-      },
-    ],
-  });
+  const id = await journaledPick(
+    cwd,
+    {
+      source: DECISION_SOURCES.wikiEnrich,
+      question: `Wiki enrich: ${plan.draftCount} draft, ${plan.acceptedCount} accepted, ${plan.total} pages in total. Which batch?`,
+      recommendationReason: "Enriching drafts is the default batch and leaves accepted pages untouched.",
+      cancelId: "cancel",
+      options: [
+        {
+          id: "drafts",
+          label: `Enrich ${plan.draftCount} draft page(s)`,
+          description: "Default batch — Status: draft only",
+          recommended: true,
+        },
+        {
+          id: "force",
+          label: `Force enrich all ${plan.total} page(s)`,
+          description: `Includes ${plan.acceptedCount} accepted (+ other statuses)`,
+        },
+        {
+          id: "cancel",
+          label: "Skip / cancel",
+          description: "Do not run enrich",
+        },
+      ],
+    },
+    (options) =>
+      showComposerChoice(otui, r, dock, {
+        title: "Wiki enrich",
+        subtitle: `drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`,
+        cancelId: "cancel",
+        options,
+      }),
+  );
   return id === "drafts" || id === "force" || id === "cancel" ? id : "cancel";
 }
 
@@ -1715,6 +1728,7 @@ export async function pickShellApproval(
       description: "Do not run",
     },
   ];
+  // Not journaled: a pure allow/deny has no recommendation to follow or ignore, so an arm would measure nothing.
   const id = await showComposerChoice(otui, r, dock, {
     title: credentials
       ? "⚠ touches keryx's OWN permissions/credentials — allow?"
@@ -6217,7 +6231,18 @@ export async function launchTuiAgentShell(opts: {
           const outcome = await resolveLeasedStartup(cause, {
             choose: async (error) => {
               chrome.hideMenu();
-              const id = await showComposerChoice(otui, r, chrome.dock, leasedChoiceRequest(error));
+              const request = leasedChoiceRequest(error);
+              const id = await journaledPick(
+                sessionCwd,
+                {
+                  source: DECISION_SOURCES.sessionLease,
+                  question: request.title,
+                  recommendationReason: "Forking keeps the original session intact for the shell that holds it.",
+                  cancelId: request.cancelId,
+                  options: request.options,
+                },
+                (options) => showComposerChoice(otui, r, chrome.dock, { ...request, options }),
+              );
               input.focus();
               return toLeasedChoice(error, id);
             },
@@ -8300,20 +8325,32 @@ export async function launchTuiAgentShell(opts: {
         }
         void (async () => {
           let blockedByOpenDialog = false;
-          const chosen = await showComposerChoice(otui, r, chrome.dock, {
-            title: "Main agent is busy",
-            subtitle: line,
-            options: [
-              { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
-              { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
-            ],
-            cancelId: "side",
-            enqueue: false,
-            onBusy: () => {
-              blockedByOpenDialog = true;
-              chrome.showToast("Answer the open approval first, then resend.");
+          const chosen = await journaledPick(
+            sessionCwd,
+            {
+              source: DECISION_SOURCES.queueRoute,
+              // the message text stays out of the journal: only the choice is recorded
+              question: "The main agent is busy. Where should this message go?",
+              recommendationReason: "The main queue keeps the message in the main history; a side answer is read-only.",
+              cancelId: "side",
+              options: [
+                { id: "main", label: "Main queue", description: "queue for the main agent; remove/edit/force later", recommended: true },
+                { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
+              ],
             },
-          });
+            (options) =>
+              showComposerChoice(otui, r, chrome.dock, {
+                title: "Main agent is busy",
+                subtitle: line,
+                options,
+                cancelId: "side",
+                enqueue: false,
+                onBusy: () => {
+                  blockedByOpenDialog = true;
+                  chrome.showToast("Answer the open approval first, then resend.");
+                },
+              }),
+          );
           if (blockedByOpenDialog) {
             // Don't silently pick "side" for a message the user never routed —
             // hand it back to the composer so nothing is lost.
@@ -9161,7 +9198,7 @@ export async function launchTuiAgentShell(opts: {
               draftCount: plan.drafts.length,
               acceptedCount: plan.accepted.length,
               total: plan.forceTargets.length,
-            });
+            }, inspectorCwd());
             if (foregroundOperation.signal.aborted || foregroundOperation.isDisposed) return;
             input.focus();
 

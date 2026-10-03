@@ -5,7 +5,11 @@
 import { buildReport, renderReport, renderReportLine, type DecisionsReport } from "./report";
 import { readJournal } from "./store";
 
-export { journalAsk } from "./ask";
+export { CANCEL_ANSWER, journalAsk } from "./ask";
+export { MAX_INTERVIEW_QUESTIONS, interviewPath, runInterview } from "./interviewer";
+export type { InterviewAnswer, InterviewAssumption, InterviewHost, InterviewQuestion, InterviewResult } from "./interviewer";
+export { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
+export type { DecisionSource } from "./sources";
 export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";

@@ -96,6 +96,7 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     irreversible,
     ...(tagged ? { action: input.action?.trim() ?? "" } : {}),
     ...(blindRefused ? { blindRefused: true } : {}),
+    ...(input.source !== undefined && input.source.trim().length > 0 ? { source: oneLine(input.source) } : {}),
     ...(input.session !== undefined && input.session.length > 0 ? { session: input.session } : {}),
   };
   await appendRecord(input.cwd, record);
