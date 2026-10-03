@@ -18,6 +18,7 @@ import {
   refusalText,
   remoteHelpText,
 } from "./command-gateway";
+import { HISTORY_EMPTY_MESSAGE } from "./history";
 
 /** What running a command in the shell produced. */
 export interface CommandOutcome {
@@ -100,6 +101,11 @@ export interface RouterContext {
   host: RemoteCommandHost;
   /** Send text to the topic. False when it could not be sent. */
   reply(text: string): Promise<boolean>;
+  /**
+   * `/history [N]` (flow 399): post the session's last messages to the topic. Resolves with the one
+   * line to answer with when nothing was posted (usage, empty history), undefined when the messages went out.
+   */
+  history?(args: string): Promise<string | undefined>;
   /** One line in the bridge's recent events. */
   record(text: string): void;
   /** Redact, trim and cap text for the topic. */
@@ -162,6 +168,18 @@ export class RemoteCommandRouter {
           });
         } else if (decision.command === "stop") {
           this.stop(end);
+        } else if (decision.command === "history") {
+          // Reads the session and posts to the topic; allowed while a turn runs.
+          this.detach(async () => {
+            const answer = this.ctx.history === undefined ? "This shell cannot post its history." : await this.ctx.history(decision.args);
+            if (answer === undefined) {
+              ended(end, "done");
+              return;
+            }
+            // An empty history is an answer, not a failure; a usage error or a refused post is one.
+            ended(end, answer === HISTORY_EMPTY_MESSAGE ? "done" : "failed");
+            await this.ctx.reply(this.ctx.compose(answer)).catch(() => false);
+          });
         } else {
           void this.ctx.reply(this.ctx.compose(remoteHelpText())).catch(() => false);
           ended(end, "done");

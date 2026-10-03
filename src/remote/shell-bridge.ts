@@ -22,7 +22,9 @@
 import { redactSensitiveText } from "../security/service";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
 import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
+import type { NormalizedMessage } from "../harness/provider/types";
 import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
+import { HISTORY_DEFAULT_COUNT, HISTORY_EMPTY_MESSAGE, formatHistoryItem, parseHistoryArgs, selectHistory } from "./history";
 
 /** The label a Telegram line carries in the queue and the transcript. */
 export const TG_SOURCE = "tg" as const;
@@ -43,10 +45,25 @@ export interface RemoteEvent {
   text: string;
 }
 
+/** The last time the session's history was posted to the topic (flow 399). */
+export interface RemoteHistoryStatus {
+  at: number;
+  /** How many messages that post carried. */
+  count: number;
+  /** Posted by the automatic restore of a resumed session, not by `/history`. */
+  auto: boolean;
+}
+
+export type HistoryOutcome =
+  | { ok: true; posted: number }
+  | { ok: false; reason: "off" | "empty" | "running" | "failed" | "unavailable"; posted: number; message: string };
+
 export interface RemoteStatus {
   state: RemoteState;
   /** The topic name, once registered. */
   name?: string;
+  /** The last history post, once there was one. */
+  history?: RemoteHistoryStatus;
   /** Milliseconds since serve last answered; absent when off or never answered. */
   heartbeatAgeMs?: number;
   /**
@@ -98,6 +115,13 @@ export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBus
   dropQueuedTelegramLines?(): string[];
   /** Something the display shows changed. */
   onChange?(): void;
+  /**
+   * The session's messages, oldest first, the whole conversation when the host keeps it (flow 399).
+   * Absent: `/history` answers that this shell cannot post it.
+   */
+  history?(): readonly NormalizedMessage[];
+  /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */
+  sessionResumed?(): boolean;
 }
 
 export interface RemoteBridgeOptions {
@@ -114,6 +138,10 @@ export interface RemoteBridgeOptions {
   commandLimitMs?: number;
   /** How long a picker or a Yes/No waits for a press. */
   choiceTimeoutMs?: number;
+  /** Pause between two restored messages, so the topic is not flooded (flow 399). */
+  historyPaceMs?: number;
+  /** Test seam for the pause. Default: a timer. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /** The policy values `/remote-policy` can change in a running shell. */
@@ -122,6 +150,9 @@ export interface RemotePolicyOverride {
   approvalTimeoutMs?: number;
   runTimeoutMs?: number;
 }
+
+/** Between two restored messages: well inside Telegram's per-group rate, and a 429 still pauses the queue. */
+export const HISTORY_PACE_MS = 2_000;
 
 export type EnableResult = StartResult | { ok: false; code: "already-on"; message: string; retrying: false };
 
@@ -234,6 +265,10 @@ export class RemoteBridge {
   private currentUpdate: number | undefined;
   /** The Telegram user whose line started the running turn (flow 396): who an auto-approval is recorded against. */
   private currentFromId: number | undefined;
+  /** The last history post to this topic; cleared with the topic. */
+  private lastHistory: RemoteHistoryStatus | undefined;
+  /** A history post is running (the pacing makes it take a while); a second one waits for it to end. */
+  private postingHistory = false;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
@@ -253,6 +288,7 @@ export class RemoteBridge {
         ...(this.host.resumeSession !== undefined ? { resumeSession: (id: string) => this.host.resumeSession!(id) } : {}),
       },
       reply: async (text) => (this.client !== undefined ? await this.client.reply(text) : false),
+      history: async (args) => await this.historyForCommand(args),
       record: (text) => this.push("command", text),
       compose: composeReply,
       choose: async (text, rows, timeoutMs, forUserId) => {
@@ -347,6 +383,7 @@ export class RemoteBridge {
     return {
       state: online ? "on" : "offline",
       ...(client.name !== undefined ? { name: client.name } : {}),
+      ...(this.lastHistory !== undefined ? { history: { ...this.lastHistory } } : {}),
       ...(heartbeat !== undefined ? { heartbeatAgeMs: Math.max(0, this.now() - heartbeat) } : {}),
       ...(unconfirmed > 0 ? { unconfirmedApprovals: unconfirmed } : {}),
       events: [...this.events],
@@ -393,6 +430,7 @@ export class RemoteBridge {
     this.client = client;
     this.connectedOnce = false;
     this.clientConnected = false;
+    this.lastHistory = undefined;
     const result = await client.start();
     if (!result.ok) {
       // Remote control starts only on an explicit command and only when it
@@ -406,6 +444,13 @@ export class RemoteBridge {
     this.clientConnected = true;
     this.host.recordOn(result.name);
     this.push("status", `on as ${result.name}`);
+    // Flow 399: a resumed session whose topic was just CREATED (not found again) is an empty
+    // topic over a conversation the operator wants to see. Nothing else restores on its own: a
+    // reconnect, a reused topic, a session that started fresh. `/history` covers those. Not
+    // awaited: ten paced posts take a while and `enable()` must return the topic at once.
+    if (result.reused === false && this.host.sessionResumed?.() === true) {
+      void this.postHistory(HISTORY_DEFAULT_COUNT, true).catch(() => undefined);
+    }
     return result;
   }
 
@@ -423,6 +468,7 @@ export class RemoteBridge {
     if (client === undefined) return false;
     this.client = undefined;
     this.clientConnected = false;
+    this.lastHistory = undefined;
     this.endTurnState();
     this.waiting.length = 0;
     // History first, before anything awaits: a host that is about to swap its session
@@ -551,6 +597,82 @@ export class RemoteBridge {
     if (client.name !== undefined) this.host.recordOn(client.name);
     this.push("status", kind === "new" ? "new session; same topic" : "resumed session; same topic");
     void client.reply(kind === "new" ? "--- new session ---" : "--- resumed session ---").catch(() => false);
+  }
+
+  // ---- history (flow 399) ----------------------------------------------------------------
+
+  /**
+   * Post the last `count` messages of the session to the topic, oldest first, each as its own
+   * message with a role label, `historyPaceMs` apart. `auto` marks the restore that follows a
+   * new topic for a resumed session. Safe to call while a turn runs: it only reads.
+   *
+   * It never repeats on its own: only `enable()` (a topic that was just created) and a typed or
+   * remote `/history` call it. Each message is handed to the client once; if the topic goes
+   * away or a send is refused the run stops there and says how far it got.
+   */
+  async postHistory(count: number = HISTORY_DEFAULT_COUNT, auto = false): Promise<HistoryOutcome> {
+    const client = this.client;
+    if (client === undefined) {
+      return { ok: false, reason: "off", posted: 0, message: "Remote control is off, so there is no topic to post to. Turn it on with /remote-control <name>." };
+    }
+    if (this.host.history === undefined) {
+      return { ok: false, reason: "unavailable", posted: 0, message: "This shell cannot post its history." };
+    }
+    if (this.postingHistory) {
+      return { ok: false, reason: "running", posted: 0, message: "The history is still being posted. Wait for it to finish." };
+    }
+    let items: ReturnType<typeof selectHistory>;
+    try {
+      items = selectHistory(this.host.history(), count);
+    } catch {
+      return { ok: false, reason: "unavailable", posted: 0, message: "The session history could not be read." };
+    }
+    if (items.length === 0) {
+      return { ok: false, reason: "empty", posted: 0, message: HISTORY_EMPTY_MESSAGE };
+    }
+    const pace = this.options.historyPaceMs ?? HISTORY_PACE_MS;
+    const sleep = this.options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    this.postingHistory = true;
+    let posted = 0;
+    try {
+      for (const item of items) {
+        if (this.client !== client) break;
+        if (posted > 0 && pace > 0) {
+          await sleep(pace);
+          if (this.client !== client) break;
+        }
+        const sent = await client.reply(composeReply(formatHistoryItem(item))).catch(() => false);
+        if (!sent) break;
+        posted += 1;
+      }
+    } finally {
+      this.postingHistory = false;
+    }
+    if (posted > 0 && this.client === client) {
+      this.lastHistory = { at: this.now(), count: posted, auto };
+      this.push("status", `history posted: ${posted} message${posted === 1 ? "" : "s"}${auto ? " (restored automatically)" : ""}`);
+      this.host.notice(
+        `history ${auto ? "restored" : "posted"} to the topic: ${posted} message${posted === 1 ? "" : "s"}${auto ? " (this session was resumed)" : ""}.`,
+      );
+    }
+    if (posted < items.length) {
+      this.push("error", `history stopped after ${posted} of ${items.length} messages`);
+      return {
+        ok: false,
+        reason: "failed",
+        posted,
+        message: `The history stopped after ${posted} of ${items.length} messages: the topic did not take the next one. Send /history again.`,
+      };
+    }
+    return { ok: true, posted };
+  }
+
+  /** `/history [N]` as the router and the shell take it: undefined when the messages went out, else the one line to answer with. */
+  async historyForCommand(args: string): Promise<string | undefined> {
+    const parsed = parseHistoryArgs(args);
+    if (!parsed.ok) return parsed.message;
+    const outcome = await this.postHistory(parsed.count, false);
+    return outcome.ok ? undefined : outcome.message;
   }
 
   // ---- hooks the host calls around a turn ------------------------------------------

@@ -42,6 +42,7 @@ export const REMOTE_COMMANDS: readonly RemoteCommandSpec[] = [
   { name: "connect", kind: "picker", description: "Switch to a connected provider with buttons" },
   { name: "resume", kind: "picker", description: "Return to an earlier session with buttons" },
   { name: "sessions", kind: "builtin", description: "List recent sessions" },
+  { name: "history", kind: "builtin", description: "Post the last messages of this session here: /history [N], 1 to 20" },
   { name: "stop", kind: "builtin", description: "Stop the run you started from Telegram" },
   { name: "new", kind: "text", description: "Start a new session; this topic stays bound to it" },
   { name: "clear", kind: "text", description: "Same as /new" },

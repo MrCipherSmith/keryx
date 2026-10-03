@@ -93,6 +93,8 @@ import {
   parseChannelsArgs,
 } from "./channels-surface";
 import {
+  HISTORY_COMMAND,
+  isHistoryCommand,
   isRemoteControlCommand,
   commandEchoText,
   labelTelegramLine,
@@ -5975,6 +5977,9 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
+    // topic's automatic history restore reads it when remote control creates a new topic.
+    let sessionResumed = false;
     let nextArchiveIndex = 0;
     let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -6069,6 +6074,7 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      sessionResumed = opened.resumed;
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
@@ -6592,6 +6598,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      sessionResumed = false;
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
       history = [];
       archive = [];
@@ -6806,6 +6813,21 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(turnedOff ? "◇ remote control off: the topic is deleted.\n" : "◇ remote control is already off.\n");
       liveRemotePanel?.refresh();
     };
+    // Flow 399: `/history [N]` (and the modal's `h`). One code path: the bridge posts and answers
+    // with the one line to show when nothing went out (usage, empty history, remote control off).
+    const runHistoryCommand = (line: string): void => {
+      const bridge = remoteBridge;
+      if (bridge === undefined) return;
+      void bridge
+        .historyForCommand(line.trim().split(/\s+/).slice(1).join(" "))
+        .then((answer) => {
+          if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+        })
+        .catch(() => {
+          io.onSystem?.("◇ the history could not be posted.\n");
+        })
+        .finally(() => liveRemotePanel?.refresh());
+    };
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
@@ -6816,6 +6838,7 @@ export async function launchTuiAgentShell(opts: {
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
+        onHistory: () => runHistoryCommand(HISTORY_COMMAND),
         renderer: r,
         ...inspectorKeys,
       });
@@ -8178,6 +8201,10 @@ export async function launchTuiAgentShell(opts: {
             runRemoteControlCommand(line);
             return;
           }
+          case "history": {
+            runHistoryCommand(line);
+            return;
+          }
           case "channels": {
             runChannelsCommand(line);
             return;
@@ -8587,6 +8614,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isRemoteControlCommand(command.name)) {
           runRemoteControlCommand(line);
+          return;
+        }
+        if (isHistoryCommand(command.name)) {
+          runHistoryCommand(line);
           return;
         }
         if (isChannelsCommand(command.name)) {
@@ -9891,6 +9922,10 @@ export async function launchTuiAgentShell(opts: {
           // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
           paintModeRow();
         },
+        // Flow 399: the whole conversation (the archive keeps what compaction removed from the
+        // context), and whether this session was resumed, for the automatic restore.
+        history: () => (archive.length > 0 ? archive : history),
+        sessionResumed: () => sessionResumed,
       },
     });
 

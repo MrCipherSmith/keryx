@@ -45,6 +45,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
     "/rendering",
     "/remote-policy",
@@ -182,6 +183,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
     "/rendering",
     "/remote-policy",
@@ -342,6 +344,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/review",
     "/reviews",
     "/remote-control",
+    "/history",
     "/channels",
     "/rendering",
     "/remote-policy",
@@ -411,7 +414,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
 });
 
 test("filterCommands: prefix narrows the set (agent)", () => {
-  expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help"]);
+  expect(filterCommands("/h", "agent").map((c) => c.name)).toEqual(["/help", "/history"]);
   expect(filterCommands("/c", "agent").map((c) => c.name)).toEqual([
     "/connect",
     "/copy",

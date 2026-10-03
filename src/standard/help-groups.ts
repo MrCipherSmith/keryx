@@ -570,6 +570,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/history",
+    group: "Automation",
+    summary: "Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default.",
+  },
+  {
+    kind: "slash",
     name: "/channels",
     group: "Automation",
     summary: "Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status].",

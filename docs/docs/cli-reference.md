@@ -955,6 +955,11 @@ Refusals print their code and exit non-zero (except where noted):
   readline shell (`--no-tui`) can only print that it is off. Each time it is
   turned on or off is recorded in the session's history (see
   [sessions](#sessions)).
+  `/history [N]` posts the last N messages of this session (1 to 20, default 10:
+  what you typed and the agent's final answer of each turn, redacted, one message
+  each) into the topic; typed in the shell, sent from the topic, or key `h` in the
+  modal. A resumed session whose topic `/remote-control <name>` just created gets
+  the last 10 by itself, once.
   Slash commands typed in the topic run only if they are on a fixed list
   (`/help` and the Telegram menu show it): text commands such as `/status`, `/new`
   and `/clear` (same topic, one separator line), button pickers (`/model`,

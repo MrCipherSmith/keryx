@@ -7,6 +7,7 @@
 // it: `presentRemoteControl` and the panel only ask the host to (`onToggle`,
 // `onOpen`), and the host runs the same code the typed command runs.
 
+import { parseHistoryArgs } from "../remote/history";
 import { REMOTE_EVENT_LIMIT, type RemoteEvent, type RemoteState, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { clampScroll, wrapLines, windowLines, type ModalHandle, type OpenModalFn } from "./flow-inspector";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
@@ -36,6 +37,7 @@ export function labelTelegramLine(text: string): string {
 
 export const REMOTE_FOOTER = [
   { key: "o", label: "turn on/off" },
+  { key: "h", label: "post history" },
   { key: "←/→", label: "tab" },
   { key: "esc", label: "close" },
 ] as const;
@@ -46,6 +48,23 @@ export const REMOTE_FOOTER = [
 
 export function isRemoteControlCommand(line: string): boolean {
   return (line.trim().split(/\s+/)[0] ?? "") === REMOTE_CONTROL_COMMAND;
+}
+
+export const HISTORY_COMMAND = "/history";
+
+/** `/history [N]` (flow 399): post the session's last messages to the topic. */
+export function isHistoryCommand(line: string): boolean {
+  return (line.trim().split(/\s+/)[0] ?? "") === HISTORY_COMMAND;
+}
+
+/**
+ * The readline shell's whole `/history`: it has no session bridge, so there is no topic to post
+ * to. The usage error still reads the same as in the full-screen shell.
+ */
+export function readlineHistoryText(line: string): string {
+  const parsed = parseHistoryArgs(line.trim().split(/\s+/).slice(1).join(" "));
+  if (!parsed.ok) return `${parsed.message}\n`;
+  return "/history posts to the Telegram topic of remote control, which starts only in the full-screen shell (run `keryx shell`, then /remote-control <name>). Here it is off.\n";
 }
 
 export type RemoteControlRequest =
@@ -88,6 +107,13 @@ export function formatAge(ms: number): string {
 
 const STATE_WORDS: Record<RemoteState, string> = { off: "off", on: "on", offline: "offline" };
 
+/** `History: 10 messages posted at 06:52:11 (restored automatically)`, or how to post it. */
+export function formatHistoryStatus(status: RemoteStatus): string {
+  const history = status.history;
+  if (history === undefined) return `History: not posted yet. Use ${HISTORY_COMMAND} [N], or press h here.`;
+  return `History: ${history.count} message${history.count === 1 ? "" : "s"} posted at ${clock(history.at)} (${history.auto ? "restored automatically" : HISTORY_COMMAND}). Again: ${HISTORY_COMMAND} [N], or press h here.`;
+}
+
 /** One status block: state, topic, heartbeat age and what turns it on or off. `posture` adds the Telegram permission lines (flow 396). */
 export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly string[]): string[] {
   const lines = [`Remote control: ${STATE_WORDS[status.state]}`];
@@ -98,6 +124,7 @@ export function formatRemoteStatusLines(status: RemoteStatus, posture?: readonly
   }
   lines.push(`Topic: ${status.name ?? "registering"}`);
   lines.push(`Last heartbeat: ${status.heartbeatAgeMs === undefined ? "none yet" : `${formatAge(status.heartbeatAgeMs)} ago`}`);
+  lines.push(formatHistoryStatus(status));
   if (status.state === "offline") lines.push("Serve is not reachable. The shell keeps retrying; nothing is lost from Telegram.");
   if (status.unconfirmedApprovals !== undefined && status.unconfirmedApprovals > 0) {
     const n = status.unconfirmedApprovals;
@@ -168,6 +195,8 @@ export type PresentRemoteOptions = {
   getPostureLines?: () => readonly string[] | undefined;
   /** Turn it on (with the name serve picks) when off, off when on. Same code as the typed command. */
   onToggle: () => void;
+  /** Post the session's history to the topic (the `h` key). Same code as the typed `/history`. */
+  onHistory?: () => void;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
@@ -245,6 +274,11 @@ export function presentRemoteControl(
         repaint();
         return;
       }
+      if (token === "h") {
+        options.onHistory?.();
+        repaint();
+        return;
+      }
       const lines = linesFor(current).length;
       const step = token === "up" || token === "k" ? -1 : token === "down" || token === "j" ? 1 : 0;
       if (step === 0) return;
@@ -281,6 +315,8 @@ export interface RemoteRow {
   readonly role: TextRole;
   /** A click always opens the modal: that is where it is turned on or off. */
   readonly action: "open";
+  /** `history 10 · 06:52` once the history was posted to this topic (flow 399); absent otherwise. */
+  readonly detail?: string;
 }
 
 function fit(text: string, width: number): string {
@@ -291,12 +327,13 @@ function fit(text: string, width: number): string {
 /** `Remote: off | <topic name> | offline`, as the value half of the row. */
 export function projectRemoteRow(status: RemoteStatus | undefined, width: number): RemoteRow {
   if (status === undefined || status.state === "off") return { text: fit("off", width), role: "muted", action: "open" };
-  if (status.state === "offline") return { text: fit("offline", width), role: "attention", action: "open" };
+  const detail = status.history === undefined ? {} : { detail: fit(`history ${status.history.count} · ${clock(status.history.at).slice(0, 5)}`, width) };
+  if (status.state === "offline") return { text: fit("offline", width), role: "attention", action: "open", ...detail };
   const topic = status.name ?? "connecting";
   const unconfirmed = status.unconfirmedApprovals ?? 0;
   // Flow 397: a decision serve has not confirmed is attention, not "ok": the topic shows it as "not confirmed".
-  if (unconfirmed > 0) return { text: fit(`${topic} · ${unconfirmed} unconfirmed`, width), role: "attention", action: "open" };
-  return { text: fit(topic, width), role: "ok", action: "open" };
+  if (unconfirmed > 0) return { text: fit(`${topic} · ${unconfirmed} unconfirmed`, width), role: "attention", action: "open", ...detail };
+  return { text: fit(topic, width), role: "ok", action: "open", ...detail };
 }
 
 /** The posture line under the Remote row: only while remote control is on or retrying, and only when there is something to say. */
@@ -344,8 +381,10 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
     marginTop: 1,
   });
   const value = new core.TextRenderable(renderer as never, { id: "sb-remote-v", content: "" }) as unknown as TextNode;
+  const detail = new core.TextRenderable(renderer as never, { id: "sb-remote-h", content: "" }) as unknown as TextNode;
   box.add(label);
   box.add(value as never);
+  box.add(detail as never);
   const posture = new core.TextRenderable(renderer as never, { id: "sb-remote-p", content: "" }) as unknown as TextNode & { visible?: boolean };
   box.add(posture as never);
 
@@ -355,6 +394,7 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
     const row = currentRow();
     label.content = core.t`${dimChunk(core, "Remote")}`;
     value.content = core.t`${roleChunk(core, row.role, row.text)}`;
+    detail.content = row.detail === undefined ? "" : core.t`${dimChunk(core, row.detail)}`;
     const line = projectPostureLine(options.getStatus(), options.getPosture?.(), options.width);
     posture.content = line === undefined ? "" : core.t`${dimChunk(core, line)}`;
     posture.visible = line !== undefined;
@@ -367,6 +407,9 @@ export function mountRemotePanel(otui: unknown, renderer: unknown, parent: unkno
     activate();
   };
   value.onMouseDown = () => {
+    activate();
+  };
+  detail.onMouseDown = () => {
     activate();
   };
   posture.onMouseDown = () => {

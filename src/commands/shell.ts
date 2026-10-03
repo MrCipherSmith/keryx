@@ -114,7 +114,7 @@ import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
 import { computeBotMetrics } from "../review/bot/metrics";
 import { isReviewsCommand, renderReviewsText } from "../tui/reviews-inspector";
-import { isRemoteControlCommand, readlineRemoteControlText } from "../tui/remote-control-surface";
+import { isHistoryCommand, isRemoteControlCommand, readlineHistoryText, readlineRemoteControlText } from "../tui/remote-control-surface";
 import { ChannelsClient } from "../remote/channels-client";
 import { isChannelsCommand, loadChannelsSnapshot, readlineChannelsText } from "../tui/channels-surface";
 import {
@@ -2695,6 +2695,9 @@ export async function runAgentRepl(
       } else if (isRemoteControlCommand(command)) {
         // Flow 376: the readline shell has no remote control; status as text, enabling explained.
         agentIo.onSystem?.(readlineRemoteControlText(line));
+      } else if (isHistoryCommand(command)) {
+        // Flow 399: no topic here; the text says where `/history` works.
+        agentIo.onSystem?.(readlineHistoryText(line));
       } else if (isChannelsCommand(command)) {
         // Flow 377: the state as text; Connect needs the hidden token entry of the full-screen shell.
         agentIo.onSystem?.(readlineChannelsText(line, await loadChannelsSnapshot(new ChannelsClient())));
