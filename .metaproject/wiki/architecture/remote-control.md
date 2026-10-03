@@ -55,9 +55,13 @@ A button press on an approval makes the surface (`http-surface.ts`, `pressApprov
 
 `orphanMs` (default 10 minutes): a session that stops heartbeating is announced in its topic, and the topic is deleted after the window; a heartbeat inside it cancels this. `runTimeoutMs` (default 30 minutes): a run started from Telegram is interrupted by the shell and the topic is told (`run-limits.ts`).
 
-### History
+### Session record (`remote` in the summary)
 
 A session driven from a topic records `remote: { name, intervals: [{ on, off? }] }` in its summary (`src/session/store.ts`). `keryx sessions list` prints a `⇄ remote <topic>` line, `--json` carries the field, and the `keryx shell -r` picker marks the row `⇄ remote`.
+
+### Restoring the conversation into a topic (`/history`)
+
+A topic is deleted when the shell exits, and a resumed session gets a new, empty one. `history.ts` is the pure side: `qualifyingHistory` keeps the operator turns (`isOperatorMessage`) and the final assistant text of each turn (narration before a tool call, tool output and reasoning are dropped), `selectHistory` takes the last N (default 10, at most 20), and `formatHistoryItem` labels it `You:` or `Agent:`, cuts it at 1,500 characters and, before anything else, replaces a turn that looks like a credential (a Telegram bot token shape or a bare 32-character mixed-case-and-digit run, both of which the shared redactor misses) with a fixed placeholder; the shared redactor is left as it is. `shell-bridge.ts` (`postHistory`) sends each message through `client.reply` with `historyPaceMs` (2 s) between them, because the outbound queue does no pacing of its own and a 429 only holds the queue; a run is bound to the client it started on, stops at the next step when remote control goes off, and a second post to the same client is refused while one runs. While a turn is running (`host.turnRunning`) the newest assistant text is half written, since the agent loop appends to that message in place, so it is left out until the turn ends. `enable()` restores on its own only when this is the first enable of the process, `client.start()` reports a created topic (`reused: false`, the first registration's answer, never changed by a reconnect) and the session was resumed; turning remote control off and on again, a reconnect and a reused topic restore nothing, and a restore that does not happen says why in the transcript. `/history [N]` is the same code from the shell (a router `builtin`) and from the topic. The panel's `h` key runs it and the modal and the sidebar show the last post.
 
 ### Connecting from the shell (`/channels`)
 

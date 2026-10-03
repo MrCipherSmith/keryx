@@ -137,7 +137,20 @@ export interface PressedApproval {
 }
 
 export type StartResult =
-  | { ok: true; name: string; threadId: number; runTimeoutMs: number; permissionMode?: "ask" | "trust"; approvalTimeoutMs?: number }
+  | {
+      ok: true;
+      name: string;
+      threadId: number;
+      runTimeoutMs: number;
+      permissionMode?: "ask" | "trust";
+      approvalTimeoutMs?: number;
+      /**
+       * Flow 399: whether the FIRST registration of this client found a topic already holding the
+       * name (true) or created a new one (false). A reconnect re-registers and always finds the
+       * topic, so only the first answer is kept. Absent when the answer did not say.
+       */
+      reused?: boolean;
+    }
   | { ok: false; code: string; message: string; retrying: boolean };
 
 class FatalClientError extends Error {
@@ -257,6 +270,8 @@ export class RemoteClient {
    */
   permissionMode: "ask" | "trust" | undefined;
   approvalTimeoutMs: number | undefined;
+  /** `reused` of the first successful registration; later registrations (reconnects) never change it. */
+  private firstReused: boolean | undefined;
   /** When serve last answered a heartbeat (or the stream last said ready), epoch ms. For the shell's status display. */
   lastHeartbeatAt: number | undefined;
 
@@ -273,6 +288,11 @@ export class RemoteClient {
 
   get connected(): boolean {
     return this.streamOpen && !this.stopped;
+  }
+
+  /** `reused` of the first registration of this client; undefined before one. A reconnect never changes it. */
+  get reusedAtStart(): boolean | undefined {
+    return this.firstReused;
   }
 
   /** How many approval decisions arrived whose ack serve has not confirmed (in flight, or failed within the last minute). */
@@ -672,6 +692,7 @@ export class RemoteClient {
                   runTimeoutMs: this.runTimeoutMs,
                   ...(this.permissionMode === undefined ? {} : { permissionMode: this.permissionMode }),
                   ...(this.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs: this.approvalTimeoutMs }),
+                  ...(this.firstReused === undefined ? {} : { reused: this.firstReused }),
                 });
               }
             } else if (status.kind === "superseded") {
@@ -714,6 +735,7 @@ export class RemoteClient {
       this.runTimeoutMs = result.runTimeoutMs;
       this.permissionMode = result.permissionMode;
       this.approvalTimeoutMs = result.approvalTimeoutMs;
+      if (this.firstReused === undefined && typeof result.reused === "boolean") this.firstReused = result.reused;
       return;
     }
     const error = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };

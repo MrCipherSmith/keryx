@@ -93,6 +93,8 @@ import {
   parseChannelsArgs,
 } from "./channels-surface";
 import {
+  HISTORY_COMMAND,
+  isHistoryCommand,
   isRemoteControlCommand,
   commandEchoText,
   labelTelegramLine,
@@ -5975,6 +5977,9 @@ export async function launchTuiAgentShell(opts: {
     let liveSession!: SessionHandle;
     let history: NormalizedMessage[] = [];
     let archive: NormalizedMessage[] = [];
+    // Flow 399: the live session was opened with `-r`/`-c`/`/resume` (not started fresh). The
+    // topic's automatic history restore reads it when remote control creates a new topic.
+    let sessionResumed = false;
     let nextArchiveIndex = 0;
     let refreshRewindSidebar: () => void = () => {};
     let sessionPersistTimer: ReturnType<typeof setTimeout> | undefined;
@@ -6069,6 +6074,7 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      sessionResumed = opened.resumed;
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
@@ -6592,6 +6598,7 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
+      sessionResumed = false;
       if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
       history = [];
       archive = [];
@@ -6806,6 +6813,25 @@ export async function launchTuiAgentShell(opts: {
       io.onSystem?.(turnedOff ? "◇ remote control off: the topic is deleted.\n" : "◇ remote control is already off.\n");
       liveRemotePanel?.refresh();
     };
+    // Flow 399: `/history [N]` (and the modal's `h`). One code path: the bridge posts and answers
+    // with the one line to show when nothing went out (usage, empty history, remote control off).
+    // Resolves with that line (undefined when messages went out); the sidebar is refreshed when it ends.
+    const postHistoryFor = async (line: string): Promise<string | undefined> => {
+      const bridge = remoteBridge;
+      if (bridge === undefined) return "Remote control is not available in this shell.";
+      try {
+        return await bridge.historyForCommand(line.trim().split(/\s+/).slice(1).join(" "));
+      } catch {
+        return "The history could not be posted.";
+      } finally {
+        liveRemotePanel?.refresh();
+      }
+    };
+    const runHistoryCommand = (line: string): void => {
+      void postHistoryFor(line).then((answer) => {
+        if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+      });
+    };
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
@@ -6816,6 +6842,8 @@ export async function launchTuiAgentShell(opts: {
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
+        // The modal shows the answer itself (a line behind it would be unseen) and repaints when the posts end.
+        onHistory: () => postHistoryFor(HISTORY_COMMAND),
         renderer: r,
         ...inspectorKeys,
       });
@@ -8178,6 +8206,10 @@ export async function launchTuiAgentShell(opts: {
             runRemoteControlCommand(line);
             return;
           }
+          case "history": {
+            runHistoryCommand(line);
+            return;
+          }
           case "channels": {
             runChannelsCommand(line);
             return;
@@ -8587,6 +8619,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isRemoteControlCommand(command.name)) {
           runRemoteControlCommand(line);
+          return;
+        }
+        if (isHistoryCommand(command.name)) {
+          runHistoryCommand(line);
           return;
         }
         if (isChannelsCommand(command.name)) {
@@ -9785,6 +9821,10 @@ export async function launchTuiAgentShell(opts: {
           forceHandoff.isAwaitingSettlement ||
           mainQueue.length > 0 ||
           leaseView()?.held() === true,
+        // The streaming loop writes the assistant message in place while a turn runs: only then is
+        // the newest answer in `history` unfinished. A queued line or another holder of the lease
+        // makes the shell busy without making that answer incomplete.
+        turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
         runLine: (text) => remoteQueue.runTelegramLine(text),
         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),
@@ -9891,6 +9931,10 @@ export async function launchTuiAgentShell(opts: {
           // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
           paintModeRow();
         },
+        // Flow 399: the whole conversation (the archive keeps what compaction removed from the
+        // context), and whether this session was resumed, for the automatic restore.
+        history: () => (archive.length > 0 ? archive : history),
+        sessionResumed: () => sessionResumed,
       },
     });
 

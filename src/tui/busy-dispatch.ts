@@ -76,6 +76,11 @@ export type BusyDispatchTarget =
    */
   | "remote-control"
   /**
+   * `/history` (flow 399): posts the session's last messages to the remote-control topic. It only
+   * reads the session and writes to the topic, so it works while a turn runs, like its sibling.
+   */
+  | "history"
+  /**
    * `/channels` (flow 377): connect, test or disconnect Telegram for this machine. It talks to
    * `keryx serve` and the user-global config, never to the main turn, so it works while one runs.
    */
@@ -150,6 +155,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/product") return "product";
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/remote-control") return "remote-control";
+  if (commandName === "/history") return "history";
   if (commandName === "/channels") return "channels";
   if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";

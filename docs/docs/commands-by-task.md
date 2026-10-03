@@ -146,6 +146,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/product` | Intents closed in code that nobody looked back at, with their outcome criteria. |
 | `/reviews` | Managed pull request reviews: findings by outcome, precision, resolved before merge. |
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
+| `/history` | Post the last messages of this session to the Telegram topic, oldest first. [N], 1 to 20; 10 by default. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
 | `/remote-policy` | Telegram defaults for a turn started there: mode ask\|trust, run limit, approval wait. Never changes the shell's /mode. |
