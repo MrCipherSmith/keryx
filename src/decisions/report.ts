@@ -277,7 +277,10 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
   const firstAnswer = (id: string): AnswerRecord | undefined => [...(answers.get(id) ?? [])].sort((a, b) => a.seq - b.seq)[0];
   // the randomized records: every live one that carries its own arm
   const randomized = live.filter((open) => !isLegacy(open));
-  const channels = [...new Set(randomized.map(channelOf))].sort();
+  // the arm cells compare how a recommendation was put: a question without one is always arm A (nothing to
+  // hide, order or preselect), so it would only skew the A counts and times. It stays in `withoutRecommendation`.
+  const compared = randomized.filter((open) => open.recommendation !== null);
+  const channels = [...new Set(compared.map(channelOf))].sort();
   const known = new Map<string, boolean | null>();
   for (const open of kept) {
     const first = firstAnswer(open.id);
@@ -298,12 +301,12 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0, opt
     inferredFlow: live.filter((open) => open.flow !== null && open.flowSource === "inferred").length,
     timing: { answered: 0, medianMs: null },
     backfilled: buildBackfilled(history, firstAnswer, reasons),
-    byArm: Object.fromEntries(ARMS.map((arm) => [arm, armRow(randomized.filter((open) => effectiveArm(open) === arm), firstAnswer)])) as Record<Arm, ArmRow>,
+    byArm: Object.fromEntries(ARMS.map((arm) => [arm, armRow(compared.filter((open) => effectiveArm(open) === arm), firstAnswer)])) as Record<Arm, ArmRow>,
     armA: {
-      free: armRow(randomized.filter((open) => effectiveArm(open) === "A" && open.forced !== true), firstAnswer),
-      forced: armRow(randomized.filter((open) => effectiveArm(open) === "A" && open.forced === true), firstAnswer),
+      free: armRow(compared.filter((open) => effectiveArm(open) === "A" && open.forced !== true), firstAnswer),
+      forced: armRow(compared.filter((open) => effectiveArm(open) === "A" && open.forced === true), firstAnswer),
     },
-    byChannel: channels.map((channel) => ({ channel, rows: channelRows(randomized.filter((open) => channelOf(open) === channel), channel, firstAnswer) })),
+    byChannel: channels.map((channel) => ({ channel, rows: channelRows(compared.filter((open) => channelOf(open) === channel), channel, firstAnswer) })),
     legacy: excludeLegacy ? buildLegacy([], firstAnswer) : buildLegacy(live.filter((open) => isLegacy(open)), firstAnswer),
     excludeLegacy,
     quality: buildQualityMatrix(options.quality ?? [], known),

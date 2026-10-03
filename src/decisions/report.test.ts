@@ -134,6 +134,27 @@ describe("AC13: arm A free and arm A forced are reported apart", () => {
     expect(text).toMatch(/A forced\s+1 decision, 1 answered, match 0% \(0\/1\)/);
   });
 
+  test("a question without a recommendation is in no arm cell: it would only skew the A count and median time", async () => {
+    const at = new Date(Date.UTC(2026, 9, 3, 11, 0, 0));
+    const answerAfter = async (id: string, ms: number): Promise<void> => {
+      await answerDecision({ cwd: root, id, choice: "o0", now: () => new Date(at.getTime() + ms) });
+    };
+    for (const [i, id] of ["norec-1", "norec-2"].entries()) {
+      await openDecision({ cwd: root, id, question: `No recommendation ${i}?`, options: OPTIONS, arm: "A", salt: "test-salt", seq: 100 + i, now: () => at });
+      await answerAfter(id, 500);
+    }
+    await openDecision({ cwd: root, id: "rec-1", question: "With one?", options: OPTIONS, recommendation: { optionId: "o0", reason: "simplest" }, arm: "A", salt: "test-salt", seq: 102, now: () => at });
+    await answerAfter("rec-1", 9000);
+
+    const result = await report();
+    expect(result.armA.free).toMatchObject({ decisions: 1, answered: 1, medianMs: 9000 });
+    expect(result.byArm.A).toMatchObject({ decisions: 1, answered: 1, medianMs: 9000 });
+    expect(result.byChannel.find((c) => c.channel === "tui")?.rows.find((r) => r.key === "A-free")?.row).toMatchObject({ decisions: 1, medianMs: 9000 });
+    // still counted as what they are
+    expect(result.total).toBe(3);
+    expect(result.withoutRecommendation).toBe(2);
+  });
+
   test("on a channel the forced A stays out of the merged A+B row", async () => {
     await decide("A", { channel: "telegram", follow: true });
     await decide("B", { channel: "telegram", follow: true });

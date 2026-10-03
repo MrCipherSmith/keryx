@@ -49,7 +49,7 @@ arm the transcript names the recommended option and its reason; in arm D it does
 after any answer. The agent gives the reason as the top-level `recommendationReason`
 of `ask_user`, and may mark at most one option recommended. This is what lets the match share mean
 something: if you only ever saw the recommendation marked, you would match it
-because it was marked.
+because it was marked. A question that carries no recommendation is always asked the ordinary way and is left out of every arm and channel cell of the report (it is still counted in the total and under "without a recommendation"), so it cannot skew the A count or its median time.
 
 A question about something on the **irreversible list** is never blind: it is always
 arm A, and the record says `forced: true` (every other A says `forced: false`). The list has
