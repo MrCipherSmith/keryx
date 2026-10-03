@@ -17,7 +17,7 @@
 // 32-bit number derived from the salt, never the salt itself.
 
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { configFile, decisionsDir, journalRoot } from "./store";
 import type { DecisionMode } from "./types";
@@ -169,32 +169,61 @@ export function seedFile(root: string): string {
   return path.join(decisionsDir(root), "seed");
 }
 
+/** A salt shorter than this is treated as absent: the generated one is 64 hex characters. */
+const MIN_SALT_LENGTH = 16;
+
 /**
  * The repository's salt, created once (mode 0600) and read back afterwards. Two
  * processes racing to create it agree: the loser of the exclusive create reads the winner's.
+ * An empty, blank or too-short seed file is as good as none: it is replaced (atomically,
+ * through a temp file and a rename) rather than failing every question after it. A seed
+ * file readable by others is tightened to 0600.
  */
 export async function loadRepoSalt(cwd: string): Promise<string> {
   const root = await journalRoot(cwd);
   const file = seedFile(root);
   const existing = await readSalt(file);
-  if (existing !== undefined) return existing;
+  if (existing.salt !== undefined) {
+    await tightenMode(file);
+    return existing.salt;
+  }
   await mkdir(decisionsDir(root), { recursive: true });
   const fresh = randomBytes(32).toString("hex");
+  if (!existing.present) {
+    try {
+      await writeFile(file, `${fresh}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+      return fresh;
+    } catch {
+      const winner = await readSalt(file);
+      if (winner.salt !== undefined) return winner.salt;
+      // the winner's file is unusable too (empty): fall through and replace it
+    }
+  }
+  const temp = `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
   try {
-    await writeFile(file, `${fresh}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-    return fresh;
+    await writeFile(temp, `${fresh}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    await rename(temp, file);
+  } catch (cause) {
+    await rm(temp, { force: true }).catch(() => undefined);
+    throw new Error(`could not create the decisions seed file ${file}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  }
+  // another process may have replaced it in the same instant: whatever is on disk now is the salt
+  return (await readSalt(file)).salt ?? fresh;
+}
+
+async function readSalt(file: string): Promise<{ present: boolean; salt: string | undefined }> {
+  try {
+    const salt = (await readFile(file, "utf8")).trim();
+    return { present: true, salt: salt.length >= MIN_SALT_LENGTH ? salt : undefined };
   } catch {
-    const winner = await readSalt(file);
-    if (winner !== undefined) return winner;
-    throw new Error(`could not create the decisions seed file ${file}`);
+    return { present: false, salt: undefined };
   }
 }
 
-async function readSalt(file: string): Promise<string | undefined> {
+async function tightenMode(file: string): Promise<void> {
   try {
-    const salt = (await readFile(file, "utf8")).trim();
-    return salt.length > 0 ? salt : undefined;
+    if (((await stat(file)).mode & 0o077) !== 0) await chmod(file, 0o600);
   } catch {
-    return undefined;
+    // best effort: a read-only file system must not stop a question
   }
 }

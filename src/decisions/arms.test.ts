@@ -1,7 +1,7 @@
 // Flow 400 (AC1, AC4): the four arms. The assignment is a pure function of (salt, seq),
 // so every test here is exact: no clock, no real randomness, no network.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -143,6 +143,32 @@ describe("AC1: the repo salt", () => {
     expect(open).toBeDefined();
     expect(JSON.stringify(open)).not.toContain(salt);
     expect(typeof (open as OpenRecord | undefined)?.seed).toBe("number");
+  });
+
+  test("an empty, blank or too-short seed file is replaced, not an error forever", async () => {
+    const file = seedFile(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    for (const bad of ["", "  \n\t\n", "short\n"]) {
+      await writeFile(file, bad, { encoding: "utf8", mode: 0o600 });
+      const salt = await loadRepoSalt(root);
+      expect(salt).toMatch(/^[0-9a-f]{64}$/);
+      expect((await readFile(file, "utf8")).trim()).toBe(salt);
+      expect((await stat(file)).mode & 0o777).toBe(0o600);
+      expect(await loadRepoSalt(root)).toBe(salt);
+      // the temp file of the replacement is gone
+      expect((await readdir(path.dirname(file))).filter((name) => name.endsWith(".tmp"))).toEqual([]);
+    }
+  });
+
+  test("an existing seed file readable by others is tightened to 0600 and its salt kept", async () => {
+    const file = seedFile(root);
+    await mkdir(path.dirname(file), { recursive: true });
+    const given = "a".repeat(64);
+    await writeFile(file, `${given}\n`, { encoding: "utf8", mode: 0o644 });
+    await chmod(file, 0o644);
+    expect((await stat(file)).mode & 0o777).toBe(0o644);
+    expect(await loadRepoSalt(root)).toBe(given);
+    expect((await stat(file)).mode & 0o777).toBe(0o600);
   });
 
   test("two opens in one journal use seq 1 and 2 and the stored seed matches assignArm", async () => {
