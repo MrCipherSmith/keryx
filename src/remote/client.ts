@@ -931,7 +931,6 @@ export class RemoteClient {
     return timer;
   }
 
-  private resolveApproval(approvalId: string, decision: ApprovalDecision): void {
   private resolveApproval(approvalId: string, decision: PressedApproval): void {
     const waiter = this.waiters.get(approvalId);
     if (waiter === undefined) {

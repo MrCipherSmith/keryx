@@ -34,7 +34,6 @@ import {
   type ApprovalDecision,
   type ApprovalEvent,
   type ApprovalResultBody,
-  isApprovalId,
   MAX_REMEMBER_PATTERN_CHARS,
   type CallbackEvent,
   type ChoiceEvent,
