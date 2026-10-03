@@ -229,13 +229,17 @@ Every agent question with options leaves one record: what was asked, what the
 agent recommended and why, how it was shown, what the human chose and how long
 it took. Call \`open\` BEFORE showing the question and \`answer\` after.
 
-  open     decides blind (a third of the questions: no "recommended" mark,
-           random order) or ordinary, and prints the order to show and whether
-           to mark the recommendation. A question about a release, a delete or
+  open     puts the question in one of four arms, seeded from a per-repository
+           salt (A 40%: agent order, mark shown, recommended preselected; B 20%:
+           mark shown, nothing preselected; C 20%: shuffled, mark shown; D 20%:
+           blind, no mark, shuffled; weights under "arms" in decisions.config.json),
+           and prints the arm, the order to show, whether to mark the recommendation
+           and whether to preselect it. A question about a release, a delete or
            a push (the strong irreversible terms, English and Russian, such as
            release, ship, rollout, promote, publish to npm, tag a version,
            выпустить, залить, отправить в прод, накатить, git reset --hard,
-           rm -rf, plus .metaproject/decisions.config.json) is never blind.
+           rm -rf, plus .metaproject/decisions.config.json) is never blind: it is
+           always arm A.
            Merge, drop, remove, force and the like count next to main,
            production, a branch, a PR, a table, ... or with no real object
            ("Merge it now?"); an identifier in a question about code

@@ -12,7 +12,7 @@ Every question with options writes one record:
 - the flow and the stage it was asked in (or no flow);
 - the question and the options, with the order they were shown in;
 - the recommendation and its reason, **written before the question is shown**;
-- the display mode: `ordinary` or `blind`;
+- the arm the question was asked in (`A`, `B`, `C` or `D`), the seed it was drawn from, whether the recommended option was preselected, where it was asked (`channel`, `tui` when absent) and the display mode (`ordinary`, `partial` or `blind`, derived from the arm);
 - your choice and the time it took you to answer;
 - a reason for deviating, when you give one.
 
@@ -30,13 +30,29 @@ flow's status.
 
 ## Blind questions
 
-One question in three is asked **blind**: the recommended option carries no
-"recommended" mark and the options come in random order. Your answer is recorded,
-and then the recommendation is revealed. This is what lets the match share mean
+A question with a recommendation is asked in one of four **arms**, drawn from a
+seeded generator on the repository's salt (`.metaproject/data/decisions/seed`, mode
+0600, git-ignored) and the position in the journal, so an assignment can be replayed:
+
+| Arm | Order | "Recommended" mark | Recommended option preselected | Default weight |
+| --- | --- | --- | --- | --- |
+| A | the agent's | shown | yes | 0.4 |
+| B | the agent's | shown | no | 0.2 |
+| C | shuffled | shown | no | 0.2 |
+| D (blind) | shuffled | hidden | no | 0.2 |
+
+Change the weights under `arms` in `.metaproject/decisions.config.json`, for example
+`{ "arms": { "A": 0.4, "B": 0.2, "C": 0.2, "D": 0.2 } }`. In arm D the recommended
+option carries no "recommended" mark and the options come in random order. Your
+answer is recorded, and then the recommendation is revealed. After a deviation in any
+arm the transcript names the recommended option and its reason; in arm D it does so
+after any answer. The agent gives the reason as the top-level `recommendationReason`
+of `ask_user`, and may mark at most one option recommended. This is what lets the match share mean
 something: if you only ever saw the recommendation marked, you would match it
 because it was marked.
 
-A question about something on the **irreversible list** is never blind. The list has
+A question about something on the **irreversible list** is never blind: it is always
+arm A, and the record says `forced: true` (every other A says `forced: false`). The list has
 two tiers, so that ordinary coding questions ("merge these two helpers", "drop an
 unused import", "remove dead code", "force a type") are not mistaken for a release:
 
@@ -85,7 +101,8 @@ risk target and a real object, such as "Merge the two date
 helpers?", is asked normally and can be blind. A question with no recommendation
 is never blind. In a blind question a mark written into a label, such as
 `(Recommended)`, `[recommended]`, `- recommended`, `Recommended:` or a star, is
-removed from what is shown.
+removed from what is shown, and in arm D so is every other use of the words
+recommend, рекоменд, preferred and suggested in a label, a description or the reason.
 
 ## Changing your mind, and giving a reason
 
@@ -126,7 +143,7 @@ keryx decisions report [--json | --line]
 
 It prints, from the journal alone:
 
-- the match share overall and by mode (`ordinary`, `blind`);
+- the match share overall and by mode (`ordinary`, `blind`, and `partial` for arms B and C when there are any);
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);
 - how many questions **looked irreversible** and how many of those would have been

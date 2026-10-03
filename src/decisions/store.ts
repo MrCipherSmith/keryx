@@ -197,7 +197,7 @@ function isOpen(rec: Record<string, unknown>): boolean {
   if (!(rec["flow"] === null || isString(rec["flow"]))) return false;
   if (!isString(rec["stage"]) || !isString(rec["question"])) return false;
   if (!Array.isArray(rec["options"]) || !rec["options"].every(isOption)) return false;
-  if (rec["mode"] !== "ordinary" && rec["mode"] !== "blind") return false;
+  if (rec["mode"] !== "ordinary" && rec["mode"] !== "blind" && rec["mode"] !== "partial") return false;
   if (!Array.isArray(rec["order"]) || !rec["order"].every(isString)) return false;
   const recommendation = rec["recommendation"];
   if (recommendation === null) return true;

@@ -5760,7 +5760,7 @@ export async function launchTuiAgentShell(opts: {
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
       question: string;
-      options: Array<{ id: string; label: string; description: string; recommended?: boolean }>;
+      options: Array<{ id: string; label: string; description: string; recommended?: boolean; preselected?: boolean }>;
     }): Promise<string> => {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
@@ -5786,6 +5786,7 @@ export async function launchTuiAgentShell(opts: {
               label: o.label,
               description: o.description.length > 0 ? o.description : " ",
               ...(o.recommended === true ? { recommended: true } : {}),
+              ...(o.preselected !== undefined ? { preselected: o.preselected } : {}),
             }),
           ),
         }),

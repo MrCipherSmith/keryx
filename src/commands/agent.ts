@@ -1901,7 +1901,8 @@ export function buildAgentSystemInstruction(orient?: string, ctx: AgentInstructi
     "anything by itself; accepting always requires a human running `keryx workspace review` at a " +
     "real terminal, never this tool.\n" +
     "- When you need a decision, interview step, or clarification: use **ask_user** with " +
-    "2–6 options `{ id, label, description, recommended? }` (mark one recommended). " +
+    "2–6 options `{ id, label, description, recommended? }` (mark at most one recommended; " +
+    "whenever you mark one, ALWAYS also pass a top-level `recommendationReason`: one sentence on why it is the better choice). " +
     "Do not dump long prose questions without options.\n" +
     "- For a focused independent subtask (investigate X, review Y, research Z): use " +
     "**spawn_subagent** with `{ task, mode?: 'read_only'|'general', label? }`. " +

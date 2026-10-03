@@ -709,8 +709,11 @@ Grouped by what you are trying to do, not by internal module layout.
   order, your choice, the time you took and, after a deviation, an optional
   reason (asked once, and the tool result waits for it; an empty answer releases
   the wait; add or change it later with `/decisions reason`).
-  One question in three is asked blind (no "recommended" mark, random order,
-  revealed after the answer, changeable with `/decisions change`), never for
+  A question with a recommendation is asked in one of four ways: ordinary (arm A, the
+  recommended option preselected), the mark with nothing preselected (B), shuffled with the
+  mark (C), or blind (D: no "recommended" mark in the flag or the words, random order,
+  revealed after the answer, changeable with `/decisions change`). The arm is a seeded
+  function of a per-repository salt; the weights are 0.4, 0.2, 0.2, 0.2. Never blind for
   release, ship, publish, deploy, delete or push, nor for merge, drop, remove or
   force next to main, production, a branch or a table, or with no real object
   ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for

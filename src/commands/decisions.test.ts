@@ -46,7 +46,7 @@ test("open returns an id, a mode, the display order and whether to mark; answer 
   const opened = await run(OPEN);
   expect(opened.exitCode).toBe(0);
   const decision = JSON.parse(opened.out) as { id: string; mode: string; order: string[]; showMark: boolean; options: Array<{ id: string; label: string }> };
-  expect(["ordinary", "blind"]).toContain(decision.mode);
+  expect(["ordinary", "blind", "partial"]).toContain(decision.mode);
   expect([...decision.order].sort()).toEqual(["a", "b", "c"]);
   expect(decision.showMark).toBe(decision.mode === "ordinary");
   expect(decision.options.map((o) => o.id)).toEqual(decision.order);

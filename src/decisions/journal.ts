@@ -1,20 +1,20 @@
 // Flow 392: the three operations on the journal — open, answer, reason.
 //
-// `open` is called BEFORE the question is shown: it decides blind or ordinary,
+// `open` is called BEFORE the question is shown: it assigns the arm (A to D),
 // writes the record (recommendation included), and returns what to display.
 // `answer` records the choice and returns the reveal. Nothing here talks to a
 // model, a TUI or a chat bridge; the caller asks the human.
 
 import { randomBytes } from "node:crypto";
 import { appendJournal, resolveFlowDir } from "../flow/store";
-import { BLIND_PROBABILITY, isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
+import { ARM_FACTORS, chooseArm, loadArmWeights, loadRepoSalt, modeOfArm } from "./arms";
+import { isIrreversible, loadDecisionsConfig, shuffle } from "./blind";
 import { appendRecord, readRecords } from "./store";
 import { oneLine } from "./text";
 import type {
   AnswerInput,
   AnswerRecord,
   AnswerResult,
-  DecisionMode,
   OpenInput,
   OpenRecord,
   OpenResult,
@@ -22,6 +22,7 @@ import type {
 } from "./types";
 
 export const DEFAULT_STAGE = "unspecified";
+export const DEFAULT_CHANNEL = "tui";
 
 function newId(now: Date): string {
   return `d-${now.getTime().toString(36)}-${randomBytes(3).toString("hex")}`;
@@ -29,7 +30,7 @@ function newId(now: Date): string {
 
 export async function openDecision(input: OpenInput): Promise<OpenResult> {
   const now = (input.now ?? (() => new Date()))();
-  const random = input.random ?? Math.random;
+  const random = input.random ?? Math.random; // the shuffle only: the arm is seeded
   const question = oneLine(input.question);
   if (question.length === 0) throw new Error("decisions open needs a question");
   if (input.options.length < 2) throw new Error("decisions open needs at least two options");
@@ -48,12 +49,26 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
   const tagged = input.action !== undefined && input.action.trim().length > 0;
   // A caller that tags the action, or says so outright, has declared it irreversible; the text match is the safety net.
   const irreversible = input.irreversible === true || tagged || isIrreversible(config.irreversible, question, input.action, input.options);
-  // Blind needs a recommendation to hide, and is never applied to an irreversible action (AC4).
-  const wantsBlind = recommendation !== null && random() < BLIND_PROBABILITY;
-  const mode: DecisionMode = wantsBlind && !irreversible ? "blind" : "ordinary";
+  // The arm is a pure function of (repoSalt, seq), so a repeated run assigns it the same way. An irreversible
+  // question is always arm A with forced: true, and never blind (AC4).
+  const salt = input.salt ?? (await loadRepoSalt(input.cwd));
+  const seq = input.seq ?? (await readRecords(input.cwd)).filter((r) => r.kind === "open").length + 1;
+  const choice = chooseArm({
+    salt,
+    seq,
+    weights: await loadArmWeights(input.cwd),
+    irreversible,
+    hasRecommendation: recommendation !== null,
+    force: input.arm,
+  });
+  const factors = ARM_FACTORS[choice.arm];
+  const mode = modeOfArm(choice.arm);
   const given = input.options.map((option) => option.id);
-  const order = mode === "blind" ? shuffle(given, random) : given;
-  const showMark = mode === "ordinary" && recommendation !== null;
+  const order = factors.order === "shuffled" ? shuffle(given, random) : given;
+  const showMark = factors.mark === "shown" && recommendation !== null;
+  const preselected = factors.preselect && recommendation !== null;
+  const channel = input.channel !== undefined && input.channel.trim().length > 0 ? oneLine(input.channel) : DEFAULT_CHANNEL;
+  const blindRefused = recommendation !== null && irreversible && choice.drawn === "D";
 
   const record: OpenRecord = {
     kind: "open",
@@ -70,21 +85,32 @@ export async function openDecision(input: OpenInput): Promise<OpenResult> {
     })),
     recommendation: recommendation === null ? null : { optionId: recommendation.optionId, reason: oneLine(recommendation.reason) },
     mode,
+    arm: choice.arm,
+    seed: choice.seed,
+    seq,
+    preselected,
+    forced: choice.forced,
+    channel,
     order,
     showMark,
     irreversible,
     ...(tagged ? { action: input.action?.trim() ?? "" } : {}),
-    ...(wantsBlind && irreversible ? { blindRefused: true } : {}),
+    ...(blindRefused ? { blindRefused: true } : {}),
     ...(input.session !== undefined && input.session.length > 0 ? { session: input.session } : {}),
   };
   await appendRecord(input.cwd, record);
   return {
     id: record.id,
     mode,
+    arm: choice.arm,
+    seed: choice.seed,
+    preselected,
+    forced: choice.forced,
+    channel,
     order,
     showMark,
     irreversible,
-    blindRefused: wantsBlind && irreversible,
+    blindRefused,
     flow: record.flow,
   };
 }

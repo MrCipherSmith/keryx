@@ -3,6 +3,16 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.72] — 2026-10-03
+### Changed
+- **The recommendation journal has four arms, not two (flow 400).** A question with a recommendation is now put to the human in one of four ways, drawn from a seeded generator on the repository's salt and the position in the journal, so an assignment can be replayed: A (the agent's order, the mark shown, the recommended option preselected), B (the mark shown, nothing preselected), C (shuffled, mark shown, nothing preselected) and D (shuffled, mark hidden, nothing preselected: the old blind question). The salt is created once in `.metaproject/data/decisions/seed` (mode 0600, git-ignored); a record keeps only the 32-bit `seed`, never the salt. The weights are 0.4, 0.2, 0.2, 0.2 and can be set under `arms` in `.metaproject/decisions.config.json`. A release, a delete, a push, an `action` tag, an `irreversible: true` flag and a match on the built-in list are always arm A and carry `forced: true`; every other A carries `forced: false`. A question with no recommendation is arm A and not forced. The old `mode` is derived from the arm (A ordinary, D blind, B and C `partial`), so older readers still work.
+- **The "(Recommended)" mark and preselection are separate in the choice menu.** In arms B and C the menu still shows the mark but opens with no row highlighted; Enter answers nothing until a row is chosen. A menu that never sets `preselected` behaves as before.
+- **Arm D removes the mark from the words, not only the flag.** The label, the description and the recommendation reason lose every form of the words recommend, рекоменд, preferred and suggested. After a deviation, in any arm, the transcript names the recommended option and its reason; in arm D it does so after any answer.
+- **`ask_user` takes a reason and one recommendation.** A top-level `recommendationReason` says why the option is recommended (the system prompt asks for it every time); a question that marks more than one option recommended is refused.
+- **The open record is wider, and old records still read.** It gains `arm`, `seed`, `preselected`, `order`, `channel` (`tui` when absent), `forced` and the recommendation's reason; a journal written before this is read as before.
+
+[Changes since 0.3.71](https://github.com/MrCipherSmith/keryx/compare/v0.3.71...v0.3.72)
+
 ## [0.3.71] — 2026-10-03
 ### Fixed
 - **A tall table, or a table with text around it, no longer loses its native layout in Telegram (flow 399).** A table of more than about 500 rows, narrow enough to fit one 4096-character part, went out as a single part that a rich message refuses (500 blocks, a table row is one block), so it fell back to HTML. The splitter now counts the blocks of the whole part, not only table rows: a table row, a paragraph or heading, a quote line, a list item (two blocks, three when it opens a list) and a fenced block each count, and a part that holds a table stays within the limit, with room for the `(i/n)` label. The table is split at a row boundary with its header repeated, as before, and every part stays a native table. In `html` and `plain` mode a reply that holds a table is also sent in more, shorter parts when it has that many blocks.

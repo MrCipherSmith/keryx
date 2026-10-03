@@ -7,6 +7,7 @@ import { readJournal } from "./store";
 
 export { journalAsk } from "./ask";
 export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
+export * from "./arms";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
 export { buildReport, renderReport, renderReportLine } from "./report";

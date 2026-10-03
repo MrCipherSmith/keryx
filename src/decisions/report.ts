@@ -63,7 +63,7 @@ export interface DecisionsReport {
   withoutRecommendation: number;
   changed: number;
   byMode: Record<DecisionMode, Tally>;
-  byStage: Array<{ stage: string; ordinary: Tally; blind: Tally; blindRefused: number }>;
+  byStage: Array<{ stage: string; ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>;
   deviations: DeviationRow[];
   /** Questions that looked irreversible (matched the list, carried an action tag, or were flagged by the caller). */
   irreversible: number;
@@ -164,7 +164,7 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     unanswered: 0,
     withoutRecommendation: 0,
     changed: 0,
-    byMode: { ordinary: emptyTally(), blind: emptyTally() },
+    byMode: { ordinary: emptyTally(), partial: emptyTally(), blind: emptyTally() },
     byStage: [],
     deviations: [],
     irreversible: live.filter((open) => open.irreversible).length,
@@ -174,9 +174,9 @@ export function buildReport(records: readonly DecisionRecord[], skipped = 0): De
     backfilled: buildBackfilled(history, firstAnswer, reasons),
     skipped,
   };
-  const stages = new Map<string, { ordinary: Tally; blind: Tally; blindRefused: number }>();
-  const stageOf = (name: string): { ordinary: Tally; blind: Tally; blindRefused: number } => {
-    const found = stages.get(name) ?? { ordinary: emptyTally(), blind: emptyTally(), blindRefused: 0 };
+  const stages = new Map<string, { ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number }>();
+  const stageOf = (name: string): { ordinary: Tally; partial: Tally; blind: Tally; blindRefused: number } => {
+    const found = stages.get(name) ?? { ordinary: emptyTally(), partial: emptyTally(), blind: emptyTally(), blindRefused: 0 };
     stages.set(name, found);
     return found;
   };
@@ -272,6 +272,7 @@ export function renderReport(report: DecisionsReport): string {
     "",
     "Match with the recommendation, by mode (first answer):",
     `  ordinary  ${share(report.byMode.ordinary)}`,
+    ...(report.byMode.partial.answered > 0 ? [`  partial   ${share(report.byMode.partial)}`] : []),
     `  blind     ${share(report.byMode.blind)}`,
     "",
     "By stage:",
@@ -279,7 +280,8 @@ export function renderReport(report: DecisionsReport): string {
   if (report.byStage.length === 0) lines.push("  (no answered decision had a recommendation)");
   for (const row of report.byStage) {
     const refused = row.blindRefused > 0 ? `, blind refused ${row.blindRefused}` : "";
-    lines.push(`  ${oneLine(row.stage)}: ordinary ${share(row.ordinary)}, blind ${share(row.blind)}${refused}`);
+    const partial = row.partial.answered > 0 ? `, partial ${share(row.partial)}` : "";
+    lines.push(`  ${oneLine(row.stage)}: ordinary ${share(row.ordinary)}${partial}, blind ${share(row.blind)}${refused}`);
   }
   lines.push(
     "",
