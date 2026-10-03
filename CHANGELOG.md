@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.3.65] — 2026-10-02
+## [0.3.69] — 2026-10-03
 ### Added
 - **Slate as working memory (flow 393).** On a host that keeps the originals (`pruneArchive`) with a live session directory, the model no longer re-reads its own history: each request is a bounded one. The slate gains two shelves, both task-local and never promoted to workspace knowledge. The **Trail** is written by the harness, never by the model: one entry per executed tool call (step, tool, argument digest, outcome, path of the saved full output). **Notes** are the model's own working notes, set, replaced or deleted by key with the new `slate_note` tool, redacted, at most 2000 characters each and 8000 tokens for the shelf; a note never becomes a Seed. Older rounds leave the request in batches and `archive.jsonl` keeps them; one rebuilt slate frame (Anchors, the latest Trail entries, every Note) stands in for them, with the tool-call and result pairing kept valid. The system instruction states the contract (older rounds leave the request, facts belong in Notes), and one notice per batch names the steps before they are dropped.
 - **Point recall.** `slate_trail` (filter by file, tool or step range), `recall_step` (the full saved output of a step, paged) and `history_search` (search this session's archive) are read-only and confined to the live session.
@@ -17,7 +17,7 @@ All notable changes to `keryx` are documented here. The format follows
 - Prune thresholds scale with the window: protect = min(40K, 30% of the window), batch saving = min(20K, 15%), so pruning fires before compaction on 32K to 272K windows.
 - Hosts without `pruneArchive` behave exactly as after 0.3.64 and never write a Trail into a slate another holder owns. `slate_read` only gains fields; Seeds are still never injected and `renderAnchorsBlock` is unchanged.
 
-[Changes since 0.3.66](https://github.com/MrCipherSmith/keryx/compare/v0.3.66...v0.3.65)
+[Changes since 0.3.66](https://github.com/MrCipherSmith/keryx/compare/v0.3.66...v0.3.69)
 
 ## [0.3.68] — 2026-10-03
 ### Changed

@@ -2,7 +2,7 @@ Same-model comparative check (AC9), flow 393 branch, keryx leg re-run on flow 39
 
 Supersedes the earlier version of this report (mean uncached 6,775, 100% over n=9). That run came from the same runner state as the earlier AC6 numbers, which did not run the working-memory path; the keryx leg has been re-run with the runner fixed (real slate, tools registered, guard on). The codex CLI leg was NOT re-run: its figures are flow 394's, in `../394-2026-10-02-shell-token-economy/comparative-report.md`, unchanged.
 
-Conditions: `bun scripts/benchmark/run-ablation-mutating.ts --provider openai-codex --model gpt-6.1-sol --seeds 1,2,3` (three tasks, three seeds, context-on and context-off), PR #865 head `ec89b5c4` (0.3.65). The runner writes a tracked fixture; the new one was kept out of the tree and the tracked fixture was restored, so nothing under `fixtures/` changed.
+Conditions: `bun scripts/benchmark/run-ablation-mutating.ts --provider openai-codex --model gpt-6.1-sol --seeds 1,2,3` (three tasks, three seeds, context-on and context-off), PR #865 code commit `ec89b5c4` (version 0.3.65 then; rebased onto main 0.3.66 and renumbered 0.3.69 afterwards; the benchmarks were not re-run after the rebase). The runner writes a tracked fixture; the new one was kept out of the tree and the tracked fixture was restored, so nothing under `fixtures/` changed.
 
 context-on, uncached input per run (tokens):
 
