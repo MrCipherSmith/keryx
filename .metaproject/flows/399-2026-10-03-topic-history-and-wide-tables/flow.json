@@ -11,12 +11,12 @@
   "title": "Telegram topic history restore and wide tables",
   "status": "ready",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T07:10:02.642Z",
+  "updatedAt": "2026-10-03T07:42:16.418Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:cedacb837ef696b5f4fa00db0fe0a2fef8060b47a7cc92dce8f8cd6930e16d8a",
+  "acChecksum": "sha256:ee6f6c35a769e5bef0263dce88f12cb86c641f5bbadc6daf5209138368cc7e2e",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -168,6 +168,16 @@
       "at": "2026-10-03T07:10:02.642Z",
       "event": "ac-updated",
       "detail": "AC1: \"A probe sends the same wide 3-column table to the operator's keryx-shell topic in three forms (A: the current `table` block, B: rich `markdown` after helyx's separator rewrite, C: HTML `<pre>` aligned table) and records, for each, whether it is wide, whether it scrolls sideways, and its rendered height; only the three test tables are sent, with no secrets, and the message ids are recorded in the flow's spike notes (`.metaproject/flows/399-2026-10-03-topic-history-and-wide-tables/spike.md`) together with the chosen variant and why. [verify: judged]\" -> \"A probe sends the same wide table to the operator keryx-shell topic in three forms (A: the current table block, B: rich markdown sent as is, C: HTML pre aligned table) and records the message ids and, for each form, whether Telegram accepted it, and whether it is wide, scrolls sideways and how tall it renders; only the three test tables are sent, with no secrets, and the ids go to the flow spike notes (.metaproject/flows/399-2026-10-03-topic-history-and-wide-tables/spike.md) together with the chosen variant and why. [verify: judged]\" (the probe table has 6 columns to be wide enough to overflow, and helyx separator rewrite is not available to this repository, so B is rich markdown sent as is)"
+    },
+    {
+      "at": "2026-10-03T07:42:16.234Z",
+      "event": "ac-updated",
+      "detail": "AC8: \"Every restored message goes through the same redaction as a live reply (composeReply) and is cut at the per-item cap (D2) with an ellipsis marker; a session fixture holding a token-shaped string and a 40,000-character turn yields a topic payload with the token redacted and the turn cut. [verify: exec `bun test src/remote/topic-history.test.ts`]\" -> \"Every restored message goes through the same redaction as a live reply (composeReply) and is cut at the per-item cap (D2) with an ellipsis marker; a turn whose text has a bot-token shape or a bare high-entropy token is not posted and is replaced by a placeholder (a restore-time guard on top of the shared redactor, which can miss them); a session fixture holding a token-shaped string and a 40,000-character turn yields a topic payload with no token and the long turn cut. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (Independent review of PR 870: the shared redactor misses a pasted bot token and a bare base64url token, so a guard replaces such a turn)"
+    },
+    {
+      "at": "2026-10-03T07:42:16.418Z",
+      "event": "ac-updated",
+      "detail": "AC12: \"A reconnect, a heartbeat, a bridge restart that re-registers the same session in the same topic (reused: true), or an at-least-once outbound retry does not repost the history; a second /history repeats it on purpose. No persistent marker is kept: the automatic restore happens only on the registration of this enable() that created the topic, and only the first registration counts, so a test that reconnects the client and re-enables with a kept topic counts one automatic restore. [verify: exec `bun test src/remote/topic-history.test.ts`]\" -> \"A reconnect, a heartbeat, a bridge restart that re-registers the same session in the same topic (reused: true), or an at-least-once outbound retry does not repost the history; a second /history repeats it on purpose. Turning remote control off and on again in the same process makes a new topic and restores nothing into it (use /history). No persistent marker is kept: the automatic restore happens only on the first enable() of the process and only on the first registration of that enable() (the one that created the topic), so a test that reconnects the client and one that turns it off and on each count one automatic restore at most. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (Independent review of PR 870: off/on reposted, contradicting the docs; the behaviour and the criterion now say nothing is posted)"
     }
   ],
   "acKinds": {

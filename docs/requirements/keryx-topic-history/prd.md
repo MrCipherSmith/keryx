@@ -37,7 +37,7 @@ Screenshots: (1) what arrived in Telegram: a native three-column table "Номе
 
 ### 4.2 What counts as a message
 
-Included: the operator's turns (`isOperatorMessage`) and the final text of each agent turn. Excluded, always: tool calls, tool output, injected or provenance-marked content (memory, hooks, slate), reasoning, and the agent's intermediate narration between tool calls (poll 53). Every message passes `composeReply`, the same redaction as a live reply, and is cut at the per-item cap (AC8, D2).
+Included: the operator's turns (`isOperatorMessage`) and the final text of each agent turn. Excluded, always: tool calls, tool output, injected or provenance-marked content (memory, hooks, slate), reasoning, and the agent's intermediate narration between tool calls (poll 53). Every message passes `composeReply`, the same redaction as a live reply, and is cut at the per-item cap (AC8, D2). A turn with a bot-token shape or a bare high-entropy token is replaced by a placeholder, because the shared redactor can miss them (review of PR 870). The unfinished answer of a running turn is left out. Turning remote control off and on in one process restores nothing into the new topic (AC12).
 
 ### 4.3 Order and labels
 
