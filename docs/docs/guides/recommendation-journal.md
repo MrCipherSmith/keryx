@@ -121,7 +121,7 @@ when it is written and again when it is shown, so it cannot add lines to a flow'
 ## The report
 
 ```text
-keryx decisions report [--json]
+keryx decisions report [--json | --line]
 ```
 
 It prints, from the journal alone:
@@ -140,6 +140,46 @@ counted separately, because it was given after the reveal.
 In the shell the same report is `/decisions`, and the sidebar shows a
 `N decisions · /decisions` row once the journal holds a record; clicking it opens
 the report. `/decisions` works while a turn is running.
+
+## Importing earlier decisions
+
+Questions you answered before the journal existed (a poll in a chat, say) can be
+loaded as the "before" arm of a comparison:
+
+```text
+keryx decisions import <file.jsonl> [--dry-run] [--json]
+keryx decisions report --line
+```
+
+One decision per line:
+
+```json
+{"id":"bf-p12-q0","at":"2026-08-14T09:30:00Z","flow":"392","stage":"design","question":"...","options":[{"id":"o0","label":"..."},{"id":"o1","label":"..."}],"recommendation":{"optionId":"o0","reason":"..."},"source":"poll 12","answer":{"choice":"o0"},"reason":"only when you deviated"}
+```
+
+`recommendation` and `answer` may be `null`; `answer.other: true` marks your own
+words instead of an option. Each line is checked (unique option ids, a
+recommendation and an answer that are options): a line that is not a decision is
+skipped, named with its line number and why, and counted, and the rest is
+imported. An id that is already in the journal is skipped and reported, which
+makes the import safe to repeat, and two imports at once are serialised by a lock file next to the journal (`journal.jsonl.lock`; a run that finds one waits, and one left by a dead process is cleared); a backfilled decision whose answer is missing
+(an interrupted write) gets just that answer on the next import. `--dry-run` only
+counts. It prints `Imported: N, skipped: S, with recommendation: R, answered: A,
+deviations: D`, plus `, repaired: R` and `, malformed: M` when there are any. With
+`--json` a failure is `{"error": "..."}`.
+
+An imported decision is **backfilled**: its recommendation was written down after
+the fact, so it is never blind, its time to answer is unknown, and it stays apart
+from the live records everywhere. The report has a block "до (историческое,
+дозаполнено задним числом)" with the total, the decisions that had a
+recommendation, the matches and their share, and every deviation with its reason;
+the live numbers and the median time to answer never include it, and `--json` has
+a `backfilled` section. `report --line` prints one line in Russian for a daily
+message, for example `Журнал решений: всего 70 (до: 60, после: 10). Совпадение с
+рекомендацией: видимая 80% (4/5), скрытая 60% (3/5); до: 72% (36/50).` (`нет
+данных` where there is nothing to divide). In the shell a bare `/decisions change`
+and `/decisions reason` never pick a backfilled decision, and the sidebar row
+counts them apart (`10 decisions + 60 before`).
 
 ## Driving it from another agent or a chat bridge
 

@@ -206,9 +206,12 @@ describe("flow 303 AC5 (amended): flat usage and the four rich helps, pinned aga
     "  approvals Pending remote approvals: list them, allow or deny one call, once (the local answer path of the serve entry)\n",
     // Flow 392: `keryx decisions`, a brand-new verb, so a USAGE_BODY block (wrapped
     // over three lines) and a Commands: summary row.
-    "  keryx decisions open|answer|reason|report     Recommendation journal: record a question with options and its\n",
+    // Flow 392 (backfill): the usage line now names `import` and `report --line`, so the pinned block grew on purpose.
+    "  keryx decisions open|answer|reason|report [--json|--line]|import <file.jsonl> [--dry-run] [--json]\n",
+    "                                               Recommendation journal: record a question with options and its\n",
     "                                               recommendation before showing it, the human's choice after;\n",
-    "                                               report = match share by mode and stage, deviations (no model)\n",
+    "                                               report = match share by mode and stage, deviations (no model);\n",
+    "                                               import = earlier decisions from a JSON-lines file, kept apart\n",
     "  decisions Recommendation journal: every agent question with options, what was recommended, what the human chose\n",
     // Flow 395: `keryx remote`, a brand-new verb (the Telegram rendering preview).
     "  keryx remote format-sample [--mode auto|rich|html|plain] [--full] [--json]\n",

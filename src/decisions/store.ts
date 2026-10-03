@@ -11,7 +11,8 @@
 // many it dropped, so a damaged line never takes the report (or a question) down
 // with it and is never silently absent either.
 
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { appendFile, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { resolveGitCommonDir } from "../lib/git-worktrees";
 import type { DecisionRecord } from "./types";
@@ -56,6 +57,132 @@ export async function appendRecord(cwd: string, record: DecisionRecord): Promise
   const root = await journalRoot(cwd);
   await mkdir(decisionsDir(root), { recursive: true });
   await appendFile(journalFile(root), `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+async function endsWithoutNewline(file: string): Promise<boolean> {
+  try {
+    const text = await readFile(file, "utf8");
+    return text.length > 0 && !text.endsWith("\n");
+  } catch {
+    return false;
+  }
+}
+
+/** Append several records in one write, so a batch (an import) is never interleaved with another writer's line. */
+export async function appendRecords(cwd: string, records: readonly DecisionRecord[]): Promise<void> {
+  if (records.length === 0) return;
+  const root = await journalRoot(cwd);
+  await mkdir(decisionsDir(root), { recursive: true });
+  const file = journalFile(root);
+  // a last line cut short by an earlier crash has no newline: end it, so the first record of this batch does not fuse with it
+  const lead = (await endsWithoutNewline(file)) ? "\n" : "";
+  await appendFile(file, lead + records.map((record) => `${JSON.stringify(record)}\n`).join(""), { encoding: "utf8", mode: 0o600 });
+}
+
+/** The lock file that serialises a read-then-append over the journal (an import). */
+export function journalLockFile(root: string): string {
+  return `${journalFile(root)}.lock`;
+}
+
+export interface JournalLockOptions {
+  /** A lock older than this is taken to be abandoned even when its pid is alive (a hung or reused pid). */
+  staleMs?: number;
+  /** How long to wait for a lock held by a live run before giving up. */
+  timeoutMs?: number;
+  pollMs?: number;
+}
+
+export const JOURNAL_LOCK_STALE_MS = 60_000;
+export const JOURNAL_LOCK_TIMEOUT_MS = 15_000;
+
+function pidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process exists but is not ours
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+/** Abandoned: older than `staleMs`, or written by a process that no longer exists. A half-written (empty) lock is young, so it is waited for. */
+async function lockIsStale(file: string, staleMs: number): Promise<boolean> {
+  let mtimeMs: number;
+  try {
+    mtimeMs = (await stat(file)).mtimeMs;
+  } catch {
+    return false;
+  }
+  if (Date.now() - mtimeMs > staleMs) return true;
+  try {
+    const pid = (JSON.parse(await readFile(file, "utf8")) as { pid?: unknown }).pid;
+    return typeof pid === "number" && !pidAlive(pid);
+  } catch {
+    return false;
+  }
+}
+
+async function ownsLock(file: string, token: string): Promise<boolean> {
+  try {
+    return (JSON.parse(await readFile(file, "utf8")) as { token?: unknown }).token === token;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Run `fn` while holding the journal's lock: an `O_EXCL` file next to the journal that
+ * names the holder (pid, time, token). A second run waits for it; a lock whose pid is
+ * dead, or that is older than `staleMs`, is broken (renamed away, then removed). The
+ * lock is released in `finally`, and only when it is still ours, so a lock that was
+ * broken as stale while we hung is not removed from under its new holder. Taking it
+ * and breaking a stale one are not atomic with each other; the window is two runs
+ * both finding the same abandoned lock, which a lock this young never is.
+ *
+ * Only a read-then-append needs it (an import deciding which ids are new). A single
+ * `appendRecord` is one `O_APPEND` write and does not.
+ */
+export async function withJournalLock<T>(cwd: string, fn: () => Promise<T>, options: JournalLockOptions = {}): Promise<T> {
+  const staleMs = options.staleMs ?? JOURNAL_LOCK_STALE_MS;
+  const timeoutMs = options.timeoutMs ?? JOURNAL_LOCK_TIMEOUT_MS;
+  const pollMs = options.pollMs ?? 25;
+  const root = await journalRoot(cwd);
+  await mkdir(decisionsDir(root), { recursive: true });
+  const file = journalLockFile(root);
+  const token = randomUUID();
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      const handle = await open(file, "wx", 0o600);
+      try {
+        await handle.writeFile(JSON.stringify({ pid: process.pid, at: new Date().toISOString(), token }));
+      } finally {
+        await handle.close();
+      }
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    if (await lockIsStale(file, staleMs)) {
+      const aside = `${file}.stale-${process.pid}-${Date.now()}`;
+      try {
+        await rename(file, aside);
+        await rm(aside, { force: true });
+      } catch {
+        // someone else broke it first
+      }
+      continue;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`the decisions journal is locked by another run (${file}); try again, or delete that file if no import is running`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  try {
+    return await fn();
+  } finally {
+    if (await ownsLock(file, token)) await rm(file, { force: true });
+  }
 }
 
 const isString = (value: unknown): value is string => typeof value === "string";

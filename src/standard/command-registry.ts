@@ -1322,11 +1322,31 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     command: "decisions report",
     summary:
       "Match share between the human's choice and the agent's recommendation, by mode (ordinary, blind) and by stage, " +
-      "with every deviation and its reason. Deterministic, no model.",
+      "with every deviation and its reason. Backfilled (imported, historical) decisions are reported in a block of their own and never counted in the live shares or the time to answer. Deterministic, no model.",
     intent: ["decisions report", "отчёт по рекомендациям", "how often does the human follow the recommendation", "blind mode results"],
-    args: [{ name: "json", type: "bool", required: false, desc: "print the report as JSON" }],
+    args: [
+      { name: "json", type: "bool", required: false, desc: "print the report as JSON (with a `backfilled` section)" },
+      { name: "line", type: "bool", required: false, desc: "print ONE line in Russian for the daily topic message: the total and the match share of the visible, hidden and historical decisions" },
+    ],
     json: true,
     read: true,
+  },
+  {
+    module: "decisions",
+    command: "decisions import",
+    summary:
+      "Import historical decisions from a JSON-lines file as backfilled records: the \"before\" arm of a comparison with the live journal. " +
+      "Each is marked backfilled, is never blind, keeps the time it was asked, and is reported apart from the live ones. " +
+      "A line that is not a decision is skipped, named with its line number and counted as malformed, and the rest is imported; an id already in the journal is skipped, so a second import changes nothing (except that a backfilled decision missing its answer gets just that answer).",
+    intent: ["decisions import", "import historical decisions", "backfill the recommendation journal", "импорт исторических решений", "дозаполнить журнал решений"],
+    args: [
+      { name: "<file>", type: "string", required: true, desc: "a JSON-lines file, one decision per line: id, at, flow, stage, question, options, recommendation, source, answer, reason" },
+      { name: "dry-run", type: "bool", required: false, desc: "check and count without writing" },
+      { name: "json", type: "bool", required: false, desc: "print the counts as JSON (a failure is {\"error\": \"...\"})" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: ["appends open, answer and reason records to .metaproject/data/decisions/journal.jsonl (nothing with --dry-run)"],
   },
   {
     module: "product",

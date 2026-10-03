@@ -2,15 +2,17 @@
 // TUI and the shells import from here, never from the files behind it (the
 // import-zone ratchet counts any other reach as an avoidable bypass).
 
-import { buildReport, renderReport, type DecisionsReport } from "./report";
+import { buildReport, renderReport, renderReportLine, type DecisionsReport } from "./report";
 import { readJournal } from "./store";
 
 export { journalAsk } from "./ask";
 export type { AskFn, AskOption, AskRequest, JournalAskDeps } from "./ask";
 export { BLIND_PROBABILITY, DEFAULT_IRREVERSIBLE, loadDecisionsConfig } from "./blind";
 export { answerDecision, openDecision, recordReason } from "./journal";
-export { buildReport, renderReport } from "./report";
-export type { DecisionsReport, DeviationRow, Tally } from "./report";
+export { buildReport, renderReport, renderReportLine } from "./report";
+export type { BackfilledReport, DecisionsReport, DeviationRow, Tally, TimingStats } from "./report";
+export { importBackfill, renderImportResult } from "./import";
+export type { ImportResult } from "./import";
 export { journalFile, resolveJournalFile } from "./store";
 export { resolveFlowContext } from "./context";
 export type { FlowContext, FlowSource } from "./context";
@@ -38,7 +40,17 @@ export async function reportText(cwd: string): Promise<string> {
   return renderReport(await loadReport(cwd));
 }
 
-/** How many decisions the journal holds (the sidebar row shows only when this is above zero). */
+/** The report as ONE Russian line, for the daily topic message (`keryx decisions report --line`). */
+export async function reportLine(cwd: string): Promise<string> {
+  return renderReportLine(await loadReport(cwd));
+}
+
+/** How many LIVE decisions the journal holds; the backfilled ones are counted apart by `backfilledCount`. */
 export async function decisionCount(cwd: string): Promise<number> {
   return (await loadReport(cwd)).total;
+}
+
+/** How many backfilled (imported, historical) decisions the journal holds. */
+export async function backfilledCount(cwd: string): Promise<number> {
+  return (await loadReport(cwd)).backfilled.total;
 }

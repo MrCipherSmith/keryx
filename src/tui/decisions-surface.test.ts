@@ -57,6 +57,17 @@ test("projectDecisionsPanel: hidden at zero, one row that fits the sidebar other
   expect(projectDecisionsPanel(5, 6).text.length).toBeLessThanOrEqual(11);
 });
 
+test("projectDecisionsPanel: backfilled decisions are shown apart from the live count", () => {
+  expect(projectDecisionsPanel(0, SIDEBAR_TEXT_WIDTH, 0)).toEqual({ visible: false, text: "" });
+  const both = projectDecisionsPanel(10, SIDEBAR_TEXT_WIDTH, 60);
+  expect(both.visible).toBe(true);
+  expect(both.text).toContain("10 decisions + 60 before");
+  const onlyBefore = projectDecisionsPanel(0, SIDEBAR_TEXT_WIDTH, 60);
+  expect(onlyBefore.visible).toBe(true);
+  expect(onlyBefore.text).toContain("60 before");
+  expect(onlyBefore.text).not.toContain("0 decisions");
+});
+
 test("/decisions is a registered agent command and is allowed while busy", () => {
   expect(findAgentCommand("/decisions", "agent")?.name).toBe("/decisions");
   expect(isDecisionsCommand("/decisions")).toBe(true);
