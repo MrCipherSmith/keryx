@@ -1,27 +1,24 @@
 # Implementation Plan
 
-Status: draft (PRD and acceptance criteria wait for the operator; nothing is frozen or implemented)
+Status: frozen with the acceptance criteria; one flow, two PRs (poll 53)
 
 ## Approach
 
-Two independent pieces in one flow, sequenced so the unknown goes first (Q1 may split them into two flows).
-
-1. Table layout. A live probe (AC1) decides between the current `table` block, rich `markdown` as helyx sends it, and an aligned HTML `<pre>`; the chosen form is then built as a pure, pinned function (AC2 to AC5) with the flow 395 invariants and the fallbacks untouched.
-2. History restore. The signal is `reused: false` from `Hub.register`, carried to `RemoteBridge.enable()`; the messages come from `loadArchive` filtered by `isOperatorMessage` and the no-tool-call rule; they pass `composeReply` and the outbound queue; a marker in session state keeps it idempotent; `/history [N]` is the manual form, registered in the shell, help and remote command tables (AC6 to AC15).
+1. PR 1, history restore. The signal is `reused: false` from `Hub.register`, carried to `RemoteBridge.enable()`, combined with a "session was resumed" flag; the messages come from `loadArchive` filtered by `isOperatorMessage` and the final-text-per-turn rule; each goes through `composeReply` and the outbound queue as a separate paced post; a per-topic marker in session state keeps it idempotent; `/history [N]` is the manual form, registered in the shell, help and remote command tables (AC6 to AC17, AC19).
+2. Live probe (AC1), allowed by the operator: three test tables to the operator's keryx-shell topic, result in `spike.md` with message ids.
+3. PR 2, tables, by another agent after the probe: the winning variant as a pure pinned builder, flow 395 invariants and the fallbacks untouched, split at rows (AC2 to AC5, AC18).
 
 ## Steps
 
-1. Operator answers the open questions in the PRD; AC are adjusted and frozen.
-2. Table probe (live send only with the operator's OK), record the result, choose the variant.
-3. Table builder, splitting, tests, golden fallbacks.
-4. History selection and formatting (pure), then the bridge hook and the marker.
-5. `/history` command in the three registries, panel key, sidebar line, transcript notice.
-6. Docs, CHANGELOG, version bump, `mkdocs build --strict`.
-7. Live acceptance by the operator (AC17).
+1. Freeze (this flow). Not a confirmation.
+2. PR 1 on its own branch and worktree from `origin/main`; version after the merge queue; targeted tests only; draft PR; green CI.
+3. Probe and `spike.md`.
+4. `keryx flow implemented 399` only after both PRs exist.
+5. Live acceptance by the operator (AC17, AC18).
 
 ## Risks
 
-- The markdown form may not scroll sideways, or may open the model's text to a parser (spike S3); the probe exists to find out first.
-- A burst of 10 messages into a new topic meets the group rate limit; the digest form (Q3) is the cheaper answer.
-- The restore must never fire for a reused topic or on a retry, or the operator gets duplicates.
-- Flow 395 has an unconfirmed live AC11; the table work touches the same code (Q12).
+- The restore must never fire for a reused topic, a non-resumed session, or a retry; the marker and the `reused` flag are the guards.
+- Ten paced posts into a fresh topic meet the group rate limit; the outbound queue paces them and a 429 pauses it.
+- The markdown table form may not scroll sideways, or may open model text to a parser (spike S3); the probe finds out first.
+- Flow 395 has an unconfirmed live AC11 on the table code; PR 1 does not touch it (AC19).

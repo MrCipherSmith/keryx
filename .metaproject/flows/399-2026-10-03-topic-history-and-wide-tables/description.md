@@ -1,6 +1,6 @@
 # Telegram topic history restore and wide tables
 
-Status: draft (PRD and acceptance criteria for the operator's review; not frozen)
+Status: PRD and acceptance criteria updated with the decisions of poll 53, then frozen (freezing is not confirming)
 Source: user description (origin: human-request, channel message 179104; a second message, 179814, on tables)
 PRD: `docs/requirements/keryx-topic-history/prd.md`
 
@@ -27,7 +27,9 @@ When a topic is created for a session that already has a conversation, the topic
 - Where the topic is created: `Hub.register` (`src/remote/hub.ts`) answers `reused: false` when it made a new topic and `reused: true` when a live or kept topic held the name. The shell learns it from `RemoteClient.start()` through `RemoteBridge.enable()` (`src/remote/shell-bridge.ts`). Resuming a session never turns remote control on (flow 376, AC4), so the restore is tied to topic creation, not to the resume.
 - Where the messages are: the session store (`src/session/store.ts`): `loadArchive` (the full history, falling back to `context.jsonl`) and `isOperatorMessage` (`src/session/compact.ts`), which tells the operator's turns from injected ones.
 - Tables: keryx sends a `table` block (`src/remote/format-rich.ts`, `is_bordered: true`) on purpose, not rich Markdown (spike S3 in `docs/requirements/keryx-telegram-rendering/spike.md`). helyx sends the reply as `rich_message: { markdown }` (`helyx/mcp/tools.ts:443`) after rewriting bare separator rows so each carries a colon (`helyx/channel/telegram.ts:232`). Whether Telegram lays the markdown form out as a wide, scrollable table is not established by any code or note; the first table criterion is a probe that settles it before anything is built.
-- The earlier decision of poll 51 on tables (keep the native table, shorten long cells with an ellipsis) is superseded by message 179814 and survives only as an open question (Q8 in the PRD).
+- The earlier decision of poll 51 on tables (keep the native table, shorten long cells with an ellipsis) is superseded by message 179814 and survives only as a default (D3 in the PRD, not kept).
+
+Decisions of poll 53: one flow, two PRs (history first, tables second); the restored messages are the operator's and the agent's final text per turn; ten separate paced messages; automatic restore only when a resumed session gets a new topic, everything else via `/history N`; the live table probe is allowed.
 
 ## Out of Scope
 
