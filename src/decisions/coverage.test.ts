@@ -108,6 +108,41 @@ describe("a TUI work picker", () => {
     expect(cancelled).toBe("esc");
     expect((await opens()).map((r) => r.source)).toEqual(["tui-queue-route", "tui-wiki-enrich"]);
   });
+
+  test("a dismissed pick (Esc, busy dock) is journaled as cancelled, never as a choice, even when the cancel id is an option id", async () => {
+    // composer-choice resolves the dismissId it was given; the pick hands it a value that is no option id
+    const dismissed = await journaledPick(
+      root,
+      { source: DECISION_SOURCES.queueRoute, question: "Where?", options: OPTIONS, cancelId: "side" },
+      async (options, dismissId) => {
+        expect(typeof dismissId).toBe("string");
+        expect(options.map((o) => o.id)).not.toContain(dismissId);
+        return dismissId;
+      },
+    );
+    expect(dismissed).toBe("side");
+    expect((await opens()).map((r) => r.source)).toEqual(["tui-queue-route"]);
+    expect((await readRecords(root)).filter((r) => r.kind === "answer")).toHaveLength(0);
+
+    // a real pick of that same option id is an answer
+    const picked = await journaledPick(
+      root,
+      { source: DECISION_SOURCES.queueRoute, question: "Where again?", options: OPTIONS, cancelId: "side" },
+      async () => "side",
+    );
+    expect(picked).toBe("side");
+    const answers = (await readRecords(root)).filter((r) => r.kind === "answer");
+    expect(answers).toHaveLength(1);
+    expect(answers[0]?.kind === "answer" ? answers[0].choice : undefined).toBe("side");
+  });
+
+  test("every journaledPick caller in tui-shell passes the dismiss id to its dialog as the cancel id", async () => {
+    const shell = await readFile(path.join(import.meta.dir, "..", "tui/tui-shell.ts"), "utf8");
+    const calls = shell.split("journaledPick(").length - 1;
+    expect(calls).toBe(3);
+    expect(shell.match(/\(options, dismissId\) =>/g)).toHaveLength(3);
+    expect(shell.match(/cancelId: dismissId/g)).toHaveLength(3);
+  });
 });
 
 describe("wiring: which pickers are journaled and which are not", () => {

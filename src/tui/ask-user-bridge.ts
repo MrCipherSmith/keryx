@@ -90,9 +90,16 @@ export interface JournaledPick {
   options: PickOption[];
   /** Why the recommended option is recommended (recorded, shown only after the answer). */
   recommendationReason?: string;
-  /** What Esc returns; also what a cancelled pick returns when the id is not one of the options. */
+  /** What the caller gets back when the pick is dismissed (Esc, a busy dock, an abort); may also be an option id. */
   cancelId: string;
 }
+
+/**
+ * Renders the options and resolves the chosen option id. `dismissId` is what the dialog must resolve to on
+ * Esc, a busy dock or an abort (pass it as the dialog's own `cancelId`): it is never an option id, so a
+ * dismissal cannot be mistaken for an answer even when `spec.cancelId` is also an option ("side", "cancel").
+ */
+export type PickShow = (options: PickOption[], dismissId: string) => Promise<string>;
 
 /**
  * A work decision picked from a composer-dock menu (wiki enrich mode, queue routing, held session), put through
@@ -101,11 +108,12 @@ export interface JournaledPick {
  * text, so the deviation reason is not asked; `/decisions reason` adds it later. The journal never throws into the
  * pick: without a record the pick is shown as given.
  */
-export async function journaledPick(cwd: string, spec: JournaledPick, show: (options: PickOption[]) => Promise<string>): Promise<string> {
+export async function journaledPick(cwd: string, spec: JournaledPick, show: PickShow): Promise<string> {
   const ask = journalAsk(
     async (request) => {
-      const id = await show(request.options);
-      return request.options.some((option) => option.id === id) ? id : CANCEL_ANSWER;
+      // the dialog is told to resolve CANCEL_ANSWER on a dismissal, so only a real option id is an answer
+      const id = await show(request.options, CANCEL_ANSWER);
+      return id !== CANCEL_ANSWER && request.options.some((option) => option.id === id) ? id : CANCEL_ANSWER;
     },
     journalDeps(cwd, { source: spec.source, askReason: false, stage: spec.source }),
   );

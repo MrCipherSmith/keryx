@@ -1612,11 +1612,11 @@ async function pickWikiEnrichMode(
         },
       ],
     },
-    (options) =>
+    (options, dismissId) =>
       showComposerChoice(otui, r, dock, {
         title: "Wiki enrich",
         subtitle: `drafts: ${plan.draftCount} · accepted: ${plan.acceptedCount} · total: ${plan.total}`,
-        cancelId: "cancel",
+        cancelId: dismissId,
         options,
       }),
   );
@@ -6241,7 +6241,7 @@ export async function launchTuiAgentShell(opts: {
                   cancelId: request.cancelId,
                   options: request.options,
                 },
-                (options) => showComposerChoice(otui, r, chrome.dock, { ...request, options }),
+                (options, dismissId) => showComposerChoice(otui, r, chrome.dock, { ...request, options, cancelId: dismissId }),
               );
               input.focus();
               return toLeasedChoice(error, id);
@@ -8338,12 +8338,12 @@ export async function launchTuiAgentShell(opts: {
                 { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
               ],
             },
-            (options) =>
+            (options, dismissId) =>
               showComposerChoice(otui, r, chrome.dock, {
                 title: "Main agent is busy",
                 subtitle: line,
                 options,
-                cancelId: "side",
+                cancelId: dismissId,
                 enqueue: false,
                 onBusy: () => {
                   blockedByOpenDialog = true;
