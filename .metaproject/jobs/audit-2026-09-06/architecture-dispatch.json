@@ -29,7 +29,7 @@
     "package.json"
   ],
   "constraints": [
-    "Project root /Users/Goodea/goodea/keryx; read index first",
+    "Project root ~/goodea/keryx; read index first",
     "Use graph/wiki/ctx/memory routing; no bare rg/grep",
     "Read testing skill/context before tests",
     "No secrets in output; no user questions or subagents"

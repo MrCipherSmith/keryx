@@ -2,7 +2,7 @@
 
 Version: 0.1.1
 
-The rest of what the 2026-09-27 competitive review found worth doing. Each
+The rest of what the 2026-09-27 functional review found worth doing. Each
 entry names what was measured or observed, and why it is not P0. Companion to
 `docs/requirements/backlog.md`, which holds measured defects; these are
 product directions.
@@ -30,9 +30,8 @@ which the honesty note partly covers.
 
 ### 3. Measure the context economy
 
-Observed: the earlier measurement run (`results/vantage-context-measurement`,
-unmerged) was negative on both passes; README still implies savings. Augment
-claims −32 %; OpenCode is criticised for ×4.7 overhead.
+Observed: the earlier measurement run (`results/acme-context-measurement`,
+unmerged) was negative on both passes; README still implies savings.
 Direction: a repeatable benchmark on three repositories, published numbers,
 or the claim removed.
 Why not P0: it is a measurement, not a feature; it decides marketing copy.
@@ -57,7 +56,7 @@ docs match the output shape.
 
 ### 6. ACP against real IDEs; VS Code extension on the marketplace
 
-Observed: ACP verified against the schema and a hand-driven Zed; Kiro reaches
+Observed: ACP verified against the schema and a hand-driven Zed; other agents reach
 JetBrains/Eclipse/Zed via ACP; the `vscode-extension/` directory exists and
 has a CI job but is not published.
 Why not P0: distribution work; W1's live-run harness is the template for
@@ -66,7 +65,7 @@ Why not P0: distribution work; W1's live-run harness is the template for
 ### 7. Windows, without a sandbox first
 
 Observed: flow 100 blocked; no Windows support at all, while Claude Code,
-Codex, Gemini and Kiro run there.
+Codex and Gemini CLI run there.
 Direction: run without OS sandbox and say so loudly; sandbox later.
 Why not P0: needs a Windows host and touches process spawning, paths and the
 TUI.
@@ -75,7 +74,7 @@ TUI.
 
 ### 8. Public catalog of bundles and skills
 
-Observed: Gemini Extensions, Claude plugins and the Cline MCP marketplace give
+Observed: Gemini Extensions, Claude plugins and MCP marketplaces give
 users a place to browse; keryx has `bundle` export/import and skill export
 with no index.
 Why not P0: needs content before it needs a catalog.
@@ -92,14 +91,14 @@ meanwhile.
 ### 10. Comparison pages
 
 Observed: no page explains "checksum-frozen AC vs prompt-frozen" or "review
-with a verifier vs one reviewer" — the two arguments competitors cannot make.
+with a verifier vs one reviewer" — the two arguments other tools cannot make.
 Why not P0: docs; write after W3 ships the action so the page has a link.
 
 ### 11. Voice in `keryx shell`
 
-Observed: Codex CLI voice on by default (moderate confidence); helyx already
-speaks replies.
-Why not P0: low demand from the operator; helyx covers the use.
+Observed: Codex CLI voice on by default (moderate confidence); the operator chat
+channel already speaks replies.
+Why not P0: low demand from the operator; the operator chat channel covers the use.
 
 ### 12. `keryx doctor` outside a keryx project reads as a failure
 

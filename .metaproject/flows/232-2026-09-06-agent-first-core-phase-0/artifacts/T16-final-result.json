@@ -24,96 +24,96 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-review.md",
       "kind": "review",
       "exists": true,
       "summary": "Full Stage 1 + Stage 2 review: scope with source hashes, criterion table for dispatch items (1)-(7) and AC3/AC4/AC5, four findings, confirmed clean areas, evidence table with raw log hashes, routing audit, keryx:findings block."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This subagent-result record."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-core-budget-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Deterministic in-memory core probe, cases C1-C11: clean text-only finish in the final allowed round, maxRounds 1 clean finish, no-progress wrap-up at and past the round boundary, toolless action reprompt at and below the ceiling, abort mid-batch, call-budget reason independence, zero call budget, zero rounds with an interactive picker, and the F-001 no-progress terminal-reason observation. 11/11 pass.",
       "hash": "1c4c17ce1b15aa8c1f44b2f97197b49af4a735f7e40b7f9439632fd7f3b73bcf"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-child-budget-probe.ts",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-child-budget-probe.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Deterministic in-memory spawn_subagent probe, cases D1-D4: distinct max_rounds and max_tool_calls limits, a clean in-budget child mapping to Completed rather than BudgetExhausted, the 24-round clamp reported truthfully in reservation, task text and system instruction, and a zero call budget stopping the child at one request. 4/4 pass.",
       "hash": "0ec1eea8580131ac37920afc0c21c5e5ed90fcc4091f02e43866d4909a173d4e"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-26-54-764Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Core probe execution log, C1-C11, allPassed true.",
       "hash": "b10c0416a20d99a1b50db4db0dc6964a7809548aed8dc73e749c8c2ce818ac76"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-01-968Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-01-968Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Child probe execution log, D1-D4, allPassed true.",
       "hash": "1a6566cf321b6ac859d69b7c585fd1398fdc4f4d43b3e921375bd29517880bc1"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-40-919Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-40-919Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Preserved T16-recheck-round-budget-probe.ts rerun, unchanged source: 1 provider request, 1 invocation, BudgetExhausted, rounds<=1. Closes the earlier F-002.",
       "hash": "fac57c91238b5db356506b9535231a51e869effcf7f28b8b16e7f47f954bb3fa"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-45-752Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-18-45-752Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "Preserved T16-child-budget-probe.ts rerun, unchanged source: 1 provider request, BudgetExhausted, reservation rounds<=10 calls<=1.",
       "hash": "dcede35946a38dd7a34bce2d9e56f355e382e42e4909c7b2574e8ead82a1cc54"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-24-585Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bun test agent.test.ts agent-tool-call-budget.test.ts spawn-subagent-tool.test.ts: 110 pass, 0 fail, 444 assertions.",
       "hash": "f1997ae7e2c7d518409dd25e8f9124db078e48d33815a9de12bf8c6c4aa6e81f"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-28-02-406Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-28-02-406Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bun test over the five other spawn-subagent suites plus agent-permission-mode.test.ts: 60 pass, 0 fail, 175 assertions.",
       "hash": "9e546c13260b0cb9eea3e447e5e6f97781935a64738fb2d3d68215e06421c606"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-29-634Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-29-634Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "AC4: keryx-shell-stress.test.ts and run-containment.test.ts, 3 pass, 0 fail, 10 assertions.",
       "hash": "2192f10267accf6bfead86a5e5485b5d45af6ed2a22ae0ed5de75aaa8c9f342a"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-39-457Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-39-457Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "AC5: scripts/typecheck.test.ts, 2 pass, 0 fail, 8 assertions, including the injected TS2322 case.",
       "hash": "3e43a75265b82d56b2a7ae33cc37040ca81c85912475196acb6ce021b2cb5618"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-53-162Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-23-53-162Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bun run typecheck, exit 0.",
       "hash": "8366207267355d3e3d5bf3bf6e8c94c5f93f6078c34f08973fa2b38cdda6cc92"
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-24-00-402Z_run.log",
+      "path": "~/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-24-00-402Z_run.log",
       "kind": "report",
       "exists": true,
       "summary": "bun run typecheck:scripts, exit 0.",

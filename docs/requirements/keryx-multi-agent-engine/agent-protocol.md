@@ -44,7 +44,7 @@ re-opens an earlier denial. The same input twice yields deep-equal output.
 
 - **Default is inherit.** An omitted `model` block means the child runs on the
   parent orchestrator's exact `providerId`/`modelId`. This is the common case and
-  matches opencode / Claude Code semantics.
+  matches Claude Code semantics.
 - **Explicit** `{ provider, model }` selects laterally — a different provider or
   model is not an escalation, but it MUST pass:
   - **G1** provider ∈ parent allowlist (credentialed),
@@ -109,8 +109,8 @@ re-opens an earlier denial. The same input twice yields deep-equal output.
   Neutralize/flag with a prepended marker line; never execute. Child free-text is
   `trustLevel:"derived"` and stays quarantined from becoming instructions.
 - Reviewer roles MAY additionally emit a structured verdict
-  (`approve | revise | reject`) as an artifact, mirroring the pattern from
-  oh-my-claudecode; this rides on `subagent-result.findings`, not a side channel.
+  (`approve | revise | reject`) as an artifact, mirroring a pattern seen in
+  another agent harness; this rides on `subagent-result.findings`, not a side channel.
 
 ## Monitoring behavior
 

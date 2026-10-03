@@ -16,23 +16,23 @@
   ],
   "context_refs": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-spec.md",
       "kind": "custom",
       "exists": true
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
+      "path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T19-verification.md",
       "kind": "custom",
       "exists": true
     }
   ],
   "files_to_read": [
-    "/Users/Goodea/goodea/keryx/src/harness/agent.ts",
-    "/Users/Goodea/goodea/keryx/src/harness/tools/spawn-subagent.ts",
-    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
+    "~/goodea/keryx/src/harness/agent.ts",
+    "~/goodea/keryx/src/harness/tools/spawn-subagent.ts",
+    "~/goodea/keryx/scripts/stress/keryx-shell-stress.ts"
   ],
   "constraints": [
-    "Root /Users/Goodea/goodea/keryx, explicitly read .metaproject/index.md first. Local review-logic fully, wiki/testing context, gdgraph/ctx; code search only keryx ctx rg. Known paths in dispatch may require graph resolution if unavailable.",
+    "Root ~/goodea/keryx, explicitly read .metaproject/index.md first. Local review-logic fully, wiki/testing context, gdgraph/ctx; code search only keryx ctx rg. Known paths in dispatch may require graph resolution if unavailable.",
     "Read-only production; write T16-final-review/result/probes only in flow232 artifacts. No flow/git/deps/global/network/model API actions. Stats off. Independent author: you did not implement these changes.",
     "Root/otherworkers security files only; budget source stable. Stage1 before Stage2; preserve original review evidence. Bounded synthetic providers only."
   ],
@@ -43,7 +43,7 @@
   ],
   "output_contract": {
     "schema": "subagent-result",
-    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
+    "artifact_path": "~/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-final-result.json"
   },
   "budget": {
     "max_output_tokens": null

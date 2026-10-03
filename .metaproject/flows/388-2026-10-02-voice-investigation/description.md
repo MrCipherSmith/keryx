@@ -5,7 +5,7 @@ Source: operator request 2026-10-01 (message 176715)
 
 ## Problem
 
-helyx talks by voice: the operator sends a voice message and hears long replies. keryx has no voice at all, neither in the Telegram topic nor in the shell. The operator wants the same ability with minimal dependencies and weight, so it must be clear what to use, what it costs and what it adds to the install.
+The operator's existing chat bot talks by voice: the operator sends a voice message and hears long replies. keryx has no voice at all, neither in the Telegram topic nor in the shell. The operator wants the same ability with minimal dependencies and weight, so it must be clear what to use, what it costs and what it adds to the install.
 
 ## Expected Outcome
 

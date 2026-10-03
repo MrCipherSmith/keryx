@@ -23,19 +23,19 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-spec.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-spec.md",
       "kind": "plan",
       "exists": true,
       "summary": "Vocabulary enumeration, sibling-shape survey, the warn determination and its justification, the conservatism argument, the fix design and the regression-test plan, written before any code change."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-implementation.md",
       "kind": "implementation-report",
       "exists": true,
       "summary": "Full enumeration, the defect reproduced pre-edit via the reviewer's own T39-exit.ts probe, the sibling-shape comparison, the warn decision and justification, the fix, RED/GREEN transcripts, the post-fix probe re-run table, and every verification command with raw log paths."
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-result.json",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T56-result.json",
       "kind": "final-report",
       "exists": true,
       "summary": "This file."

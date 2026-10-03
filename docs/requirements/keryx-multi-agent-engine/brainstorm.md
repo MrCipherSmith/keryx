@@ -9,9 +9,9 @@ Version: 0.3.0
 
 | Project | Model resolution | Isolation / spawn | Notable |
 |---|---|---|---|
-| **opencode** (sst) | `agent.model` → **inherit parent** → provider default; parent `variant` carried only when model not overridden | child = new *session* with `parentID`, same process; one generic `task` tool | `subagent_depth`=1 default; children auto-denied `task`/`todowrite`; result as `<task id state>` XML; background re-injected as synthetic parent msg |
-| **grok-cli** (superagent-ai) | vision/computer/explore pinned to constants; custom = own `model`; **general = inherit `this.modelId`** | foreground inline (same process); background = detached OS process (`spawn`,`unref`) | two tools `task`(sync)+`delegate`(async, explore-only); nested bg disabled; inbox/outbox via files; pull-based status |
-| **oh-my-claudecode** | env (`ANTHROPIC_MODEL`) → OMC tiers (`OMC_MODEL_HIGH/MEDIUM/LOW`) → **`undefined`=inherit CC default**; keyword routing escalates tier | tmux pane per worker (external process), ephemeral | HUD, snapshot-diff delta events, char-proxy usage (no tokens from codex/gemini), verdict.json (`approve/revise/reject`) |
+| **Harness 1** (open source) | `agent.model` → **inherit parent** → provider default; parent `variant` carried only when model not overridden | child = new *session* with `parentID`, same process; one generic `task` tool | `subagent_depth`=1 default; children auto-denied `task`/`todowrite`; result as `<task id state>` XML; background re-injected as synthetic parent msg |
+| **Harness 2** (open-source CLI) | vision/computer/explore pinned to constants; custom = own `model`; **general = inherit `this.modelId`** | foreground inline (same process); background = detached OS process (`spawn`,`unref`) | two tools `task`(sync)+`delegate`(async, explore-only); nested bg disabled; inbox/outbox via files; pull-based status |
+| **Harness 3** (Claude Code plugin) | env (`ANTHROPIC_MODEL`) → tier env vars (`*_MODEL_HIGH/MEDIUM/LOW`) → **`undefined`=inherit CC default**; keyword routing escalates tier | tmux pane per worker (external process), ephemeral | HUD, snapshot-diff delta events, char-proxy usage (no tokens from codex/gemini), verdict.json (`approve/revise/reject`) |
 | **Claude Code / Agent SDK** | env `CLAUDE_CODE_SUBAGENT_MODEL` → per-invocation → frontmatter → **`inherit` default** | fresh isolated context window; opt. git-worktree | `.claude/agents/*.md`; depth ≤5, ≤200/session; background-first; output-scanning vs injection; final message = tool result |
 
 **Convergent pattern (all four):** one generic spawn tool; model = a priority
@@ -113,30 +113,29 @@ Keryx's own code first (`src/commands/agent.ts`'s tool-call loop, `await`s each
 `spawn_subagent` fully before starting the next; `spawn-subagent-tool.ts`'s
 internal-budget-exhaustion path returns `isError:false`, indistinguishable from
 a clean finish) — both confirmed true. Cloned three shallow reference repos
-(`~/forks/{grok-build,opencode,codex}`) and re-read them specifically for these
+(Harness 4, Harness 1 and codex) and re-read them specifically for these
 two questions (distinct from the four references studied for the original A→B→C
-work above — note `grok-build` here is xAI's own official repo, a different
-project from `grok-cli` studied above).
+work above — Harness 4 is a different project from Harness 2).
 
 | Project | Sibling-spawn concurrency | Completion-status distinctness |
 |---|---|---|
-| **grok-build** (xai-org) | Bounded pool, default **32** concurrent (`AdmissionDecision`, `FuturesUnordered` in the coordinator actor; `admission.rs`, `coordinator.rs`) | Typed `PromptCompletionKind::MaxTurnsReached{limit}` → `SubagentResult{success:false, cancelled:true, error:Some(...)}`; separate `Cancelled{category,...}` variant (no-progress, interrupt, etc.) — never confused with a clean finish |
+| **Harness 4** | Bounded pool, default **32** concurrent (`AdmissionDecision`, `FuturesUnordered` in the coordinator actor; `admission.rs`, `coordinator.rs`) | Typed `PromptCompletionKind::MaxTurnsReached{limit}` → `SubagentResult{success:false, cancelled:true, error:Some(...)}`; separate `Cancelled{category,...}` variant (no-progress, interrupt, etc.) — never confused with a clean finish |
 | **codex** (openai) | Fire-and-forget `spawn_agent` (returns once the child's turn STARTS, not when it finishes); parent `wait_agent` uses `FuturesUnordered` to await several at once; usage hint literally states an N-slot concurrency ceiling | `AgentStatus{Completed, Errored, Interrupted, Shutdown, NotFound}` + a richer persisted `ThreadGoalStatus{Active,Paused,Blocked,UsageLimited,BudgetLimited,Complete}` — `TurnAbortReason::BudgetLimited` maps to `Interrupted`, never `Completed` |
-| **opencode** (sst) | Concurrent in its experimental native runtime (`FiberSet.run({startImmediately:true})` per tool-call event, synced only at the end via `awaitEmpty`); default path delegates dispatch to the Vercel AI SDK (opaque in a shallow clone, but that SDK is documented to run same-step tool calls concurrently too) | **Partial** — explicit errors/cancellation ARE distinct (`<task_error>` vs `<task_result>` tag), but step/budget exhaustion specifically is NOT: `MAX_STEPS_PROMPT` just nudges the model to wrap up in-band; the resulting `finish` reason is whatever the model naturally emits, and the task tool reports `"completed"` either way — **the same specific gap Keryx has**, not the general case |
+| **Harness 1** | Concurrent in its experimental native runtime (`FiberSet.run({startImmediately:true})` per tool-call event, synced only at the end via `awaitEmpty`); default path delegates dispatch to the Vercel AI SDK (opaque in a shallow clone, but that SDK is documented to run same-step tool calls concurrently too) | **Partial** — explicit errors/cancellation ARE distinct (`<task_error>` vs `<task_result>` tag), but step/budget exhaustion specifically is NOT: `MAX_STEPS_PROMPT` just nudges the model to wrap up in-band; the resulting `finish` reason is whatever the model naturally emits, and the task tool reports `"completed"` either way — **the same specific gap Keryx has**, not the general case |
 | **Keryx** (before Phase D) | **Strictly sequential** — the outlier of the four | **No structured field at all** — only `{output, isError}`; even the general case (not just step-budget) is unmarked except for the two paths (timeout, thrown error) that already set `isError:true` |
 
 **Reading:** concurrency is a clear, unanimous gap — nobody else studied runs
 sibling spawns sequentially, and the primitive to fix it (`planWaves`) already
 exists in Keryx unused for this purpose, so this is a wiring gap, not a missing
 capability. Completion-status distinctness is *mostly* a clear gap too, but
-opencode's one shared weak spot (step-budget exhaustion specifically) is a
+Harness 1's one shared weak spot (step-budget exhaustion specifically) is a
 useful signal that this exact case is easy to miss even in a mature reference
 implementation — worth being deliberate about in the spec rather than assuming
 "add an enum" automatically covers it.
 
 **Proposed status set (spec §Phase D), richer than any single reference
 studied:** `Completed | BudgetExhausted | Timeout | Denied | Error | NoProgress`
-— `codex`/`grok-build` both collapse budget-exhaustion and no-progress into one
+— `codex` and Harness 4 both collapse budget-exhaustion and no-progress into one
 "stopped early" bucket (`Interrupted` / `cancelled:true`); Keryx's proposal keeps
 them distinguishable so the parent can pick a differentiated response (extend
 budget vs. try a different task framing) instead of a uniform retry.

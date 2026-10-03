@@ -1,7 +1,7 @@
 # Review — flow 296, keep saved provider keys out of the MCP servers `keryx shell` starts (PR #657)
 
 One review round ran over the flow 296 diff at PR head `b399c79a` (worktree
-`/home/altsay/keryx-mcpenv`, branch `fix/shell-mcp-credentials`): `src/mcp-servers/spawn-env.ts`
+`~/keryx-mcpenv`, branch `fix/shell-mcp-credentials`): `src/mcp-servers/spawn-env.ts`
 (`buildMcpChildEnv`, the shared by-name/by-shape strip), `src/acp/session-mcp.ts` (removal of the
 duplicate `acpMcpParentEnv`), `src/mcp-servers/runtime.ts` (`defaultConnect`), and the surfaces that
 launch MCP servers through them (`keryx shell`'s readline and TUI branches in `src/commands/shell.ts`,

@@ -14,10 +14,10 @@
 - `src/tui/shell-chrome.test.ts` — overlay suppresses `/`-menu
 - Wiki: `.metaproject/wiki/components/src-tui.md`
 
-## Grok reference (pattern only)
+## Reference pattern
 
 Extensions modal: `/hooks|/plugins|/marketplace|/skills` share one host,
-different `initialTab`. Steal-Esc. Not Grok source — user-guide only.
+different `initialTab`. Steal-Esc.
 
 ## Constraints
 

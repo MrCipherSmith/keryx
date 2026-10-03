@@ -23,7 +23,7 @@
     },
     "AC2": {
       "at": "2026-10-01T13:22:14.059Z",
-      "note": "wiki history/restore <page> [--version]/--run implemented (src/commands/wiki-history.ts, 18 CLI tests). Real-store: copy of vantage-frontend's 504-page wiki, collect --force then restore --run -> diff -rq empty over 509 files (context.md T10). head 78688050, CI green"
+      "note": "wiki history/restore <page> [--version]/--run implemented (src/commands/wiki-history.ts, 18 CLI tests). Real-store: copy of acme-frontend's 504-page wiki, collect --force then restore --run -> diff -rq empty over 509 files (context.md T10). head 78688050, CI green"
     },
     "AC3": {
       "at": "2026-10-01T13:22:14.221Z",
@@ -39,7 +39,7 @@
     },
     "AC6": {
       "at": "2026-10-01T13:22:14.701Z",
-      "note": "Reworded attestation entry stays byte-identical on disk: page-invariants.test.ts AC6 + T-001; real data: src-auth.md attestation intact after collect --force on the vantage copy. head 78688050, CI green"
+      "note": "Reworded attestation entry stays byte-identical on disk: page-invariants.test.ts AC6 + T-001; real data: src-auth.md attestation intact after collect --force on the acme copy. head 78688050, CI green"
     },
     "AC7": {
       "at": "2026-10-01T13:22:14.852Z",
@@ -47,7 +47,7 @@
     },
     "AC8": {
       "at": "2026-10-01T13:22:15.014Z",
-      "note": "collect --force merges: generated sections only, front matter/prose/changelog kept (page-invariants.test.ts AC8, map-page and Related Wiki tests); vantage copy: 29 pages regenerated, 0 invariant violations, no prose lost; src-auth 181 lines kept (was cut to 90). head 78688050, CI green"
+      "note": "collect --force merges: generated sections only, front matter/prose/changelog kept (page-invariants.test.ts AC8, map-page and Related Wiki tests); acme copy: 29 pages regenerated, 0 invariant violations, no prose lost; src-auth 181 lines kept (was cut to 90). head 78688050, CI green"
     },
     "AC9": {
       "at": "2026-10-01T13:22:15.169Z",
@@ -55,7 +55,7 @@
     },
     "AC10": {
       "at": "2026-10-01T13:22:15.330Z",
-      "note": "validate: Version behind changelog on every page; changelog dropped / entry reworded / key or managed block dropped / duplicated section vs the previous recorded version; unreadable history reported (page-invariants.test.ts AC10, L-001, L-010 tests). Real data: the 3 incident drift kinds caught on the vantage copy, cleared by restore. head 78688050, CI green"
+      "note": "validate: Version behind changelog on every page; changelog dropped / entry reworded / key or managed block dropped / duplicated section vs the previous recorded version; unreadable history reported (page-invariants.test.ts AC10, L-001, L-010 tests). Real data: the 3 incident drift kinds caught on the acme copy, cleared by restore. head 78688050, CI green"
     },
     "AC11": {
       "at": "2026-10-01T13:22:15.486Z",
@@ -173,7 +173,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "page-invariants.ts + enrich/collect wiring; AC5-AC9 tests (mutation-checked); real vantage copy: 29 pages regenerated, 0 invariant violations, no prose lost"
+      "dispositionReason": "page-invariants.ts + enrich/collect wiring; AC5-AC9 tests (mutation-checked); real acme copy: 29 pages regenerated, 0 invariant violations, no prose lost"
     },
     {
       "id": "T7",
@@ -191,7 +191,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "validatePageInvariants + readPreviousVersion; tests incl. restore case; real vantage copy: damage of 3 kinds caught, restore clears it. Open: src-harness.md Version drift in keryx's own wiki (needs user decision, AC11)"
+      "dispositionReason": "validatePageInvariants + readPreviousVersion; tests incl. restore case; real acme copy: damage of 3 kinds caught, restore clears it. Open: src-harness.md Version drift in keryx's own wiki (needs user decision, AC11)"
     },
     {
       "id": "T8",
@@ -223,7 +223,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "Real-store round trip on a copy of vantage-frontend's 504-page wiki: collect --force then restore --run -> diff -rq empty over 509 files; merge-collect: 29 pages, 0 invariant violations, no prose lost; validate catches the 3 incident drift kinds and restore clears them. The live downstream run after release is the flow's outcome criterion, measured after npm release + keryx update."
+      "dispositionReason": "Real-store round trip on a copy of acme-frontend's 504-page wiki: collect --force then restore --run -> diff -rq empty over 509 files; merge-collect: 29 pages, 0 invariant violations, no prose lost; validate catches the 3 incident drift kinds and restore clears them. The live downstream run after release is the flow's outcome criterion, measured after npm release + keryx update."
     },
     {
       "id": "T10",
@@ -241,7 +241,7 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed",
-      "dispositionReason": "history.ts + history/restore CLI; W1-W9 and index.md routed through writeWikiPage; 26 history tests + per-writer tests green; real vantage copy: collect --force then restore --run gives diff -rq empty over 509 files"
+      "dispositionReason": "history.ts + history/restore CLI; W1-W9 and index.md routed through writeWikiPage; 26 history tests + per-writer tests green; real acme copy: collect --force then restore --run gives diff -rq empty over 509 files"
     }
   ],
   "history": [
@@ -361,7 +361,7 @@
     {
       "at": "2026-10-01T13:22:14.060Z",
       "event": "ac-confirmed",
-      "detail": "AC2: wiki history/restore <page> [--version]/--run implemented (src/commands/wiki-history.ts, 18 CLI tests). Real-store: copy of vantage-frontend's 504-page wiki, collect --force then restore --run -> diff -rq empty over 509 files (context.md T10). head 78688050, CI green (signed: MrCipherSmith [stated])"
+      "detail": "AC2: wiki history/restore <page> [--version]/--run implemented (src/commands/wiki-history.ts, 18 CLI tests). Real-store: copy of acme-frontend's 504-page wiki, collect --force then restore --run -> diff -rq empty over 509 files (context.md T10). head 78688050, CI green (signed: MrCipherSmith [stated])"
     },
     {
       "at": "2026-10-01T13:22:14.221Z",
@@ -381,7 +381,7 @@
     {
       "at": "2026-10-01T13:22:14.701Z",
       "event": "ac-confirmed",
-      "detail": "AC6: Reworded attestation entry stays byte-identical on disk: page-invariants.test.ts AC6 + T-001; real data: src-auth.md attestation intact after collect --force on the vantage copy. head 78688050, CI green (signed: MrCipherSmith [stated])"
+      "detail": "AC6: Reworded attestation entry stays byte-identical on disk: page-invariants.test.ts AC6 + T-001; real data: src-auth.md attestation intact after collect --force on the acme copy. head 78688050, CI green (signed: MrCipherSmith [stated])"
     },
     {
       "at": "2026-10-01T13:22:14.852Z",
@@ -391,7 +391,7 @@
     {
       "at": "2026-10-01T13:22:15.014Z",
       "event": "ac-confirmed",
-      "detail": "AC8: collect --force merges: generated sections only, front matter/prose/changelog kept (page-invariants.test.ts AC8, map-page and Related Wiki tests); vantage copy: 29 pages regenerated, 0 invariant violations, no prose lost; src-auth 181 lines kept (was cut to 90). head 78688050, CI green (signed: MrCipherSmith [stated])"
+      "detail": "AC8: collect --force merges: generated sections only, front matter/prose/changelog kept (page-invariants.test.ts AC8, map-page and Related Wiki tests); acme copy: 29 pages regenerated, 0 invariant violations, no prose lost; src-auth 181 lines kept (was cut to 90). head 78688050, CI green (signed: MrCipherSmith [stated])"
     },
     {
       "at": "2026-10-01T13:22:15.169Z",
@@ -401,7 +401,7 @@
     {
       "at": "2026-10-01T13:22:15.330Z",
       "event": "ac-confirmed",
-      "detail": "AC10: validate: Version behind changelog on every page; changelog dropped / entry reworded / key or managed block dropped / duplicated section vs the previous recorded version; unreadable history reported (page-invariants.test.ts AC10, L-001, L-010 tests). Real data: the 3 incident drift kinds caught on the vantage copy, cleared by restore. head 78688050, CI green (signed: MrCipherSmith [stated])"
+      "detail": "AC10: validate: Version behind changelog on every page; changelog dropped / entry reworded / key or managed block dropped / duplicated section vs the previous recorded version; unreadable history reported (page-invariants.test.ts AC10, L-001, L-010 tests). Real data: the 3 incident drift kinds caught on the acme copy, cleared by restore. head 78688050, CI green (signed: MrCipherSmith [stated])"
     },
     {
       "at": "2026-10-01T13:22:15.486Z",

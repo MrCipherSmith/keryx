@@ -41,5 +41,5 @@ Collected by `keryx flow init` and enriched for W7. (T1 context.) RELEASE BOUNDA
 ## Operational
 - keryx = `bun ./src/cli.ts`; new worktree needs `bun install`. Never commit to main.
 - State only via `keryx flow`; workers via subagent-dispatch/result (STATUS: first line).
-- WORKTREE-GUARD: every writing worker must `cd /Users/Goodea/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it. Verify file locations after each worker. fetch-mocks: `as unknown as typeof fetch`; guard array indexing (noUncheckedIndexedAccess).
+- WORKTREE-GUARD: every writing worker must `cd ~/goodea/keryx/.claude/worktrees/feature-keryx-harness-impl && pwd` first and write ONLY under it. Verify file locations after each worker. fetch-mocks: `as unknown as typeof fetch`; guard array indexing (noUncheckedIndexedAccess).
 - TDD order: S1(T5→T6), S2(T7→T8), S3(T9→T10), S4(T11→T12), S5(T13→T14), review T15.

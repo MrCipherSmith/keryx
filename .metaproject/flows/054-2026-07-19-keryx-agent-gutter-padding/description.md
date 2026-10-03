@@ -2,9 +2,9 @@
 
 ## Problem
 Agent-mode content is flush against column 0 (see screenshot) — cramped vs.
-OpenCode/codex/claude, which indent the whole conversation with a small left
-gutter. User asked to "добавить падингов". Design reference: OpenCode's TUI (the
-look oh-my-claude-code mimics) — consistent left gutter + breathing room.
+codex/claude, which indent the whole conversation with a small left
+gutter. User asked to "добавить падингов". Design goal: a
+consistent left gutter + breathing room.
 
 ## Approach
 - Pure `indentBlock(text, pad)` in ui.ts (prefix non-empty lines).

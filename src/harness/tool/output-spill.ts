@@ -9,7 +9,7 @@ import path from "node:path";
  *
  * Before this, a 20-39K char tool result (a skills listing, a whole SKILL.md, a
  * full source file, lint JSON) entered history verbatim and was re-sent on every
- * later round. Competitors cap the same way (opencode `tool/truncate.ts`: 2000
+ * later round. Other agent tools cap the same way (opencode `tool/truncate.ts`: 2000
  * lines / 50KB; pi `tools/truncate.ts`: same caps; gemini-cli: head+tail with the
  * path shown).
  *

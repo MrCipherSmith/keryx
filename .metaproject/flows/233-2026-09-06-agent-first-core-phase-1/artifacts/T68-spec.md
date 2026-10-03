@@ -1,6 +1,6 @@
 # T68 spec — three residuals left by T61/T65 (T62 F-002, F-003, F-004)
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Written
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Written
 before coding, per `tdd-workflow.mdc`.
 
 Ownership for this task: `src/security/self-protect.ts`, `src/security/service.ts`,

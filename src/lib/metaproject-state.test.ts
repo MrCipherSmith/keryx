@@ -41,7 +41,7 @@ test("no .metaproject at all is absent, and offers nothing", async () => {
 });
 
 test("a bare .metaproject directory is incomplete, not an initialized project", async () => {
-  // The `vantage-specs` shape: `.metaproject/workspaces/` and nothing else. This is the
+  // The `acme-specs` shape: `.metaproject/workspaces/` and nothing else. This is the
   // state the old `existsSync(".metaproject")` gate mistook for an initialized project, so
   // eighteen index tools were offered to a session where every call answered
   // `index-incomplete` — and an empty answer read like an empty project.

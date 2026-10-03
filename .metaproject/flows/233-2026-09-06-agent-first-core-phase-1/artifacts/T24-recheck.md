@@ -281,7 +281,7 @@ Each was executed, not inspected.
 
 ## Evidence
 
-All under `/Users/Goodea/goodea/keryx/`.
+All under `~/goodea/keryx/`.
 
 | Artifact | SHA-256 |
 |---|---|

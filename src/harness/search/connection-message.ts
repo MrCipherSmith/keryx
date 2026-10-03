@@ -32,7 +32,7 @@ export function describeConnectionFailure(reason: SearchConnectionResult["reason
  * The useful half is "wait a few minutes": measured from this machine, a deeply
  * tripped limiter still refused after 10 minutes of quiet, and every extra
  * request of ours extended it. It is also what the one other agent that scrapes
- * this same endpoint tells its model — crush's errSearchRateLimited reads
+ * this same endpoint tells its model — its rate-limit error reads
  * "Do not retry or rephrase; wait a few minutes or fetch known URLs directly" —
  * and it is the opposite of what a bare "search failed" invites.
  */

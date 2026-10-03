@@ -1,7 +1,7 @@
 # Flow 031 — keryx shell rich-inline rendering
 
 Status: formalized
-Source: user request ("свой harness с нормальным UI, как claude/opencode").
+Source: user request ("свой harness с нормальным UI, как claude").
 Follow-on to flow 021 (interactive shell `runShell` core) and flow 022 (R2-4
 provider/model selection adapter). Consistent with 022's frozen posture:
 **Variant A — no new dependencies, hand-rolled ANSI** (`dependencies` stays `{}`).
@@ -12,7 +12,7 @@ The interactive `keryx` shell renders as a bare line-based `node:readline` REPL
 (`src/commands/shell.ts` `shellCommand`): assistant tokens, system notices, and
 errors all flow through a single `io.write(string)` sink to `process.stdout` with
 no styling, no role separation, no streaming affordance, and no markdown. Next to
-Claude Code / opencode it reads as unfinished, even though the underlying
+Claude Code it reads as unfinished, even though the underlying
 `runShell` core, provider streaming, and provider/model selection already work.
 
 The single mixed `write` stream is also the blocker: from `write` calls alone the

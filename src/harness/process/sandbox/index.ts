@@ -1,5 +1,5 @@
 // OS-sandbox public surface (flow 093). Workspace-write + network-off OS
-// containment for real `shell_exec` subprocesses, grok-build model: build a
+// containment for real `shell_exec` subprocesses: build a
 // launcher-wrapped command (macOS seatbelt / Linux bwrap) around the approved
 // command, enforced by the OS regardless of what the model chose to run.
 //

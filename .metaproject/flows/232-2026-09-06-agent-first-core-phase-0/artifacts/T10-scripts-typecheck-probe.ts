@@ -15,7 +15,7 @@
 import path from "node:path";
 import ts from "typescript";
 
-const REPO_ROOT = "/Users/Goodea/goodea/keryx";
+const REPO_ROOT = "~/goodea/keryx";
 const SCRIPTS_CONFIG = path.join(REPO_ROOT, "tsconfig.scripts.json");
 
 const configText = ts.sys.readFile(SCRIPTS_CONFIG);

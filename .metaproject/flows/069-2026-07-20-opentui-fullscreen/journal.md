@@ -7,7 +7,7 @@
 - 2026-07-20T11:31:18.745Z - started
 
 ## Phase 2/3 — implement + verify (orchestrator)
-- tui-shell.ts: createCliRenderer screenMode split-footer → "alternate-screen" + clearOnShutdown:true. Owns the alternate buffer → clears launch scrollback, composer anchored bottom, full-screen like grok. Restores terminal on exit.
+- tui-shell.ts: createCliRenderer screenMode split-footer → "alternate-screen" + clearOnShutdown:true. Owns the alternate buffer → clears launch scrollback, composer anchored bottom, full-screen. Restores terminal on exit.
 - Verify: tsc CLEAN; bun test 1507/0 (headless tests use createTestRenderer, unaffected). Real-terminal full-screen look = user (--tui).
 - AC1-AC4 satisfied.
 - 2026-07-20T11:31:18.828Z - task-done: T1: Collect remaining context

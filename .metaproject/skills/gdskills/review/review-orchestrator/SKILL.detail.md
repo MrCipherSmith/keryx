@@ -33,7 +33,7 @@ comma-separated list, `stack_requires` as a string, only keys directly under
 has already applied it — use the fields, not the raw frontmatter.
 
 A description saying another entry point dispatches it ("Dispatched by
-vantage-review …") is its author's routing note, not a restriction: this
+acme-review …") is its author's routing note, not a restriction: this
 orchestrator dispatches it through the fields above.
 
 ### Family flags — why a shared flag does not lift the path gate

@@ -4,7 +4,7 @@ Date: 2026-09-26
 
 ## Result
 
-Implemented on `codex/openai-subscription` in `/Users/Goodea/goodea/keryx-openai-subscription`, based on `main` at `0a5d23eb0` (0.3.3). Implementation commit: `27958ff5`. Release publication and live personal-account authorization are separate follow-up steps.
+Implemented on `codex/openai-subscription` in `~/goodea/keryx-openai-subscription`, based on `main` at `0a5d23eb0` (0.3.3). Implementation commit: `27958ff5`. Release publication and live personal-account authorization are separate follow-up steps.
 
 - `openai`: Platform API key, native OpenAI Responses transport.
 - `openai-codex`: ChatGPT subscription, browser-completed device authorization, native Codex Responses transport.

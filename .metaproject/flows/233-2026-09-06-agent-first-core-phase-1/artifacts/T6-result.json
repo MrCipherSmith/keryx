@@ -29,21 +29,21 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+      "path": "~/goodea/keryx/src/lib/contained-read.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Reusable owner-root contained reader with typed errors and bounded reads",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+      "path": "~/goodea/keryx/src/lib/descriptor-read.ts",
       "kind": "custom",
       "exists": true,
       "summary": "Shared POSIX descriptor-chain primitive",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-implementation.md",
       "kind": "report",
       "exists": true,
       "summary": "T6 implementation and verification report",

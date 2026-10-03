@@ -1,6 +1,6 @@
 # T34 spec — repair per-file coverage rows and the non-recursive scan outcome
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`).
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`).
 
 This is a regression-first repair of three defects the independent T28 review
 reproduced with an executable probe (`T28-scan-probe.ts`) against the T20

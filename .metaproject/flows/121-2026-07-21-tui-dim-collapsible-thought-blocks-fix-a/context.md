@@ -115,6 +115,6 @@ explicit cross-axis size restores correct measurement.
 
 ## Reference material
 
-- Comparable shells (grok-build / Claude Code / opencode) render reasoning as
+- Comparable shells (e.g. Claude Code) render reasoning as
   dim secondary text, bounded to a short preview, with an explicit toggle
   affordance — the target behaviour for AC5/AC6.

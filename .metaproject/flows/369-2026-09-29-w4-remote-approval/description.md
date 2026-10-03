@@ -1,7 +1,7 @@
 # P0 W4 remote approval: async approvals over keryx serve (R4d)
 
 Status: draft
-Source: operator "по порядку" (helyx 172447), competitive review P0 item 4; roadmap item R4d, specified in docs/requirements/keryx-remote-entry/ and keryx-telegram-transport/security-policy.md
+Source: operator "по порядку" (operator chat channel 172447), competitive review P0 item 4; roadmap item R4d, specified in docs/requirements/keryx-remote-entry/ and keryx-telegram-transport/security-policy.md
 
 ## Problem
 
@@ -17,6 +17,6 @@ During a `keryx serve` turn an `ask` creates a durable pending approval (opaque 
 
 ## Out of Scope
 
-- The Telegram/web card itself: it is a client of this API and lives in the helyx bridge (a separate repository). This flow ships the API, the store, the TUI and the documented contract, not the bot.
+- The Telegram/web card itself: it is a client of this API and lives in the operator's chat bot (a separate repository). This flow ships the API, the store, the TUI and the documented contract, not the bot.
 - Session-wide grants from a remote answer: a remote allow is one-time only; destructive, credential, publish-lease, untrusted-origin and hook-ask floors are never lifted by an answer.
 - Approvals for unattended trigger runs: they keep their deny-and-record behaviour.

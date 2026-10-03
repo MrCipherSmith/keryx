@@ -24,14 +24,14 @@
   ],
   "artifacts": [
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-recheck.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-recheck.md",
       "kind": "review",
       "exists": true,
       "summary": "Independent Stage 1 and Stage 2 health/Shell recheck.",
       "hash": null
     },
     {
-      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T21-implementation.md",
+      "path": "~/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T21-implementation.md",
       "kind": "custom",
       "exists": true,
       "summary": "T21 parser repair and all-health evidence retained as prior-finding evidence.",

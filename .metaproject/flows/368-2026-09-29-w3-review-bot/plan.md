@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: approved by operator instruction (helyx 172447)
+Status: approved by operator instruction (operator chat channel 172447)
 
 ## Approach
 

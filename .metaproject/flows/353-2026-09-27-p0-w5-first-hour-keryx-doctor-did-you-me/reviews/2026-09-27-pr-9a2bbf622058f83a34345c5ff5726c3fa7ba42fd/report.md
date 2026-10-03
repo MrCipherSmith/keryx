@@ -1,7 +1,7 @@
 # Managed Review Round 1 — PR #773 (flow 353)
 
 - Repo: MrCipherSmith/keryx
-- Branch: `feat/p0-w5-first-hour` (worktree `/home/altsay/keryx-w5`)
+- Branch: `feat/p0-w5-first-hour` (worktree `~/keryx-w5`)
 - Base: `origin/main` @ `f2ee4c8896dde3402c57a8c8544f75544289d0b2`
 - Head reviewed: `9a2bbf622058f83a34345c5ff5726c3fa7ba42fd` (PR #773 head, confirmed via `gh pr view 773`)
 - Flow: 353 (attached)
@@ -65,7 +65,7 @@ See `keryx:verifications` block and verifier summary appended after dispatch.
     "problem": "AC3 states, without qualification, that 'an unknown command or subcommand prints one line ... to stderr with exit 1, never the full usage', with suggestions 'over the known commands (and subcommands of the parent group)', and the PR's own CHANGELOG entry claims this generally: 'An unknown command or subcommand no longer dumps the full usage block.' The diff only wires formatUnknownCommandMessage/suggestClosest (src/lib/suggest.ts) into two call sites: the top-level cli.ts dispatch and keryx mcp <sub> (src/commands/mcp.ts). Every other CLI subcommand group's 'unknown subcommand' branch is untouched and still executes the pre-PR pattern: one error line followed immediately by that group's full print*Help() usage dump, then process.exitCode = 1 — i.e. still the literal defect AC3/backlog-item-4 describe, and with no 'did you mean' suggestions at all.",
     "impact": "Typing e.g. `keryx health rn`, `keryx wiki serach`, `keryx memory serach`, `keryx auth logn`, `keryx flow lst`, `keryx providers staus`, `keryx skills isntall`, etc. still dumps the group's entire usage block (often several KB) to the console on an error path and gives the operator no 'did you mean' hint — the same UX/noise defect this flow's own CHANGELOG says is fixed for 'an unknown command or subcommand' in general.",
     "suggested_fix": "Either (a) route every remaining site through formatUnknownCommandMessage(sub, <that group's known subcommands>, 'keryx <group> --help') the same way cli.ts/mcp.ts now do, and drop the trailing print*Help() call on that path; or (b) narrow AC3's wording and the CHANGELOG entry to say exactly which commands were covered, so the acceptance criterion and release notes stop asserting a CLI-wide fix that was not shipped.",
-    "evidence": "git grep -n \"Unknown .*command\" -A2 -- src/commands/*.ts (excluding *.test.ts) in /home/altsay/keryx-w5 shows the unchanged console.error(...); print*Help(); process.exitCode = 1; pattern still present in at least 38 files (agents-external.ts, agents.ts x2, auth.ts, bundle.ts, bus.ts, ctx.ts, dashboard.ts, external.ts, flow.ts, forgetting.ts, gdgraph.ts, governance.ts, health.ts, hooks.ts, integrations.ts, job.ts, memory.ts, metrics.ts, projects.ts, providers.ts, retention.ts, review.ts, routing.ts x2, rules.ts, sandbox.ts, security-impact-evidence.ts, security.ts, serve.ts x3, sessions.ts, skills-governance.ts, skills.ts x2, stack.ts, standard.ts, wiki.ts, workspace.ts); only src/cli.ts and src/commands/mcp.ts import lib/suggest per the bounded diff.",
+    "evidence": "git grep -n \"Unknown .*command\" -A2 -- src/commands/*.ts (excluding *.test.ts) in ~/keryx-w5 shows the unchanged console.error(...); print*Help(); process.exitCode = 1; pattern still present in at least 38 files (agents-external.ts, agents.ts x2, auth.ts, bundle.ts, bus.ts, ctx.ts, dashboard.ts, external.ts, flow.ts, forgetting.ts, gdgraph.ts, governance.ts, health.ts, hooks.ts, integrations.ts, job.ts, memory.ts, metrics.ts, projects.ts, providers.ts, retention.ts, review.ts, routing.ts x2, rules.ts, sandbox.ts, security-impact-evidence.ts, security.ts, serve.ts x3, sessions.ts, skills-governance.ts, skills.ts x2, stack.ts, standard.ts, wiki.ts, workspace.ts); only src/cli.ts and src/commands/mcp.ts import lib/suggest per the bounded diff.",
     "confidence": "high",
     "reviewer": "review-logic",
     "class_scope": {
@@ -86,7 +86,7 @@ See `keryx:verifications` block and verifier summary appended after dispatch.
         "src/commands/schedule.ts:192 (narrower: no usage dump, but still no suggestion)",
         "src/commands/trigger.ts:131 (narrower: no usage dump, but still no suggestion)"
       ],
-      "enumeration_method": "git grep -n \"Unknown .*command\" -A2 -- src/commands/*.ts (excluding *.test.ts) in /home/altsay/keryx-w5, manually inspected 2 lines after each match for a print*Help()/usage dump; cross-checked which files import lib/suggest against the bounded diff (only cli.ts, mcp.ts do)."
+      "enumeration_method": "git grep -n \"Unknown .*command\" -A2 -- src/commands/*.ts (excluding *.test.ts) in ~/keryx-w5, manually inspected 2 lines after each match for a print*Help()/usage dump; cross-checked which files import lib/suggest against the bounded diff (only cli.ts, mcp.ts do)."
     }
   },
   {

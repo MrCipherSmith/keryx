@@ -2,7 +2,7 @@
 
 Status: formalized
 Source: user request — bare `keryx` (no args) should open an interactive agent shell
-like Claude Code / opencode, streaming responses through the harness. (This is the
+like Claude Code, streaming responses through the harness. (This is the
 deferred SC_R13_TUI direction, brought forward as a live-usability increment on top of
 the merged harness + provider adapters.)
 
@@ -10,14 +10,14 @@ the merged harness + provider adapters.)
 
 `keryx` today is a batch CLI: bare `keryx` prints a usage list and exits; there is no
 interactive mode. The user wants bare `keryx` to open an interactive multi-turn shell
-(like `claude` / `opencode`) that streams a local model's responses through the harness
+(like `claude`) that streams a local model's responses through the harness
 provider layer. Also: the `harness` command is missing from the usage list, and
 `keryx harness run` with no `--provider`/prompt prints a confusing blocked-run JSON
 instead of usage.
 
 ## Approved decisions (user)
 
-1. **Bare `keryx` (no args) → the interactive shell** (claude/opencode style);
+1. **Bare `keryx` (no args) → the interactive shell** (claude style);
    `keryx --help`/`-h` → the command list.
 2. **Default provider = `ollama` + `llama3.1:latest`** (local, no key); overridable via
    `keryx --provider <fake|ollama|anthropic> --model <m> [--base-url <url>]` or in-shell

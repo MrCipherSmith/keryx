@@ -90,7 +90,7 @@ demonstrated benefit — revisit only if real misuse shows up later).
      Directory/Activity/Subagents (same area referenced at line ~490's
      Directory-panel doc comment), wire `onOpen` to `openJobInspector`.
 
-3. **T6 — Review**: `review-orchestrator` with `--backend`/`--vantage-core`-
+3. **T6 — Review**: `review-orchestrator` with `--backend`/`--acme-core`-
    equivalent domains for this repo (architecture + logic + testing-practices
    at minimum, given this touches approval/budget-gated tool surface); fix
    findings through `task-implementer` per the standard loop.

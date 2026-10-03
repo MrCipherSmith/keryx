@@ -4020,7 +4020,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         env: process.env,
         ...(baseUrl !== undefined ? { baseUrl } : {}),
       });
-    // Persisted config (flow 080/085, opencode-style): reuse the last
+    // Persisted config (flow 080/085): reuse the last
     // provider/model and every saved provider API key so the user need not
     // re-enter them. Applied in BOTH modes since flow 112 — chat used to skip
     // this entirely (AC12).

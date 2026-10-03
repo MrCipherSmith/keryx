@@ -653,7 +653,7 @@ examined, and the full suite passes on the merged tree at 8919 / 0.
     "file": "src/tui/tui-shell.ts",
     "disposition": {
       "state": "dismissed-out-of-scope",
-      "evidence": "Deferred to P2. decided-by: altsay (operator), 2026-09-10, in the helyx channel \u2014 shown all three options (defer both / fix F-033 now / fix both) with the deferral as the stated recommendation, and answered agreeing to it. The defect is in tui-shell.ts's approval rendering rather than this package, is verified not to be an execution bypass, and wants the per-tool renderer P2's consumer-modal work needs anyway."
+      "evidence": "Deferred to P2. decided-by: altsay (operator), 2026-09-10, in the operator chat channel \u2014 shown all three options (defer both / fix F-033 now / fix both) with the deferral as the stated recommendation, and answered agreeing to it. The defect is in tui-shell.ts's approval rendering rather than this package, is verified not to be an execution bypass, and wants the per-tool renderer P2's consumer-modal work needs anyway."
     }
   },
   {
@@ -668,7 +668,7 @@ examined, and the full suite passes on the merged tree at 8919 / 0.
     "file": "src/commands/shell.ts",
     "disposition": {
       "state": "dismissed-out-of-scope",
-      "evidence": "Deferred to P2 with F-032. decided-by: altsay (operator), 2026-09-10, in the helyx channel \u2014 same question, same answer. Both are approval-rendering defects in the shell surfaces and want one fix together rather than two partial ones."
+      "evidence": "Deferred to P2 with F-032. decided-by: altsay (operator), 2026-09-10, in the operator chat channel \u2014 same question, same answer. Both are approval-rendering defects in the shell surfaces and want one fix together rather than two partial ones."
     }
   },
   {

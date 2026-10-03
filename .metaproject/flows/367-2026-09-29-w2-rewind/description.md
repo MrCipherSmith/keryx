@@ -1,7 +1,7 @@
 # P0 W2 rewind: per-turn file snapshots with rollback of files and history
 
 Status: draft
-Source: operator "по порядку" (helyx 172447), competitive review P0 item 2
+Source: operator "по порядку" (operator chat channel 172447), competitive review P0 item 2
 
 ## Problem
 

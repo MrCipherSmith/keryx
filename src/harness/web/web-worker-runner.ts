@@ -18,7 +18,7 @@ const MAX_WORKER_OUTPUT_BYTES = 192_000;
  * serves its bot-check page to one that does not — and keryx sent NO
  * User-Agent at all. Rotating a small set of current browsers rather than
  * pinning one string is what the one other agent that scrapes this same
- * endpoint does (`crush/internal/agent/tools/search.go`), and it keeps a
+ * endpoint does, and it keeps a
  * single frozen UA from becoming a signature of its own. This repo already
  * sets a client-shaped User-Agent where a server requires one
  * (`src/lib/oauth/catalog.ts` explains why GitHub forces it), so this is a

@@ -140,7 +140,7 @@
           {
             "at": "2026-09-27T14:53:55.619Z",
             "outcome": "started",
-            "detail": "Sonnet implementer in /home/altsay/keryx-audit"
+            "detail": "Sonnet implementer in ~/keryx-audit"
           }
         ]
       },
@@ -161,7 +161,7 @@
           {
             "at": "2026-09-27T14:53:55.979Z",
             "outcome": "started",
-            "detail": "Sonnet implementer in /home/altsay/keryx-audit"
+            "detail": "Sonnet implementer in ~/keryx-audit"
           }
         ]
       },
@@ -238,12 +238,12 @@
     {
       "at": "2026-09-27T14:53:55.619Z",
       "event": "task-attempt",
-      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit"
+      "detail": "T5: started (attempt 1) — Sonnet implementer in ~/keryx-audit"
     },
     {
       "at": "2026-09-27T14:53:55.980Z",
       "event": "task-attempt",
-      "detail": "T6: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-audit"
+      "detail": "T6: started (attempt 1) — Sonnet implementer in ~/keryx-audit"
     },
     {
       "at": "2026-09-27T16:31:47.918Z",

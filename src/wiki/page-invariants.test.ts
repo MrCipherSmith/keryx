@@ -1,6 +1,6 @@
 // Flow 367, AC5-AC9: enrich and collect keep a page's changelog, attestation
 // entries, Version and front matter. The fixture is shaped like a real enriched
-// page from the 2026-10-01 incident (vantage-frontend `components/src-auth.md`):
+// page from the 2026-10-01 incident (acme-frontend `components/src-auth.md`):
 // still `Status: draft`, the collect marker inside its changelog, a tool-written
 // attestation entry on top.
 
@@ -225,7 +225,7 @@ describe("mergeGeneratedSections", () => {
   });
 
   test("map pages: an enriched page keeps prose written under a generated heading; an untouched one is regenerated", () => {
-    // Shaped like vantage's enriched quality-map: the enricher reorganised the
+    // Shaped like acme's enriched quality-map: the enricher reorganised the
     // page and wrote an interpretation under the generator's own heading.
     const generated = [
       "# Quality Map", "", "Version: 0.1.0", "Type: architecture", "Status: draft", "",

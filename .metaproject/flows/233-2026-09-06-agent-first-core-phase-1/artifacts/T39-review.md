@@ -14,7 +14,7 @@ per the dispatch's ordering.
 
 ## Scope
 
-- Root: `/Users/Goodea/goodea/keryx`
+- Root: `~/goodea/keryx`
 - Branch: `codex/agent-first-core`; base / merge-base with `main`:
   `0bc6418fa1a038f8ec909cf949fecba077acf9a4` (identical to HEAD — the branch
   carries uncommitted work only)
@@ -594,7 +594,7 @@ Checked, with no finding:
 
 ## Evidence
 
-Raw logs under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+Raw logs under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 | # | What ran | Raw log | SHA-256 |
 |---|---|---|---|

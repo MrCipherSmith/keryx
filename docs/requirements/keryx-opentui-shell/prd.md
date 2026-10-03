@@ -43,18 +43,18 @@ The keryx interactive shell (`keryx shell`, chat + `--agent`) renders through
 `node:readline` in line mode: it reads a whole line on Enter and lets the terminal
 handle echo and editing. This is robust and preserves native scrollback, but it
 **cannot** present a live, as-you-type interface — most concretely, the
-Pi/grok-style `/` command dropdown that filters while you type. Two attempts at
+full-screen-TUI-style `/` command dropdown that filters while you type. Two attempts at
 in-place, keystroke-driven rendering over readline (the flow-032 status bar, the
 flow-051 differential streamer) confirmed the ceiling: anything that must own the
 cursor while readline also owns the line is fragile (flow 048 removed the status
 bar for exactly this reason).
 
-Pi (`earendil-works/pi`) and xAI's grok-build (`xai-org/grok-build`) achieve the
+Other coding-agent TUIs achieve the
 live composer because they are **full-screen TUIs that own the terminal** and
 repaint on every keystroke. To match that UX, keryx needs a render/input layer
 that owns the terminal — an architectural change, not a package. OpenTUI provides
 that layer, is Bun-native (keryx runs on Bun), ships prebuilt native binaries, and
-is already proven in a coding-agent TUI (`superagent-ai/grok-cli`).
+is already proven in another coding-agent TUI.
 
 ## Goals
 

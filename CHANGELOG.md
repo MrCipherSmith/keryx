@@ -3870,7 +3870,7 @@ code it did, so a script that ran before runs now.
 One theme: a project-skill you already have as a `SKILL.md` — in a folder,
 a file, or a GitHub blob — could not become a project-skill without being
 re-typed through `keryx skills create`. Overlay reviewers lived in
-`~/.vantage-frontend` and `review-orchestrator` never saw them.
+a consumer project's home directory and `review-orchestrator` never saw them.
 
 ### Added
 
@@ -3892,7 +3892,7 @@ re-typed through `keryx skills create`. Overlay reviewers lived in
 
 - **`keryx review import --from <dir>`.** Alias for
   `keryx skills import --module review` with an extra filter: only
-  `review-vantage-*` packages, so generic copies of bundled reviewers
+  `review-<overlay>-*` packages, so generic copies of bundled reviewers
   cannot shadow the engine.
 
 ### Changed
@@ -5436,8 +5436,8 @@ surface. This release closes the six flows that came out of it.
   more round. The armed round budget lives only on the in-memory session
   object, never in `slate.json`, so a forked or resumed session never
   silently inherits an unattended loop. Guide: `docs/docs/guides/goal.md`.
-  Drawn from a 13-competitor survey of comparable mechanisms in other
-  coding-agent CLIs — `docs/requirements/goal-continuation/`.
+  Drawn from a survey of comparable mechanisms —
+  `docs/requirements/goal-continuation/`.
 - **Slate v3: private MCP slate lifecycle for external hands (SLATE-22..26).**
   Three new MCP tools — `slate.open`/`slate.writeSeed`/`slate.close` — let
   any MCP-connected external harness (Claude Code, Codex, or anything else

@@ -2,7 +2,7 @@
 
 Status: draft
 
-Source: operator request (helyx, 2026-09-30, message 174480) and answers 174531 (1А 2А 3А 4А): one `/settings` command opening a modal styled like `/connect`, with On/Off buttons like Test/Disconnect, gathering the settings-like slash commands.
+Source: operator request (operator chat channel, 2026-09-30, message 174480) and answers 174531 (1А 2А 3А 4А): one `/settings` command opening a modal styled like `/connect`, with On/Off buttons like Test/Disconnect, gathering the settings-like slash commands.
 
 ## Problem
 

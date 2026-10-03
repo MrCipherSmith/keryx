@@ -1,6 +1,6 @@
 # Implementation Plan
 
-Status: approved by operator instruction (helyx 172447)
+Status: approved by operator instruction (operator chat channel 172447)
 
 ## Approach
 
@@ -10,7 +10,7 @@ Decisions where the spec is silent:
 - Orphaned pending record after a restart: the turn that raised it is gone, so the record resolves as expired-deny with the reason on record and the call is never re-executed (safe default, no resumption of half-run turns).
 - No consumer attached: with `approval.requireConsumer` (default true) the approval resolves as `undeliverable` deny immediately rather than waiting for an expiry no one can beat.
 - A remote allow is one-time only: it never sets session grants or MCP trust.
-- The Telegram/web card is the helyx bridge's job; this flow documents the contract.
+- The Telegram/web card is the operator chat bot's job; this flow documents the contract.
 
 ## Steps
 

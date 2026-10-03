@@ -1,6 +1,6 @@
 # T64 — implementation: legibility for the health gate's forced-strict verdict
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`). Files
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`). Files
 changed: `src/health/types.ts`, `src/health/config.ts`, `src/health/gate.ts`,
 `src/health/config.test.ts`, `src/health/gate.test.ts` — nothing else.
 `src/health/service.ts` was read-only (and, independently, was already
@@ -18,7 +18,7 @@ verification). `src/security/config.ts` and `src/security/guard.ts` were
 read-only references. Spec written before coding: `T64-spec.md` (same
 directory).
 
-All raw logs are under `/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/`.
+All raw logs are under `~/goodea/keryx/.metaproject/data/gdctx/raw/`.
 
 ## 1. What was missing
 

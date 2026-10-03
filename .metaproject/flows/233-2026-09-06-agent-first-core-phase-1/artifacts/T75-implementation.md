@@ -2,7 +2,7 @@ STATUS: DONE
 
 # T75 — implementation: closing T70 F-001..F-004
 
-Root: `/Users/Goodea/goodea/keryx` (branch `codex/agent-first-core`, confirmed
+Root: `~/goodea/keryx` (branch `codex/agent-first-core`, confirmed
 via `pwd`/`git rev-parse --abbrev-ref HEAD` before the first read). No
 `.claude/worktrees/**` directory entered. No `git stash`. Spec written before
 editing: `T75-spec.md` (same directory).

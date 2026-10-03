@@ -140,7 +140,7 @@
           {
             "at": "2026-09-28T04:19:47.093Z",
             "outcome": "started",
-            "detail": "Sonnet implementer in /home/altsay/keryx-ar2"
+            "detail": "Sonnet implementer in ~/keryx-ar2"
           }
         ]
       },
@@ -241,7 +241,7 @@
     {
       "at": "2026-09-28T04:19:47.093Z",
       "event": "task-attempt",
-      "detail": "T5: started (attempt 1) — Sonnet implementer in /home/altsay/keryx-ar2"
+      "detail": "T5: started (attempt 1) — Sonnet implementer in ~/keryx-ar2"
     },
     {
       "at": "2026-09-28T05:02:47.963Z",

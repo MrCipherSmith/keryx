@@ -1270,8 +1270,8 @@ Three is the self-fix bound `task-implementer` and this skill share
 most achievable gains"* ([arXiv:2607.05197](https://arxiv.org/abs/2607.05197));
 correctness falls **0.820 -> 0.673** across two forced revisions while
 cumulative ever-correct is **0.847**
-([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Aider hardcodes
-`max_reflections = 3`; OpenHands' critic uses 3.
+([arXiv:2607.24604](https://arxiv.org/abs/2607.24604)). Other agent tools
+hardcode the same bound (`max_reflections = 3`).
 
 The bound is a ceiling, not a target. Repetition ends the loop earlier and
 **regardless of remaining iterations** — a counter cannot tell "converging

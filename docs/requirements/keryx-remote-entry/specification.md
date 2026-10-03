@@ -76,9 +76,9 @@ When no session matches and the request permits creation, a new session is
 created for the declared project. When the declared project is unknown to this
 install, the request fails; the server does not fall back to "the obvious one".
 
-This rule is not theoretical caution. `helyx` shipped a timing-based pairing
-first and had to replace it after transports cross-linked between projects under
-concurrent sessions; see [brainstorm.md](brainstorm.md).
+This rule is not theoretical caution. Another agent tool shipped a timing-based
+pairing first and had to replace it after transports cross-linked between
+projects under concurrent sessions.
 
 ## Project registry
 

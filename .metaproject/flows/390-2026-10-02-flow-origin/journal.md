@@ -17,7 +17,7 @@
 - 2026-10-02T11:16:20.933Z - ac-confirmed: AC7: PR #852 CI green on the final head (all legs pass); src/flow/origin-never-gates.test.ts, including origin set with an invalid kind (added after review). (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T11:16:21.312Z - ac-confirmed: AC8: PR #852 CI green on the final head (all legs pass); src/tui/origin-surface.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-02T11:16:21.690Z - ac-confirmed: AC9: PR #852 CI green on the final head (all legs pass); src/flow/origin-docs.test.ts. (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
-- 2026-10-02T15:19:06.252Z - ac-confirmed: AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, helyx-channel 178131) [stated])
+- 2026-10-02T15:19:06.252Z - ac-confirmed: AC10: Judged by the operator: «390 - ок» (channel message 178131, 2026-10-02), on the three effect lines of flow 392, created with --origin (quote, effect, how to observe). (signed: altsay (operator, operator chat channel 178131) [stated])
 - 2026-10-02T15:21:17.968Z - completing
 - 2026-10-02T15:21:22.413Z - completion-attempt-recorded: attempt 1: passed
 - 2026-10-02T15:21:22.414Z - done: all gates passed

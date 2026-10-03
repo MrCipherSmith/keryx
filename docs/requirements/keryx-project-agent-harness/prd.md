@@ -306,8 +306,6 @@ Implement a Keryx-owned runtime with five strict layers:
    completion gates.
 5. **Transports** — CLI first, JSONL/RPC second, TUI later.
 
-Borrow design ideas, not runtime ownership: Pi is the closest inspiration for
-the small core and session/RPC discipline; OpenCode is the strongest reference
-for tools and permissions; oh-my-claude is the strongest reference for hard
-quality gates; oh-my-claudecode is the strongest reference for staged parallel
-orchestration.
+Borrow design ideas, not runtime ownership: a small core with session/RPC
+discipline, separated roles, tools and permissions, hard quality gates, and
+staged parallel orchestration.

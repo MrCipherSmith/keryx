@@ -1,6 +1,6 @@
 # Review 310 R6: PR #684 (flow 310, W2), final narrow verification round
 
-Scope: fix commit 27fe9bc3 (plus the record commit d3a695cb) on flow/310-w2 (head d3a695cb), in /Users/Goodea/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r6/ (script e2e.sh, output e2e.out).
+Scope: fix commit 27fe9bc3 (plus the record commit d3a695cb) on flow/310-w2 (head d3a695cb), in ~/goodea/keryx-ape-310-w2. The review was read-only on the repo. All CLI probes ran in fresh git repos under scratchpad/review310-r6/ (script e2e.sh, output e2e.out).
 
 R5 disposition: **R5-F1 resolved.**
 

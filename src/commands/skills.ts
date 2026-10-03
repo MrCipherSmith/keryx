@@ -1979,7 +1979,7 @@ Examples:
   keryx skills ${command} src/pipelines --module pipelines --name pipelines-module
   keryx skills ${command} PipelineStepStore --module pipelines --name pipeline-step-store --dry-run
   keryx skills ${command} "review profile" --module review --name b091-profile \\
-      --origin ~/.vantage-frontend/rules/core/code-review-b091-profile.mdc
+      --origin ~/.acme-frontend/rules/core/code-review-b091-profile.mdc
 `);
 }
 

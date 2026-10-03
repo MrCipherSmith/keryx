@@ -4,7 +4,7 @@ Task definitions here; statuses via `keryx flow task done 027 <taskId>`.
 
 Scope: 5 MED review findings (+2 trivial doc/comment corrections). TDD. Reuse-only; deterministic/
 offline; deps `{}`; fail-closed preserved; D-02; no real spawn in CI; frozen untouched. Root
-`/Users/Goodea/goodea/keryx` (branch feature/keryx-r2-review-hardening). Worktree-guard. Commits/PR:
+`~/goodea/keryx` (branch feature/keryx-r2-review-hardening). Worktree-guard. Commits/PR:
 NO co-authorship.
 
 | ID | Kind | Model | Title / definition |

@@ -1,6 +1,6 @@
 # Journal
 
-- 2026-08-16: Flow init. Cloned xai-org/grok-build to `~/goodea/misk/grok-build`.
+- 2026-08-16: Flow init.
   Worktree: `~/goodea/keryx-wt-subagent-inspector` on `feat/subagent-inspector`.
 - 2026-08-16: Implemented clickable sidebar list + inspector modal. Spawn tool
   keeps every child and emits a work log. Focused tests + tsc green. Tasks 5/5.
