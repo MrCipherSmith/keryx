@@ -1,12 +1,15 @@
 // Backfilled decisions: historical questions imported into the journal after the
 // fact (`keryx decisions import <file.jsonl>`), as the "before" arm of a comparison
 // with the live records. The recommendation in them was written down once the
-// answer was known, so every one is marked `backfilled`, is never blind, and is
-// kept apart from the live records by the report and by every lookup.
+// answer was known, so every one is marked `backfilled` and is kept apart from the
+// live records by the report and by every lookup. Flow 400: every one is also stamped
+// `legacy: true` (it was not drawn by the seeded arms); ordinary records go to arm A
+// and records marked "mode":"blind" go to arm D.
 //
 // One line of the input file is one decision:
 //   {"id","at","flow","stage","question","options":[{"id","label"}],
-//    "recommendation":{"optionId","reason"}|null,"source","answer":{"choice","other"?}|null,"reason"?}
+//    "recommendation":{"optionId","reason"}|null,"source","mode"?:"ordinary"|"blind",
+//    "answer":{"choice","other"?}|null,"reason"?}
 //
 // A line that cannot be read is skipped, named (line number and why) and counted as
 // malformed; the rest is imported. An id already in the journal is skipped (reported,
@@ -15,6 +18,7 @@
 // after the open record): the re-import adds the missing answer, and nothing else.
 // Two runs of the same file at once are serialised by a lock file next to the journal.
 
+import { armOfMode } from "./arms";
 import { DEFAULT_STAGE } from "./journal";
 import { appendRecords, readRecords, withJournalLock } from "./store";
 import { oneLine } from "./text";
@@ -29,6 +33,8 @@ export interface BackfillEntry {
   options: DecisionOption[];
   recommendation: DecisionRecommendation | null;
   source?: string;
+  /** A record taken from the old blind mode says so; anything else was ordinary. Maps to arm D or A. */
+  mode?: "blind";
   answer: { choice: string; other: boolean } | null;
   reason?: string;
 }
@@ -114,6 +120,8 @@ function parseEntry(raw: unknown): BackfillEntry | string {
   if (reasonRaw !== undefined && reasonRaw !== null && !isString(reasonRaw)) return `${id}: "reason" must be a string`;
   const reason = isString(reasonRaw) ? oneLine(reasonRaw) : "";
   const source = isString(sourceRaw) ? oneLine(sourceRaw) : "";
+  const modeRaw = raw["mode"];
+  if (modeRaw !== undefined && modeRaw !== "ordinary" && modeRaw !== "blind") return `${id}: "mode" must be "ordinary" or "blind"`;
 
   return {
     id,
@@ -124,6 +132,7 @@ function parseEntry(raw: unknown): BackfillEntry | string {
     options,
     recommendation,
     ...(source.length > 0 ? { source } : {}),
+    ...(modeRaw === "blind" ? { mode: "blind" as const } : {}),
     answer,
     ...(reason.length > 0 ? { reason } : {}),
   };
@@ -169,6 +178,9 @@ function reasonRecordOf(entry: BackfillEntry, at: string): ReasonRecord | undefi
 
 /** The records of one backfilled decision: open, then the answer, then the reason, all stamped with the time the question was asked. */
 export function backfillRecords(entry: BackfillEntry): DecisionRecord[] {
+  // Flow 400 (AC11): every imported record predates the seeded arms, so it is stamped legacy; the old
+  // ordinary mode was arm A and the old blind mode was arm D.
+  const mode = entry.mode === "blind" ? "blind" : "ordinary";
   const open: OpenRecord = {
     kind: "open",
     id: entry.id,
@@ -178,10 +190,12 @@ export function backfillRecords(entry: BackfillEntry): DecisionRecord[] {
     question: entry.question,
     options: entry.options,
     recommendation: entry.recommendation,
-    // never blind: the human saw the options in order, with the recommendation marked when there was one
-    mode: "ordinary",
+    // ordinary unless the file says the question was blind: the human saw the options in order, with the recommendation marked when there was one
+    mode,
+    arm: armOfMode(mode),
+    legacy: true,
     order: entry.options.map((option) => option.id),
-    showMark: entry.recommendation !== null,
+    showMark: mode === "ordinary" && entry.recommendation !== null,
     irreversible: false,
     backfilled: true,
     ...(entry.source !== undefined ? { source: entry.source } : {}),

@@ -138,12 +138,24 @@ when it is written and again when it is shown, so it cannot add lines to a flow'
 ## The report
 
 ```text
-keryx decisions report [--json | --line]
+keryx decisions report [--json | --line] [--exclude-legacy]
 ```
 
-It prints, from the journal alone:
+It prints, from the journal alone (plus the quality ratings, below):
 
 - the match share overall and by mode (`ordinary`, `blind`, and `partial` for arms B and C when there are any);
+- the match share by **arm**: A, B, C and D. Arm A is shown as two rows, **A free**
+  (drawn) and **A forced** (the question looked irreversible, so it was always A).
+  A forced A was not randomized, so it is never pooled with the drawn arms;
+- the match share by **channel** (`tui`, `telegram`, ...), each channel cut by arm.
+  On `telegram` arms A and B are **one row, "A+B"**, because a poll cannot preselect
+  an option (see "What the journal does NOT measure");
+- the records from before the arms in a block of their own, **legacy** (see
+  "Importing earlier decisions"). By default they stay in the old overall and by-mode
+  totals, as before, and never appear in the arm and channel tables.
+  `--exclude-legacy` leaves them, and the imported historical records, out of every
+  number and block;
+- the recommendation-quality matrix (see "Rating the recommendation");
 - the match share by stage;
 - every deviation with its reason (`(none given)` when you gave none);
 - how many questions **looked irreversible** and how many of those would have been
@@ -185,9 +197,16 @@ counts. It prints `Imported: N, skipped: S, with recommendation: R, answered: A,
 deviations: D`, plus `, repaired: R` and `, malformed: M` when there are any. With
 `--json` a failure is `{"error": "..."}`.
 
-An imported decision is **backfilled**: its recommendation was written down after
-the fact, so it is never blind, its time to answer is unknown, and it stays apart
-from the live records everywhere. The report has a block "до (историческое,
+An imported decision is **backfilled** and **legacy**: its recommendation was written
+down after the fact, its time to answer is unknown, and it was not drawn by the arms.
+An ordinary record is stamped `legacy: true` and goes to arm A; a line with
+`"mode":"blind"` goes to arm D. A record that is already in the journal from before
+the arms (no `arm` field) is read the same way, so the roughly 87 pre-v2 records need
+no rewrite (the journal is append-only and is never rewritten). Running the import
+again changes nothing. The arm a legacy record carries only says how it was shown
+(marked or blind); it was **not randomized**, so the report keeps it in a "Legacy,
+before the arms" block, split by that arm, and never mixes it into the arm tables.
+It stays apart from the live records everywhere. The report has a block "до (историческое,
 дозаполнено задним числом)" with the total, the decisions that had a
 recommendation, the matches and their share, and every deviation with its reason;
 the live numbers and the median time to answer never include it, and `--json` has
@@ -205,7 +224,8 @@ three commands any agent can call:
 
 ```text
 keryx decisions open --question "<text>" --option a=<label> --option b=<label> \
-    --recommend a --reason "<why>" [--stage <name>] [--flow <id>] [--action <tag>] [--json]
+    --recommend a --reason "<why>" [--stage <name>] [--flow <id>] [--action <tag>] \
+    [--channel <name>] [--json]
 keryx decisions answer <id> --choice <id> [--reason "<why>"] [--json]
 keryx decisions reason <id> --text "<why>" [--json]
 ```
@@ -219,10 +239,81 @@ keryx decisions reason <id> --text "<why>" [--json]
    own `ask_user` waits for it; an empty answer is recorded as absent.)
 
 `--flow` and `--stage` default to what the checkout says (`KERYX_FLOW`, the
-branch, the only flow in progress). A failure here is
+branch, the only flow in progress). `--channel` says where the question is shown
+(`telegram` for a chat bridge); it is lower-cased, and a question without one is `tui`.
+A bridge that shows polls must pass `--channel telegram`: that is what lets the report
+treat arms A and B as one condition there. A failure here is
 reported on one line and never has to stop the question.
 
 keryx's own `ask_user` tool does all of this for you.
+
+## Rating the recommendation
+
+Matching the recommendation is not the same as the recommendation being good. After a
+decision is closed you can rate it:
+
+```text
+keryx decisions rate <id> good|bad|unclear [--note "<why>"] [--json]
+keryx decisions rate --blind-model --model "<label>" --model-cmd "<command>" \
+    [--since <date>] [--id <id>] [--limit <n>] [--json]
+```
+
+- `rate <id> ...` is **your** rating and the main measure. It needs a closed decision.
+- `rate --blind-model` has a model rate every closed decision that carries a
+  recommendation, in a **clean context**: the model gets only the question and the
+  options, numbered, in the order you saw them, with the recommendation mark removed
+  and no reason, no choice and no conversation history. Its pick is compared with the
+  agent's recommendation (`good` when they agree, `bad` when they do not, `unclear`
+  for no usable answer). `--model` is the label the rating is filed under;
+  `--model-cmd` is a command that reads the prompt on stdin and prints the answer
+  (for example `claude -p`). Each call is a new process, which is what makes the
+  context clean, and a rating records `cleanContext: true` only when the call really
+  carried no earlier messages. A decision already rated under the same label is
+  skipped, and imported records are left out (their recommendation was written after
+  the answer).
+
+Ratings are appended to `.metaproject/data/decisions/quality.jsonl` (mode 0600), a file
+of their own next to the journal. The report shows a matrix with your rating in the
+rows and the model's in the columns, and your rating against whether you followed the
+recommendation. Every model rating is labelled **model self-assessment**.
+
+## Exporting for analysis
+
+```text
+keryx decisions export [--since <date>] [--format jsonl|json] [--exclude-legacy]
+```
+
+One row per decision with its **structure only**: arm, seed, preselected, forced,
+legacy, channel, the display order as option positions (never ids), the position of
+the recommended and the chosen option, whether you deviated, how many times you
+changed the answer, the quality ratings and the times. There is no question text, no
+option label or description, no reason and no note; the decision id is replaced by a
+short hash, and a stage, channel or model name is kept only when it is a plain
+identifier. A test plants strings in every text field and fails if one reaches the
+export, so the file can be shared without reading it first.
+
+## What the journal does NOT measure
+
+Read the numbers with these limits in mind:
+
+- **Arms A and B are indistinguishable in Telegram.** A Telegram poll cannot start with
+  an option highlighted, so a question asked there shows the "recommended" mark and
+  no preselection whichever of the two arms was drawn. The report merges A and B into
+  one "A+B" row for the `telegram` channel, and the effect of preselection can only be
+  read from the `tui` channel.
+- **Model ratings are a self-assessment by the same model.** The model that rates a
+  recommendation in a clean context is usually the model that wrote it, so it will tend
+  to agree with itself, and a clean context does not remove that. Treat the model
+  columns as a consistency check; your own rating is the measure.
+- **The legacy records are not randomized.** The roughly 87 records from before the
+  arms were shown marked, or blind, by a hand-made rule, not drawn. Their share
+  of matches cannot be compared with the randomized arms, which is why they have a
+  block of their own and why `--exclude-legacy` exists.
+- **A forced A is not randomized either.** Irreversible questions are always arm A, so
+  "A forced" is reported apart from "A free".
+- **A match is not a good recommendation.** Following the recommendation can mean the
+  recommendation was right, or only that it was marked. Only the arm comparison and
+  your rating separate the two.
 
 ## What it does not do
 

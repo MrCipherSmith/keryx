@@ -718,10 +718,14 @@ Grouped by what you are trying to do, not by internal module layout.
   force next to main, production, a branch or a table, or with no real object
   ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for
   the irreversible ones, and the report counts how often blind was refused.
-  `keryx decisions report` prints the match share by mode and stage and the
-  deviations, with no model; `keryx decisions open|answer|reason` lets any agent
+  `keryx decisions report` prints the match share by mode, arm, channel and stage and
+  the deviations, with no model (the pre-arm records are shown apart as legacy);
+  `keryx decisions rate` records whether a recommendation was good (yours, or a
+  model's self-assessment in a clean context) and `keryx decisions export` writes
+  the structure of each decision with no question or option text;
+  `keryx decisions open|answer|reason` lets any agent
   or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the
-  same report. See the
+  same report. The guide says what the journal does not measure. See the
   [Recommendation journal guide](docs/docs/guides/recommendation-journal.md).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed
