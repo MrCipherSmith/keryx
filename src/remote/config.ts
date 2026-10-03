@@ -19,7 +19,19 @@ import { isRenderMode, RENDER_MODE_CHOICES, type RenderMode } from "./rendering-
 
 export const REMOTE_CONFIG_SCHEMA_VERSION = 1;
 export const DEFAULT_ORPHAN_MS = 10 * 60_000;
-export const DEFAULT_RUN_TIMEOUT_MS = 30 * 60_000;
+/** Flow 396: a run started from Telegram has no time limit unless `runTimeoutMs` says otherwise; `/stop` ends it. */
+export const DEFAULT_RUN_TIMEOUT_MS = 0;
+/** The limit before flow 396, kept so a rollback has a named value (release note, docs, tests). */
+export const LEGACY_RUN_TIMEOUT_MS = 30 * 60_000;
+/** How long a Telegram approval prompt waits for a tap before it is denied (flow 396: 15 minutes). */
+export const DEFAULT_APPROVAL_WAIT_MS = 15 * 60_000;
+/** The wait before flow 396, kept for the rollback note. */
+export const LEGACY_APPROVAL_WAIT_MS = 5 * 60_000;
+export const MIN_APPROVAL_WAIT_MS = 30_000;
+export const MAX_APPROVAL_WAIT_MS = 60 * 60_000;
+/** The mode a Telegram-started turn starts with until `/mode` changes the shell's mode (flow 396). */
+export type RemotePermissionMode = "ask" | "trust";
+export const DEFAULT_REMOTE_PERMISSION_MODE: RemotePermissionMode = "trust";
 const MAX_TIMEOUT_MS = 7 * 24 * 60 * 60_000;
 
 export interface RemoteConfig {
@@ -30,8 +42,15 @@ export interface RemoteConfig {
   allowedUserIds: number[];
   /** How long an unavailable session's topic is kept before deletion. */
   orphanMs: number;
-  /** How long a run started from Telegram may take before the shell interrupts it. */
+  /** How long a run started from Telegram may take before the shell interrupts it; 0 means no limit. */
   runTimeoutMs: number;
+  /**
+   * The permission mode a Telegram-started turn starts with while the shell's own mode has not been
+   * changed by `/mode` in this session. `auto` is not accepted here.
+   */
+  permissionMode: RemotePermissionMode;
+  /** How long a Telegram approval prompt waits for an answer before it is denied. */
+  approvalTimeoutMs: number;
   /**
    * How a reply is written for Telegram (flow 395): auto | rich | html | plain. Left out of the
    * file means `auto`; a reader applies `DEFAULT_RENDER_MODE`, so a config that never set it is
@@ -40,9 +59,22 @@ export interface RemoteConfig {
   rendering?: RenderMode;
 }
 
+/** What a caller may hand to `saveRemoteConfig`: the two flow-396 keys are optional and default when absent. */
+export type RemoteConfigInput = Omit<RemoteConfig, "permissionMode" | "approvalTimeoutMs"> &
+  Partial<Pick<RemoteConfig, "permissionMode" | "approvalTimeoutMs">>;
+
 export type Loaded<T> = { ok: true; value: T } | { ok: false; reason: string };
 
-const CONFIG_KEYS = new Set(["schemaVersion", "chatId", "allowedUserIds", "orphanMs", "runTimeoutMs", "rendering"]);
+const CONFIG_KEYS = new Set([
+  "schemaVersion",
+  "chatId",
+  "allowedUserIds",
+  "orphanMs",
+  "runTimeoutMs",
+  "permissionMode",
+  "approvalTimeoutMs",
+  "rendering",
+]);
 const TOKEN_SHAPE = /^\d{5,}:[A-Za-z0-9_-]{20,}$/;
 
 function isSafeInt(value: unknown): value is number {
@@ -85,9 +117,39 @@ export function parseRemoteConfig(value: unknown): Loaded<RemoteConfig> {
   if (!orphan.ok) {
     return orphan;
   }
-  const run = timeout("runTimeoutMs", DEFAULT_RUN_TIMEOUT_MS);
-  if (!run.ok) {
-    return run;
+  let runTimeoutMs = DEFAULT_RUN_TIMEOUT_MS;
+  if (doc.runTimeoutMs !== undefined) {
+    // 0 means "no limit" (flow 396); anything else is a real limit in milliseconds.
+    if (doc.runTimeoutMs === 0) {
+      runTimeoutMs = 0;
+    } else {
+      const run = timeout("runTimeoutMs", DEFAULT_RUN_TIMEOUT_MS);
+      if (!run.ok) {
+        return { ok: false, reason: `remote config runTimeoutMs must be 0 (no limit) or an integer from 1 to ${MAX_TIMEOUT_MS} (milliseconds)` };
+      }
+      runTimeoutMs = run.value;
+    }
+  }
+  let permissionMode: RemotePermissionMode = DEFAULT_REMOTE_PERMISSION_MODE;
+  if (doc.permissionMode !== undefined) {
+    if (doc.permissionMode !== "ask" && doc.permissionMode !== "trust") {
+      return { ok: false, reason: 'remote config permissionMode must be "ask" or "trust" (auto is not available here)' };
+    }
+    permissionMode = doc.permissionMode;
+  }
+  let approvalTimeoutMs = DEFAULT_APPROVAL_WAIT_MS;
+  if (doc.approvalTimeoutMs !== undefined) {
+    if (
+      !isSafeInt(doc.approvalTimeoutMs) ||
+      doc.approvalTimeoutMs < MIN_APPROVAL_WAIT_MS ||
+      doc.approvalTimeoutMs > MAX_APPROVAL_WAIT_MS
+    ) {
+      return {
+        ok: false,
+        reason: `remote config approvalTimeoutMs must be an integer from ${MIN_APPROVAL_WAIT_MS} to ${MAX_APPROVAL_WAIT_MS} (milliseconds)`,
+      };
+    }
+    approvalTimeoutMs = doc.approvalTimeoutMs;
   }
   if (doc.rendering !== undefined && !isRenderMode(doc.rendering)) {
     return { ok: false, reason: `remote config rendering must be ${RENDER_MODE_CHOICES}` };
@@ -99,7 +161,9 @@ export function parseRemoteConfig(value: unknown): Loaded<RemoteConfig> {
       chatId: doc.chatId,
       allowedUserIds: [...new Set(ids as number[])],
       orphanMs: orphan.value,
-      runTimeoutMs: run.value,
+      runTimeoutMs,
+      permissionMode,
+      approvalTimeoutMs,
       ...(doc.rendering === undefined ? {} : { rendering: doc.rendering }),
     },
   };
@@ -127,13 +191,68 @@ export function loadRemoteConfig(dir?: string): Loaded<RemoteConfig> {
 }
 
 /** Write a validated config, atomically and owner-only. */
-export function saveRemoteConfig(config: RemoteConfig, dir?: string): Loaded<RemoteConfig> {
+export function saveRemoteConfig(config: RemoteConfigInput, dir?: string): Loaded<RemoteConfig> {
   const checked = parseRemoteConfig(config);
   if (!checked.ok) {
     return checked;
   }
   ensureRemoteDir(dir);
-  writeOwnerOnlyFileAtomic(remoteConfigPath(dir), `${JSON.stringify(checked.value, null, 2)}\n`);
+  // A key the caller did not set stays out of the file: an absent key means the default, so a file
+  // written by Connect is the same file as before flow 396 and a later default change reaches it.
+  const { permissionMode, approvalTimeoutMs, ...base } = checked.value;
+  const onDisk = {
+    ...base,
+    ...(config.permissionMode === undefined ? {} : { permissionMode }),
+    ...(config.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs }),
+  };
+  writeOwnerOnlyFileAtomic(remoteConfigPath(dir), `${JSON.stringify(onDisk, null, 2)}\n`);
+  return checked;
+}
+
+/** The saved defaults `/remote-policy` may change (flow 396). Each key is optional: only the ones given change. */
+export interface RemotePolicyPatch {
+  permissionMode?: RemotePermissionMode;
+  /** 0 means no limit. */
+  runTimeoutMs?: number;
+  approvalTimeoutMs?: number;
+}
+
+/**
+ * Change the saved defaults for a Telegram-started turn. The file is edited as it is: a key the caller
+ * did not name keeps its place, and an absent key stays absent so a later default change still reaches
+ * it. The result is validated by the same closed schema as a load, so a bad value is refused here and
+ * the file is not touched.
+ */
+export function updateRemotePolicy(patch: RemotePolicyPatch, dir?: string): Loaded<RemoteConfig> {
+  const file = remoteConfigPath(dir);
+  const read = readConfigFile(file);
+  if (!read.ok) {
+    return {
+      ok: false,
+      reason:
+        read.reason === "absent"
+          ? `no remote-control config at ${file}; connect Telegram first`
+          : `remote-control config at ${file} cannot be read (${read.reason})`,
+    };
+  }
+  let doc: unknown;
+  try {
+    doc = JSON.parse(read.text);
+  } catch {
+    return { ok: false, reason: `remote-control config at ${file} is not valid JSON` };
+  }
+  if (typeof doc !== "object" || doc === null || Array.isArray(doc)) {
+    return { ok: false, reason: "remote config must be a JSON object" };
+  }
+  const next: Record<string, unknown> = { ...(doc as Record<string, unknown>) };
+  if (patch.permissionMode !== undefined) next.permissionMode = patch.permissionMode;
+  if (patch.runTimeoutMs !== undefined) next.runTimeoutMs = patch.runTimeoutMs;
+  if (patch.approvalTimeoutMs !== undefined) next.approvalTimeoutMs = patch.approvalTimeoutMs;
+  const checked = parseRemoteConfig(next);
+  if (!checked.ok) {
+    return checked;
+  }
+  writeOwnerOnlyFileAtomic(file, `${JSON.stringify(next, null, 2)}\n`);
   return checked;
 }
 

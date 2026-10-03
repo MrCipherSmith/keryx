@@ -22,7 +22,7 @@
 import { redactSensitiveText } from "../security/service";
 import { type ClientStatus, type InboundMeta, RemoteClient, type RemoteClientOptions, type StartResult } from "./client";
 import { DEFAULT_ROUTER_LIMITS, type RemoteCommandHost, RemoteCommandRouter } from "./command-router";
-import { DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
+import { APPROVAL_INPUT_PREVIEW_CHARS, DEFAULT_APPROVAL_TIMEOUT_MS, MAX_APPROVAL_PROMPT_CHARS, type MessageState } from "./protocol";
 
 /** The label a Telegram line carries in the queue and the transcript. */
 export const TG_SOURCE = "tg" as const;
@@ -63,9 +63,19 @@ export type RemoteClientLike = Pick<
   RemoteClient,
   "start" | "close" | "reply" | "requestApproval" | "requestChoice" | "connected" | "name" | "runTimeoutMs" | "lastHeartbeatAt"
 > &
-  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals">>;
+  Partial<Pick<RemoteClient, "reportState" | "unconfirmedApprovals" | "askApproval" | "reportApprovalResult" | "permissionMode" | "approvalTimeoutMs">>;
 
-export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn">> {
+/** What the topic answered to one approval (flow 396). */
+export interface RemoteApprovalAnswer {
+  decision: "allow" | "deny";
+  /** "Always" was pressed: the shell saves the rule it offered, then calls {@link RemoteBridge.reportRemembered}. */
+  always: boolean;
+  approvalId?: string;
+  /** The Telegram user who pressed; absent when nobody did (timeout, no stream). */
+  fromId?: number;
+}
+
+export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBusy" | "cancelTurn" | "stopTelegramTurn">> {
   sessionId(): string;
   project(): string;
   /** A turn is running, or something the user typed is waiting to run. */
@@ -106,6 +116,13 @@ export interface RemoteBridgeOptions {
   choiceTimeoutMs?: number;
 }
 
+/** The policy values `/remote-policy` can change in a running shell. */
+export interface RemotePolicyOverride {
+  permissionMode?: "ask" | "trust";
+  approvalTimeoutMs?: number;
+  runTimeoutMs?: number;
+}
+
 export type EnableResult = StartResult | { ok: false; code: "already-on"; message: string; retrying: false };
 
 function preview(text: string): string {
@@ -120,13 +137,32 @@ export function composeReply(text: string): string {
   return `${safe.slice(0, REMOTE_REPLY_MAX_CHARS)}\n[cut: the full reply is in the shell]`;
 }
 
+/**
+ * What the shell takes from the client's answer. Fail closed: only an explicit `allow` or `always` is a
+ * yes; a missing, unknown or malformed decision is a deny, and `always` counts as one only when an
+ * "Always" was offered. Exported for the tests.
+ */
+export function mapApprovalAnswer(got: unknown, offered: boolean): RemoteApprovalAnswer {
+  if (got === null || typeof got !== "object") return { decision: "deny", always: false };
+  const o = got as { decision?: unknown; approvalId?: unknown; fromId?: unknown };
+  const yes = o.decision === "allow" || o.decision === "always";
+  const approvalId = typeof o.approvalId === "string" && o.approvalId.length > 0 ? o.approvalId : undefined;
+  const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+  return {
+    decision: yes ? "allow" : "deny",
+    always: o.decision === "always" && offered,
+    ...(approvalId === undefined ? {} : { approvalId }),
+    ...(fromId === undefined ? {} : { fromId }),
+  };
+}
+
 /** The approval prompt: redacted and within the server's limit. Exported for the tests. */
 export function composeApprovalPrompt(prompt: string): string {
   const safe = redactSensitiveText(prompt).trim();
-  return safe.length <= MAX_APPROVAL_PROMPT_CHARS ? safe : `${safe.slice(0, MAX_APPROVAL_PROMPT_CHARS - 1)}…`;
+  if (safe.length <= MAX_APPROVAL_PROMPT_CHARS) return safe;
+  const note = "\n[cut: the rest of this prompt is in the shell]";
+  return `${safe.slice(0, MAX_APPROVAL_PROMPT_CHARS - note.length - 1)}…${note}`;
 }
-
-const APPROVAL_INPUT_PREVIEW_CHARS = 1_500;
 
 /**
  * What the topic is asked: the tool, the command or input a human would read, and the
@@ -154,8 +190,13 @@ export function describeApprovalForTopic(
     } catch {
       // not JSON: show it as it is
     }
-    shown = shown.length > APPROVAL_INPUT_PREVIEW_CHARS ? `${shown.slice(0, APPROVAL_INPUT_PREVIEW_CHARS)}…` : shown;
+    const total = shown.length;
+    shown = total > APPROVAL_INPUT_PREVIEW_CHARS ? `${shown.slice(0, APPROVAL_INPUT_PREVIEW_CHARS)}…` : shown;
     lines.push(`Approve ${tool}?`, shown);
+    // Said out loud: a cut tail is not shown, and the operator must know the prompt is not the whole call.
+    if (total > APPROVAL_INPUT_PREVIEW_CHARS) {
+      lines.push(`[cut: only the first ${APPROVAL_INPUT_PREVIEW_CHARS} of ${total} characters are shown; the rest is in the shell]`);
+    }
   }
   if (meta?.destructive === true) lines.push("Warning: this can delete or overwrite files.");
   if (meta?.credentials === true) lines.push("Warning: this touches the agent's own permission or credential files.");
@@ -168,13 +209,19 @@ export class RemoteBridge {
   private readonly events: RemoteEvent[] = [];
   private readonly host: RemoteBridgeHost;
   private readonly now: () => number;
-  private readonly approvalTimeoutMs: number;
+  private readonly approvalOverrideMs: number | undefined;
+  /** What `/remote-policy` changed in this shell since it registered; wins over what serve delivered (flow 396). */
+  private policyOverride: RemotePolicyOverride = {};
   private connectedOnce = false;
   private clientConnected = false;
   private tgTurn = false;
   private lastAssistantText = "";
   private runTimer: ReturnType<typeof setTimeout> | undefined;
   private timedOut = false;
+  /** `/stop` ended the running Telegram turn (flow 396). */
+  private stoppedByUser = false;
+  /** Aborts a pending approval wait when the turn is stopped or runs out of time. */
+  private turnAbort: AbortController | undefined;
   /** The close of the client being turned off, while it runs. */
   private closing: Promise<void> | undefined;
   private readonly router: RemoteCommandRouter;
@@ -182,18 +229,21 @@ export class RemoteBridge {
   private keepTopic = false;
   private switched = false;
   /** Plain lines taken from the topic whose turn has not started yet, oldest first (flow 387, AC18). */
-  private readonly waiting: Array<{ updateId: number; line: string }> = [];
+  private readonly waiting: Array<{ updateId: number; line: string; fromId?: number }> = [];
   /** The Telegram message the running turn belongs to. */
   private currentUpdate: number | undefined;
+  /** The Telegram user whose line started the running turn (flow 396): who an auto-approval is recorded against. */
+  private currentFromId: number | undefined;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
     this.now = options.now ?? Date.now;
-    this.approvalTimeoutMs = options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+    this.approvalOverrideMs = options.approvalTimeoutMs;
     this.router = new RemoteCommandRouter({
       host: {
         isBusy: () => this.host.isBusy(),
         cancelTurn: () => this.host.cancelTurn(),
+        stopTelegramTurn: () => this.stopTelegramTurn(),
         ...(this.host.runCommand !== undefined ? { runCommand: (line: string) => this.host.runCommand!(line) } : {}),
         ...(this.host.busyRefusal !== undefined ? { busyRefusal: (line: string) => this.host.busyRefusal!(line) } : {}),
         ...(this.host.listModels !== undefined ? { listModels: (id?: string) => this.host.listModels!(id) } : {}),
@@ -245,6 +295,45 @@ export class RemoteBridge {
   /** The running turn came from Telegram. */
   get telegramTurnActive(): boolean {
     return this.tgTurn;
+  }
+
+  /** The Telegram user who started the running turn, when known (flow 396). */
+  get telegramTurnUserId(): number | undefined {
+    return this.tgTurn ? this.currentFromId : undefined;
+  }
+
+  /**
+   * The mode serve says a Telegram-started turn starts under. A serve that did not say (older than this
+   * shell) is read as `ask`: today's behaviour, never a silent widening.
+   */
+  get configuredPermissionMode(): "ask" | "trust" {
+    return this.policyOverride.permissionMode ?? this.client?.permissionMode ?? "ask";
+  }
+
+  /** How long an approval waits in the topic: a test override, then what serve delivered, then the old five minutes. */
+  get approvalTimeoutMs(): number {
+    return this.policyOverride.approvalTimeoutMs ?? this.approvalOverrideMs ?? this.client?.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS;
+  }
+
+  /** The run limit for a Telegram-started turn: what `/remote-policy` set, then what serve delivered; 0 or absent is no limit. */
+  get runTimeoutMs(): number {
+    return this.policyOverride.runTimeoutMs ?? this.client?.runTimeoutMs ?? 0;
+  }
+
+  /**
+   * `/remote-policy` changed the saved defaults: the running shell takes them now. Only the values named
+   * change. This is the Telegram default and nothing else: the shell's own mode and the "changed this
+   * session" flag are the host's, and are not touched here. A turn already running keeps the limit it
+   * started with; the next one uses the new value.
+   */
+  applyPolicy(next: RemotePolicyOverride): void {
+    this.policyOverride = { ...this.policyOverride, ...next };
+    this.host.onChange?.();
+  }
+
+  /** Put a line in the remote event ring from the host (an auto-approval, a saved rule): redacted and capped. */
+  recordApproval(text: string): void {
+    this.push("approval", preview(text));
   }
 
   status(): RemoteStatus {
@@ -396,7 +485,7 @@ export class RemoteBridge {
       return;
     }
     this.push("line", `Telegram: ${preview(line)}`);
-    this.waiting.push({ updateId: meta.updateId, line });
+    this.waiting.push({ updateId: meta.updateId, line, ...(meta.fromId === undefined ? {} : { fromId: meta.fromId }) });
     if (this.host.isBusy()) {
       // Queued: the message keeps its "received" reaction until its own turn starts.
       this.host.enqueue(line);
@@ -472,18 +561,39 @@ export class RemoteBridge {
     if (source !== TG_SOURCE || this.client === undefined) return;
     const next = this.waiting.shift();
     this.currentUpdate = next?.updateId;
+    this.currentFromId = next?.fromId;
     if (next !== undefined) this.report(next.updateId, "working");
     this.tgTurn = true;
     this.lastAssistantText = "";
     this.timedOut = false;
-    const limit = this.client.runTimeoutMs;
-    if (limit !== undefined && limit > 0) {
+    this.stoppedByUser = false;
+    this.turnAbort = new AbortController();
+    // 0 or absent is "no limit" (flow 396): only `/stop` or the shell ends such a run.
+    const limit = this.runTimeoutMs;
+    if (limit > 0) {
       this.runTimer = setTimeout(() => {
         this.timedOut = true;
         this.push("error", "run time limit reached; stopping the turn");
+        this.turnAbort?.abort();
         this.host.cancelTurn();
       }, limit);
     }
+  }
+
+  /**
+   * `/stop` from the topic (flow 396). Ends a turn that Telegram started, the way Esc ends it in the shell;
+   * a turn the operator started in the shell is not Telegram's to stop. The topic is told by
+   * {@link turnSettled} once the turn has actually ended.
+   */
+  stopTelegramTurn(): "stopped" | "idle" | "operator" {
+    if (this.client === undefined) return "idle";
+    if (!this.tgTurn) return this.host.isBusy() ? "operator" : "idle";
+    if (this.stoppedByUser) return "stopped";
+    this.stoppedByUser = true;
+    this.push("command", "/stop: stopping the turn");
+    this.turnAbort?.abort();
+    this.host.cancelTurn();
+    return "stopped";
   }
 
   /** Assistant text the user would see. Only the last one of the turn is sent. */
@@ -527,13 +637,16 @@ export class RemoteBridge {
     const client = this.client;
     const text = this.lastAssistantText;
     const timedOut = this.timedOut;
+    const stopped = this.stoppedByUser && !timedOut;
     const updateId = this.currentUpdate;
     this.endTurnState();
     if (client === undefined) return;
-    if (updateId !== undefined) this.report(updateId, outcome.failed || timedOut ? "failed" : "done");
+    if (updateId !== undefined) this.report(updateId, outcome.failed || timedOut || stopped ? "failed" : "done");
     let body: string;
-    if (timedOut) {
-      body = "Stopped: this run went over the time limit for runs started from Telegram.";
+    if (stopped) {
+      body = "Stopped by you.";
+    } else if (timedOut) {
+      body = "Stopped: this run went over the time limit you set for runs started from Telegram (runTimeoutMs).";
     } else if (outcome.failed && text.trim().length === 0) {
       body = "The run failed. The details are in the shell.";
     } else if (text.trim().length === 0) {
@@ -548,8 +661,12 @@ export class RemoteBridge {
   private endTurnState(): void {
     this.tgTurn = false;
     this.currentUpdate = undefined;
+    this.currentFromId = undefined;
     this.lastAssistantText = "";
     this.timedOut = false;
+    this.stoppedByUser = false;
+    this.turnAbort?.abort();
+    this.turnAbort = undefined;
     if (this.runTimer !== undefined) {
       clearTimeout(this.runTimer);
       this.runTimer = undefined;
@@ -563,19 +680,49 @@ export class RemoteBridge {
    * error the answer is `deny`.
    */
   async requestApproval(prompt: string): Promise<"allow" | "deny"> {
+    return (await this.askApproval(prompt)).decision;
+  }
+
+  /**
+   * Like {@link requestApproval}; with `remember` the prompt carries an "Always: <pattern>" button
+   * (flow 396). Anything but an explicit press is a deny. The press is recorded with the user id.
+   */
+  async askApproval(prompt: string, options: { remember?: string } = {}): Promise<RemoteApprovalAnswer> {
     const client = this.client;
     if (client === undefined || !client.connected) {
       this.push("approval", "denied: not connected");
-      return "deny";
+      return { decision: "deny", always: false };
     }
     this.push("approval", "asked in the topic");
-    let decision: "allow" | "deny";
+    let answer: RemoteApprovalAnswer;
     try {
-      decision = await client.requestApproval(composeApprovalPrompt(prompt), this.approvalTimeoutMs);
+      const text = composeApprovalPrompt(prompt);
+      const timeoutMs = this.approvalTimeoutMs;
+      if (client.askApproval !== undefined) {
+        const signal = this.turnAbort?.signal;
+        const got = await client.askApproval(text, timeoutMs, {
+          ...(options.remember === undefined ? {} : { remember: options.remember }),
+          ...(signal === undefined ? {} : { signal }),
+        });
+        answer = mapApprovalAnswer(got, options.remember !== undefined);
+      } else {
+        const decision: unknown = await client.requestApproval(text, timeoutMs);
+        answer = { decision: decision === "allow" || decision === "always" ? "allow" : "deny", always: false };
+      }
     } catch {
-      decision = "deny";
+      answer = { decision: "deny", always: false };
     }
-    this.push("approval", decision === "allow" ? "allowed in the topic" : "denied (or no answer)");
-    return decision;
+    const by = answer.fromId === undefined ? "" : ` by user ${answer.fromId}`;
+    this.push(
+      "approval",
+      answer.decision === "allow" ? `${answer.always ? "allowed (always)" : "allowed"} in the topic${by}` : `denied${by === "" ? " (or no answer)" : by}`,
+    );
+    return answer;
+  }
+
+  /** Tell the topic whether an "Always" press became a saved rule (flow 396). Best effort. */
+  async reportRemembered(approvalId: string | undefined, remembered: boolean): Promise<void> {
+    if (approvalId === undefined) return;
+    await this.client?.reportApprovalResult?.(approvalId, remembered);
   }
 }

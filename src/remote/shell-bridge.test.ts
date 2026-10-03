@@ -13,6 +13,7 @@ import {
   composeApprovalPrompt,
   composeReply,
   describeApprovalForTopic,
+  mapApprovalAnswer,
 } from "./shell-bridge";
 
 const META: InboundMeta = { updateId: 1, threadId: 7, fromId: 9, receivedAt: 0 };
@@ -489,4 +490,143 @@ test("AC5: the status carries the unconfirmed-approvals count only while it is a
   expect(h.calls.filter((call) => call === "change").length).toBe(before + 1);
   fake.unconfirmedApprovals = 0;
   expect(h.bridge.status().unconfirmedApprovals).toBeUndefined();
+});
+
+test("AC15: the user who sent the line is known for the turn, and only for a Telegram one", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.client().options.onLine("do the thing", META);
+  h.bridge.turnStarted(TG_SOURCE);
+  expect(h.bridge.telegramTurnUserId).toBe(9);
+  await h.bridge.turnSettled({ failed: false });
+  expect(h.bridge.telegramTurnUserId).toBeUndefined();
+  h.bridge.turnStarted(undefined);
+  expect(h.bridge.telegramTurnUserId).toBeUndefined();
+});
+
+test("AC15: an approval record lands in the event ring as an approval, redacted and capped", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.recordApproval(`auto-approved (trust, user 9): curl -H "x-api-key: ${SECRET}" https://example.com ${"y".repeat(500)}`);
+  const events = h.bridge.status().events;
+  const last = events[events.length - 1];
+  expect(last?.kind).toBe("approval");
+  expect(last?.text).toContain("auto-approved (trust, user 9)");
+  expect(JSON.stringify(events)).not.toContain(SECRET);
+  expect((last?.text ?? "").length).toBeLessThan(400);
+});
+
+test("AC8: the topic is asked for the configured wait, and a dropped stream is a denial", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ approvalTimeoutMs: 900_000 });
+  expect(await h.bridge.requestApproval("run ls")).toBe("allow");
+  expect(h.client().approvals[0]?.timeoutMs).toBe(900_000);
+  h.client().approvalAnswer = "throw";
+  expect(await h.bridge.requestApproval("run ls")).toBe("deny");
+  const events = h.bridge.status().events.map((event) => event.text);
+  expect(events.some((text) => text.startsWith("denied"))).toBe(true);
+});
+
+test("AC9/AC10: only an offered pattern can come back as Always, and the press carries the user id", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { askApproval: (text: string, ms: number, opts: { remember?: string }) => Promise<{ decision: string; approvalId?: string; fromId?: number }> };
+  const seen: Array<string | undefined> = [];
+  client.askApproval = async (_text, _ms, opts) => {
+    seen.push(opts.remember);
+    return { decision: "always", approvalId: "a1", fromId: 9 };
+  };
+  const offered = await h.bridge.askApproval("run docker ps", { remember: "docker ps" });
+  expect(offered).toMatchObject({ decision: "allow", always: true, approvalId: "a1", fromId: 9 });
+  const notOffered = await h.bridge.askApproval("run docker ps");
+  expect(notOffered).toMatchObject({ decision: "allow", always: false });
+  expect(seen).toEqual(["docker ps", undefined]);
+  const events = h.bridge.status().events.map((event) => event.text);
+  expect(events).toContain("allowed (always) in the topic by user 9");
+});
+
+test("applyPolicy: the bridge's effective values change at once, and the mode of the shell is not part of it", async () => {
+  const h = harness({ runTimeoutMs: 0 });
+  await h.bridge.enable();
+  const changes = h.calls.filter((c) => c === "change").length;
+  expect(h.bridge.runTimeoutMs).toBe(0);
+  h.bridge.applyPolicy({ permissionMode: "ask", approvalTimeoutMs: 120_000, runTimeoutMs: 600_000 });
+  expect(h.bridge.configuredPermissionMode).toBe("ask");
+  expect(h.bridge.approvalTimeoutMs).toBe(120_000);
+  expect(h.bridge.runTimeoutMs).toBe(600_000);
+  expect(h.calls.filter((c) => c === "change").length).toBe(changes + 1);
+  // Only the named keys move: a later patch leaves the others where the first put them.
+  h.bridge.applyPolicy({ approvalTimeoutMs: 300_000 });
+  expect(h.bridge.configuredPermissionMode).toBe("ask");
+  expect(h.bridge.runTimeoutMs).toBe(600_000);
+  expect(h.bridge.approvalTimeoutMs).toBe(300_000);
+});
+
+test("applyPolicy: a run limit set after enable() applies to the next Telegram turn", async () => {
+  const h = harness({ runTimeoutMs: 0 });
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ runTimeoutMs: 20 });
+  h.bridge.turnStarted(TG_SOURCE);
+  await new Promise((r) => setTimeout(r, 60));
+  expect(h.calls).toContain("cancel");
+});
+
+test("applyPolicy: no limit set after enable() means the next turn is never cancelled", async () => {
+  const h = harness({ runTimeoutMs: 20 });
+  await h.bridge.enable();
+  h.bridge.applyPolicy({ runTimeoutMs: 0 });
+  h.bridge.turnStarted(TG_SOURCE);
+  await new Promise((r) => setTimeout(r, 60));
+  expect(h.calls).not.toContain("cancel");
+});
+
+test("fail closed: only an explicit allow or always is a yes; anything else the client returns is a deny", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { askApproval?: (text: string, ms: number, opts: { remember?: string }) => Promise<unknown> };
+  for (const odd of [{ decision: "yes" }, { decision: undefined }, { decision: null }, { decision: 1 }, { decision: "ALLOW" }, {}, null, undefined, "allow", 7]) {
+    client.askApproval = async () => odd;
+    const got = await h.bridge.askApproval("run ls", { remember: "ls" });
+    expect(got.decision).toBe("deny");
+    expect(got.always).toBe(false);
+  }
+  client.askApproval = async () => ({ decision: "allow" });
+  expect((await h.bridge.askApproval("run ls")).decision).toBe("allow");
+  client.askApproval = async () => ({ decision: "always" });
+  expect(await h.bridge.askApproval("run ls", { remember: "ls" })).toMatchObject({ decision: "allow", always: true });
+  // "always" with no offer is still a yes for this call, and never a rule.
+  expect(await h.bridge.askApproval("run ls")).toMatchObject({ decision: "allow", always: false });
+});
+
+test("fail closed: a client without askApproval (legacy path) denies anything but an explicit allow", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const client = h.client() as unknown as { approvalAnswer: unknown };
+  for (const odd of ["yes", undefined, null, 1, "ALLOW", "", {}]) {
+    client.approvalAnswer = odd;
+    expect(await h.bridge.requestApproval("run ls")).toBe("deny");
+  }
+  client.approvalAnswer = "allow";
+  expect(await h.bridge.requestApproval("run ls")).toBe("allow");
+});
+
+test("mapApprovalAnswer keeps only well-formed ids and user ids", () => {
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: "a1", fromId: 9 }, false)).toEqual({ decision: "allow", always: false, approvalId: "a1", fromId: 9 });
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: "", fromId: "9" }, false)).toEqual({ decision: "allow", always: false });
+  expect(mapApprovalAnswer({ decision: "allow", approvalId: 5, fromId: 1.5 }, false)).toEqual({ decision: "allow", always: false });
+  expect(mapApprovalAnswer({ decision: "always", fromId: 9 }, false)).toEqual({ decision: "allow", always: false, fromId: 9 });
+  expect(mapApprovalAnswer({ decision: "deny", fromId: 9 }, true)).toEqual({ decision: "deny", always: false, fromId: 9 });
+});
+
+test("a cut approval prompt says so, and says how much was cut", () => {
+  const long = describeApprovalForTopic("shell_exec", JSON.stringify({ command: `echo ${"z".repeat(3000)}` }));
+  expect(long).toContain("[cut: only the first 1500 of 3005 characters are shown");
+  expect(long).toContain("…");
+  const short = describeApprovalForTopic("shell_exec", JSON.stringify({ command: "echo hi" }));
+  expect(short).not.toContain("[cut");
+  const composed = composeApprovalPrompt("y".repeat(10_000));
+  expect(composed.length).toBeLessThanOrEqual(3_000);
+  expect(composed).toContain("[cut: the rest of this prompt is in the shell]");
+  expect(composeApprovalPrompt("short")).toBe("short");
 });

@@ -455,6 +455,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "cli",
+    name: "permissions",
+    group: "Automation",
+    summary: "The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one.",
+  },
+  {
+    kind: "cli",
     name: "governance",
     group: "Automation",
     summary: "Read-only report over already-recorded spend, confirmations, signatures and gate outcomes.",
@@ -509,6 +515,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
   },
   {
     kind: "slash",
+    name: "/permissions",
+    group: "Automation",
+    summary: "The saved shell rules (what Always remembered): honoured or not, session grants — remove one.",
+  },
+  {
+    kind: "slash",
     name: "/external-diff",
     group: "Automation",
     summary: "External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard.",
@@ -555,6 +567,12 @@ export const HELP_GROUPS: readonly HelpEntry[] = [
     name: "/rendering",
     group: "Automation",
     summary: "How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto|rich|html|plain].",
+  },
+  {
+    kind: "slash",
+    name: "/remote-policy",
+    group: "Automation",
+    summary: "Telegram defaults for a turn started there: mode ask|trust, run limit, approval wait. Never changes the shell's /mode.",
   },
 
   // ---- External agents, ACP and MCP ----------------------------------------

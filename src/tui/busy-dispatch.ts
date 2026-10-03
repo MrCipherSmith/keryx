@@ -81,6 +81,11 @@ export type BusyDispatchTarget =
    */
   | "channels"
   /**
+   * `/remote-policy` (flow 396): the saved Telegram defaults. It edits a file and the bridge's own copy;
+   * it never touches the main turn or the shell's mode, so it works while a turn runs.
+   */
+  | "remote-policy"
+  /**
    * `/schedules` (flow 295): the Schedules list and detail modals. Opening them is
    * read-only; their actions (pause, resume, delete, run-now as a CHILD process)
    * never touch the main turn.
@@ -91,6 +96,11 @@ export type BusyDispatchTarget =
    * answer is one call, once, in the store; neither touches the main turn.
    */
   | "approvals"
+  /**
+   * `/permissions` (flow 396): the saved shell rules. Listing and removing one edit a file on disk and
+   * the shell's own rule set; neither touches the main turn.
+   */
+  | "permissions"
   /**
    * `/decisions` (flow 392): the recommendation journal's report. A read-only look at
    * a file on disk; it never touches the main turn.
@@ -141,8 +151,10 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/reviews") return "reviews";
   if (commandName === "/remote-control") return "remote-control";
   if (commandName === "/channels") return "channels";
+  if (commandName === "/remote-policy") return "remote-policy";
   if (commandName === "/schedules") return "schedules";
   if (commandName === "/approvals") return "approvals";
+  if (commandName === "/permissions") return "permissions";
   if (commandName === "/decisions") return "decisions";
   if (commandName === "/external-diff") return "external-diff";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;

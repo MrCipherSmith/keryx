@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { AgentIO } from "../commands/agent";
 import {
   createForegroundAgentIoFacade,
+  type TurnScopedIo,
   createForegroundForceHandoff,
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
@@ -252,4 +253,55 @@ test("foreground facade shares MCP grants but denies their use after losing owne
   owner.settle(operation);
   expect(facade.readOnly?.()).toBe(true);
   expect(facade.permissionMode?.()).toBe("ask");
+});
+
+test("flow 396: the hooks of a Telegram turn reach that turn's facade only, never the shell's own io or another turn", async () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const asked: string[] = [];
+  const auto: string[] = [];
+  // The shell's io is the typed-turn behaviour: ask in the dock, mode ask, MCP grants apply.
+  const io: AgentIO = {
+    write: () => {},
+    permissionMode: () => "ask",
+    mcpGrantsApply: () => true,
+    requestApproval: async (tool) => {
+      asked.push(`dock:${tool}`);
+      return false;
+    },
+    onAutoApproved: (tool) => auto.push(`typed:${tool}`),
+  };
+  const telegram: TurnScopedIo = {
+    permissionMode: () => "trust",
+    mcpGrantsApply: () => false,
+    requestApproval: async (tool) => {
+      asked.push(`topic:${tool}`);
+      return true;
+    },
+    onAutoApproved: (tool) => auto.push(`telegram:${tool}`),
+  };
+
+  const telegramTurn = createForegroundAgentIoFacade(owner, operation, io, telegram);
+  expect(telegramTurn.permissionMode?.()).toBe("trust");
+  expect(telegramTurn.mcpGrantsApply?.()).toBe(false);
+  expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(true);
+  telegramTurn.onAutoApproved?.("shell_exec", "{}", { destructive: false, credentials: false });
+
+  // The shell's io, and a facade made without the hooks, are untouched by the Telegram turn running beside them.
+  expect(io.permissionMode?.()).toBe("ask");
+  expect(io.mcpGrantsApply?.()).toBe(true);
+  expect(await io.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+  const typedTurn = createForegroundAgentIoFacade(owner, operation, io);
+  expect(typedTurn.permissionMode?.()).toBe("ask");
+  expect(typedTurn.mcpGrantsApply?.()).toBe(true);
+  expect(await typedTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
+  typedTurn.onAutoApproved?.("shell_exec", "{}", { destructive: false, credentials: false });
+
+  expect(asked).toEqual(["topic:shell_exec", "dock:shell_exec", "dock:shell_exec"]);
+  expect(auto).toEqual(["telegram:shell_exec", "typed:shell_exec"]);
+
+  // Losing ownership still wins over the hooks: a stale Telegram turn is a deny and mode ask.
+  owner.settle(operation);
+  expect(telegramTurn.permissionMode?.()).toBe("ask");
+  expect(await telegramTurn.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
 });

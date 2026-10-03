@@ -474,7 +474,7 @@ async function shellWithFakeServe(options: {
 }
 
 /** A question the shell is waiting on (its id is the fake serve's APPROVAL), and the frame that answers it. */
-async function askAndAnswer(client: RemoteClient, fake: FakeServe, decision: "allow" | "deny", updateId = 1): Promise<"allow" | "deny"> {
+async function askAndAnswer(client: RemoteClient, fake: FakeServe, decision: "allow" | "deny", updateId = 1): Promise<"allow" | "deny" | "always"> {
   const asked = client.requestApproval("Run it?", 10_000);
   await settle();
   fake.push(approvalFrame(APPROVAL, decision, updateId));

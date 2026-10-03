@@ -123,6 +123,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `keryx trigger` | Fire one declared project trigger (git hook, cron line, CI job) — one pass, one exit code. |
 | `keryx schedule` | Scheduled agent tasks in the background: create (with confirmation), list, pause, resume, remove; `add --digest` makes a GitHub and board digest that `keryx serve` sends to Telegram. |
 | `keryx approvals` | Pending remote approvals: list them, allow or deny one call, once (the local answer path of keryx serve). |
+| `keryx permissions` | The saved shell rules an Always answer leaves behind: list them (honoured or not, with the reason) and remove one. |
 | `keryx governance` | Read-only report over already-recorded spend, confirmations, signatures and gate outcomes. |
 | `keryx decisions` | Recommendation journal: record each agent question with options and its recommendation, the human's choice, and report how often they agree (a third are asked blind). |
 | `keryx product` | The product's intent as a derived index, and the intents closed in code that nobody looked back at. |
@@ -136,6 +137,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/schedule` | Schedule a background agent task — shows a confirmation card first (keryx schedule add). |
 | `/schedules` | Scheduled tasks: next run, last outcome, report — pause, resume, run now, delete. |
 | `/approvals` | Pending remote approvals with scope, consequence and expiry — allow or deny one call, once. |
+| `/permissions` | The saved shell rules (what Always remembered): honoured or not, session grants — remove one. |
 | `/external-diff` | External agent write runs awaiting review: patch and flagged paths — apply (typed hash prefix) or discard. |
 | `/governance` | Flows with their summary and stated effect — check an open one, complete it once the check passes and the PR is merged; the last report in its own tab, or run one in the background. |
 | `/decisions` | Recommendation journal report: match share by mode and stage, and the deviations with their reasons. |
@@ -144,6 +146,7 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/remote-control` | Drive this session from a Telegram topic: send lines, get replies, answer approvals. Off by default; [name\|off\|status]. |
 | `/channels` | Connect, test or disconnect Telegram for this machine: bot token, one-time code, group. [status]. |
 | `/rendering` | How Telegram replies are written: tables and lists as rich messages or HTML, with a fallback. [auto\|rich\|html\|plain]. |
+| `/remote-policy` | Telegram defaults for a turn started there: mode ask\|trust, run limit, approval wait. Never changes the shell's /mode. |
 
 ## External agents, ACP and MCP
 

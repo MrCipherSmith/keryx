@@ -201,6 +201,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 396: the saved defaults for a turn that came from Telegram (mode, run limit, approval wait).
+    // It never changes the shell's own mode; the full-screen shell also updates its running copy.
+    name: "/remote-policy",
+    description: "Telegram defaults: /remote-policy [mode ask|trust] [limit none|<minutes>] [wait <minutes>]. Never changes the shell's /mode",
+    modes: AGENT_ONLY,
+  },
+  {
     // Flow 362: TUI-only, same reasoning as /governance — the list modal needs
     // the OpenTUI surface. Reads the index; never rebuilds it.
     name: "/product",
@@ -248,6 +255,13 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // is one call, once; the local answer path of the serve approval broker.
     name: "/approvals",
     description: "Pending remote approvals: summary, scope, consequence, expiry — allow or deny one call, once",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Flow 396: the saved shell rules an Always answer leaves behind (also from Telegram). Listed and
+    // removed here; never from a chat.
+    name: "/permissions",
+    description: "The saved shell rules (what Always remembered): honoured or not, session grants; remove one",
     modes: AGENT_ONLY,
   },
   {

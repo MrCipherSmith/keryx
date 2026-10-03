@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-10-02T19:21:02.643Z - flow created
+- 2026-10-02T19:24:34.414Z - task-done: T2: Implement per plan
+- 2026-10-02T19:24:34.850Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-02T19:24:35.232Z - task-added: T5: Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)
+- 2026-10-02T19:24:35.650Z - task-added: T6: Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)
+- 2026-10-02T19:24:36.107Z - task-added: T7: Always button on the Telegram prompt with remember offer (AC9,AC10)
+- 2026-10-02T19:24:36.511Z - task-added: T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)
+- 2026-10-02T19:24:36.931Z - task-added: T9: keryx permissions list|remove and /permissions modal (AC11)
+- 2026-10-02T19:24:37.337Z - task-added: T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)
+- 2026-10-02T19:24:37.785Z - task-added: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)
+- 2026-10-02T19:24:38.221Z - task-added: T12: Docs (README + docs site pages) and version bump (AC16,AC17)
+- 2026-10-02T19:24:38.623Z - task-depends-set: T4: dependsOn T11, T12 (was empty) — review runs after implementation, tests and docs
+- 2026-10-02T19:30:44.780Z - frozen: 19 criteria; checksum recorded
+- 2026-10-02T19:30:45.235Z - started
+- 2026-10-02T19:30:48.524Z - task-done: T1: Collect remaining context
+- 2026-10-02T19:39:57.242Z - task-done: T5: Remote config: permissionMode, approvalTimeoutMs, runTimeoutMs 0=none; ApprovalDecision always; registration delivery (AC4,AC6,AC8,AC14)
+- 2026-10-02T19:46:54.737Z - task-done: T6: Effective Telegram mode (trust) and allowlist parity in the Telegram approver (AC1,AC2,AC3,AC5,AC15)
+- 2026-10-02T19:46:54.925Z - task-done: T7: Always button on the Telegram prompt with remember offer (AC9,AC10)
+- 2026-10-02T19:50:46.064Z - task-done: T8: /stop topic command, no-limit timer, fix /interrupt text (AC6,AC7)
+- 2026-10-02T20:03:35.526Z - task-done: T9: keryx permissions list|remove and /permissions modal (AC11)
+- 2026-10-02T20:19:50.776Z - task-done: T10: /remote-policy, /settings Telegram group, sidebar posture line, keryx serve status posture (AC12,AC13)
+- 2026-10-02T20:25:30.451Z - task-done: T11: Tests: floors parity table, fake-bot e2e for stop/always/expiry, compat of old configs (AC1-AC15)
+- 2026-10-02T20:31:14.458Z - task-done: T12: Docs (README + docs site pages) and version bump (AC16,AC17)
+- 2026-10-02T20:33:53.079Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-02T20:58:08.401Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/868 (base: main)

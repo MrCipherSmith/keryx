@@ -70,6 +70,16 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isAcCommand, isFlowsCommand, openFlows } from "./flow-inspector";
 import { isProductCommand, openProduct } from "./product-open-surface";
 import { isReviewsCommand, mountReviewsPanel, openReviews, type ReviewsPanelHandle } from "./reviews-inspector";
+import { permissionsSlashText } from "../commands/permissions-command";
+import {
+  loadPosture,
+  postureLines,
+  postureSidebarText,
+  REMOTE_POLICY_COMMAND,
+  remotePolicyText,
+  type RemotePolicyDeps,
+} from "../commands/remote-policy-command";
+import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
 import type { CommandOutcome } from "../remote/command-router";
@@ -300,10 +310,18 @@ import {
   parseShellExecCommand,
   shellPermissionsFingerprint,
   shellPermissionsPath,
-  loadShellPermissions,
   suggestShellPatterns,
 } from "../lib/shell-permissions";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import {
+  evaluateTelegramShellApproval,
+  formatModeInForce,
+  modeAutoApprovalAudit,
+  modeInForce,
+  type ModeInForce,
+  type RememberOffer,
+  savedRuleAutoApprovalAudit,
+} from "../remote/telegram-permission";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
 import {
@@ -319,6 +337,7 @@ import {
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
   forceForegroundQueueItem,
+  type TurnScopedIo,
 } from "./foreground-operation";
 import {
   compactSession,
@@ -3734,7 +3753,8 @@ export async function launchTuiAgentShell(opts: {
   // No-op unless the shell was launched inside a herdr pane.
   const herdr = createHerdrReporter();
   /** Session-scoped allow patterns (plus persisted permissions.json). */
-  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
+  // Empty on purpose: `evaluateShellApproval` loads the saved list on every call, and tracks what it loaded so a removal reaches this set.
+  const sessionShellAllow = new Set<string>();
   /** The stored-permission migration warning is shown at most once per session. */
   let permissionMigrationShown = false;
   /**
@@ -4404,6 +4424,11 @@ export async function launchTuiAgentShell(opts: {
       width: SIDEBAR_TEXT_WIDTH,
       getStatus: remoteStatus,
       onOpen: () => showRemoteControl(),
+      onOpenPermissions: () => showPermissions(),
+      getPosture: () => {
+        const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+        return posture === undefined ? undefined : postureSidebarText(posture);
+      },
     });
     // Flow 377: `Telegram: off | pairing | connected | serve down`; a click opens `/channels`.
     liveChannelsPanel = mountChannelsPanel(otui, r, sidebar, {
@@ -5667,20 +5692,67 @@ export async function launchTuiAgentShell(opts: {
     // answer feeds the same approval flow (the fingerprint is echoed back, so a mismatch
     // is still a denial). Anything but an explicit allow - a timeout, a dropped stream, no
     // client - is a denial. Turns typed here keep the local dock above, untouched.
-    io.requestApproval = async (tool, inputJson, meta) => {
+    //
+    // Flow 396: this is the hook of a Telegram TURN, handed to that turn alone through the foreground
+    // facade (`telegramTurnIo`). The shell's own `io.requestApproval` is the dock, so work that runs beside a
+    // Telegram turn and is not part of it is never judged or asked as if it were.
+    const requestApprovalForTelegramTurn: NonNullable<TuiAgentIo["requestApproval"]> = async (tool, inputJson, meta) => {
       const bridge = remoteBridge;
       if (bridge === undefined || !bridge.telegramTurnActive) {
         return requestApprovalLocally(tool, inputJson, meta);
       }
       const brief = tool.length > 60 ? `${tool.slice(0, 59)}…` : tool;
+      const approvedAnswer = (): true | { approved: true; fingerprint: string } =>
+        meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      // Flow 396: a shell command is judged by the same allowlist as in the dock (saved and session
+      // patterns, with every exclusion: destructive, credentials, SAC/flow confirm, publish lease,
+      // hook ask, untrusted content). A match runs without a prompt; otherwise the prompt may carry
+      // an "Always" button for the pattern the dock would offer.
+      let offer: RememberOffer | undefined;
+      if (tool === "shell_exec") {
+        const judged = evaluateTelegramShellApproval({
+          inputJson,
+          ...(meta !== undefined ? { meta } : {}),
+          sessionAllow: sessionShellAllow,
+          fingerprintAtStart: permissionsFingerprintAtStart,
+        });
+        if (!permissionTamperShown && judged.evaluation.tampered) {
+          permissionTamperShown = true;
+          io.onSystem?.("⚠ the saved shell permissions changed outside this approval UI — review them before trusting an auto-approve\n");
+        }
+        if (judged.autoApprove) {
+          const shown = judged.evaluation.command.length > 200 ? `${judged.evaluation.command.slice(0, 199)}…` : judged.evaluation.command;
+          io.onSystem?.(`✓ auto-approved shell (saved rule): ${shown}\n`);
+          bridge.recordApproval(savedRuleAutoApprovalAudit({ userId: bridge.telegramTurnUserId, command: judged.evaluation.command }));
+          return approvedAnswer();
+        }
+        offer = judged.offer;
+      }
       io.onSystem?.(`◇ approval for ${brief} sent to the Telegram topic; waiting for the answer there.\n`);
       setMainAgent("blocked", "approval (telegram)");
-      const decision = await bridge.requestApproval(describeApprovalForTopic(tool, inputJson, meta));
+      const answer = await bridge.askApproval(describeApprovalForTopic(tool, inputJson, meta), offer === undefined ? {} : { remember: offer.pattern });
+      const decision = answer.decision;
+      let rememberedNote = "";
+      if (decision === "allow" && answer.always && offer !== undefined) {
+        // The pattern is the one the shell classified from the command it showed, never text from the
+        // model or from the button, and it goes through the same store and validators as the dock.
+        const stored = allowShellPattern(offer.pattern);
+        if (stored.length > 0) {
+          sessionShellAllow.add(stored);
+          permissionsFingerprintAtStart = shellPermissionsFingerprint();
+        }
+        rememberedNote = stored.length > 0 ? ` and remembered “${stored}”` : ` once; “${offer.pattern}” cannot be remembered`;
+        bridge.recordApproval(stored.length > 0 ? `saved a rule: ${stored}` : "a rule was asked for and refused by the store");
+        await bridge.reportRemembered(answer.approvalId, stored.length > 0);
+      }
       setMainAgent("running", decision === "allow" ? "approved (telegram)" : "denied");
-      io.onSystem?.(decision === "allow" ? `◇ ${brief} approved in Telegram.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`);
+      io.onSystem?.(
+        decision === "allow" ? `◇ ${brief} approved in Telegram${rememberedNote}.\n` : `◇ ${brief} denied (Telegram answer, timeout or no connection).\n`,
+      );
       if (decision !== "allow") return false;
-      return meta?.fingerprint !== undefined ? { approved: true, fingerprint: meta.fingerprint } : true;
+      return approvedAnswer();
     };
+    io.requestApproval = requestApprovalLocally;
 
     /** Host for ask_user — Claude-style options docked above the composer. */
     const askUserInteractive = async (req: {
@@ -5812,7 +5884,23 @@ export async function launchTuiAgentShell(opts: {
     // ever reassigns the `let`, never re-derives this chain.
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
-    io.permissionMode = () => permissionMode;
+    // Flow 396: set when `/mode` commits a mode, typed here or sent from the topic. Until then a turn
+    // that came from Telegram starts under the saved Telegram default; afterwards the shell's mode
+    // wins for every turn. Neither the CLI flag nor a project default counts as a change.
+    let modeChangedThisSession = false;
+    const modeForTurn = (telegramTurn: boolean): ModeInForce =>
+      modeInForce({
+        shellMode: permissionMode,
+        changedThisSession: modeChangedThisSession,
+        telegramTurn,
+        telegramDefault: remoteBridge?.configuredPermissionMode ?? "ask",
+      });
+    // The mode a RUNNING turn is shown in (the sidebar row, `/settings`): that of the Telegram turn while one runs.
+    // It is a display. What a call is judged by is chosen per turn: `io` below is the typed-turn behaviour, and
+    // a turn that came from Telegram gets `telegramTurnIo` through the foreground facade, so work that is not
+    // part of that turn never inherits its trust (flow 396 finding 9).
+    const modeNow = (): ModeInForce => modeForTurn(remoteBridge?.telegramTurnActive === true);
+    io.permissionMode = () => modeForTurn(false).mode;
     io.trustedMcpTools = new Map<string, string>();
     // Read fresh on every call: a grant holds only while the tool's definition
     // in the live catalog still matches the fingerprint stored with it.
@@ -5825,17 +5913,20 @@ export async function launchTuiAgentShell(opts: {
     io.readOnly = () => readOnly;
     const paintModeRow = (): void => {
       const row = describeModeRow(permissionMode, readOnly);
+      // Flow 396: with remote control on, the row names the mode in force and where it comes from
+      // (`trust (Telegram default)`, `ask (shell /mode)`), because a Telegram turn and a typed one can differ.
+      const inForce = remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined;
       // Read-only is the state an operator must not forget they are in.
       // The row is also the sidebar's way into `/settings` (flow 374): clicking
       // it opens the modal, and the hint names the command while there is room.
       const hint = settingsSidebarHint(row.readOnly !== undefined);
       sbModeV.content =
         row.readOnly !== undefined
-          ? otui.t`${dimChunk(otui, `mode ${row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
-          : otui.t`${dimChunk(otui, `mode ${row.mode}${hint === undefined ? "" : ` ${hint}`}`)}`;
+          ? otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}`)} ${roleChunk(otui, "attention", row.readOnly)}`
+          : otui.t`${dimChunk(otui, `mode ${inForce ?? row.mode}${hint === undefined || inForce !== undefined ? "" : ` ${hint}`}`)}`;
     };
     paintModeRow();
-    io.onAutoApproved = (tool, input, meta) => {
+    const autoApprovedFor = (telegramTurn: boolean): NonNullable<TuiAgentIo["onAutoApproved"]> => (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
       // only the mode itself was chosen, once, so the transcript line is the
@@ -5848,16 +5939,33 @@ export async function launchTuiAgentShell(opts: {
             : tool;
       // `meta.credentials` never reaches here — resolveApprovalDecision's hard
       // floor means a credentials-touching call is never `auto`, in any mode.
+      const inForce = modeForTurn(telegramTurn);
       const label =
-        `◇ auto-approved (${permissionMode})` +
+        `◇ auto-approved (${inForce.mode})` +
         (meta.destructive ? " [destructive]" : "") +
         (meta.mcpTrusted === true ? ` ${TRUSTED_MARKER}` : "");
+      // Flow 396: a call that ran in a Telegram turn without a tap is also written to the remote
+      // panel's event list, with the Telegram user who sent the line (redacted and capped there).
+      if (telegramTurn && remoteBridge !== undefined) {
+        remoteBridge.recordApproval(modeAutoApprovalAudit({ mode: inForce.mode, userId: remoteBridge.telegramTurnUserId, preview }));
+      }
       transcript.add(
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
           content: otui.t`${roleChunk(otui, "attention", label)} ${dimChunk(otui, preview)}`,
         }),
       );
+    };
+    io.onAutoApproved = autoApprovedFor(false);
+    // Flow 396 (finding 9): what a turn that came from Telegram is judged and asked by. Passed to the
+    // foreground facade of THAT turn only, so it follows the turn and not a bridge-wide flag: a trust default
+    // for Telegram never reaches work that is not part of the turn, and an MCP grant made in the shell never
+    // lets an MCP `use_tool` skip the question there.
+    const telegramTurnIo: TurnScopedIo = {
+      requestApproval: requestApprovalForTelegramTurn,
+      permissionMode: () => modeForTurn(true).mode,
+      onAutoApproved: autoApprovedFor(true),
+      mcpGrantsApply: () => false,
     };
 
     // Definite assignment: every control-flow path calls `applyOpened` before
@@ -6624,6 +6732,54 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.("The product index could not be used. Run `keryx product index`.\n");
       });
     };
+    // Flow 396: `/permissions`. Bare: the modal. `list` and `remove <n|pattern>`: a line in the transcript.
+    // A removal also leaves this shell's session set and refreshes the tamper fingerprint, so the rule stops
+    // approving at once and the shell does not warn about a change it made itself.
+    const permissionsChanged = (): void => {
+      permissionsFingerprintAtStart = shellPermissionsFingerprint();
+    };
+    const showPermissions = (): void => {
+      openPermissions(otui, chrome, {
+        sessionAllow: sessionShellAllow,
+        onChanged: permissionsChanged,
+        onKeypress: (handler) => onKeypress(r, handler),
+        renderer: r,
+        inputBlocked: () => chrome.keyboardOwnedElsewhere(),
+      });
+    };
+    const runPermissionsCommand = (line: string): void => {
+      const rest = line.trim().slice(PERMISSIONS_COMMAND.length).trim();
+      if (rest.length === 0) {
+        showPermissions();
+        return;
+      }
+      io.onSystem?.(permissionsSlashText(rest, { sessionAllow: sessionShellAllow, onChanged: permissionsChanged }));
+    };
+    // Flow 396: `/remote-policy`. The saved Telegram defaults, and this shell's copy of them. It never
+    // touches `permissionMode` or `modeChangedThisSession`: `/mode` owns those.
+    const runningTelegramPolicy = (): NonNullable<ReturnType<NonNullable<RemotePolicyDeps["running"]>>> | undefined => {
+      const bridge = remoteBridge;
+      if (bridge === undefined || !bridge.active) return undefined;
+      return {
+        defaultMode: bridge.configuredPermissionMode,
+        runTimeoutMs: bridge.runTimeoutMs,
+        approvalTimeoutMs: bridge.approvalTimeoutMs,
+      };
+    };
+    const telegramModeInForce = (): string | undefined => (remoteBridge?.active === true ? formatModeInForce(modeNow()) : undefined);
+    const remotePolicyDeps = (): RemotePolicyDeps => ({
+      running: runningTelegramPolicy,
+      inForce: telegramModeInForce,
+      applyPolicy: (patch) => {
+        remoteBridge?.applyPolicy(patch);
+        paintModeRow();
+        liveRemotePanel?.refresh();
+      },
+    });
+    const telegramPosture = () => loadPosture({ running: runningTelegramPolicy, inForce: telegramModeInForce });
+    const runRemotePolicyCommand = (line: string): void => {
+      io.onSystem?.(remotePolicyText(line.trim().slice(REMOTE_POLICY_COMMAND.length), remotePolicyDeps()));
+    };
     const showReviews = (): void => {
       void openReviews(otui, chrome, { cwd: inspectorCwd(), renderer: r, ...inspectorKeys })
         .then(() => liveReviewsPanel?.refresh())
@@ -6652,6 +6808,10 @@ export async function launchTuiAgentShell(opts: {
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
         getStatus: remoteStatus,
+        getPostureLines: () => {
+          const posture = remoteBridge?.active === true ? telegramPosture() : undefined;
+          return posture === undefined ? undefined : postureLines(posture);
+        },
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
@@ -7088,6 +7248,7 @@ export async function launchTuiAgentShell(opts: {
     /** The change itself, after any confirmation: `/mode`'s dialog and `/settings`' second Enter both end here. */
     const commitPermissionMode = (next: PermissionMode): void => {
       permissionMode = next;
+      modeChangedThisSession = true;
       paintModeRow();
       chrome.showToast(`Permission mode: ${next}`);
     };
@@ -7291,6 +7452,11 @@ export async function launchTuiAgentShell(opts: {
           routing: routingEnabled,
           thinkDisplay: thinkDisplayMode,
           reasoningOverride,
+          ...(() => {
+            const running = runningTelegramPolicy();
+            const inForce = telegramModeInForce();
+            return running === undefined ? {} : { telegram: { ...running, ...(inForce !== undefined ? { inForce } : {}) } };
+          })(),
         }),
       );
     const runSettingsAction = (command: string): Promise<void> =>
@@ -7308,6 +7474,7 @@ export async function launchTuiAgentShell(opts: {
         reasoning: runReasoningCommand,
         think: runThinkCommand,
         theme: runThemeCommand,
+        remotePolicy: (arg) => remotePolicyText(arg, remotePolicyDeps()),
         onSystem: (text) => io.onSystem?.(text),
       });
     const showSettings = (): void => {
@@ -8022,6 +8189,14 @@ export async function launchTuiAgentShell(opts: {
             routeApprovalsCommand(line, true, approvals);
             return;
           }
+          case "permissions": {
+            runPermissionsCommand(line);
+            return;
+          }
+          case "remote-policy": {
+            runRemotePolicyCommand(line);
+            return;
+          }
           case "decisions": {
             routeDecisionsCommand(line, decisionsPanel);
             return;
@@ -8421,6 +8596,14 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (routeApprovalsCommand(line, false, approvals)) {
+          return;
+        }
+        if (command.name === PERMISSIONS_COMMAND) {
+          runPermissionsCommand(line);
+          return;
+        }
+        if (command.name === REMOTE_POLICY_COMMAND) {
+          runRemotePolicyCommand(line);
           return;
         }
         if (routeDecisionsCommand(line, decisionsPanel)) {
@@ -9083,6 +9266,8 @@ export async function launchTuiAgentShell(opts: {
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
       remoteQueue.turnStarted(source);
+      // The bridge says whether it took the line as a Telegram turn (it does not when remote control is off).
+      const telegramTurn = source === TG_SOURCE && remoteBridge?.telegramTurnActive === true;
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
       // PRIOR turn (abort/error path; the root cause is fixed in
       // `commands/agent.ts`) must never leak stale live-preview text or
@@ -9247,7 +9432,7 @@ export async function launchTuiAgentShell(opts: {
         guardCollector.reset(line);
         syncArchive();
         rewindRecorder.beginTurn({ archiveIndex: archive.length, prompt: line });
-        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
+        const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io, telegramTurn ? telegramTurnIo : {});
         // Captured now, while `operation` is still the active one — `.signal`
         // throws once `foregroundOperation.settle(operation)` below clears it,
         // and by the time the guard's own deferred continuation (further down)
@@ -9541,7 +9726,7 @@ export async function launchTuiAgentShell(opts: {
       });
       return (
         `${formatSessionInfoText(snapshot).trimEnd()}\n\n` +
-        `Mode: ${permissionMode}${readOnly ? " (read-only on)" : ""}\n` +
+        `Mode: ${formatModeInForce(modeForTurn(true))}${readOnly ? " (read-only on)" : ""}\n` +
         `Turn: ${chrome.isBusy() ? "running" : "idle"} · queue: ${mainQueue.length} waiting`
       );
     };
@@ -9558,11 +9743,16 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`${await remoteStatusText()}\n`);
         });
       }
-      if (name === "/mode" && (first === "" || first === "auto")) {
+      // `/mode` typed in the topic changes the SHELL's mode, exactly as typed in the shell (flow 396):
+      // there is no Telegram-only mode. A bare `/mode` shows the mode in force for turns from the
+      // topic and where it comes from. `ask` runs directly; `trust` and `auto` were confirmed with a
+      // button press before they got here, so the shell's own dialog is not asked again.
+      const modeWords = line.trim().split(/\s+/).slice(1).filter((word) => word.length > 0);
+      if (name === "/mode" && (first === "" || ((first === "ask" || first === "trust" || first === "auto") && modeWords.length === 1))) {
         echoRemoteCommand(line);
         return await captureShellOutput(() => {
-          if (first === "auto") commitPermissionMode("auto");
-          io.onSystem?.(`Permission mode: ${permissionMode} (ask, trust or auto)\n`);
+          if (first === "ask" || first === "trust" || first === "auto") commitPermissionMode(first);
+          io.onSystem?.(`Permission mode: ${formatModeInForce(modeForTurn(true))} (ask, trust or auto)\n`);
         });
       }
       return await captureShellOutput(() => runLine(line, "operator", TG_SOURCE));
@@ -9686,7 +9876,11 @@ export async function launchTuiAgentShell(opts: {
           // The switch happened when the live session is now the one asked for.
           return liveSession.summary.id === found.id ? { ...outcome, ok: true } : { ...outcome, ok: false };
         },
-        onChange: () => liveRemotePanel?.refresh(),
+        onChange: () => {
+          liveRemotePanel?.refresh();
+          // A Telegram turn starting or ending changes which mode is in force; the mode row follows.
+          paintModeRow();
+        },
       },
     });
 

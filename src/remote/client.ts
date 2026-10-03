@@ -36,7 +36,7 @@ import {
   type ApprovalAckBody,
   type ApprovalBody,
   type ApprovalDecision,
-  type ApprovalEvent,
+  type ApprovalResultBody,
   isApprovalId,
   type ChoiceEvent,
   type PromptBody,
@@ -109,8 +109,35 @@ export interface RemoteClientOptions {
   earlyDecisionMs?: number;
 }
 
+/** What came back for one approval (flow 396). `approvalId` is absent when nothing was ever asked. */
+export interface ApprovalAnswer {
+  decision: ApprovalDecision;
+  approvalId?: string;
+  /** The Telegram user who pressed the button; absent for a deny that was not a press (timeout, dropped stream). */
+  fromId?: number;
+}
+
+/**
+ * An approval event from the stream, read without trusting its shape (flow 396). It needs an id to
+ * mean anything; a decision that is not exactly `allow`, `always` or `deny` is a `deny`, never a yes.
+ * `fromId` is kept only when it is a whole number. Exported for the tests.
+ */
+export function readApprovalEvent(parsed: unknown): { approvalId: string; pressed: PressedApproval } | undefined {
+  if (parsed === null || typeof parsed !== "object") return undefined;
+  const o = parsed as { approvalId?: unknown; decision?: unknown; fromId?: unknown };
+  if (typeof o.approvalId !== "string" || o.approvalId.length === 0) return undefined;
+  const decision: ApprovalDecision = o.decision === "allow" || o.decision === "always" ? o.decision : "deny";
+  const fromId = typeof o.fromId === "number" && Number.isSafeInteger(o.fromId) ? o.fromId : undefined;
+  return { approvalId: o.approvalId, pressed: { decision, ...(fromId === undefined ? {} : { fromId }) } };
+}
+
+export interface PressedApproval {
+  decision: ApprovalDecision;
+  fromId?: number;
+}
+
 export type StartResult =
-  | { ok: true; name: string; threadId: number; runTimeoutMs: number }
+  | { ok: true; name: string; threadId: number; runTimeoutMs: number; permissionMode?: "ask" | "trust"; approvalTimeoutMs?: number }
   | { ok: false; code: string; message: string; retrying: boolean };
 
 class FatalClientError extends Error {
@@ -206,8 +233,8 @@ export class RemoteClient {
   /** The register request in flight, so `close` can wait for it and deregister what it created. */
   private registering: Promise<void> | undefined;
   private inboundChain: Promise<void> = Promise.resolve();
-  private readonly waiters = new Map<string, { resolve: (decision: ApprovalDecision) => void; timer: ReturnType<typeof setTimeout> }>();
-  private readonly earlyDecisions = new Map<string, { decision: ApprovalDecision; timer: ReturnType<typeof setTimeout> }>();
+  private readonly waiters = new Map<string, { resolve: (answer: PressedApproval) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly earlyDecisions = new Map<string, { pressed: PressedApproval; timer: ReturnType<typeof setTimeout> }>();
   /** `pending` is a parked decision whose question has not claimed it yet; its ack goes out when it settles. */
   private readonly seenApprovals = new Map<string, "applied" | "not-applied" | "pending">();
   private readonly earlyDecisionMs: number;
@@ -223,6 +250,13 @@ export class RemoteClient {
   threadId: number | undefined;
   /** How long a run started from Telegram may take; learned at registration. */
   runTimeoutMs: number | undefined;
+  /**
+   * What serve says a Telegram-started turn starts under, and how long an approval waits (flow 396).
+   * Undefined when the serve that answered is older than this client: the shell then keeps today's
+   * behaviour (`ask`, 5 minutes) rather than guess.
+   */
+  permissionMode: "ask" | "trust" | undefined;
+  approvalTimeoutMs: number | undefined;
   /** When serve last answered a heartbeat (or the stream last said ready), epoch ms. For the shell's status display. */
   lastHeartbeatAt: number | undefined;
 
@@ -343,38 +377,81 @@ export class RemoteClient {
    * stream, an error.
    */
   async requestApproval(prompt: string, timeoutMs: number): Promise<ApprovalDecision> {
-    if (!this.connected) {
-      return "deny";
+    return (await this.askApproval(prompt, timeoutMs)).decision;
+  }
+
+  /**
+   * Like {@link requestApproval}, and it can offer "Always: <remember>" (flow 396). The answer names the
+   * approval and the Telegram user who pressed, so the shell can audit it and report what became of an
+   * "Always" press with {@link reportApprovalResult}. Same fail-closed rule: no press is a deny.
+   */
+  async askApproval(prompt: string, timeoutMs: number, options: { remember?: string; signal?: AbortSignal } = {}): Promise<ApprovalAnswer> {
+    if (!this.connected || options.signal?.aborted === true) {
+      return { decision: "deny" };
     }
-    const body: ApprovalBody = { sessionId: this.options.sessionId, prompt, timeoutMs };
+    const body: ApprovalBody = {
+      sessionId: this.options.sessionId,
+      prompt,
+      timeoutMs,
+      ...(options.remember === undefined ? {} : { remember: options.remember }),
+    };
     let approvalId: string;
     try {
       const response = await this.post("approval", body);
       if (!response.ok) {
-        return "deny";
+        return { decision: "deny" };
       }
-      approvalId = ((await response.json()) as ApprovalResponse).approvalId;
+      const id = ((await response.json()) as Partial<ApprovalResponse> | null)?.approvalId;
+      if (typeof id !== "string" || id.length === 0) {
+        return { decision: "deny" };
+      }
+      approvalId = id;
     } catch {
-      return "deny";
+      return { decision: "deny" };
     }
     const early = this.earlyDecisions.get(approvalId);
     if (early !== undefined) {
       // The frame beat this response: now it reaches a live question, so it is applied, and only now.
       clearTimeout(early.timer);
       this.earlyDecisions.delete(approvalId);
-      this.settleApproval(approvalId, early.decision, true);
-      return early.decision;
+      this.settleApproval(approvalId, early.pressed.decision, true);
+      return { ...early.pressed, approvalId };
     }
     if (!this.connected) {
-      return "deny";
+      return { decision: "deny" };
     }
-    return new Promise<ApprovalDecision>((resolve) => {
-      const timer = setTimeout(() => {
+    return new Promise<ApprovalAnswer>((resolve) => {
+      const signal = options.signal;
+      const onAbort = (): void => {
+        // The turn was stopped (flow 396 `/stop`): the question is moot, so it is a deny and a late press finds nothing.
+        const waiter = this.waiters.get(approvalId);
+        if (waiter !== undefined) clearTimeout(waiter.timer);
         this.waiters.delete(approvalId);
-        resolve("deny");
+        resolve({ decision: "deny", approvalId });
+      };
+      const timer = setTimeout(() => {
+        signal?.removeEventListener("abort", onAbort);
+        this.waiters.delete(approvalId);
+        resolve({ decision: "deny" });
       }, timeoutMs);
-      this.waiters.set(approvalId, { resolve, timer });
+      this.waiters.set(approvalId, {
+        resolve: (pressed) => {
+          signal?.removeEventListener("abort", onAbort);
+          resolve({ ...pressed, approvalId });
+        },
+        timer,
+      });
+      signal?.addEventListener("abort", onAbort, { once: true });
     });
+  }
+
+  /** Tell the topic whether an "Always" press became a saved rule. Best effort: the approval itself already counted. */
+  async reportApprovalResult(approvalId: string, remembered: boolean): Promise<void> {
+    try {
+      await this.post("approval-result", { sessionId: this.options.sessionId, approvalId, remembered });
+    } catch {
+      // The message keeps saying "Saving the rule"; nothing else depends on this.
+    }
   }
 
   /**
@@ -462,7 +539,7 @@ export class RemoteClient {
    * (another program on a freed port, or a serve too old to prove itself) gets nothing
    * acted on. Throws `TransientClientError` on a missing or wrong proof (F-002).
    */
-  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | ApprovalAckBody | { sessionId: string }): Promise<Response> {
+  private async post(route: RemoteRoute, body: RegisterBody | ReplyBody | ApprovalBody | PromptBody | StateBody | AckBody | ApprovalAckBody | ApprovalResultBody | { sessionId: string }): Promise<Response> {
     const { url, token } = this.target(route);
     const { nonce, bearer } = shellRequestCredential(token);
     const response = await this.fetchImpl(url, {
@@ -588,7 +665,14 @@ export class RemoteClient {
               this.lastHeartbeatAt = Date.now();
               this.options.onStatus?.({ state: "connected" });
               if (this.name !== undefined && this.threadId !== undefined && this.runTimeoutMs !== undefined) {
-                this.settleFirst({ ok: true, name: this.name, threadId: this.threadId, runTimeoutMs: this.runTimeoutMs });
+                this.settleFirst({
+                  ok: true,
+                  name: this.name,
+                  threadId: this.threadId,
+                  runTimeoutMs: this.runTimeoutMs,
+                  ...(this.permissionMode === undefined ? {} : { permissionMode: this.permissionMode }),
+                  ...(this.approvalTimeoutMs === undefined ? {} : { approvalTimeoutMs: this.approvalTimeoutMs }),
+                });
               }
             } else if (status.kind === "superseded") {
               // Another connection for this session id took over; fighting it would loop forever.
@@ -628,6 +712,8 @@ export class RemoteClient {
       this.name = result.name;
       this.threadId = result.threadId;
       this.runTimeoutMs = result.runTimeoutMs;
+      this.permissionMode = result.permissionMode;
+      this.approvalTimeoutMs = result.approvalTimeoutMs;
       return;
     }
     const error = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
@@ -655,7 +741,7 @@ export class RemoteClient {
       // callbacks are handled at once, below.
       this.inboundChain = this.inboundChain.then(() => this.handleInbound(inbound)).catch(() => undefined);
     } else if (event === "approval") {
-      this.handleApprovalFrame(parsed as ApprovalEvent);
+      this.handleApprovalFrame(parsed);
     } else if (event === "choice") {
       const choice = parsed as ChoiceEvent;
       this.resolveChoice(choice.promptId, choice.index);
@@ -715,12 +801,12 @@ export class RemoteClient {
    * question already given up on). A repeat for an id already settled is acknowledged again with the
    * same outcome (the first ack may have been lost) but is not said or resolved twice.
    */
-  private handleApprovalFrame(approval: ApprovalEvent): void {
-    const approvalId = approval?.approvalId;
-    if (!isApprovalId(approvalId) || (approval.decision !== "allow" && approval.decision !== "deny")) {
+  private handleApprovalFrame(parsed: unknown): void {
+    const read = readApprovalEvent(parsed);
+    if (read === undefined || !isApprovalId(read.approvalId)) {
       return;
     }
-    const decision = approval.decision;
+    const { approvalId, pressed } = read;
     const seen = this.seenApprovals.get(approvalId);
     if (seen === "pending") {
       // Parked and waiting: its own ack goes out when it settles.
@@ -732,11 +818,11 @@ export class RemoteClient {
       return;
     }
     if (this.waiters.has(approvalId)) {
-      this.settleApproval(approvalId, decision, true, () => this.resolveApproval(approvalId, decision));
+      this.settleApproval(approvalId, pressed.decision, true, () => this.resolveApproval(approvalId, pressed));
       return;
     }
     this.rememberSeen(approvalId, "pending");
-    this.parkEarlyDecision(approvalId, decision);
+    this.parkEarlyDecision(approvalId, pressed);
   }
 
   private rememberSeen(approvalId: string, outcome: "applied" | "not-applied" | "pending"): void {
@@ -777,7 +863,7 @@ export class RemoteClient {
   }
 
   /** Park a decision no question has claimed yet, for a short bounded time. */
-  private parkEarlyDecision(approvalId: string, decision: ApprovalDecision): void {
+  private parkEarlyDecision(approvalId: string, pressed: PressedApproval): void {
     while (this.earlyDecisions.size >= MAX_EARLY_DECISIONS) {
       const oldest = this.earlyDecisions.keys().next().value;
       if (oldest === undefined) {
@@ -787,7 +873,7 @@ export class RemoteClient {
     }
     const timer = setTimeout(() => this.dropEarlyDecision(approvalId), this.earlyDecisionMs);
     (timer as { unref?: () => void }).unref?.();
-    this.earlyDecisions.set(approvalId, { decision, timer });
+    this.earlyDecisions.set(approvalId, { pressed, timer });
   }
 
   /** Nobody claimed it: it was for a question that is gone, so it is acked as not applied. */
@@ -799,7 +885,7 @@ export class RemoteClient {
     clearTimeout(early.timer);
     this.earlyDecisions.delete(approvalId);
     if (!this.stopped) {
-      this.settleApproval(approvalId, early.decision, false);
+      this.settleApproval(approvalId, early.pressed.decision, false);
     }
   }
 
@@ -845,7 +931,7 @@ export class RemoteClient {
     return timer;
   }
 
-  private resolveApproval(approvalId: string, decision: ApprovalDecision): void {
+  private resolveApproval(approvalId: string, decision: PressedApproval): void {
     const waiter = this.waiters.get(approvalId);
     if (waiter === undefined) {
       return;
@@ -886,7 +972,7 @@ export class RemoteClient {
     for (const [id, waiter] of [...this.waiters.entries()]) {
       clearTimeout(waiter.timer);
       this.waiters.delete(id);
-      waiter.resolve("deny");
+      waiter.resolve({ decision: "deny" });
     }
     for (const id of [...this.earlyDecisions.keys()]) {
       // Nobody is coming for these: each is acked as not applied (and said so), unless the shell is gone.

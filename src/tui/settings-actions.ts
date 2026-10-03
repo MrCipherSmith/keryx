@@ -19,6 +19,8 @@ export interface SettingsActionHandlers {
   reasoning: (arg: string) => void;
   think: (arg: string) => void;
   theme: (arg: string) => void;
+  /** `/remote-policy <args>` (flow 396): the saved Telegram defaults; the text it returns is shown. */
+  remotePolicy?: (arg: string) => string;
   onSystem: (text: string) => void;
 }
 
@@ -70,6 +72,9 @@ export async function runSettingsCommand(command: string, handlers: SettingsActi
         return;
       case "/theme":
         handlers.theme(arg);
+        return;
+      case "/remote-policy":
+        if (handlers.remotePolicy !== undefined) handlers.onSystem(handlers.remotePolicy(arg));
         return;
     }
   } catch (error) {

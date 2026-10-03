@@ -10,10 +10,11 @@
 import { REASONING_EFFORT_LEVELS, type ReasoningEffortLevel, type ReasoningEffortSource } from "../commands/agent";
 import { PERMISSION_MODES, type PermissionMode } from "../commands/permission-mode";
 import { RENDER_MODES, type RenderMode } from "../remote/rendering-mode";
+import { formatPolicyDuration, type PolicyPosture } from "../commands/remote-policy-command";
 import { THINK_DISPLAY_MODES, type ThinkDisplayMode } from "./reasoning-display";
 import { THEME_IDS, type ThemeId } from "./theme";
 
-export const SETTING_GROUPS = ["Safety", "Routing", "Display", "External"] as const;
+export const SETTING_GROUPS = ["Safety", "Routing", "Display", "External", "Telegram"] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number];
 
 /**
@@ -69,6 +70,11 @@ export interface SettingsSnapshot {
   externalAgents: { on: boolean; reason?: string };
   /** How Telegram replies are written (flow 395). `saveable`: a remote config exists to hold a change. */
   rendering: { mode: RenderMode; saveable: boolean };
+  /**
+   * Flow 396: the Telegram permission posture. Absent: the group is not drawn. Present without
+   * `posture`: Telegram is not connected, and the rows say so instead of offering buttons.
+   */
+  telegram?: { posture?: PolicyPosture };
 }
 
 const onOff = (value: boolean): string => (value ? "on" : "off");
@@ -112,6 +118,79 @@ const EXTERNAL_PRIVACY_DETAIL: Record<SettingsSnapshot["externalPrivacy"]["sourc
   user: undefined,
   default: "default",
 };
+
+/** Choices offered as buttons; the typed command takes any whole number of minutes. */
+const LIMIT_CHOICES_MIN = [30, 60] as const;
+const WAIT_CHOICES_MIN = [5, 15, 30] as const;
+
+function telegramRows(state: SettingsSnapshot): SettingRow[] {
+  if (state.telegram === undefined) return [];
+  const posture = state.telegram.posture;
+  const notConnected = "not connected (/channels)";
+  const modeDetail =
+    posture === undefined
+      ? "connect Telegram first"
+      : `${posture.inForce !== undefined ? `in force: ${posture.inForce}; ` : ""}a /mode in the shell wins once used`;
+  const minutes = (ms: number): number => Math.round(ms / 60_000);
+  return [
+    {
+      id: "tg-mode",
+      group: "Telegram",
+      label: "Telegram mode",
+      value: posture?.defaultMode ?? notConnected,
+      scope: "saved",
+      detail: modeDetail,
+      command: "/remote-policy",
+      usage: "/remote-policy mode ask|trust",
+      actions:
+        posture === undefined
+          ? []
+          : (["ask", "trust"] as const).map((mode) => action(mode, `/remote-policy mode ${mode}`, mode === posture.defaultMode)),
+    },
+    {
+      id: "tg-limit",
+      group: "Telegram",
+      label: "Telegram run limit",
+      value: posture === undefined ? notConnected : formatPolicyDuration(posture.runTimeoutMs),
+      scope: "saved",
+      detail: "/stop in the topic always ends a run",
+      command: "/remote-policy",
+      usage: "/remote-policy limit none|<minutes>",
+      actions:
+        posture === undefined
+          ? []
+          : [
+              action("None", "/remote-policy limit none", posture.runTimeoutMs === 0),
+              ...LIMIT_CHOICES_MIN.map((m) => action(`${m} min`, `/remote-policy limit ${m}`, minutes(posture.runTimeoutMs) === m && posture.runTimeoutMs > 0)),
+            ],
+    },
+    {
+      id: "tg-wait",
+      group: "Telegram",
+      label: "Telegram approval wait",
+      value: posture === undefined ? notConnected : formatPolicyDuration(posture.approvalTimeoutMs),
+      scope: "saved",
+      detail: "a prompt nobody answers in this time is denied",
+      command: "/remote-policy",
+      usage: "/remote-policy wait <minutes>",
+      actions:
+        posture === undefined
+          ? []
+          : WAIT_CHOICES_MIN.map((m) => action(`${m} min`, `/remote-policy wait ${m}`, posture.approvalTimeoutMs === m * 60_000)),
+    },
+    {
+      id: "tg-rules",
+      group: "Telegram",
+      label: "Saved shell rules",
+      value: posture === undefined ? "none" : String(posture.savedRules),
+      scope: "saved",
+      detail: "what Always remembered, from the shell or Telegram",
+      command: "/permissions",
+      usage: "/permissions [list | remove <number | pattern>]",
+      actions: [],
+    },
+  ];
+}
 
 export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
   const reasoning = reasoningScope(state.reasoning);
@@ -249,6 +328,7 @@ export function buildSettingsRows(state: SettingsSnapshot): SettingRow[] {
       usage: "/jevprofile",
       actions: [],
     },
+    ...telegramRows(state),
   ];
 }
 

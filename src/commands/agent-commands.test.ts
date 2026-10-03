@@ -47,6 +47,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/remote-control",
     "/channels",
     "/rendering",
+    "/remote-policy",
     "/product",
     "/governance",
     "/triggers",
@@ -54,6 +55,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/permissions",
     "/decisions",
     "/integrate",
     "/ci",
@@ -180,6 +182,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/remote-control",
     "/channels",
     "/rendering",
+    "/remote-policy",
     "/product",
     "/governance",
     "/triggers",
@@ -187,6 +190,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/permissions",
     "/decisions",
     "/integrate",
     "/ci",
@@ -336,6 +340,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/remote-control",
     "/channels",
     "/rendering",
+    "/remote-policy",
     "/product",
     "/governance",
     "/triggers",
@@ -343,6 +348,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/schedule",
     "/schedules",
     "/approvals",
+    "/permissions",
     "/decisions",
     "/integrate",
     "/ci",
@@ -419,7 +425,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
-  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/remote-control", "/rendering", "/rewind", "/reasoning"]);
+  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reviews", "/remote-control", "/rendering", "/remote-policy", "/rewind", "/reasoning"]);
   // `/integrate` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix
@@ -453,7 +459,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
   expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/plan"]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/product", "/permissions", "/plan"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",

@@ -33,6 +33,8 @@ import {
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalEvent,
+  type ApprovalResultBody,
+  MAX_REMEMBER_PATTERN_CHARS,
   type CallbackEvent,
   type ChoiceEvent,
   choiceCallbackData,
@@ -241,6 +243,8 @@ interface PendingApproval {
   messageId?: number;
   /** The plain text of that message, so the final state keeps what was asked. */
   text?: string;
+  /** The pattern an "Always" press would remember (flow 396), as shown in the topic. Absent: no Always button. */
+  remember?: string;
 }
 
 /**
@@ -257,6 +261,10 @@ interface AwaitingApproval {
   timer: unknown;
   messageId?: number;
   text?: string;
+  /** The pattern an "Always" press would remember (flow 396); absent for allow and deny. */
+  remember?: string;
+  /** The shell's `approval-result` when it beat the ack here: applied as soon as the ack settles the message. */
+  reported?: boolean;
 }
 
 /** A picker or a Yes/No waiting for a press (flow 387). */
@@ -273,6 +281,11 @@ interface FinishedPrompt {
   messageId?: number;
   finalText: string;
   shortReply: string;
+  /**
+   * Set when the approval was answered with "Always" (flow 396): the shell reports whether the rule was
+   * stored (`approval-result`), once, and the message is edited to say which.
+   */
+  rememberOf?: { original: string | undefined; who: string; when: string; pattern: string } | undefined;
 }
 
 const MAX_FINISHED_PROMPTS = 128;
@@ -408,6 +421,8 @@ export class RemoteHttpSurface {
         return this.reply(hub, request);
       case "approval":
         return this.requestApproval(hub, request);
+      case "approval-result":
+        return this.approvalResult(hub, request);
       case "prompt":
         return this.requestPrompt(hub, request);
       case "state":
@@ -484,7 +499,15 @@ export class RemoteHttpSurface {
         this.sent.delete(checked.sessionId);
         this.bound.set(checked.sessionId, binding);
       }
-      return ok({ name: result.name, threadId: result.threadId, reused: result.reused, runTimeoutMs: hub.limits().runTimeoutMs });
+      const limits = hub.limits();
+      return ok({
+        name: result.name,
+        threadId: result.threadId,
+        reused: result.reused,
+        runTimeoutMs: limits.runTimeoutMs,
+        permissionMode: limits.permissionMode,
+        approvalTimeoutMs: limits.approvalTimeoutMs,
+      });
     }
     const status = result.code === "name-taken" ? 409 : result.code === "invalid-name" ? 400 : 502;
     return fail(status, result.code, result.message);
@@ -619,6 +642,13 @@ export class RemoteHttpSurface {
     if (typeof timeoutMs !== "number" || !Number.isSafeInteger(timeoutMs) || timeoutMs < MIN_APPROVAL_TIMEOUT_MS || timeoutMs > MAX_APPROVAL_TIMEOUT_MS) {
       return invalid(`timeoutMs must be an integer from ${MIN_APPROVAL_TIMEOUT_MS} to ${MAX_APPROVAL_TIMEOUT_MS}.`);
     }
+    let remember: string | undefined;
+    if (value.remember !== undefined) {
+      if (typeof value.remember !== "string" || value.remember.length === 0 || value.remember.length > MAX_REMEMBER_PATTERN_CHARS || CONTROL_CHARS.test(value.remember)) {
+        return invalid(`remember must be a string of 1 to ${MAX_REMEMBER_PATTERN_CHARS} characters without control characters.`);
+      }
+      remember = redactSensitiveText(value.remember);
+    }
     const sessionId = value.sessionId;
     if (!hub.hasSession(sessionId)) {
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
@@ -645,14 +675,17 @@ export class RemoteHttpSurface {
       sessionId,
       expiresAt,
       timer: this.timers.setTimeout(() => this.expireApproval(approvalId), timeoutMs),
+      ...(remember === undefined ? {} : { remember }),
     });
     // The operator approves what is shown, so the prompt goes out as a code block: nothing in it is read as markup.
-    const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}`, {
+    const offer = remember === undefined ? "" : `\nAlways would remember:\n${asCodeBlock(remember)}`;
+    const sent = await hub.send(sessionId, `Approval needed:\n${asCodeBlock(redactSensitiveText(value.prompt))}${offer}`, {
       keyboard: [
         [
           { text: "Allow", callback_data: approvalCallbackData(approvalId, "allow") },
           { text: "Deny", callback_data: approvalCallbackData(approvalId, "deny") },
         ],
+        ...(remember === undefined ? [] : [[{ text: alwaysButtonText(remember), callback_data: approvalCallbackData(approvalId, "always") }]]),
       ],
       onSent: (info) => this.onApprovalSent(approvalId, sessionId, info.messageId, info.text),
     });
@@ -661,6 +694,54 @@ export class RemoteHttpSurface {
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
     return ok({ approvalId, expiresAt });
+  }
+
+  /**
+   * The shell's report of what became of an "Always" press (flow 396). It counts once, for the session
+   * whose approval it was, and only for an approval that was answered with "Always": the message is
+   * edited to say whether the rule was remembered. Anything else changes nothing.
+   */
+  private async approvalResult(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return body.response;
+    }
+    const value = body.value as Partial<ApprovalResultBody> & Record<string, unknown>;
+    if (!isSessionId(value.sessionId)) {
+      return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+    }
+    if (!isApprovalId(value.approvalId) || typeof value.remembered !== "boolean") {
+      return invalid("approvalId must be an approval id and remembered a boolean.");
+    }
+    const waiting = this.awaiting.get(value.approvalId);
+    if (waiting !== undefined && waiting.sessionId === value.sessionId && waiting.remember !== undefined) {
+      // The report beat the shell's ack here: keep it, and apply it when the ack settles the message.
+      waiting.reported ??= value.remembered;
+      return ok({ settled: true });
+    }
+    const done = this.finished.get(value.approvalId);
+    if (done === undefined || done.sessionId !== value.sessionId || done.rememberOf === undefined) {
+      return fail(404, "unknown-approval", "No approval of this session is waiting for that report.");
+    }
+    this.settleRemembered(hub, value.sessionId, done, value.remembered);
+    return ok({ settled: true });
+  }
+
+  /** Edit a finished "Always" approval to say whether its rule was stored. Counts once. */
+  private settleRemembered(hub: RemoteHub, sessionId: string, done: FinishedPrompt, remembered: boolean): void {
+    const info = done.rememberOf;
+    if (info === undefined) {
+      return;
+    }
+    done.rememberOf = undefined;
+    const result = remembered
+      ? `Allowed by ${info.who} at ${info.when}. Remembered: ${info.pattern}`
+      : `Allowed by ${info.who} at ${info.when}. Not remembered: ${info.pattern} (approved this once).`;
+    done.shortReply = remembered ? "Approval granted and remembered." : "Approval granted once; the rule was not remembered.";
+    done.finalText = done.messageId === undefined ? result : settledText(info.original, result);
+    if (done.messageId !== undefined) {
+      void hub.settleMessage(sessionId, done.messageId, done.finalText, done.shortReply).catch(() => undefined);
+    }
   }
 
   /**
@@ -828,9 +909,24 @@ export class RemoteHttpSurface {
       if (value.applied === false) {
         // The shell got the frame but no live question took it: say so, never "Allowed".
         this.finishApproval(id, sessionId, waiting.messageId, waiting.text, {
-          result: `Not applied at ${waiting.sentAt}: the shell was no longer waiting for this question, so the ${waiting.decision === "allow" ? "Allow" : "Deny"} from ${waiting.who} changed nothing.`,
+          result: `Not applied at ${waiting.sentAt}: the shell was no longer waiting for this question, so the ${waiting.decision === "deny" ? "Deny" : "Allow"} from ${waiting.who} changed nothing.`,
           shortReply: "Not applied: the shell was no longer waiting for this question.",
         });
+        return ok({ acknowledged: true });
+      }
+      if (waiting.decision === "always" && waiting.remember !== undefined) {
+        // Applied now; whether the rule was stored is the shell's to report (`approval-result`), once.
+        this.finishApproval(id, sessionId, waiting.messageId, waiting.text, {
+          result: `Allowed by ${waiting.who} at ${waiting.sentAt}. Saving the rule: ${waiting.remember}`,
+          shortReply: "Approval granted; saving the rule.",
+        });
+        const done = this.finished.get(id);
+        if (done !== undefined) {
+          done.rememberOf = { original: waiting.text, who: waiting.who, when: waiting.sentAt, pattern: waiting.remember };
+          if (waiting.reported !== undefined) {
+            this.settleRemembered(hub, sessionId, done, waiting.reported);
+          }
+        }
         return ok({ acknowledged: true });
       }
       // `applied` true, or absent: an older shell, whose ack only ever meant "received".
@@ -1019,8 +1115,12 @@ export class RemoteHttpSurface {
       return;
     }
     if (entry !== undefined && entry.expiresAt > this.now()) {
+      if (approval.decision === "always" && entry.remember === undefined) {
+        // No "Always" was ever offered for this approval: nothing to remember and nothing approved.
+        return;
+      }
       this.dropApproval(id);
-      const event: ApprovalEvent = { updateId: callback.updateId, approvalId: id, decision: approval.decision };
+      const event: ApprovalEvent = { updateId: callback.updateId, approvalId: id, decision: approval.decision, fromId: callback.fromId };
       // Say "allowed" only if the shell was actually told: a decision that went nowhere is not one.
       const told = stream?.write(encodeSseEvent("approval", event, callback.updateId)) === true;
       const messageId = entry.messageId ?? callback.messageId;
@@ -1041,6 +1141,7 @@ export class RemoteHttpSurface {
         sentAt: when,
         ...(messageId === undefined ? {} : { messageId }),
         ...(entry.text === undefined ? {} : { text: entry.text }),
+        ...(approval.decision === "always" && entry.remember !== undefined ? { remember: entry.remember } : {}),
         timer: this.timers.setTimeout(() => this.giveUpOnAck(id), this.approvalAckMs),
       });
       return;
@@ -1329,6 +1430,12 @@ export class RemoteHttpSurface {
       this.hub?.endActivity(stream.sessionId);
     }
   }
+}
+
+/** The button for an "Always" offer: the pattern, cut to Telegram's button length. */
+export function alwaysButtonText(pattern: string): string {
+  const text = `Always: ${pattern.replace(/\s+/g, " ")}`;
+  return text.length <= MAX_BUTTON_TEXT_CHARS ? text : `${text.slice(0, MAX_BUTTON_TEXT_CHARS - 1)}…`;
 }
 
 /** The longest backtick run left in a code block: the fence is one longer, and stays under the renderer's fence limit. */

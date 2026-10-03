@@ -106,6 +106,8 @@ import { launchTuiChatShell } from "../tui/chat-shell";
 import { findFlowItem, formatFlowDetailText, formatFlowListText, isFlowsCommand } from "../tui/flow-inspector";
 import { loadInspectorFlows, loadInspectorWorkspaces } from "../tui/inspector-sources";
 import { approvalsSlashText } from "./approvals";
+import { permissionsSlashText } from "./permissions-command";
+import { remotePolicyText } from "./remote-policy-command";
 import { defaultExternalDiffDeps, externalDiffSlashText } from "../tui/external-diff-modal";
 import { buildDoctorReport, formatDoctorReport } from "./doctor";
 import { renderSetupSlash } from "./setup-guide";
@@ -122,7 +124,7 @@ import {
 import { loadSessionLimits } from "./model-limits";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
-import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
+import { parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
 import { getProjectPermissionMode, setProjectPermissionMode } from "../lib/permission-mode-config";
@@ -264,6 +266,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/status",
   "/flows",
   "/approvals",
+  "/permissions",
   "/external-diff",
   "/doctor",
   "/setup",
@@ -271,6 +274,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/remote-control",
   "/channels",
   "/rendering",
+  "/remote-policy",
   "/theme",
   "/settings",
   "/mode",
@@ -1771,7 +1775,8 @@ export async function runAgentRepl(
   // see `rememberExactShellGrant`'s own doc comment) so a hermetic test can
   // prove what gets persisted without touching the operator's real
   // `~/.local/share/keryx/permissions.json`.
-  const sessionShellAllow = new Set<string>(loadShellPermissions(configDir).allow);
+  // Empty on purpose: `evaluateShellApproval` loads the saved list on every call and tracks it, so a removal reaches this set.
+  const sessionShellAllow = new Set<string>();
   let fingerprintAtStart = shellPermissionsFingerprint(configDir);
   let permissionMigrationShown = false;
   let permissionTamperShown = false;
@@ -2693,6 +2698,9 @@ export async function runAgentRepl(
       } else if (isRenderingCommand(command)) {
         // Flow 395: same text as the full-screen shell and the /settings row, no modal needed.
         agentIo.onSystem?.(runRenderingCommand(rest));
+      } else if (command === "/remote-policy") {
+        // Flow 396: the saved Telegram defaults. This shell has no bridge, so it edits the file only.
+        agentIo.onSystem?.(remotePolicyText(rest, { ...(configDir !== undefined ? { dir: configDir } : {}) }));
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
         const [workspaces, flows] = await Promise.all([
@@ -2719,6 +2727,15 @@ export async function runAgentRepl(
         );
       } else if (command === "/approvals") {
         agentIo.onSystem?.(approvalsSlashText(rest));
+      } else if (command === "/permissions") {
+        agentIo.onSystem?.(
+          permissionsSlashText(rest, {
+            sessionAllow: sessionShellAllow,
+            onChanged: () => {
+              fingerprintAtStart = shellPermissionsFingerprint(configDir);
+            },
+          }),
+        );
       } else if (command === "/external-diff") {
         agentIo.onSystem?.(externalDiffSlashText(defaultExternalDiffDeps(sessionCwd)));
       } else if (isFlowsCommand(command)) {

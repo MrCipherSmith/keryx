@@ -94,6 +94,53 @@ describe("AC1 — off by default", () => {
   }, 30_000);
 });
 
+describe("flow 396 — serve status reports the Telegram permission defaults", () => {
+  function seedRemote(extra: Record<string, unknown> = {}): void {
+    mkdirSync(path.join(configDir, "remote"), { recursive: true });
+    writeFileSync(path.join(configDir, "remote", "config.json"), JSON.stringify({ schemaVersion: 1, chatId: -1001, allowedUserIds: [1], ...extra }), { mode: 0o600 });
+  }
+
+  test("a config written before flow 396 prints the new defaults and says a shell's /mode overrides them", async () => {
+    seedRemote();
+    const { code, out } = await run(["serve", "status"]);
+    expect(code).toBe(0);
+    expect(out).toContain("default mode trust");
+    expect(out).toContain("run limit none");
+    expect(out).toContain("approval wait 15m");
+    expect(out).toContain("running shell's /mode overrides the default mode");
+    expect(out).toContain("/remote-policy");
+  }, 30_000);
+
+  test("saved values are printed as saved, in the human line and in --json", async () => {
+    seedRemote({ permissionMode: "ask", runTimeoutMs: 1_800_000, approvalTimeoutMs: 300_000 });
+    const human = await run(["serve", "status"]);
+    expect(human.out).toContain("default mode ask");
+    expect(human.out).toContain("run limit 30m");
+    expect(human.out).toContain("approval wait 5m");
+    expect(human.out).toContain("1 allowed user");
+    // A count, never the ids or the chat.
+    expect(human.out).not.toContain("-1001");
+    const json = await run(["serve", "status", "--json"]);
+    const start = json.out.indexOf("{");
+    const report = JSON.parse(json.out.slice(start, json.out.lastIndexOf("}") + 1)) as { telegramPermissions?: Record<string, unknown> };
+    expect(report.telegramPermissions).toEqual({
+      defaultMode: "ask",
+      runTimeoutMs: 1_800_000,
+      approvalTimeoutMs: 300_000,
+      savedRules: 0,
+      allowedUsers: 1,
+      shellModeOverridesDefault: true,
+    });
+  }, 30_000);
+
+  test("without a Telegram config there is no telegram line and no telegramPermissions key", async () => {
+    const human = await run(["serve", "status"]);
+    expect(human.out).not.toContain("default mode");
+    const json = await run(["serve", "status", "--json"]);
+    expect(json.out).not.toContain("telegramPermissions");
+  }, 30_000);
+});
+
 describe("AC4 — refusal is terminal", () => {
   test("no configuration: non-zero exit, says what is missing, nothing bound", async () => {
     const port = await borrowPort();

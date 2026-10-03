@@ -159,6 +159,41 @@ test("a rejecting handler is reported through onSystem and never escapes", async
   expect(r.system).toEqual(["/external-agents: no runtime\n", "/editguard: read-only file system\n", "/guard: config locked\n"]);
 });
 
+test("every Telegram button reaches /remote-policy with its own arguments, and the text it returns is shown", async () => {
+  const seen: string[] = [];
+  const r = recorder({
+    remotePolicy: (arg) => {
+      seen.push(arg);
+      return `policy: ${arg}\n`;
+    },
+  });
+  const connected: SettingsSnapshot = {
+    ...STATE,
+    telegram: { posture: { defaultMode: "trust", runTimeoutMs: 0, approvalTimeoutMs: 900_000, savedRules: 0 } },
+  };
+  const lines = buildSettingsRows(connected)
+    .filter((row) => row.group === "Telegram")
+    .flatMap((row) => row.actions.map((a) => a.command));
+  expect(lines.length).toBeGreaterThan(0);
+  for (const line of lines) await runSettingsCommand(line, r.handlers);
+  expect(seen).toEqual(lines.map((line) => line.replace("/remote-policy ", "")));
+  expect(r.system).toEqual(seen.map((arg) => `policy: ${arg}\n`));
+  expect(r.calls).toEqual([]);
+});
+
+test("a Telegram button never touches the shell's mode handlers", async () => {
+  const r = recorder({ remotePolicy: () => "ok\n" });
+  await runSettingsCommand("/remote-policy mode ask", r.handlers);
+  await runSettingsCommand("/remote-policy mode trust", r.handlers);
+  expect(r.calls.filter((call) => call.startsWith("mode:") || call.startsWith("commit:"))).toEqual([]);
+});
+
+test("/remote-policy without a handler (readline-less surfaces) does nothing and does not throw", async () => {
+  const r = recorder();
+  await runSettingsCommand("/remote-policy mode ask", r.handlers);
+  expect(r.system).toEqual([]);
+});
+
 test("an unknown line does nothing", async () => {
   const r = recorder();
   await runSettingsCommand("/nope x", r.handlers);
