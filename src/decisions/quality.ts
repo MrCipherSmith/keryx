@@ -21,6 +21,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { scrubRecommendWords } from "./ask";
 import { decisionsDir, journalRoot, readRecords } from "./store";
 import { oneLine } from "./text";
 import type { AnswerRecord, DecisionOption, OpenRecord } from "./types";
@@ -160,18 +161,18 @@ export interface ModelCallResult {
 /** The seam: tests pass a fake, the command passes `commandModelCall`. */
 export type ModelCallFn = (request: ModelCallRequest) => Promise<ModelCallResult>;
 
-const MARK_PATTERNS: readonly RegExp[] = [
-  /\s*[([]\s*(?:recommended|recommend|рекомендуется|рекомендую|рекомендовано|рекомендованный)[^)\]]*[)\]]/giu,
-  /^\s*[★⭐✓✔]\s*/u,
-  /\s*[★⭐]\s*$/u,
-  /\brecommended\s*:\s*/giu,
-];
+// the check marks the shared scrubber does not know (it removes the stars and the recommend words itself)
+const CHECK_MARKS: readonly RegExp[] = [/^\s*[\u2713\u2714]\s*/u, /\s*[\u2713\u2714]\s*$/u];
 
-/** A label, description or question without the textual forms of the recommendation mark. */
+/**
+ * A label, description or question without any form of the recommendation mark. The same scrubber that
+ * hides the mark from the human in arm D, so the blind model never sees what the blind human did not:
+ * "(preferred)", "Recommended - use Y", "Recommended: V" and "the recommended way" are all gone.
+ */
 export function stripRecommendationMark(text: string): string {
   let out = text;
-  for (const pattern of MARK_PATTERNS) out = out.replace(pattern, " ");
-  return oneLine(out, 600);
+  for (const pattern of CHECK_MARKS) out = out.replace(pattern, " ");
+  return oneLine(scrubRecommendWords(out), 600);
 }
 
 export interface BlindPrompt {
@@ -190,7 +191,7 @@ export function buildBlindPrompt(open: Pick<OpenRecord, "question" | "options" |
   const shown = open.order.map((id) => byId.get(id)).filter((option): option is DecisionOption => option !== undefined);
   const options = shown.length === open.options.length ? shown : open.options;
   const lines = options.map((option, index) => {
-    const label = stripRecommendationMark(option.label);
+    const label = stripRecommendationMark(option.label) || "(unnamed)";
     const description = option.description === undefined ? "" : stripRecommendationMark(option.description);
     return `${index + 1}. ${label}${description.length > 0 ? ` - ${description}` : ""}`;
   });

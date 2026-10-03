@@ -213,6 +213,22 @@ describe("AC12: the prompt helpers", () => {
     expect(stripRecommendationMark("Keep it")).toBe("Keep it");
   });
 
+  test("the blind prompt carries none of the forms the blind human was not shown (labels, descriptions, question)", () => {
+    const forms = ["Use X (preferred)", "Recommended - use Y", "Рекомендуется: V", "the recommended way, suggested by docs"];
+    for (const form of forms) expect(stripRecommendationMark(form)).not.toMatch(/recommend|preferred|suggested|рекоменд/iu);
+    expect(stripRecommendationMark("Use X (preferred)")).toBe("Use X");
+    expect(stripRecommendationMark("Recommended - use Y")).toBe("use Y");
+    expect(stripRecommendationMark("Рекомендуется: V")).toBe("V");
+    expect(stripRecommendationMark("the recommended way, suggested by docs")).toBe("the way, by docs");
+
+    const prompt = buildBlindPrompt({
+      question: forms[3] as string,
+      options: forms.map((form, i) => ({ id: `o${i}`, label: form, description: form })),
+      order: ["o0", "o1", "o2", "o3"],
+    });
+    expect(`${prompt.system}\n${prompt.user}`).not.toMatch(/recommend|preferred|suggested|рекоменд/iu);
+  });
+
   test("parseModelChoice maps a number to an id and anything else to unclear", () => {
     expect(parseModelChoice("2", ["a", "b"])).toBe("b");
     expect(parseModelChoice("Answer: 1.", ["a", "b"])).toBe("a");
