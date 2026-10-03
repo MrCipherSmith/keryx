@@ -194,7 +194,7 @@ export function tableLayout(table: MarkdownTable): TableLayout {
 }
 
 /** The "Header: value" lines of one body row, empty cells left out. */
-function stackedRowLines(table: MarkdownTable, row: readonly string[]): string[] {
+export function stackedRowLines(table: MarkdownTable, row: readonly string[]): string[] {
   const lines: string[] = [];
   row.forEach((cell, column) => {
     const text = plainCell(cell);
