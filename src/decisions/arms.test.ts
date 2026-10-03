@@ -55,6 +55,24 @@ describe("AC1: the arm is a seeded function of (repoSalt, seq)", () => {
     expect(ARMS).toContain(first.arm);
   });
 
+  test("golden values: fixed (salt, seq) pairs give fixed arms and seeds, so a change of hash, PRNG or weights fails here", () => {
+    const golden: Array<[string, number, Arm, number]> = [
+      ["golden-salt", 1, "B", 4019443924],
+      ["golden-salt", 2, "D", 2761754493],
+      ["golden-salt", 3, "D", 1891882281],
+      ["golden-salt", 4, "B", 1878995061],
+      ["golden-salt", 5, "A", 2549695323],
+      ["golden-salt", 6, "A", 3569336769],
+      ["golden-salt", 16, "C", 296563100],
+      ["golden-salt", 18, "C", 864226196],
+      ["other-salt", 1, "B", 4256560751],
+      ["other-salt", 2, "A", 846608942],
+    ];
+    for (const [salt, seq, arm, seed] of golden) expect(assignArm(salt, seq)).toEqual({ arm, seed });
+    // every arm is covered, so a weights change cannot slip through unnoticed
+    expect(new Set(golden.map(([, , arm]) => arm))).toEqual(new Set(ARMS));
+  });
+
   test("a different salt or a different seq gives a different seed", () => {
     expect(assignArm("salt-one", 7).seed).not.toBe(assignArm("salt-two", 7).seed);
     expect(assignArm("salt-one", 7).seed).not.toBe(assignArm("salt-one", 8).seed);
