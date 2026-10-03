@@ -1,14 +1,14 @@
 // Backfilled decisions: the import, their separation in the report and the one-line
 // summary, and the lookups that must never reach them.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { GROUP_SUBCOMMANDS } from "../lib/group-subcommands";
 import { importBackfill, parseBackfill, renderImportResult } from "./import";
 import { buildReport, renderReport, renderReportLine } from "./report";
 import { answerDecision, changeAnswer, giveReason, latestAnsweredDecision, loadReport, openDecision, recordReason, reportLine } from "./service";
-import { readJournal, readRecords } from "./store";
+import { decisionsDir, journalLockFile, readJournal, readRecords, withJournalLock } from "./store";
 import type { OpenRecord } from "./types";
 
 let root: string;
@@ -176,6 +176,85 @@ describe("import", () => {
     const result = await importBackfill(root, file(entry()));
     expect(result).toMatchObject({ skipped: 1, repaired: 0 });
     expect((await readRecords(root)).map((r) => r.kind)).toEqual(["open"]);
+  });
+
+  describe("two runs at once", () => {
+    const lockFile = () => journalLockFile(root);
+    const exists = (file: string) => access(file).then(() => true, () => false);
+
+    test("the same file imported twice at the same time writes every decision once", async () => {
+      const text = file(entry({ id: "c-1" }), entry({ id: "c-2", answer: { choice: "o1" } }), entry({ id: "c-3", answer: null }));
+      const runs = await Promise.all([importBackfill(root, text), importBackfill(root, text), importBackfill(root, text), importBackfill(root, text)]);
+      expect(runs.map((r) => r.imported).sort()).toEqual([0, 0, 0, 3]);
+      expect(runs.reduce((sum, r) => sum + r.skipped, 0)).toBe(9);
+      const records = await readRecords(root);
+      const opens = records.filter((r) => r.kind === "open").map((r) => r.id);
+      expect(opens.sort()).toEqual(["c-1", "c-2", "c-3"]);
+      expect(records.filter((r) => r.kind === "answer").map((r) => r.id).sort()).toEqual(["c-1", "c-2"]);
+      expect((await readJournal(root)).skipped).toBe(0);
+      expect(await exists(lockFile())).toBe(false);
+    });
+
+    test("a lock left by a process that no longer exists is broken", async () => {
+      await mkdir(decisionsDir(root), { recursive: true });
+      await writeFile(lockFile(), JSON.stringify({ pid: 99_999_999, at: new Date().toISOString(), token: "dead" }));
+      const result = await importBackfill(root, file(entry()));
+      expect(result.imported).toBe(1);
+      expect(await exists(lockFile())).toBe(false);
+      expect((await readdir(decisionsDir(root))).filter((name) => name.includes("stale"))).toEqual([]);
+    });
+
+    test("a lock that is too old is broken even when its pid is alive", async () => {
+      await mkdir(decisionsDir(root), { recursive: true });
+      await writeFile(lockFile(), JSON.stringify({ pid: process.pid, at: "2026-01-01T00:00:00Z", token: "hung" }));
+      const longAgo = new Date(Date.now() - 10 * 60_000);
+      await utimes(lockFile(), longAgo, longAgo);
+      expect(await withJournalLock(root, async () => "ran")).toBe("ran");
+      expect(await exists(lockFile())).toBe(false);
+    });
+
+    test("a young lock held by a live process is waited for, then reported", async () => {
+      await mkdir(decisionsDir(root), { recursive: true });
+      await writeFile(lockFile(), JSON.stringify({ pid: process.pid, at: new Date().toISOString(), token: "busy" }));
+      let ran = false;
+      await expect(withJournalLock(root, async () => { ran = true; }, { timeoutMs: 150, pollMs: 10 })).rejects.toThrow(/locked by another run/);
+      expect(ran).toBe(false);
+      expect(await exists(lockFile())).toBe(true);
+      // and it is released once the holder lets go
+      const waiting = withJournalLock(root, async () => "got it", { timeoutMs: 3000, pollMs: 10 });
+      setTimeout(() => void rm(lockFile(), { force: true }), 60);
+      expect(await waiting).toBe("got it");
+    });
+
+    test("the lock is released when the work throws, and an import with nothing to write still releases it", async () => {
+      await expect(withJournalLock(root, async () => { throw new Error("boom"); })).rejects.toThrow("boom");
+      expect(await exists(lockFile())).toBe(false);
+      await importBackfill(root, file(entry()));
+      await importBackfill(root, file(entry()));
+      expect(await exists(lockFile())).toBe(false);
+    });
+
+    test("a dry run takes no lock, so it works while an import holds it", async () => {
+      await mkdir(decisionsDir(root), { recursive: true });
+      await writeFile(lockFile(), JSON.stringify({ pid: process.pid, at: new Date().toISOString(), token: "busy" }));
+      expect((await importBackfill(root, file(entry()), { dryRun: true })).imported).toBe(1);
+    });
+
+    test("a lock that was broken while its holder hung is not removed from under the new holder", async () => {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      let inner: Promise<string> | undefined;
+      await withJournalLock(root, async () => {
+        await rm(lockFile(), { force: true }); // what breaking it as stale does
+        inner = withJournalLock(root, async () => { await gate; return "second"; }, { timeoutMs: 2000, pollMs: 10 });
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      });
+      // the first holder is done; the lock on disk is the second one's
+      expect(await exists(lockFile())).toBe(true);
+      release();
+      expect(await inner).toBe("second");
+      expect(await exists(lockFile())).toBe(false);
+    });
   });
 
   test("a journal whose last line was cut short is ended with a newline before the batch, so nothing fuses", async () => {

@@ -13,9 +13,10 @@
 // never duplicated), so the same file can be imported twice. The one exception is a
 // backfilled decision whose answer is missing from the journal (a write that stopped
 // after the open record): the re-import adds the missing answer, and nothing else.
+// Two runs of the same file at once are serialised by a lock file next to the journal.
 
 import { DEFAULT_STAGE } from "./journal";
-import { appendRecords, readRecords } from "./store";
+import { appendRecords, readRecords, withJournalLock } from "./store";
 import { oneLine } from "./text";
 import type { AnswerRecord, DecisionOption, DecisionRecommendation, DecisionRecord, OpenRecord, ReasonRecord } from "./types";
 
@@ -201,6 +202,13 @@ export function backfillRecords(entry: BackfillEntry): DecisionRecord[] {
  * nothing is written.
  */
 export async function importBackfill(cwd: string, text: string, options: { dryRun?: boolean } = {}): Promise<ImportResult> {
+  // The known-id set is read and the new records appended under one lock, so two runs of the
+  // same file cannot both find an id new. A dry run writes nothing and takes no lock.
+  if (options.dryRun === true) return importUnlocked(cwd, text, options);
+  return withJournalLock(cwd, () => importUnlocked(cwd, text, options));
+}
+
+async function importUnlocked(cwd: string, text: string, options: { dryRun?: boolean }): Promise<ImportResult> {
   const { entries, errors } = parseBackfill(text);
   const records = await readRecords(cwd);
   const known = new Map<string, OpenRecord>();

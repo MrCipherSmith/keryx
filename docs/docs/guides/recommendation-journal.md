@@ -162,7 +162,7 @@ words instead of an option. Each line is checked (unique option ids, a
 recommendation and an answer that are options): a line that is not a decision is
 skipped, named with its line number and why, and counted, and the rest is
 imported. An id that is already in the journal is skipped and reported, which
-makes the import safe to repeat; a backfilled decision whose answer is missing
+makes the import safe to repeat, and two imports at once are serialised by a lock file next to the journal (`journal.jsonl.lock`; a run that finds one waits, and one left by a dead process is cleared); a backfilled decision whose answer is missing
 (an interrupted write) gets just that answer on the next import. `--dry-run` only
 counts. It prints `Imported: N, skipped: S, with recommendation: R, answered: A,
 deviations: D`, plus `, repaired: R` and `, malformed: M` when there are any. With
