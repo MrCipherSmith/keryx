@@ -11,7 +11,7 @@
   "title": "Scheduled agent: GitHub and board digest on a schedule",
   "status": "ready",
   "createdAt": "2026-10-02T04:37:18.590Z",
-  "updatedAt": "2026-10-02T04:39:36.357Z",
+  "updatedAt": "2026-10-02T20:09:46.459Z",
   "source": {
     "type": "description",
     "ref": null
@@ -103,6 +103,11 @@
       "at": "2026-10-02T04:39:36.357Z",
       "event": "frozen",
       "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T20:09:46.459Z",
+      "event": "origin-set",
+      "detail": "unknown -> human-request; quote: \"за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам\"; source: ~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome) (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
     }
   ],
   "acKinds": {
@@ -152,5 +157,10 @@
     "AC12": {
       "kind": "judged"
     }
+  },
+  "origin": {
+    "kind": "human-request",
+    "quote": "за 7 дней работы расписания я хотя бы раз сделал что-то в GitHub или на доске из-за сводки раньше, чем заметил бы сам",
+    "source": "~/prompts/keryx-supervisor/flow-C-scheduled-agent.md (бриф оператора, строка Outcome)"
   }
 }
