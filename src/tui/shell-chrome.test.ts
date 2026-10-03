@@ -535,8 +535,9 @@ otuiTest("AC3: `/` opens the menu, printable keys filter it, Esc closes it and r
   expect(h.chrome.input.value).toBe("/h");
   const filtered = h.captureCharFrame();
   expect(filtered).toContain("/help");
+  expect(filtered).toContain("/history");
   expect(filtered).not.toContain("/model"); // filtered out by the `h` prefix
-  expect(h.chrome.menu.options.length).toBe(1);
+  expect(h.chrome.menu.options.length).toBe(2); // /help and /history
   expect(h.chrome.menu.visible).toBe(true);
 
   // Backspace widens the filter again.
