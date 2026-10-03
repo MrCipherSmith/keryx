@@ -144,12 +144,26 @@ describe("AC12: rate --blind-model", () => {
   });
 
   test("the answer is mapped through the shown order: agreement is with the recommended option, not position 1", async () => {
-    await openDecision({ cwd: root, id: "d-1", question: "Q?", options: OPTIONS, recommendation: { optionId: "keep", reason: "r" }, arm: "D", salt: "s", seq: 1 });
-    await answerDecision({ cwd: root, id: "d-1", choice: "keep" });
-    const open = (await readRecords(root)).find((r) => r.kind === "open");
-    const shownFirst = open?.kind === "open" ? open.order[0] : undefined;
-    const result = await rateBlindModel({ cwd: root, model: "m", call: fakeModel("1").call });
-    expect(result.rated[0]?.modelAgree).toBe(shownFirst === "keep");
+    // `random` drives the shuffle: 0 puts the recommended option last ("move", "skip", "keep"), 0.999 leaves the given order.
+    // The options carry no weak irreversible word (OPTIONS' "Drop it" would force arm A and skip the shuffle altogether).
+    const options = [
+      { id: "keep", label: "Keep it", description: "No change" },
+      { id: "move", label: "Move it", description: "A new home" },
+      { id: "skip", label: "Skip it" },
+    ];
+    for (const [id, random, order, agree] of [
+      ["d-last", () => 0, ["move", "skip", "keep"], false],
+      ["d-first", () => 0.999, ["keep", "move", "skip"], true],
+    ] as const) {
+      await openDecision({ cwd: root, id, question: "Q?", options, recommendation: { optionId: "keep", reason: "r" }, arm: "D", salt: "s", seq: 1, random });
+      await answerDecision({ cwd: root, id, choice: "keep" });
+      const open = (await readRecords(root)).find((r) => r.kind === "open" && r.id === id);
+      expect(open).toMatchObject({ arm: "D", forced: false });
+      expect(open?.kind === "open" ? open.order : undefined).toEqual([...order]);
+      // the model answers "1": the first option it was shown
+      const result = await rateBlindModel({ cwd: root, model: "m", call: fakeModel("1").call, id });
+      expect(result.rated[0]?.modelAgree).toBe(agree);
+    }
   });
 
   test("a disagreeing pick is bad and an unreadable or 0 answer is unclear", async () => {

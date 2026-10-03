@@ -1,12 +1,13 @@
 // Flow 400 (AC8): the round-limit picker and the TUI work decisions are journaled with a `source`;
 // pure permissions (allow/deny) are not.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { offerRoundLimitReset, type AgentDeps } from "../commands/agent";
 import { journaledAskUser, journaledPick, setAskUserHost, setAskUserNotice, type PickOption } from "../tui/ask-user-bridge";
 import { journalAsk, type AskRequest } from "./ask";
+import { assignArm, seedFile } from "./arms";
 import { openDecision } from "./journal";
 import { DECISION_SOURCES, WORK_DECISION_SOURCES } from "./sources";
 import { readRecords } from "./store";
@@ -14,9 +15,20 @@ import type { OpenRecord } from "./types";
 
 let root: string;
 
+/** A repo salt for which the first question of an empty journal is arm A (default weights): the arm is then a fact, not a draw. */
+function saltForFirstArmA(): string {
+  for (let i = 0; i < 10_000; i += 1) {
+    const salt = `coverage-pinned-salt-${i}`;
+    if (assignArm(salt, 1).arm === "A") return salt;
+  }
+  throw new Error("no salt gives arm A at seq 1");
+}
+
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "keryx-coverage-"));
   await mkdir(path.join(root, ".metaproject"), { recursive: true });
+  await mkdir(path.dirname(seedFile(root)), { recursive: true });
+  await writeFile(seedFile(root), `${saltForFirstArmA()}\n`, { encoding: "utf8", mode: 0o600 });
 });
 
 afterEach(async () => {
@@ -70,6 +82,7 @@ describe("the round-limit picker", () => {
     expect(roundState.maxRounds).toBeGreaterThan(8);
     const [open] = await opens();
     expect(open?.source).toBe("round-limit");
+    expect(open?.arm).toBe("A");
     expect(open?.recommendation?.optionId).toBe("reset");
     expect((await readRecords(root)).some((r) => r.kind === "answer" && r.choice === "reset")).toBe(true);
   });
@@ -91,8 +104,9 @@ describe("a TUI work picker", () => {
     expect(open?.source).toBe("tui-queue-route");
     expect(shown).toHaveLength(1);
     expect(shown[0]?.map((o) => o.id).sort()).toEqual(["main", "side"]);
-    // the journal decided the preselection: only arm A with a recommendation starts highlighted
-    expect(shown[0]?.some((o) => o.preselected === true)).toBe(open?.arm === "A");
+    // the pinned salt puts this first question in arm A: only the recommended option starts highlighted
+    expect(open?.arm).toBe("A");
+    expect(shown[0]?.filter((o) => o.preselected === true).map((o) => o.id)).toEqual(["main"]);
   });
 
   test("a deviation does not ask a second question (a menu takes no free text); Esc returns the cancel id", async () => {
