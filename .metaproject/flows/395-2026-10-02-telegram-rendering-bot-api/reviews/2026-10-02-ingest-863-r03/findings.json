@@ -1,0 +1,55 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "flow395-pr863-review-ac",
+    "severity": "minor",
+    "problem": "[reported severity: medium] AC1 requires a live probe result, but the spike note records `Status: PENDING` with no message id (spike.md `Message id: _not yet recorded_`). The test (rendering-spike.test.ts, 'is either a recorded message id or a recorded reason it was not run') is written to pass either way.",
+    "impact": "AC1 asks for a confirmed message id or the reason the rich path was refused; the note records only that no bot token was available, so the live half of AC1 is unmet and the test cannot fail on a missing probe.",
+    "suggested_fix": "The reviewer or operator decides whether to accept this or to run the probe before merge.",
+    "evidence": "Read of docs/requirements/keryx-telegram-rendering/spike.md:74-87 and src/remote/rendering-spike.test.ts:150-160. The other AC tests pass (1949 pass, 2 fail outside the PR diff, see F4).",
+    "confidence": "medium",
+    "file": "docs/requirements/keryx-telegram-rendering/spike.md",
+    "line": 87,
+    "quote": "Message id: _not yet recorded_",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-10-02-ingest-863-r03#F1"
+  },
+  {
+    "id": "F2",
+    "reviewer": "flow395-pr863-review-ac",
+    "severity": "minor",
+    "problem": "[reported severity: low] AC10's `mkdocs build --strict` was not run locally (mkdocs is not installed) and is delegated to CI; rendering-docs.test.ts only checks content and anchors.",
+    "impact": "The strict docs build is unobserved by this review.",
+    "suggested_fix": "Confirm the CI mkdocs step is green.",
+    "evidence": "mkdocs absent on the reviewer's machine; mkdocs.yml unchanged.",
+    "confidence": "medium",
+    "file": "src/remote/rendering-docs.test.ts",
+    "global_id": "2026-10-02-ingest-863-r03#F2"
+  },
+  {
+    "id": "F3",
+    "reviewer": "flow395-pr863-review-ac",
+    "severity": "info",
+    "problem": "AC11 and the AC1 live probe are operator-gated; the flow should not be called fully accepted until both are done.",
+    "impact": "AC11 is [verify: judged] and needs the operator in live Telegram; the guide says it is still pending.",
+    "suggested_fix": "Operator runs the live acceptance.",
+    "evidence": "Read of the acceptance criteria and the guide section.",
+    "confidence": "medium",
+    "global_id": "2026-10-02-ingest-863-r03#F3"
+  },
+  {
+    "id": "F4",
+    "reviewer": "flow395-pr863-review-ac",
+    "severity": "info",
+    "problem": "The two failures in src/tui/ci-triage-source.test.ts ('not opted in' cases) are outside the PR diff: the PR touches neither that test nor src/tui/ci-triage-source.ts.",
+    "impact": "The run saw a `gh` call and got a parse error from `gh pr view`; treated as environmental, not confirmed on main.",
+    "suggested_fix": "Confirm they also fail on a clean main or in the CI environment.",
+    "evidence": "Test run of the AC-named files at 25e6fb45: 1949 pass, 2 fail.",
+    "confidence": "medium",
+    "global_id": "2026-10-02-ingest-863-r03#F4"
+  }
+]
