@@ -1,0 +1,493 @@
+[
+  {
+    "id": "L-1",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "journaledPick records any option id returned by show() as the human's answer, including the cancelId a busy or Esc-dismissed dock resolves to; tui-queue-route uses cancelId 'side', which is also an option id.",
+    "impact": "A queue-route question opens while another dialog is open; the dock resolves to 'side'; the journal holds an answer the human never gave, feeding follow-rate and median time.",
+    "suggested_fix": "Journal a dismissed or busy pick as cancelled, never as a choice (fixed in 5062f564).",
+    "evidence": "Line 108 maps any option id to an answer; the queue-route cancelId 'side' is an option id, so Esc or a busy dock is journaled as an answer. Wiki-enrich and session-lease use option ids as cancelId too.",
+    "confidence": "high",
+    "file": "src/tui/ask-user-bridge.ts",
+    "line": 104,
+    "class_scope": {
+      "sites": [
+        "src/tui/ask-user-bridge.ts:104 journaledPick (member, the defect)",
+        "src/tui/tui-shell.ts ~8328 tui-queue-route, cancelId 'side' is an option id (member, confirmed)",
+        "src/tui/tui-shell.ts ~1589 tui-wiki-enrich, cancelId 'cancel' is an option id (member, confirmed by the verifier)",
+        "src/tui/tui-shell.ts ~6235 tui-session-lease, cancelId 'cancel' is an option id (member, confirmed by the verifier)",
+        "src/tui/ask-user-bridge.ts journaledAskUser (non-member: goes through journalAsk which has CANCEL_ANSWER)",
+        "src/commands/agent.ts:4307 round-limit via deps.askUser (non-member: same path as journaledAskUser)"
+      ],
+      "enumeration_method": "keryx ctx rg --all -n 'journaledPick' src; keryx ctx rg --all -n 'cancelId' src/tui/tui-shell.ts src/tui/composer-choice.ts; read journaledPick and composer-choice.ts:60. No live TUI repro."
+    },
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 5062f564. Probe v-fixed/probes/l1.ts (temp git repo, KERYX_CONFIG_DIR temp), journaledPick with cancelId 'side' (also an option id) and a show() that resolves what composer-choice resolves on Esc/busy (the dismissId it is handed). Pre-fix tree e7e1f201 (git archive): 'dismissed -> side answers: 1 opens: 1' (cancel journaled as a choice). HEAD 1f15acdc: 'dismissed -> side answers: 0 opens: 1'; a genuine pick of 'side' still records ['side'] (1 answer). Site check: tui-shell.ts 1589 (wiki enrich), 6235 (session lease), 8328 (queue route) each pass '(options, dismissId) => showComposerChoice(..., cancelId: dismissId)', so the fix reaches all three; coverage.test.ts asserts 3 callers with 3 dismissId wirings and passes.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 5062f564"
+    }
+  },
+  {
+    "id": "L-2",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "An empty or whitespace seed file makes loadRepoSalt throw on every call; openDecision fails permanently and journalAsk swallows the error so recording stops silently.",
+    "impact": "A partial write leaves the seed file empty; every later openDecision throws; questions are asked but not journaled.",
+    "suggested_fix": "Treat an empty or short salt as absent and regenerate it, tighten the mode to 0600 (fixed in 3309d7bc).",
+    "evidence": "Both calls threw 'could not create the decisions seed file'. readSalt returns undefined for an empty file and the wx create fails; journalAsk swallows the error but emits a note.",
+    "confidence": "high",
+    "file": "src/decisions/arms.ts",
+    "line": 176,
+    "class_scope": {
+      "sites": [
+        "src/decisions/arms.ts:176 loadRepoSalt (member, the throw)",
+        "src/decisions/arms.ts:193 readSalt (member, returns undefined for an empty file, then the 'wx' create fails because the file exists)",
+        "src/decisions/journal.ts openDecision (affected caller)",
+        "src/decisions/ask.ts journalAsk (swallows the error, so the failure is silent)",
+        "opts.salt test seam in openDecision (non-member: bypasses the file)"
+      ],
+      "enumeration_method": "keryx ctx rg --all -n 'loadRepoSalt|readSalt' src; bun probe in a temp git repo with an empty seed file."
+    },
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 3309d7bc. Probe v-fixed/probes/l2.ts: temp git repo, KERYX_CONFIG_DIR temp, salt file at saltFile(root) written empty and then as whitespace '  \\n\\t\\n' (created 0666). Pre-fix e7e1f201: both THROW 'could not create the decisions seed file ...'. HEAD: both cases return a 64-char salt, loadRepoSalt called twice returns the same salt (same: true), file mode afterwards 600.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 3309d7bc"
+    }
+  },
+  {
+    "id": "T-1",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "Preselection through present() is asserted only for arm D; A, B and C requests never get a preselected assertion, and other tests draw arms from an unseeded salt.",
+    "impact": "present() returns preselected:false always; arm A degrades into arm B and no named AC2 test fails.",
+    "suggested_fix": "Pin preselection per arm with a fixed salt and make the draw-dependent tests deterministic (fixed in 857854ca).",
+    "evidence": "60 pass, 0 fail across four files; coverage.test.ts failed 3 of 10 runs, only when the unseeded arm was A.",
+    "confidence": "high",
+    "file": "src/decisions/ask.test.ts",
+    "line": 64,
+    "class_scope": {
+      "sites": [
+        "src/decisions/ask.ts present() preselected expression (member, untested for A/B/C)",
+        "src/decisions/ask.test.ts:64 asserts arm D only (member, partial coverage)",
+        "src/decisions/coverage.test.ts:95 asserts on an unseeded arm (member, not pinned)",
+        "src/tui/composer-choice.test.ts (non-member: consumer side)",
+        "src/harness/tool/builtin/ask-user-tool.ts and src/tui/ask-user-bridge.ts (non-member: pass the request through)"
+      ],
+      "enumeration_method": "Read ask.ts present(), ask.test.ts, coverage.test.ts, composer-choice.test.ts; keryx ctx rg -n 'preselected' over test files. No mutation executed."
+    },
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 857854ca. Mutation in a scratch copy (v-fixed/copy, src copied, node_modules and docs symlinked): ask.ts present() 'preselected: opened.preselected && option.id === recommendedId' replaced by 'preselected: false'. Ran ask, arms, journal, quality, coverage tests: 84 pass, 2 fail: 'AC3 ... arm A, reached through the repo seed: only the recommended option starts highlighted' (ask.test.ts:137, expected [\"b\"] got []) and 'journaledPick records the source ... returns the choice' (coverage.test.ts). So preselection is asserted for arm A through present(), not only for D. Unmutated at HEAD: coverage.test.ts run 6 times in the worktree, 12 pass 0 fail each time; combined five-file run 86 pass 0 fail.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 857854ca"
+    }
+  },
+  {
+    "id": "T-2",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "AC8 'pure permissions are not journaled' is a 700-character text heuristic over tui-shell.ts; the source regex misses literal sources; the positive picker assertion depends on an unseeded arm.",
+    "impact": "An allow/deny picker wrapped in journaledPick passes the test, so permissions get journaled with no red test.",
+    "suggested_fix": "Replace the text heuristic with an AST audit of every journaledPick call site (fixed in 2c1e5424).",
+    "evidence": "All 5 runs passed; lastIndexOf comparison cannot tell a wrapped picker from a bare one.",
+    "confidence": "medium",
+    "file": "src/decisions/coverage.test.ts",
+    "line": 123,
+    "class_scope": {
+      "sites": [
+        "src/decisions/coverage.test.ts:123-132 lastIndexOf comparison (member)",
+        "src/decisions/coverage.test.ts:116-120 source regex misses literals (member)",
+        "src/decisions/coverage.test.ts:95 unseeded arm (member)",
+        "src/tui/tui-shell.ts journaledPick sites near 1589, 6235, 8328 (members: callback holds showComposerChoice)",
+        "src/commands/ask-user-tool.test.ts (non-member: behavioural)"
+      ],
+      "enumeration_method": "Read coverage.test.ts; keryx ctx rg -n 'journaledPick|showComposerChoice' src/tui/tui-shell.ts. No mutation executed."
+    },
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 2c1e5424. Mutation in a scratch copy of src/tui/tui-shell.ts (probes/mut_t2.py): the 'Allow shell command?' showComposerChoice wrapped in journaledPick(sessionCwd, {source: DECISION_SOURCES.queueRoute, ... cancelId:'deny'}, (_o, dismissId) => showComposerChoice(...)). coverage.test.ts: 8 pass, 4 fail, including the AC8 check 'no allow/deny or permission-mode picker is wrapped in journaledPick, and none of their ids appear inside one' and 'tui-shell journals exactly the work pickers' (a fourth failure is the self-test whose needle the mutation removed, so it is collateral). Restored copy: 12 pass 0 fail. Note: the pre-fix text heuristic also caught this exact shape (1 fail of 9), so the refutation rests on the AST audit now failing, not on the old test being blind to this shape.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 2c1e5424"
+    }
+  },
+  {
+    "id": "S-1",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The measured agent can steer or predict its own arm: it can re-roll by repeating open, the tool description says irreversible/action avoids blind, and the salt is a same-uid readable file inside the repository.",
+    "impact": "An agent re-opens or tags questions until it gets arm A, or reads the seed file and asks only when it knows the arm; the randomized comparison is selection-biased.",
+    "suggested_fix": "Make open idempotent per question, move the salt to ~/.config/keryx, remove the steering wording from the tool description (fixed in 92d37b2b, 52f12a42; operator poll 67).",
+    "evidence": "Predicted AACCBB and actual AACCBB: predictable from the repo-readable salt and changes with each open.",
+    "confidence": "high",
+    "file": "src/decisions/journal.ts",
+    "line": 55,
+    "class_scope": {
+      "sites": [
+        "src/decisions/arms.ts:176 loadRepoSalt same-uid readable salt in repo (member)",
+        "src/decisions/journal.ts:55-63 seq = opens+1 then chooseArm, re-rollable (member)",
+        "src/harness/tool/builtin/ask-user-tool.ts:26-29,51-52,126-127 agent sets irreversible/action (member)",
+        "src/commands/decisions.ts:103-117 CLI --action/--recommend (member)",
+        "src/decisions/report.ts forced-A reported apart (non-member, partial mitigation)",
+        "src/decisions/export.ts exports seed and arm, not the salt (non-member)"
+      ],
+      "enumeration_method": "keryx ctx rg --all -n 'loadRepoSalt|seedFile|chooseArm' src --glob '!*.test.ts'; probe predicted D and got D, repeated open gave D then A."
+    },
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 92d37b2b. Probe v-fixed/probes/s1.ts: temp git repo, all arm weights 1, the same question opened 6 times with a different random each time. Pre-fix e7e1f201: arms 'A B A A A C' (3 distinct), 6 open records, seed file inside the repo at .metaproject/data/decisions/seed. HEAD 1f15acdc: arms 'A A A A A A' (1 distinct), 1 open record (idempotent open, same arm and order returned), no seed or salt file anywhere in the repo tree (excluding .git), salt file found only under KERYX_CONFIG_DIR/decisions/<hash>.seed.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 92d37b2b"
+    }
+  },
+  {
+    "id": "L-3",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "stripRecommendationMark is weaker than scrubRecommendWords; the blind-model prompt can still show '(preferred)', 'Recommended - use Y', 'Рекомендуется: V'.",
+    "impact": "rate --blind-model sees which option was recommended; the 'blind' rating is not blind.",
+    "suggested_fix": "Reuse the arm-D scrubber for the blind-model prompt (fixed in e56f68e7).",
+    "evidence": "'Use X (preferred)', 'Recommended - use Y', 'Рекомендуется: V' came back unchanged.",
+    "confidence": "high",
+    "file": "src/decisions/quality.ts",
+    "line": 163,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in e56f68e7. Probe v-fixed/probes/l3.ts calling stripRecommendationMark and buildBlindPrompt from quality.ts. Pre-fix e7e1f201 stripRecommendationMark: 'Use X (preferred)' unchanged, 'Recommended - use Y' unchanged, 'Рекомендуется: V' unchanged, and the blind prompt leaks (LEAK in prompt: true). HEAD: 'Use X', 'use Y', 'V', 'W - recommended' -> 'W', and the built blind prompt contains none of recommend/preferred/suggested/рекоменд (LEAK in prompt: false); it now delegates to scrubRecommendWords, the same scrubber arm D uses.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in e56f68e7"
+    }
+  },
+  {
+    "id": "L-4",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "armA.free includes arm-A decisions that had no recommendation, skewing count and median time against B.",
+    "impact": "Two recommendation-less A records at 500ms and one real A at 9000ms give A-free median 500ms.",
+    "suggested_fix": "Leave recommendation-less questions out of every arm and channel cell (fixed in ae945304).",
+    "evidence": "chooseArm gives recommendation-less questions arm A forced:false and armRow counts their time and decisions.",
+    "confidence": "high",
+    "file": "src/decisions/report.ts",
+    "line": 303,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in ae945304. Probe v-fixed/probes/l4.ts: records written with the real openDecision/answerDecision (two recommendation-less arm A answered at 500ms, one arm A with recommendation answered at 9000ms), then buildReport. Pre-fix e7e1f201: armA.free = {decisions:3, answered:3, medianMs:500}. HEAD: armA.free = {decisions:1, answered:1, medianMs:9000}.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in ae945304"
+    }
+  },
+  {
+    "id": "L-5",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Top-level byArm and armA pool all channels, mixing telegram A (typed) with TUI A in the headline table and the /decisions arms modal.",
+    "impact": "The headline A share changes with channel mix.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "byArm and armA are built from the all-channel randomized set.",
+    "confidence": "medium",
+    "file": "src/decisions/report.ts",
+    "line": 302,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-5",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Probe v-open/probe.ts at HEAD 1f15acdc: buildReport with one telegram arm-A and one tui arm-A answered decision returned byArm.A.decisions=2 and armA.free.decisions=2 (byChannel splits them into telegram,tui). src/decisions/report.ts:buildReport builds byArm/armA from `compared` (all channels) with no channel cut; renderArms prints these top-level rows. Only byChannel is separated.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "L-6",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "buildQualityMatrix keeps one model rating per decision and includes cleanContext:false ratings under the self-assessment label; commandModelCall hardcodes historyMessages 0 so cleanContext is always true on the CLI path.",
+    "impact": "A contaminated CLI rating is labelled clean.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "The matrix keeps the latest model rating per decision including non-clean ones; history is never[] so cleanContext is always true on the CLI path.",
+    "confidence": "medium",
+    "file": "src/decisions/quality.ts",
+    "line": 289,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-6",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Probe: buildQualityMatrix with a clean model rating (m1, 11:00) and a later cleanContext:false rating (m2, 12:00) for one decision gave modelRated=1, modelClean=0, humanVsModel.good={bad:1}: one rating kept per decision (latest wins, any model), and the cleanContext:false one is counted under the self-assessment label. src/decisions/quality.ts:buildQualityMatrix. commandModelCall now returns historyMessages: request.history.length (not a literal 0), but history is typed readonly never[] and always [], probe returned {historyMessages:0}, so cleanContext is always true on the CLI path; the substance of the claim holds.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "T-3",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC9 pins runInterview, which no production code calls, plus substring checks of two SKILL.md copies.",
+    "impact": "The real interview path changes while the test stays green.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "runInterview appears only in interviewer.ts, a re-export in service.ts and a SKILL.md mention.",
+    "confidence": "medium",
+    "file": "src/decisions/interviewer-path.test.ts",
+    "line": 1,
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg for runInterview/interviewPath outside *.test.ts: only src/decisions/interviewer.ts (definition), src/decisions/service.ts:10 (re-export) and the SKILL.md line 97 text. No production caller. src/decisions/interviewer-path.test.ts still pins runInterview with fakes plus readFile substring checks (toContain) of the two SKILL.md copies and a copies-identical test.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "T-4",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "AC1 determinism compared run() with run() in one process; no golden literals.",
+    "impact": "The hash, PRNG or weights change and the test passes.",
+    "suggested_fix": "Add golden (salt, seq) to arm and seed pairs (fixed in 67c3c5a4).",
+    "evidence": "The determinism test compares run() to run() and checks only a regex shape; no golden literals.",
+    "confidence": "medium",
+    "file": "src/decisions/arms.test.ts",
+    "line": 1,
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 67c3c5a4. Three mutations in a scratch copy of arms.ts, each run against arms.test.ts (baseline 25 pass 0 fail): hash input 'salt:seq' -> 'seq:salt' gives 24 pass 1 fail; DEFAULT_ARM_WEIGHTS A .4/D .2 -> .41/.19 gives 2 fail; mulberry32 constant 0x6d2b79f5 -> 0x6d2b79f6 gives 1 fail. The failing test is 'AC1 ... golden values: fixed (salt, seq) pairs give fixed arms and seeds'. Restored copy: 25 pass 0 fail.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 67c3c5a4"
+    }
+  },
+  {
+    "id": "T-5",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "Unseeded arm or shuffle in quality.test.ts and coverage.test.ts makes assertions depend on the draw.",
+    "impact": "An unlucky draw gives an intermittent CI failure or a vacuous pass.",
+    "suggested_fix": "Inject salt or seed instead of an unseeded draw (fixed in 857854ca).",
+    "evidence": "Lines 146-153 derive the expected value from the unseeded shuffle; passes on any draw.",
+    "confidence": "medium",
+    "file": "src/decisions/quality.test.ts",
+    "line": 146,
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in 857854ca. In the worktree at HEAD, coverage.test.ts run 6 times (12 pass 0 fail each) and quality.test.ts run 6 times (23 pass 0 fail each), no flake. Search of both files (keryx ctx rg for Math.random, openDecision, journalAsk, shuffle, random:, salt, arm:) finds no Math.random; quality.test.ts forces arm and salt via the seam and passes a fixed random to the only shuffled arm-D case; coverage.test.ts pins the repo salt (coverage-pinned-salt-2: seq 1 A, seq 2 A, seq 3 D) and no test journals a third question, so no shuffle draw is reached and no assertion depends on one. Caveat: the shuffle default is still Math.random in production code, only unreachable from these two files.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 857854ca"
+    }
+  },
+  {
+    "id": "T-6",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The AC3 question strip check was vacuous (no mark planted).",
+    "impact": "The mark list is shortened or the question stops being scrubbed and the tests stay green.",
+    "suggested_fix": "Plant every mark in question, labels, descriptions and reason, and scrub the question in arm D (fixed in f399ea74).",
+    "evidence": "The question 'Which approach?' carries no mark, so the strip assertion cannot fail.",
+    "confidence": "medium",
+    "file": "src/decisions/ask.test.ts",
+    "line": 1,
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixed in f399ea74. Mutation in a scratch copy of ask.ts present(): 'const scrubbedQuestion = opened.showMark ? rest.question : scrubRecommendWords(rest.question)' replaced by 'const scrubbedQuestion = rest.question' (arm D no longer scrubs the question). ask.test.ts: 17 pass, 2 fail: 'AC3: arm D strips every mark from what the host shows > no question, label, description or reason carries a mark' and '> the question keeps its meaning once the mark is gone'. Copy restored afterwards.",
+      "verifier": "review-verifier-reverify-2026-10-03"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in f399ea74"
+    }
+  },
+  {
+    "id": "T-7",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "plain() allows identifier-shaped stage/channel/model strings; fixtures use spaces so that path is never hit; AC11 tests use 1-2 records, not 87.",
+    "impact": "An identifier-shaped secret in the stage field is exported verbatim and the leak test stays green.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "plain() passes identifier-shaped strings; fixtures use spaces so the path is never hit.",
+    "confidence": "low",
+    "file": "src/decisions/export.test.ts",
+    "line": 95,
+    "global_id": "2026-10-03-ingest-origin-main-r02#T-7",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "src/decisions/export.ts:plain() uses PLAIN=/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,39}$/; probe with stage and channel 'sk-live-abcdef123' and model 'tok-ghp_abc123' came out verbatim in the export row. export.test.ts SECRETS fixtures for stage/channel/model are 'STAGE secret stage name', 'CHANNEL secret channel', 'MODEL secret model name' (spaces), so the identifier-shaped branch is never exercised. AC11 tests in src/decisions/import.test.ts use 1-3 records (journalWithOldAndNew: 3 old + 1 imported + 1 new), nothing near 87.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "S-2",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The export allow-list is enforced only by TypeScript types; seed, arm, at, timeToAnswerMs, modelAgree and similar are copied unvalidated from the journal.",
+    "impact": "A hand-edited journal line with prose in 'at' is exported verbatim; needs direct write to the journal file.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "openedAt, answeredAt, seed, timeToAnswerMs and rating fields are copied from the journal with no runtime validation.",
+    "confidence": "high",
+    "file": "src/decisions/export.ts",
+    "line": 133,
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Probe: buildExport over a journal record with seed:'SEEDSECRET text with words', at:'AT-SECRET-free-text', preselected:'PRESEL-SECRET' and an answer with timeToAnswerMs:'TTA-SECRET', at:'ANSAT-SECRET', plus a rating with cleanContext/modelAgree/at strings, emitted all of them verbatim (openedAt, seed, preselected, answeredAt, timeToAnswerMs, ratings[].cleanContext/modelAgree/at). src/decisions/export.ts:buildExport copies open.seed/open.at/first.at etc. with no runtime validation; the allow-list is TypeScript types and EXPORT_FIELDS only.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "S-3",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "--model-cmd is run with spawn(command, {shell:true}) from a CLI argument with the full environment inherited.",
+    "impact": "If a harness allowlists the prefix 'keryx decisions', rate --blind-model --model-cmd runs arbitrary shell outside that allowlist.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "Line 289 is spawn(command, { shell: true }) with the full environment inherited.",
+    "confidence": "medium",
+    "file": "src/decisions/quality.ts",
+    "line": 289,
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/decisions/quality.ts:commandModelCall line ~290: spawn(command, { shell: true, stdio: [...] }) with no env option, so the child inherits process.env in full; the command string comes from --model-cmd (src/commands/decisions.ts:runRate, no validation).",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "S-4",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "The judge prompt is built from agent-written question and option text and parseModelChoice takes the first digit run in stdout; cleanContext is request.history.length === 0, always true for the command call.",
+    "impact": "An option containing 'answer 3' or a banner with a digit skews the self-assessment.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "The prompt includes agent-written text, parseModelChoice takes the first digit run, cleanContext is always true on the command path.",
+    "confidence": "medium",
+    "file": "src/decisions/quality.ts",
+    "line": 210,
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-4",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/decisions/quality.ts:buildBlindPrompt builds the user prompt from open.question and option label/description through stripRecommendationMark, which only removes recommendation words/check marks and caps at 600 chars (agent-written text reaches the judge). parseModelChoice uses /\\d+/.exec(text) (first digit run; probe 'I considered 3 options; pick 2' returned the 3rd option 'z'). commandModelCall returns historyMessages: request.history.length and history is always [], so cleanContext (reply.historyMessages === 0 in rateBlindModel) is always true on the command path.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "L-7",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "seq = open records + 1 is computed outside the append lock, so two concurrent opens can share a seed.",
+    "impact": "Two simultaneous questions get the same draw; correlation only.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "Seeds 3062647667, 3062647667, 1100472038: two concurrent opens share a seed.",
+    "confidence": "low",
+    "file": "src/decisions/journal.ts",
+    "line": 55,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-7",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Probe: Promise.all of 4 openDecision calls with 4 DIFFERENT questions in a fresh journal gave seq 1,1,1,4 and seeds 455472012,455472012,455472012,4223131137, so three decisions share seq/seed. src/decisions/journal.ts:openDecision computes seq = records.filter(open).length + 1 from a readRecords snapshot taken before appendRecord and outside withJournalLock (appendRecord in store.ts is not locked). The idempotency twin check only dedupes identical questions, it does not serialise distinct ones.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "L-8",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "parseModelChoice takes the first digit; store isOpen does not type-check arm/forced/legacy; 'partial' covers both B and C; --line ignores --exclude-legacy.",
+    "impact": "'option 2 of 3' parsed by luck; a hand-edited open record with a bad arm type is read without complaint.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "parseModelChoice takes the first digit run; isOpen does not check arm/forced/legacy; --line ignores excludeLegacy.",
+    "confidence": "low",
+    "file": "src/decisions/quality.ts",
+    "line": 210,
+    "global_id": "2026-10-03-ingest-origin-main-r02#L-8",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "(1) src/decisions/quality.ts:parseModelChoice takes /\\d+/ first match (probe confirmed). (2) src/decisions/store.ts:isOpen checks flow, stage, question, options, mode, order and recommendation only; arm, forced, legacy, seed, channel are not type-checked. (3) src/commands/decisions.ts:runReport --line calls reportLine(process.cwd()) without options, and service.ts:reportLine(cwd) takes no options, so --exclude-legacy is ignored with --line.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "S-5",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "report --json includes question, reason, flow and source of deviations by design; only export is scrubbed.",
+    "impact": "Someone publishes report --json believing it shareable.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "report --json prints loadReport including question and reason.",
+    "confidence": "high",
+    "file": "src/decisions/report.ts",
+    "line": 350,
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-5",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "src/commands/decisions.ts:runReport --json prints JSON.stringify(loadReport(...)); DecisionsReport.deviations (src/decisions/report.ts:DeviationRow, built in buildReport) carries question, reason, flow, flowSource, and backfilled.deviations carry question, reason, flow, source. Only buildExport scrubs text.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  },
+  {
+    "id": "S-6",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "Import does not apply oneLine to option labels and descriptions, reads any path without a size cap, and exportRef is an unsalted hash.",
+    "impact": "Control characters kept in the journal; no live render site found.",
+    "suggested_fix": "Open for the operator to rule on.",
+    "evidence": "No oneLine on labels or descriptions, readFile has no size cap, exportRef is an unsalted sha256 slice.",
+    "confidence": "low",
+    "file": "src/decisions/import.ts",
+    "line": 95,
+    "global_id": "2026-10-03-ingest-origin-main-r02#S-6",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Probe: parseBackfill on an entry with option label 'line1\\nline2 LABELSECRET' padded to 900 chars and description 'd\\nd2' kept the newline and the full 900 chars (label.includes('\\n') true, desc 'd\\nd2'). src/decisions/import.ts:parseEntry does not apply oneLine to option label/description (question, stage, source, reason, recommendation.reason do get oneLine). src/commands/decisions.ts:runImport reads the file with readFile(path.resolve(cwd, file)) with no size cap and no path restriction. export.ts:exportRef is sha256(id).slice(0,12) unsalted: exportRef('x') = 2d711642b726, deterministic.",
+      "verifier": "review-verifier-reverify-open-2026-10-03"
+    }
+  }
+]

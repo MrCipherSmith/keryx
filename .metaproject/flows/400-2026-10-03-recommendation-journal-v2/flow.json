@@ -9,9 +9,9 @@
   "id": "400",
   "slug": "recommendation-journal-v2",
   "title": "Recommendation journal v2: arms, reasons, coverage, quality",
-  "status": "ready",
+  "status": "implemented",
   "createdAt": "2026-10-03T19:20:13.037Z",
-  "updatedAt": "2026-10-03T19:21:16.666Z",
+  "updatedAt": "2026-10-03T20:50:28.907Z",
   "source": {
     "type": "description",
     "ref": null
@@ -19,7 +19,7 @@
   "acChecksum": "sha256:2a60774bbe085736c8de3433fff358b1cdffb0115898795c2ea092bb8ec1184e",
   "acConfirmed": {},
   "pr": {
-    "url": null
+    "url": "875"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -38,7 +38,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -46,14 +46,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered in the PRD, AC and the earlier flow 392 journal code"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -61,14 +63,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR 875 (waves 1, 2a, 2b and review fixes)"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -76,14 +80,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tests added and pinned by arm, golden seeds and a mutation self-check; CI on 875"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -91,7 +97,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "independent review recorded in reviews/2026-10-03-ingest-origin-main, 10 fixed, 11 open for the operator"
     }
   ],
   "history": [
@@ -103,6 +111,35 @@
       "at": "2026-10-03T19:21:16.666Z",
       "event": "frozen",
       "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-03T20:10:28.959Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-03T20:41:08.566Z",
+      "event": "implemented",
+      "detail": "draft PR: 875 (base: main)"
+    },
+    {
+      "at": "2026-10-03T20:50:27.705Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-03T20:50:28.099Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-03T20:50:28.513Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-03T20:50:28.907Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ],
   "acKinds": {
@@ -168,5 +205,6 @@
     "AC16": {
       "kind": "judged"
     }
-  }
+  },
+  "baseBranch": "main"
 }

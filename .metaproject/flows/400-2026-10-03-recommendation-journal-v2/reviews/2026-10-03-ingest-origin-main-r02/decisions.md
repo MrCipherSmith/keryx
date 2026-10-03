@@ -1,0 +1,23 @@
+# Decisions
+
+- L-1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-1: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-2: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-3: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-4: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-7: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-8: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-5: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-6: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
