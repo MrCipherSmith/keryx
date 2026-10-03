@@ -1,0 +1,203 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "397",
+  "slug": "remote-control-review-residuals-approval",
+  "title": "Remote control review residuals: approval frame ack and TUI call-site tests",
+  "status": "in-progress",
+  "createdAt": "2026-10-02T19:57:21.409Z",
+  "updatedAt": "2026-10-02T20:24:19.726Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:8666eefa79addfc06db5e6a7de5a1b21f6c170dbec9126ce929ad959a7490d70",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "origin": {
+    "kind": "agent-finding",
+    "source": "flow 376 review rounds 2026-10-01-ingest-817 and 2026-10-02-ingest-817-r02, findings F-004 (residual), F-010, F-014, F-015, F-016 (residual)"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Extract tui-shell queue/session/narration wiring into an injectable module and test the call sites (AC4, AC5 line)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-02T19:57:21.409Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-02T19:58:46.162Z",
+      "event": "task-added",
+      "detail": "T5: Extract tui-shell queue/session/narration wiring into an injectable module and test the call sites (AC4, AC5 line)"
+    },
+    {
+      "at": "2026-10-02T19:58:46.349Z",
+      "event": "task-added",
+      "detail": "T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)"
+    },
+    {
+      "at": "2026-10-02T20:03:55.015Z",
+      "event": "ac-updated",
+      "detail": "AC4 wording was stale: a turn aborted after a tool call is a failed settle, which sends the failure reply; the no-text reply belongs to a non-failed settle. Reworded F-015 to name both cases."
+    },
+    {
+      "at": "2026-10-02T20:03:55.444Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-02T20:03:55.941Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-02T20:03:59.330Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-02T20:15:10.602Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-02T20:15:10.920Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-02T20:23:05.595Z",
+      "event": "task-done",
+      "detail": "T5: Extract tui-shell queue/session/narration wiring into an injectable module and test the call sites (AC4, AC5 line)"
+    },
+    {
+      "at": "2026-10-02T20:24:19.726Z",
+      "event": "task-done",
+      "detail": "T6: Docs, CHANGELOG, wiki, version bump, extend docs test (AC6)"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "unclassified"
+    },
+    "AC2": {
+      "kind": "unclassified"
+    },
+    "AC3": {
+      "kind": "unclassified"
+    },
+    "AC4": {
+      "kind": "unclassified"
+    },
+    "AC5": {
+      "kind": "unclassified"
+    },
+    "AC6": {
+      "kind": "unclassified"
+    }
+  }
+}

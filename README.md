@@ -1053,8 +1053,16 @@ once to HTML and once to plain text, so a reply is never dropped. `keryx remote
 format-sample` prints the sample in every mode with no network, and `/channels`
 shows the mode and the last fallback; see
 [how replies look in Telegram](docs/docs/guides/drive-keryx-remotely.md#how-replies-look-in-telegram).
-This has been verified against a fake Bot API only; no run against real Telegram has
-been done yet. Setup and limits:
+An approval question is confirmed by the shell: after you press Allow or Deny,
+`serve` waits five seconds for the shell to say it applied the answer to the question
+it was waiting on, then edits the message to "Allowed by ... at ..." or "Denied by ... at ...".
+If the shell was no longer waiting (the question had timed out or the session had
+reconnected) the message says "Not applied" and that the answer changed nothing. If the shell does
+not answer in time the message says the answer was sent to the shell, **not
+confirmed**: the shell did not say in time that it received the answer (a shell that never got an Allow lets its own question time out as a denial; one that got it late still applies it); while
+that is so the shell shows an "Approvals not confirmed" count in `/remote-control`
+and in the sidebar row. This has been verified against a fake Bot API only; no run
+against real Telegram has been done yet. Setup and limits:
 [drive keryx remotely](docs/docs/guides/drive-keryx-remotely.md#remote-control-from-telegram).
 
 ## CI integration

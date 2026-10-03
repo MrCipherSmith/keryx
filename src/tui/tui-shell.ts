@@ -360,17 +360,14 @@ import {
   SIDE_WORKER_ID_PREFIX,
   sideWorkerLabel,
 } from "./side-worker";
-import type { PendingQueueEdit, QueuedMainQuestion } from "./main-queue";
+import type { QueuedMainQuestion } from "./main-queue";
 import {
   formatMainQueueMarker,
   drainIdleMainQueue,
-  dropQueuedBySource,
   parseQueueCommand,
-  pendingQueueEditFor,
   removeMainQueueItem,
-  editMainQueueItem,
-  reinsertEditedMainQueueItem,
 } from "./main-queue";
+import { createRemoteQueueWiring } from "./remote-queue-wiring";
 import type { ConnectNavAction, QueueNavAction } from "./queue-nav";
 import { clampQueueNavIndex, stepConnectNavAction, stepQueueNavAction, stepQueueNavIndex } from "./queue-nav";
 
@@ -4858,20 +4855,37 @@ export async function launchTuiAgentShell(opts: {
       guardCollector.onToolResult(name, toolResult);
       baseOnToolResultForGuard?.(name, toolResult);
     };
+    // Flow 397: the calls between the main queue, the session switches, the turn stream and the
+    // bridge live in `remote-queue-wiring.ts`, where a test drives them. Every closure below runs
+    // late (a keypress, a settled turn), so the names it reaches exist by then.
+    const remoteQueue = createRemoteQueueWiring({
+      getBridge: () => remoteBridge,
+      getQueue: () => mainQueue,
+      setQueue: (next) => {
+        mainQueue = next;
+      },
+      nextId: () => `mq${mainQueueSeq++}`,
+      summarize: summarizeSubmittedLine,
+      paint: () => paintMainQueue(),
+      composer: {
+        setText: (text) => {
+          input.value = text;
+        },
+        focus: () => input.focus(),
+      },
+      say: (text) => io.onSystem?.(text),
+      runLine: (line, origin, source) => runLine(line, origin, source),
+    });
     const baseOnAssistantTextForGuard = io.onAssistantText?.bind(io);
     io.onAssistantText = (text) => {
       guardCollector.onAssistantText(text);
       // Flow 376: the text a human would read; the bridge keeps the last one of a
       // Telegram-originated turn as the reply. Tool calls and reasoning never reach here.
-      remoteBridge?.assistantText(text);
+      remoteQueue.assistantText(text);
       baseOnAssistantTextForGuard?.(text);
     };
     // Flow 376: text followed by a tool call is narration, not the answer; the bridge drops it.
-    const baseOnToolCallForRemote = io.onToolCall?.bind(io);
-    io.onToolCall = (name, toolInput) => {
-      remoteBridge?.toolCall();
-      baseOnToolCallForRemote?.(name, toolInput);
-    };
+    io.onToolCall = remoteQueue.wrapOnToolCall(io.onToolCall?.bind(io));
     /** AC5: sidebar state — zero rows while off, "on · N checked[, M flagged]" while on. */
     const refreshGuardSidebar = (): void => {
       clearTranscriptChildren(sbGuard);
@@ -5930,21 +5944,7 @@ export async function launchTuiAgentShell(opts: {
     // Flow 376: a topic belongs to the session it was registered for. Switching the live
     // session (`/new`, `/resume`, the startup picker) turns remote control off first, so the
     // history interval closes on the session that opened it. A no-op while it is off.
-    const stopRemoteForSessionSwitch = (): void => {
-      // Flow 387 (AC17): a `/new`, `/clear` or `/resume` typed in the Telegram topic keeps the
-      // topic. The history interval closes on the session being left; `sessionEntered` opens
-      // the next one right after the live session is replaced.
-      if (remoteBridge?.keepingTopic === true) {
-        remoteBridge.sessionLeaving();
-        return;
-      }
-      if (remoteBridge?.active !== true) return;
-      // The close is asynchronous (it deregisters, which deletes the topic): say it is
-      // being turned off now, and that the topic is gone only once it really is.
-      const closing = remoteBridge.disable();
-      io.onSystem?.("◇ remote control is turning off: the session changed, and its Telegram topic is being deleted. Turn it on again with /remote-control <name>.\n");
-      void closing.then(() => io.onSystem?.("◇ remote control off: the topic is deleted.\n"));
-    };
+    const stopRemoteForSessionSwitch = (): void => remoteQueue.stopRemoteForSessionSwitch();
 
     const applyOpened = (
       opened: {
@@ -7376,10 +7376,6 @@ export async function launchTuiAgentShell(opts: {
     // QueuedMainQuestion type imported from ./main-queue (pure helpers).
     let mainQueue: QueuedMainQuestion[] = [];
     let mainQueueSeq = 0;
-    // Set by `editMainQueue`: the NEXT plain-text submit while busy re-queues
-    // this item at its original position instead of opening the recipient
-    // selector again (AC5 — edit must preserve position).
-    let pendingQueueEdit: PendingQueueEdit | undefined;
     // Force can be selected more than once while cancellation is settling.
     // Retain every selection in order; only the first schedules the current
     // operation's settlement handoff (AC3).
@@ -7536,27 +7532,8 @@ export async function launchTuiAgentShell(opts: {
       }
     };
 
-    const removeMainQueue = (index: number): void => {
-      if (index < 0 || index >= mainQueue.length) return;
-      // A Telegram line that is thrown away would leave its author waiting: tell the topic.
-      const removedItem = mainQueue[index];
-      if (removedItem?.source === TG_SOURCE) {
-        remoteBridge?.queuedLineRemoved(removedItem.question);
-      }
-      mainQueue = removeMainQueueItem(mainQueue, index);
-      paintMainQueue();
-    };
-
-    const editMainQueue = (index: number): void => {
-      const edited = editMainQueueItem(mainQueue, index);
-      if (edited === undefined) return;
-      mainQueue = edited.rest;
-      // `source` travels with the edit: a Telegram line stays a Telegram line.
-      pendingQueueEdit = pendingQueueEditFor(edited.removed, index);
-      input.value = edited.text;
-      input.focus();
-      paintMainQueue();
-    };
+    const removeMainQueue = (index: number): void => remoteQueue.removeMainQueue(index);
+    const editMainQueue = (index: number): void => remoteQueue.editMainQueue(index);
 
     const forceMainQueue = (index: number): void => {
       const item = mainQueue[index];
@@ -7579,7 +7556,7 @@ export async function launchTuiAgentShell(opts: {
       // showed stays green with the guard deleted.
       void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
         announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
-        run: (next) => runLine(next.question, "operator", next.source),
+        run: (next) => remoteQueue.runQueued(next),
       });
     };
 
@@ -8095,11 +8072,8 @@ export async function launchTuiAgentShell(opts: {
         // AC5: a pending `/queue edit` re-queues at its ORIGINAL position on
         // the very next busy submit, skipping the recipient selector entirely
         // (the item is already committed to the main queue by definition).
-        if (pendingQueueEdit !== undefined) {
-          const edit = pendingQueueEdit;
-          pendingQueueEdit = undefined;
-          mainQueue = reinsertEditedMainQueueItem(mainQueue, edit, line, displayLine);
-          paintMainQueue();
+        // (`remoteQueue` holds the pending edit: `/queue edit` set it, this takes it.)
+        if (remoteQueue.requeuePendingEdit(line, displayLine)) {
           return;
         }
         // Flow 275 T7 (specification §4.3, AC4): "dispatches no side worker
@@ -8155,7 +8129,7 @@ export async function launchTuiAgentShell(opts: {
               takeForced: () => forceHandoff.takeNext(),
               dispatch: (next) => {
                 paintMainQueue();
-                runLine(next.question, "operator", next.source);
+                remoteQueue.runQueued(next);
               },
             });
           } else {
@@ -9088,7 +9062,7 @@ export async function launchTuiAgentShell(opts: {
                   if (!forceHandoff.isAwaitingSettlement) {
                     const next = forceHandoff.takeNext() ?? mainQueue.shift();
                     paintMainQueue();
-                    if (next !== undefined) runLine(next.question, "operator", next.source);
+                    if (next !== undefined) remoteQueue.runQueued(next);
                   }
                 },
               },
@@ -9108,7 +9082,7 @@ export async function launchTuiAgentShell(opts: {
       const operation = foregroundOperation.begin();
       // Flow 376: a turn that came from Telegram has its reply, its approvals and its run
       // time limit handled by the bridge; every other turn resets that state.
-      remoteBridge?.turnStarted(source);
+      remoteQueue.turnStarted(source);
       // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
       // PRIOR turn (abort/error path; the root cause is fixed in
       // `commands/agent.ts`) must never leak stale live-preview text or
@@ -9289,7 +9263,7 @@ export async function launchTuiAgentShell(opts: {
         foregroundOperation.settle(operation);
         // Flow 376: the reply of a Telegram-originated turn goes back to the topic
         // (a no-op for any other turn). Cancelled and failed turns say so there.
-        void remoteBridge?.turnSettled({ failed: turnFailed || turnSignal.aborted });
+        void remoteQueue.turnSettled({ failed: turnFailed, aborted: turnSignal.aborted });
         if (foregroundOperation.isDisposed) return;
         refreshRewindSidebar();
         const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
@@ -9383,7 +9357,7 @@ export async function launchTuiAgentShell(opts: {
           const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
           if (next !== undefined) {
-            runLine(next.question, "operator", next.source);
+            remoteQueue.runQueued(next);
           } else {
             // Flow 274 T7 (specification §5.3): "on turn settle, when
             // busInbox still holds wake-eligible messages" — only once there
@@ -9478,7 +9452,7 @@ export async function launchTuiAgentShell(opts: {
         if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
         const drained = forceHandoff.takeNext() ?? mainQueue.shift();
         paintMainQueue();
-        if (drained !== undefined) runLine(drained.question, "operator", drained.source);
+        if (drained !== undefined) remoteQueue.runQueued(drained);
       },
     });
 
@@ -9611,13 +9585,8 @@ export async function launchTuiAgentShell(opts: {
           forceHandoff.isAwaitingSettlement ||
           mainQueue.length > 0 ||
           leaseView()?.held() === true,
-        runLine: (text) => runLine(text, "operator", TG_SOURCE),
-        enqueue: (text) => {
-          const id = `mq${mainQueueSeq++}`;
-          mainQueue.push({ id, question: text, displayQuestion: summarizeSubmittedLine(text), source: TG_SOURCE });
-          paintMainQueue();
-          io.onSystem?.(`◇ a line from Telegram is queued as q${mainQueue.length}.\n`);
-        },
+        runLine: (text) => remoteQueue.runTelegramLine(text),
+        enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),
         cancelTurn: () => foregroundOperation.cancel("remote run time limit"),
         recordOn: (name) => {
@@ -9638,13 +9607,7 @@ export async function launchTuiAgentShell(opts: {
         },
         // Remote control going off: its queued lines have no topic to answer in. Drop
         // them from the shell queue and hand their text to the bridge, which says so.
-        dropQueuedTelegramLines: () => {
-          const { kept, dropped } = dropQueuedBySource(mainQueue, TG_SOURCE);
-          if (dropped.length === 0) return [];
-          mainQueue = kept;
-          paintMainQueue();
-          return dropped.map((item) => item.question);
-        },
+        dropQueuedTelegramLines: () => remoteQueue.dropQueuedTelegramLines(),
         // Flow 387: slash commands and button pickers from the topic. Each member is a thin
         // call into code the shell already has; none of them shows or accepts a credential.
         runCommand: runRemoteCommand,

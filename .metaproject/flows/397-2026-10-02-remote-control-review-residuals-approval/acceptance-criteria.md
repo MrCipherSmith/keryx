@@ -1,0 +1,18 @@
+# Acceptance Criteria
+
+Rules:
+
+- Criteria lines use the exact format `- ACn: <criterion>`.
+- After `flow freeze` this file is checksum-protected: any edit outside
+  `keryx flow ac update` fails every gate and status transition.
+- Completion requires every ACn to be confirmed via
+  `keryx flow ac confirm <id> <ACn>`.
+
+## Criteria
+
+- AC1: The shell acknowledges every `approval` frame it receives on a proven stream by posting the approval id to serve once; a repeated frame for the same id is acknowledged again without resolving the waiter twice, and a frame on an unproven stream is neither acted on nor acknowledged. Verify: a client test in `src/remote/` feeds an `approval` frame, a duplicate and a frame on an unproven stream, and counts the ack posts (1, 2 and 0); it fails on main, where no ack exists.
+- AC2: Serve finishes a pressed approval as "Allowed by ..." or "Denied by ..." only after the shell's ack for that approval id arrives within `APPROVAL_ACK_MS` (default 5000, injectable through the surface options); with no ack it finishes it as "Sent to the shell at <time>, not confirmed; the shell denies by itself if it did not receive it", and the short reply never says "Approval granted." in that case. Verify: an http-surface test with a stream whose `write` returns true but never acks asserts the "not confirmed" text and no "granted"; the same test with an ack asserts "Allowed"; the first assertion fails on main.
+- AC3: An ack that arrives after the unconfirmed ending changes nothing (no second edit, no second message); an ack for an unknown approval id, or one that belongs to another session, is refused with 4xx and changes nothing. Verify: tests for both cases assert zero further Bot API calls and the refusal status; they fail on any implementation that edits again.
+- AC4: The `src/tui/tui-shell.ts` handlers that carry the 376 fixes (`editMainQueue`, `removeMainQueue`, the session-switch stop and the `onToolCall` wrapper) are built from a module with injected dependencies that `tui-shell.ts` imports, and a test drives that same module: a `[tg]` line edited and re-queued drains with source `tg` (F-010); removing a `[tg]` line calls `queuedLineRemoved` once and removing a local line calls it zero times (F-016); a session switch leaves no `tg` entry in the queue before the live session is replaced (F-014); a turn that says text, calls a tool and then settles without further text sends "Done. There was no text to show." rather than the narration, and the same turn settling as failed or aborted sends the "The run failed" reply, never the narration (F-015). Verify: each assertion goes red when the corresponding call is deleted from the module (checked once by hand per call and recorded in the flow journal), and `tui-shell.ts` contains no second copy of that logic.
+- AC5: TUI visibility: when an approval decision frame arrives from Telegram the shell writes one system line naming the approval id and the decision (`◇ approval <id> allowed from Telegram`) before it acks, and the `/remote-control` status modal and the sidebar show the number of approvals sent but not yet confirmed by an ack while it is above zero. Verify: a test through the same `io.onSystem` and the status view model asserts the line and the counter appear and clear; it fails on main.
+- AC6: The package version is bumped above the version on main at merge time, and README.md, `docs/docs/cli-reference.md`, `.metaproject/wiki/architecture/remote-control.md` and CHANGELOG.md describe the "not confirmed" approval ending and the ack. Verify: the documentation test in `src/standard/help-groups.test.ts` is extended to require the phrase "not confirmed" in those four files and the version bump; it fails before the docs and the bump are in.

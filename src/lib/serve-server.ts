@@ -458,6 +458,7 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["prompt", "POST"],
   ["state", "POST"],
   ["ack", "POST"],
+  ["approval-ack", "POST"],
   ["stream", "GET"],
   // The channels plane (flow 377): connect Telegram, test it, disconnect it.
   ["channels-status", "GET"],
@@ -478,6 +479,7 @@ export type RemoteRouteName =
   | "prompt"
   | "state"
   | "ack"
+  | "approval-ack"
   | "stream"
   | "channels-status"
   | "channels-pair"

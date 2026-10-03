@@ -376,6 +376,25 @@ that it sets `pruneArchive`, and reduce each site to a call of the builder. The
 `/goal` and ACP pins in the same test file read neither god-file and are not
 counted.
 
+### Added by flow 397 (remote control review residuals), review of PR 867
+
+`tui/remote-queue-wiring.test.ts` reads `tui/tui-shell.ts` at one site. It counts
+how many times the shell calls each member of `createRemoteQueueWiring`'s result
+(`assistantText`, `wrapOnToolCall`, `turnStarted`, `turnSettled`, `runQueued` five
+times, the queue edit and removal members, the three Telegram host members). The
+behaviour it protects is that the shell still tells the wiring when a turn starts,
+streams text and settles: the behavioural tests in the same file drive the wiring
+directly, so deleting `remoteQueue.turnSettled(...)`, `remoteQueue.turnStarted(source)`
+or `remoteQueue.assistantText(text)` from the shell leaves all of them green while a
+Telegram-started turn is never answered or its queued lines never drain.
+
+The behaviour is not observable today: the calls sit inside `launchTuiAgentShell`'s
+foreground dispatch, which cannot be mounted in a test. The conversion is the same
+seam as the one above: when the foreground dispatch is extracted into a function the
+wiring can be mounted under, replace the counts with a test that runs a turn through
+it and observes the bridge. The guard counts call sites and pins no line number, so
+moving code does not fail it.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -405,6 +424,7 @@ tui/help-first-run.test.ts | tui/tui-shell.ts | 1
 tui/main-queue.test.ts | tui/tui-shell.ts | 1
 tui/mcp-trust-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/provider-catalog-startup.test.ts | tui/tui-shell.ts | 1
+tui/remote-queue-wiring.test.ts | tui/tui-shell.ts | 1
 tui/routing-classifier-shell-wiring.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/task-cost-shell-wiring.test.ts | tui/tui-shell.ts | 1

@@ -11,7 +11,7 @@
 export const REMOTE_API_PREFIX = "/v1/remote";
 export const REMOTE_SCHEMA_VERSION = "1.0.0";
 
-export type RemoteRoute = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "prompt" | "state" | "ack" | "stream";
+export type RemoteRoute = "register" | "deregister" | "heartbeat" | "reply" | "approval" | "prompt" | "state" | "ack" | "approval-ack" | "stream";
 
 export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">> = {
   register: "POST",
@@ -22,6 +22,7 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   prompt: "POST",
   state: "POST",
   ack: "POST",
+  "approval-ack": "POST",
   stream: "GET",
 };
 
@@ -153,6 +154,12 @@ export const MAX_CALLBACK_DATA_BYTES = 64;
 export const DEFAULT_APPROVAL_TIMEOUT_MS = 5 * 60_000;
 export const MAX_APPROVAL_TIMEOUT_MS = 60 * 60_000;
 export const MIN_APPROVAL_TIMEOUT_MS = 100;
+/**
+ * How long serve waits, after it wrote an approval decision to the shell's stream, for the shell
+ * to say it received it (flow 397). Without that word the approval is shown as "not confirmed",
+ * never as granted: a write that went into a stalled socket proves nothing.
+ */
+export const DEFAULT_APPROVAL_ACK_MS = 5_000;
 
 /** Server comment line on an otherwise idle stream; keeps proxies and the client's own watchdog honest. */
 export const DEFAULT_KEEPALIVE_MS = 15_000;
@@ -273,6 +280,18 @@ export interface PromptBody {
 export interface AckBody {
   sessionId: string;
   updateId: number;
+}
+
+/**
+ * The shell's word on the decision frame for this approval (flow 397). One per frame, repeats allowed.
+ * `applied` says whether the decision reached a live question in the shell. A shell that sends no
+ * `applied` (one older than this field) is read as received-only and treated as applied, which is all
+ * it ever claimed; a present `applied: false` ends the topic message as "not applied", never "Allowed".
+ */
+export interface ApprovalAckBody {
+  sessionId: string;
+  approvalId: string;
+  applied?: boolean;
 }
 
 /**

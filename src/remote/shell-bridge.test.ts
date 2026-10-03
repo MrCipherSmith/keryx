@@ -454,3 +454,39 @@ test("disable during a Telegram turn drops the pending reply", async () => {
   expect(h.client().replies).toEqual([]);
   expect(h.bridge.telegramTurnActive).toBe(false);
 });
+
+// Flow 397 (AC5, F-004): what the shell received from the topic is said in the transcript before it is acknowledged,
+// and a decision serve has not confirmed is counted where the status is shown.
+test("AC5: an approval frame from the topic is said in the transcript, allowed or denied, naming the id", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.client().options.onApprovalFrame?.({ approvalId: "ap0123456789ab", decision: "allow", applied: true });
+  h.client().options.onApprovalFrame?.({ approvalId: "ap0123456789cd", decision: "deny", applied: true });
+  expect(h.calls).toContain("notice:◇ approval ap0123456789ab allowed from Telegram");
+  expect(h.calls).toContain("notice:◇ approval ap0123456789cd denied from Telegram");
+});
+
+test("AC5: a decision that reached no live question is not said as allowed or denied", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  h.client().options.onApprovalFrame?.({ approvalId: "ap0123456789ab", decision: "allow", applied: false });
+  h.client().options.onApprovalFrame?.({ approvalId: "ap0123456789cd", decision: "deny", applied: false });
+  const notices = h.calls.filter((call) => call.startsWith("notice:"));
+  expect(notices.join("\n")).not.toMatch(/allowed from Telegram|denied from Telegram/);
+  expect(h.calls).toContain("notice:◇ approval ap0123456789ab: an allow from Telegram arrived but nothing here was waiting for it; not applied");
+  expect(h.calls).toContain("notice:◇ approval ap0123456789cd: a deny from Telegram arrived but nothing here was waiting for it; not applied");
+});
+
+test("AC5: the status carries the unconfirmed-approvals count only while it is above zero, and a change repaints", async () => {
+  const h = harness();
+  await h.bridge.enable();
+  const fake = h.client() as FakeClient & { unconfirmedApprovals?: number };
+  expect(h.bridge.status().unconfirmedApprovals).toBeUndefined();
+  fake.unconfirmedApprovals = 2;
+  expect(h.bridge.status().unconfirmedApprovals).toBe(2);
+  const before = h.calls.filter((call) => call === "change").length;
+  fake.options.onUnconfirmedChange?.();
+  expect(h.calls.filter((call) => call === "change").length).toBe(before + 1);
+  fake.unconfirmedApprovals = 0;
+  expect(h.bridge.status().unconfirmedApprovals).toBeUndefined();
+});

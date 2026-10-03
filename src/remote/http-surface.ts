@@ -29,6 +29,7 @@ import type { RemoteHub, RemoteConsumer, HubTimers, CallbackDelivery, DeliverMet
 import { realTimers } from "./hub";
 import {
   type AckBody,
+  type ApprovalAckBody,
   type ApprovalBody,
   type ApprovalDecision,
   type ApprovalEvent,
@@ -36,10 +37,12 @@ import {
   type ChoiceEvent,
   choiceCallbackData,
   DEFAULT_ACK_TIMEOUT_MS,
+  DEFAULT_APPROVAL_ACK_MS,
   DEFAULT_APPROVAL_TIMEOUT_MS,
   DEFAULT_KEEPALIVE_MS,
   encodeSseEvent,
   type InboundEvent,
+  isApprovalId,
   isMessageState,
   isSessionId,
   MAX_APPROVAL_PROMPT_CHARS,
@@ -96,6 +99,8 @@ export interface RemoteSurfaceOptions {
   timers?: HubTimers;
   keepaliveMs?: number;
   ackTimeoutMs?: number;
+  /** How long a pressed approval waits for the shell to confirm it received the decision (flow 397). */
+  approvalAckMs?: number;
   /** Test seam: the approval id generator. Must produce `ap` and 12 lowercase hex characters. */
   approvalIds?: () => string;
   /** Test seam: the choice prompt id generator. Must produce `pk` and 12 lowercase hex characters. */
@@ -238,6 +243,22 @@ interface PendingApproval {
   text?: string;
 }
 
+/**
+ * An approval whose decision frame was written to the shell's stream and is waiting for the shell's
+ * word that it arrived (flow 397). The message is not finished until then: a write is not receipt.
+ */
+interface AwaitingApproval {
+  sessionId: string;
+  decision: ApprovalDecision;
+  /** `user <id>`, as it appears in the final text. */
+  who: string;
+  /** When the decision was sent, as the final text shows it. */
+  sentAt: string;
+  timer: unknown;
+  messageId?: number;
+  text?: string;
+}
+
 /** A picker or a Yes/No waiting for a press (flow 387). */
 interface PendingChoice extends PendingApproval {
   /** The label of each button, in reading order across the rows. */
@@ -255,6 +276,8 @@ interface FinishedPrompt {
 }
 
 const MAX_FINISHED_PROMPTS = 128;
+/** How many answered approval ids are remembered so a late or repeated ack is recognised and ignored. */
+const MAX_DECIDED_APPROVALS = 256;
 /** Edits stay under Telegram's limit even after the result line is added. */
 const MAX_SETTLED_TEXT_CHARS = 3_600;
 
@@ -289,6 +312,7 @@ export class RemoteHttpSurface {
   private readonly timers: HubTimers;
   private readonly keepaliveMs: number;
   private readonly ackTimeoutMs: number;
+  private readonly approvalAckMs: number;
   private readonly newApprovalId: () => string;
   private readonly newPromptId: () => string;
   private readonly streams = new Map<string, ShellStream>();
@@ -300,6 +324,9 @@ export class RemoteHttpSurface {
   private readonly bound = new Map<string, string>();
   private readonly pendingAcks = new Map<string, Map<number, PendingAck>>();
   private readonly approvals = new Map<string, PendingApproval>();
+  private readonly awaiting = new Map<string, AwaitingApproval>();
+  /** Approval id to its session, once the decision was sent and either confirmed or given up on (bounded). */
+  private readonly decided = new Map<string, string>();
   private readonly choices = new Map<string, PendingChoice>();
   private readonly finished = new Map<string, FinishedPrompt>();
 
@@ -308,6 +335,7 @@ export class RemoteHttpSurface {
     this.timers = options.timers ?? realTimers;
     this.keepaliveMs = options.keepaliveMs ?? DEFAULT_KEEPALIVE_MS;
     this.ackTimeoutMs = options.ackTimeoutMs ?? DEFAULT_ACK_TIMEOUT_MS;
+    this.approvalAckMs = options.approvalAckMs ?? DEFAULT_APPROVAL_ACK_MS;
     this.newApprovalId = options.approvalIds ?? (() => `ap${randomBytes(6).toString("hex")}`);
     this.newPromptId = options.promptIds ?? (() => `pk${randomBytes(6).toString("hex")}`);
     this.consumer = {
@@ -386,6 +414,8 @@ export class RemoteHttpSurface {
         return this.messageState(hub, request);
       case "ack":
         return this.ack(hub, request);
+      case "approval-ack":
+        return this.approvalAck(hub, request);
       case "stream":
         return this.openStream(hub, request, io);
     }
@@ -404,6 +434,9 @@ export class RemoteHttpSurface {
     }
     for (const id of [...this.approvals.keys()]) {
       this.dropApproval(id);
+    }
+    for (const id of [...this.awaiting.keys()]) {
+      this.dropAwaiting(id);
     }
     for (const id of [...this.choices.keys()]) {
       this.dropChoice(id);
@@ -763,6 +796,56 @@ export class RemoteHttpSurface {
     return ok({ acknowledged: true });
   }
 
+  /**
+   * The shell says it received the decision frame for an approval (flow 397). Only the session the
+   * decision went to can confirm it. A late or repeated ack for an approval already finished is
+   * accepted and changes nothing; an id this surface never sent, or sent to another session, is refused.
+   */
+  private async approvalAck(hub: RemoteHub, request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return body.response;
+    }
+    const value = body.value as Partial<ApprovalAckBody> & Record<string, unknown>;
+    if (!isSessionId(value.sessionId)) {
+      return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+    }
+    if (!isApprovalId(value.approvalId)) {
+      return invalid("approvalId must be 'ap' and 12 lowercase hex characters.");
+    }
+    if (!hub.hasSession(value.sessionId)) {
+      return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
+    }
+    if (value.applied !== undefined && typeof value.applied !== "boolean") {
+      return invalid("applied must be true or false when present.");
+    }
+    const sessionId = value.sessionId;
+    const id = value.approvalId;
+    const waiting = this.awaiting.get(id);
+    if (waiting !== undefined && waiting.sessionId === sessionId) {
+      this.dropAwaiting(id);
+      this.rememberDecided(id, sessionId);
+      if (value.applied === false) {
+        // The shell got the frame but no live question took it: say so, never "Allowed".
+        this.finishApproval(id, sessionId, waiting.messageId, waiting.text, {
+          result: `Not applied at ${waiting.sentAt}: the shell was no longer waiting for this question, so the ${waiting.decision === "allow" ? "Allow" : "Deny"} from ${waiting.who} changed nothing.`,
+          shortReply: "Not applied: the shell was no longer waiting for this question.",
+        });
+        return ok({ acknowledged: true });
+      }
+      // `applied` true, or absent: an older shell, whose ack only ever meant "received".
+      this.finishApproval(id, sessionId, waiting.messageId, waiting.text, {
+        result: waiting.decision === "allow" ? `Allowed by ${waiting.who} at ${waiting.sentAt}.` : `Denied by ${waiting.who} at ${waiting.sentAt}.`,
+        shortReply: waiting.decision === "allow" ? "Approval granted." : "Approval denied.",
+      });
+      return ok({ acknowledged: true });
+    }
+    if (this.decided.get(id) === sessionId) {
+      return ok({ acknowledged: true });
+    }
+    return fail(404, "unknown-approval", "No approval with that id was sent to this session.");
+  }
+
   private openStream(hub: RemoteHub, request: Request, io: { untimed: () => void }): Response {
     const sessionId = new URL(request.url).searchParams.get("sessionId");
     if (!isSessionId(sessionId)) {
@@ -949,16 +1032,27 @@ export class RemoteHttpSurface {
         });
         return;
       }
-      const who = `user ${callback.fromId}`;
-      this.finishApproval(id, sessionId, messageId, entry.text, {
-        result: approval.decision === "allow" ? `Allowed by ${who} at ${when}.` : `Denied by ${who} at ${when}.`,
-        shortReply: approval.decision === "allow" ? "Approval granted." : "Approval denied.",
+      // Written is not received: the message stays as it is until the shell's ack arrives, or
+      // the wait runs out and it is shown as "not confirmed" (flow 397, F-004).
+      this.awaiting.set(id, {
+        sessionId,
+        decision: approval.decision,
+        who: `user ${callback.fromId}`,
+        sentAt: when,
+        ...(messageId === undefined ? {} : { messageId }),
+        ...(entry.text === undefined ? {} : { text: entry.text }),
+        timer: this.timers.setTimeout(() => this.giveUpOnAck(id), this.approvalAckMs),
       });
       return;
     }
     if (entry !== undefined) {
       // The window closed and the timer has not run yet: it is expired now.
       this.expireApproval(id);
+      return;
+    }
+    if (this.awaiting.has(id)) {
+      // Decided, waiting for the shell's ack: a second press is not a second answer, and the
+      // message it came from still carries the question until the ack or the timeout settles it.
       return;
     }
     const done = this.finished.get(id);
@@ -983,7 +1077,7 @@ export class RemoteHttpSurface {
   }
 
   private carriesLivePrompt(messageId: number): boolean {
-    return [...this.approvals.values(), ...this.choices.values()].some((live) => live.messageId === messageId);
+    return [...this.approvals.values(), ...this.awaiting.values(), ...this.choices.values()].some((live) => live.messageId === messageId);
   }
 
   /**
@@ -1075,7 +1169,7 @@ export class RemoteHttpSurface {
   }
 
   private onApprovalSent(approvalId: string, sessionId: string, messageId: number, text: string): void {
-    const live = this.approvals.get(approvalId);
+    const live = this.approvals.get(approvalId) ?? this.awaiting.get(approvalId);
     if (live !== undefined) {
       live.messageId = messageId;
       live.text = text;
@@ -1136,6 +1230,41 @@ export class RemoteHttpSurface {
     this.approvals.delete(approvalId);
   }
 
+  private dropAwaiting(approvalId: string): void {
+    const entry = this.awaiting.get(approvalId);
+    if (entry === undefined) {
+      return;
+    }
+    this.timers.clearTimeout(entry.timer);
+    this.awaiting.delete(approvalId);
+  }
+
+  private rememberDecided(approvalId: string, sessionId: string): void {
+    this.decided.delete(approvalId);
+    this.decided.set(approvalId, sessionId);
+    while (this.decided.size > MAX_DECIDED_APPROVALS) {
+      const oldest = this.decided.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.decided.delete(oldest);
+    }
+  }
+
+  /** No ack inside the window: say what is known (sent, not confirmed), never "granted". A later ack changes nothing. */
+  private giveUpOnAck(approvalId: string): void {
+    const entry = this.awaiting.get(approvalId);
+    if (entry === undefined) {
+      return;
+    }
+    this.dropAwaiting(approvalId);
+    this.rememberDecided(approvalId, entry.sessionId);
+    this.finishApproval(approvalId, entry.sessionId, entry.messageId, entry.text, {
+      result: `Sent to the shell at ${entry.sentAt}, not confirmed; the shell denies by itself if it did not receive it.`,
+      shortReply: "Sent to the shell, not confirmed; it denies by itself if it did not receive it.",
+    });
+  }
+
   private expireApproval(approvalId: string): void {
     const entry = this.approvals.get(approvalId);
     if (entry === undefined) {
@@ -1173,6 +1302,12 @@ export class RemoteHttpSurface {
             shortReply: "Approval cancelled: the shell disconnected, so it was denied.",
           });
         }
+      }
+    }
+    for (const [id, entry] of [...this.awaiting.entries()]) {
+      if (entry.sessionId === stream.sessionId && !this.closed) {
+        // The stream is gone, so the ack cannot come on it: settle now as not confirmed.
+        this.giveUpOnAck(id);
       }
     }
     for (const [id, entry] of [...this.choices.entries()]) {

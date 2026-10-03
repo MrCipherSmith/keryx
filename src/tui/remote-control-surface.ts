@@ -99,6 +99,10 @@ export function formatRemoteStatusLines(status: RemoteStatus): string[] {
   lines.push(`Topic: ${status.name ?? "registering"}`);
   lines.push(`Last heartbeat: ${status.heartbeatAgeMs === undefined ? "none yet" : `${formatAge(status.heartbeatAgeMs)} ago`}`);
   if (status.state === "offline") lines.push("Serve is not reachable. The shell keeps retrying; nothing is lost from Telegram.");
+  if (status.unconfirmedApprovals !== undefined && status.unconfirmedApprovals > 0) {
+    const n = status.unconfirmedApprovals;
+    lines.push(`Approvals not confirmed: ${n}. The topic shows ${n === 1 ? "it" : "them"} as "not confirmed" until serve takes the shell's ack.`);
+  }
   lines.push(`Turn it off with ${REMOTE_CONTROL_COMMAND} off, or press o here. Rename: ${REMOTE_CONTROL_COMMAND} off, then ${REMOTE_CONTROL_COMMAND} <name>.`);
   return lines;
 }
@@ -283,7 +287,11 @@ function fit(text: string, width: number): string {
 export function projectRemoteRow(status: RemoteStatus | undefined, width: number): RemoteRow {
   if (status === undefined || status.state === "off") return { text: fit("off", width), role: "muted", action: "open" };
   if (status.state === "offline") return { text: fit("offline", width), role: "attention", action: "open" };
-  return { text: fit(status.name ?? "connecting", width), role: "ok", action: "open" };
+  const topic = status.name ?? "connecting";
+  const unconfirmed = status.unconfirmedApprovals ?? 0;
+  // Flow 397: a decision serve has not confirmed is attention, not "ok": the topic shows it as "not confirmed".
+  if (unconfirmed > 0) return { text: fit(`${topic} · ${unconfirmed} unconfirmed`, width), role: "attention", action: "open" };
+  return { text: fit(topic, width), role: "ok", action: "open" };
 }
 
 type PanelParent = { add(child: unknown): void };
