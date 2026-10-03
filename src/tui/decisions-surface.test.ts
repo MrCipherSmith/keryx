@@ -9,7 +9,20 @@ import path from "node:path";
 import { answerDecision, loadReport, openDecision, reportText } from "../decisions/service";
 import { findAgentCommand } from "../commands/agent-commands";
 import { classifyBusyDispatch } from "./busy-dispatch";
-import { formatDecisionsLines, isDecisionsCommand, mountDecisionsSidebar, parseDecisionsCommand, presentDecisions, projectDecisionsPanel, routeDecisionsCommand, runDecisionsFollowup } from "./decisions-surface";
+import {
+  armsSummaryText,
+  armsText,
+  formatDecisionsLines,
+  isDecisionsCommand,
+  mountDecisionsSidebar,
+  parseDecisionsCommand,
+  presentDecisions,
+  projectArmsPanel,
+  projectDecisionsPanel,
+  routeDecisionsCommand,
+  runDecisionsFollowup,
+  summarizeArms,
+} from "./decisions-surface";
 import type { OpenModalFn } from "./flow-inspector";
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { clickNode, findById, keypressSource, loadOpenTui, manualInterval, mountChrome, settle, textOf } from "./ops-sidebar.test-helpers";
@@ -219,4 +232,186 @@ test("/decisions reason|change with no session decision and no flow touches noth
   const report = await loadReport(root);
   expect(report.changed).toBe(0);
   expect(report.deviations[0]).not.toHaveProperty("reason");
+});
+
+// --- flow 400 (AC16): the arm summary, as a command and as a side-panel section ---
+
+const cell = (decisions: number, answered: number, matched: number, medianMs: number | null = null) => ({ decisions, answered: decisions, tally: { answered, matched }, medianMs });
+const ARM_REPORT = {
+  byArm: { A: cell(10, 8, 6, 4200), B: cell(5, 4, 2, 65_000), C: cell(5, 5, 2), D: cell(5, 0, 0) },
+  armA: { free: cell(7, 6, 5), forced: cell(3, 2, 1) },
+};
+
+test("parseDecisionsCommand: /decisions arms is its own command", () => {
+  expect(parseDecisionsCommand("/decisions arms")).toEqual({ kind: "arms" });
+  expect(parseDecisionsCommand("/decisions  arms ")).toEqual({ kind: "arms" });
+  expect(parseDecisionsCommand("/decisions armsx")).toEqual({ kind: "show" });
+});
+
+test("summarizeArms reads the report's cells as they are and computes only the share", () => {
+  const summary = summarizeArms(ARM_REPORT);
+  expect(summary.basis).toBe("arms");
+  expect(summary.rows.map((row) => [row.key, row.decisions, row.matched, row.answered, row.share])).toEqual([
+    ["A", 10, 6, 8, 0.75],
+    ["B", 5, 2, 4, 0.5],
+    ["C", 5, 2, 5, 0.4],
+    ["D", 5, 0, 0, null],
+  ]);
+  expect(summary.armA.map((row) => [row.key, row.decisions, row.share])).toEqual([
+    ["A-free", 7, 5 / 6],
+    ["A-forced", 3, 0.5],
+  ]);
+});
+
+test("armsSummaryText: the table, the A split, and `-` where no answered decision had a recommendation", () => {
+  const text = armsSummaryText(summarizeArms(ARM_REPORT));
+  expect(text).toContain("Recommendation arms");
+  expect(text).toMatch(/A {2}mark shown, preselected\s+10 {2}\s*6\/8 {2}\s*75% {2}4\.2s/);
+  expect(text).toMatch(/D {2}mark hidden, shuffled\s+5\s+0\/0\s+- {2}-/);
+  expect(text).toContain("1m");
+  expect(text).toContain("Arm A, split:");
+  expect(text).toContain("A forced (irreversible)");
+});
+
+test("without the new fields the summary falls back to the older modes and says so, never throws", () => {
+  const modes = { byMode: { ordinary: { answered: 4, matched: 3 }, partial: { answered: 0, matched: 0 }, blind: { answered: 2, matched: 1 } } };
+  const summary = summarizeArms(modes);
+  expect(summary.basis).toBe("modes");
+  expect(summary.armA).toEqual([]);
+  const text = armsSummaryText(summary);
+  expect(text).toContain("no per-arm data");
+  expect(text).toMatch(/ordinary .*3\/4 +75%/);
+  expect(text).not.toContain("Arm A, split:");
+  for (const junk of [undefined, null, {}, 7, { byArm: null }, { byArm: { A: "x" } }]) {
+    expect(() => armsSummaryText(summarizeArms(junk))).not.toThrow();
+  }
+  // byArm present, armA split absent: the four arms show and the split block is simply left out
+  const noSplit = armsSummaryText(summarizeArms({ byArm: ARM_REPORT.byArm }));
+  expect(noSplit).toContain("Recommendation arms");
+  expect(noSplit).not.toContain("Arm A, split:");
+});
+
+test("projectArmsPanel: hidden without data or on the old modes, one row that fits the sidebar otherwise", () => {
+  expect(projectArmsPanel(summarizeArms({}), SIDEBAR_TEXT_WIDTH)).toEqual({ visible: false, text: "" });
+  expect(projectArmsPanel(summarizeArms({ byMode: { ordinary: { answered: 3, matched: 3 } } }), SIDEBAR_TEXT_WIDTH).visible).toBe(false);
+  const empty = { byArm: { A: cell(2, 0, 0), B: cell(0, 0, 0), C: cell(0, 0, 0), D: cell(0, 0, 0) } };
+  expect(projectArmsPanel(summarizeArms(empty), SIDEBAR_TEXT_WIDTH).visible).toBe(false);
+  const row = projectArmsPanel(summarizeArms(ARM_REPORT), SIDEBAR_TEXT_WIDTH);
+  expect(row.visible).toBe(true);
+  expect(row.text).toContain("A 75%");
+  expect(row.text).toContain("D -");
+  expect(row.text.length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+  expect(projectArmsPanel(summarizeArms(ARM_REPORT), 12).text.length).toBeLessThanOrEqual(12);
+});
+
+test("armsText reads the real journal through loadReport: empty, then one answered arm decision", async () => {
+  expect(await armsText(root)).toContain("Recommendation");
+  await seed();
+  const text = await armsText(root);
+  // a journal written by this build carries the arm; the cell for it counts the decision
+  const report = (await loadReport(root)) as { byArm?: unknown };
+  if (report.byArm !== undefined) expect(text).toContain("Recommendation arms");
+  else expect(text).toContain("no per-arm data");
+});
+
+test("the arms modal paints the arm summary under its own tab", async () => {
+  let tabs: Array<{ label: string }> | undefined;
+  let painted: string | undefined;
+  const open: OpenModalFn = (_otui, _chrome, input) => {
+    tabs = [...input.tabs];
+    input.renderTab?.("report", { add: () => undefined } as never, undefined as never);
+    return { close: () => undefined } as never;
+  };
+  class FakeText {
+    content: string;
+    constructor(_r: unknown, opts: { id: string; content: string }) {
+      this.content = opts.content;
+      painted = opts.content;
+    }
+  }
+  const text = armsSummaryText(summarizeArms(ARM_REPORT));
+  expect(presentDecisions(open, { TextRenderable: FakeText }, {}, { text, tabLabel: "Arms", visibleRows: 40 })).toBeDefined();
+  expect(tabs?.[0]?.label).toBe("Arms");
+  expect(painted).toContain("Arm A, split:");
+});
+
+function mountArms(h: Awaited<ReturnType<typeof mountChrome>>, state: { n: number; report: unknown }) {
+  const timer = manualInterval();
+  const sidebar = mountDecisionsSidebar({
+    otui: OTUI!.core,
+    chrome: h.chrome,
+    parent: h.chrome.sidebarTop,
+    width: SIDEBAR_TEXT_WIDTH,
+    cwd: root,
+    onKeypress: keypressSource(h.renderer),
+    count: async () => state.n,
+    armsReport: async () => {
+      if (state.report instanceof Error) throw state.report;
+      return state.report;
+    },
+    interval: timer.interval,
+  });
+  return { sidebar, timer };
+}
+
+otuiTest("the arms row is absent with no decisions and appears with the shares once an arm has answered ones", async () => {
+  const h = await mountChrome(OTUI!);
+  const state: { n: number; report: unknown } = { n: 0, report: ARM_REPORT };
+  const { sidebar, timer } = mountArms(h, state);
+  try {
+    await settle(h);
+    expect(findById(h.chrome.sidebarTop, "sb-decisions-arms-row")).toBeUndefined();
+    expect(sidebar.armsProjection().visible).toBe(false);
+    state.n = 3;
+    await timer.fire();
+    await settle(h);
+    expect(textOf(findById(h.chrome.sidebarTop, "sb-decisions-arms-row"))).toContain("A 75%");
+    const paints = sidebar.paintCount();
+    await timer.fire();
+    expect(sidebar.paintCount()).toBe(paints);
+    // old report shape: the row goes away rather than showing nothing useful
+    state.report = { byMode: { ordinary: { answered: 1, matched: 1 } } };
+    await timer.fire();
+    await settle(h);
+    expect(findById(h.chrome.sidebarTop, "sb-decisions-arms-row")).toBeUndefined();
+    // an unreadable report hides it too
+    state.report = ARM_REPORT;
+    await timer.fire();
+    await settle(h);
+    expect(findById(h.chrome.sidebarTop, "sb-decisions-arms-row")).toBeDefined();
+    state.report = new Error("boom");
+    await timer.fire();
+    await settle(h);
+    expect(findById(h.chrome.sidebarTop, "sb-decisions-arms-row")).toBeUndefined();
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
+});
+
+otuiTest("/decisions arms and a click on the arms row open the arm modal; /decisions still opens the report", async () => {
+  const h = await mountChrome(OTUI!);
+  const state: { n: number; report: unknown } = { n: 2, report: ARM_REPORT };
+  const { sidebar } = mountArms(h, state);
+  try {
+    await settle(h);
+    expect(sidebar.handleCommand("/decisions arms")).toBe(true);
+    await settle(h);
+    await clickNode(h, findById(h.chrome.sidebarTop, "sb-decisions-arms-row"));
+    await settle(h);
+    expect(sidebar.handleCommand("/decisions")).toBe(true);
+    await settle(h);
+    const shown = await sidebar.showArms();
+    expect(shown).toBeDefined();
+  } finally {
+    sidebar.dispose();
+    h.destroy();
+  }
+});
+
+test("/decisions arms routes through the shell's agent-command registry", () => {
+  const taken: string[] = [];
+  expect(routeDecisionsCommand("/decisions arms", { handleCommand: (line) => (taken.push(line), true) })).toBe(true);
+  expect(taken).toEqual(["/decisions arms"]);
+  expect(findAgentCommand("/decisions", "agent")?.description).toContain("/decisions arms");
 });

@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "400",
+  "slug": "recommendation-journal-v2",
+  "title": "Recommendation journal v2: arms, reasons, coverage, quality",
+  "status": "implemented",
+  "createdAt": "2026-10-03T19:20:13.037Z",
+  "updatedAt": "2026-10-03T20:50:28.907Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:2a60774bbe085736c8de3433fff358b1cdffb0115898795c2ea092bb8ec1184e",
+  "acConfirmed": {},
+  "pr": {
+    "url": "875"
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "human",
+  "origin": {
+    "kind": "human-request",
+    "quote": "в openDecision, добавить режимы „пометка без предвыбора“ и „перемешано с пометкой“ … эффект — сделать результат выбора более детерминированным и изучаемым",
+    "source": "channel messages 180099-180101, 2026-10-03T09:23Z; PRD and AC approved in poll 58, outcome author human per poll 57"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered in the PRD, AC and the earlier flow 392 journal code"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented in PR 875 (waves 1, 2a, 2b and review fixes)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "tests added and pinned by arm, golden seeds and a mutation self-check; CI on 875"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "independent review recorded in reviews/2026-10-03-ingest-origin-main, 10 fixed, 11 open for the operator"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-03T19:20:13.037Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-10-03T19:21:16.666Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-10-03T20:10:28.959Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-03T20:41:08.566Z",
+      "event": "implemented",
+      "detail": "draft PR: 875 (base: main)"
+    },
+    {
+      "at": "2026-10-03T20:50:27.705Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-10-03T20:50:28.099Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-10-03T20:50:28.513Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-10-03T20:50:28.907Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ],
+  "acKinds": {
+    "AC1": {
+      "kind": "exec",
+      "check": "bun test src/decisions/arms.test.ts"
+    },
+    "AC2": {
+      "kind": "exec",
+      "check": "bun test src/tui/composer-choice.test.ts"
+    },
+    "AC3": {
+      "kind": "exec",
+      "check": "bun test src/decisions/ask.test.ts"
+    },
+    "AC4": {
+      "kind": "exec",
+      "check": "bun test src/decisions/arms.test.ts"
+    },
+    "AC5": {
+      "kind": "exec",
+      "check": "bun test src/commands/ask-user-tool.test.ts"
+    },
+    "AC6": {
+      "kind": "exec",
+      "check": "bun test src/decisions/journal.test.ts"
+    },
+    "AC7": {
+      "kind": "exec",
+      "check": "bun test src/decisions/ask.test.ts"
+    },
+    "AC8": {
+      "kind": "exec",
+      "check": "bun test src/decisions/coverage.test.ts"
+    },
+    "AC9": {
+      "kind": "exec",
+      "check": "bun test src/decisions/interviewer-path.test.ts"
+    },
+    "AC10": {
+      "kind": "exec",
+      "check": "bun test src/decisions/report.test.ts"
+    },
+    "AC11": {
+      "kind": "exec",
+      "check": "bun test src/decisions/import.test.ts"
+    },
+    "AC12": {
+      "kind": "exec",
+      "check": "bun test src/decisions/quality.test.ts"
+    },
+    "AC13": {
+      "kind": "exec",
+      "check": "bun test src/decisions/report.test.ts"
+    },
+    "AC14": {
+      "kind": "exec",
+      "check": "bun test src/decisions/export.test.ts"
+    },
+    "AC15": {
+      "kind": "judged"
+    },
+    "AC16": {
+      "kind": "judged"
+    }
+  },
+  "baseBranch": "main"
+}

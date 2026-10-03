@@ -87,22 +87,20 @@ blockers?: string[]       — unresolved critical unknowns
 - **Max 8 questions** — stop when enough context is gathered
 - **Confirm before proceeding** — summarize gathered context, state the summary's own confidence (the weakest of the answers it rests on), and ask if correct
 
+## Host or no host
+
+Before the first question, check whether a host can show it: the `ask_user` tool is available in this run.
+
+- **Host present:** ask every question through `ask_user`, one per call, with the A/B/C/D options as its options.
+- **No host:** ask NO question, not even in plain text; nobody is there to answer it. Return `status: "NEEDS_CONTEXT"` with the `assumptions` you would have asked about (question, assumption, `confidence: "assumption"`), `ready_to_proceed: false`. The caller decides.
+- A cancelled or empty `ask_user` answer is not an answer: record it as an assumption and stop asking.
+- The contract is `runInterview` in `src/decisions/interviewer.ts`; `interviewer-path.test.ts` pins it.
+
 ## Question Bank by Goal Type
 
-### For implementation goals
-- What is the expected input/output?
-- What are the edge cases that must be handled?
-- What is the performance/scale requirement?
-- What should NOT be changed (constraints)?
-
-### For review goals
-- What specific concerns should the review focus on?
-- What is the acceptance criteria?
-
-### For architecture/design goals
-- What are the hard constraints (performance, compat, timeline)?
-- What are you most worried about?
-- Who else is affected by this decision?
+- **Implementation:** expected input/output, edge cases that must be handled, performance or scale requirement, what must NOT change.
+- **Review:** which concerns the review should focus on, the acceptance criteria.
+- **Architecture/design:** hard constraints (performance, compat, timeline), what worries you most, who else is affected.
 
 ## Red Flags
 

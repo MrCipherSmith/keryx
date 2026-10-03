@@ -292,7 +292,7 @@ describe("import", () => {
 
 /** One live decision answered `choice`, shown the given way. */
 async function live(id: string, choice: string, mode: "ordinary" | "blind", now: Date, answeredAfterMs = 4000): Promise<void> {
-  await openDecision({ cwd: root, id, question: `live ${id}`, options: OPTIONS, recommendation: { optionId: "o0", reason: "" }, random: () => (mode === "blind" ? 0 : 0.99), now: () => now });
+  await openDecision({ cwd: root, id, question: `live ${id}`, options: OPTIONS, recommendation: { optionId: "o0", reason: "" }, arm: mode === "blind" ? "D" : "A", now: () => now });
   await answerDecision({ cwd: root, id, choice, now: () => new Date(now.getTime() + answeredAfterMs) });
 }
 

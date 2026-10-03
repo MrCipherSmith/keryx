@@ -286,7 +286,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   {
     // Flow 392: the recommendation journal's report, the same lines `keryx decisions report` prints.
     name: "/decisions",
-    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions reason <why> and /decisions change <option> follow up on the last answer",
+    description: "Recommendation journal: how often you follow the agent's recommendation, by mode and stage, and the deviations; /decisions arms: how often it was followed in each arm; /decisions reason <why> and /decisions change <option> follow up on the last answer",
     modes: AGENT_ONLY,
   },
   {

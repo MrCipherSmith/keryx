@@ -709,16 +709,23 @@ Grouped by what you are trying to do, not by internal module layout.
   order, your choice, the time you took and, after a deviation, an optional
   reason (asked once, and the tool result waits for it; an empty answer releases
   the wait; add or change it later with `/decisions reason`).
-  One question in three is asked blind (no "recommended" mark, random order,
-  revealed after the answer, changeable with `/decisions change`), never for
+  A question with a recommendation is asked in one of four ways: ordinary (arm A, the
+  recommended option preselected), the mark with nothing preselected (B), shuffled with the
+  mark (C), or blind (D: no "recommended" mark in the flag or the words, random order,
+  revealed after the answer, changeable with `/decisions change`). The arm is a seeded
+  function of a per-repository salt; the weights are 0.4, 0.2, 0.2, 0.2. Never blind for
   release, ship, publish, deploy, delete or push, nor for merge, drop, remove or
   force next to main, production, a branch or a table, or with no real object
   ("merge it"); agents set `--action` (or `irreversible: true` in `ask_user`) for
   the irreversible ones, and the report counts how often blind was refused.
-  `keryx decisions report` prints the match share by mode and stage and the
-  deviations, with no model; `keryx decisions open|answer|reason` lets any agent
+  `keryx decisions report` prints the match share by mode, arm, channel and stage and
+  the deviations, with no model (the pre-arm records are shown apart as legacy);
+  `keryx decisions rate` records whether a recommendation was good (yours, or a
+  model's self-assessment in a clean context) and `keryx decisions export` writes
+  the structure of each decision with no question or option text;
+  `keryx decisions open|answer|reason` lets any agent
   or chat bridge drive it. In the TUI, `/decisions` and a sidebar row show the
-  same report. See the
+  same report. The guide says what the journal does not measure. See the
   [Recommendation journal guide](docs/docs/guides/recommendation-journal.md).
 - **security** — deterministic secrets / PII / prompt-injection / egress
   scanning, redaction, and a policy gate at agent write seams, with a committed

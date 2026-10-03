@@ -5,7 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
-import { journalAsk, resolveFlowContext } from "../decisions/service";
+import { CANCEL_ANSWER, journalAsk, resolveFlowContext, type JournalAskDeps } from "../decisions/service";
 
 let host: AskUserFn | undefined;
 
@@ -54,7 +54,12 @@ export function setAskUserNotice(fn: ((text: string) => void) | undefined): void
  * throws into the question: see `journalAsk`.
  */
 export function journaledAskUser(cwd: string): AskUserFn {
-  const journaled = journalAsk(invokeAskUserHost, {
+  const journaled = journalAsk(invokeAskUserHost, journalDeps(cwd));
+  return (request) => (host === undefined ? invokeAskUserHost(request) : journaled(request));
+}
+
+function journalDeps(cwd: string, extra: Partial<JournalAskDeps> = {}): JournalAskDeps {
+  return {
     cwd,
     // the flow and its stage come from the checkout (env, branch, the one flow in progress), not only from KERYX_FLOW
     session: sessionId,
@@ -65,6 +70,58 @@ export function journaledAskUser(cwd: string): AskUserFn {
     onDecision: (id) => {
       lastDecisionId = id;
     },
+    ...extra,
+  };
+}
+
+/** One option of a composer-dock picker, as `showComposerChoice` takes it. */
+export interface PickOption {
+  id: string;
+  label: string;
+  description: string;
+  recommended?: boolean;
+  preselected?: boolean;
+}
+
+export interface JournaledPick {
+  /** One of `DECISION_SOURCES`. */
+  source: string;
+  question: string;
+  options: PickOption[];
+  /** Why the recommended option is recommended (recorded, shown only after the answer). */
+  recommendationReason?: string;
+  /** What the caller gets back when the pick is dismissed (Esc, a busy dock, an abort); may also be an option id. */
+  cancelId: string;
+}
+
+/**
+ * Renders the options and resolves the chosen option id. `dismissId` is what the dialog must resolve to on
+ * Esc, a busy dock or an abort (pass it as the dialog's own `cancelId`): it is never an option id, so a
+ * dismissal cannot be mistaken for an answer even when `spec.cancelId` is also an option ("side", "cancel").
+ */
+export type PickShow = (options: PickOption[], dismissId: string) => Promise<string>;
+
+/**
+ * A work decision picked from a composer-dock menu (wiki enrich mode, queue routing, held session), put through
+ * the journal exactly like `ask_user`: arm, order, mark and preselection come from the journal, and `show` renders
+ * the options it hands back. Pure permissions never come through here (see `sources.ts`). A menu cannot take free
+ * text, so the deviation reason is not asked; `/decisions reason` adds it later. The journal never throws into the
+ * pick: without a record the pick is shown as given.
+ */
+export async function journaledPick(cwd: string, spec: JournaledPick, show: PickShow): Promise<string> {
+  const ask = journalAsk(
+    async (request) => {
+      // the dialog is told to resolve CANCEL_ANSWER on a dismissal, so only a real option id is an answer
+      const id = await show(request.options, CANCEL_ANSWER);
+      return id !== CANCEL_ANSWER && request.options.some((option) => option.id === id) ? id : CANCEL_ANSWER;
+    },
+    journalDeps(cwd, { source: spec.source, askReason: false, stage: spec.source }),
+  );
+  const chosen = await ask({
+    question: spec.question,
+    options: spec.options,
+    ...(spec.recommendationReason !== undefined ? { recommendationReason: spec.recommendationReason } : {}),
+    source: spec.source,
   });
-  return (request) => (host === undefined ? invokeAskUserHost(request) : journaled(request));
+  return chosen === CANCEL_ANSWER ? spec.cancelId : chosen;
 }

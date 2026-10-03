@@ -211,7 +211,7 @@ import {
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
-import { invokeAskUserHost } from "../tui/ask-user-bridge";
+import { journaledAskUser } from "../tui/ask-user-bridge";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -4014,7 +4014,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
         }),
         idSeq: () => randomUUID(),
-        askUser: invokeAskUserHost,
+        askUser: journaledAskUser(cwd),
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
@@ -4489,7 +4489,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
         }),
         idSeq: () => randomUUID(),
-        askUser: invokeAskUserHost,
+        askUser: journaledAskUser(agentCwd),
         mcpRuntime: () => mcpRuntime,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),

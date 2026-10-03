@@ -230,7 +230,7 @@ export const GROUP_SUBCOMMANDS: ReadonlyMap<string, readonly string[]> = new Map
   // commands/governance.ts:86-90
   ["governance", ["report", "show"]],
   // commands/decisions.ts (decisionsCommand dispatch)
-  ["decisions", ["open", "answer", "reason", "report", "import"]],
+  ["decisions", ["open", "answer", "reason", "report", "import", "rate", "export"]],
   // commands/product.ts (productCommand dispatch)
   ["product", ["index", "open"]],
   // commands/hooks.ts:1247-1271 (excludes the unrelated hook-event-name switch earlier in the same file)
