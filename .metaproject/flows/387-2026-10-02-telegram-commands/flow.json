@@ -11,13 +11,77 @@
   "title": "Telegram commands: slash commands and button pickers from the topic",
   "status": "ready",
   "createdAt": "2026-10-02T04:20:33.712Z",
-  "updatedAt": "2026-10-02T20:09:38.994Z",
+  "updatedAt": "2026-10-03T18:14:55.554Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-10-03T18:14:47.630Z"
+    },
+    "AC2": {
+      "at": "2026-10-03T18:14:48.053Z"
+    },
+    "AC3": {
+      "at": "2026-10-03T18:14:48.431Z"
+    },
+    "AC4": {
+      "at": "2026-10-03T18:14:48.833Z"
+    },
+    "AC5": {
+      "at": "2026-10-03T18:14:49.227Z"
+    },
+    "AC6": {
+      "at": "2026-10-03T18:14:49.609Z"
+    },
+    "AC7": {
+      "at": "2026-10-03T18:14:50.001Z"
+    },
+    "AC8": {
+      "at": "2026-10-03T18:14:50.388Z"
+    },
+    "AC9": {
+      "at": "2026-10-03T18:14:50.793Z"
+    },
+    "AC10": {
+      "at": "2026-10-03T18:14:51.160Z"
+    },
+    "AC11": {
+      "at": "2026-10-03T18:14:51.568Z"
+    },
+    "AC12": {
+      "at": "2026-10-03T18:14:51.976Z"
+    },
+    "AC13": {
+      "at": "2026-10-03T18:14:52.379Z"
+    },
+    "AC14": {
+      "at": "2026-10-03T18:14:52.796Z"
+    },
+    "AC15": {
+      "at": "2026-10-03T18:14:53.194Z"
+    },
+    "AC16": {
+      "at": "2026-10-03T18:14:53.597Z"
+    },
+    "AC17": {
+      "at": "2026-10-03T18:14:54.004Z"
+    },
+    "AC18": {
+      "at": "2026-10-03T18:14:54.392Z"
+    },
+    "AC19": {
+      "at": "2026-10-03T18:14:54.778Z"
+    },
+    "AC20": {
+      "at": "2026-10-03T18:14:55.154Z"
+    },
+    "AC21": {
+      "at": "2026-10-03T18:14:55.554Z"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -118,6 +182,111 @@
       "at": "2026-10-02T20:09:38.994Z",
       "event": "origin-set",
       "detail": "unknown -> human-request; quote: \"Еще одно фло, сейчас команды в топике не поддерживаются, проанализируй какие команды из keryx shell мы можем передавать и добавь их в бота. Идея что и keryx и телеграм наши и можем делать из общение максимально удобным . То есть часть функциональности можно вынести в телеграм как интерфейс, который будет выполнять функции на keryx, например /коннект, что бы менять провайдера и модель, то есть в телеграм должно прийти так же список и кнопки, потом выбор модели и так все какие можно. Эффект: я хочу иметь полноценную возможность работать в через телеграмм.\"; source: channel message 176710, 2026-10-01T20:42:01Z (решение оператора 2026-10-02 20:03, flow создан по запросу и корректировкам оператора; decided-by: altsay)"
+    },
+    {
+      "at": "2026-10-03T18:14:47.630Z",
+      "event": "ac-confirmed",
+      "detail": "AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:48.053Z",
+      "event": "ac-confirmed",
+      "detail": "AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:48.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:48.833Z",
+      "event": "ac-confirmed",
+      "detail": "AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:49.227Z",
+      "event": "ac-confirmed",
+      "detail": "AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:49.609Z",
+      "event": "ac-confirmed",
+      "detail": "AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:50.001Z",
+      "event": "ac-confirmed",
+      "detail": "AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:50.388Z",
+      "event": "ac-confirmed",
+      "detail": "AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:50.793Z",
+      "event": "ac-confirmed",
+      "detail": "AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:51.160Z",
+      "event": "ac-confirmed",
+      "detail": "AC10 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:51.569Z",
+      "event": "ac-confirmed",
+      "detail": "AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:51.977Z",
+      "event": "ac-confirmed",
+      "detail": "AC12 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:52.380Z",
+      "event": "ac-confirmed",
+      "detail": "AC13 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:52.796Z",
+      "event": "ac-confirmed",
+      "detail": "AC14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:53.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC15 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:53.597Z",
+      "event": "ac-confirmed",
+      "detail": "AC16 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:54.004Z",
+      "event": "ac-confirmed",
+      "detail": "AC17 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:54.392Z",
+      "event": "ac-confirmed",
+      "detail": "AC18 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:54.779Z",
+      "event": "ac-confirmed",
+      "detail": "AC19 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:55.154Z",
+      "event": "ac-confirmed",
+      "detail": "AC20 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:14:55.554Z",
+      "event": "ac-confirmed",
+      "detail": "AC21 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
     }
   ],
   "acKinds": {
@@ -209,5 +378,238 @@
     "kind": "human-request",
     "quote": "Еще одно фло, сейчас команды в топике не поддерживаются, проанализируй какие команды из keryx shell мы можем передавать и добавь их в бота. Идея что и keryx и телеграм наши и можем делать из общение максимально удобным . То есть часть функциональности можно вынести в телеграм как интерфейс, который будет выполнять функции на keryx, например /коннект, что бы менять провайдера и модель, то есть в телеграм должно прийти так же список и кнопки, потом выбор модели и так все какие можно. Эффект: я хочу иметь полноценную возможность работать в через телеграмм.",
     "source": "channel message 176710, 2026-10-01T20:42:01Z"
-  }
+  },
+  "signatures": [
+    {
+      "at": "2026-10-03T18:14:47.630Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC1",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:48.053Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC2",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:48.431Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC3",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:48.833Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC4",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:49.227Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC5",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:49.609Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC6",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:50.001Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC7",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:50.388Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC8",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:50.793Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC9",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:51.160Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC10",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:51.568Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC11",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:51.976Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC12",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:52.379Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC13",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:52.796Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC14",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:53.194Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC15",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:53.597Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC16",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:54.004Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC17",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:54.392Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC18",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:54.778Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC19",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:55.154Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC20",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    },
+    {
+      "at": "2026-10-03T18:14:55.554Z",
+      "kind": "ac-confirm",
+      "identity": {
+        "value": "200531777+MrCipherSmith@users.noreply.github.com",
+        "basis": "derived",
+        "source": "git config user.email in this checkout — this is who RAN the command, which is not necessarily who signed. Pass --signed-by to record the actual signer."
+      },
+      "criterion": "AC21",
+      "acChecksum": "sha256:9cbba54ba3d88e1804c52ddf4435238e30f8c975613772a711da37e19f2af9bd"
+    }
+  ]
 }

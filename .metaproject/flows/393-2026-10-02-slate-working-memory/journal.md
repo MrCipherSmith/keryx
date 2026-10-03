@@ -37,3 +37,17 @@
 - 2026-10-02T20:19:44.381Z - task-done: T4: Self-review and prepare draft PR
 - 2026-10-02T20:19:57.176Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/865
 - 2026-10-02T21:50:00.000Z - measurement redone on the real working-memory path (runner fixed: real slate, four tools registered, a guard fails the run otherwise; commit ec89b5c4). AC3 replay: peak 40,428 (limit 64,000), total 2,969,506 (limit 5,531,077). AC6 registry-recall, 3 seeds: 22/22 each, 110/114/104 calls (cap 150 not hit), 0 repeated reads (limit: average 10). AC9 keryx leg: context-on mean uncached 9,436 (limit 13,259), success 9/9; codex CLI leg not re-run (flow 394 figures stay). Earlier AC6/AC9 numbers measured a degraded mode and are superseded. Thresholds unchanged; no criterion confirmed by the implementer.
+- 2026-10-03T18:15:00.505Z - ac-confirmed: AC1 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:00.893Z - ac-confirmed: AC2 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:01.272Z - ac-confirmed: AC3 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:01.694Z - ac-confirmed: AC4 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:02.060Z - ac-confirmed: AC5 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:02.449Z - ac-confirmed: AC6 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:02.833Z - ac-confirmed: AC7 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:03.228Z - ac-confirmed: AC8 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:03.608Z - ac-confirmed: AC9 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:04.008Z - ac-confirmed: AC10 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:04.386Z - ac-confirmed: AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:04.738Z - ac-confirmed: AC12 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:05.124Z - ac-confirmed: AC13 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-03T18:15:05.533Z - ac-confirmed: AC14 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
