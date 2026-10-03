@@ -17,7 +17,7 @@ All notable changes to `keryx` are documented here. The format follows
 - Prune thresholds scale with the window: protect = min(40K, 30% of the window), batch saving = min(20K, 15%), so pruning fires before compaction on 32K to 272K windows.
 - Hosts without `pruneArchive` behave exactly as after 0.3.64 and never write a Trail into a slate another holder owns. `slate_read` only gains fields; Seeds are still never injected and `renderAnchorsBlock` is unchanged.
 
-[Changes since 0.3.66](https://github.com/MrCipherSmith/keryx/compare/v0.3.66...v0.3.69)
+[Changes since 0.3.68](https://github.com/MrCipherSmith/keryx/compare/v0.3.68...v0.3.69)
 
 ## [0.3.68] — 2026-10-03
 ### Changed
