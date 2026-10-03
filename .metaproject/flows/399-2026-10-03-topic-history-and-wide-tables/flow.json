@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true,
+    "owner": true,
+    "folderCommitted": true
+  },
+  "id": "399",
+  "slug": "topic-history-and-wide-tables",
+  "title": "Telegram topic history restore and wide tables",
+  "status": "initializing",
+  "createdAt": "2026-10-03T06:28:47.928Z",
+  "updatedAt": "2026-10-03T06:28:47.928Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "owner": {
+    "value": "MrCipherSmith",
+    "basis": "stated",
+    "source": "`--owner` flag on `flow init`"
+  },
+  "outcomeAuthor": "agent",
+  "origin": {
+    "kind": "human-request",
+    "quote": "1. Как только я вышел из keryx shell топик убился, когда я запустил с продолжением keryx shell подхватил сессию, но топик создался новый и пустой. Это правильно, но нудна команда восстановить историю, и по ней присылать в топик 10 последних сообщений(и мои и агента)\n2 смотри скриншоты. 1 это что пришло, 2 это как в keryx shell",
+    "source": "channel message 179104, 2026-10-02T20:11:19Z"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-03T06:28:47.928Z",
+      "event": "created"
+    }
+  ]
+}
