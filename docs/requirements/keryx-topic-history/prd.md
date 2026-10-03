@@ -64,11 +64,11 @@ No argument: 10. N from 1 to 20 (D2); anything else, including a non-number, get
 
 keryx sends a `table` block (`src/remote/format-rich.ts`, `is_bordered: true`) on purpose: spike S3 (`docs/requirements/keryx-telegram-rendering/spike.md`) requires that model text never reach a parser. helyx sends `rich_message: { markdown }` (`helyx/mcp/tools.ts`) after rewriting bare separator rows so each carries a colon (`helyx/channel/telegram.ts`), because Telegram recognises a Markdown table only then. Which of these Telegram lays out wide and scrollable is not known from the code; the first step is a probe (AC1) of three variants:
 
-- A. the current `table` block (what the operator sees now, narrow and tall);
+- A. the current `table` block (chosen by the operator after the probe: wide, scrolls sideways);
 - B. rich `markdown` as helyx sends it (likely the helyx look; carries the injection risk S3 is about);
 - C. an aligned HTML `<pre>` table (Telegram scrolls `<pre>` blocks sideways; safe; loses cell styling).
 
-The chosen variant becomes a pure, pinned builder (AC2), keeps the 395 invariants (AC3), leaves the HTML and plain fallbacks byte-for-byte as they are (AC4), and splits at row boundaries with the header repeated (AC5). The earlier decision of poll 51 (keep the native table, shorten cells with an ellipsis) is superseded by 179814 and remains only as the default D3.
+The operator read the probe messages and chose A, the current `table` block: it is wide and scrolls sideways like helyx (B and C not chosen; `spike.md`). So no new renderer is built. PR 2 pins what exists: the output of the native table block with every cell whole, no cell shortening anywhere (AC2); the 395 invariants (AC3); the HTML and plain fallbacks, wide aligned or stacked, in their order (AC4); and the split at row boundaries with the header repeated, within 4096 characters and the rich limits including 500 blocks, a table row being a block (AC5). The earlier decision of poll 51 (keep the native table, shorten cells with an ellipsis) is superseded by 179814 and stays dropped (D3).
 
 ## 5. Acceptance criteria
 

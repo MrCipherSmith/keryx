@@ -11,12 +11,12 @@
   "title": "Telegram topic history restore and wide tables",
   "status": "ready",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T07:42:16.418Z",
+  "updatedAt": "2026-10-03T08:32:06.837Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:ee6f6c35a769e5bef0263dce88f12cb86c641f5bbadc6daf5209138368cc7e2e",
+  "acChecksum": "sha256:50176d1d21db1c36e922af1a4f3e0dfbec6427fb6d56617708f95616922accf6",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -178,6 +178,31 @@
       "at": "2026-10-03T07:42:16.418Z",
       "event": "ac-updated",
       "detail": "AC12: \"A reconnect, a heartbeat, a bridge restart that re-registers the same session in the same topic (reused: true), or an at-least-once outbound retry does not repost the history; a second /history repeats it on purpose. No persistent marker is kept: the automatic restore happens only on the registration of this enable() that created the topic, and only the first registration counts, so a test that reconnects the client and re-enables with a kept topic counts one automatic restore. [verify: exec `bun test src/remote/topic-history.test.ts`]\" -> \"A reconnect, a heartbeat, a bridge restart that re-registers the same session in the same topic (reused: true), or an at-least-once outbound retry does not repost the history; a second /history repeats it on purpose. Turning remote control off and on again in the same process makes a new topic and restores nothing into it (use /history). No persistent marker is kept: the automatic restore happens only on the first enable() of the process and only on the first registration of that enable() (the one that created the topic), so a test that reconnects the client and one that turns it off and on each count one automatic restore at most. [verify: exec `bun test src/remote/topic-history.test.ts`]\" (Independent review of PR 870: off/on reposted, contradicting the docs; the behaviour and the criterion now say nothing is posted)"
+    },
+    {
+      "at": "2026-10-03T08:32:06.088Z",
+      "event": "ac-updated",
+      "detail": "AC2: \"The chosen table variant is built by a pure function whose output for a fixed corpus of tables (2 to 20 columns, empty cells, cells with `|`, Cyrillic, emoji, a 300-character cell) is pinned by a test; a table with more than 20 columns degrades to the HTML or plain form instead of failing. Short and 2-column tables follow D5. [verify: exec]\" -> \"The table path is unchanged by this flow (the operator chose variant A, the native `table` block, in the probe): a test pins the output of `renderRichMessage` for a fixed corpus of tables (2 to 20 columns, empty cells, cells with `|`, Cyrillic, emoji, a 300-character cell) as typed blocks with every cell whole (no cell is shortened anywhere on the table path); a table with more than 20 columns is not recognised as a table and goes out as HTML. Short and 2-column tables follow D5. [verify: exec `bun test src/remote/format-table-pins.test.ts`]\" (Operator chose variant A (today's native table block): no new builder, the existing behaviour is pinned instead)"
+    },
+    {
+      "at": "2026-10-03T08:32:06.276Z",
+      "event": "ac-updated",
+      "detail": "AC3: \"Every invariant flow 395 already holds for rich replies still holds for the new table path: escaping, block balance, model text never reaches a parser it was not meant for (a cell containing Markdown or block syntax stays a cell), and the property corpus passes unchanged. [verify: exec]\" -> \"Every invariant flow 395 already holds for rich replies is unchanged and pinned by tests: escaping, block balance, model text never reaches a parser it was not meant for (a cell containing Markdown or block syntax stays a cell), and the property corpus passes unchanged. [verify: exec `bun test src/remote/format-property.test.ts src/remote/format-rich.test.ts src/remote/format-table-pins.test.ts`]\" (Operator chose variant A: nothing new reaches a parser, the invariants are pinned, not extended)"
+    },
+    {
+      "at": "2026-10-03T08:32:06.462Z",
+      "event": "ac-updated",
+      "detail": "AC4: \"The HTML fallback and the plain-text fallback of a table are byte-for-byte what they are before this flow (golden files compared); a send refused by Telegram still falls back in the same order. [verify: exec]\" -> \"The HTML fallback and the plain-text fallback of a table are unchanged and pinned by literal expected strings (the aligned layout, the stacked layout for a row over the cost limit), and the fall from rich to HTML to plain keeps its order when Telegram refuses a send. [verify: exec `bun test src/remote/format-table-pins.test.ts src/remote/outbound-rich.test.ts`]\" (Operator chose variant A: the fallbacks are what they were, pinned by tests instead of golden files of a new variant)"
+    },
+    {
+      "at": "2026-10-03T08:32:06.648Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"A reply with a table too large for one message is split at row boundaries, never inside a row, and each part repeats the header row; the parts are sent in order and none exceeds 4096 characters (ordinary) or the rich-message limits (32768 characters, 500 blocks). [verify: exec]\" -> \"A reply with a table too large for one message is split at row boundaries, never inside a row, and each part repeats the header row; the parts are sent in order; none exceeds 4096 rendered characters (ordinary) and none exceeds the rich-message limits (32768 characters, 500 blocks, where a table row is a block), so a part of a tall table still goes out as a native table instead of falling to HTML. [verify: exec `bun test src/remote/format-table-pins.test.ts src/remote/format-table.test.ts`]\" (Pinning AC5 showed that the splitter charged rendered characters only: a table of more than 500 rows fitted one 4096-character part and was refused by the rich limit, so it lost its native table)"
+    },
+    {
+      "at": "2026-10-03T08:32:06.837Z",
+      "event": "ac-updated",
+      "detail": "AC18: \"README, `docs/docs/guides/drive-keryx-remotely.md` and `CHANGELOG.md` describe the new table layout, with a version bump, and `mkdocs build --strict` passes; live acceptance by the operator: ask the agent for a wide table and confirm it reads like helyx's, with horizontal scroll when it does not fit. [verify: judged]\" -> \"README, `docs/docs/guides/drive-keryx-remotely.md` and `CHANGELOG.md` describe how a table reaches Telegram (the native wide table with horizontal scroll, no cell shortening, the 20-column cap, the HTML and plain fallbacks, the row cap per part), with a version bump, and `mkdocs build --strict` passes; live acceptance by the operator: ask the agent for a wide table and confirm it reads like helyx, with horizontal scroll when it does not fit. [verify: judged]\" (Operator chose variant A: there is no new table layout to describe, only the behaviour that is now pinned)"
     }
   ],
   "acKinds": {
@@ -185,16 +210,20 @@
       "kind": "judged"
     },
     "AC2": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/format-table-pins.test.ts"
     },
     "AC3": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/format-property.test.ts src/remote/format-rich.test.ts src/remote/format-table-pins.test.ts"
     },
     "AC4": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/format-table-pins.test.ts src/remote/outbound-rich.test.ts"
     },
     "AC5": {
-      "kind": "unclassified"
+      "kind": "exec",
+      "check": "bun test src/remote/format-table-pins.test.ts src/remote/format-table.test.ts"
     },
     "AC6": {
       "kind": "exec",
