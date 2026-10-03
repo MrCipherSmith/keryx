@@ -11,12 +11,12 @@
   "title": "Telegram topic history restore and wide tables",
   "status": "ready",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T08:32:06.837Z",
+  "updatedAt": "2026-10-03T09:37:07.423Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:50176d1d21db1c36e922af1a4f3e0dfbec6427fb6d56617708f95616922accf6",
+  "acChecksum": "sha256:779b8fa9c45d89771514b2763cba6063d8d27129a01f2d654d7a8022f303ab91",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -203,6 +203,11 @@
       "at": "2026-10-03T08:32:06.837Z",
       "event": "ac-updated",
       "detail": "AC18: \"README, `docs/docs/guides/drive-keryx-remotely.md` and `CHANGELOG.md` describe the new table layout, with a version bump, and `mkdocs build --strict` passes; live acceptance by the operator: ask the agent for a wide table and confirm it reads like helyx's, with horizontal scroll when it does not fit. [verify: judged]\" -> \"README, `docs/docs/guides/drive-keryx-remotely.md` and `CHANGELOG.md` describe how a table reaches Telegram (the native wide table with horizontal scroll, no cell shortening, the 20-column cap, the HTML and plain fallbacks, the row cap per part), with a version bump, and `mkdocs build --strict` passes; live acceptance by the operator: ask the agent for a wide table and confirm it reads like helyx, with horizontal scroll when it does not fit. [verify: judged]\" (Operator chose variant A: there is no new table layout to describe, only the behaviour that is now pinned)"
+    },
+    {
+      "at": "2026-10-03T09:37:07.423Z",
+      "event": "ac-updated",
+      "detail": "AC5: \"A reply with a table too large for one message is split at row boundaries, never inside a row, and each part repeats the header row; the parts are sent in order; none exceeds 4096 rendered characters (ordinary) and none exceeds the rich-message limits (32768 characters, 500 blocks, where a table row is a block), so a part of a tall table still goes out as a native table instead of falling to HTML. [verify: exec `bun test src/remote/format-table-pins.test.ts src/remote/format-table.test.ts`]\" -> \"A reply with a table too large for one message is split at row boundaries, never inside a row (except a single cell larger than a whole message), and each part repeats the header row; the parts are sent in order; none exceeds 4096 rendered characters (ordinary) and a part that holds a table stays within the rich-message limits (32768 characters, 500 blocks counted for the whole part: a table row, a paragraph, a list item each cost blocks), so a part of a tall table, or of a table with text around it, still goes out as a native table instead of falling to HTML; a row too large to share a message with the header is written as stacked header: value lines. [verify: exec `bun test src/remote/format-table-pins.test.ts src/remote/format-table.test.ts`]\" (#871 review: the row cap counted only table rows and 'never inside a row' was false for a row over a message; the criterion now states the whole-part block budget and the defined behaviour for an oversized row)"
     }
   ],
   "acKinds": {
