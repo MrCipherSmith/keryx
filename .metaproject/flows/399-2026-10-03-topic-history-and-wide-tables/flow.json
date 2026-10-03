@@ -9,9 +9,9 @@
   "id": "399",
   "slug": "topic-history-and-wide-tables",
   "title": "Telegram topic history restore and wide tables",
-  "status": "ready",
+  "status": "implemented",
   "createdAt": "2026-10-03T06:28:47.928Z",
-  "updatedAt": "2026-10-03T18:15:24.707Z",
+  "updatedAt": "2026-10-03T18:15:58.641Z",
   "source": {
     "type": "description",
     "ref": null
@@ -77,7 +77,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "871"
   },
   "owner": {
     "value": "MrCipherSmith",
@@ -361,6 +361,15 @@
       "at": "2026-10-03T18:15:24.707Z",
       "event": "ac-confirmed",
       "detail": "AC19 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])"
+    },
+    {
+      "at": "2026-10-03T18:15:51.431Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-10-03T18:15:58.641Z",
+      "event": "implemented",
+      "detail": "draft PR: 871 (warning: PR is not a draft) (base: main)"
     }
   ],
   "acKinds": {
@@ -648,5 +657,6 @@
       "criterion": "AC19",
       "acChecksum": "sha256:779b8fa9c45d89771514b2763cba6063d8d27129a01f2d654d7a8022f303ab91"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
