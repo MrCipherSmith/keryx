@@ -25,7 +25,7 @@ import {
 } from "./rewrite-gate";
 import { renderAnchorsBlock, type Slate } from "./slate";
 import { buildSlateFrame, isSlateFrameMessage, renderMemoryFrame, MEMORY_FRAME_HEADER } from "./slate-frame";
-import { atPlanBoundary, buildWorkingMemoryInstruction, leavingNotice, rewriteWorkingMemory, workingMemoryState } from "./working-memory";
+import { atPlanBoundary, buildWorkingMemoryInstruction, lastNoteStep, leavingNotice, rewriteWorkingMemory, workingMemoryState } from "./working-memory";
 
 const NONCE = "n0nce123";
 const scrub = (t: string): string => t.split(NONCE).join("[scrubbed]");
@@ -294,23 +294,53 @@ test("with few short operator messages nothing is dropped, so no pointer is owed
 
 // ---- AC5: the notice ------------------------------------------------------------------
 
-test("one notice per batch names the steps that leave, one round before they do", () => {
+test("the notice names the steps that leave, one round before they do, and repeats until a Note covers them", () => {
   const history: NormalizedMessage[] = [op("go"), ...rounds(BOUNDED_KEEP_ROUNDS + 2)];
-  const state = workingMemoryState(history);
-  expect(leavingNotice(history, state)).toBeUndefined(); // 10 rounds: nothing leaves next round
+  expect(leavingNotice(history)).toBeUndefined(); // 10 rounds: nothing leaves next round
   history.push(...rounds(1, 200, BOUNDED_KEEP_ROUNDS + 3)); // 11 rounds: the rewrite is due after the next one
-  const notice = leavingNotice(history, workingMemoryState(history));
+  const notice = leavingNotice(history);
   expect(notice?.steps).toEqual([1, 2, 3, 4]);
+  expect(notice?.reminder).toBe(false);
   expect(notice?.text).toContain("Steps 1-4");
   expect(notice?.text).toContain("slate_note");
-  // asking again in the same batch says nothing
-  expect(leavingNotice(history, workingMemoryState(history))).toBeUndefined();
   expect(formatStepRanges([1, 2, 3, 7, 9, 10])).toBe("1-3, 7, 9-10");
+  // Review finding 5: asking again says it again, as a short reminder, while nothing covers the loss.
+  history.push({ role: "user", content: notice?.text ?? "", provenance: "harness" });
+  for (let i = 0; i < 3; i++) {
+    const again = leavingNotice(history);
+    expect(again?.steps).toEqual([1, 2, 3, 4]);
+    expect(again?.reminder).toBe(true);
+    expect(again?.text).toContain("steps 1-4");
+    expect(again?.text).toContain(LEAVING_NOTICE_MARKER);
+    expect(again?.text.length).toBeLessThan(notice?.text.length ?? 0);
+  }
+});
+
+test("a slate_note written after the leaving steps covers them; a note before them and another tool do not", () => {
+  // Ten rounds, steps 1-10; the round appended in each case below is the eleventh, so steps 1-4 are due to leave.
+  const base: NormalizedMessage[] = [op("go"), ...rounds(BOUNDED_KEEP_ROUNDS + 2)];
+  expect(leavingNotice(base)).toBeUndefined();
+  const noteAt = (step: number): NormalizedMessage[] => [
+    { role: "assistant", content: "", toolCalls: [{ id: `note-${step}`, name: "slate_note", arguments: "{}" }] },
+    { role: "tool", content: "saved", toolCallId: `note-${step}`, trailStep: step },
+  ];
+  // A Note at step 3 was written after steps 1 and 2: those are covered, 3 and 4 are not.
+  expect(leavingNotice([...base, ...noteAt(3)])?.steps).toEqual([4]);
+  // A Note after all four covers the batch: no notice at all.
+  expect(leavingNotice([...base, ...noteAt(40)])).toBeUndefined();
+  // Another tool at a later step is not a Note.
+  const other: NormalizedMessage[] = [
+    { role: "assistant", content: "", toolCalls: [{ id: "r", name: "read_file", arguments: "{}" }] },
+    { role: "tool", content: "x", toolCallId: "r", trailStep: 40 },
+  ];
+  expect(leavingNotice([...base, ...other])?.steps).toEqual([1, 2, 3, 4]);
+  expect(lastNoteStep([...base, ...noteAt(7)])).toBe(7);
+  expect(lastNoteStep(base)).toBe(0);
 });
 
 test("the notice names the operator messages that leave next, with a call that reads each, and says the Trail does not list them", () => {
   const history: NormalizedMessage[] = [...longAsks(24), ...rounds(BOUNDED_KEEP_ROUNDS + 3)];
-  const notice = leavingNotice(history, workingMemoryState(history));
+  const notice = leavingNotice(history);
   expect(notice?.text).toMatch(/\d+ earlier operator messages will no longer be sent/);
   expect(notice?.text).toMatch(/history_search \{"ts":"2026-10-02T09:00:\d\d\.000Z","role":"user"\}/);
   expect(notice?.text).toContain("ask 0");
@@ -318,7 +348,7 @@ test("the notice names the operator messages that leave next, with a call that r
   expect(notice?.text).toContain("Trail records tool calls only");
   // Short asks all stay, so the notice does not claim any are leaving.
   const calm: NormalizedMessage[] = [op("go"), ...rounds(BOUNDED_KEEP_ROUNDS + 3)];
-  expect(leavingNotice(calm, workingMemoryState(calm))?.text).not.toContain("operator message");
+  expect(leavingNotice(calm)?.text).not.toContain("operator message");
 });
 
 test("the instruction tells the model how many operator messages stay and where the rest are", () => {

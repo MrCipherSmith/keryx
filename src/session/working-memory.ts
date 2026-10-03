@@ -10,6 +10,7 @@ import {
   LEAVING_NOTICE_MARKER,
   describeDroppedOperators,
   formatStepRanges,
+  isLeavingNotice,
   operatorTurnsLeavingNextRound,
   planBoundedRewrite,
   stepsLeavingNextRound,
@@ -26,8 +27,6 @@ import type { Slate } from "./slate";
 
 /** Per-conversation bookkeeping; keyed on the history array the turn holds. */
 export interface WorkingMemoryState {
-  /** Highest Trail step a leaving-the-request notice already named. */
-  noticedThroughStep: number;
   /** Completed plan items when the last rewrite ran (or was first looked at). */
   completedAtLastRewrite: number | undefined;
   rewrites: number;
@@ -44,7 +43,7 @@ const states = new WeakMap<NormalizedMessage[], WorkingMemoryState>();
 export function workingMemoryState(history: NormalizedMessage[]): WorkingMemoryState {
   let s = states.get(history);
   if (s === undefined) {
-    s = { noticedThroughStep: 0, completedAtLastRewrite: undefined, rewrites: 0, operatorTurnsDropped: 0, fallbackNoticed: false, lastSkipKey: undefined };
+    s = { completedAtLastRewrite: undefined, rewrites: 0, operatorTurnsDropped: 0, fallbackNoticed: false, lastSkipKey: undefined };
     states.set(history, s);
   }
   return s;
@@ -63,20 +62,49 @@ export function atPlanBoundary(state: WorkingMemoryState, completedPlanItems: nu
 }
 
 /**
- * Flow 393 AC5: the text of ONE notice per batch, naming the steps that leave the request at the
- * next rewrite; `undefined` when nothing is about to leave or a notice already covers it.
+ * Highest Trail step of a `slate_note` call still in `history` (0 when none): a Note written at step N
+ * was written after the model saw every step before N, so those steps count as covered.
  */
-export function leavingNotice(history: NormalizedMessage[], state: WorkingMemoryState): { text: string; steps: number[] } | undefined {
-  const steps = stepsLeavingNextRound(history);
-  if (steps === undefined) return undefined;
-  const fresh = steps.filter((s) => s > state.noticedThroughStep);
-  // One notice per batch: a notice already covered the oldest of these, so stay quiet until a
-  // later, disjoint batch is about to leave.
-  if (fresh.length === 0 || fresh.length < steps.length) return undefined;
-  state.noticedThroughStep = steps[steps.length - 1] ?? state.noticedThroughStep;
+export function lastNoteStep(history: readonly NormalizedMessage[]): number {
+  const noteCalls = new Set<string>();
+  for (const m of history) {
+    for (const c of m.toolCalls ?? []) if (c.name === "slate_note") noteCalls.add(c.id);
+  }
+  let last = 0;
+  for (const m of history) {
+    if (m.role === "tool" && m.toolCallId !== undefined && noteCalls.has(m.toolCallId) && m.trailStep !== undefined) {
+      last = Math.max(last, m.trailStep);
+    }
+  }
+  return last;
+}
+
+/**
+ * Flow 393 AC5 (review finding 5, decided by the operator): the notice naming the steps that leave
+ * the request at the next rewrite. It is built on EVERY request while any of those steps is not
+ * covered by a Note written after it, not once per batch: it stops when nothing is left to lose
+ * (no rewrite is near, or a `slate_note` call came after the steps). The first notice of a batch is
+ * the full text; later ones, while the earlier one is still in `history`, are short reminders.
+ */
+export function leavingNotice(history: readonly NormalizedMessage[]): { text: string; steps: number[]; reminder: boolean } | undefined {
+  const leaving = stepsLeavingNextRound(history);
+  if (leaving === undefined) return undefined;
+  const covered = lastNoteStep(history);
+  const steps = leaving.filter((s) => s > covered);
+  if (steps.length === 0) return undefined;
+  if (history.some(isLeavingNotice)) {
+    return {
+      steps,
+      reminder: true,
+      text:
+        `Reminder: steps ${formatStepRanges(steps)} ${LEAVING_NOTICE_MARKER}, and no Note was written after them. ` +
+        `Save what you still need with slate_note now; recall_step, slate_trail and history_search read them back later.`,
+    };
+  }
   const operators = describeDroppedOperators(operatorTurnsLeavingNextRound(history), "will no longer be sent");
   return {
     steps,
+    reminder: false,
     text:
       `Steps ${formatStepRanges(steps)} ${LEAVING_NOTICE_MARKER}: older rounds are not re-sent. ` +
       `If a fact from them is still needed, save it now with slate_note. Their outputs stay readable with recall_step, ` +
@@ -95,7 +123,7 @@ export function buildWorkingMemoryInstruction(): string {
     "Working memory: this session keeps its history on disk and does not re-send all of it.",
     "Older rounds leave the request in batches; what stays is the Anchors block, your Notes, a digest of the Trail (one line per tool call you made) and the most recent rounds.",
     "A fact you will still need after that belongs in a Note: call slate_note with a short key and the fact (set, replace or delete; 2000 characters per note).",
-    "Before a batch leaves, the shell sends one notice naming the steps; write Notes then, not afterwards.",
+    "Before a batch leaves, the shell sends a notice naming the steps and repeats it on every request until a Note you wrote after those steps covers them; write Notes then, not afterwards.",
     "Only the two newest operator messages stay in the request: older ones are not re-sent, the Trail does not list them, and the notice names them with the history_search call that reads each in full.",
     "To get something back, call recall_step for a saved tool output, slate_trail to list steps by file, tool or step range, or history_search to find earlier text.",
     "Read a recalled output only when you need it: the Trail line says what the call was and whether it succeeded.",

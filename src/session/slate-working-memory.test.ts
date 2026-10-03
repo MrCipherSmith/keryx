@@ -6,7 +6,6 @@ import {
   NOTE_MAX_CHARS,
   NOTES_MAX_TOKENS,
   SlateNoteRefusedError,
-  TRAIL_MAX_ENTRIES,
   appendSeed,
   appendTrailEntry,
   estimateNotesTokens,
@@ -16,6 +15,8 @@ import {
   writeSlate,
   type Slate,
 } from "./slate";
+import { estimateMessageTokens } from "../harness/provider/context-guard";
+import { FRAME_TRAIL_TOKENS, renderMemoryFrame } from "./slate-frame";
 import { recordSlateSessionTrail, detachSlateSession, type SlateSessionRef } from "./slate-lifecycle";
 
 const ts = "2026-10-02T00:00:00.000Z";
@@ -75,21 +76,28 @@ test("Trail digests and file paths are redacted before they reach disk", async (
   expect(raw).not.toContain("sk-abcdefghijklmnopqrstuvwxyz0123456789");
 });
 
-test("Trail is bounded: the oldest entries are dropped but step numbers keep rising", async () => {
+test("the stored Trail has no cap: past the old 1500 entries nothing is dropped and steps keep rising", async () => {
   const dir = await openedDir();
-  const big = Array.from({ length: TRAIL_MAX_ENTRIES }, (_, i) => ({
-    step: i + 1,
-    tool: "read_file",
-    digest: "x",
-    outcome: "ok" as const,
-    ts,
-  }));
-  await writeSlate(dir, (prev) => ({ ...(prev as Slate), trail: big }));
+  const many = Array.from({ length: 1600 }, (_, i) => ({ step: i + 1, tool: "read_file", digest: "x", outcome: "ok" as const, ts }));
+  await writeSlate(dir, (prev) => ({ ...(prev as Slate), trail: many }));
   const next = await appendTrailEntry(dir, { tool: "read_file", digest: "y", outcome: "ok", ts });
-  expect(next?.step).toBe(TRAIL_MAX_ENTRIES + 1);
+  expect(next?.step).toBe(1601);
   const slate = await readSlate(dir);
-  expect(slate?.trail).toHaveLength(TRAIL_MAX_ENTRIES);
-  expect(slate?.trail?.[0]?.step).toBe(2);
+  expect(slate?.trail).toHaveLength(1601);
+  expect(slate?.trail?.[0]?.step).toBe(1);
+});
+
+test("what the frame sends of a long Trail is bounded by its token budget, not by the entry count", () => {
+  const entries = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ step: i + 1, tool: "read_file", digest: `path: src/dir/file-${i}.ts`, outcome: "ok" as const, ts }));
+  const opts = { nonce: "N", scrub: (s: string) => s, ts };
+  const tokens = (n: number): number => estimateMessageTokens({ content: renderMemoryFrame({ trail: entries(n) }, opts) ?? "" });
+  const small = tokens(300);
+  const huge = tokens(20_000);
+  // Twenty thousand entries cost about what three hundred do, and sit near the 2,500-token Trail budget.
+  expect(huge).toBeLessThan(small + 200);
+  expect(huge).toBeLessThan(FRAME_TRAIL_TOKENS + 400);
+  expect(renderMemoryFrame({ trail: entries(20_000) }, opts)).toContain("older ones via slate_trail");
 });
 
 test("a Trail entry for a session with no open slate is a no-op that creates nothing", async () => {

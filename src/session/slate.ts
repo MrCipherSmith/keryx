@@ -163,8 +163,6 @@ export type SlateNote = {
   ts: string;
 };
 
-/** Most Trail entries kept in `slate.json`; the oldest are dropped past this. */
-export const TRAIL_MAX_ENTRIES = 1500;
 const TRAIL_DIGEST_MAX = 160;
 const TRAIL_FILES_MAX = 6;
 const TRAIL_FILE_MAX = 200;
@@ -422,9 +420,9 @@ export async function appendTrailEntry(
         ...(entry.outputPath !== undefined ? { outputPath: entry.outputPath } : {}),
         ...(files.length > 0 ? { files } : {}),
       };
-      const next = [...trail, written];
-      const bounded = next.length > TRAIL_MAX_ENTRIES ? next.slice(next.length - TRAIL_MAX_ENTRIES) : next;
-      await writeFileAtomic(slatePath(dir), `${JSON.stringify({ ...prev, trail: bounded }, null, 2)}\n`);
+      // No cap on stored entries (decided by the operator, flow 393 review finding 7): what is SENT is
+      // bounded by the frame's token budget, not by how many entries slate.json holds.
+      await writeFileAtomic(slatePath(dir), `${JSON.stringify({ ...prev, trail: [...trail, written] }, null, 2)}\n`);
     });
   } catch (error) {
     if (isNotFound(error)) {

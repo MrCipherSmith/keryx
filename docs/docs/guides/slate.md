@@ -166,7 +166,12 @@ as before and write no Trail into a slate another holder owns.
 
 - **Trail** — written by the harness, never by the model: one entry per executed
   tool call (step, tool, argument digest, outcome, path of the saved full
-  output). There is no tool that writes it.
+  output). There is no tool that writes it. It has no entry cap: `slate.json`
+  keeps every step, and what the model is sent of it is bounded by the frame's
+  token budget (about 2,500 tokens of the newest lines), however long it grows.
+  Each call rewrites `slate.json`, so the cost of a call grows with the number
+  of steps (about 340 bytes and 2 ms per call at 1,500 steps, 6.7 MB and 20 ms
+  at 20,000).
 - **Notes** — the model's own working notes, set, replaced or deleted by key with
   `slate_note`. Redacted for secrets, at most 2,000 characters per note and 8,000
   tokens for the whole shelf. A note is not a Seed and is never proposed to
@@ -174,8 +179,11 @@ as before and write no Trail into a slate another holder owns.
 - **Bounded request.** Older rounds leave the request in batches; the full
   history stays in `archive.jsonl`. One slate frame, rebuilt every time rather
   than appended, stands in for them: the Anchors, the latest Trail entries and
-  every Note. The system instruction says so, and one notice per batch names the
-  steps about to leave.
+  every Note. The system instruction says so. While a rewrite is due on the next
+  round, the shell puts a notice at the end of the request on every round, naming
+  the steps about to leave, until a Note written after those steps covers them
+  (the first one in full, the rest as short reminders). A rewrite that the cache
+  gate holds back therefore keeps warning rather than warning once.
 - **Recall.** `slate_trail`, `recall_step` (the full output of a step, paged) and
   `history_search` are read-only and confined to the live session.
   `history_search {"query": ...}` finds earlier text (a query with a quote, a

@@ -2641,9 +2641,10 @@ async function pruneOrRewriteHistory(input: RoundRewriteInput): Promise<PruneRes
       announced: true,
     };
   }
-  // Nothing was rewritten this round: tell the model which steps leave at the next rewrite, once
-  // per batch, so it can save what it still needs as Notes (AC5).
-  const notice = leavingNotice(history, state);
+  // Nothing was rewritten this round: tell the model which steps leave at the next rewrite, on every
+  // request until a Note written after them covers them, so it can save what it still needs (AC5).
+  // Notices are appended, never replaced: the archive syncs by index, and the request prefix stays put.
+  const notice = leavingNotice(history);
   if (notice !== undefined) {
     history.push({
       role: "user",

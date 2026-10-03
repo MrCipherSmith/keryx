@@ -45,11 +45,17 @@ async function run(
     history?: NormalizedMessage[];
     contextWindow?: number;
     opened?: boolean;
+    /** Replace the read_file call of this 0-based round with a slate_note call. */
+    noteAtRound?: number;
     /** Runs after the Nth read_file call returned (1-based): lets a test break the slate mid-turn. */
     afterReadFile?: { call: number; act: () => Promise<void> };
   } = {},
 ): Promise<{ requests: NormalizedRequest[]; system: string[]; history: NormalizedMessage[] }> {
-  const scripts = Array.from({ length: ROUNDS }, (_, i) => callRound(`c${i}`, "read_file", JSON.stringify({ path: `f${i}.txt` })));
+  const scripts = Array.from({ length: ROUNDS }, (_, i) =>
+    i === extra.noteAtRound
+      ? callRound(`c${i}`, "slate_note", JSON.stringify({ key: "kept", text: "the fact I still need" }))
+      : callRound(`c${i}`, "read_file", JSON.stringify({ path: `f${i}.txt` })),
+  );
   const { provider, requests } = scriptedProvider([...scripts, okReply]);
   const { io, system } = collectingIo();
   const history: NormalizedMessage[] = extra.history ?? [];
@@ -133,7 +139,7 @@ test("the note reaches the model as delimited data, and course and seeds never a
   expect(await readSlate(dir)).toBeDefined();
 });
 
-test("one notice per batch names the leaving steps, and it arrives before any of them is dropped", async () => {
+test("a notice names the leaving steps, and it arrives before any of them is dropped", async () => {
   const { requests } = await run(true);
   const withNotice = requests.filter((r) => r.messages.some((m) => NOTICE.test(m.content)));
   expect(withNotice.length).toBeGreaterThan(0);
@@ -154,6 +160,57 @@ test("one notice per batch names the leaving steps, and it arrives before any of
   expect(rewritten.messages.some((m) => NOTICE.test(m.content))).toBe(false);
 });
 
+/** The messages of `r` that are leaving notices, oldest first. */
+const noticesIn = (r: NormalizedRequest): NormalizedMessage[] => r.messages.filter((m) => NOTICE.test(m.content));
+
+/** The requests built before the first rewrite landed (the first one that starts with a frame ends the run). */
+const beforeRewrite = (requests: NormalizedRequest[]): NormalizedRequest[] => {
+  const at = requests.findIndex((r) => r.messages.some((m) => m.slateFrame === true));
+  return at === -1 ? requests : requests.slice(0, at);
+};
+
+test("while the rewrite is held back, the notice is on the end of every request, not once per batch (review finding 5)", async () => {
+  // Tiny results: the gate holds the rewrite back, so the steps stay due round after round.
+  for (let i = 0; i < ROUNDS; i++) await writeFile(path.join(work, `f${i}.txt`), `tiny ${i}\n`);
+  const { requests, system } = await run(true);
+  const held = beforeRewrite(requests);
+  const first = held.findIndex((r) => noticesIn(r).length > 0);
+  expect(first).toBeGreaterThan(0);
+  const tail = held.slice(first);
+  expect(tail.length).toBeGreaterThan(2);
+  tail.forEach((r, i) => {
+    const last = r.messages[r.messages.length - 1] as NormalizedMessage;
+    expect(NOTICE.test(last.content)).toBe(true);
+    expect(last.provenance).toBe("harness");
+    // The earlier ones stay where they were (the request prefix does not move): one more per round.
+    expect(noticesIn(r)).toHaveLength(i + 1);
+  });
+  // The first of the batch is the full text, the repeats are the short reminder.
+  const firstText = noticesIn(tail[0] as NormalizedRequest)[0]?.content ?? "";
+  expect(firstText).toContain("If a fact from them is still needed");
+  const lastRequest = tail[tail.length - 1] as NormalizedRequest;
+  expect(lastRequest.messages[lastRequest.messages.length - 1]?.content).toMatch(/Reminder: steps \d/);
+  expect(system.filter((s) => /\[working memory\] Steps \d.* leave the request/.test(s))).toHaveLength(tail.length);
+});
+
+test("a Note written after the leaving steps ends the notices", async () => {
+  for (let i = 0; i < ROUNDS; i++) await writeFile(path.join(work, `f${i}.txt`), `tiny ${i}\n`);
+  // Round 10 is a slate_note (step 11), after steps 1-4 that would leave: nothing is left to warn about.
+  const covered = await run(true, { noteAtRound: 10 });
+  expect(covered.requests.every((r) => noticesIn(r).length === 0)).toBe(true);
+});
+
+test("a Note that is too early covers only the steps before it; the later leaving steps stay named", async () => {
+  for (let i = 0; i < ROUNDS; i++) await writeFile(path.join(work, `f${i}.txt`), `tiny ${i}\n`);
+  // Round 1 is a slate_note (step 2): step 1 is covered, steps 3-4 are still named.
+  const early = await run(true, { noteAtRound: 1 });
+  const carrying = beforeRewrite(early.requests).filter((r) => noticesIn(r).length > 0);
+  expect(carrying.length).toBeGreaterThan(0);
+  const last = carrying[0]?.messages[(carrying[0]?.messages.length ?? 1) - 1] as NormalizedMessage;
+  expect(last.content).toMatch(/Steps 3-4 /);
+  expect(last.content).not.toMatch(/Steps 1/);
+});
+
 test("every rewrite decision is logged with its numbers", async () => {
   const { system } = await run(true);
   const decisions = system.filter((s) => s.includes("[rewrite]"));
@@ -163,16 +220,27 @@ test("every rewrite decision is logged with its numbers", async () => {
   expect(system.some((s) => s.includes("[working memory]") && /steps \d/.test(s))).toBe(true);
 });
 
-test("a rewrite that would cost more to re-bill than it saves is skipped, logged once, and the request stays whole", async () => {
+test("a rewrite that would cost more to re-bill than it saves is skipped and the request stays whole until it pays", async () => {
   for (let i = 0; i < ROUNDS; i++) await writeFile(path.join(work, `f${i}.txt`), `tiny ${i}\n`);
   const { requests, system } = await run(true);
-  const last = requests[requests.length - 1] as NormalizedRequest;
-  expect(last.messages.some((m) => m.slateFrame === true)).toBe(false);
-  expect(last.messages.some((m) => m.role === "tool" && m.content.includes("tiny 0"))).toBe(true);
+  // Every request built before the first rewrite is whole: no frame, round 0 still in it.
+  const held = beforeRewrite(requests);
+  expect(held.length).toBeGreaterThan(10);
+  for (const [i, r] of held.entries()) {
+    expect(r.messages.some((m) => m.slateFrame === true)).toBe(false);
+    // Request 0 is built before round 0 has run.
+    if (i > 0) expect(r.messages.some((m) => m.role === "tool" && m.content.includes("tiny 0"))).toBe(true);
+  }
+  // The skip is logged when it starts, and not again while its reason is unchanged. The frame costs about
+  // what four tiny rounds weigh: nothing to save, so nothing to re-bill for.
   const skipped = system.filter((s) => s.includes("[rewrite] frame: skipped"));
-  expect(skipped).toHaveLength(1);
-  // The frame costs about what four tiny rounds weigh: nothing to save, so nothing to re-bill for.
+  expect(skipped.length).toBeGreaterThan(0);
   expect(skipped[0]).toMatch(/nothing-to-save|cost-exceeds-saving/);
+  expect(new Set(skipped).size).toBe(skipped.length);
+  // The notices the model gets while it waits are themselves tokens the rewrite will remove: it lands
+  // once they make it pay, and it drops them with the steps they named.
+  const landed = requests.find((r) => r.messages.some((m) => m.slateFrame === true));
+  expect(landed === undefined || noticesIn(landed).length === 0).toBe(true);
 });
 
 test("a host without working memory keeps sending every round (no frame, no notice, no rewrite log)", async () => {
