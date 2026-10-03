@@ -82,6 +82,7 @@ import {
 import { openPermissions, PERMISSIONS_COMMAND } from "./permissions-inspector";
 import { describeApprovalForTopic, RemoteBridge, type RemoteStatus, TG_SOURCE } from "../remote/shell-bridge";
 import { BUSY_REASON } from "../remote/command-gateway";
+import { historyArgsOf, NEW_SESSION_ENTRY, sessionEntryOf } from "../remote/history-host";
 import type { CommandOutcome } from "../remote/command-router";
 import { ChannelsClient } from "../remote/channels-client";
 import {
@@ -6074,8 +6075,9 @@ export async function launchTuiAgentShell(opts: {
       }
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      sessionResumed = opened.resumed;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(opened.resumed ? "resumed" : "new");
+      const entry = sessionEntryOf(opened.resumed);
+      sessionResumed = entry.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(entry.kind);
       // A new/resumed conversation is a new trust boundary within this shell.
       io.trustedMcpTools?.clear();
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -6598,8 +6600,8 @@ export async function launchTuiAgentShell(opts: {
       io.trustedMcpTools?.clear();
       stopRemoteForSessionSwitch();
       liveSession = opened.handle;
-      sessionResumed = false;
-      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered("new");
+      sessionResumed = NEW_SESSION_ENTRY.resumed;
+      if (remoteBridge?.keepingTopic === true) remoteBridge.sessionEntered(NEW_SESSION_ENTRY.kind);
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -6820,7 +6822,7 @@ export async function launchTuiAgentShell(opts: {
       const bridge = remoteBridge;
       if (bridge === undefined) return "Remote control is not available in this shell.";
       try {
-        return await bridge.historyForCommand(line.trim().split(/\s+/).slice(1).join(" "));
+        return await bridge.historyForCommand(historyArgsOf(line));
       } catch {
         return "The history could not be posted.";
       } finally {

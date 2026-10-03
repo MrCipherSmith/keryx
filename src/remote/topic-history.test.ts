@@ -175,6 +175,20 @@ describe("formatHistoryItem", () => {
     expect(straddling).not.toContain("sk-ant-api03-AbCd");
   });
 
+  // T-1 (flow 399 review): `SECRET` above is a long mixed-case run, so `looksLikeSecret` hides the whole
+  // turn and `redactSensitiveText` never runs. An AWS access key id is the other way round: the guard
+  // does not flag it and only the redactor can mask it.
+  test("a secret only the redactor knows is masked in place, before the cut (history.ts:134)", () => {
+    const AWS = "AKIAIOSFODNN7EXAMPLE";
+    expect(looksLikeSecret(AWS)).toBe(false);
+    expect(formatHistoryItem({ role: "user", text: `my aws key is ${AWS} thanks` })).toBe("You:\nmy aws key is [REDACTED:secret] thanks");
+    // It starts 10 characters before the cut: redacted after the cut it would stay half-shown ("AKIAIOSFO…").
+    const straddling = formatHistoryItem({ role: "agent", text: `${"x".repeat(HISTORY_ITEM_MAX_CHARS - 10)} ${AWS} ${"y".repeat(100)}` });
+    expect(looksLikeSecret(`${"x".repeat(HISTORY_ITEM_MAX_CHARS - 10)} ${AWS} ${"y".repeat(100)}`)).toBe(false);
+    expect(straddling).not.toContain("AKIAIO");
+    expect(straddling.endsWith("…")).toBe(true);
+  });
+
   test("a Telegram bot token or a bare token in a turn hides the whole turn, either role", () => {
     for (const text of [
       `here is the bot token ${BOT_TOKEN} thanks`,
