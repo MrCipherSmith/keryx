@@ -858,6 +858,8 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "graph_query",
     "graph_symbol",
     "health_status",
+    // Flow 393: working-memory recall (read-only) and the Notes writer.
+    "history_search",
     "list_dir",
     "memory_search",
     "plan_get",
@@ -865,6 +867,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "plan_update",
     "read_file",
     "read_wiki",
+    "recall_step",
     "repomap",
     // Flow 295: operator-confirmed scheduling — schedule_create always asks and shows
     // the card; schedule_list is read-only. TUI roster only.
@@ -886,7 +889,9 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "shell_task_wait",
     "skill_load",
     "skills_catalog",
+    "slate_note",
     "slate_read",
+    "slate_trail",
     "slate_write_seed",
     "spawn_subagent",
     "test_related",

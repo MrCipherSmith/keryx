@@ -103,13 +103,15 @@ async function run(shell: InteractiveTool): Promise<{ history: NormalizedMessage
   return { history, system: system.join("") };
 }
 
-test("the runner's turn options and uncapped shell runner yield a spill and a prune", async () => {
+test("the runner's turn options and uncapped shell runner yield a spill and a working-memory rewrite", async () => {
   const { history, system } = await run(shellExecTool(root, uncappedShellRunner(root)));
 
   expect(fullOutputSaved()).toBe(true);
-  expect(system).toContain("[prune]");
-  // The old exchange was collapsed into a record that names the saved file, not re-sent.
-  expect(history.some((m) => m.role === "assistant" && m.content.includes("full output:"))).toBe(true);
+  // A working-memory host (pruneArchive plus a live session dir) says so with
+  // one "[working memory]" notice per batch instead of the legacy "[prune]" line.
+  expect(system).toContain("[working memory]");
+  // The big result became an observation pack that names the saved file instead of re-sending the text.
+  expect(history.some((m) => m.role === "tool" && m.content.includes("full text:") && m.content.includes("tool-output"))).toBe(true);
 });
 
 test("the stock shell_exec runner caps at 20 KB, so the same command never spills (the root cause)", async () => {

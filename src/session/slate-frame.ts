@@ -17,8 +17,8 @@
 // workspace proposal, never injected into the model's context (slate invariant B).
 
 import type { NormalizedMessage } from "../harness/provider/types";
-import { redactSensitiveText } from "../security/redact";
-import { estimateTokens } from "../gdgraph/repomap";
+import { redactSensitiveText } from "../security/service";
+import { estimateTokens } from "../gdgraph/service";
 import { renderAnchorsBlock, type Slate, type SlateNote, type TrailEntry } from "./slate";
 
 /** Token budget for the Trail digest in the frame. */

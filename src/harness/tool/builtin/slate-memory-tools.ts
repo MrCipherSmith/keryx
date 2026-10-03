@@ -16,7 +16,7 @@ import { createReadStream } from "node:fs";
 import { lstat, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createInterface } from "node:readline";
-import { redactSensitiveText } from "../../../security/redact";
+import { redactSensitiveText } from "../../../security/service";
 import {
   NOTE_KEY_PATTERN,
   NOTE_MAX_CHARS,
