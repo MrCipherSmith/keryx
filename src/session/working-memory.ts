@@ -1,0 +1,237 @@
+// Flow 393: the working-memory rewrite, composed from its pure parts.
+//
+// One call per round on a host that keeps working memory. It plans the bounded request (frame +
+// kept text + last K rounds), the observation packs and the reasoning-replay trim as ONE batch,
+// asks the cache-cost gate whether the batch is worth re-billing the prefix for, logs the decision
+// through the caller, and applies it. A rewrite that is skipped changes nothing.
+
+import type { NormalizedMessage } from "../harness/provider/types";
+import {
+  LEAVING_NOTICE_MARKER,
+  describeDroppedOperators,
+  formatStepRanges,
+  isLeavingNotice,
+  operatorTurnsLeavingNextRound,
+  planBoundedRewrite,
+  stepsLeavingNextRound,
+  tokensOf,
+  trimOldReplay,
+} from "./bounded-request";
+import {
+  applyObservationPacks,
+  planObservationPacks,
+} from "./observation-pack";
+import { cachedPriceRatio, decideRewrite, type RewriteDecision, type RewriteKind } from "./rewrite-gate";
+import { buildSlateFrame, type FrameOptions } from "./slate-frame";
+import type { Slate } from "./slate";
+
+/** Per-conversation bookkeeping; keyed on the history array the turn holds. */
+export interface WorkingMemoryState {
+  /** Completed plan items when the last rewrite ran (or was first looked at). */
+  completedAtLastRewrite: number | undefined;
+  rewrites: number;
+  /** Operator messages the rewrites so far stopped sending (they stay in the archive). */
+  operatorTurnsDropped: number;
+  /** The slate-missing fallback prune was announced to the model already. */
+  fallbackNoticed: boolean;
+  /** Kind and reason of the last skipped rewrite that was logged: the same skip is not logged twice in a row. */
+  lastSkipKey: string | undefined;
+}
+
+const states = new WeakMap<NormalizedMessage[], WorkingMemoryState>();
+
+export function workingMemoryState(history: NormalizedMessage[]): WorkingMemoryState {
+  let s = states.get(history);
+  if (s === undefined) {
+    s = { completedAtLastRewrite: undefined, rewrites: 0, operatorTurnsDropped: 0, fallbackNoticed: false, lastSkipKey: undefined };
+    states.set(history, s);
+  }
+  return s;
+}
+
+/**
+ * Whether the plan advanced a step since the last rewrite (a boundary: the cache is about to go
+ * stale anyway, so a rewrite there is cheap). The first look only records the baseline.
+ */
+export function atPlanBoundary(state: WorkingMemoryState, completedPlanItems: number): boolean {
+  if (state.completedAtLastRewrite === undefined) {
+    state.completedAtLastRewrite = completedPlanItems;
+    return false;
+  }
+  return completedPlanItems > state.completedAtLastRewrite;
+}
+
+/**
+ * Highest Trail step of a `slate_note` call still in `history` (0 when none): a Note written at step N
+ * was written after the model saw every step before N, so those steps count as covered.
+ */
+export function lastNoteStep(history: readonly NormalizedMessage[]): number {
+  const noteCalls = new Set<string>();
+  for (const m of history) {
+    for (const c of m.toolCalls ?? []) if (c.name === "slate_note") noteCalls.add(c.id);
+  }
+  let last = 0;
+  for (const m of history) {
+    if (m.role === "tool" && m.toolCallId !== undefined && noteCalls.has(m.toolCallId) && m.trailStep !== undefined) {
+      last = Math.max(last, m.trailStep);
+    }
+  }
+  return last;
+}
+
+/**
+ * Flow 393 AC5 (review finding 5, decided by the operator): the notice naming the steps that leave
+ * the request at the next rewrite. It is built on EVERY request while any of those steps is not
+ * covered by a Note written after it, not once per batch: it stops when nothing is left to lose
+ * (no rewrite is near, or a `slate_note` call came after the steps). The first notice of a batch is
+ * the full text; later ones, while the earlier one is still in `history`, are short reminders.
+ */
+export function leavingNotice(history: readonly NormalizedMessage[]): { text: string; steps: number[]; reminder: boolean } | undefined {
+  const leaving = stepsLeavingNextRound(history);
+  if (leaving === undefined) return undefined;
+  const covered = lastNoteStep(history);
+  const steps = leaving.filter((s) => s > covered);
+  if (steps.length === 0) return undefined;
+  if (history.some(isLeavingNotice)) {
+    return {
+      steps,
+      reminder: true,
+      text:
+        `Reminder: steps ${formatStepRanges(steps)} ${LEAVING_NOTICE_MARKER}, and no Note was written after them. ` +
+        `Save what you still need with slate_note now; recall_step, slate_trail and history_search read them back later.`,
+    };
+  }
+  const operators = describeDroppedOperators(operatorTurnsLeavingNextRound(history), "will no longer be sent");
+  return {
+    steps,
+    reminder: false,
+    text:
+      `Steps ${formatStepRanges(steps)} ${LEAVING_NOTICE_MARKER}: older rounds are not re-sent. ` +
+      `If a fact from them is still needed, save it now with slate_note. Their outputs stay readable with recall_step, ` +
+      `slate_trail lists them and history_search finds earlier messages.` +
+      (operators.length > 0 ? ` ${operators} The Trail records tool calls only, so what the operator asked there is not in the Trail: save it with slate_note or read it back with the call shown.` : ""),
+  };
+}
+
+/**
+ * Flow 393 AC5: the paragraph of the system instruction a working-memory host adds. It states the
+ * contract the rewrite relies on: older rounds leave the request, so a fact worth keeping goes in a
+ * Note, and the Trail and the recall tools bring the rest back.
+ */
+export function buildWorkingMemoryInstruction(): string {
+  return [
+    "Working memory: this session keeps its history on disk and does not re-send all of it.",
+    "Older rounds leave the request in batches; what stays is the Anchors block, your Notes, a digest of the Trail (one line per tool call you made) and the most recent rounds.",
+    "A fact you will still need after that belongs in a Note: call slate_note with a short key and the fact (set, replace or delete; 2000 characters per note).",
+    "Before a batch leaves, the shell sends a notice naming the steps and repeats it on every request until a Note you wrote after those steps covers them; write Notes then, not afterwards.",
+    "Only the two newest operator messages stay in the request: older ones are not re-sent, the Trail does not list them, and the notice names them with the history_search call that reads each in full.",
+    "To get something back, call recall_step for a saved tool output, slate_trail to list steps by file, tool or step range, or history_search to find earlier text.",
+    "Read a recalled output only when you need it: the Trail line says what the call was and whether it succeeded.",
+  ].join(" ");
+}
+
+export interface WorkingMemoryInput {
+  history: NormalizedMessage[];
+  sessionDir: string;
+  /** The slate to build the frame from; without one only packs and the replay trim can apply. */
+  slate: Slate | undefined;
+  frame: FrameOptions;
+  contextWindow?: number;
+  providerId?: string;
+  remainingRounds: number;
+  atPlanBoundary: boolean;
+  /** The request would overflow the window: applied whatever the gate says. */
+  forced: boolean;
+  /** Called once, just before `history` changes (hosts flush their archive here). */
+  beforeApply?: () => void;
+}
+
+export interface WorkingMemoryResult {
+  /** The gate's verdict; absent when there was nothing to rewrite. */
+  decision?: RewriteDecision;
+  applied: boolean;
+  /** Messages `history` lost (the host treats a shortening like a compaction). */
+  removed: number;
+  droppedRounds: number;
+  droppedSteps: number[];
+  /** Operator messages this rewrite stopped sending. */
+  droppedOperators: number;
+  /** The harness line that tells the model how to recall every operator turn no longer sent; present when any exist. */
+  operatorPointer?: string;
+  packed: number;
+  /** Estimated tokens the batch removed from every later request. */
+  savedTokens: number;
+}
+
+const NOTHING: WorkingMemoryResult = { applied: false, removed: 0, droppedRounds: 0, droppedSteps: [], droppedOperators: 0, packed: 0, savedTokens: 0 };
+
+export async function rewriteWorkingMemory(input: WorkingMemoryInput): Promise<WorkingMemoryResult> {
+  const { history } = input;
+  const frames = input.slate === undefined ? [] : buildSlateFrame(input.slate, input.frame);
+  const bounded =
+    frames.length === 0
+      ? undefined
+      : planBoundedRewrite(history, frames, {
+          ...(input.contextWindow !== undefined ? { contextWindow: input.contextWindow } : {}),
+          ...(input.forced ? { force: true } : {}),
+        });
+  const base = bounded?.next ?? trimOldReplay(history);
+  const packs = planObservationPacks(base);
+  const before = tokensOf(history);
+  const savedByRewrite = before - tokensOf(base);
+  const savedTokens = savedByRewrite + packs.reduce((a, p) => a + p.saving, 0);
+  const changedBase = bounded !== undefined || savedByRewrite > 0;
+  if (!changedBase && packs.length === 0) {
+    return NOTHING;
+  }
+  let firstChanged = bounded?.firstChangedIndex ?? history.length;
+  if (bounded === undefined) {
+    // No frame rewrite: the change starts at the first message the replay trim or a pack alters.
+    for (let i = 0; i < history.length; i++) {
+      if (history[i] !== base[i]) {
+        firstChanged = i;
+        break;
+      }
+    }
+  }
+  for (const p of packs) firstChanged = Math.min(firstChanged, p.index);
+  const invalidatedTokens = tokensOf(history.slice(Math.min(firstChanged, history.length)));
+  const kind: RewriteKind = bounded !== undefined ? "frame" : packs.length > 0 ? "pack" : "prune";
+  const decision = decideRewrite({
+    kind,
+    savedTokens,
+    invalidatedTokens,
+    remainingRounds: input.remainingRounds,
+    cachedRatio: cachedPriceRatio(input.providerId),
+    atPlanBoundary: input.atPlanBoundary,
+    forced: input.forced,
+  });
+  if (!decision.apply) {
+    return { ...NOTHING, decision };
+  }
+  input.beforeApply?.();
+  const lengthBefore = history.length;
+  history.splice(0, history.length, ...base);
+  const { packed } = await applyObservationPacks(history, packs, input.sessionDir);
+  const state = workingMemoryState(history);
+  state.rewrites += 1;
+  const droppedOperators = bounded?.droppedOperators.length ?? 0;
+  state.operatorTurnsDropped += droppedOperators;
+  return {
+    decision,
+    applied: true,
+    removed: lengthBefore - history.length,
+    droppedRounds: bounded?.droppedRounds ?? 0,
+    droppedSteps: bounded?.droppedSteps ?? [],
+    droppedOperators,
+    ...(state.operatorTurnsDropped > 0
+      ? {
+          operatorPointer:
+            `${state.operatorTurnsDropped} earlier operator message${state.operatorTurnsDropped === 1 ? " is" : "s are"} not in this request (the newest two stay). ` +
+            `Find one with history_search {"query":"<words from it>","role":"user"}, then read it whole with {"row":N}.`,
+        }
+      : {}),
+    packed,
+    savedTokens,
+  };
+}

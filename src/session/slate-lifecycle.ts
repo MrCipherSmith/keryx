@@ -17,7 +17,18 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { archiveSlate, openSlateAtomic, readSlate, writeSlate, type Slate, type SlateAnchors } from "./slate";
+import {
+  appendTrailEntry,
+  archiveSlate,
+  openSlateAtomic,
+  readArchivedWorkingMemory,
+  readSlate,
+  workingMemoryOf,
+  writeSlate,
+  type Slate,
+  type SlateAnchors,
+  type TrailEntry,
+} from "./slate";
 import { resolveProjectRoot } from "./paths";
 import type { CourseProjection } from "./slate-course";
 
@@ -271,11 +282,20 @@ export async function ensureSlateOpened(
   if (isSlateSessionDetached(ref)) {
     return;
   }
-  await openSlateAtomic(ref.dir, mintAttemptId, (_existing) => ({
-    anchors,
-    course: {},
-    seeds: [],
-  }));
+  // Flow 393: the Trail and Notes belong to the conversation, not to one slate attempt. A live slate
+  // that is being re-opened (a resumed session whose process died) or an archived one (the session
+  // was resumed after a clean exit, or its slate closed mid-conversation) hands them to the new slate.
+  const archived = await readArchivedWorkingMemory(ref.dir);
+  await openSlateAtomic(ref.dir, mintAttemptId, (existing): Slate => {
+    const live = workingMemoryOf(existing);
+    return {
+      anchors,
+      course: {},
+      seeds: [],
+      ...(live.trail !== undefined || archived.trail !== undefined ? { trail: live.trail ?? archived.trail } : {}),
+      ...(live.notes !== undefined || archived.notes !== undefined ? { notes: live.notes ?? archived.notes } : {}),
+    };
+  });
   ref.opened = true;
 }
 
@@ -474,6 +494,21 @@ export async function recordSlateSessionTouch(
     return undefined;
   }
   return recordSlateTouch(ref.dir, touched, extra);
+}
+
+/**
+ * Flow 393 (AC1, AC8): append one Trail entry through a ref. `undefined`, and
+ * nothing written, once the ref is detached — a shell that lost the session's
+ * lease must never write a Trail entry into the slate its successor now holds.
+ */
+export async function recordSlateSessionTrail(
+  ref: SlateSessionRef,
+  entry: Omit<TrailEntry, "step">,
+): Promise<TrailEntry | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return appendTrailEntry(ref.dir, entry);
 }
 
 /**

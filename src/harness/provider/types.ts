@@ -281,6 +281,24 @@ export interface NormalizedMessage {
    */
   collapsed?: true;
   /**
+   * Flow 393: tool only; the Trail step (`slate.json#trail[].step`) this result was
+   * recorded under. Store-only like `spillPath`: lets an observation pack and the
+   * recall tools name the step. Never sent to a provider.
+   */
+  trailStep?: number;
+  /**
+   * Flow 393: tool only; `true` on a result the harness replaced with a fixed
+   * observation pack (size, first and last line, a reference to the saved full
+   * output). Store-only; marks it so it is never packed twice.
+   */
+  packed?: true;
+  /**
+   * Flow 393: user only; `true` on the harness-built working-memory frame (the
+   * rebuilt Anchors block and the Notes/Trail section). The next rebuild REPLACES
+   * every message carrying it instead of appending another. Store-only.
+   */
+  slateFrame?: true;
+  /**
    * ISO timestamp of when this message first entered history (set at the
    * `history.push(...)` call site, not at whatever checkpoint later flushes
    * it to disk). Optional and store-only bookkeeping: no request builder

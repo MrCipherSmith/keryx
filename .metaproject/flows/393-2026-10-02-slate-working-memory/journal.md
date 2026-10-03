@@ -20,3 +20,20 @@
 - 2026-10-02T15:37:54.956Z - task-added: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
 - 2026-10-02T15:37:56.493Z - task-depends-set: T14: dependsOn T10, T11, T12, T13, T15 (was T10, T11, T12, T13) — measurement must include ObservationPack and the cache-cost gate (AC13, AC14)
 - 2026-10-02T16:26:30.802Z - owner-changed: Aleksandr Tsaitler -> MrCipherSmith (keryx flows are always owned by MrCipherSmith (operator rule, message 178610))
+- 2026-10-02T19:04:37.073Z - started
+- 2026-10-02T19:09:04.674Z - task-done: T5: Slate data model: trail + notes shelves, caps, lock-safe IO, legacy slate.json load (AC1, AC2, AC10)
+- 2026-10-02T19:14:38.683Z - task-done: T6: Trail recording per executed tool call in the agent loop; no model write path (AC1, AC8)
+- 2026-10-02T19:18:14.128Z - task-done: T7: slate_note tool + Notes in slate_read; redaction and caps; Seeds untouched (AC2, AC10)
+- 2026-10-02T19:18:14.304Z - task-done: T8: Recall tools slate_trail, recall_step, history_search with session confinement (AC4)
+- 2026-10-02T19:33:34.636Z - task-done: T9: Slate frame renderer with token budget and untrusted-data framing (AC3, AC7, AC10)
+- 2026-10-02T19:33:51.958Z - task-done: T10: Bounded request assembly behind pruneArchive: frame + operator messages + last K rounds; pairing valid; cache-stable (AC3, AC8)
+- 2026-10-02T19:33:52.357Z - task-done: T13: Window-relative prune thresholds (AC12)
+- 2026-10-02T19:33:52.771Z - task-done: T15: ObservationPack (>10 KiB packed after 2 requests, recall by reference) + cache-cost gate for history rewrites at plan-step boundaries (AC13, AC14)
+- 2026-10-02T19:36:00.000Z - measurement (AC3, replay, seed 0x20261001, window 272000, 110 rounds, 180 tool results; `bun run scripts/benchmark/replay-session-shape.ts`): flow 394 baseline reproduced exactly, peak 96,783 and total 7,374,769 estimated input tokens. Bounded request on this branch: peak 40,428 (limit 64,000) and total 2,969,506 (limit 5,531,077; 59.7% below flow 394), 28 working-memory rewrites in batches, 0 compactions. The replay composes the real rewriteWorkingMemory (frame, last K rounds, packs, cache-cost gate) with a Trail entry and a saved output per tool result and three Notes in the frame.
+- 2026-10-02T19:37:33.895Z - task-done: T11: Note-taking contract in the system instruction + pre-eviction notice (AC5)
+- 2026-10-02T19:43:25.461Z - task-done: T12: shell_exec spill-instead-of-truncate (AC11)
+- 2026-10-02T20:18:53.908Z - task-done: T14: Measurement: replay numbers (AC3), comparative vs codex CLI (AC9), registry-recall 3 seeds branch vs flow 392 (AC6)
+- 2026-10-02T20:18:58.388Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-02T20:19:44.381Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-02T20:19:57.176Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/865
+- 2026-10-02T21:50:00.000Z - measurement redone on the real working-memory path (runner fixed: real slate, four tools registered, a guard fails the run otherwise; commit ec89b5c4). AC3 replay: peak 40,428 (limit 64,000), total 2,969,506 (limit 5,531,077). AC6 registry-recall, 3 seeds: 22/22 each, 110/114/104 calls (cap 150 not hit), 0 repeated reads (limit: average 10). AC9 keryx leg: context-on mean uncached 9,436 (limit 13,259), success 9/9; codex CLI leg not re-run (flow 394 figures stay). Earlier AC6/AC9 numbers measured a degraded mode and are superseded. Thresholds unchanged; no criterion confirmed by the implementer.

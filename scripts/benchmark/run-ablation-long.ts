@@ -31,8 +31,10 @@ import { createGitWorktreePort } from "../../src/harness/child/git-worktree-port
 import { builtinMetaprojectTools } from "../../src/harness/tool/builtin/metaproject-tools";
 import { builtinReadOnlyTools, type InteractiveTool } from "../../src/harness/tool/builtin/interactive-tools";
 import { shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
+import { workingMemoryTools } from "../../src/harness/tool/builtin/slate-memory-tools";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
+import { readSlate } from "../../src/session/slate";
 import { MechanismTracker, PRUNE_HOOK_NAME, VolumeTracker } from "./long-metrics";
 import {
   argValue,
@@ -41,7 +43,9 @@ import {
   finalizeLongRun,
   labelledFilename,
   countSpillFiles,
-  longTurnOptions,
+  assertWorkingMemoryPath,
+  createRunnerArchive,
+  openLongTurnOptions,
   mechanismRollup,
   parseSeeds,
   seedLongWorktree,
@@ -81,15 +85,22 @@ const RESULTS_FILENAME = labelledFilename(
 function buildTools(root: string, variant: AblationVariant, getSessionDir: () => string): InteractiveTool[] {
   const basic = builtinReadOnlyTools(root, { getSessionDir });
   // The stock runner caps output at 20 KB, below the spill threshold (50 KB); see uncappedShellRunner.
-  const withShell = [...basic, shellExecTool(root, uncappedShellRunner(root))];
+  // Flow 393: the working-memory tools are the host's to register (`runAgentTurn` only filters them OUT
+  // of non-working-memory hosts). The system instruction promises them, so a runner without them
+  // measures a mode no real session is in.
+  const withShell = [
+    ...basic,
+    shellExecTool(root, uncappedShellRunner(root)),
+    ...workingMemoryTools(getSessionDir, () => new Date().toISOString()),
+  ];
   return variant === "context-off" ? withShell : [...withShell, ...builtinMetaprojectTools(root)];
 }
 
 function systemInstruction(variant: AblationVariant): string {
   const tools =
     variant === "context-on"
-      ? "get_cwd, list_dir, read_file, shell_exec, search_code, graph_affected, memory_search"
-      : "get_cwd, list_dir, read_file, shell_exec";
+      ? "get_cwd, list_dir, read_file, shell_exec, search_code, graph_affected, memory_search, slate_note, slate_trail, recall_step, history_search"
+      : "get_cwd, list_dir, read_file, shell_exec, slate_note, slate_trail, recall_step, history_search";
   return (
     `You are doing a long, careful, multi-file job in a real repository. You have these tools: ${tools}. ` +
     "Ground every claim in what you actually read or ran. Earlier tool output may be replaced by a short note that names " +
@@ -119,8 +130,12 @@ async function runSeed(
     const usageAcc = new KeryxUsageAccumulator();
     const budgetNotes: string[] = [];
     const contextWindow = CONTEXT_WINDOW > 0 ? CONTEXT_WINDOW : undefined;
+    const history: NormalizedMessage[] = [];
+    const archive = createRunnerArchive(sessionDir, history);
+    const tools = buildTools(root, variant, () => sessionDir);
     const deps: AgentDeps = {
       onContextCompaction: (r) => {
+        archive.rebase();
         mechanisms.onContextCompaction(r);
         if (r.kind === "prune") repeated.onPrune();
         else repeated.onCompaction();
@@ -128,7 +143,7 @@ async function runSeed(
       provider,
       providerId: PROVIDER_NAME,
       modelId: MODEL,
-      tools: buildTools(root, variant, () => sessionDir),
+      tools,
       systemInstruction: systemInstruction(variant),
       idSeq,
       maxToolCalls: MAX_TOOL_CALLS,
@@ -143,6 +158,8 @@ async function runSeed(
       write: () => undefined,
       // Scoped to this script's own AgentIO: shell_exec is risk:"shell" and would otherwise block forever on a TTY prompt.
       requestApproval: async () => true,
+      // The shell host's archive writer, so `history_search` reads a real archive.jsonl.
+      onHistoryChange: () => archive.sync(),
       onUsage: (usage) => {
         sawUsage = true;
         usageAcc.addUsage(usage);
@@ -162,13 +179,29 @@ async function runSeed(
         if (text.includes("[budget]")) budgetNotes.push(text.trim().slice(0, 200));
       },
     };
-    const history: NormalizedMessage[] = [];
     const startedAt = Date.now();
     // Flow 387 review r1 F-001: prune/collapse run only on hosts that keep the originals. This runner
     // holds the whole run in memory and writes full texts to sessionDir, so it opts in like the shell
-    // hosts do (`longTurnOptions`). A `main` checkout ignores the unknown option.
-    await runAgentTurn(io, deps, history, task.prompt, longTurnOptions(sessionDir, root) as Parameters<typeof runAgentTurn>[4]);
+    // hosts do (`openLongTurnOptions`). A `main` checkout ignores the unknown option.
+    // Flow 393: the slate is opened for real and the run is refused if it is not on the working-memory
+    // path (no slate, empty frame, missing tools): that mode is not the one being measured.
+    const turnOptions = await openLongTurnOptions(sessionDir, root, { provider: PROVIDER_NAME, model: MODEL });
+    await assertWorkingMemoryPath(turnOptions, tools);
+    await runAgentTurn(io, deps, history, task.prompt, turnOptions as Parameters<typeof runAgentTurn>[4]);
+    archive.sync();
+    await assertWorkingMemoryPath(turnOptions, tools);
     const durationMs = Date.now() - startedAt;
+
+    // Flow 393: what the working-memory path actually did in this run (evidence that it was exercised).
+    {
+      const slate = await readSlate(sessionDir);
+      const used = (name: string): number => toolLog.filter((l) => l.startsWith(`${name} `)).length;
+      console.error(
+        `  working memory: frame messages in final history ${history.filter((m) => m.slateFrame === true).length}, ` +
+          `trail ${slate?.trail?.length ?? 0}, notes ${Object.keys(slate?.notes ?? {}).length}, ` +
+          `slate_note ${used("slate_note")}, slate_trail ${used("slate_trail")}, recall_step ${used("recall_step")}, history_search ${used("history_search")}`,
+      );
+    }
 
     // Independent verification from the files the agent left behind, never its own "DONE".
     const oracle = built.check(worktreeReader(root));

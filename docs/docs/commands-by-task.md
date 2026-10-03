@@ -64,6 +64,8 @@ Generated. Do not hand-edit: regenerate with `bun scripts/generate-commands-by-t
 | `/new` | Start a new session (old kept on disk). |
 | `/clear` | New session (alias of /new). |
 | `/compact` | Compact model context — /compact [focus] (archive kept). |
+| `/trail` | The tool calls this session recorded (what stays when older rounds leave the request) — /trail [count] [tool=NAME] [file=TEXT] [from=STEP] [to=STEP]. |
+| `/notes` | The notes the model keeps for itself (the facts that survive older rounds) — /notes [key]. |
 | `/rewind` | Roll back files and/or conversation to the start of an earlier turn — /rewind [N [files\|history\|both]]; snapshots cover the work tree only. |
 | `/copy` | Copy the newest transcript block to the clipboard. |
 | `/expand` | Expand the last tool output block. |

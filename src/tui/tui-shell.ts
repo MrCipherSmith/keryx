@@ -182,6 +182,7 @@ import {
   runExternalAgentsCommand,
 } from "./external-command";
 import { isRenderingCommand, runRenderingCommand } from "./rendering-command";
+import { isNotesCommand, isTrailCommand, runNotesCommand, runTrailCommand } from "./working-memory-command";
 import { resolveExternalSetting, writeUserExternalSetting, type ResolvedExternalSetting } from "../lib/external-switch";
 import { loadExternalProvidersConfig } from "../lib/external-providers";
 import { resolveJevApiKey } from "../harness/decision/jev-client";
@@ -8815,6 +8816,15 @@ export async function launchTuiAgentShell(opts: {
           // with a mode it saves it, and serve reads it before the next message part.
           const arg = line.trim().split(/\s+/).slice(1).join(" ");
           io.onSystem?.(runRenderingCommand(arg));
+          return;
+        }
+        if (isTrailCommand(command.name) || isNotesCommand(command.name)) {
+          // flow 393: the working memory, as text. Both read the live session's slate.json.
+          const arg = line.trim().split(/\s+/).slice(1).join(" ");
+          const dir = liveSlateSession()?.dir;
+          trackCommandWork(() =>
+            (isTrailCommand(command.name) ? runTrailCommand(arg, dir) : runNotesCommand(arg, dir)).then((text) => io.onSystem?.(text)),
+          );
           return;
         }
         if (isExternalAgentsCommand(command.name)) {

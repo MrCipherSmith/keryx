@@ -48,6 +48,8 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/channels",
     "/rendering",
     "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
@@ -183,6 +185,8 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/channels",
     "/rendering",
     "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
@@ -341,6 +345,8 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/channels",
     "/rendering",
     "/remote-policy",
+    "/trail",
+    "/notes",
     "/product",
     "/governance",
     "/triggers",
@@ -452,7 +458,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/interrupt",
   ]);
   expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows", "/flow"]);
-  expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
+  expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new", "/notes"]);
   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);
 });
 
