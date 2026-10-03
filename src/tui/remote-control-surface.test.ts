@@ -5,12 +5,14 @@
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { postureLines, postureSidebarText } from "../commands/remote-policy-command";
-import type { RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
-import { REMOTE_EVENT_LIMIT, TG_SOURCE } from "../remote/shell-bridge";
+import type { NormalizedMessage } from "../harness/provider/types";
+import type { RemoteBridgeHost, RemoteClientLike, RemoteEvent, RemoteStatus } from "../remote/shell-bridge";
+import { REMOTE_EVENT_LIMIT, RemoteBridge, TG_SOURCE } from "../remote/shell-bridge";
 import { HELP_GROUPS } from "../standard/help-groups";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
 import { appendUserEcho } from "./transcript-blocks";
+import { createTuiAgentIo } from "./tui-shell";
 import { applyThemeId, getThemeId, roleColor } from "./theme";
 import { chunkColors, clickNode, findById, loadOpenTui, mountChrome, settle, textOf } from "./ops-sidebar.test-helpers";
 import {
@@ -22,6 +24,7 @@ import {
   TG_LABEL,
   commandEchoText,
   HISTORY_COMMAND,
+  HISTORY_POSTING_NOTE,
   formatAge,
   formatHistoryStatus,
   isHistoryCommand,
@@ -258,7 +261,7 @@ type Key = { name: string; sequence: string };
 function openModalFake(
   getStatus: () => RemoteStatus,
   onToggle: () => void = () => {},
-  extra: { getPostureLines?: () => readonly string[] | undefined; visibleRows?: number; onHistory?: () => void } = {},
+  extra: { getPostureLines?: () => readonly string[] | undefined; visibleRows?: number; onHistory?: () => void | Promise<string | undefined> } = {},
 ) {
   const painted = new Map<string, { content: string }>();
   let input: { title: string; tabs: readonly { id: string; label: string }[]; initialTab?: string; footer?: readonly { key: string; label: string }[] } | undefined;
@@ -628,6 +631,145 @@ test("modal: h asks the host to post the history, and the status repaints", () =
   m.press("h");
   expect(posts).toBe(1);
   expect(m.text("status")).toContain("10 messages posted");
+});
+
+const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("modal: h while the posts run says so at once, ignores a second press, and repaints when they finish", async () => {
+  let status: RemoteStatus = ON;
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let posts = 0;
+  const m = openModalFake(
+    () => status,
+    () => {},
+    {
+      onHistory: async () => {
+        posts += 1;
+        await done;
+        status = { ...ON, history: { at: POSTED_AT, count: 10, auto: false } };
+        return undefined;
+      },
+    },
+  );
+  expect(m.text("status")).toContain("not posted yet");
+  m.press("h");
+  // Not finished: the line says it is working, and the History line is still the old one.
+  expect(m.text("status")).toContain(HISTORY_POSTING_NOTE);
+  expect(m.text("status")).toContain("not posted yet");
+  m.press("h");
+  expect(posts).toBe(1);
+  release();
+  await tick();
+  await tick();
+  // Finished: the note is gone and the History line shows the result, without another key.
+  expect(m.text("status")).not.toContain(HISTORY_POSTING_NOTE);
+  expect(m.text("status")).toContain("10 messages posted");
+  // And it can be pressed again.
+  m.press("h");
+  expect(posts).toBe(2);
+});
+
+test("modal: the answer to h (remote control off, an empty history) is shown in the modal itself", async () => {
+  const off = "Remote control is off, so there is no topic to post to. Turn it on with /remote-control <name>.";
+  const m = openModalFake(
+    () => OFF,
+    () => {},
+    { onHistory: async () => off },
+  );
+  m.press("h");
+  await tick();
+  await tick();
+  expect(m.text("status")).toContain("Remote control is off, so there is no topic to post to");
+  const empty = openModalFake(
+    () => ON,
+    () => {},
+    { onHistory: async () => "There is no history to post yet: this session has no messages." },
+  );
+  empty.press("h");
+  await tick();
+  await tick();
+  expect(empty.text("status")).toContain("There is no history to post yet");
+  // The note sits under the History line of an "on" status.
+  const lines = empty.text("status").split("\n");
+  const at = lines.findIndex((line) => line.startsWith("History:"));
+  expect(lines[at + 1] ?? "").toContain("There is no history to post yet");
+});
+
+test("modal: a post that finishes after the modal closed repaints nothing", async () => {
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const m = openModalFake(
+    () => ON,
+    () => {},
+    {
+      onHistory: async () => {
+        await done;
+        return "late answer";
+      },
+    },
+  );
+  m.press("h");
+  m.close();
+  release();
+  await tick();
+  await tick();
+  expect(m.text("status")).not.toContain("late answer");
+});
+
+// Flow 399 AC15: the transcript says so on every restore. The line is the bridge's own notice,
+// written by the shell's own transcript IO into a real chrome, and read back from the rendered frame.
+otuiTest("transcript: an automatic and a manual restore each leave a notice line in the rendered transcript", async () => {
+  const otui = OTUI!;
+  const h = await mountChrome(otui, { width: 140, height: 30 });
+  try {
+    const io = createTuiAgentIo(otui.core, h.renderer, h.chrome.transcript);
+    const conversation: NormalizedMessage[] = [];
+    for (let n = 1; n <= 6; n += 1) {
+      conversation.push({ role: "user", content: `q${n}`, provenance: "trusted" }, { role: "assistant", content: `a${n}` });
+    }
+    const fakeClient = (): RemoteClientLike =>
+      ({
+        connected: true,
+        name: "keryx-demo",
+        runTimeoutMs: 0,
+        lastHeartbeatAt: undefined,
+        start: async () => ({ ok: true, name: "keryx-demo", threadId: 7, runTimeoutMs: 0, reused: false }),
+        close: async () => undefined,
+        reply: async () => true,
+        requestApproval: async () => "deny" as const,
+        requestChoice: async () => undefined,
+      }) as unknown as RemoteClientLike;
+    const host: RemoteBridgeHost = {
+      sessionId: () => "sess-tui-1",
+      project: () => "/proj",
+      isBusy: () => false,
+      runLine: () => undefined,
+      enqueue: () => undefined,
+      // The same wiring the shell uses for the bridge's notices.
+      notice: (text) => io.onSystem?.(`${text}\n`),
+      cancelTurn: () => undefined,
+      recordOn: () => undefined,
+      recordOff: () => undefined,
+      history: () => conversation,
+      sessionResumed: () => true,
+    };
+    const bridge = new RemoteBridge({ host, makeClient: fakeClient, historyPaceMs: 0 });
+    await bridge.enable("keryx-demo");
+    for (let i = 0; i < 100 && bridge.status().history === undefined; i += 1) await tick();
+    await settle(h);
+    expect(h.captureCharFrame()).toContain("history restored to the topic: 10 messages (this session was resumed).");
+
+    expect(await bridge.historyForCommand("3")).toBeUndefined();
+    await settle(h);
+    expect(h.captureCharFrame()).toContain("history posted to the topic: 3 messages.");
+  } finally {
+    h.destroy();
+  }
 });
 
 test("/history: recognised by name only, runs while a turn runs, listed for the agent shell", () => {

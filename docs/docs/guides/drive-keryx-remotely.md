@@ -497,14 +497,20 @@ number). Each message is posted on its own, oldest first, with a `You:` or `Agen
 two seconds apart so Telegram does not throttle the run; a message longer than 1,500 characters
 is cut with `…`. The messages are what you typed and the agent's final answer of each turn: no
 tool calls, no tool output, no reasoning and no narration written before a tool call. Anything
-that looks like a secret is redacted first, as in every reply.
+that looks like a secret is redacted first, as in every reply. A message that contains a Telegram
+bot token or any long run of letters and digits that looks like a key is not posted at all: it
+appears as `[сообщение скрыто: похоже на секрет]`, because the redactor can miss a token you pasted.
+While a turn is running, the answer being written is left out; it appears once the turn ends.
 
 When you resume a session and then turn remote control on, and `/remote-control <name>` creates
 a new topic, the last 10 messages are posted by themselves, once, and the shell says so. That
-is the only automatic case: a topic that already existed is never refilled, and turning remote
-control off and on again, a reconnect or a restart of `serve` post nothing. Anything else is
-`/history`. The shell shows the last post in the `/remote-control` modal (key `h` posts it
-again) and as a line under the Remote row of the sidebar. If Telegram refuses a message the run
+is the only automatic case, and only the first time remote control is turned on in that shell: a
+topic that already existed is never refilled, and turning remote control off and on again (that
+makes a new, empty topic on purpose), a reconnect or a restart of `serve` post nothing. Anything
+else is `/history`. If the automatic restore cannot run, the shell says why in the transcript. The
+shell shows the last post in the `/remote-control` modal (key `h` posts it again, shows that it is
+working and repaints when it is done, and shows an answer such as "remote control is off" in the
+modal itself) and as a line under the Remote row of the sidebar. If Telegram refuses a message the run
 stops there and says how far it got; sending `/history` again posts the whole set again, so a
 topic can hold a message twice.
 

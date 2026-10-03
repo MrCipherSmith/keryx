@@ -6,26 +6,46 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { NormalizedMessage } from "../harness/provider/types";
 import { AGENT_SLASH_COMMANDS } from "../commands/agent-commands";
 import { HELP_GROUPS } from "../standard/help-groups";
-import type { InboundMeta, RemoteClientOptions, StartResult } from "./client";
+import type { InboundMeta, RemoteClient, RemoteClientOptions, StartResult } from "./client";
 import { REMOTE_COMMANDS } from "./command-gateway";
 import {
   HISTORY_DEFAULT_COUNT,
   HISTORY_EMPTY_MESSAGE,
   HISTORY_ITEM_MAX_CHARS,
   HISTORY_MAX_COUNT,
+  HISTORY_SECRET_PLACEHOLDER,
   HISTORY_USAGE,
   formatHistoryItem,
+  looksLikeSecret,
   parseHistoryArgs,
   qualifyingHistory,
   selectHistory,
 } from "./history";
 import { RemoteBridge, type RemoteBridgeHost, type RemoteClientLike } from "./shell-bridge";
-import { makeHarness, until } from "./remote.test-helpers";
+import { settle as settleLoop, until } from "./remote.test-helpers";
 import { makeRig, type Rig } from "./remote.http.test-helpers";
 
 const META: InboundMeta = { updateId: 1, threadId: 7, fromId: 9, receivedAt: 0 };
 // Shaped like a provider key; the redactor must not let it through.
 const SECRET = "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCdEfGhIjKlMnOp";
+
+/** The last 10 messages of `conversation(8)`, as the topic reads them, written out so no test derives them from the code under test. */
+const LAST_TEN_OF_EIGHT = [
+  "You:\nq4",
+  "Agent:\na4",
+  "You:\nq5",
+  "Agent:\na5",
+  "You:\nq6",
+  "Agent:\na6",
+  "You:\nq7",
+  "Agent:\na7",
+  "You:\nq8",
+  "Agent:\na8",
+];
+
+// Not real credentials: the shapes the shared redactor misses.
+const BOT_TOKEN = "7412398765:AAHx9Kf3Lq0ZpR7sT2vWx4Yb6Nc8Md1QeUg";
+const SHELL_TOKEN = "q3F9xK2mT7vB0LzR8wYpN4cD6eHuJ1aSgOiXbMkVtQE";
 
 const user = (content: string): NormalizedMessage => ({ role: "user", content, provenance: "trusted" });
 const agent = (content: string): NormalizedMessage => ({ role: "assistant", content });
@@ -78,9 +98,19 @@ describe("which messages qualify", () => {
     const history = conversation(13).slice(0, -1);
     expect(qualifyingHistory(history)).toHaveLength(25);
     const items = selectHistory(history, 10);
-    expect(items).toHaveLength(10);
-    const all = qualifyingHistory(history);
-    expect(items).toEqual(all.slice(15, 25));
+    // Written out: message 16 of 25 is the agent's a8, message 25 is the operator's q13.
+    expect(items).toEqual([
+      { role: "agent", text: "a8" },
+      { role: "user", text: "q9" },
+      { role: "agent", text: "a9" },
+      { role: "user", text: "q10" },
+      { role: "agent", text: "a10" },
+      { role: "user", text: "q11" },
+      { role: "agent", text: "a11" },
+      { role: "user", text: "q12" },
+      { role: "agent", text: "a12" },
+      { role: "user", text: "q13" },
+    ]);
   });
 
   test("injected user blocks, harness nudges and compaction summaries are not operator messages", () => {
@@ -106,6 +136,23 @@ describe("which messages qualify", () => {
     ]);
   });
 
+  test("while a turn runs, its half-written assistant text is not a message; once it ends it is", () => {
+    const streaming = agent("The answer so f");
+    const history = [user("q1"), agent("a1"), user("q2"), streaming];
+    expect(qualifyingHistory(history, { turnRunning: true })).toEqual([
+      { role: "user", text: "q1" },
+      { role: "agent", text: "a1" },
+      { role: "user", text: "q2" },
+    ]);
+    expect(selectHistory(history, 1, { turnRunning: true })).toEqual([{ role: "user", text: "q2" }]);
+    // Idle: the same history, the finished text is there.
+    expect(qualifyingHistory(history).at(-1)).toEqual({ role: "agent", text: "The answer so f" });
+    // The items are strings: the live message growing afterwards changes nothing already selected.
+    const picked = selectHistory(history, 1);
+    streaming.content += "ar as I know";
+    expect(picked).toEqual([{ role: "agent", text: "The answer so f" }]);
+  });
+
   test("an empty or short history gives what there is; a count above it gives all of it", () => {
     expect(qualifyingHistory([])).toEqual([]);
     expect(selectHistory([user("only"), agent("one")], 10)).toHaveLength(2);
@@ -126,6 +173,44 @@ describe("formatHistoryItem", () => {
     // A secret that straddles the cut point is gone too, not half-shown.
     const straddling = formatHistoryItem({ role: "agent", text: `${"x".repeat(HISTORY_ITEM_MAX_CHARS - 20)} ${SECRET} ${"y".repeat(100)}` });
     expect(straddling).not.toContain("sk-ant-api03-AbCd");
+  });
+
+  test("a Telegram bot token or a bare token in a turn hides the whole turn, either role", () => {
+    for (const text of [
+      `here is the bot token ${BOT_TOKEN} thanks`,
+      BOT_TOKEN,
+      SHELL_TOKEN,
+      `use ${SHELL_TOKEN}`,
+      `Authorization is ${SHELL_TOKEN}==`,
+    ]) {
+      for (const role of ["user", "agent"] as const) {
+        const out = formatHistoryItem({ role, text });
+        expect(out).toBe(`${role === "user" ? "You" : "Agent"}:\n${HISTORY_SECRET_PLACEHOLDER}`);
+        expect(out).not.toContain("AAHx9K");
+        expect(out).not.toContain("q3F9xK2m");
+      }
+    }
+  });
+
+  test("a secret after the cut point of a 40,000-character turn is still found", () => {
+    const long = `${"word ".repeat(8_000)}${BOT_TOKEN}`;
+    expect(long.length).toBeGreaterThan(40_000 - 100);
+    expect(formatHistoryItem({ role: "user", text: long })).toBe(`You:\n${HISTORY_SECRET_PLACEHOLDER}`);
+    expect(formatHistoryItem({ role: "agent", text: `${long}` })).not.toContain("word");
+  });
+
+  test("ordinary text is not mistaken for a secret", () => {
+    for (const text of [
+      "deploy at 12:30 tomorrow",
+      "commit 858e787c8efeb5b785c6cbc29425d8b809f7cbe5 is green",
+      "see /home/altsay/keryx-wH1/src/remote/topic-history.test.ts for the test",
+      "SomeVeryLongCamelCaseIdentifierWithoutAnyDigitsAtAllInIt is a name",
+      "call 8005550123 or 8005550124",
+      "https://github.com/MrCipherSmith/keryx/pull/870",
+      "На русском языке длинное слово: сверхъестественнейшаяпоследовательность",
+    ]) {
+      expect(looksLikeSecret(text)).toBe(false);
+    }
   });
 
   test("a long turn is cut at the limit with a marker", () => {
@@ -162,6 +247,11 @@ function bridgeHarness(
     noHistoryHook?: boolean;
     onReply?: HistoryClient["onReply"];
     paceMs?: number;
+    /** A turn is being written: the host says so. Omitted: the host does not say, and `isBusy` stands in. */
+    turnRunning?: () => boolean;
+    busy?: () => boolean;
+    /** The pause between two restored messages; default returns at once. */
+    sleep?: (ms: number) => Promise<void>;
   } = {},
 ) {
   const calls: string[] = [];
@@ -170,7 +260,7 @@ function bridgeHarness(
   const host: RemoteBridgeHost = {
     sessionId: () => "sess-1",
     project: () => "/proj",
-    isBusy: () => false,
+    isBusy: () => opts.busy?.() ?? false,
     runLine: (t) => calls.push(`run:${t}`),
     enqueue: (t) => calls.push(`queue:${t}`),
     notice: (t) => calls.push(`notice:${t}`),
@@ -179,6 +269,7 @@ function bridgeHarness(
     recordOff: () => calls.push("off"),
     ...(opts.noHistoryHook ? {} : { history: () => state.history }),
     sessionResumed: () => opts.resumed ?? false,
+    ...(opts.turnRunning !== undefined ? { turnRunning: opts.turnRunning } : {}),
   };
   const clients: HistoryClient[] = [];
   const bridge = new RemoteBridge({
@@ -188,6 +279,7 @@ function bridgeHarness(
     historyPaceMs: opts.paceMs ?? 2_000,
     sleep: async (ms) => {
       sleeps.push(ms);
+      await opts.sleep?.(ms);
     },
     makeClient: (options) => {
       const startResult: StartResult = { ok: true, name: "topic-a", threadId: 7, runTimeoutMs: 0, ...(opts.reused === undefined ? {} : { reused: opts.reused }) };
@@ -237,8 +329,7 @@ describe("automatic restore", () => {
     await settle(h, 10);
     const replies = h.client().replies;
     expect(replies).toHaveLength(10);
-    const expected = qualifyingHistory(conversation(8)).slice(-10).map(formatHistoryItem);
-    expect(replies).toEqual(expected);
+    expect(replies).toEqual(LAST_TEN_OF_EIGHT);
     // Role labels, and the operator's and the agent's messages alternate.
     expect(replies.map((text) => text.split(":")[0])).toEqual(["You", "Agent", "You", "Agent", "You", "Agent", "You", "Agent", "You", "Agent"]);
     expect(replies.join("\n")).not.toContain("let me look");
@@ -285,16 +376,33 @@ describe("automatic restore", () => {
     expect(h.bridge.status().state).toBe("on");
   });
 
-  test("turning it off and on again with a kept topic (reused) does not repost", async () => {
+  test("turning it off and on again in the same process does not restore into the new topic", async () => {
     const h = bridgeHarness({ reused: false, resumed: true });
     await h.bridge.enable();
     await settle(h, 10);
     await h.bridge.disable();
     expect(h.bridge.status().history).toBeUndefined();
-    const second = bridgeHarness({ reused: true, resumed: true, history: h.state.history });
-    await second.bridge.enable();
+    // The client says "new topic" again, as the hub does after a delete; the session is still resumed.
+    await h.bridge.enable();
     await new Promise((r) => setTimeout(r, 20));
-    expect(second.client().replies).toEqual([]);
+    expect(h.clients).toHaveLength(2);
+    expect(h.client().replies).toEqual([]);
+    expect(h.bridge.status().history).toBeUndefined();
+    // `/history` is how that topic gets its messages, and it does.
+    expect(await h.bridge.historyForCommand("2")).toBeUndefined();
+    expect(h.client().replies).toEqual(["You:\nq8", "Agent:\na8"]);
+  });
+
+  test("a restore that does not happen says why in the transcript", async () => {
+    const empty = bridgeHarness({ reused: false, resumed: true, history: [] });
+    await empty.bridge.enable();
+    await until(() => empty.calls.some((c) => c.startsWith("notice:history was not restored automatically")), "the reason");
+    expect(empty.calls.find((c) => c.includes("not restored automatically"))).toContain(HISTORY_EMPTY_MESSAGE);
+
+    const refused = bridgeHarness({ reused: false, resumed: true, onReply: () => false });
+    await refused.bridge.enable();
+    await until(() => refused.calls.some((c) => c.startsWith("notice:history was not restored automatically")), "the failure reason");
+    expect(refused.calls.find((c) => c.includes("not restored automatically"))).toContain("Send /history again");
   });
 
   test("a failed send stops the restore there; nothing is sent twice and enable stays on", async () => {
@@ -313,7 +421,7 @@ describe("/history from the shell", () => {
     await h.bridge.enable();
     expect(await h.bridge.historyForCommand("3")).toBeUndefined();
     expect(h.client().replies).toHaveLength(3);
-    expect(h.client().replies).toEqual(qualifyingHistory(conversation(8)).slice(-3).map(formatHistoryItem));
+    expect(h.client().replies).toEqual(["Agent:\na7", "You:\nq8", "Agent:\na8"]);
     expect(h.bridge.status().history).toMatchObject({ count: 3, auto: false });
     expect(await h.bridge.historyForCommand("")).toBeUndefined();
     expect(h.client().replies).toHaveLength(13);
@@ -367,6 +475,78 @@ describe("/history from the shell", () => {
     expect(h.client().replies).toHaveLength(4);
   });
 
+  test("mid-turn it posts the finished messages and leaves out the half-written answer", async () => {
+    const streaming = agent("half a sent");
+    let running = true;
+    const h = bridgeHarness({
+      reused: true,
+      history: [user("q1"), agent("a1"), user("q2"), streaming],
+      turnRunning: () => running,
+      busy: () => running,
+    });
+    await h.bridge.enable();
+    expect(await h.bridge.historyForCommand("5")).toBeUndefined();
+    expect(h.client().replies).toEqual(["You:\nq1", "Agent:\na1", "You:\nq2"]);
+    expect(h.client().replies.join("\n")).not.toContain("half a sent");
+    // The turn ends: the same /history now has the finished answer.
+    streaming.content = "half a sentence, finished";
+    running = false;
+    expect(await h.bridge.historyForCommand("1")).toBeUndefined();
+    expect(h.client().replies.at(-1)).toBe("Agent:\nhalf a sentence, finished");
+  });
+
+  test("without a turnRunning hook a busy shell counts as running", async () => {
+    const h = bridgeHarness({ reused: true, history: [user("q1"), agent("partial")], busy: () => true });
+    await h.bridge.enable();
+    expect(await h.bridge.historyForCommand("2")).toBeUndefined();
+    expect(h.client().replies).toEqual(["You:\nq1"]);
+  });
+
+  test("a message that grows while the posts are paced is posted as it was when selected", async () => {
+    const last = agent("as selected");
+    const h = bridgeHarness({
+      reused: true,
+      history: [user("q1"), last],
+      onReply: (_text, index) => {
+        if (index === 0) last.content = "changed after the first post";
+        return true;
+      },
+    });
+    await h.bridge.enable();
+    await h.bridge.postHistory(2);
+    expect(h.client().replies).toEqual(["You:\nq1", "Agent:\nas selected"]);
+  });
+
+  test("off and on again during the pause: the new topic's /history is not refused and the old run stops", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let paused = false;
+    const h = bridgeHarness({
+      reused: true,
+      sleep: async () => {
+        paused = true;
+        await gate;
+      },
+    });
+    await h.bridge.enable();
+    const oldClient = h.client();
+    const first = h.bridge.postHistory(4);
+    await until(() => paused, "the pause after the first message");
+    await h.bridge.disable();
+    await h.bridge.enable();
+    const newClient = h.client();
+    expect(newClient).not.toBe(oldClient);
+    // Same client would be "running"; a new client is a new topic and gets its own run.
+    release();
+    expect(await h.bridge.postHistory(4)).toEqual({ ok: true, posted: 4 });
+    expect(newClient.replies).toEqual(["You:\nq7", "Agent:\na7", "You:\nq8", "Agent:\na8"]);
+    const old = await first;
+    expect(old).toMatchObject({ ok: false, reason: "failed", posted: 1 });
+    expect(oldClient.replies).toEqual(["You:\nq7"]);
+  });
+
   test("the run stops when the topic is turned off in the middle", async () => {
     const h = bridgeHarness({ reused: true });
     await h.bridge.enable();
@@ -377,6 +557,34 @@ describe("/history from the shell", () => {
     const outcome = await h.bridge.postHistory(6);
     expect(outcome.ok).toBe(false);
     expect(h.client().replies.length).toBeLessThan(6);
+  });
+
+  test("a pasted bot token, a bare shell token and a token in a 40,000-character turn never reach the topic", async () => {
+    const h = bridgeHarness({
+      reused: true,
+      history: [
+        user(`the bot token is ${BOT_TOKEN}`),
+        agent(`noted ${BOT_TOKEN.split(":")[1]}`),
+        user(SHELL_TOKEN),
+        agent("fine, I will not use it"),
+        user(`${"word ".repeat(8_000)}${BOT_TOKEN}`),
+        agent(`${"filler ".repeat(5_000)}${SHELL_TOKEN}`),
+      ],
+    });
+    await h.bridge.enable();
+    expect(await h.bridge.postHistory(10)).toEqual({ ok: true, posted: 6 });
+    const all = h.client().replies.join("\n");
+    for (const piece of ["AAHx9K", "7412398765", "q3F9xK2m", "Lq0ZpR7sT2", "word word", "filler"]) {
+      expect(all).not.toContain(piece);
+    }
+    expect(h.client().replies).toEqual([
+      `You:\n${HISTORY_SECRET_PLACEHOLDER}`,
+      `Agent:\n${HISTORY_SECRET_PLACEHOLDER}`,
+      `You:\n${HISTORY_SECRET_PLACEHOLDER}`,
+      "Agent:\nfine, I will not use it",
+      `You:\n${HISTORY_SECRET_PLACEHOLDER}`,
+      `Agent:\n${HISTORY_SECRET_PLACEHOLDER}`,
+    ]);
   });
 
   test("a secret in the session never reaches the topic", async () => {
@@ -394,7 +602,7 @@ describe("/history from the topic", () => {
     await h.say("/history 4");
     await h.bridge.idle();
     await until(() => h.client().replies.length >= 4, "four messages");
-    expect(h.client().replies).toEqual(qualifyingHistory(conversation(8)).slice(-4).map(formatHistoryItem));
+    expect(h.client().replies).toEqual(["You:\nq7", "Agent:\na7", "You:\nq8", "Agent:\na8"]);
   });
 
   test("a bad argument is answered with the usage line", async () => {
@@ -417,11 +625,14 @@ describe("/history from the topic", () => {
 });
 
 describe("where /history is listed", () => {
-  test("the topic's command list, the agent's slash commands and the help groups all carry it", () => {
-    expect(REMOTE_COMMANDS.some((c) => c.name === "history" && c.kind === "builtin")).toBe(true);
-    expect(AGENT_SLASH_COMMANDS.some((c) => c.name === "/history" || c.name === "history")).toBe(true);
-    const grouped = JSON.stringify(HELP_GROUPS);
-    expect(grouped).toContain("/history");
+  test("the topic's command list, the agent's slash commands and the help groups each carry its own entry", () => {
+    expect(REMOTE_COMMANDS.find((c) => c.name === "history")).toMatchObject({ kind: "builtin" });
+    const slash = AGENT_SLASH_COMMANDS.find((c) => c.name === "/history");
+    expect(slash?.description).toContain("/history [N]");
+    const help = HELP_GROUPS.find((e) => e.kind === "slash" && e.name === "/history");
+    expect(help?.group).toBe("Automation");
+    expect(help?.summary).toContain("[N]");
+    expect(help?.summary).toContain("20");
   });
 });
 
@@ -446,24 +657,127 @@ describe("the client reports whether the topic was new", () => {
   });
 });
 
-describe("history through the outbound queue under a rate limit", () => {
-  test("ten messages arrive in order, none twice, when Telegram answers 429 part-way", async () => {
-    const h = makeHarness();
-    try {
-      const hub = h.makeHub();
-      const reg = await hub.register({ sessionId: "sess-th-0003", project: "/w/app", name: "release" });
-      if (!reg.ok) throw new Error("register failed");
-      await hub.start();
-      const items = qualifyingHistory(conversation(8)).slice(-10).map(formatHistoryItem);
-      h.api.rateLimitNext("sendMessage", 2);
-      for (const text of items) await hub.send("sess-th-0003", text);
-      await h.clock.advance(2_000);
-      await until(() => hub.outboundPending() === 0, "the queue to drain");
-      const sent = h.api.sentTo(reg.threadId).map((m) => m.text);
-      const ours = sent.filter((text) => text.startsWith("You:") || text.startsWith("Agent:"));
-      expect(ours).toEqual(items);
-    } finally {
-      await h.cleanup();
-    }
+// ---- the real client and serve, with the real bridge on top ------------------------------
+
+/** A bridge over a real client talking to the rig's serve; the host is a plain recorder. */
+function realBridge(rig: Rig, opts: { resumed: boolean; sessionId: string; history?: NormalizedMessage[] }) {
+  const clients: RemoteClient[] = [];
+  const notices: string[] = [];
+  const bridge = new RemoteBridge({
+    host: {
+      sessionId: () => opts.sessionId,
+      project: () => "/work/app",
+      isBusy: () => false,
+      runLine: () => undefined,
+      enqueue: () => undefined,
+      notice: (text) => void notices.push(text),
+      cancelTurn: () => undefined,
+      recordOn: () => undefined,
+      recordOff: () => undefined,
+      history: () => opts.history ?? conversation(8),
+      sessionResumed: () => opts.resumed,
+    },
+    historyPaceMs: 5,
+    makeClient: (options) => {
+      const client = rig.makeClient(options);
+      clients.push(client);
+      return client;
+    },
+  });
+  const sentTo = (threadId: number): string[] =>
+    rig.api
+      .sentTo(threadId)
+      .map((m) => m.text)
+      .filter((text) => text.startsWith("You:") || text.startsWith("Agent:"));
+  return { bridge, clients, notices, sentTo, client: () => clients[clients.length - 1] as RemoteClient };
+}
+
+describe("the client reports whether the topic was new", () => {
+  let rig: Rig;
+  afterEach(async () => {
+    await rig.cleanup();
+  });
+
+  test("a fresh topic is reused:false; the same session registering again is reused:true", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const first = rig.makeClient({ sessionId: "sess-th-0001", project: "/work/app", name: "release", onLine: () => undefined });
+    const a = await first.start();
+    expect(a).toMatchObject({ ok: true, reused: false });
+    const second = rig.makeClient({ sessionId: "sess-th-0001", project: "/work/app", name: "release", onLine: () => undefined });
+    const b = await second.start();
+    expect(b).toMatchObject({ ok: true });
+    expect(b.ok && b.reused).toBe(true);
+  });
+
+  test("AC12: the answer of the first registration survives a reconnect, and a reconnect restores nothing", async () => {
+    rig = makeRig();
+    const firstServe = await rig.startServe();
+    const t = realBridge(rig, { resumed: true, sessionId: "sess-th-0004" });
+    const started = await t.bridge.enable("release");
+    if (!started.ok) throw new Error("enable failed");
+    expect(started.reused).toBe(false);
+    const threadId = started.threadId;
+    await until(() => t.sentTo(threadId).length === 10, "the automatic restore", 8_000);
+    expect(t.sentTo(threadId)).toEqual(LAST_TEN_OF_EIGHT);
+    expect(t.client().reusedAtStart).toBe(false);
+
+    // Serve goes away and comes back; the client registers again, the hub says "reused" this time.
+    await firstServe.stop();
+    await until(() => !t.client().connected, "the shell to notice serve is gone");
+    await rig.startServe();
+    await until(() => t.client().connected, "the shell to reconnect", 10_000);
+    await settleLoop();
+    await settleLoop();
+    // The flag is the first registration's, so a second registration changes nothing...
+    expect(t.client().reusedAtStart).toBe(false);
+    // ...and nothing was posted again.
+    await new Promise((r) => setTimeout(r, 100));
+    expect(t.sentTo(threadId)).toEqual(LAST_TEN_OF_EIGHT);
+  });
+
+  test("AC12: turning remote control off and on in one process leaves the new topic empty until /history", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const t = realBridge(rig, { resumed: true, sessionId: "sess-th-0006" });
+    const first = await t.bridge.enable("release");
+    if (!first.ok) throw new Error("enable failed");
+    await until(() => t.sentTo(first.threadId).length === 10, "the automatic restore", 8_000);
+    expect(await t.bridge.disable()).toBe(true);
+
+    const second = await t.bridge.enable("release");
+    if (!second.ok) throw new Error("second enable failed");
+    expect(t.clients).toHaveLength(2);
+    expect(second.reused).toBe(false); // a new topic, over a session that is still resumed
+    const before = t.sentTo(second.threadId).length;
+    await new Promise((r) => setTimeout(r, 150));
+    expect(t.sentTo(second.threadId).length).toBe(before);
+    expect(t.bridge.status().history).toBeUndefined();
+
+    // On request it does fill.
+    expect(await t.bridge.historyForCommand("2")).toBeUndefined();
+    await until(() => t.sentTo(second.threadId).length === before + 2, "the two messages", 8_000);
+    expect(t.sentTo(second.threadId).slice(-2)).toEqual(["You:\nq8", "Agent:\na8"]);
+  });
+});
+
+describe("history through the real outbound queue under a rate limit", () => {
+  let rig: Rig;
+  afterEach(async () => {
+    await rig.cleanup();
+  });
+
+  test("AC10: ten messages posted by the bridge's own pacing arrive in order, none twice, when Telegram answers 429", async () => {
+    rig = makeRig();
+    await rig.startServe();
+    const t = realBridge(rig, { resumed: false, sessionId: "sess-th-0007" });
+    const started = await t.bridge.enable("release");
+    if (!started.ok) throw new Error("enable failed");
+    // The next send is refused for one second; the queue holds, then sends everything once, in order.
+    rig.api.rateLimitNext("sendMessage", 1, 1);
+    expect(await t.bridge.historyForCommand("10")).toBeUndefined();
+    await until(() => t.sentTo(started.threadId).length === 10, "all ten messages", 12_000);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(t.sentTo(started.threadId)).toEqual(LAST_TEN_OF_EIGHT);
   });
 });

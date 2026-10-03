@@ -56,7 +56,10 @@ export function parseHistoryArgs(args: string): HistoryArgs {
  * discards the text gathered so far in this turn; a later assistant message without calls
  * replaces it. A turn that ended on tool calls with no closing text yields no agent item.
  */
-export function qualifyingHistory(history: readonly NormalizedMessage[]): HistoryItem[] {
+export function qualifyingHistory(
+  history: readonly NormalizedMessage[],
+  options: { turnRunning?: boolean } = {},
+): HistoryItem[] {
   const items: HistoryItem[] = [];
   let pending: string | undefined;
   const flush = (): void => {
@@ -77,17 +80,48 @@ export function qualifyingHistory(history: readonly NormalizedMessage[]): Histor
       items.push({ role: "user", text: message.content });
     }
   }
-  flush();
+  // While a turn is running its assistant message is still being written: the streaming loop
+  // appends to that very object, so what is there now is half a sentence. Only a finished turn's
+  // text counts; the one in flight appears once it ends.
+  if (options.turnRunning !== true) flush();
   return items;
 }
 
-/** The last `count` qualifying messages, oldest first. Pure. */
-export function selectHistory(history: readonly NormalizedMessage[], count: number): HistoryItem[] {
-  const items = qualifyingHistory(history);
+/** The last `count` qualifying messages, oldest first. Pure. Strings, so a later edit of the live history changes nothing here. */
+export function selectHistory(
+  history: readonly NormalizedMessage[],
+  count: number,
+  options: { turnRunning?: boolean } = {},
+): HistoryItem[] {
+  const items = qualifyingHistory(history, options);
   return count >= items.length ? items : items.slice(items.length - Math.max(0, count));
 }
 
 const ROLE_LABEL: Record<HistoryRole, string> = { user: "You", agent: "Agent" };
+
+/** What a restored message that looks like a secret is replaced by. */
+export const HISTORY_SECRET_PLACEHOLDER = "[сообщение скрыто: похоже на секрет]";
+
+const BOT_TOKEN_SHAPE = /\d{6,}:[A-Za-z0-9_-]{30,}/;
+// base64url runs from 32; a standard-base64 run (`+`, `/`) only from 40, because a URL path or a
+// file path is a long run of letters, digits and slashes too and a 32-byte token is 43 characters.
+const TOKEN_RUN = /[A-Za-z0-9_-]{32,}|[A-Za-z0-9+/]{40,}={0,2}/g;
+
+/**
+ * Whether `text` carries something that looks like a credential. The shared redactor catches the
+ * shapes it knows (and mangles a Telegram bot token's number as a phone), so a pasted token can
+ * come through whole or half. A restored turn is old text nobody is looking at: when in doubt it
+ * is hidden, not posted. Two shapes: a Telegram bot token (`123456789:AAH…`), and any bare run of
+ * 32 or more token characters (40 for the `+` and `/` alphabet) that mixes upper case, lower case and digits (a base64url or base64
+ * secret; a hex hash is lower case only, a word has no digits, so neither matches). Pure.
+ */
+export function looksLikeSecret(text: string): boolean {
+  if (BOT_TOKEN_SHAPE.test(text)) return true;
+  for (const run of text.match(TOKEN_RUN) ?? []) {
+    if (/[a-z]/.test(run) && /[A-Z]/.test(run) && /\d/.test(run)) return true;
+  }
+  return false;
+}
 
 /**
  * One restored message as the topic reads it: a role label, then the text. Redacted first and
@@ -95,6 +129,8 @@ const ROLE_LABEL: Record<HistoryRole, string> = { user: "You", agent: "Agent" };
  * Text only, no time (the label tells who spoke; the order tells when).
  */
 export function formatHistoryItem(item: HistoryItem): string {
+  // The raw text, before the redactor: it is the redactor's blind spots this guards.
+  if (looksLikeSecret(item.text)) return `${ROLE_LABEL[item.role]}:\n${HISTORY_SECRET_PLACEHOLDER}`;
   const safe = redactSensitiveText(item.text).trim();
   let body = safe;
   if (safe.length > HISTORY_ITEM_MAX_CHARS) {

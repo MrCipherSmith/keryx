@@ -120,6 +120,12 @@ export interface RemoteBridgeHost extends Partial<Omit<RemoteCommandHost, "isBus
    * Absent: `/history` answers that this shell cannot post it.
    */
   history?(): readonly NormalizedMessage[];
+  /**
+   * An assistant turn is being written right now, so the last assistant message in `history()`
+   * is unfinished. Absent: `isBusy()` stands in, which only errs towards leaving the newest
+   * answer out.
+   */
+  turnRunning?(): boolean;
   /** The live session was resumed (`-r`, `-c`, `/resume`), not started fresh. The automatic restore needs it. */
   sessionResumed?(): boolean;
 }
@@ -267,8 +273,14 @@ export class RemoteBridge {
   private currentFromId: number | undefined;
   /** The last history post to this topic; cleared with the topic. */
   private lastHistory: RemoteHistoryStatus | undefined;
-  /** A history post is running (the pacing makes it take a while); a second one waits for it to end. */
-  private postingHistory = false;
+  /**
+   * The client a history post is running for (the pacing makes it take a while). A second post to
+   * the SAME client is refused; one to a newer client (off, then on again within the pause) is
+   * not, because the older run stops at its next step and never sends to the newer topic.
+   */
+  private postingClient: RemoteClientLike | undefined;
+  /** Remote control has been turned on once in this process; only that first time can restore on its own. */
+  private enabledOnce = false;
 
   constructor(private readonly options: RemoteBridgeOptions) {
     this.host = options.host;
@@ -446,10 +458,21 @@ export class RemoteBridge {
     this.push("status", `on as ${result.name}`);
     // Flow 399: a resumed session whose topic was just CREATED (not found again) is an empty
     // topic over a conversation the operator wants to see. Nothing else restores on its own: a
-    // reconnect, a reused topic, a session that started fresh. `/history` covers those. Not
-    // awaited: ten paced posts take a while and `enable()` must return the topic at once.
-    if (result.reused === false && this.host.sessionResumed?.() === true) {
-      void this.postHistory(HISTORY_DEFAULT_COUNT, true).catch(() => undefined);
+    // reconnect (`result.reused` is the FIRST registration's, a reconnect never changes it), a
+    // reused topic, a session that started fresh, and turning it off and on again in the same
+    // process (that new topic is empty on purpose; `/history` fills it). Not awaited: ten paced
+    // posts take a while and `enable()` must return the topic at once.
+    const firstEnable = !this.enabledOnce;
+    this.enabledOnce = true;
+    if (firstEnable && result.reused === false && this.host.sessionResumed?.() === true) {
+      void this.postHistory(HISTORY_DEFAULT_COUNT, true)
+        .then((outcome) => {
+          // A restore that did not happen says why, in the transcript: the operator is looking at an empty topic.
+          if (!outcome.ok && this.client === client) {
+            this.host.notice(`history was not restored automatically: ${outcome.message}`);
+          }
+        })
+        .catch(() => undefined);
     }
     return result;
   }
@@ -618,12 +641,13 @@ export class RemoteBridge {
     if (this.host.history === undefined) {
       return { ok: false, reason: "unavailable", posted: 0, message: "This shell cannot post its history." };
     }
-    if (this.postingHistory) {
+    if (this.postingClient === client) {
       return { ok: false, reason: "running", posted: 0, message: "The history is still being posted. Wait for it to finish." };
     }
     let items: ReturnType<typeof selectHistory>;
     try {
-      items = selectHistory(this.host.history(), count);
+      const turnRunning = this.host.turnRunning !== undefined ? this.host.turnRunning() : this.host.isBusy();
+      items = selectHistory(this.host.history(), count, { turnRunning });
     } catch {
       return { ok: false, reason: "unavailable", posted: 0, message: "The session history could not be read." };
     }
@@ -632,7 +656,7 @@ export class RemoteBridge {
     }
     const pace = this.options.historyPaceMs ?? HISTORY_PACE_MS;
     const sleep = this.options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-    this.postingHistory = true;
+    this.postingClient = client;
     let posted = 0;
     try {
       for (const item of items) {
@@ -646,7 +670,7 @@ export class RemoteBridge {
         posted += 1;
       }
     } finally {
-      this.postingHistory = false;
+      if (this.postingClient === client) this.postingClient = undefined;
     }
     if (posted > 0 && this.client === client) {
       this.lastHistory = { at: this.now(), count: posted, auto };

@@ -1047,7 +1047,7 @@ after a Yes press, and commands such as `/mcp`, `/guard`, `/route`, `/provider`,
 `/schedule`, `/rewind`, `/conform` and `/ci` stay local. A topic is deleted when the
 shell exits, so `/history [N]` (1 to 20, 10 by default) posts the session's last messages
 back into the topic, yours and the agent's final answers, one message each; a resumed
-session whose topic was just created gets the last 10 by itself, once. Each message shows its state as a reaction and the topic shows typing
+session whose topic was just created gets the last 10 by itself, once (the first time remote control is turned on in that shell); a turn that looks like it holds a secret is replaced by a placeholder. Each message shows its state as a reaction and the topic shows typing
 while a turn runs; see
 [commands from the topic](docs/docs/guides/drive-keryx-remotely.md#commands-from-the-topic).
 Without a connection `serve` starts as before, with remote control off, and only

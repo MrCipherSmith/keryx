@@ -290,6 +290,11 @@ export class RemoteClient {
     return this.streamOpen && !this.stopped;
   }
 
+  /** `reused` of the first registration of this client; undefined before one. A reconnect never changes it. */
+  get reusedAtStart(): boolean | undefined {
+    return this.firstReused;
+  }
+
   /** How many approval decisions arrived whose ack serve has not confirmed (in flight, or failed within the last minute). */
   get unconfirmedApprovals(): number {
     const cutoff = Date.now() - UNCONFIRMED_APPROVAL_LINGER_MS;

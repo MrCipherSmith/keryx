@@ -195,8 +195,13 @@ export type PresentRemoteOptions = {
   getPostureLines?: () => readonly string[] | undefined;
   /** Turn it on (with the name serve picks) when off, off when on. Same code as the typed command. */
   onToggle: () => void;
-  /** Post the session's history to the topic (the `h` key). Same code as the typed `/history`. */
-  onHistory?: () => void;
+  /**
+   * Post the session's history to the topic (the `h` key). Same code as the typed `/history`.
+   * Returns a promise that settles when the posts are done (a paced run takes a while): the
+   * modal shows that it is working, then repaints with the answer (a line for usage, empty
+   * history or remote control off) or with the new status when it is undefined.
+   */
+  onHistory?: () => void | Promise<string | undefined>;
   renderer?: { width?: number; height?: number };
   visibleRows?: number;
   onKeypress?: (handler: (key: { name: string; sequence: string }) => void) => () => void;
@@ -211,6 +216,9 @@ function paint(otui: unknown, renderer: unknown, body: unknown, id: string, cont
   parent.add(node);
   return node;
 }
+
+/** Shown in the status tab while the history posts are running. */
+export const HISTORY_POSTING_NOTE = "Posting the history to the topic, a message every couple of seconds. This line updates when it is done.";
 
 export function presentRemoteControl(
   open: OpenModalFn,
@@ -229,12 +237,21 @@ export function presentRemoteControl(
   let current = "status";
   const nodes = new Map<string, { content: string }>();
   let unsubscribeKey: (() => void) | undefined;
+  /** What the last `h` press says: that it is posting, or why nothing was posted. Shown in the status tab. */
+  let historyNote: string | undefined;
+  let postingHistory = false;
+  let closed = false;
 
   const linesFor = (tab: string): string[] => {
     const status = options.getStatus();
     if (tab === "events") return formatRemoteEventLines(status);
     if (tab === "commands") return formatRemoteCommandLines(status);
-    return formatRemoteStatusLines(status, options.getPostureLines?.());
+    const lines = formatRemoteStatusLines(status, options.getPostureLines?.());
+    if (historyNote !== undefined) {
+      const at = lines.findIndex((line) => line.startsWith("History:"));
+      lines.splice(at < 0 ? lines.length : at + 1, 0, historyNote);
+    }
+    return lines;
   };
   const content = (tab: string): string => {
     const lines = linesFor(tab);
@@ -259,6 +276,7 @@ export function presentRemoteControl(
       if (node !== undefined) nodes.set(tabId, node);
     },
     onClose: () => {
+      closed = true;
       unsubscribeKey?.();
     },
   });
@@ -275,7 +293,29 @@ export function presentRemoteControl(
         return;
       }
       if (token === "h") {
-        options.onHistory?.();
+        if (postingHistory) return;
+        const running = options.onHistory?.();
+        if (running !== undefined && typeof running.then === "function") {
+          // The posts are paced and take a while: say so now, repaint when they are done, so the
+          // History line is never left showing the state from before the press.
+          postingHistory = true;
+          historyNote = HISTORY_POSTING_NOTE;
+          repaint();
+          void running
+            .then(
+              (answer) => {
+                historyNote = answer;
+              },
+              () => {
+                historyNote = "The history could not be posted.";
+              },
+            )
+            .then(() => {
+              postingHistory = false;
+              if (!closed) repaint();
+            });
+          return;
+        }
         repaint();
         return;
       }

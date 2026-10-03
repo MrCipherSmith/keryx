@@ -6815,18 +6815,22 @@ export async function launchTuiAgentShell(opts: {
     };
     // Flow 399: `/history [N]` (and the modal's `h`). One code path: the bridge posts and answers
     // with the one line to show when nothing went out (usage, empty history, remote control off).
-    const runHistoryCommand = (line: string): void => {
+    // Resolves with that line (undefined when messages went out); the sidebar is refreshed when it ends.
+    const postHistoryFor = async (line: string): Promise<string | undefined> => {
       const bridge = remoteBridge;
-      if (bridge === undefined) return;
-      void bridge
-        .historyForCommand(line.trim().split(/\s+/).slice(1).join(" "))
-        .then((answer) => {
-          if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
-        })
-        .catch(() => {
-          io.onSystem?.("◇ the history could not be posted.\n");
-        })
-        .finally(() => liveRemotePanel?.refresh());
+      if (bridge === undefined) return "Remote control is not available in this shell.";
+      try {
+        return await bridge.historyForCommand(line.trim().split(/\s+/).slice(1).join(" "));
+      } catch {
+        return "The history could not be posted.";
+      } finally {
+        liveRemotePanel?.refresh();
+      }
+    };
+    const runHistoryCommand = (line: string): void => {
+      void postHistoryFor(line).then((answer) => {
+        if (answer !== undefined) io.onSystem?.(`◇ ${answer}\n`);
+      });
     };
     const showRemoteControl = (): void => {
       openRemoteControl(otui, chrome, {
@@ -6838,7 +6842,8 @@ export async function launchTuiAgentShell(opts: {
         onToggle: () => {
           void (remoteBridge?.active === true ? disableRemoteControl() : enableRemoteControl());
         },
-        onHistory: () => runHistoryCommand(HISTORY_COMMAND),
+        // The modal shows the answer itself (a line behind it would be unseen) and repaints when the posts end.
+        onHistory: () => postHistoryFor(HISTORY_COMMAND),
         renderer: r,
         ...inspectorKeys,
       });
@@ -9816,6 +9821,10 @@ export async function launchTuiAgentShell(opts: {
           forceHandoff.isAwaitingSettlement ||
           mainQueue.length > 0 ||
           leaseView()?.held() === true,
+        // The streaming loop writes the assistant message in place while a turn runs: only then is
+        // the newest answer in `history` unfinished. A queued line or another holder of the lease
+        // makes the shell busy without making that answer incomplete.
+        turnRunning: () => chrome.isBusy() || foregroundOperation.isActive,
         runLine: (text) => remoteQueue.runTelegramLine(text),
         enqueue: (text) => remoteQueue.enqueueTelegramLine(text),
         notice: (text) => io.onSystem?.(`${text}\n`),
