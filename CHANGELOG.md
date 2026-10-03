@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.3.71] — 2026-10-03
+### Fixed
+- **A tall table no longer loses its native layout in Telegram (flow 399).** A table of more than about 500 rows, narrow enough to fit one 4096-character part, went out as a single part that a rich message refuses (500 blocks, a table row is one block), so it fell back to HTML. A part now holds at most 400 table rows, header included; the table is split at a row boundary with its header repeated, as before, and every part stays a native table. In `html` and `plain` mode a table of more than about 400 rows is also sent in more, shorter parts.
+
+### Changed
+- **Wide tables are pinned, not reshaped.** The operator chose the native table block as it is: as wide as its content, scrolling sideways, no cell shortened. Tests now pin that output for a corpus, the 20-column limit (a wider table stays ordinary text and goes out as HTML), the aligned and stacked fallbacks in HTML and plain text, the split at row boundaries with the header repeated, and the 4096 and rich limits (32768 characters, 500 blocks) on every part. The docs and README describe how a table reaches Telegram.
+
+[Changes since 0.3.70](https://github.com/MrCipherSmith/keryx/compare/v0.3.70...v0.3.71)
+
 ## [0.3.70] — 2026-10-03
 ### Added
 - **The topic gets the session's history back (flow 399).** A topic is deleted when the shell exits, so a session resumed with `keryx shell --continue` got a new, empty one. `/history [N]` now posts the session's last messages into the topic: `N` is 1 to 20 (10 without a number), anything else answers the usage line. It works typed in the shell, sent from the topic (it is a built-in command there, like `/help`), and with key `h` in the `/remote-control` modal, and it runs while a turn is running because it only reads the session. The messages are what the operator typed and the agent's final answer of each turn: no tool calls, no tool output, no reasoning and no narration written before a tool call. Each goes out as its own message, oldest first, with a `You:` or `Agent:` label and no timestamp, two seconds apart so Telegram does not throttle the run. A message over 1,500 characters is cut with `…`; text that looks like a secret is redacted before the cut, so a secret is never half-shown. A turn that contains a Telegram bot token shape or a bare 32-character key-like run is not posted: it is replaced by `[сообщение скрыто: похоже на секрет]`, a guard on top of the shared redactor, which can miss a pasted token. While a turn is running its half-written answer is not posted.

@@ -1054,7 +1054,9 @@ Without a connection `serve` starts as before, with remote control off, and only
 offers the local `/channels` routes. Replies are rendered in one of four modes,
 `remote.rendering` = `auto` (the default), `rich`, `html` or `plain`, set from the
 `/settings` row **Telegram rendering**: a table goes out as a native Telegram rich
-message in `auto` and `rich` (an aligned `<pre>` block in HTML), ordered and nested
+message in `auto` and `rich`, as wide as its content and scrolling sideways with no
+cell shortened (an aligned `<pre>` block in HTML; more than 20 columns stays ordinary
+text), ordered and nested
 lists, task items and rules keep their shape, and a refused rich message falls back
 once to HTML and once to plain text, so a reply is never dropped. `keryx remote
 format-sample` prints the sample in every mode with no network, and `/channels`

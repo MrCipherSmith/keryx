@@ -302,15 +302,23 @@ What each construct becomes:
 - **Links** whose visible text reads as a web address for another host than the target show
   that host after the link, for example `https://mybank.example (→ evil.example)`, in HTML and
   in a rich message, so a label cannot pass for a different site. Any other link is unchanged.
-- **Tables** are never sent as raw pipes. In HTML a table is an aligned `<pre>` block with the
-  separator row dropped; in a rich message it is a native table block with a header row.
+- **Tables** are never sent as raw pipes. In a rich message a table is a native table block with a
+  header row: it is as wide as its content and scrolls sideways, and no cell is shortened. In HTML a
+  table is an aligned `<pre>` block with the separator row dropped, and in plain text the same
+  aligned layout without markup; a row too wide for that layout is stacked as `header: value` lines
+  instead. A table with more than 20 columns (Telegram's limit for a native table) is not treated
+  as a table at all: it goes out as ordinary text, so its pipes show.
 - **Ordered lists** keep their numbers, **nested bullets** keep their indentation, **task items**
   show a box or a ticked box, and a **rule** (`---`) shows as a line, in HTML and in rich.
 - Text that holds none of these renders byte for byte as it did before.
 
 Long replies are still split into numbered `(i/n)` parts within the limit of the mode in use
 (4096 characters for HTML and plain, 32768 characters and 500 blocks for a rich message). A table is
-never cut inside a row, and its header row is repeated at the top of the next part.
+never cut inside a row, and its header row is repeated at the top of the next part. A part holds at
+most 400 table rows, header included, because a table row is one block of the 500 a rich message
+takes; a tall, narrow table therefore goes out in several parts and stays a native table, instead of
+one part that Telegram would refuse and that would fall back to HTML. The same parts are used in
+every mode.
 
 **The fallback chain.** A rich message is sent only where the Bot API accepts it, and the
 shell does not assume it does. If Telegram refuses a rich message with a 4xx, the same text is
