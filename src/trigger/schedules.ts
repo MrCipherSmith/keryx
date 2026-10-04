@@ -39,7 +39,7 @@ import {
   type ScheduleHost,
 } from "./install";
 import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
-import { anchorDigest, markDigestResumed } from "../scheduler/digest-ticker";
+import { anchorDigest, markDigestResumed } from "./digest-state";
 import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
 import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
 import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
