@@ -707,6 +707,32 @@ export class RemoteHub {
     }
   }
 
+  /**
+   * Flow 403: edit a message the bot sent into a SERVICE topic (an intake card after a decision). The text is
+   * redacted like every outbound text; with no `keyboard` the buttons are gone. A press replayed on a settled
+   * card ("message is not modified") counts as done. Returns false when Telegram refused the edit.
+   */
+  async editServiceMessage(chatId: number, messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean> {
+    try {
+      await editRendered(
+        this.api,
+        { chatId, messageId, text: redactSensitiveText(text), ...(keyboard === undefined ? {} : { inlineKeyboard: keyboard }) },
+        { state: this.rendering, onFallback: (fallback) => this.fallbackEvent(fallback, " (service topic)", "edited") },
+      );
+      return true;
+    } catch (error) {
+      if (isNotModified(error)) {
+        return true;
+      }
+      try {
+        await this.api.editMessageReplyMarkup({ chatId, messageId });
+      } catch {
+        // Already gone or unchanged: the decision is in the ledger either way.
+      }
+      return false;
+    }
+  }
+
   /** Try to send everything queued. Safe to call at any time. */
   async flushOutbound(): Promise<void> {
     const result = await this.outbound.flush();

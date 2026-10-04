@@ -150,15 +150,25 @@ describe("the intake tests cannot reach GitHub, Telegram or a model", () => {
     expect(production.map((entry) => path.basename(entry.name))).toEqual(expect.arrayContaining(["poll.ts", "events.ts", "store.ts", "report.ts", "status.ts", "config.ts", "types.ts", "intake.ts"]));
     expect(testFiles.map((entry) => path.basename(entry.name)).sort()).toEqual(
       [
+        "intake-allowlist.test.ts",
         "intake-baseline.test.ts",
+        "intake-buttons.test.ts",
+        "intake-card.test.ts",
+        "intake-ci-triage.test.ts",
         "intake-dedupe.test.ts",
+        "intake-decline-later.test.ts",
         "intake-events.test.ts",
         "intake-failures.test.ts",
         "intake-limits-accounts.test.ts",
+        "intake-press-guards.test.ts",
         "intake-quiet-limits.test.ts",
         "intake-readonly.test.ts",
         "intake-report.test.ts",
+        "intake-restart.test.ts",
+        "intake-review-flow.test.ts",
         "intake-status.test.ts",
+        "intake-take-failure.test.ts",
+        "intake-take.test.ts",
       ].sort(),
     );
     expect(helpers.map((entry) => path.basename(entry.name))).toContain("intake.test-helpers.ts");
