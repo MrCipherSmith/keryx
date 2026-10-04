@@ -273,6 +273,7 @@ import { isSettingsCommand, openSettings, settingsSidebarHint } from "./settings
 import { buildSettingsRows, type SettingRow } from "./settings-model";
 import { loadSettingsSnapshot } from "./settings-state";
 import { boldChunk, dimChunk, roleChunk } from "./theme-text";
+import { mountAskAnswerLine } from "./ask-user-transcript";
 import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { formatBalance, mountBalancePanel } from "./balance-panel";
@@ -5799,34 +5800,8 @@ export async function launchTuiAgentShell(opts: {
         }),
       );
       input.focus();
-      const chosen = result.kind === "id" ? result.id : result.kind === "reason" ? result.id : "";
-      if (result.kind === "own") {
-        // shown right after the question breadcrumb, in full: it is the answer the agent now acts on
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `aska${uid++}`,
-            content: otui.t`${roleChunk(otui, "ok", "→ ✍")} ${dimChunk(otui, result.text)}`,
-          }),
-        );
-      } else if (chosen !== "__cancel__") {
-        const picked = req.options.find((o) => o.id === chosen);
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `aska${uid++}`,
-            content:
-              result.kind === "reason"
-                ? otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)} ${dimChunk(otui, `— ${result.reason}`)}`
-                : otui.t`${roleChunk(otui, "ok", "→")} ${dimChunk(otui, picked?.label ?? chosen)}`,
-          }),
-        );
-      } else {
-        transcript.add(
-          new otui.TextRenderable(r, {
-            id: `askc${uid++}`,
-            content: otui.t`${dimChunk(otui, "→ cancelled")}`,
-          }),
-        );
-      }
+      // shown right after the question breadcrumb; an own answer in full: it is what the agent now acts on
+      mountAskAnswerLine(otui, r, transcript, `aska${uid++}`, req.options, result);
       setMainAgent("running", "waiting");
       if (result.kind === "own") return { kind: "own", text: result.text };
       if (result.kind === "reason") return { kind: "option", choice: result.id, reason: result.reason };
