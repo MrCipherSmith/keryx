@@ -39,6 +39,7 @@ import {
   type ScheduleHost,
 } from "./install";
 import { latestRunByTrigger, readTriggerRuns, type TriggerRunRecord } from "./record";
+import { anchorDigest, markDigestResumed } from "../scheduler/digest-ticker";
 import { addConfirmedSchedule, removeStoredSchedule, setScheduleEnabled, triggerReportsDir } from "./store";
 import { configDirInsideProjectReason, scheduleKeyPath } from "./schedule-key";
 import { pinGrantedBinary, resolvesInsideProject, type BinaryPin } from "./granted-binary";
@@ -402,6 +403,8 @@ export async function confirmSchedule(projectRoot: string, draft: ScheduleDraft,
   const stored = await addConfirmedSchedule(projectRoot, draft.entry);
   // Flow 389: a digest is fired by `keryx serve`, so no OS timer is installed for it.
   if ((draft.entry["action"] as { digest?: unknown } | undefined)?.digest !== undefined) {
+    // Anchored at creation: a cron time that passes before serve first ticks is a missed slot, not a skipped one.
+    await anchorDigest(projectRoot, stored.name, new Date());
     return { name: stored.name, backend: "serve", unit: "keryx serve", confirmedHash: stored.confirmedHash };
   }
   try {
@@ -511,6 +514,7 @@ export async function resumeStoredSchedule(projectRoot: string, name: string, ho
     throw new Error(`resume refused: schedule "${name}" has no confirmed runner recorded — remove it and create it again`);
   }
   if (entry.action.digest === undefined) await resumeSchedule(projectRoot, name, entry.fire.cron, host, entry.install);
+  else await markDigestResumed(projectRoot, name);
   await setScheduleEnabled(projectRoot, name, true);
 }
 

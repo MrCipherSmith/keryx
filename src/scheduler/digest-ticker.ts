@@ -15,7 +15,9 @@
 // slot when it comes back, never one per missed slot. A slot is claimed before the run, so a
 // crash in the middle of a run is NOT run a second time; the run record shows the failure.
 //
-// A digest that was paused does not catch up when it is resumed: a paused tick re-anchors it.
+// A digest that was paused does not catch up when it is resumed: resume marks it (also when no tick saw the
+// pause, because serve was down) and the next enabled tick re-anchors it. A digest is anchored at its creation
+// (`anchorDigest`), so a first slot that passed while serve was down still fires once.
 //
 // The clock, the project roots, the run and the delivery flush are all injected, so a test
 // drives this with a fake clock and a fake `fire` and never starts a timer.
@@ -128,6 +130,28 @@ function minuteFloor(d: Date): Date {
   const t = new Date(d.getTime());
   t.setSeconds(0, 0);
   return t;
+}
+
+/**
+ * A new digest is anchored at its creation time, not at the first tick that happens to see it. A cron time
+ * between the creation and the first tick (serve was down when the schedule was confirmed) then counts as a
+ * missed slot and fires once, the same as any other missed slot. Overwrites a leftover claim of an earlier
+ * schedule of the same name: a new schedule owes nothing for the time before it existed.
+ */
+export async function anchorDigest(projectRoot: string, name: string, at: Date): Promise<void> {
+  await writeFired(projectRoot, name, { version: 1, slot: minuteFloor(at).toISOString(), fired: false });
+}
+
+/**
+ * Resume records that the digest was paused, whether or not a tick saw the pause. A pause that happened while
+ * serve was not running leaves no `pausedAt` behind (only a running ticker writes it), so without this the first
+ * tick after the resume would take the old anchor for the last claim and fire a catch-up digest. With the mark
+ * the next enabled tick re-anchors instead. A digest that was never armed has nothing to mark.
+ */
+export async function markDigestResumed(projectRoot: string, name: string, at: Date = new Date()): Promise<void> {
+  const state = await readFired(projectRoot, name);
+  if (state === undefined || state.pausedAt !== undefined) return;
+  await writeFired(projectRoot, name, { ...state, pausedAt: at.toISOString() });
 }
 
 export function createDigestTicker(deps: TickerDeps): DigestTicker {
