@@ -16,3 +16,12 @@
 - 2026-10-03T18:14:59.386Z - ac-confirmed: AC10 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-03T18:14:59.775Z - ac-confirmed: AC11 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
 - 2026-10-03T18:15:00.151Z - ac-confirmed: AC12 (signed: 200531777+MrCipherSmith@users.noreply.github.com [derived])
+- 2026-10-04T10:14:32.603Z - task-done: T1: Collect remaining context
+- 2026-10-04T10:14:32.876Z - task-done: T2: Implement per plan
+- 2026-10-04T10:14:33.171Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-10-04T10:14:33.515Z - task-done: T4: Self-review and prepare draft PR
+- 2026-10-04T10:14:48.736Z - started
+- 2026-10-04T10:14:51.342Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/848 (warning: PR is not a draft) (base: main)
+- 2026-10-04T10:15:05.999Z - owner-changed: Aleksandr -> MrCipherSmith (Standing rule: the owner of every keryx flow is MrCipherSmith)
+- 2026-10-04T10:57:56.470Z - decision d-mutpe7oo-540cbd [close, ordinary]: chose update; followed the recommendation
+- 2026-10-04T10:58:03.945Z - ac-updated: AC9 named src/docs/scheduled-digest-docs.test.ts; the test lives at src/scheduler/scheduled-digest-docs.test.ts (review finding T-3, operator approved the correction in poll 75). Confirmations voided; operator re-confirms.
