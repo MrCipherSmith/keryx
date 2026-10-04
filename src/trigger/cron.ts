@@ -171,7 +171,12 @@ export function cronToLaunchdIntervals(expression: string): { ok: true; value: R
   return { ok: true, value: combos };
 }
 
-/** The next `count` run times (UTC-agnostic: evaluated in the given `from`'s local time), up to one year ahead. */
+/**
+ * The next `count` run times, up to one year ahead. The expression is read in the LOCAL time of the machine
+ * this runs on (the `Date` local getters, so the `TZ` of the process), not in UTC. A schedule that says
+ * `0 9 * * *` therefore fires at 09:00 where `keryx serve` runs. A wall-clock time that a daylight-saving
+ * change skips (the hour that does not exist) has no run that day, and one it repeats runs once.
+ */
 export function nextCronRuns(expression: string, from: Date, count: number): Date[] {
   const parsed = parseCron(expression);
   if (!parsed.ok) return [];
