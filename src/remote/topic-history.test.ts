@@ -280,7 +280,12 @@ describe("formatHistoryItem", () => {
       "V4E9PvifRN1VMIRgxF5HYXFkibZenj_zorc",
       "cntU92CS7AHYTwturM2dkcDQ7hhwMct34byy",
       "N0y06KWO1JV9Ir05W1WQCBq5Bvhfj2TB9Q07l3G9",
+      // One or two digit groups, so only the word-length rule (a word is three letters or more)
+      // separates these from an identifier.
+      "aBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeF1",
+      "xYzAbCdEfGhIjKlMnOpQrStUvWx7yZaBcDe3",
     ]) {
+      expect(text.length).toBeGreaterThanOrEqual(32);
       expect(looksLikeSecret(text)).toBe(true);
     }
   });

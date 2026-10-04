@@ -356,8 +356,11 @@ test("AC4: a Telegram line while the shell is busy is queued with its label and 
 // call sites and never pins a line number, so moving code does not fail it.
 const SHELL_SOURCE = new URL("./tui-shell.ts", import.meta.url);
 
+// Comments are dropped before counting, so commenting a call out turns the test red. A call wrapped in
+// a dead branch (`if (false && ...)`) still counts: text cannot tell, which is why these lines are few.
 function shellOccurrences(source: string, needle: string): number {
-  return source.split(needle).length - 1;
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  return code.split(needle).length - 1;
 }
 
 test("AC4 F-010 F-014 F-015 F-016: tui-shell.ts still delegates every remote-queue call into the wiring", () => {
