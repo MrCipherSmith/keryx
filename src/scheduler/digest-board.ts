@@ -58,7 +58,15 @@ export async function readBoard(projectRoot: string): Promise<BoardRead> {
   if (registered === undefined) {
     return { items: [], chains: [], failure: { source: "board", detail: "the flow board is not available in this process" } };
   }
-  const read = await registered(projectRoot);
+  // A reader that throws is a failing source, the same as a failing gh call: the digest still goes out
+  // with the GitHub half, the board entries of the last digest are kept (the source is held), and the
+  // report says which source failed instead of calling the whole run a crash.
+  let read: BoardSource;
+  try {
+    read = await registered(projectRoot);
+  } catch (error) {
+    return { items: [], chains: [], failure: { source: "board", detail: `the board could not be read: ${error instanceof Error ? error.message : String(error)}` } };
+  }
   if (read.state === "absent") {
     return { items: [], chains: [], failure: { source: "board", detail: "no product index — run `keryx product index` to build it" } };
   }

@@ -27,6 +27,7 @@ import {
   agentTaskScratchParent,
   pruneReports,
   refusal,
+  scrubGrantedOutput,
   type AgentTaskDeps,
   type AgentTaskResult,
 } from "../commands/trigger-agent-task";
@@ -183,6 +184,10 @@ async function runLocked(
   let summaryText: string | undefined;
   let cost: TriggerRunCost = { recorded: true, usd: 0 };
   let baseline = false;
+  // The snapshot of this run is written only after its message is safely queued (below), so a change is
+  // never marked as already reported before there is a message that carries it.
+  let pendingSnapshot: ReturnType<typeof nextSnapshot> | undefined;
+  const ghEnv = ghEnvForProject(projectRoot, env);
   const startedAt = now();
 
   try {
@@ -193,7 +198,7 @@ async function runLocked(
       stats: binaries.stats,
       cwd: grantedCwd,
       // The account follows the PROJECT'S path (work vs personal). No `auth` subcommand is ever run.
-      env: ghEnvForProject(projectRoot, env),
+      env: ghEnv,
       runGh: deps.runGh ?? defaultGhRunner,
       limits,
     });
@@ -250,7 +255,7 @@ async function runLocked(
     // a source would call all of it "new" next time; neither is stored.
     const partialBaseline = diff.baseline && failedSources.size > 0;
     if (!limits.signal.aborted && !partialBaseline) {
-      await writeSnapshot(projectRoot, entry.name, nextSnapshot(previous, items, heldSources, startedAt.toISOString()));
+      pendingSnapshot = nextSnapshot(previous, items, heldSources, startedAt.toISOString());
     }
   } catch (error) {
     crashed = error instanceof Error ? error.message : String(error);
@@ -293,6 +298,7 @@ async function runLocked(
         failures: content?.failures ?? [...collected.failures],
         cost,
         repos: action.grants.repos,
+        ghAccount: ghEnv["GH_ACCOUNT"],
       }),
       "utf8",
     );
@@ -307,11 +313,23 @@ async function runLocked(
   // partial or empty digest. The failures that left it with nothing are named under the line.
   const statusReason = stopReason ?? (crashed !== undefined ? `the run threw: ${crashed}` : everySourceFailed ? "no source could be read" : undefined);
   const statusDetail = everySourceFailed && stopReason === undefined && crashed === undefined ? partial.slice(0, 6).map((f) => `\n- ${f.source}: ${f.detail}`).join("") : "";
+  // The last hop before an external service: scrub the assembled text here, not only per source. Board
+  // lines are local text that no source scrubber saw, and a failure detail can quote anything. Scrub first,
+  // then cap, so a cut can never split a token into something no pattern matches.
   const message =
     statusReason !== undefined
-      ? `Digest ${entry.name} stopped — ${statusReason}${statusDetail}${reportPath !== undefined ? `\nReport: ${reportPath}` : ""}`
-      : capForDelivery(summaryText !== undefined ? `Summary (written by the model)\n${summaryText}\n\n${body}` : body, reportPath);
+      ? scrubGrantedOutput(`Digest ${entry.name} stopped — ${statusReason}${statusDetail}${reportPath !== undefined ? `\nReport: ${reportPath}` : ""}`, env)
+      : capForDelivery(scrubGrantedOutput(summaryText !== undefined ? `Summary (written by the model)\n${summaryText}\n\n${body}` : body, env), reportPath);
   await enqueueDelivery(projectRoot, entry.name, { runId, text: message, topic: digest.topic, ...(reportPath !== undefined ? { reportPath } : {}) }, now());
+  // Queued: only now is this run's view of the world the baseline of the next one.
+  let snapshotNote = "";
+  if (pendingSnapshot !== undefined) {
+    try {
+      await writeSnapshot(projectRoot, entry.name, pendingSnapshot);
+    } catch (error) {
+      snapshotNote = ` (snapshot NOT written: ${error instanceof Error ? error.message : String(error)})`;
+    }
+  }
   if (deps.sink !== undefined) await flushDeliveries(projectRoot, entry.name, deps.sink, now);
   else await appendDeliveryLine(projectRoot, reportPath, `${now().toISOString()} queued — serve delivers it to the "${digest.topic}" topic (or the project's remote session) on its next tick`);
 
@@ -320,7 +338,7 @@ async function runLocked(
     outcome,
     detail:
       `${outcome === "ok" ? (baseline ? "digest written (baseline)" : content?.quiet === true ? "digest written (nothing changed)" : `digest written (${content?.changeCount ?? 0} change(s))`) : `run ${outcome}: ${why}`}` +
-      `${reportPath !== undefined ? ` → ${reportPath}` : ""}${reportNote} [${collected.calls.length} gh call(s)${partialNote}]`,
+      `${reportPath !== undefined ? ` → ${reportPath}` : ""}${reportNote}${snapshotNote} [${collected.calls.length} gh call(s)${partialNote}]`,
     cost,
     agentTask: {
       runId,
@@ -346,6 +364,8 @@ interface DigestReportInput {
   readonly failures: readonly DigestFailure[];
   readonly cost: TriggerRunCost;
   readonly repos: readonly string[];
+  /** The account the digest asked gh for (`GH_ACCOUNT`); only the machine's gh wrapper honours it. */
+  readonly ghAccount: string | undefined;
 }
 
 function renderDigestReport(r: DigestReportInput): string {
@@ -356,6 +376,7 @@ function renderDigestReport(r: DigestReportInput): string {
     `- outcome: ${r.outcome}${r.why !== undefined ? ` (${r.why})` : ""}`,
     `- kind: ${r.baseline ? "baseline (first run, nothing to compare with)" : "diff against the previous run"}`,
     `- repositories: ${r.repos.join(", ")}`,
+    `- gh account asked for: ${r.ghAccount ?? "none"} (set through GH_ACCOUNT; only the gh wrapper honours it, the real gh uses its active login)`,
     `- cost: ${r.cost.recorded ? `$${r.cost.usd.toFixed(4)}` : `not recorded (${r.cost.reason})`}`,
     "",
   ];
