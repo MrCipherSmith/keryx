@@ -20,6 +20,7 @@ export type RemoteRoute =
   | "approval-result"
   | "approval-ack"
   | "prompt"
+  | "prompt-close"
   | "state"
   | "ack"
   | "stream";
@@ -32,6 +33,7 @@ export const REMOTE_ROUTE_METHODS: Readonly<Record<RemoteRoute, "GET" | "POST">>
   approval: "POST",
   "approval-result": "POST",
   prompt: "POST",
+  "prompt-close": "POST",
   state: "POST",
   ack: "POST",
   "approval-ack": "POST",
@@ -243,6 +245,33 @@ export function parseChoiceCallback(data: string): { promptId: string; index: nu
   return { promptId: match[1] as string, index: Number(match[2]) };
 }
 
+// ---- own answers (flow 401) ---------------------------------------------------------------
+//
+// A prompt asked with `own: true` carries one more button, "✍ Свой ответ", whose callback is
+// `pk:<id>:own`. Pressing it (same message, same person, before the prompt expires) makes serve send
+// a ForceReply message and remember its message id. Only a reply TO THAT MESSAGE, from the person who
+// pressed, before the window closes, is the answer: it is never "the next message in the topic", and
+// it never starts a turn. Approvals have no such path.
+
+/** The label of the own-answer button. */
+export const OWN_ANSWER_BUTTON_LABEL = "✍ Свой ответ";
+/** How long an own answer may take after the button is pressed. At least five minutes, whatever the options' own timeout. */
+export const OWN_ANSWER_WINDOW_MS = 5 * 60_000;
+/** The most characters of an own answer a reply may carry through the stream (Telegram's own message limit). */
+export const MAX_OWN_ANSWER_CHARS = 4_096;
+
+const OWN_CALLBACK_PATTERN = /^pk:(pk[0-9a-f]{12}):own$/;
+
+/** `pk:<id>:own`: 20 bytes. */
+export function ownCallbackData(promptId: string): string {
+  return `pk:${promptId}:own`;
+}
+
+export function parseOwnCallback(data: string): { promptId: string } | undefined {
+  const match = OWN_CALLBACK_PATTERN.exec(data);
+  return match === null ? undefined : { promptId: match[1] as string };
+}
+
 /** Buttons a shell may attach to a reply may not collide with the picker namespace either. */
 export const RESERVED_CHOICE_PREFIX = "pk:";
 /** The most buttons one prompt may carry in total. */
@@ -312,6 +341,19 @@ export interface PromptBody {
   timeoutMs?: number;
   /** Only this Telegram user may answer. */
   forUserId?: number;
+  /**
+   * Flow 401: add the "✍ Свой ответ" button after the rows. Serve builds it (the shell sends no label)
+   * and counts it against the button limit. Absent: the prompt is exactly what it was.
+   */
+  own?: boolean;
+}
+
+/** The shell closes a prompt it no longer needs (flow 401): the answer came from the dock, or the turn stopped. */
+export interface PromptCloseBody {
+  sessionId: string;
+  promptId: string;
+  /** What the topic message says: "shell" for an answer given in the shell, otherwise "cancelled". */
+  by?: "shell" | "cancelled";
 }
 
 export interface AckBody {
@@ -417,8 +459,13 @@ export interface ApprovalEvent {
 export interface ChoiceEvent {
   updateId: number;
   promptId: string;
+  /** The pressed button; -1 for an own answer or a close, which carry `own` or `closed` instead. */
   index: number;
   fromId: number;
+  /** Flow 401: the person's own answer, from a reply to the armed prompt. Never set for a press. */
+  own?: string;
+  /** Flow 401: serve ended the prompt without an answer, so the shell stops waiting. */
+  closed?: "expired";
 }
 
 export interface CallbackEvent {

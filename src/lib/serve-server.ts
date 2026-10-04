@@ -457,6 +457,7 @@ const REMOTE_ROUTES: ReadonlyMap<string, "GET" | "POST"> = new Map([
   ["approval", "POST"],
   ["approval-result", "POST"],
   ["prompt", "POST"],
+  ["prompt-close", "POST"],
   ["state", "POST"],
   ["ack", "POST"],
   ["approval-ack", "POST"],
@@ -479,6 +480,7 @@ export type RemoteRouteName =
   | "approval"
   | "approval-result"
   | "prompt"
+  | "prompt-close"
   | "state"
   | "ack"
   | "approval-ack"

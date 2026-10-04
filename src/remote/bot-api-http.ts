@@ -152,6 +152,11 @@ export function createHttpBotApi(options: HttpBotApiOptions): BotApi {
       }
       if (params.inlineKeyboard !== undefined) {
         body.reply_markup = { inline_keyboard: params.inlineKeyboard };
+      } else if (params.forceReply !== undefined) {
+        body.reply_markup = {
+          force_reply: true,
+          ...(params.forceReply.placeholder === undefined ? {} : { input_field_placeholder: params.forceReply.placeholder.slice(0, 64) }),
+        };
       }
       return call<{ message_id: number }>("sendMessage", body);
     },

@@ -208,7 +208,9 @@ const MISSING_METHOD = "this Bot API client has no rich message method";
 
 export async function sendRendered(api: BotApi, params: SendMessageParams, hooks: RenderHooks): Promise<{ message_id: number }> {
   const { parseMode: _ignored, ...plain } = params;
-  const step = firstStep(hooks.state.mode(), params.text);
+  // A force-reply prompt (flow 401) never goes out as a rich message: that method carries no `force_reply`.
+  const first = firstStep(hooks.state.mode(), params.text);
+  const step = params.forceReply !== undefined && first === "rich" ? "html" : first;
   if (step === "plain") {
     return api.sendMessage({ ...plain, text: renderPlainText(params.text) });
   }

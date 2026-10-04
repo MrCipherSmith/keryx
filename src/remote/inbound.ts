@@ -42,6 +42,8 @@ export interface InboundEntry {
   text?: string;
   /** The Telegram message the line came in, for `kind: "text"`: what a state reaction goes on. */
   messageId?: number;
+  /** The message this line was sent as a reply to (flow 401), for `kind: "text"`: what binds an own answer to its prompt. */
+  replyToMessageId?: number;
   /** The pressed button, for `kind: "callback"`. */
   callback?: { id: string; data: string; messageId?: number };
 }

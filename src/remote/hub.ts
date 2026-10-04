@@ -38,6 +38,8 @@ export interface DeliverMeta {
   threadId: number;
   fromId: number;
   receivedAt: number;
+  /** The message the line replied to (flow 401), when it was a reply. */
+  replyToMessageId?: number;
 }
 
 export interface CallbackDelivery {
@@ -532,7 +534,7 @@ export class RemoteHub {
   async send(
     sessionId: string,
     text: string,
-    options: { keyboard?: InlineKeyboard; onSent?: (info: SentMessageInfo) => void } = {},
+    options: { keyboard?: InlineKeyboard; forceReply?: { placeholder?: string }; onSent?: (info: SentMessageInfo) => void } = {},
   ): Promise<boolean> {
     const record = this.registry.bySession(sessionId);
     if (record === undefined) {
@@ -543,6 +545,7 @@ export class RemoteHub {
       threadId: record.threadId,
       text,
       ...(options.keyboard === undefined ? {} : { keyboard: options.keyboard }),
+      ...(options.forceReply === undefined ? {} : { forceReply: options.forceReply }),
       ...(options.onSent === undefined ? {} : { onSent: options.onSent }),
     });
     await this.flushOutbound();
@@ -917,7 +920,14 @@ export class RemoteHub {
         this.event("update-unrouted", `update ${update.update_id}: command addressed to another bot`);
         return undefined;
       }
-      const appended = this.inbound.append(key, { ...base, kind: "text", text: message.text, messageId: message.message_id });
+      const replyTo = message.reply_to_message?.message_id;
+      const appended = this.inbound.append(key, {
+        ...base,
+        kind: "text",
+        text: message.text,
+        messageId: message.message_id,
+        ...(typeof replyTo === "number" ? { replyToMessageId: replyTo } : {}),
+      });
       if (appended.added) {
         // The first thing the sender sees: the message was received. Fire and forget.
         const tracked = this.track(record, update.update_id, message.message_id);
@@ -1103,6 +1113,7 @@ export class RemoteHub {
               threadId: record.threadId,
               fromId: entry.fromId,
               receivedAt: entry.receivedAt,
+              ...(typeof entry.replyToMessageId === "number" ? { replyToMessageId: entry.replyToMessageId } : {}),
             });
           } else if (entry.callback !== undefined && this.consumer.deliverCallback !== undefined) {
             await this.consumer.deliverCallback(record.sessionId, {

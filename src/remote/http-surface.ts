@@ -35,6 +35,12 @@ import {
   type ApprovalEvent,
   type ApprovalResultBody,
   MAX_REMEMBER_PATTERN_CHARS,
+  MAX_OWN_ANSWER_CHARS,
+  OWN_ANSWER_BUTTON_LABEL,
+  OWN_ANSWER_WINDOW_MS,
+  ownCallbackData,
+  parseOwnCallback,
+  type PromptCloseBody,
   type CallbackEvent,
   type ChoiceEvent,
   choiceCallbackData,
@@ -46,6 +52,7 @@ import {
   type InboundEvent,
   isApprovalId,
   isMessageState,
+  isPromptId,
   isSessionId,
   MAX_APPROVAL_PROMPT_CHARS,
   MAX_APPROVAL_TIMEOUT_MS,
@@ -273,7 +280,29 @@ interface PendingChoice extends PendingApproval {
   labels: string[];
   /** Only this Telegram user may answer. */
   forUserId?: number;
+  /** Flow 401: the prompt carries the own-answer button. */
+  own?: boolean;
+  /** Flow 401: the ForceReply message sent for it, once the own button was pressed and the message is in the topic. */
+  armedReplyId?: number;
+  /** Flow 401: set the moment the own button is accepted, before the ForceReply message has an id. */
+  armed?: boolean;
 }
+
+/**
+ * Flow 401: a ForceReply message that waits for one own answer. Keyed by its Telegram message id, which is
+ * what a reply names (`reply_to_message`). It outlives its prompt in state `done`, so a late reply is
+ * recognised as late and never taken for an ordinary line.
+ */
+interface ArmedOwn {
+  promptId: string;
+  sessionId: string;
+  /** The person who pressed the button: the only one whose reply counts. */
+  userId: number;
+  expiresAt: number;
+  state: "live" | "done";
+}
+
+const MAX_ARMED_OWN = 128;
 
 /** A prompt that reached its final state: kept so a late press can be put back to it (flow 387, AC21). */
 interface FinishedPrompt {
@@ -342,6 +371,7 @@ export class RemoteHttpSurface {
   private readonly decided = new Map<string, string>();
   private readonly choices = new Map<string, PendingChoice>();
   private readonly finished = new Map<string, FinishedPrompt>();
+  private readonly armedOwn = new Map<number, ArmedOwn>();
 
   constructor(private readonly options: RemoteSurfaceOptions) {
     this.now = options.now ?? Date.now;
@@ -425,6 +455,8 @@ export class RemoteHttpSurface {
         return this.approvalResult(hub, request);
       case "prompt":
         return this.requestPrompt(hub, request);
+      case "prompt-close":
+        return this.closePrompt(request);
       case "state":
         return this.messageState(hub, request);
       case "ack":
@@ -768,6 +800,10 @@ export class RemoteHttpSurface {
     if (value.forUserId !== undefined && (typeof value.forUserId !== "number" || !Number.isSafeInteger(value.forUserId))) {
       return invalid("forUserId must be an integer.");
     }
+    if (value.own !== undefined && typeof value.own !== "boolean") {
+      return invalid("own must be a boolean.");
+    }
+    const own = value.own === true;
     const rows = value.rows;
     if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_KEYBOARD_ROWS) {
       return invalid(`rows must be 1 to ${MAX_KEYBOARD_ROWS} rows of button labels.`);
@@ -786,7 +822,7 @@ export class RemoteHttpSurface {
       }
       layout.push((row as unknown[]).length);
     }
-    if (labels.length > MAX_PROMPT_BUTTONS) {
+    if (labels.length + (own ? 1 : 0) > MAX_PROMPT_BUTTONS) {
       return invalid(`a prompt may carry at most ${MAX_PROMPT_BUTTONS} buttons.`);
     }
     const sessionId = value.sessionId;
@@ -813,6 +849,7 @@ export class RemoteHttpSurface {
       expiresAt,
       labels,
       ...(value.forUserId === undefined ? {} : { forUserId: value.forUserId }),
+      ...(own ? { own: true } : {}),
       timer: this.timers.setTimeout(() => this.expireChoice(promptId), timeoutMs),
     });
     const keyboard: InlineKeyboard = [];
@@ -825,6 +862,9 @@ export class RemoteHttpSurface {
       }
       keyboard.push(line);
     }
+    if (own) {
+      keyboard.push([{ text: OWN_ANSWER_BUTTON_LABEL, callback_data: ownCallbackData(promptId) }]);
+    }
     const sent = await hub.send(sessionId, redactSensitiveText(value.text), {
       keyboard,
       onSent: (info) => this.onChoiceSent(promptId, sessionId, info.messageId, info.text),
@@ -834,6 +874,40 @@ export class RemoteHttpSurface {
       return fail(404, "unknown-session", "This session is not registered for remote control; register again.");
     }
     return ok({ promptId, expiresAt });
+  }
+
+  /**
+   * Flow 401: the shell no longer needs this prompt (the dock answered first, or the turn stopped).
+   * Only the session that asked can close it. The message is put in its final state and a later press or
+   * reply finds nothing to answer.
+   */
+  private async closePrompt(request: Request): Promise<Response> {
+    const body = await readJsonBody(request);
+    if (!body.ok) {
+      return body.response;
+    }
+    const value = body.value as Partial<PromptCloseBody> & Record<string, unknown>;
+    if (!isSessionId(value.sessionId)) {
+      return invalid("sessionId must be 1 to 64 characters of letters, digits, '-' and '_'.");
+    }
+    if (typeof value.promptId !== "string" || !isPromptId(value.promptId)) {
+      return invalid("promptId must be a prompt id this serve issued.");
+    }
+    if (value.by !== undefined && value.by !== "shell" && value.by !== "cancelled") {
+      return invalid("by must be 'shell' or 'cancelled'.");
+    }
+    const entry = this.choices.get(value.promptId);
+    if (entry === undefined || entry.sessionId !== value.sessionId) {
+      return ok({ closed: false });
+    }
+    this.dropChoice(value.promptId);
+    const when = clockText(this.now());
+    const answered = value.by === "shell";
+    this.finishApproval(value.promptId, entry.sessionId, entry.messageId, entry.text, {
+      result: answered ? `Answered in the shell at ${when}.` : `Cancelled at ${when}: the question is no longer open.`,
+      shortReply: answered ? "Answered in the shell." : "That question is no longer open.",
+    });
+    return ok({ closed: true });
   }
 
   /** The shell says where one of its messages is; the hub shows it as a reaction and typing (flow 387, AC18). */
@@ -1028,6 +1102,12 @@ export class RemoteHttpSurface {
   }
 
   private deliver(sessionId: string, line: string, meta: DeliverMeta): Promise<void> {
+    if (meta.replyToMessageId !== undefined && this.armedOwn.has(meta.replyToMessageId)) {
+      // A reply to a message this serve armed for an own answer is never an ordinary line: it either
+      // answers that prompt or answers nothing, and it starts no turn (flow 401).
+      this.replyToArmed(sessionId, line, meta, this.armedOwn.get(meta.replyToMessageId) as ArmedOwn);
+      return Promise.resolve();
+    }
     if (this.completed.get(sessionId)?.has(meta.updateId) === true) {
       // The shell already finished this exact update (a redelivery after a lost ack or a restart).
       return Promise.resolve();
@@ -1077,6 +1157,11 @@ export class RemoteHttpSurface {
     const approval = parseApprovalCallback(callback.data);
     if (approval !== undefined) {
       this.pressApproval(sessionId, callback, approval, stream);
+      return Promise.resolve();
+    }
+    const own = parseOwnCallback(callback.data);
+    if (own !== undefined) {
+      this.pressChoice(sessionId, callback, { promptId: own.promptId, own: true }, stream);
       return Promise.resolve();
     }
     const choice = parseChoiceCallback(callback.data);
@@ -1187,7 +1272,12 @@ export class RemoteHttpSurface {
    * press for another session, message or user leaves the prompt as it was, and a late or repeated
    * press puts the message back to its final state.
    */
-  private pressChoice(sessionId: string, callback: CallbackDelivery, choice: { promptId: string; index: number }, stream: ShellStream | undefined): void {
+  private pressChoice(
+    sessionId: string,
+    callback: CallbackDelivery,
+    choice: { promptId: string; index: number } | { promptId: string; own: true },
+    stream: ShellStream | undefined,
+  ): void {
     const id = choice.promptId;
     const entry = this.choices.get(id);
     if (entry !== undefined && entry.sessionId !== sessionId) {
@@ -1196,6 +1286,12 @@ export class RemoteHttpSurface {
     if (entry !== undefined && entry.expiresAt > this.now()) {
       const sameMessage = entry.messageId !== undefined && callback.messageId === entry.messageId;
       const sameUser = entry.forUserId === undefined || entry.forUserId === callback.fromId;
+      if ("own" in choice) {
+        if (sameMessage && sameUser && entry.own === true) {
+          this.armOwn(id, entry, callback);
+        }
+        return;
+      }
       if (!sameMessage || !sameUser || choice.index >= entry.labels.length) {
         return;
       }
@@ -1238,6 +1334,86 @@ export class RemoteHttpSurface {
     }
   }
 
+  /**
+   * The own button was accepted: send the ForceReply message and remember its id. The prompt (and its
+   * buttons) stay live, so the person may still pick an option instead; whichever comes first wins. The
+   * prompt's life is extended to at least the own-answer window from now, so a slow typist is not cut
+   * off by an option timeout that was sized for a tap.
+   */
+  private armOwn(promptId: string, entry: PendingChoice, callback: CallbackDelivery): void {
+    if (entry.armed === true) {
+      return;
+    }
+    entry.armed = true;
+    const now = this.now();
+    const expiresAt = Math.max(entry.expiresAt, now + OWN_ANSWER_WINDOW_MS);
+    entry.expiresAt = expiresAt;
+    this.timers.clearTimeout(entry.timer);
+    entry.timer = this.timers.setTimeout(() => this.expireChoice(promptId), expiresAt - now);
+    const sessionId = entry.sessionId;
+    const userId = callback.fromId;
+    void this.hub
+      ?.send(sessionId, "Reply to this message with your own answer. It is open for 5 minutes.", {
+        forceReply: { placeholder: "Your own answer" },
+        onSent: (info) => this.onArmedSent(promptId, sessionId, userId, expiresAt, info.messageId),
+      })
+      .catch(() => {
+        // The ForceReply message could not be queued: let the person press the button again.
+        entry.armed = false;
+      });
+  }
+
+  private onArmedSent(promptId: string, sessionId: string, userId: number, expiresAt: number, replyMessageId: number): void {
+    const live = this.choices.get(promptId);
+    this.armedOwn.set(replyMessageId, { promptId, sessionId, userId, expiresAt, state: live === undefined ? "done" : "live" });
+    if (live !== undefined) {
+      live.armedReplyId = replyMessageId;
+    }
+    while (this.armedOwn.size > MAX_ARMED_OWN) {
+      const oldest = this.armedOwn.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.armedOwn.delete(oldest);
+    }
+  }
+
+  /**
+   * A reply to an armed own-answer message. It answers the prompt only when it comes from the person who
+   * pressed the button, inside the window, while the prompt is still open. A reply from anyone else, or to
+   * a prompt that belongs to another session, answers nothing and is not a line. A late reply answers
+   * nothing and is told so once.
+   */
+  private replyToArmed(sessionId: string, line: string, meta: DeliverMeta, armed: ArmedOwn): void {
+    if (armed.sessionId !== sessionId) {
+      return;
+    }
+    const entry = this.choices.get(armed.promptId);
+    const live = armed.state === "live" && entry !== undefined && armed.expiresAt > this.now();
+    if (!live) {
+      void this.hub?.send(sessionId, "That question is no longer open, so your reply was not used.").catch(() => undefined);
+      return;
+    }
+    if (meta.fromId !== armed.userId) {
+      return;
+    }
+    const text = line.trim();
+    if (text.length === 0) {
+      return;
+    }
+    const stream = this.streams.get(sessionId);
+    this.dropChoice(armed.promptId);
+    const event: ChoiceEvent = { updateId: meta.updateId, promptId: armed.promptId, index: -1, fromId: meta.fromId, own: text.slice(0, MAX_OWN_ANSWER_CHARS) };
+    const told = stream?.write(encodeSseEvent("choice", event, meta.updateId)) === true;
+    const when = clockText(this.now());
+    this.finishApproval(armed.promptId, sessionId, entry.messageId, entry.text, {
+      result: told
+        ? `Own answer (user ${meta.fromId}, ${when}).`
+        : `Not delivered at ${when}: the shell is not connected, so nothing changed.`,
+      shortReply: told ? "Your own answer was sent." : "Not delivered: the shell is not connected, so nothing changed.",
+    });
+  }
+
   private onChoiceSent(promptId: string, sessionId: string, messageId: number, text: string): void {
     const live = this.choices.get(promptId);
     if (live !== undefined) {
@@ -1255,6 +1431,12 @@ export class RemoteHttpSurface {
     }
     this.timers.clearTimeout(entry.timer);
     this.choices.delete(promptId);
+    if (entry.armedReplyId !== undefined) {
+      const armed = this.armedOwn.get(entry.armedReplyId);
+      if (armed !== undefined) {
+        armed.state = "done";
+      }
+    }
   }
 
   private expireChoice(promptId: string): void {
@@ -1263,6 +1445,11 @@ export class RemoteHttpSurface {
       return;
     }
     this.dropChoice(promptId);
+    if (entry.own === true) {
+      // The shell waits past the options' timeout for an own answer; this is how it learns there is none.
+      const closed: ChoiceEvent = { updateId: 0, promptId, index: -1, fromId: 0, closed: "expired" };
+      this.streams.get(entry.sessionId)?.write(encodeSseEvent("choice", closed));
+    }
     this.finishApproval(promptId, entry.sessionId, entry.messageId, entry.text, {
       result: `Expired at ${clockText(this.now())}: no answer, nothing changed.`,
       shortReply: "That question expired: no answer, nothing changed.",

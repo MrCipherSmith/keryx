@@ -114,7 +114,7 @@ export function commandHarness(opts: CommandHarnessOptions = {}) {
         reportState: async (updateId: number, state: MessageState) => {
           fake.reported.push([updateId, state]);
         },
-        ...(opts.refuseChoice !== undefined ? { askChoice: async () => ({ index: undefined, refusal: opts.refuseChoice as string }) } : {}),
+        ...(opts.refuseChoice !== undefined ? { askChoice: async () => ({ kind: "none" as const, refusal: opts.refuseChoice as string }) } : {}),
         requestChoice: (text: string, rows: string[][], timeoutMs: number) =>
           new Promise<number | undefined>((resolve) => {
             fake.choices.push({ text, rows, timeoutMs, answer: resolve });

@@ -19,6 +19,11 @@ export interface BotMessage {
   /** Unix seconds. */
   date: number;
   text?: string;
+  /**
+   * The message this one answers (flow 401). In a forum topic Telegram also sets it on a plain
+   * message, to the topic's first message; only the id is read, and only to match an armed own-answer prompt.
+   */
+  reply_to_message?: { message_id: number };
   /** Set when the message was forwarded from somewhere else (Bot API 7+ and the older fields). */
   forward_origin?: unknown;
   forward_date?: number;
@@ -91,6 +96,11 @@ export interface SendMessageParams {
   text: string;
   messageThreadId?: number;
   inlineKeyboard?: InlineKeyboard;
+  /**
+   * Flow 401: ask Telegram to open the reply box on this message (`force_reply`), with `placeholder`
+   * in the input field. Mutually exclusive with `inlineKeyboard`; never sent as a rich message.
+   */
+  forceReply?: { placeholder?: string };
   /** Left out: plain text. "HTML": `text` is Telegram HTML (see `format-html.ts`). */
   parseMode?: "HTML";
 }
