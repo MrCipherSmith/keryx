@@ -98,3 +98,34 @@ describe("parseCadence", () => {
     if (!nonsense.ok) expect(nonsense.reason).toContain("every N hours");
   });
 });
+
+describe("nextCronRuns: the expression is read in the machine's local time", () => {
+  function runsIn(zone: string, expression: string, from: string, count: number): string[] {
+    const before = process.env["TZ"];
+    process.env["TZ"] = zone;
+    try {
+      return nextCronRuns(expression, new Date(from), count).map((d) => d.toISOString());
+    } finally {
+      if (before === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = before;
+    }
+  }
+
+  test("L-4: the same 09:00 cron is a different instant in each zone (09:00 where serve runs, not 09:00 UTC)", () => {
+    expect(runsIn("UTC", "0 9 * * *", "2026-10-02T00:00:00Z", 1)).toEqual(["2026-10-02T09:00:00.000Z"]);
+    expect(runsIn("America/New_York", "0 9 * * *", "2026-10-02T00:00:00Z", 1)).toEqual(["2026-10-02T13:00:00.000Z"]);
+    expect(runsIn("Asia/Tokyo", "0 9 * * *", "2026-10-01T12:00:00Z", 1)).toEqual(["2026-10-02T00:00:00.000Z"]);
+  });
+
+  test("L-4: across a daylight-saving change the local hour holds and the UTC instant moves; the skipped hour has no run", () => {
+    // New York leaves daylight saving on 2026-11-01: 09:00 is 13:00Z before it and 14:00Z after it
+    expect(runsIn("America/New_York", "0 9 * * *", "2026-10-31T00:00:00Z", 3)).toEqual([
+      "2026-10-31T13:00:00.000Z",
+      "2026-11-01T14:00:00.000Z",
+      "2026-11-02T14:00:00.000Z",
+    ]);
+    // and on 2026-03-08 it springs forward at 02:00, so 02:30 does not exist that day
+    const spring = runsIn("America/New_York", "30 2 * * *", "2026-03-07T00:00:00Z", 3);
+    expect(spring.some((iso) => iso.startsWith("2026-03-08"))).toBe(false);
+  });
+});

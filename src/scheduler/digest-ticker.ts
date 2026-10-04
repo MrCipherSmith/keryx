@@ -15,27 +15,21 @@
 // slot when it comes back, never one per missed slot. A slot is claimed before the run, so a
 // crash in the middle of a run is NOT run a second time; the run record shows the failure.
 //
-// A digest that was paused does not catch up when it is resumed: a paused tick re-anchors it.
+// A digest that was paused does not catch up when it is resumed: resume marks it (also when no tick saw the
+// pause, because serve was down) and the next enabled tick re-anchors it. A digest is anchored at its creation
+// (`anchorDigest`), so a first slot that passed while serve was down still fires once.
 //
 // The clock, the project roots, the run and the delivery flush are all injected, so a test
 // drives this with a fake clock and a fake `fire` and never starts a timer.
 
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { isNotFound, writeFileAtomic } from "../lib/fs";
 import { loadTriggersConfig, type AgentTaskAction, type TriggerEntry } from "../trigger/config";
 import { nextCronRuns } from "../trigger/cron";
-import { digestScheduleDir, ensureDigestDataIgnored } from "./digest-snapshot";
+import { anchorDigest, firedPath, markDigestResumed, minuteFloor, readFired, writeFired, type FiredState } from "../trigger/digest-state";
 
-export interface FiredState {
-  readonly version: 1;
-  /** ISO time of the last slot that was claimed (or, for a new or resumed digest, the moment it was armed). */
-  readonly slot: string;
-  /** True when a run was started for `slot`; false when `slot` is only the anchor. */
-  readonly fired: boolean;
-  /** Set while the digest is paused; the next enabled tick re-anchors instead of catching up. */
-  readonly pausedAt?: string;
-}
+// The fired-slot state lives in `trigger/digest-state.ts` (the schedule confirm/resume paths there write it);
+// re-exported so the ticker's callers keep one import.
+export { anchorDigest, firedPath, markDigestResumed, readFired, type FiredState };
 
 export type TickAction = "fired" | "armed" | "waiting" | "paused" | "skipped";
 
@@ -81,28 +75,6 @@ export function digestEntries(projectRoot: string): DigestScheduleEntry[] {
   );
 }
 
-export function firedPath(projectRoot: string, name: string): string {
-  return path.join(digestScheduleDir(projectRoot, name), "fired.json");
-}
-
-export async function readFired(projectRoot: string, name: string): Promise<FiredState | undefined> {
-  try {
-    const raw = JSON.parse(await readFile(firedPath(projectRoot, name), "utf8")) as Record<string, unknown> | null;
-    if (raw !== null && typeof raw["slot"] === "string" && typeof raw["fired"] === "boolean") {
-      return { version: 1, slot: raw["slot"], fired: raw["fired"], ...(typeof raw["pausedAt"] === "string" ? { pausedAt: raw["pausedAt"] } : {}) };
-    }
-    return undefined;
-  } catch (error) {
-    if (isNotFound(error)) return undefined;
-    return undefined;
-  }
-}
-
-async function writeFired(projectRoot: string, name: string, state: FiredState): Promise<void> {
-  await ensureDigestDataIgnored(projectRoot);
-  await writeFileAtomic(firedPath(projectRoot, name), `${JSON.stringify(state, null, 2)}\n`);
-}
-
 /**
  * The newest cron slot after `anchor` that is at or before `now`, or undefined when none is due.
  * Several missed slots collapse into the newest one.
@@ -122,12 +94,6 @@ export function dueSlot(cron: string, anchor: Date, now: Date): Date | undefined
     from = last;
   }
   return newest;
-}
-
-function minuteFloor(d: Date): Date {
-  const t = new Date(d.getTime());
-  t.setSeconds(0, 0);
-  return t;
 }
 
 export function createDigestTicker(deps: TickerDeps): DigestTicker {

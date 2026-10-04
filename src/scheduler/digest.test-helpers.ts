@@ -110,10 +110,10 @@ function pinOf(env: DigestTestEnv): Record<string, BinaryPin> {
   return { gh: pinned.pin };
 }
 
-/** Store a confirmed digest schedule exactly as `keryx schedule add --digest` would. Returns its name. */
-export async function addDigestSchedule(env: DigestTestEnv, options: DigestScheduleOptions = {}): Promise<string> {
+/** The entry `keryx schedule add --digest` drafts: what a test hands to `addConfirmedSchedule`, or to `confirmSchedule` inside a draft. */
+export function digestScheduleEntry(env: DigestTestEnv, options: DigestScheduleOptions = {}): Record<string, unknown> {
   const name = options.name ?? "morning";
-  await addConfirmedSchedule(env.root, {
+  return {
     name,
     on: { kind: "schedule", cron: options.cron ?? "* * * * *" },
     // The runner `draftSchedule` records. A digest never installs it (serve fires the schedule), but resume checks it is there.
@@ -138,8 +138,13 @@ export async function addDigestSchedule(env: DigestTestEnv, options: DigestSched
       },
       digest: { topic: options.topic ?? "Digest", memoryLimitMb: options.memoryLimitMb ?? 512 },
     },
-  });
-  return name;
+  };
+}
+
+/** Store a confirmed digest schedule exactly as `keryx schedule add --digest` would. Returns its name. */
+export async function addDigestSchedule(env: DigestTestEnv, options: DigestScheduleOptions = {}): Promise<string> {
+  await addConfirmedSchedule(env.root, digestScheduleEntry(env, options));
+  return options.name ?? "morning";
 }
 
 // ---- gh fixtures --------------------------------------------------------------
